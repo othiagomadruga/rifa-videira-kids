@@ -169,9 +169,13 @@ export const COLUNAS_CSV_HIERARQUIA_OBRIGATORIAS = [
 /** Máximo de linhas de dados por arquivo. */
 export const LIMITE_LINHAS_CSV_HIERARQUIA = 2000;
 
+/** Máximo de caracteres do arquivo (o campo `csv` do corpo): cerca de 1 MB. */
+export const LIMITE_CARACTERES_CSV_HIERARQUIA = 1_000_000;
+
 /**
  * `detalhes` do erro 400 `csv_invalido` (importação da hierarquia e, depois, a reconciliação): o
- * arquivo não pôde nem ser lido linha a linha.
+ * arquivo não pôde nem ser lido linha a linha. A tela mostra a `mensagem`; `motivo` é para quem
+ * precisa tratar cada caso. `linha` conta o cabeçalho como linha 1.
  */
 export const detalhesCsvInvalidoSchema = z.discriminatedUnion("motivo", [
   /** Arquivo vazio ou sem linha de cabeçalho. */
@@ -187,20 +191,49 @@ export const detalhesCsvInvalidoSchema = z.discriminatedUnion("motivo", [
     limite: z.number().int().positive(),
     total_linhas: z.number().int().positive(),
   }),
+  /** Arquivo maior que o limite de caracteres. */
+  z.object({
+    motivo: z.literal("arquivo_grande"),
+    limite_caracteres: z.number().int().positive(),
+  }),
+  /** Uma coluna conhecida aparece mais de uma vez no cabeçalho. */
+  z.object({
+    motivo: z.literal("coluna_repetida"),
+    coluna: z.string().min(1),
+  }),
+  /** Aspas abertas que não fecham até o fim do arquivo. */
+  z.object({
+    motivo: z.literal("aspas_abertas"),
+    linha: z.number().int().positive(),
+  }),
+  /** O arquivo não estava em UTF-8 (o texto chegou com caracteres de substituição). */
+  z.object({
+    motivo: z.literal("codificacao_invalida"),
+    linha: z.number().int().positive(),
+  }),
 ]);
 export type DetalhesCsvInvalido = z.infer<typeof detalhesCsvInvalidoSchema>;
 
 export const corpoImportarHierarquiaSchema = z.object({
   /** Conteúdo do arquivo (UTF-8, separador "," ou ";", aspas como no RFC 4180). */
-  csv: z.string().min(1).max(1_000_000),
+  csv: z.string().min(1).max(LIMITE_CARACTERES_CSV_HIERARQUIA),
   /** true = só valida e conta o que mudaria, sem gravar. */
   simular: z.boolean().default(false),
 });
 
-/** Célula de texto do CSV: tira espaços das pontas; vazio vira null. */
+/**
+ * Junta espaços em sequência (inclusive tab, quebra de linha e espaço não separável) num espaço só e
+ * tira os das pontas: "Rede  Jovem" e "Rede Jovem" são o mesmo nome. Vale para os textos da planilha e
+ * para a comparação de nomes da hierarquia.
+ */
+export function normalizarEspacos(texto: string): string {
+  return texto.replace(/\s+/g, " ").trim();
+}
+
+/** Célula de texto do CSV: espaços normalizados (`normalizarEspacos`); vazio vira null. */
 function textoCsv(valor: unknown): unknown {
   if (typeof valor !== "string") return valor;
-  const limpo = valor.trim();
+  const limpo = normalizarEspacos(valor);
   return limpo === "" ? null : limpo;
 }
 
@@ -250,6 +283,25 @@ export const erroLinhaImportacaoSchema = z.object({
 });
 
 /**
+ * Avisos não impedem a importação:
+ * - linha_repetida: linha igual a uma anterior (mesma célula, mesmos dados), ignorada;
+ * - coluna_ignorada: coluna do cabeçalho que não é do contrato (linha 1), com sugestão quando parecida.
+ * A mensagem não traz dados pessoais (só números de linha e nomes de coluna).
+ */
+export const TIPOS_AVISO_IMPORTACAO = [
+  "linha_repetida",
+  "coluna_ignorada",
+] as const;
+
+export const avisoImportacaoSchema = z.object({
+  tipo: z.enum(TIPOS_AVISO_IMPORTACAO),
+  /** Linha no arquivo, contando o cabeçalho como linha 1. */
+  linha: z.number().int().min(1),
+  mensagem: z.string().min(1),
+});
+export type AvisoImportacao = z.infer<typeof avisoImportacaoSchema>;
+
+/**
  * Importação atômica: se qualquer linha tiver erro, nada é gravado (`aplicado: false`) e as contagens
  * mostram o que teria acontecido. Linhas de outras células não citadas no arquivo ficam como estão.
  */
@@ -261,6 +313,8 @@ export const respostaImportarHierarquiaSchema = z.object({
   atualizados: contagemHierarquiaSchema,
   inalterados: contagemHierarquiaSchema,
   erros: z.array(erroLinhaImportacaoSchema),
+  /** Lista vazia quando não há aviso. */
+  avisos: z.array(avisoImportacaoSchema),
 });
 export type RespostaImportarHierarquia = z.infer<
   typeof respostaImportarHierarquiaSchema

@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import modeloCsv from "../../../docs/modelos/hierarquia-modelo.csv?raw";
 import {
   COLUNAS_CSV_HIERARQUIA,
+  LIMITE_CARACTERES_CSV_HIERARQUIA,
   LIMITE_LINHAS_CSV_HIERARQUIA,
+  detalhesCsvInvalidoSchema,
   respostaImportarHierarquiaSchema,
   type RespostaImportarHierarquia,
 } from "../../shared/contracts";
@@ -52,6 +54,7 @@ function relatorio(
     atualizados: zero,
     inalterados: zero,
     erros: [],
+    avisos: [],
     ...parcial,
   };
 }
@@ -446,6 +449,20 @@ describe("CA2: importação da hierarquia", () => {
       relatorio({
         total_linhas: 4,
         criados: { redes: 1, discipuladores: 1, celulas: 2 },
+        avisos: [
+          {
+            tipo: "linha_repetida",
+            linha: 4,
+            mensagem:
+              "Linha igual à linha 2: foi ignorada (a célula conta uma vez)",
+          },
+          {
+            tipo: "linha_repetida",
+            linha: 5,
+            mensagem:
+              "Linha igual à linha 3: foi ignorada (a célula conta uma vez)",
+          },
+        ],
       }),
     );
     // Vale a grafia da primeira linha de cada célula.
@@ -558,9 +575,12 @@ describe("CA2: importação da hierarquia", () => {
       400,
       "csv_invalido",
     );
-    expect(acima.mensagem).toBe(
-      "O arquivo tem 2001 linhas de dados; o limite é 2000. Divida em mais de um arquivo.",
-    );
+    expect(acima).toEqual({
+      codigo: "csv_invalido",
+      mensagem:
+        "O arquivo tem 2001 linhas de dados; o limite é 2000. Divida em mais de um arquivo.",
+      detalhes: { motivo: "linhas_demais", limite: 2000, total_linhas: 2001 },
+    });
     expect(await listarRedes()).toEqual([]);
 
     expect(await importarComSucesso(csv(LIMITE_LINHAS_CSV_HIERARQUIA))).toEqual(
@@ -575,53 +595,110 @@ describe("CA2: importação da hierarquia", () => {
     expect(total).toEqual({ celulas: 2000 });
   });
 
-  it("400 csv_invalido: sem cabeçalho, sem coluna obrigatória (detalhes), aspas abertas, fora de UTF-8", async () => {
-    const vazio = esperarErro(await importar("\r\n \r\n"), 400, "csv_invalido");
-    expect(vazio.mensagem).toContain("cabeçalho");
-
-    const semColunas = esperarErro(
-      await importar(
+  it("400 csv_invalido com detalhes no formato do contrato: sem cabeçalho, colunas faltando, coluna repetida, aspas abertas, fora de UTF-8", async () => {
+    const casos: [string, unknown, string][] = [
+      [
+        "\r\n \r\n",
+        { motivo: "sem_cabecalho" },
+        "O arquivo está vazio: a primeira linha precisa ser o cabeçalho com os nomes das colunas",
+      ],
+      [
         "rede;divisao;celula;observacao\nRede A;jovens;Célula 1;x\n",
-      ),
-      400,
-      "csv_invalido",
-    );
-    expect(semColunas.detalhes).toEqual([
-      "discipulador",
-      "qtd_pessoas",
-      "lider_nome",
-    ]);
-
-    const aspas = esperarErro(
-      await importar(
+        {
+          motivo: "colunas_faltando",
+          colunas: ["discipulador", "qtd_pessoas", "lider_nome"],
+        },
+        "Faltam colunas obrigatórias no cabeçalho (linha 1): discipulador, qtd_pessoas, lider_nome",
+      ],
+      [
+        "rede;divisao;discipulador;celula;qtd_pessoas;lider_nome;REDE\n",
+        { motivo: "coluna_repetida", coluna: "rede" },
+        'A coluna "rede" aparece mais de uma vez no cabeçalho',
+      ],
+      [
         'rede,divisao,discipulador,celula,qtd_pessoas,lider_nome\nRede A,jovens,Disc,"Célula 1,8,Líder\n',
-      ),
-      400,
-      "csv_invalido",
-    );
-    expect(aspas.mensagem).toBe(
-      "As aspas abertas na linha 2 não foram fechadas",
-    );
-
-    const windows1252 = esperarErro(
-      await importar(
+        { motivo: "aspas_abertas", linha: 2 },
+        "As aspas abertas na linha 2 não foram fechadas",
+      ],
+      [
         "rede,divisao,discipulador,celula,qtd_pessoas,lider_nome\nRede A,jovens,Disc,C\uFFFDlula 1,8,L\uFFFDder\n",
-      ),
-      400,
-      "csv_invalido",
-    );
-    expect(windows1252.mensagem).toContain("UTF-8");
+        { motivo: "codificacao_invalida", linha: 2 },
+        'O arquivo não está em UTF-8 (caractere inválido na linha 2). No Excel, salve como "CSV UTF-8"; no Google Planilhas, use Arquivo > Fazer download > CSV.',
+      ],
+    ];
+    for (const [csv, detalhes, mensagem] of casos) {
+      const erro = esperarErro(await importar(csv), 400, "csv_invalido");
+      expect(erro).toEqual({ codigo: "csv_invalido", mensagem, detalhes });
+      expect(detalhesCsvInvalidoSchema.parse(erro.detalhes)).toEqual(detalhes);
+    }
     expect(await listarRedes()).toEqual([]);
   });
 
-  it("400 requisicao_invalida ou json_invalido quando o corpo foge do schema", async () => {
-    const csvVazio = esperarErro(
+  it("coluna obrigatória com outro nome no cabeçalho: a mensagem sugere o nome certo", async () => {
+    const erro = esperarErro(
+      await importar(
+        "rede;divisao;discipulador;celula;Quantidade de pessoas;Nome do líder;Observações\nRede A;jovens;Disc;Célula 1;8;Líder;x\n",
+      ),
+      400,
+      "csv_invalido",
+    );
+
+    expect(erro).toEqual({
+      codigo: "csv_invalido",
+      mensagem:
+        'Faltam colunas obrigatórias no cabeçalho (linha 1): qtd_pessoas, lider_nome. Talvez estejam com outro nome: "Quantidade de pessoas" (use "qtd_pessoas"), "Nome do líder" (use "lider_nome")',
+      detalhes: {
+        motivo: "colunas_faltando",
+        colunas: ["qtd_pessoas", "lider_nome"],
+      },
+    });
+  });
+
+  it("csv vazio ou acima de 1 MB: 400 csv_invalido com mensagem em português", async () => {
+    const vazio = esperarErro(
       await chamar("POST", IMPORTAR, { csv: "" }),
+      400,
+      "csv_invalido",
+    );
+    expect(vazio).toEqual({
+      codigo: "csv_invalido",
+      mensagem:
+        "O arquivo está vazio: a primeira linha precisa ser o cabeçalho com os nomes das colunas",
+      detalhes: { motivo: "sem_cabecalho" },
+    });
+
+    const grande = esperarErro(
+      await chamar("POST", IMPORTAR, {
+        csv: "x".repeat(LIMITE_CARACTERES_CSV_HIERARQUIA + 1),
+        simular: true,
+      }),
+      400,
+      "csv_invalido",
+    );
+    expect(grande).toEqual({
+      codigo: "csv_invalido",
+      mensagem:
+        "O arquivo passa de 1 MB: divida a planilha em arquivos menores e importe um de cada vez.",
+      detalhes: {
+        motivo: "arquivo_grande",
+        limite_caracteres: LIMITE_CARACTERES_CSV_HIERARQUIA,
+      },
+    });
+    expect(await listarRedes()).toEqual([]);
+  });
+
+  it("400 requisicao_invalida (mensagens em português) ou json_invalido quando o corpo foge do schema", async () => {
+    const semCsv = esperarErro(
+      await chamar("POST", IMPORTAR, { simular: true }),
       400,
       "requisicao_invalida",
     );
-    expect(csvVazio.detalhes).toEqual([
-      expect.objectContaining({ caminho: ["csv"] }),
+    expect(semCsv.detalhes).toEqual([
+      {
+        caminho: ["csv"],
+        codigo: "invalid_type",
+        mensagem: "Campo obrigatório",
+      },
     ]);
     const simularTexto = esperarErro(
       await chamar("POST", IMPORTAR, {
@@ -632,7 +709,11 @@ describe("CA2: importação da hierarquia", () => {
       "requisicao_invalida",
     );
     expect(simularTexto.detalhes).toEqual([
-      expect.objectContaining({ caminho: ["simular"] }),
+      {
+        caminho: ["simular"],
+        codigo: "invalid_type",
+        mensagem: "Use true ou false",
+      },
     ]);
     esperarErro(
       await chamar("POST", IMPORTAR, undefined, {
@@ -750,22 +831,121 @@ describe("CA3: planilha fictícia de 36 células (redes de jovens e adultos)", (
     );
   });
 
-  it("aceita cabeçalho com maiúsculas e acentos e ignora colunas desconhecidas", async () => {
+  it("aceita cabeçalho com maiúsculas e acentos e avisa as colunas desconhecidas, sugerindo a certa quando é parecida", async () => {
     const csv = [
-      "REDE;Divisão;Discipulador;Célula;Qtd_Pessoas;Líder_Nome;Observações",
-      "Rede Jovem Norte;Jovens;Discipulador A;Célula 01;12;Líder 01;liga às 19h",
+      "REDE;Divisão;Discipulador;Célula;Qtd_Pessoas;Líder_Nome;Telefone do líder;E-mail;Observações;;",
+      "Rede Jovem Norte;Jovens;Discipulador A;Célula 01;12;Líder 01;(91) 90000-0001;lider@example.com;liga às 19h;;",
     ].join("\r\n");
 
-    expect(await importarComSucesso(csv)).toMatchObject({
-      aplicado: true,
-      erros: [],
-      criados: { redes: 1, discipuladores: 1, celulas: 1 },
-    });
+    expect(await importarComSucesso(csv)).toEqual(
+      relatorio({
+        total_linhas: 1,
+        criados: { redes: 1, discipuladores: 1, celulas: 1 },
+        avisos: [
+          {
+            tipo: "coluna_ignorada",
+            linha: 1,
+            mensagem:
+              'Coluna "Telefone do líder" ignorada: não é uma coluna do modelo. Você quis dizer "lider_telefone"?',
+          },
+          {
+            tipo: "coluna_ignorada",
+            linha: 1,
+            mensagem:
+              'Coluna "E-mail" ignorada: não é uma coluna do modelo. Você quis dizer "lider_email"?',
+          },
+          {
+            tipo: "coluna_ignorada",
+            linha: 1,
+            mensagem:
+              'Coluna "Observações" ignorada: não é uma coluna do modelo',
+          },
+        ],
+      }),
+    );
+    // Coluna ignorada não grava nada: telefone e e-mail ficam vazios.
     expect((await listarCelulas())[0]).toMatchObject({
       nome: "Célula 01",
       divisao: "jovens",
       lider_email: null,
+      lider_telefone: null,
     });
+  });
+});
+
+describe("nomes com espaços em sequência (inclusive espaço não separável e tab)", () => {
+  it("na planilha, são o mesmo nome e são gravados com um espaço só", async () => {
+    const csv = [
+      "rede;divisao;rede_responsavel;discipulador;celula;qtd_pessoas;lider_nome;lider_telefone",
+      "Rede  Jovem;jovens;Pastor   Fulano;Discipulador\tA;Célula   01;10;Líder  Um;(91)  90000-0001",
+      "Rede\u00A0Jovem;jovens;;Discipulador A;Célula 02;10;Líder Dois;",
+      " rede jovem ;jovens;Pastor\u00A0Fulano;discipulador  a;CÉLULA\u00A001;10;Líder Um;(91) 90000-0001",
+    ].join("\r\n");
+
+    expect(await importarComSucesso(csv)).toEqual(
+      relatorio({
+        total_linhas: 3,
+        criados: { redes: 1, discipuladores: 1, celulas: 2 },
+        avisos: [
+          {
+            tipo: "linha_repetida",
+            linha: 4,
+            mensagem:
+              "Linha igual à linha 2: foi ignorada (a célula conta uma vez)",
+          },
+        ],
+      }),
+    );
+    expect(
+      (await listarRedes()).map((r) => [r.nome, r.responsavel_nome]),
+    ).toEqual([["Rede Jovem", "Pastor Fulano"]]);
+    expect(nomes(await listarDiscipuladores())).toEqual(["Discipulador A"]);
+    expect(
+      (await listarCelulas()).map((c) => [
+        c.nome,
+        c.lider_nome,
+        c.lider_telefone,
+      ]),
+    ).toEqual([
+      ["Célula 01", "Líder Um", "(91) 90000-0001"],
+      ["Célula 02", "Líder Dois", null],
+    ]);
+  });
+
+  it("o que já está gravado com um espaço só é encontrado e fica inalterado", async () => {
+    const rede = await criarRede({ nome: "Rede Norte" });
+    const discipulador = await criarDiscipulador(rede.id, "Discipulador B");
+    await criarCelula(discipulador.id, "Célula 03");
+    const csv = [
+      "rede;divisao;discipulador;celula;qtd_pessoas;lider_nome",
+      "Rede   Norte;jovens;Discipulador\u00A0\u00A0B;Célula\t03;10;Líder  da  Célula 03",
+    ].join("\n");
+
+    expect(await importarComSucesso(csv)).toEqual(
+      relatorio({
+        total_linhas: 1,
+        inalterados: { redes: 1, discipuladores: 1, celulas: 1 },
+      }),
+    );
+  });
+
+  it("nome gravado antes com espaços duplos é encontrado e passa a ter um espaço só", async () => {
+    await env.DB.prepare(
+      "INSERT INTO redes (nome, divisao) VALUES ('Rede  Antiga', 'adultos')",
+    ).run();
+    const csv = [
+      "rede;divisao;discipulador;celula;qtd_pessoas;lider_nome",
+      "Rede Antiga;adultos;Discipulador C;Célula 04;10;Líder",
+    ].join("\n");
+
+    expect(await importarComSucesso(csv)).toEqual(
+      relatorio({
+        total_linhas: 1,
+        criados: { redes: 0, discipuladores: 1, celulas: 1 },
+        atualizados: { redes: 1, discipuladores: 0, celulas: 0 },
+      }),
+    );
+    expect(nomes(await listarRedes())).toEqual(["Rede Antiga"]);
   });
 });
 

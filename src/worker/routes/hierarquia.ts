@@ -10,7 +10,12 @@ import { Hono, type Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
-import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
+import {
+  LIMITE_CARACTERES_CSV_HIERARQUIA,
+  ROTAS,
+  detalhesDeValidacao,
+  type ProblemaZod,
+} from "../../shared/contracts";
 import {
   atualizarCelula,
   atualizarDiscipulador,
@@ -30,6 +35,8 @@ import {
   removerRede,
   type Resultado,
 } from "../db/hierarquia";
+import { arquivoGrandeDemais, arquivoVazio, type FalhaCsv } from "../lib/csv";
+import { mensagemDeCampo } from "../lib/mensagens-validacao";
 import { responderErro } from "../lib/respostas-erro";
 
 type Ambiente = { Bindings: Cloudflare.Env };
@@ -68,20 +75,51 @@ const MENSAGEM_DE_INVALIDO = {
   query: "Consulta inválida",
 } as const;
 
-/** Valida com o schema do contrato; fora dele, 400 `requisicao_invalida` com os problemas em `detalhes`. */
+/**
+ * Valida com o schema do contrato; fora dele, 400 `requisicao_invalida` com os problemas em `detalhes`:
+ * códigos e caminhos do zod, mensagens em português. `problemaDoArquivo` troca o 400 por `csv_invalido`
+ * quando o problema é o arquivo, e não o resto do corpo.
+ */
 function validar<
   Alvo extends keyof typeof MENSAGEM_DE_INVALIDO,
   Schema extends z.ZodType,
->(alvo: Alvo, schema: Schema) {
-  return zValidator(alvo, schema, (resultado, c) => {
-    if (!resultado.success)
+>(
+  alvo: Alvo,
+  schema: Schema,
+  problemaDoArquivo?: (problemas: readonly ProblemaZod[]) => FalhaCsv | null,
+) {
+  return zValidator(alvo, schema, async (resultado, c) => {
+    if (resultado.success) return;
+    // Só no caminho de erro: repete a validação da entrada recebida (resultado.data) com as mensagens
+    // em português. Os problemas são os mesmos; só o texto muda.
+    const emPortugues = await schema.safeParseAsync(resultado.data, {
+      error: mensagemDeCampo,
+    });
+    const erro = emPortugues.success ? resultado.error : emPortugues.error;
+    const doArquivo = problemaDoArquivo?.(erro.issues);
+    if (doArquivo)
       return responderErro(
         c,
-        "requisicao_invalida",
-        MENSAGEM_DE_INVALIDO[alvo],
-        detalhesDeValidacao(resultado.error),
+        "csv_invalido",
+        doArquivo.mensagem,
+        doArquivo.detalhes,
       );
+    return responderErro(
+      c,
+      "requisicao_invalida",
+      MENSAGEM_DE_INVALIDO[alvo],
+      detalhesDeValidacao(erro),
+    );
   });
+}
+
+/** No corpo da importação, `csv` vazio ou acima do limite é problema do arquivo (csv_invalido). */
+function problemaDoCsv(problemas: readonly ProblemaZod[]): FalhaCsv | null {
+  const doCsv = problemas.find((problema) => problema.path[0] === "csv");
+  if (doCsv?.code === "too_big")
+    return arquivoGrandeDemais(LIMITE_CARACTERES_CSV_HIERARQUIA);
+  if (doCsv?.code === "too_small") return arquivoVazio();
+  return null;
 }
 
 /** A mesma regra que o validador do Hono usa para decidir se lê o corpo como JSON. */
@@ -262,7 +300,7 @@ hierarquia.delete(
 hierarquia.post(
   local(ROTAS.importarHierarquia.caminho),
   exigirJson,
-  validar("json", ROTAS.importarHierarquia.corpo),
+  validar("json", ROTAS.importarHierarquia.corpo, problemaDoCsv),
   async (c) => {
     const { csv, simular } = c.req.valid("json");
     return responder(c, await importarHierarquia(c.env.DB, csv, simular));

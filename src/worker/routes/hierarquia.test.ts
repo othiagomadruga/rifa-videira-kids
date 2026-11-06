@@ -75,7 +75,7 @@ describe("CA1: redes", () => {
     expect(atualizada.atualizado_em >= rede.atualizado_em).toBe(true);
   });
 
-  it("400 requisicao_invalida com os problemas em detalhes (caminho, código, mensagem)", async () => {
+  it("400 requisicao_invalida com os problemas em detalhes (caminho, código, mensagem em português)", async () => {
     const resposta = await chamar("POST", "/api/admin/redes", {
       nome: "   ",
       divisao: "kids",
@@ -83,14 +83,236 @@ describe("CA1: redes", () => {
 
     const erro = esperarErro(resposta, 400, "requisicao_invalida");
     expect(erro.detalhes).toEqual([
-      { caminho: ["nome"], codigo: "too_small", mensagem: qualquerTexto },
+      { caminho: ["nome"], codigo: "too_small", mensagem: "Campo obrigatório" },
       {
         caminho: ["divisao"],
         codigo: "invalid_value",
-        mensagem: qualquerTexto,
+        mensagem: 'Use "jovens" ou "adultos"',
       },
     ]);
     expect(await listarRedes()).toEqual([]);
+  });
+
+  it("mensagens de validação em português nos casos comuns (códigos e status não mudam)", async () => {
+    const rede = await criarRede();
+    const discipulador = await criarDiscipulador(rede.id, "Discipulador A");
+    const casos: ["GET" | "POST", string, unknown, unknown[]][] = [
+      [
+        "POST",
+        "/api/admin/redes",
+        {},
+        [
+          {
+            caminho: ["nome"],
+            codigo: "invalid_type",
+            mensagem: "Campo obrigatório",
+          },
+          {
+            caminho: ["divisao"],
+            codigo: "invalid_value",
+            mensagem: 'Use "jovens" ou "adultos"',
+          },
+        ],
+      ],
+      [
+        "POST",
+        "/api/admin/redes",
+        { nome: "x".repeat(121), divisao: "jovens", responsavel_nome: 5 },
+        [
+          {
+            caminho: ["nome"],
+            codigo: "too_big",
+            mensagem: "Use no máximo 120 caracteres",
+          },
+          {
+            caminho: ["responsavel_nome"],
+            codigo: "invalid_type",
+            mensagem: "Use um texto",
+          },
+        ],
+      ],
+      [
+        "POST",
+        "/api/admin/discipuladores",
+        { rede_id: "1", nome: "Discipulador B" },
+        [
+          {
+            caminho: ["rede_id"],
+            codigo: "invalid_type",
+            mensagem: "Use um número",
+          },
+        ],
+      ],
+      [
+        "POST",
+        "/api/admin/discipuladores",
+        { rede_id: 1.5, nome: "Discipulador B" },
+        [
+          {
+            caminho: ["rede_id"],
+            codigo: "invalid_type",
+            mensagem: "Use um número inteiro",
+          },
+        ],
+      ],
+      [
+        "POST",
+        "/api/admin/celulas",
+        {
+          discipulador_id: discipulador.id,
+          nome: "Célula 01",
+          qtd_pessoas: 0,
+          lider_nome: "Líder",
+          lider_email: "sem-arroba",
+        },
+        [
+          {
+            caminho: ["qtd_pessoas"],
+            codigo: "too_small",
+            mensagem: "Use um número a partir de 1",
+          },
+          {
+            caminho: ["lider_email"],
+            codigo: "invalid_format",
+            mensagem: "E-mail inválido",
+          },
+        ],
+      ],
+      [
+        "POST",
+        "/api/admin/celulas",
+        {
+          discipulador_id: discipulador.id,
+          nome: "Célula 01",
+          qtd_pessoas: 1001,
+          lider_nome: " ",
+          lider_telefone: "9".repeat(41),
+        },
+        [
+          {
+            caminho: ["qtd_pessoas"],
+            codigo: "too_big",
+            mensagem: "Use um número até 1000",
+          },
+          {
+            caminho: ["lider_nome"],
+            codigo: "too_small",
+            mensagem: "Campo obrigatório",
+          },
+          {
+            caminho: ["lider_telefone"],
+            codigo: "too_big",
+            mensagem: "Use no máximo 40 caracteres",
+          },
+        ],
+      ],
+      [
+        "GET",
+        "/api/admin/redes/abc",
+        undefined,
+        [
+          {
+            caminho: ["id"],
+            codigo: "invalid_type",
+            mensagem: "Use um número",
+          },
+        ],
+      ],
+      [
+        "GET",
+        "/api/admin/redes/0",
+        undefined,
+        [
+          {
+            caminho: ["id"],
+            codigo: "too_small",
+            mensagem: "Use um número maior que 0",
+          },
+        ],
+      ],
+      [
+        "GET",
+        "/api/admin/celulas?divisao=kids",
+        undefined,
+        [
+          {
+            caminho: ["divisao"],
+            codigo: "invalid_value",
+            mensagem: 'Use "jovens" ou "adultos"',
+          },
+        ],
+      ],
+    ];
+
+    for (const [metodo, caminho, corpo, detalhes] of casos) {
+      const erro = esperarErro(
+        await chamar(metodo, caminho, corpo),
+        400,
+        "requisicao_invalida",
+      );
+      expect({ caminho, detalhes: erro.detalhes }).toEqual({
+        caminho,
+        detalhes,
+      });
+    }
+  });
+
+  it("nomes com espaços em sequência (inclusive espaço não separável e tab) são o mesmo nome; o gravado tem um espaço só", async () => {
+    await criarRede({ nome: "Rede Jovem" });
+    for (const nome of [
+      "Rede  Jovem",
+      "Rede\u00A0Jovem",
+      "Rede\tJovem",
+      " rede \u00A0 jovem ",
+    ]) {
+      esperarErro(
+        await chamar("POST", "/api/admin/redes", { nome, divisao: "jovens" }),
+        409,
+        "nome_duplicado",
+      );
+    }
+    // Casos que o UNIQUE NOCASE do banco não pega, só a chave de nome: um nome gravado antes com
+    // espaços duplos e uma diferença de maiúscula acentuada somada a espaços.
+    await env.DB.prepare(
+      "INSERT INTO redes (nome, divisao) VALUES ('Rede  Legada', 'adultos')",
+    ).run();
+    await criarRede({ nome: "Rede ágape" });
+    for (const nome of ["Rede Legada", "REDE  ÁGAPE"]) {
+      esperarErro(
+        await chamar("POST", "/api/admin/redes", { nome, divisao: "adultos" }),
+        409,
+        "nome_duplicado",
+      );
+    }
+
+    const adulta = await criarRede({
+      nome: "  Rede\u00A0\u00A0Adulta   Sul ",
+      divisao: "adultos",
+      responsavel_nome: "Pastor   Fulano",
+    });
+    expect(adulta).toMatchObject({
+      nome: "Rede Adulta Sul",
+      responsavel_nome: "Pastor Fulano",
+    });
+    const discipulador = await criarDiscipulador(
+      adulta.id,
+      "Discipulador\t\tB",
+    );
+    expect(discipulador.nome).toBe("Discipulador B");
+    const celula = await criarCelula(discipulador.id, "Célula   01", {
+      lider_nome: "Líder  Um",
+      lider_telefone: "(91)  90000-0001",
+    });
+    expect(celula).toMatchObject({
+      nome: "Célula 01",
+      lider_nome: "Líder Um",
+      lider_telefone: "(91) 90000-0001",
+    });
+    const renomeada = await chamar("PUT", `/api/admin/redes/${adulta.id}`, {
+      nome: "Rede   Adulta\tSul",
+      divisao: "adultos",
+    });
+    expect(conforme(redeSchema, renomeada.corpo).nome).toBe("Rede Adulta Sul");
   });
 
   it("400 json_invalido quando o corpo não é JSON ou não vem como JSON", async () => {

@@ -16,7 +16,11 @@ import {
   detalhesCsvInvalidoSchema,
   detalhesErroWebhookSchema,
   CAMINHOS_WEBHOOK_RIFEI,
+  LIMITE_CARACTERES_CSV_HIERARQUIA,
   LIMITE_CORPO_WEBHOOK_BYTES,
+  avisoImportacaoSchema,
+  normalizarEspacos,
+  respostaImportarHierarquiaSchema,
 } from "./api";
 import {
   CODIGOS_ERRO,
@@ -383,6 +387,96 @@ describe("CA3: parâmetros, consultas e corpos", () => {
       { motivo: "linhas_demais", limite: 2000 },
     ]) {
       expect(detalhesCsvInvalidoSchema.safeParse(detalhes).success).toBe(false);
+    }
+  });
+
+  it("csv_invalido: também arquivo grande, coluna repetida, aspas abertas e codificação", () => {
+    for (const detalhes of [
+      {
+        motivo: "arquivo_grande",
+        limite_caracteres: LIMITE_CARACTERES_CSV_HIERARQUIA,
+      },
+      { motivo: "coluna_repetida", coluna: "rede" },
+      { motivo: "aspas_abertas", linha: 7 },
+      { motivo: "codificacao_invalida", linha: 2 },
+    ]) {
+      expect(detalhesCsvInvalidoSchema.safeParse(detalhes).success).toBe(true);
+    }
+    for (const detalhes of [
+      { motivo: "arquivo_grande" },
+      { motivo: "coluna_repetida", coluna: "" },
+      { motivo: "aspas_abertas", linha: 0 },
+      { motivo: "codificacao_invalida" },
+    ]) {
+      expect(detalhesCsvInvalidoSchema.safeParse(detalhes).success).toBe(false);
+    }
+    expect(
+      corpoImportarHierarquiaSchema.safeParse({
+        csv: "x".repeat(LIMITE_CARACTERES_CSV_HIERARQUIA + 1),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("nomes: espaços em sequência (inclusive tab e espaço não separável) viram um só", () => {
+    expect(normalizarEspacos("  Rede \t\u00A0 Jovem\r\n ")).toBe("Rede Jovem");
+    const linha = linhaCsvHierarquiaSchema.parse({
+      rede: "Rede  Jovem",
+      divisao: " jovens ",
+      rede_responsavel: "\u00A0",
+      discipulador: "Discipulador\tA",
+      celula: " Célula \u00A0 01 ",
+      qtd_pessoas: " 12 ",
+      lider_nome: "Líder   Um",
+      lider_telefone: "(91)  90000-0001",
+    });
+    expect(linha).toEqual({
+      rede: "Rede Jovem",
+      divisao: "jovens",
+      rede_responsavel: null,
+      discipulador: "Discipulador A",
+      celula: "Célula 01",
+      qtd_pessoas: 12,
+      lider_nome: "Líder Um",
+      lider_telefone: "(91) 90000-0001",
+    });
+  });
+
+  it("importação: a resposta sempre traz avisos (lista, possivelmente vazia)", () => {
+    const resposta = {
+      aplicado: true,
+      simulado: false,
+      total_linhas: 2,
+      criados: { redes: 1, discipuladores: 1, celulas: 1 },
+      atualizados: { redes: 0, discipuladores: 0, celulas: 0 },
+      inalterados: { redes: 0, discipuladores: 0, celulas: 0 },
+      erros: [],
+      avisos: [
+        {
+          tipo: "linha_repetida",
+          linha: 3,
+          mensagem: "Linha igual à linha 2: foi ignorada",
+        },
+        { tipo: "coluna_ignorada", linha: 1, mensagem: "Coluna ignorada" },
+      ],
+    };
+    expect(respostaImportarHierarquiaSchema.safeParse(resposta).success).toBe(
+      true,
+    );
+    expect(
+      respostaImportarHierarquiaSchema.safeParse({ ...resposta, avisos: [] })
+        .success,
+    ).toBe(true);
+    const semAvisos: Record<string, unknown> = { ...resposta };
+    delete semAvisos.avisos;
+    expect(respostaImportarHierarquiaSchema.safeParse(semAvisos).success).toBe(
+      false,
+    );
+    for (const aviso of [
+      { tipo: "outro", linha: 2, mensagem: "x" },
+      { tipo: "linha_repetida", linha: 0, mensagem: "x" },
+      { tipo: "coluna_ignorada", linha: 1, mensagem: "" },
+    ]) {
+      expect(avisoImportacaoSchema.safeParse(aviso).success).toBe(false);
     }
   });
 });

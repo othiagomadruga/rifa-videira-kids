@@ -28,14 +28,14 @@ Cada linha descreve uma célula e repete o discipulador e a rede dela. É assim 
 
 Regras do arquivo:
 
-- **A primeira linha é o cabeçalho**, com os nomes das colunas acima. A ordem das colunas não importa; maiúsculas e acentos no cabeçalho também não (`Divisão` vale como `divisao`). Colunas a mais, como "observações", são ignoradas.
-- **Nomes são comparados sem diferenciar maiúsculas e sem os espaços das pontas**: "Rede Jovem" e "REDE JOVEM " são a mesma rede. Acentos contam: "Célula Ágape" e "Celula Agape" são células diferentes. A grafia que vale é a da primeira linha em que o nome aparece.
+- **A primeira linha é o cabeçalho**, com os nomes das colunas acima. A ordem das colunas não importa; maiúsculas e acentos no cabeçalho também não (`Divisão` vale como `divisao`). Colunas a mais, como "Observações", são ignoradas e aparecem nos **avisos** do resultado. Se o nome parecer o de uma coluna do modelo (ex.: "Telefone do líder"), o aviso sugere o nome certo (`lider_telefone`): renomeie o cabeçalho, senão o dado dessa coluna não entra.
+- **Nomes são comparados sem diferenciar maiúsculas e com os espaços normalizados**: os espaços das pontas não contam, e espaços em sequência (inclusive tab e o espaço não separável, que às vezes vem de textos copiados da internet ou do WhatsApp) valem como um só. `Rede Jovem`, `REDE JOVEM ` e `Rede  Jovem` (com dois espaços) são a mesma rede, e o nome é gravado com um espaço só (o mesmo vale para os outros textos da planilha). Acentos contam: "Célula Ágape" e "Celula Agape" são células diferentes. A grafia que vale é a da primeira linha em que o nome aparece.
 - **O arquivo precisa ser coerente**:
   - a mesma rede sempre com a mesma divisão (e, quando preenchido, com o mesmo responsável);
   - o mesmo discipulador sempre na mesma rede. Se forem duas pessoas com o mesmo nome, diferencie (ex.: "João Silva" e "João Souza");
-  - cada célula em uma linha só. Uma linha repetida com os **mesmos dados** em todas as colunas (por exemplo, colada duas vezes) não é erro: ela é ignorada e a célula conta uma vez. Aqui também espaços nas pontas e maiúsculas não contam como diferença. Se a linha repetida tiver **algum dado diferente**, é erro.
+  - cada célula em uma linha só. Uma linha repetida com os **mesmos dados** em todas as colunas (por exemplo, colada duas vezes) não é erro: ela é ignorada, a célula conta uma vez e o resultado traz um aviso com o número da linha. Aqui também espaços e maiúsculas não contam como diferença. Se a linha repetida tiver **algum dado diferente**, é erro.
 - Linhas em branco são ignoradas.
-- No máximo **2000 linhas** de dados e 1 MB por arquivo.
+- No máximo **2000 linhas** de dados e 1 MB por arquivo. Acima disso, divida a planilha e importe um arquivo de cada vez.
 
 ## Preencher e exportar
 
@@ -63,6 +63,7 @@ Envie o arquivo pela importação da hierarquia, na área da coordenação.
 
 - **Simule primeiro.** A simulação valida o arquivo inteiro e mostra quantas redes, discipuladores e células seriam criados, atualizados ou ficariam iguais, com os erros de cada linha. Nada é gravado.
 - Sem erros, importe de verdade: o resultado é o mesmo da simulação, agora gravado.
+- **Avisos** não impedem a importação (colunas ignoradas e linhas repetidas iguais), mas leia antes de importar: uma coluna ignorada não entra no sistema.
 - Para quem integra pela API: `POST /api/admin/hierarquia/importar` com `{ "csv": "<conteúdo do arquivo>", "simular": true }`. O formato da resposta está em [api.md](api.md#post-apiadminhierarquiaimportar-coordenacao).
 
 ### O que a importação faz
@@ -95,11 +96,22 @@ Alguns problemas impedem a leitura do arquivo inteiro (resposta `csv_invalido`, 
 | Mensagem | O que fazer |
 |---|---|
 | O arquivo está vazio: a primeira linha precisa ser o cabeçalho... | confira se o arquivo certo foi enviado e se a primeira linha tem os nomes das colunas |
-| Faltam colunas obrigatórias no cabeçalho (linha 1): ... | corrija os nomes das colunas citadas (use o modelo) |
+| Faltam colunas obrigatórias no cabeçalho (linha 1): ... | corrija os nomes das colunas citadas (use o modelo). Se o arquivo tiver uma coluna com nome parecido, a mensagem sugere o certo, como `"Quantidade de pessoas" (use "qtd_pessoas")` |
 | A coluna "X" aparece mais de uma vez no cabeçalho | apague a coluna repetida |
 | O arquivo não está em UTF-8 ... | exporte de novo como "CSV UTF-8" (Excel) ou pelo Google Planilhas |
 | As aspas abertas na linha N não foram fechadas | confira a linha N: um campo começa com aspas e não termina |
 | O arquivo tem N linhas de dados; o limite é 2000 | divida em mais de um arquivo |
+| O arquivo passa de 1 MB: divida a planilha em arquivos menores... | divida em mais de um arquivo e importe um de cada vez |
+
+## Avisos
+
+Avisos não impedem a importação. Eles aparecem na simulação e no resultado, com o número da linha (o cabeçalho é a linha 1).
+
+| Aviso | O que fazer |
+|---|---|
+| Coluna "X" ignorada: não é uma coluna do modelo. Você quis dizer "y"? | a coluna não foi lida. Se ela tem dados que devem entrar, renomeie o cabeçalho para o nome sugerido e importe de novo |
+| Coluna "X" ignorada: não é uma coluna do modelo | coluna extra (ex.: observações): pode deixar, ela não atrapalha |
+| Linha igual à linha N: foi ignorada (a célula conta uma vez) | a linha é cópia de outra; pode apagar da planilha |
 
 ## Sobre o modelo
 

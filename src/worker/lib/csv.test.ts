@@ -1,6 +1,13 @@
 // CA3: leitor de CSV robusto (separadores, aspas, BOM, fins de linha, acentos, linhas em branco).
 import { describe, expect, it } from "vitest";
-import { detectarSeparador, lerCsv, lerTabelaCsv } from "./csv";
+import {
+  arquivoGrandeDemais,
+  arquivoVazio,
+  detectarSeparador,
+  lerCsv,
+  lerTabelaCsv,
+  sugerirColuna,
+} from "./csv";
 
 function registros(texto: string) {
   const leitura = lerCsv(texto);
@@ -116,15 +123,31 @@ describe("CA3: lerTabelaCsv", () => {
     limiteLinhas: 3,
   };
 
-  it("acha as colunas pelo nome (maiúsculas, acentos e espaços não importam) e ignora as desconhecidas", () => {
+  it("acha as colunas pelo nome (maiúsculas, acentos e espaços não importam) e lista as desconhecidas", () => {
     const tabela = lerTabelaCsv(
-      "Observação;CÉLULA; Divisão ;Rede\nqualquer;Célula 01;jovens;Rede Jovem\nx;Célula 02\n",
+      "Observação;CÉLULA; Divisão ;Rede;;Rede \nqualquer;Célula 01;jovens;Rede Jovem\nx;Célula 02\n",
       opcoes,
     );
 
     expect(tabela).toEqual({
+      ok: false,
+      mensagem: 'A coluna "rede" aparece mais de uma vez no cabeçalho',
+      detalhes: { motivo: "coluna_repetida", coluna: "rede" },
+    });
+    expect(
+      lerTabelaCsv(
+        "Observação;CÉLULA; Divisão ;Rede;;Obs  ervação;Observação\nqualquer;Célula 01;jovens;Rede Jovem\nx;Célula 02\n",
+        opcoes,
+      ),
+    ).toEqual({
       ok: true,
+      cabecalho: 1,
       colunas: new Set(["celula", "divisao", "rede"]),
+      // Sem as vazias e sem repetir o mesmo nome; espaços normalizados no nome citado.
+      ignoradas: [
+        { nome: "Observação", sugestao: null },
+        { nome: "Obs ervação", sugestao: null },
+      ],
       linhas: [
         {
           linha: 2,
@@ -140,12 +163,19 @@ describe("CA3: lerTabelaCsv", () => {
     });
   });
 
+  it("o cabeçalho é a primeira linha com conteúdo", () => {
+    expect(
+      lerTabelaCsv("\n;;\nrede;divisao;celula\nR;jovens;C\n", opcoes),
+    ).toMatchObject({ ok: true, cabecalho: 3, linhas: [{ linha: 4 }] });
+  });
+
   it("falha sem cabeçalho (arquivo vazio ou só com linhas em branco)", () => {
     for (const texto of ["", "\r\n\r\n", " ; ; \n\n"]) {
       expect(lerTabelaCsv(texto, opcoes)).toEqual({
         ok: false,
         mensagem:
           "O arquivo está vazio: a primeira linha precisa ser o cabeçalho com os nomes das colunas",
+        detalhes: { motivo: "sem_cabecalho" },
       });
     }
   });
@@ -157,14 +187,21 @@ describe("CA3: lerTabelaCsv", () => {
       ok: false,
       mensagem:
         "Faltam colunas obrigatórias no cabeçalho (linha 1): divisao, celula",
-      detalhes: ["divisao", "celula"],
+      detalhes: { motivo: "colunas_faltando", colunas: ["divisao", "celula"] },
     });
   });
 
-  it("falha quando uma coluna conhecida aparece duas vezes", () => {
-    expect(lerTabelaCsv("rede,divisao,celula,REDE\n", opcoes)).toEqual({
+  it("coluna obrigatória com outro nome: a mensagem sugere o nome certo", () => {
+    expect(
+      lerTabelaCsv("Redes,Divisões,celula,Observação\n", {
+        ...opcoes,
+        sinonimos: { divisoes: "divisao" },
+      }),
+    ).toEqual({
       ok: false,
-      mensagem: 'A coluna "rede" aparece mais de uma vez no cabeçalho',
+      mensagem:
+        'Faltam colunas obrigatórias no cabeçalho (linha 1): rede, divisao. Talvez estejam com outro nome: "Redes" (use "rede"), "Divisões" (use "divisao")',
+      detalhes: { motivo: "colunas_faltando", colunas: ["rede", "divisao"] },
     });
   });
 
@@ -180,6 +217,7 @@ describe("CA3: lerTabelaCsv", () => {
       ok: false,
       mensagem:
         "O arquivo tem 4 linhas de dados; o limite é 3. Divida em mais de um arquivo.",
+      detalhes: { motivo: "linhas_demais", limite: 3, total_linhas: 4 },
     });
   });
 
@@ -190,6 +228,7 @@ describe("CA3: lerTabelaCsv", () => {
       ok: false,
       mensagem:
         'O arquivo não está em UTF-8 (caractere inválido na linha 2). No Excel, salve como "CSV UTF-8"; no Google Planilhas, use Arquivo > Fazer download > CSV.',
+      detalhes: { motivo: "codificacao_invalida", linha: 2 },
     });
   });
 
@@ -199,6 +238,58 @@ describe("CA3: lerTabelaCsv", () => {
     ).toEqual({
       ok: false,
       mensagem: "As aspas abertas na linha 2 não foram fechadas",
+      detalhes: { motivo: "aspas_abertas", linha: 2 },
     });
+  });
+
+  it("arquivo vazio e grande demais têm mensagens prontas no formato do contrato", () => {
+    expect(arquivoVazio().detalhes).toEqual({ motivo: "sem_cabecalho" });
+    expect(arquivoGrandeDemais(1_000_000)).toEqual({
+      ok: false,
+      mensagem:
+        "O arquivo passa de 1 MB: divida a planilha em arquivos menores e importe um de cada vez.",
+      detalhes: { motivo: "arquivo_grande", limite_caracteres: 1_000_000 },
+    });
+    expect(arquivoGrandeDemais(1_500_000).mensagem).toContain("1,5 MB");
+  });
+});
+
+describe("sugerirColuna", () => {
+  const colunas = [
+    "rede",
+    "divisao",
+    "rede_responsavel",
+    "discipulador",
+    "celula",
+    "qtd_pessoas",
+    "lider_nome",
+    "lider_email",
+    "lider_telefone",
+  ] as const;
+  const sinonimos = { quantidade: "qtd", mail: "email", celular: "telefone" };
+
+  it.each([
+    ["Telefone do líder", "lider_telefone"],
+    ["Celular do Líder", "lider_telefone"],
+    ["E-mail", "lider_email"],
+    ["Quantidade de pessoas", "qtd_pessoas"],
+    ["qtd pessoas", "qtd_pessoas"],
+    ["Nome do líder", "lider_nome"],
+    ["Discipuladora", "discipulador"],
+    ["Divisáo", "divisao"],
+    ["Responsável", "rede_responsavel"],
+  ])("%s → %s", (nome, esperada) => {
+    expect(sugerirColuna(nome, colunas, sinonimos)).toBe(esperada);
+  });
+
+  it.each(["Observações", "Bairro", "Data", "ID", "", " - "])(
+    "%j não é parecida com nenhuma coluna",
+    (nome) => {
+      expect(sugerirColuna(nome, colunas, sinonimos)).toBeNull();
+    },
+  );
+
+  it("sinônimos só valem como chaves próprias (nada herdado do Object)", () => {
+    expect(sugerirColuna("constructor", colunas, sinonimos)).toBeNull();
   });
 });

@@ -16,6 +16,8 @@ import {
   COLUNAS_CSV_HIERARQUIA_OBRIGATORIAS,
   LIMITE_LINHAS_CSV_HIERARQUIA,
   linhaCsvHierarquiaSchema,
+  normalizarEspacos,
+  type AvisoImportacao,
   type Celula,
   type CodigoErro,
   type ColunaCsvHierarquia,
@@ -32,7 +34,8 @@ import {
   type discipuladorEntradaSchema,
   type redeEntradaSchema,
 } from "../../shared/contracts";
-import { lerTabelaCsv, mensagemDeCelula } from "../lib/csv";
+import { lerTabelaCsv, type ColunaIgnorada } from "../lib/csv";
+import { mensagemDeCelula } from "../lib/mensagens-validacao";
 
 export type DadosRede = z.output<typeof redeEntradaSchema>;
 export type DadosDiscipulador = z.output<typeof discipuladorEntradaSchema>;
@@ -69,11 +72,12 @@ function falha(
 }
 
 /**
- * Chave de comparação de nomes (CRUD e importação): sem os espaços das pontas e sem diferenciar
- * maiúsculas, inclusive acentuadas ("CÉLULA" = "célula"). Acentos continuam contando ("Célula" ≠ "Celula").
+ * Chave de comparação de nomes (CRUD e importação): espaços normalizados (sem os das pontas e com os
+ * em sequência, inclusive tab e espaço não separável, juntados num só) e sem diferenciar maiúsculas,
+ * inclusive acentuadas ("CÉLULA  01" = "célula 01"). Acentos continuam contando ("Célula" ≠ "Celula").
  */
 export function chaveDeNome(nome: string): string {
-  return nome.trim().normalize("NFC").toLowerCase();
+  return normalizarEspacos(nome).normalize("NFC").toLowerCase();
 }
 
 function violou(erro: unknown, restricao: "UNIQUE" | "FOREIGN KEY"): boolean {
@@ -336,22 +340,26 @@ const referenciaDiscipulador = (id: number): Referencia => ({
   mensagem: `O discipulador ${id} não existe`,
 });
 
+/** Nomes e textos livres são gravados com os espaços normalizados, como a importação grava. */
+const textoOpcional = (valor: string | null) =>
+  valor === null ? null : normalizarEspacos(valor);
+
 const valoresRede = (dados: DadosRede) => [
-  dados.nome,
+  normalizarEspacos(dados.nome),
   dados.divisao,
-  dados.responsavel_nome,
+  textoOpcional(dados.responsavel_nome),
 ];
 const valoresDiscipulador = (dados: DadosDiscipulador) => [
   dados.rede_id,
-  dados.nome,
+  normalizarEspacos(dados.nome),
 ];
 const valoresCelula = (dados: DadosCelula) => [
   dados.discipulador_id,
-  dados.nome,
+  normalizarEspacos(dados.nome),
   dados.qtd_pessoas,
-  dados.lider_nome,
+  normalizarEspacos(dados.lider_nome),
   dados.lider_email,
-  dados.lider_telefone,
+  textoOpcional(dados.lider_telefone),
 ];
 
 const INSERIR_REDE =
@@ -599,6 +607,7 @@ interface Mudancas<T> {
 
 interface PlanoImportacao {
   erros: ErroLinha[];
+  avisos: AvisoImportacao[];
   redes: Mudancas<RedeGravada>;
   discipuladores: Mudancas<DiscipuladorGravado>;
   celulas: Mudancas<CelulaGravada>;
@@ -647,6 +656,7 @@ function lerEntidades(linhas: LinhaValida[]) {
   const discipuladores = new Map<string, DiscipuladorDoArquivo>();
   const celulas = new Map<string, CelulaDoArquivo>();
   const erros: ErroLinha[] = [];
+  const avisos: AvisoImportacao[] = [];
 
   for (const { linha, dados } of linhas) {
     const chaveRede = chaveDeNome(dados.rede);
@@ -658,7 +668,14 @@ function lerEntidades(linhas: LinhaValida[]) {
     const responsavel = dados.rede_responsavel;
     const diferencas = celula ? colunasDiferentes(celula.dados, dados) : [];
     // Linha repetida com os mesmos dados (ex.: colada duas vezes): não é erro e a célula conta uma vez.
-    if (celula && diferencas.length === 0) continue;
+    if (celula && diferencas.length === 0) {
+      avisos.push({
+        tipo: "linha_repetida",
+        linha,
+        mensagem: `Linha igual à linha ${celula.linha}: foi ignorada (a célula conta uma vez)`,
+      });
+      continue;
+    }
 
     const conflitos: ErroLinha[] = [];
     if (rede && rede.divisao !== dados.divisao)
@@ -731,7 +748,7 @@ function lerEntidades(linhas: LinhaValida[]) {
       discipulador: discipuladorDaLinha,
     });
   }
-  return { redes, discipuladores, celulas, erros };
+  return { redes, discipuladores, celulas, erros, avisos };
 }
 
 /** Primeiro registro de cada chave de nome (o banco vem ordenado por id). */
@@ -838,7 +855,13 @@ function planejarImportacao(
       atual.lider_telefone !== gravada.lider_telefone,
   );
 
-  return { erros: arquivo.erros, redes, discipuladores, celulas };
+  return {
+    erros: arquivo.erros,
+    avisos: arquivo.avisos,
+    redes,
+    discipuladores,
+    celulas,
+  };
 }
 
 async function carregarEstado(db: D1Database): Promise<EstadoHierarquia> {
@@ -940,9 +963,58 @@ function contagem(
 }
 
 /**
+ * Palavras de cabeçalhos feitos à mão → palavras das colunas, para sugerir a coluna certa quando o nome
+ * não é o do modelo (ex.: "Celular do líder" → lider_telefone; "Quantidade de pessoas" → qtd_pessoas).
+ */
+const SINONIMOS_COLUNAS: Readonly<Record<string, string>> = {
+  quantidade: "qtd",
+  qtde: "qtd",
+  quant: "qtd",
+  numero: "qtd",
+  num: "qtd",
+  n: "qtd",
+  membros: "pessoas",
+  integrantes: "pessoas",
+  participantes: "pessoas",
+  pessoa: "pessoas",
+  mail: "email",
+  fone: "telefone",
+  tel: "telefone",
+  celular: "telefone",
+  whatsapp: "telefone",
+  zap: "telefone",
+  pastor: "responsavel",
+  pastora: "responsavel",
+  obreiro: "responsavel",
+  obreira: "responsavel",
+  lideres: "lider",
+  discipuladora: "discipulador",
+  discipuladores: "discipulador",
+  redes: "rede",
+  celulas: "celula",
+  divisoes: "divisao",
+};
+
+function avisoDeColunaIgnorada(
+  linha: number,
+  { nome, sugestao }: ColunaIgnorada<ColunaCsvHierarquia>,
+): AvisoImportacao {
+  const ignorada = `Coluna "${nome}" ignorada: não é uma coluna do modelo`;
+  return {
+    tipo: "coluna_ignorada",
+    linha,
+    mensagem:
+      sugestao === null
+        ? ignorada
+        : `${ignorada}. Você quis dizer "${sugestao}"?`,
+  };
+}
+
+/**
  * POST /api/admin/hierarquia/importar. Valida cada linha (linhaCsvHierarquiaSchema), confere a coerência
  * do arquivo e compara com o banco pela chave de nome. Grava só se nenhuma linha tiver erro e `simular`
- * for false; caso contrário, devolve o mesmo relatório sem gravar nada.
+ * for false; caso contrário, devolve o mesmo relatório sem gravar nada. Colunas ignoradas e linhas
+ * repetidas iguais saem em `avisos`.
  */
 export async function importarHierarquia(
   db: D1Database,
@@ -953,6 +1025,7 @@ export async function importarHierarquia(
     colunas: COLUNAS_CSV_HIERARQUIA,
     obrigatorias: COLUNAS_CSV_HIERARQUIA_OBRIGATORIAS,
     limiteLinhas: LIMITE_LINHAS_CSV_HIERARQUIA,
+    sinonimos: SINONIMOS_COLUNAS,
   });
   if (!tabela.ok)
     return falha("csv_invalido", tabela.mensagem, tabela.detalhes);
@@ -990,6 +1063,12 @@ export async function importarHierarquia(
         celulas: plano.celulas.inalteradas,
       },
       erros,
+      avisos: [
+        ...tabela.ignoradas.map((ignorada) =>
+          avisoDeColunaIgnorada(tabela.cabecalho, ignorada),
+        ),
+        ...plano.avisos,
+      ],
     },
   };
 }

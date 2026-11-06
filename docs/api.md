@@ -65,7 +65,7 @@ Toda resposta que não é 2xx tem este corpo:
 | `requisicao_invalida` | 400 | corpo, consulta ou parâmetros fora do schema (`detalhes` = problemas) |
 | `json_invalido` | 400 | corpo não é JSON (em `PUT /api/admin/campanha` e `PUT /api/admin/afiliados/:affiliateId`, também sem `Content-Type` JSON) |
 | `payload_invalido` | 400 | webhook sem o essencial: `event`, `id`, `slug`, `numbers_count` ou `total` (ausente, inválido ou acima do limite) |
-| `csv_invalido` | 400 | CSV sem cabeçalho, sem coluna obrigatória ou acima do limite (`detalhes`: `detalhesCsvInvalidoSchema`) |
+| `csv_invalido` | 400 | arquivo da importação que não dá para ler: vazio ou sem cabeçalho, sem coluna obrigatória, com coluna repetida, aspas abertas, fora de UTF-8, ou acima do limite de linhas ou de tamanho (`detalhes`: `detalhesCsvInvalidoSchema`, com o `motivo`) |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
 | `nao_autenticado` | 401 | sem credencial ou credencial inválida |
 | `proibido` | 403 | autenticado, sem permissão; ou escrita de outra origem (CSRF) |
@@ -194,7 +194,8 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
 | discipuladores | `{ rede_id, nome }` | + `rede_nome`, `divisao` | `?rede_id=` |
 | celulas | `{ discipulador_id, nome, qtd_pessoas (1–1000), lider_nome, lider_email?, lider_telefone? }` | + `discipulador_nome`, `rede_id`, `rede_nome`, `divisao` | `?discipulador_id=&rede_id=&divisao=` |
 
-- Os nomes são únicos dentro de cada recurso, sem diferenciar maiúsculas (inclusive acentuadas) e ignorando espaços nas pontas.
+- Os nomes são únicos dentro de cada recurso, sem diferenciar maiúsculas (inclusive acentuadas) e com os espaços normalizados (`normalizarEspacos`): os das pontas não contam e os em sequência, inclusive tab e espaço não separável, valem um só (`Rede  Jovem` = `Rede Jovem`). Os textos são gravados assim, com um espaço só: `nome`, `responsavel_nome`, `lider_nome` e `lider_telefone`.
+- No `400 requisicao_invalida`, a `mensagem` de cada item de `detalhes` é em português ("Campo obrigatório", "Use no máximo 120 caracteres", "Use um número inteiro", "E-mail inválido"...); `caminho` e `codigo` continuam os do zod.
 - `DELETE` não apaga em cascata:
   - rede com discipuladores: `409 em_uso`;
   - discipulador com células: `409 em_uso`;
@@ -211,8 +212,8 @@ Importa a hierarquia (redes, discipuladores e células) de um CSV, como a planil
   - separador `,` ou `;` (detectado no cabeçalho; o Excel em português usa `;`);
   - aspas como no RFC 4180;
   - linhas vazias são ignoradas;
-  - no máximo 2000 linhas de dados.
-- **Colunas** (`COLUNAS_CSV_HIERARQUIA`). Os nomes do cabeçalho são comparados sem diferenciar maiúsculas; colunas desconhecidas são ignoradas.
+  - no máximo 2000 linhas de dados e 1.000.000 de caracteres (`LIMITE_CARACTERES_CSV_HIERARQUIA`, cerca de 1 MB).
+- **Colunas** (`COLUNAS_CSV_HIERARQUIA`). Os nomes do cabeçalho são comparados sem diferenciar maiúsculas nem acentos; colunas desconhecidas são ignoradas e listadas em `avisos` (`coluna_ignorada`, sugerindo a coluna do contrato mais parecida, quando houver).
 
 | Coluna | Obrigatória | Conteúdo |
 |---|---|---|
@@ -235,18 +236,24 @@ Rede Adulta Ficticia,adultos,,Discipulador Ficticio B,Célula Ficticia 03,15,Lid
 
 **Regras**
 
-- Cada linha é validada por `linhaCsvHierarquiaSchema`, que tira os espaços das pontas.
+- Cada linha é validada por `linhaCsvHierarquiaSchema`, que normaliza os espaços de cada célula (`normalizarEspacos`). As mensagens dos erros de linha são em português.
 - As entidades são encontradas pelo **nome** (mesma comparação do CRUD):
   - se não existe, é criada;
   - se existe e mudou, é atualizada (um discipulador pode mudar de rede e uma célula, de discipulador);
   - se existe e não mudou, fica "inalterada".
 - Coluna opcional **ausente do cabeçalho** mantém o valor atual. Coluna **presente e vazia** apaga o valor (null).
-- O arquivo precisa ser coerente. A mesma rede com divisões diferentes, o mesmo discipulador em redes diferentes ou uma célula repetida com dados diferentes é erro na linha que contradiz a anterior. Uma linha idêntica repetida conta uma vez.
-- **Atômico**: se qualquer linha tem erro, nada é gravado. O que não está no arquivo não é apagado.
+- O arquivo precisa ser coerente. A mesma rede com divisões diferentes (ou com responsáveis diferentes, quando preenchidos), o mesmo discipulador em redes diferentes ou uma célula repetida com dados diferentes é erro na linha que contradiz a anterior. Na célula repetida com dados diferentes, `coluna` é `null` e a mensagem cita as colunas que diferem. Uma linha repetida idêntica (sem diferenciar maiúsculas e com espaços normalizados) conta uma vez e gera o aviso `linha_repetida`.
+- **Atômico**: se qualquer linha tem erro, nada é gravado. O que não está no arquivo não é apagado. A gravação é um lote só (transação do D1): se outra alteração gravar ao mesmo tempo um nome que a importação ia criar, o lote inteiro é desfeito e a resposta é **409** `nome_duplicado` (nada gravado; importe de novo).
 - **400** `csv_invalido`, com `detalhes` no formato `detalhesCsvInvalidoSchema`:
   - `{ "motivo": "sem_cabecalho" }`: arquivo vazio ou sem cabeçalho;
   - `{ "motivo": "colunas_faltando", "colunas": ["qtd_pessoas"] }`: falta coluna obrigatória;
-  - `{ "motivo": "linhas_demais", "limite": 2000, "total_linhas": 2500 }`: mais de 2000 linhas de dados.
+  - `{ "motivo": "linhas_demais", "limite": 2000, "total_linhas": 2500 }`: mais de 2000 linhas de dados;
+  - `{ "motivo": "arquivo_grande", "limite_caracteres": 1000000 }`: `csv` acima do limite ("O arquivo passa de 1 MB: divida a planilha..."); `csv` vazio é `sem_cabecalho`;
+  - `{ "motivo": "coluna_repetida", "coluna": "rede" }`: coluna do contrato duas vezes no cabeçalho;
+  - `{ "motivo": "aspas_abertas", "linha": 7 }`: aspas abertas que não fecham;
+  - `{ "motivo": "codificacao_invalida", "linha": 2 }`: arquivo fora de UTF-8 (ex.: salvo como "CSV" no Excel, e não "CSV UTF-8").
+
+  A `mensagem` é em português e diz o que fazer; é ela que a tela mostra. Em `colunas_faltando`, ela sugere o nome certo quando o cabeçalho tem uma coluna parecida (ex.: `"Quantidade de pessoas" (use "qtd_pessoas")`).
 
 **200** (`respostaImportarHierarquiaSchema`) para o CSV acima, num banco vazio:
 
@@ -258,12 +265,14 @@ Rede Adulta Ficticia,adultos,,Discipulador Ficticio B,Célula Ficticia 03,15,Lid
   "criados": { "redes": 2, "discipuladores": 2, "celulas": 3 },
   "atualizados": { "redes": 0, "discipuladores": 0, "celulas": 0 },
   "inalterados": { "redes": 0, "discipuladores": 0, "celulas": 0 },
-  "erros": []
+  "erros": [],
+  "avisos": []
 }
 ```
 
 - `aplicado` só é `true` quando não há erro e `simular` é `false`. Sem aplicar, as contagens mostram o que teria acontecido com as linhas válidas.
 - Uma entidade que aparece em várias linhas conta uma vez.
+- `avisos` (`avisoImportacaoSchema`, lista possivelmente vazia) não impedem a importação. Tipos: `coluna_ignorada` (linha do cabeçalho) e `linha_repetida` (a linha ignorada). Ex.: `{ "tipo": "coluna_ignorada", "linha": 1, "mensagem": "Coluna \"Telefone do líder\" ignorada: não é uma coluna do modelo. Você quis dizer \"lider_telefone\"?" }` e `{ "tipo": "linha_repetida", "linha": 5, "mensagem": "Linha igual à linha 3: foi ignorada (a célula conta uma vez)" }`. As mensagens não trazem dados pessoais, só números de linha e nomes de coluna.
 - Se a linha 4 tivesse `qtd_pessoas` = `12,5`, a resposta seria `aplicado: false`, com `erros: [{ "linha": 4, "coluna": "qtd_pessoas", "mensagem": "Use um número inteiro" }]` e as contagens só das linhas 2 e 3. `linha` conta o cabeçalho como linha 1.
 
 ### `GET /api/admin/afiliados` (`coordenacao`)
