@@ -50,7 +50,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `data_inicio` | TEXT | data local, primeiro dia de vendas |
 | `preco_bilhete_centavos` | INTEGER > 0 | |
 | `meta_unidade` | TEXT | `bilhetes` ou `centavos` |
-| `meta_regra` | TEXT | `por_pessoa`, `total_proporcional` ou `fixa_por_celula` (seção 7.2) |
+| `meta_regra` | TEXT | `por_pessoa`, `total_proporcional` ou `fixa_por_celula` ([regras-de-calculo.md](regras-de-calculo.md), R1) |
 | `meta_valor` | INTEGER > 0 | na unidade da meta; o significado depende da regra |
 | `ranking_criterio` | TEXT | `percentual_meta`, `bilhetes` ou `arrecadacao` |
 | `publico_mostra_percentual_meta` | INTEGER 0/1 | padrão 0: o público vê só posições |
@@ -189,75 +189,23 @@ GROUP BY celula_id;
 3. As vendas passam para a célula imediatamente, porque a view resolve a célula na leitura.
 4. Venda sem `affiliate_id` fica em "sem afiliado".
 
-## 7. Como ritmo, metas e ranking serão calculados (Sprints 3–4)
+## 7. Cálculos de metas, ritmo, ranking e bumbo
 
-Esta seção é a base das rotas rascunho `GET /api/painel/resumo` e `GET /api/painel/ranking`. O cálculo será implementado depois; aqui ficam as regras e as fórmulas.
+As regras de cálculo (metas e soma por nível, curva com normalização, meta do dia, situação, projeção, rankings, visão pública e bumbo) estão em [regras-de-calculo.md](regras-de-calculo.md), com fontes, exemplos e as suposições para o PO; o código é `src/shared/contracts/calculos.ts`. Nada disso é guardado no banco: as rotas leem a configuração, as células e as vendas aprovadas e calculam na hora. Aqui ficam só as convenções do modelo de dados que os cálculos usam.
 
 ### 7.1 Tempo
 
-- **Dia local** `D`: o intervalo `[D 00:00, D+1 00:00)` no fuso da campanha, convertido para UTC. Em `America/Belem` (UTC−3 fixo): `[D 03:00Z, D+1 03:00Z)`.
-- **Dia da campanha** `d = D − data_inicio + 1`. Antes do dia 1, a campanha está na fase `antes`; depois do último dia, `encerrada`.
-- **Período `k`**: o que contém `D`. Ele começa em `data_inicio + soma dos dias dos períodos anteriores` e dura `dias_k`. A posição de `D` dentro dele é `t = D − início_k + 1`.
+- `data_inicio` e os `dias` de `campanha_periodos` são do calendário local, sem fuso. Os períodos são consecutivos a partir de `data_inicio`, na `ordem`, e o último dia de vendas é `data_inicio` + soma dos dias − 1 (`calendario.ts`).
+- `aprovado_em` é um instante UTC. O dia local `D` é `[D 00:00, D+1 00:00)` no fuso da campanha, convertido para UTC: em `America/Belem` (UTC−3 fixo), `[D 03:00Z, D+1 03:00Z)`, e o dia de uma venda é `date(aprovado_em, '-3 hours')`.
 
-### 7.2 Meta da célula e das instâncias acima
+### 7.2 Entradas
 
-`M_c` é a meta da célula `c`, na unidade `meta_unidade` (bilhetes ou centavos):
+- Meta: `meta_unidade`, `meta_regra` e `meta_valor` da campanha e `qtd_pessoas` de cada célula.
+- Realizado: `qtd_bilhetes` (unidade `bilhetes`) ou `total_centavos` (unidade `centavos`) da view `vendas_aprovadas`, que só tem pedidos `approved`; `celula_id` NULL é venda sem célula.
 
-| `meta_regra` | `M_c` |
-|---|---|
-| `por_pessoa` | `meta_valor × qtd_pessoas_c` |
-| `total_proporcional` | `meta_valor × qtd_pessoas_c / Σ qtd_pessoas (todas as células)` |
-| `fixa_por_celula` | `meta_valor` |
+### 7.3 Percentuais dos períodos
 
-- Discipulador, rede, divisão e campanha têm como meta a **soma** das metas das células abaixo deles.
-- **Realizado** é a soma de `qtd_bilhetes` (unidade `bilhetes`) ou de `total_centavos` (unidade `centavos`) das vendas aprovadas na janela.
-- Na campanha, o realizado inclui as vendas sem célula, porque o total arrecadado é tudo. Nas demais instâncias, só as vendas atribuídas.
-- Metas e esperados não são arredondados no cálculo; o arredondamento é só na exibição.
-
-### 7.3 Normalização dos percentuais
-
-Os percentuais configurados **nunca são alterados**. O cálculo usa o peso normalizado:
-
-```
-w_k = percentual_bp_k / Σ_j percentual_bp_j
-```
-
-Exemplo da ata: 3500, 2500 e 4500 somam 10500 (105%). Os pesos ficam `w = 0,3333; 0,2381; 0,4286`, que somam 1. Se a soma for 10000, `w_k = percentual_bp_k / 10000`. A API devolve `soma_percentuais_bp` em `GET /api/admin/campanha` para a interface avisar quando a soma for diferente de 10000. Pelo menos um percentual precisa ser maior que zero.
-
-### 7.4 Ritmo
-
-Para uma instância com meta `M`:
-
-| Grandeza | Fórmula |
-|---|---|
-| Meta do período `k` | `M_k = M × w_k` |
-| Meta do dia (linear dentro do período) | `m_k = M_k / dias_k` |
-| Fração esperada até o fim do dia `D` | `F(D) = Σ_{i<k} w_i + w_k × t / dias_k` |
-| Esperado acumulado na campanha | `E(D) = M × F(D)` |
-| Esperado no período até `D` | `M_k × t / dias_k` |
-| Ritmo (`percentual_ritmo_bp`) | `realizado / esperado`, na mesma janela |
-| Meta ajustada do dia | `max(0, M_k − realizado no período até ontem) / (dias_k − t + 1)`: o que faltou é redistribuído pelos dias restantes do período (RF04) |
-| Projeção do fim da campanha | `realizado acumulado / F(D)` (null se `F(D) = 0`) |
-
-A curva dentro do dia (RF09) fica para depois. No MVP, a meta do dia é linear dentro do período, e o esperado considera o dia de hoje inteiro.
-
-Exemplo: 36 células com 450 pessoas, regra `por_pessoa`, 10 bilhetes por pessoa (`M = 4500`), períodos de 10, 7 e 7 dias com 35/25/45.
-
-- Pesos: 0,3333, 0,2381 e 0,4286. Metas dos períodos: 1500, 1071,4 e 1928,6. Metas diárias: 150, 153,1 e 275,5.
-- No dia 8 (período 1, `t = 8`): `F = 0,3333 × 8/10 = 0,2667` e `E = 1200`. Com 1100 bilhetes vendidos, o ritmo é 91,67% e a projeção é `1100 / 0,2667 = 4125`.
-- Uma célula de 12 pessoas tem meta 120: 40 no período 1, ou 4 por dia.
-
-### 7.5 Ranking
-
-- **Níveis**: `celula`, `discipulador`, `rede` e `divisao` (adultos × jovens). O filtro `divisao` gera os rankings separados.
-- **Janela**: `atual` = do início do período que contém a data até a data; `campanha` = do primeiro dia até a data.
-- **Critério** (`ranking_criterio`):
-  - `percentual_meta` = realizado / meta da instância na janela (`M × w_k` no período, `M` na campanha). Comparar com a meta cheia ou com o esperado até hoje dá a mesma ordem, porque a fração do tempo é igual para todos.
-  - `bilhetes` = soma de `qtd_bilhetes`.
-  - `arrecadacao` = soma de `total_centavos`.
-- **Empates** dividem a posição (1, 2, 2, 4). Dentro do empate, a ordem é por nome. Uma instância sem meta (sem células) vai para o fim.
-- **Vendas sem célula** não entram em nenhum ranking. O painel mostra essas vendas à parte (`vendas_sem_celula`).
-- **Visão pública** (`/api/publico/ranking`): mesma ordem, só posição, nome e divisão, com as posições até `publico_limite_ranking` (padrão 3). Quem empata na última posição entra, então a lista pode ter mais itens que o limite (ex.: 1, 2, 3, 3). O `% da meta` só aparece se `publico_mostra_percentual_meta = 1`. **Nunca há valores em R$.**
+- `percentual_bp` guarda o valor configurado, que nunca é alterado: 3500, 2500 e 4500 continuam somando 10500. O cálculo normaliza na leitura, e `GET /api/admin/campanha` devolve `soma_percentuais_bp` para a interface avisar quando a soma é diferente de 10000. Pelo menos um percentual precisa ser maior que zero.
 
 ## 8. O que não é guardado (D1)
 

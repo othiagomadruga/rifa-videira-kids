@@ -3,11 +3,15 @@
 import { describe, expect, it } from "vitest";
 import * as contrato from ".";
 import {
+  JANELAS_RANKING,
+  NIVEIS_RANKING,
+  referenciaCampanhaSchema,
   respostaBumboSchema,
   respostaPainelResumoSchema,
   respostaRankingPublicoSchema,
   respostaRankingSchema,
   type ConsultaRanking,
+  type SituacaoRitmo,
 } from "./api";
 import {
   BUMBO_PADRAO,
@@ -37,10 +41,11 @@ import {
   type CelulaCalculo,
   type EntradaCalculo,
   type EscopoResolvido,
+  type VendaAprovada,
   type VendasDoDia,
 } from "./calculos";
-import { somarDias } from "./calendario";
-import { DIVISOES } from "./dominio";
+import { diasEntre, somarDias } from "./calendario";
+import { CRITERIOS_RANKING, DIVISOES, REGRAS_META } from "./dominio";
 
 // ---------------------------------------------------------------------------------------------------
 // Cenário: 21 dias (7/7/7) com 35/25/45 (soma 105%), 10 bilhetes por pessoa, início em 23/11/2026.
@@ -1639,3 +1644,933 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
     ).toContain("6.236 bilhetes");
   });
 });
+
+// ---------------------------------------------------------------------------------------------------
+// Revisão (RIFA-008): propriedades e bordas com entradas sorteadas. A semente é fixa: mesma entrada,
+// mesmo resultado. Cada teste sorteia muitas campanhas (curvas, regras, unidades, células e vendas,
+// inclusive fora da janela e sem célula) e confere uma promessa de docs/regras-de-calculo.md.
+// ---------------------------------------------------------------------------------------------------
+
+type Sorteador = {
+  inteiro: (minimo: number, maximo: number) => number;
+  chance: (probabilidade: number) => boolean;
+  um: <T>(lista: readonly T[]) => T;
+  embaralhar: <T>(lista: readonly T[]) => T[];
+};
+
+/** Pseudoaleatório com semente (mulberry32): o teste que falha falha sempre igual. */
+function sorteador(semente: number): Sorteador {
+  let estado = semente >>> 0;
+  const proximo = () => {
+    estado = (estado + 0x6d2b79f5) >>> 0;
+    let t = estado;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+  const inteiro = (minimo: number, maximo: number) =>
+    minimo + Math.floor(proximo() * (maximo - minimo + 1));
+  return {
+    inteiro,
+    chance: (probabilidade) => proximo() < probabilidade,
+    um: <T>(lista: readonly T[]): T => lista[inteiro(0, lista.length - 1)],
+    embaralhar: <T>(lista: readonly T[]): T[] => {
+      const copia = [...lista];
+      for (let i = copia.length - 1; i > 0; i--) {
+        const j = inteiro(0, i);
+        [copia[i], copia[j]] = [copia[j], copia[i]];
+      }
+      return copia;
+    },
+  };
+}
+
+const NOMES_SORTEADOS = [
+  "Ágape",
+  "Betel",
+  "Canaã",
+  "Dorcas",
+  "Éfeso",
+  "Filadélfia",
+  "Gileade",
+  "Hebrom",
+  "Israel",
+  "Jope",
+];
+const DAVI: [number, string] = [40, "Discipulador Davi"];
+const DISCIPULADORES_SORTEADOS = [
+  [ABEL, JOVEM],
+  [BOAZ, JOVEM],
+  [CALEB, ADULTA],
+  [DAVI, ADULTA],
+] as const;
+
+/** 1 a 5 períodos de 1 a 9 dias; percentuais de 0 a 100% (pelo menos um > 0), quase nunca somando 100%. */
+function periodosSorteados(s: Sorteador) {
+  const periodos = Array.from({ length: s.inteiro(1, 5) }, (_, indice) => ({
+    nome: `Semana ${indice + 1}`,
+    dias: s.inteiro(1, 9),
+    percentual_bp: s.chance(0.2) ? 0 : s.inteiro(1, 10_000),
+  }));
+  if (periodos.every((periodo) => periodo.percentual_bp === 0))
+    periodos[0].percentual_bp = 3500;
+  return periodos;
+}
+
+/** Campanha, células e vendas sorteadas (de 3 dias antes do início a 3 depois do fim) e um "agora". */
+function cenarioSorteado(s: Sorteador) {
+  const periodos = periodosSorteados(s);
+  const duracao = periodos.reduce((soma, periodo) => soma + periodo.dias, 0);
+  const unidade = s.um(["bilhetes", "centavos"] as const);
+  const campanha: CampanhaCalculo = {
+    ...CAMPANHA,
+    meta: {
+      unidade,
+      regra: s.um(REGRAS_META),
+      valor:
+        unidade === "bilhetes"
+          ? s.inteiro(1, 3000)
+          : s.inteiro(100_000, 9_000_000),
+    },
+    periodos,
+    ranking: { criterio: s.um(CRITERIOS_RANKING) },
+    publico: {
+      mostra_percentual_meta: s.chance(0.5),
+      limite_ranking: s.chance(0.2) ? null : s.inteiro(1, 5),
+    },
+  };
+  const celulas = Array.from({ length: s.inteiro(1, 10) }, (_, indice) => {
+    const [discipulador, rede] = s.um(DISCIPULADORES_SORTEADOS);
+    return celula(
+      indice + 1,
+      `Célula ${NOMES_SORTEADOS[indice]}`,
+      s.inteiro(1, 25),
+      discipulador,
+      rede,
+    );
+  });
+  const preco = s.um([1990, 2000, 2500]);
+  const vendas = Array.from({ length: s.inteiro(0, 40) }, () => {
+    const bilhetes = s.inteiro(1, 30);
+    return venda(
+      s.chance(0.1)
+        ? null
+        : s.chance(0.05)
+          ? 999
+          : s.inteiro(1, celulas.length),
+      dia(s.inteiro(-3, duracao + 3)),
+      bilhetes,
+      bilhetes * preco,
+      s.inteiro(1, 3),
+    );
+  });
+  const hora = String(s.inteiro(3, 26) % 24).padStart(2, "0");
+  const agora = new Date(
+    `${dia(s.inteiro(-3, duracao + 3))}T${hora}:30:00.000Z`,
+  );
+  const entradaSorteada: EntradaCalculo = { campanha, celulas, vendas };
+  return { entrada: entradaSorteada, duracao, agora };
+}
+
+/** Uma venda de `quantidade` na unidade da meta (bilhetes ou centavos). */
+function vendaNaUnidade(
+  campanha: CampanhaCalculo,
+  celulaId: number | null,
+  data: string,
+  quantidade: number,
+): VendasDoDia {
+  return campanha.meta.unidade === "bilhetes"
+    ? venda(celulaId, data, quantidade, quantidade * 2000)
+    : venda(
+        celulaId,
+        data,
+        Math.max(1, Math.ceil(quantidade / 2000)),
+        quantidade,
+      );
+}
+
+/** Todo número da resposta é finito (sem NaN nem Infinity escondidos atrás de um null do JSON). */
+function numerosFinitos(valor: unknown): boolean {
+  if (typeof valor === "number") return Number.isFinite(valor);
+  if (Array.isArray(valor)) return valor.every(numerosFinitos);
+  if (valor && typeof valor === "object")
+    return Object.values(valor).every(numerosFinitos);
+  return true;
+}
+
+const textoPorcento = (bp: number) =>
+  `${new Intl.NumberFormat("pt-BR").format(Math.floor(bp / 100))}%`;
+
+describe("Revisão: propriedades e bordas (entradas sorteadas)", () => {
+  it("R1: a meta da campanha é a regra aplicada ao todo; células, discipuladores, redes e divisões somam a ela", () => {
+    const s = sorteador(1);
+    for (let rodada = 0; rodada < 150; rodada++) {
+      const { entrada: e, agora } = cenarioSorteado(s);
+      const { meta } = e.campanha;
+      const pessoas = e.celulas.reduce((soma, c) => soma + c.qtd_pessoas, 0);
+      const daRegra = {
+        por_pessoa: meta.valor * pessoas,
+        fixa_por_celula: meta.valor * e.celulas.length,
+        total_proporcional: meta.valor,
+      }[meta.regra];
+      const metaDoEscopo = (escopo: EscopoResolvido) =>
+        montarResumoPainel(e, { escopo }, agora).campanha.meta;
+      expect(metaDoEscopo(ESCOPO_CAMPANHA)).toBe(daRegra);
+      // Por pessoa e fixa: soma exata. Proporcional: cada instância arredonda para cima (S5), então a
+      // soma mostrada passa do total em menos de 1 por instância.
+      const conferirSoma = (metas: number[]) => {
+        const soma = metas.reduce((total, valor) => total + valor, 0);
+        const folga =
+          meta.regra === "total_proporcional" ? metas.length - 1 : 0;
+        expect(soma - daRegra).toBeGreaterThanOrEqual(0);
+        expect(soma - daRegra).toBeLessThanOrEqual(folga);
+      };
+      for (const nivel of NIVEIS_RANKING)
+        conferirSoma(
+          montarRankingPainel(
+            e,
+            { nivel, periodo: "campanha" },
+            agora,
+          ).itens.map((item) => item.meta),
+        );
+      const divisoes = DIVISOES.filter((divisao) =>
+        e.celulas.some((c) => c.divisao === divisao),
+      );
+      conferirSoma(
+        divisoes.map((divisao) =>
+          metaDoEscopo({
+            tipo: "divisao",
+            id: null,
+            divisao,
+            nome: NOMES_DIVISAO[divisao],
+          }),
+        ),
+      );
+      // Mesmo número de pessoas, mesma meta, em qualquer regra.
+      const metas = metasDasCelulas(meta, e.celulas);
+      for (const a of e.celulas)
+        for (const b of e.celulas)
+          if (a.qtd_pessoas === b.qtd_pessoas)
+            expect(metas.get(a.id)).toEqual(metas.get(b.id));
+    }
+  });
+
+  it("R2: a curva começa em 0, nunca desce, é linear dentro de cada período e termina em 100% exatos", () => {
+    const s = sorteador(2);
+    for (let rodada = 0; rodada < 300; rodada++) {
+      const periodos = periodosSorteados(s);
+      const curva = curvaEsperada(periodos);
+      const soma = BigInt(periodos.reduce((t, p) => t + p.percentual_bp, 0));
+      const duracao = periodos.reduce((t, p) => t + p.dias, 0);
+      expect(curva).toHaveLength(duracao + 1);
+      expect(curva[0].num).toBe(0n);
+      expect(curva[duracao].num).toBe(curva[duracao].den);
+      // Cada dia do período anda percentual ÷ (soma dos percentuais × dias do período): normaliza os
+      // 105% e reparte o período em partes iguais.
+      let n = 0;
+      for (const periodo of periodos)
+        for (let t = 1; t <= periodo.dias; t++) {
+          n++;
+          const [a, b] = [curva[n - 1], curva[n]];
+          expect(
+            (b.num * a.den - a.num * b.den) * soma * BigInt(periodo.dias),
+          ).toBe(BigInt(periodo.percentual_bp) * a.den * b.den);
+        }
+      const meta = {
+        num: BigInt(s.inteiro(0, 50_000)),
+        den: BigInt(s.inteiro(1, 60)),
+      };
+      const esperados = Array.from({ length: duracao + 3 }, (_, i) =>
+        esperadoAteODia(meta, curva, i - 1),
+      );
+      expect(esperados).toEqual([...esperados].sort((x, y) => x - y));
+      expect(esperados.slice(0, 2)).toEqual([0, 0]);
+      expect(esperados.slice(-2)).toEqual([
+        metaArredondada(meta),
+        metaArredondada(meta),
+      ]);
+      expect(percentualEsperadoBp(curva, duracao)).toBe(10_000);
+    }
+  });
+
+  it("R3: a meta do dia nunca é negativa, as partes da curva somam a meta e quem cumpre a meta do dia termina nela", () => {
+    const s = sorteador(3);
+    for (let rodada = 0; rodada < 300; rodada++) {
+      const curva = curvaEsperada(periodosSorteados(s));
+      const duracao = curva.length - 1;
+      const meta = {
+        num: BigInt(s.inteiro(0, 50_000)),
+        den: BigInt(s.inteiro(1, 60)),
+      };
+      const total = metaArredondada(meta);
+      let somaDasPartes = 0;
+      let cumprindo = 0; // vende exatamente a meta do dia, todo dia
+      let qualquer = 0; // vende um valor sorteado (às vezes zero, às vezes muito acima)
+      for (let n = 1; n <= duracao; n++) {
+        const doDia = metaDoDia(meta, curva, n, cumprindo);
+        expect(doDia.meta_base).toBeGreaterThanOrEqual(0);
+        expect(doDia.meta).toBe(doDia.meta_base);
+        somaDasPartes += doDia.meta_base;
+        cumprindo += doDia.meta;
+        expect(cumprindo).toBe(esperadoAteODia(meta, curva, n));
+        const sorteado = metaDoDia(meta, curva, n, qualquer);
+        expect(sorteado.meta).toBe(
+          Math.max(0, esperadoAteODia(meta, curva, n) - qualquer),
+        );
+        if (n === duracao)
+          expect(sorteado.meta).toBe(Math.max(0, total - qualquer));
+        qualquer += s.inteiro(0, Math.ceil((2 * total) / duracao) + 1);
+      }
+      expect(somaDasPartes).toBe(total);
+      expect(cumprindo).toBe(total);
+    }
+  });
+
+  it("R3/R4 no painel: quem vende a meta do dia fica em dia e fecha na meta; o dia zerado entra na meta do dia seguinte", () => {
+    const s = sorteador(4);
+    for (let rodada = 0; rodada < 40; rodada++) {
+      const { entrada: e, duracao } = cenarioSorteado(s);
+      const vendas: VendasDoDia[] = [];
+      const zerado = s.inteiro(1, duracao);
+      let metaZerada = 0;
+      for (let n = 1; n <= duracao + 1; n++) {
+        const r = montarResumoPainel(
+          { ...e, vendas },
+          { escopo: ESCOPO_CAMPANHA },
+          meioDia(n),
+        );
+        expect(respostaPainelResumoSchema.parse(r)).toEqual(r);
+        const { campanha } = r;
+        if (n > duracao) {
+          expect(r.hoje).toBeNull();
+          expect(campanha.esperado).toBe(campanha.meta);
+          expect(campanha.realizado).toBe(
+            campanha.meta - (zerado === duracao ? metaZerada : 0),
+          );
+          break;
+        }
+        const hoje = obrigatorioNoTeste(r.hoje);
+        // "120 + 30 que faltaram": a meta do dia é a parte da curva mais a falta (menos a sobra).
+        expect(hoje.meta).toBe(
+          Math.max(
+            0,
+            hoje.meta_base + campanha.esperado - campanha.realizado_ate_ontem,
+          ),
+        );
+        if (n === zerado + 1) {
+          expect(campanha.situacao).toBe(metaZerada > 0 ? "abaixo" : "em_dia");
+          expect(campanha.diferenca).toBe(0 - metaZerada);
+          expect(hoje.meta).toBe(hoje.meta_base + metaZerada);
+        } else {
+          expect(campanha.situacao).toBe("em_dia");
+          expect(campanha.diferenca).toBe(0);
+        }
+        if (n === zerado) metaZerada = hoje.meta;
+        else if (hoje.meta > 0)
+          vendas.push(
+            vendaNaUnidade(e.campanha, s.um([1, null]), dia(n), hoje.meta),
+          );
+      }
+    }
+  });
+
+  it("R11: realizado ≥ alvo arredondado vale exatamente quando o percentual chega a 100% (painel e ranking)", () => {
+    const s = sorteador(5);
+    const conferir = (valores: {
+      meta: number;
+      esperado: number;
+      realizado: number;
+      diferenca: number;
+      situacao: SituacaoRitmo;
+      percentual_meta_bp: number | null;
+    }) => {
+      expect(valores.diferenca).toBe(valores.realizado - valores.esperado);
+      expect(valores.esperado).toBeLessThanOrEqual(valores.meta);
+      if (valores.percentual_meta_bp === null)
+        expect(valores.situacao).toBe("sem_meta");
+      else {
+        expect(valores.percentual_meta_bp >= 10_000).toBe(
+          valores.realizado >= valores.meta,
+        );
+        expect(valores.situacao).toBe(
+          valores.realizado >= valores.esperado ? "em_dia" : "abaixo",
+        );
+      }
+    };
+    for (let rodada = 0; rodada < 150; rodada++) {
+      const { entrada: e, agora } = cenarioSorteado(s);
+      for (const escopo of [
+        ESCOPO_CAMPANHA,
+        { ...ESCOPO_AGAPE, nome: "Célula Ágape" },
+      ]) {
+        const r = montarResumoPainel(e, { escopo }, agora);
+        for (const ritmo of [r.campanha, r.periodo]) {
+          if (!ritmo) continue;
+          conferir(ritmo);
+          expect(ritmo.ritmo_bp === null).toBe(ritmo.esperado === 0);
+          if (ritmo.ritmo_bp !== null)
+            expect(ritmo.ritmo_bp >= 10_000).toBe(
+              ritmo.realizado_ate_ontem >= ritmo.esperado,
+            );
+          expect(ritmo.percentual_esperado_bp === null).toBe(
+            ritmo.percentual_meta_bp === null,
+          );
+        }
+        if (r.hoje) {
+          expect(r.hoje.batida).toBe(r.hoje.realizado >= r.hoje.meta);
+          expect(r.hoje.falta).toBe(
+            Math.max(0, r.hoje.meta - r.hoje.realizado),
+          );
+          if (r.hoje.percentual_meta_bp !== null)
+            expect(r.hoje.percentual_meta_bp >= 10_000).toBe(r.hoje.batida);
+        }
+      }
+      for (const periodo of JANELAS_RANKING)
+        for (const item of montarRankingPainel(
+          e,
+          { nivel: "celula", periodo },
+          agora,
+        ).itens)
+          conferir(item);
+    }
+  });
+
+  it("R6: em todos os dias, 03:00:00.000Z abre e 02:59:59.999Z do dia seguinte fecha o dia de Belém", () => {
+    const linhas: VendaAprovada[] = [];
+    for (let n = 0; n <= 22; n++)
+      linhas.push(
+        {
+          celula_id: 1,
+          aprovado_em: `${dia(n)}T03:00:00.000Z`,
+          qtd_bilhetes: 1,
+          total_centavos: 2000,
+        },
+        {
+          celula_id: 1,
+          aprovado_em: `${dia(n + 1)}T02:59:59.999Z`,
+          qtd_bilhetes: 2,
+          total_centavos: 4000,
+        },
+      );
+    const porDiaLocal = agruparVendasPorDia(linhas, "America/Belem");
+    expect(porDiaLocal.map((l) => [l.dia, l.pedidos, l.bilhetes])).toEqual(
+      Array.from({ length: 23 }, (_, n) => [dia(n), 2, 3]),
+    );
+    const { inicio, fim } = janelaUtcDaCampanha(CAMPANHA);
+    for (const linha of linhas)
+      expect(vendaContaNaCampanha(linha.aprovado_em, CAMPANHA)).toBe(
+        linha.aprovado_em >= inicio && linha.aprovado_em < fim,
+      );
+    // A consulta SQL de regras-de-calculo.md (seção 5), date(aprovado_em, '-3 hours'), dá o mesmo dia.
+    const s = sorteador(6);
+    const tresHoras = 3 * 3_600_000;
+    for (let i = 0; i < 500; i++) {
+      const instante = new Date(
+        Date.UTC(2026, 0, 1) +
+          s.inteiro(0, 2 * 365 * 24 * 60) * 60_000 -
+          s.inteiro(0, 1),
+      ).toISOString();
+      expect(diaLocalDoInstante(instante, "America/Belem")).toBe(
+        new Date(Date.parse(instante) - tresHoras).toISOString().slice(0, 10),
+      );
+    }
+    // No painel, depois do fim: 3 bilhetes em cada um dos 21 dias e os dias 0 e 22 fora da janela.
+    const r = resumo(
+      porDiaLocal,
+      new Date("2026-12-20T15:00:00.000Z"),
+      ESCOPO_CAMPANHA,
+    );
+    expect(r.curva.map((ponto) => ponto.realizado_no_dia)).toEqual(
+      Array(21).fill(3),
+    );
+    const doisPedidos = {
+      pedidos_aprovados: 2,
+      bilhetes: 3,
+      total_centavos: 6000,
+    };
+    expect(r.vendas_fora_da_janela).toEqual({
+      antes_do_inicio: doisPedidos,
+      depois_do_fim: doisPedidos,
+    });
+  });
+
+  it("S8: vendas aprovadas antes do 1º dia ou depois do último não mudam meta, realizado, rankings nem bumbo", () => {
+    const s = sorteador(7);
+    for (let rodada = 0; rodada < 60; rodada++) {
+      const { entrada: e, duracao, agora } = cenarioSorteado(s);
+      const naJanela = (v: VendasDoDia) => {
+        const n = diasEntre(e.campanha.data_inicio, v.dia) + 1;
+        return n >= 1 && n <= duracao;
+      };
+      const extras = Array.from({ length: s.inteiro(1, 6) }, () =>
+        venda(
+          s.chance(0.2) ? null : s.inteiro(1, e.celulas.length),
+          s.chance(0.5)
+            ? dia(s.inteiro(-30, 0))
+            : dia(duracao + s.inteiro(1, 30)),
+          s.inteiro(1, 9),
+        ),
+      );
+      const semFora = { ...e, vendas: e.vendas.filter(naJanela) };
+      const comFora = { ...semFora, vendas: [...semFora.vendas, ...extras] };
+      const r1 = montarResumoPainel(
+        semFora,
+        { escopo: ESCOPO_CAMPANHA },
+        agora,
+      );
+      const r2 = montarResumoPainel(
+        comFora,
+        { escopo: ESCOPO_CAMPANHA },
+        agora,
+      );
+      expect({ ...r2, vendas_fora_da_janela: null }).toEqual({
+        ...r1,
+        vendas_fora_da_janela: null,
+      });
+      // À parte, só o que já foi aprovado até a data de referência.
+      const hoje = diaLocalDoInstante(agora, "America/Belem");
+      const jaAconteceu = extras.filter((v) => diasEntre(v.dia, hoje) >= 0);
+      const fora = obrigatorioNoTeste(r2.vendas_fora_da_janela);
+      expect(fora.antes_do_inicio.bilhetes + fora.depois_do_fim.bilhetes).toBe(
+        jaAconteceu.reduce((soma, v) => soma + v.bilhetes, 0),
+      );
+      for (const periodo of JANELAS_RANKING) {
+        const consulta = { nivel: "celula" as const, periodo };
+        expect(montarRankingPainel(comFora, consulta, agora)).toEqual(
+          montarRankingPainel(semFora, consulta, agora),
+        );
+        expect(montarRankingPublico(comFora, consulta, agora)).toEqual(
+          montarRankingPublico(semFora, consulta, agora),
+        );
+      }
+      for (let n = -1; n <= duracao + 2; n++)
+        expect(montarBumbo(comFora, { data: dia(n) }, agora).texto).toBe(
+          montarBumbo(semFora, { data: dia(n) }, agora).texto,
+        );
+    }
+  });
+
+  it("S17: o retrato de uma data passada não muda com vendas posteriores nem com a hora da consulta", () => {
+    const s = sorteador(8);
+    const semHora = <T extends { atualizado_em: string }>(resposta: T) => ({
+      ...resposta,
+      atualizado_em: "",
+    });
+    for (let rodada = 0; rodada < 60; rodada++) {
+      const { entrada: e, duracao } = cenarioSorteado(s);
+      const n = s.inteiro(-1, duracao + 1);
+      const data = dia(n);
+      const ate = (limite: string) => ({
+        ...e,
+        vendas: e.vendas.filter((v) => diasEntre(v.dia, limite) >= 0),
+      });
+      const fimDoDia = new Date(`${dia(n + 1)}T02:59:59.999Z`); // último instante de `data` em Belém
+      const muitoDepois = new Date(`${dia(duracao + 5)}T15:00:00.000Z`);
+      const escopo = s.chance(0.5) ? ESCOPO_CAMPANHA : ESCOPO_AGAPE;
+      expect(
+        semHora(montarResumoPainel(e, { escopo, data }, muitoDepois)),
+      ).toEqual(semHora(montarResumoPainel(ate(data), { escopo }, fimDoDia)));
+      const consulta = {
+        nivel: s.um(NIVEIS_RANKING),
+        periodo: s.um(JANELAS_RANKING),
+      };
+      expect(
+        semHora(montarRankingPainel(e, { ...consulta, data }, muitoDepois)),
+      ).toEqual(semHora(montarRankingPainel(ate(data), consulta, fimDoDia)));
+      // O bumbo de `data` fala do dia anterior: as vendas do próprio dia também não contam.
+      const bumbo1 = montarBumbo(e, { data }, muitoDepois);
+      const bumbo2 = montarBumbo(ate(dia(n - 1)), {}, fimDoDia);
+      expect([bumbo1.texto, bumbo1.referencia]).toEqual([
+        bumbo2.texto,
+        bumbo2.referencia,
+      ]);
+    }
+  });
+
+  it("R8: classificarRanking não depende da ordem de entrada; posição de competição, empates e vizinhos corretos", () => {
+    const s = sorteador(9);
+    const nomes = [
+      "Célula Ágape",
+      "célula agape",
+      "Célula Betel",
+      "Célula 2",
+      "Célula 10",
+      "Célula Éfeso",
+      "CÉLULA EFESO",
+      "Célula Canaã",
+    ];
+    const ordemPt = new Intl.Collator("pt-BR", {
+      sensitivity: "base",
+      numeric: true,
+    });
+    // `a` é estritamente melhor que `b` (null = sem meta, o pior).
+    const melhor = (a: number | null, b: number | null) =>
+      a !== null && (b === null || a > b);
+    for (let rodada = 0; rodada < 300; rodada++) {
+      const participantes = Array.from(
+        { length: s.inteiro(0, 10) },
+        (_, indice) => ({
+          id: indice + 1,
+          nome: s.um(nomes),
+          chave: s.chance(0.15) ? null : s.inteiro(0, 4),
+        }),
+      );
+      const resultado = classificarRanking(participantes);
+      const resumir = (lista: typeof resultado) =>
+        lista.map((c) => [
+          c.item.id,
+          c.posicao,
+          c.acima && [c.acima.item.id, c.acima.posicao, c.acima.diferenca],
+          c.abaixo && [c.abaixo.item.id, c.abaixo.posicao, c.abaixo.diferenca],
+        ]);
+      expect(resumir(classificarRanking(s.embaralhar(participantes)))).toEqual(
+        resumir(resultado),
+      );
+      expect(resultado).toHaveLength(participantes.length);
+      resultado.forEach((c, i) => {
+        expect(c.posicao).toBe(
+          1 + participantes.filter((p) => melhor(p.chave, c.item.chave)).length,
+        );
+        if (i > 0) {
+          const anterior = resultado[i - 1].item;
+          expect(melhor(c.item.chave, anterior.chave)).toBe(false);
+          if (anterior.chave === c.item.chave)
+            expect(
+              ordemPt.compare(anterior.nome, c.item.nome) ||
+                anterior.id - c.item.id,
+            ).toBeLessThan(0);
+        }
+        const distancia = (maior: number | null, menor: number | null) =>
+          maior === null || menor === null ? null : maior - menor;
+        const acima = resultado
+          .slice(0, i)
+          .reverse()
+          .find((o) => o.posicao < c.posicao);
+        expect(
+          c.acima && [c.acima.item, c.acima.posicao, c.acima.diferenca],
+        ).toEqual(
+          acima
+            ? [
+                acima.item,
+                acima.posicao,
+                distancia(acima.item.chave, c.item.chave),
+              ]
+            : null,
+        );
+        const abaixo = resultado
+          .slice(i + 1)
+          .find((o) => o.posicao > c.posicao);
+        expect(
+          c.abaixo && [c.abaixo.item, c.abaixo.posicao, c.abaixo.diferenca],
+        ).toEqual(
+          abaixo
+            ? [
+                abaixo.item,
+                abaixo.posicao,
+                distancia(c.item.chave, abaixo.item.chave),
+              ]
+            : null,
+        );
+      });
+    }
+  });
+
+  it("R9: o ranking público é o da coordenação cortado (só quem vendeu, até o limite, com empates) e sem valores", () => {
+    const s = sorteador(10);
+    for (let rodada = 0; rodada < 100; rodada++) {
+      const { entrada: e, agora } = cenarioSorteado(s);
+      const { publico } = e.campanha;
+      for (const nivel of NIVEIS_RANKING)
+        for (const periodo of JANELAS_RANKING)
+          for (const divisao of [undefined, ...DIVISOES]) {
+            const consulta =
+              divisao === undefined
+                ? { nivel, periodo }
+                : { nivel, periodo, divisao };
+            const coordenacao = montarRankingPainel(e, consulta, agora);
+            const aberto = montarRankingPublico(e, consulta, agora);
+            expect(respostaRankingPublicoSchema.parse(aberto)).toEqual(aberto);
+            expect(aberto.itens).toEqual(
+              coordenacao.itens
+                .filter(
+                  (item) =>
+                    item.vendas.pedidos_aprovados > 0 &&
+                    (publico.limite_ranking === null ||
+                      item.posicao <= publico.limite_ranking),
+                )
+                .map((item) => ({
+                  posicao: item.posicao,
+                  nome: item.nome,
+                  divisao: item.divisao,
+                  ...(publico.mostra_percentual_meta &&
+                  item.percentual_meta_bp !== null
+                    ? { percentual_meta_bp: item.percentual_meta_bp }
+                    : {}),
+                })),
+            );
+            expect([aberto.janela, aberto.referencia, aberto.criterio]).toEqual(
+              [
+                coordenacao.janela,
+                coordenacao.referencia,
+                coordenacao.criterio,
+              ],
+            );
+            for (const item of aberto.itens)
+              expect(
+                Object.keys(item).every((chave) =>
+                  ["posicao", "nome", "divisao", "percentual_meta_bp"].includes(
+                    chave,
+                  ),
+                ),
+              ).toBe(true);
+          }
+    }
+  });
+
+  it("R10: o bumbo nunca traz R$, centavos nem número cru; bilhetes só com a opção e sempre bilhetes de verdade", () => {
+    const s = sorteador(11);
+    const proibidos = [
+      /R\$/,
+      /centavo/i,
+      /\breais?\b/i,
+      /\d,\d/, // vírgula decimal: nenhum valor em dinheiro formatado
+      /\d{4,}/, // número cru: tudo acima de 999 sai com separador de milhar
+      /NaN|Infinity|undefined|null/,
+    ];
+    for (let rodada = 0; rodada < 50; rodada++) {
+      const { entrada: e, duracao } = cenarioSorteado(s);
+      const naJanela = e.vendas.filter((v) => {
+        const n = diasEntre(e.campanha.data_inicio, v.dia) + 1;
+        return n >= 1 && n <= duracao;
+      });
+      for (let n = -2; n <= duracao + 2; n++)
+        for (const mostrar_bilhetes of [false, true]) {
+          const resposta = montarBumbo(
+            e,
+            { data: dia(n) },
+            new Date(`${dia(n)}T13:00:00.000Z`),
+            { mostrar_bilhetes },
+          );
+          expect(respostaBumboSchema.parse(resposta)).toEqual(resposta);
+          for (const proibido of proibidos)
+            expect(resposta.texto, `${dia(n)}: ${proibido}`).not.toMatch(
+              proibido,
+            );
+          if (!mostrar_bilhetes) {
+            expect(resposta.texto).not.toMatch(/bilhete/i);
+            continue;
+          }
+          // Com a opção, só aparecem os bilhetes de ontem e os acumulados até ontem.
+          const ontem = dia(n - 1);
+          const somar = (lista: VendasDoDia[]) =>
+            lista.reduce((soma, v) => soma + v.bilhetes, 0);
+          const permitidos = [
+            somar(naJanela.filter((v) => v.dia === ontem)),
+            somar(naJanela.filter((v) => diasEntre(v.dia, ontem) >= 0)),
+          ].map((valor) => new Intl.NumberFormat("pt-BR").format(valor));
+          for (const [, numero] of resposta.texto.matchAll(
+            /([\d.]+) bilhetes?\b/g,
+          ))
+            expect(permitidos, `${dia(n)}: ${numero} bilhetes`).toContain(
+              numero,
+            );
+        }
+    }
+  });
+
+  it("R10: o bumbo do dia D repete o painel do fim do dia D−1 (venda de ontem, acumulado, curva, situação e projeção)", () => {
+    const s = sorteador(12);
+    for (let rodada = 0; rodada < 40; rodada++) {
+      const { entrada: e, duracao } = cenarioSorteado(s);
+      const curva = curvaEsperada(e.campanha.periodos);
+      for (let n = 2; n <= duracao + 1; n++) {
+        const texto = montarBumbo(e, { data: dia(n) }, meioDia(n)).texto;
+        const ontem = montarResumoPainel(
+          e,
+          { escopo: ESCOPO_CAMPANHA, data: dia(n - 1) },
+          meioDia(n),
+        );
+        const rotulo =
+          n > duracao
+            ? `*Último dia (dia ${n - 1}):*`
+            : `*Ontem (dia ${n - 1}):*`;
+        const doDia = obrigatorioNoTeste(ontem.hoje).percentual_meta_bp;
+        expect(texto).toContain(
+          doDia === null
+            ? `${rotulo} a meta do dia já estava coberta.`
+            : `${rotulo} vendemos ${textoPorcento(doDia)} da meta do dia.`,
+        );
+        const acumulado = textoPorcento(
+          obrigatorioNoTeste(ontem.campanha.percentual_meta_bp),
+        );
+        if (n > duracao) {
+          expect(texto).toContain(`*Resultado final:* ${acumulado} da meta.`);
+          continue;
+        }
+        expect(texto).toContain(
+          `*Acumulado:* ${acumulado} da meta. Pela curva, o esperado até ontem era ${textoPorcento(percentualEsperadoBp(curva, n - 1))}.`,
+        );
+        // Situação e projeção: as do painel na manhã do dia D, antes de qualquer venda do dia.
+        const manha = montarResumoPainel(
+          {
+            ...e,
+            vendas: e.vendas.filter((v) => diasEntre(v.dia, dia(n - 1)) >= 0),
+          },
+          { escopo: ESCOPO_CAMPANHA, data: dia(n) },
+          meioDia(n),
+        ).campanha;
+        if (manha.projecao_percentual_meta_bp === null)
+          expect(texto).not.toContain("no ritmo atual");
+        else
+          expect(texto).toContain(
+            `${manha.situacao === "em_dia" ? "Estamos em dia" : "Estamos abaixo da curva"}: no ritmo atual, chegamos a ${textoPorcento(manha.projecao_percentual_meta_bp)} da meta.`,
+          );
+        const faltam = duracao - n + 1;
+        expect(texto).toContain(
+          n === duracao
+            ? "*Hoje é o último dia!*"
+            : `Faltam ${faltam === 1 ? "1 dia" : `${faltam} dias`}${manha.situacao === "abaixo" ? " e dá para virar o jogo" : ". Bora manter o ritmo"}`,
+        );
+      }
+    }
+  });
+
+  it("R7: fase, dia N de total e período batem com o calendário em todas as datas, inclusive o último dia", () => {
+    const s = sorteador(13);
+    for (let rodada = 0; rodada < 100; rodada++) {
+      const periodos = periodosSorteados(s);
+      const campanha = { ...CAMPANHA, periodos };
+      const duracao = periodos.reduce((t, p) => t + p.dias, 0);
+      const doDia: { ordem: number; noPeriodo: number; dias: number }[] = [];
+      periodos.forEach((periodo, indice) => {
+        for (let t = 1; t <= periodo.dias; t++)
+          doDia.push({ ordem: indice + 1, noPeriodo: t, dias: periodo.dias });
+      });
+      for (let n = -2; n <= duracao + 2; n++) {
+        const referencia = referenciaDaCampanha(campanha, dia(n));
+        expect(referenciaCampanhaSchema.parse(referencia)).toEqual(referencia);
+        expect(referencia).toMatchObject({
+          data: dia(n),
+          duracao_dias: duracao,
+          data_fim: dia(duracao),
+        });
+        if (n < 1)
+          expect(referencia).toMatchObject({
+            fase: "antes",
+            dia_campanha: null,
+            dias_restantes: duracao,
+            dias_para_inicio: 1 - n,
+            periodo: null,
+          });
+        else if (n > duracao)
+          expect(referencia).toMatchObject({
+            fase: "encerrada",
+            dia_campanha: null,
+            dias_restantes: 0,
+            dias_para_inicio: null,
+            periodo: null,
+          });
+        else {
+          const { ordem, noPeriodo, dias } = doDia[n - 1];
+          expect(referencia).toMatchObject({
+            fase: "durante",
+            dia_campanha: n,
+            dias_restantes: duracao - n + 1,
+            dias_para_inicio: null,
+            periodo: {
+              ordem,
+              nome: periodos[ordem - 1].nome,
+              data_inicio: dia(n - noPeriodo + 1),
+              data_fim: dia(n - noPeriodo + dias),
+              dias,
+              dia_no_periodo: noPeriodo,
+              dias_restantes: dias - noPeriodo + 1,
+            },
+          });
+        }
+      }
+    }
+  });
+
+  it("bordas: 0 pessoas, meta zero e período a 0% não dividem por zero, não lançam e cabem nos schemas", () => {
+    const zeradas = [
+      celula(1, "Célula Zero", 0, ABEL, JOVEM),
+      celula(2, "Célula Vazia", 0, CALEB, ADULTA),
+    ];
+    const comUma = [...zeradas, celula(3, "Célula Uma", 1, BOAZ, JOVEM)];
+    const aquecimento: CampanhaCalculo = {
+      ...CAMPANHA,
+      periodos: [
+        { nome: "Aquecimento", dias: 3, percentual_bp: 0 },
+        { nome: "Reta final", dias: 4, percentual_bp: 10_000 },
+      ],
+    };
+    const campanhas: CampanhaCalculo[] = [
+      ...REGRAS_META.map((regra) => ({
+        ...CAMPANHA,
+        meta: { ...CAMPANHA.meta, regra },
+      })),
+      { ...CAMPANHA, meta: { ...CAMPANHA.meta, valor: 0 } },
+      aquecimento,
+    ];
+    const vendas = [
+      venda(1, dia(1), 3),
+      venda(2, dia(2), 1),
+      venda(3, dia(3), 2),
+      venda(null, dia(2), 1),
+    ];
+    for (const campanha of campanhas)
+      for (const celulas of [zeradas, comUma])
+        for (const n of [-1, 0, 1, 2, 4, 7, 8, 21, 22, 30]) {
+          const e = { campanha, celulas, vendas };
+          const agora = meioDia(n);
+          const respostas = [
+            respostaPainelResumoSchema.parse(
+              montarResumoPainel(e, { escopo: ESCOPO_CAMPANHA }, agora),
+            ),
+            respostaPainelResumoSchema.parse(
+              montarResumoPainel(
+                e,
+                { escopo: { ...ESCOPO_AGAPE, nome: "Célula Zero" } },
+                agora,
+              ),
+            ),
+            ...JANELAS_RANKING.map((periodo) =>
+              respostaRankingSchema.parse(
+                montarRankingPainel(e, { nivel: "celula", periodo }, agora),
+              ),
+            ),
+            respostaRankingPublicoSchema.parse(
+              montarRankingPublico(
+                e,
+                { nivel: "celula", periodo: "atual" },
+                agora,
+              ),
+            ),
+            respostaBumboSchema.parse(montarBumbo(e, {}, agora)),
+          ];
+          expect(numerosFinitos(respostas)).toBe(true);
+        }
+    // No período a 0%, ninguém tem meta: todos "sem meta", empatados em 1º no % da meta.
+    const itens = montarRankingPainel(
+      { campanha: aquecimento, celulas: comUma, vendas },
+      { nivel: "celula", periodo: "atual" },
+      meioDia(3),
+    ).itens;
+    expect(itens.map((i) => [i.posicao, i.situacao, i.meta])).toEqual([
+      [1, "sem_meta", 0],
+      [1, "sem_meta", 0],
+      [1, "sem_meta", 0],
+    ]);
+    // Período de 0 dias não forma curva: erro explícito (a configuração exige ≥ 1 dia), nunca divisão por zero.
+    expect(() => curvaEsperada([{ dias: 0, percentual_bp: 10_000 }])).toThrow(
+      RangeError,
+    );
+  });
+});
+
+function obrigatorioNoTeste<T>(valor: T | null | undefined): T {
+  if (valor === null || valor === undefined)
+    throw new Error("valor ausente no teste");
+  return valor;
+}

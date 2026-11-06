@@ -2,7 +2,7 @@
 
 Contrato das regras que o painel, os rankings, a visão pública e o bumbo usam (RIFA-008). O código é um só e é puro: `src/shared/contracts/calculos.ts`, testado em `calculos.test.ts` (cada exemplo numérico deste documento está lá). As rotas estão em [api.md](api.md): o Worker lê o banco e chama as funções `montar*`, sem refazer conta nenhuma.
 
-Este documento **substitui a seção 7 de [modelo-de-dados.md](modelo-de-dados.md)**. Onde os dois divergem, vale este (as diferenças estão na seção 4).
+Este documento **substituiu o conteúdo de cálculo da seção 7 de [modelo-de-dados.md](modelo-de-dados.md)**, que agora só resume e aponta para cá; o que mudou em relação àquela versão está na seção 4.
 
 **Como ler as fontes.** `[hh:mm:ss]` é o horário da "Reunião Projeto Kids" (27/08/2026, Sinapse). "DevMission, decisão N" é a decisão N do retrato do projeto (espaço Videira, seção "decisoes"); "missão N" é uma das 16 missões antigas. "Regra-base" é a regra que veio no planejamento da Sprint 3. O que é escolha nossa está marcado como **SUPOSIÇÃO Sn** e listado na seção 3 para o PO validar.
 
@@ -111,7 +111,7 @@ Este documento **substitui a seção 7 de [modelo-de-dados.md](modelo-de-dados.m
 
 **Regra**
 - **Esperado de uma janela** = esperado até o fim de **ontem** (dias fechados), dentro da janela.
-- **Em dia** quando o realizado até agora (inclusive o de hoje) ≥ esperado; senão **abaixo**. `diferenca = realizado − esperado` ("estamos 30 abaixo"). Com meta zero na janela, **sem meta** (SUPOSIÇÃO S1).
+- **Em dia** quando o realizado até agora (inclusive o de hoje) ≥ esperado (SUPOSIÇÃO S1); senão **abaixo**. `diferenca = realizado − esperado` ("estamos 30 abaixo"). Com meta zero na janela (célula sem pessoas, S6, ou período a 0%), **sem meta**.
 - Quem estava abaixo ontem fica em dia assim que vende hoje o que faltou; a meta do dia (R3) segue à parte e diz quanto falta para fechar hoje no ritmo.
 - **Ritmo** (`ritmo_bp`) = realizado até ontem ÷ esperado até ontem (só dias fechados, para a venda parcial de hoje não inflar). Null enquanto o esperado é zero (1º dia da janela).
 - Janelas: a campanha inteira e o período atual. No período, meta = M × peso do período e esperado = parte do período já fechada.
@@ -290,7 +290,7 @@ Faltam 13 dias e dá para virar o jogo: compartilhe hoje o link da sua célula c
 
 Resumo da seção 1, com a fonte:
 - Dinheiro em centavos inteiros e percentuais em pontos-base inteiros: convenções do contrato (`dominio.ts`, D2).
-- Metas e esperados exatos no cálculo, arredondados só na exibição: [modelo-de-dados.md](modelo-de-dados.md), seção 7.2.
+- Metas e esperados exatos no cálculo, arredondados só na exibição: a antiga seção 7.2 de [modelo-de-dados.md](modelo-de-dados.md).
 - Percentual truncado, para nunca mostrar 100% antes da hora: `formatarPercentual` do site ([frontend.md](frontend.md)).
 - Regra-base da Sprint 3 ("nada de float acumulado sem controle").
 
@@ -322,7 +322,7 @@ Perguntas que continuam abertas no requisito e afetam estes números: P3 (meta, 
 
 ---
 
-## 4. O que muda em relação à seção 7 de modelo-de-dados.md
+## 4. O que mudou em relação à antiga seção 7 de modelo-de-dados.md
 
 | Ponto | Seção 7 (antes) | Agora |
 |---|---|---|
