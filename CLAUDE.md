@@ -48,8 +48,11 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   site com jsdom + Testing Library. ESLint (flat, typescript-eslint, react-hooks) + Prettier.
   Decisões e porquês em `docs/decisions.md`.
 - **Pastas:**
-  - `src/worker/`: API. `index.ts` (app Hono), `routes/` (uma rota por arquivo, montada em `/api/...`),
+  - `src/worker/`: API. `index.ts` (app Hono e a ORDEM de montagem: cabeçalhos → health → sessão → login em
+    `/api/admin/*` e `/api/painel/*` → rotas; ver docs/acesso.md §6), `routes/` (uma rota por arquivo),
+    `middleware/` (sessão, CSRF, cabeçalhos de segurança), `db/` (acesso ao D1), `lib/` (erros, CSV, cripto),
     `worker-env.d.ts` (tipos dos bindings: binding novo no `wrangler.jsonc` é declarado aqui também).
+    `src/worker/protecao.test.ts` falha se alguma rota da coordenação ficar aberta: rota nova entra atrás do login.
   - `src/web/`: site. `main.tsx`, `App.tsx`, `rotas.tsx`, `lib/api.ts` (cliente da API), `pages/<tela>/` (uma pasta por tela, com as chamadas à API dela), `components/`. Convenções em `docs/frontend.md`.
   - `src/shared/contracts/`: contrato da API (tipos usados pelo Worker e pelo site). Só o SM altera.
   - `migrations/`: migrações D1 em SQL, numeradas (`0001_<nome>.sql`...). Migração aplicada não se edita: crie outra.
@@ -65,10 +68,12 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   - `npm run typecheck`: `tsc -b` no Worker, no site e nas configs.
   - `npm run build`: gera `dist/client` (site) e `dist/rifa_videira_kids` (Worker). `npm run preview` serve o build.
   - `npm run db:migrate:local`: aplica as migrações no D1 local (`.wrangler/state`).
-  - `npm run deploy`: build + migrações no D1 remoto + `wrangler deploy`. **Depende da conta Cloudflare**
-    (`npx wrangler login`) **e do `database_id` real** no `wrangler.jsonc`, que hoje é placeholder
-    (`npx wrangler d1 create rifa-videira-kids` devolve o id). Segredos de produção: `npx wrangler secret put <NOME>`.
+  - **Publicação:** automática pelo GitHub Actions a cada push na `main` (job `deploy` do ci.yml, depois dos testes),
+    com o segredo `CLOUDFLARE_API_TOKEN` do repositório. D1 de produção já criado (id real no `wrangler.jsonc`).
+    Da sessão de nuvem do Claude o upload dos assets falha (o proxy troca o JWT do upload), então não rode
+    `npm run deploy` daqui; comandos D1 remotos funcionam. Segredos do Worker: `npx wrangler secret put <NOME>`.
+  - Primeiro admin em produção: `npm run acesso:criar -- --nome "<nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev`.
 - **Segredos locais:** copie `.dev.vars.example` para `.dev.vars` (ignorado pelo git) e troque os valores.
-- **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test e build (Node 22) em todo push e pull request.
+- **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test e build (Node 22) em todo push e pull request, e publica na Cloudflare nos pushes da `main`.
 - **Dependências:** `wrangler`, `@cloudflare/vite-plugin` e `@cloudflare/vitest-plugin` têm versão fixa e sobem juntos.
   Vitest fica na 5.x e TypeScript na 6.0.x (limite do typescript-eslint). Veja `docs/decisions.md`.
