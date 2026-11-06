@@ -1,11 +1,80 @@
-import { EmConstrucao } from "../../components/EmConstrucao";
-import { PageHeader } from "../../components/ui";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { Aviso, Card, Loading, PageHeader } from "../../components/ui";
+import { esquecerDestino, lerEstadoEntrar, useSessao } from "../../lib/sessao";
+import "./entrar.css";
 
+// Como entrar (sem sessão): o acesso é pelo link pessoal que chega no WhatsApp, sem senha. Quem já tem
+// sessão vai direto para a coordenação (ou para a tela que tinha pedido, quando veio da guarda).
 export function EntrarPage() {
+  const { estado, verificar } = useSessao();
+  const navigate = useNavigate();
+  const { de, motivo } = lerEstadoEntrar(useLocation().state);
+  const { situacao } = estado;
+
+  useEffect(() => {
+    if (situacao === "desconhecida") verificar();
+  }, [situacao, verificar]);
+
+  useEffect(() => {
+    if (situacao !== "conectada") return;
+    esquecerDestino();
+    void navigate(de ?? "/coordenacao", { replace: true });
+  }, [situacao, de, navigate]);
+
+  const conferindo =
+    situacao === "desconhecida" ||
+    situacao === "verificando" ||
+    situacao === "conectada";
+
   return (
     <>
-      <PageHeader titulo="Entrar" descricao="Acesso da coordenação." />
-      <EmConstrucao tarefa="RIFA-007" />
+      <PageHeader
+        titulo="Entrar"
+        descricao="Área da coordenação da Rifa Videira Kids."
+      />
+      {conferindo ? (
+        <Loading texto="Conferindo o seu acesso…" />
+      ) : (
+        <>
+          {motivo === "saiu" && (
+            <Aviso tom="sucesso" titulo="Você saiu do sistema neste aparelho.">
+              <p>Para entrar de novo, abra o seu link pessoal.</p>
+            </Aviso>
+          )}
+          {motivo === "expirou" && (
+            <Aviso tom="info" titulo="Sua sessão terminou.">
+              <p>Para continuar, entre de novo pelo seu link pessoal.</p>
+            </Aviso>
+          )}
+          <Card titulo="Como entrar">
+            <div className="entrar-explicacao">
+              <p>
+                O acesso é pelo seu <strong>link pessoal</strong>, sem senha. O
+                link chega pelo <strong>WhatsApp</strong>, mandado pela
+                coordenação.
+              </p>
+              <ol className="entrar-passos">
+                <li>Abra a conversa do WhatsApp em que você recebeu o link.</li>
+                <li>
+                  Toque no link e, na página que abrir, toque em{" "}
+                  <strong>Entrar</strong>.
+                </li>
+              </ol>
+              {de && (
+                <p>Depois de entrar, você volta para a tela em que estava.</p>
+              )}
+              <p>
+                Não achou o link ou ele não funciona mais? Peça um link novo à
+                coordenação.
+              </p>
+              <p className="entrar-nota">
+                O link é só seu: não repasse. Quem tiver o link entra como você.
+              </p>
+            </div>
+          </Card>
+        </>
+      )}
     </>
   );
 }

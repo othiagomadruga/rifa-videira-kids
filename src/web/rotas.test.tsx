@@ -6,24 +6,28 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderizarRota, respostaJson } from "./test/renderizar";
+import {
+  ADMIN_DE_TESTE,
+  renderizarRota,
+  respostaJson,
+} from "./test/renderizar";
 
-// Rotas planejadas: caminho, título (h1) e a tarefa que vai construir a tela.
+// Rotas planejadas: caminho, título (h1) e a tarefa que vai construir a tela. As telas da coordenação
+// abrem com a sessão de teste (papel coordenacao) do renderizarRota.
 const TELAS = [
   ["/", "Ranking da campanha", "RIFA-010/011"],
   ["/telao", "Telão", "RIFA-011"],
-  ["/entrar", "Entrar", "RIFA-007"],
   ["/coordenacao", "Visão geral", "RIFA-009"],
-  // /coordenacao/campanha (RIFA-004), /coordenacao/hierarquia (RIFA-005) e /coordenacao/adesao
-  // (RIFA-006) já são telas de verdade: ver pages/campanha/CampanhaPage.test.tsx,
-  // pages/hierarquia/HierarquiaPage.test.tsx e pages/adesao/AdesaoPage.test.tsx.
+  // /entrar, /acesso e /coordenacao/acessos (RIFA-007), /coordenacao/campanha (RIFA-004),
+  // /coordenacao/hierarquia (RIFA-005) e /coordenacao/adesao (RIFA-006) já são telas de verdade: ver
+  // pages/entrar, pages/acesso, pages/acessos, pages/campanha, pages/hierarquia e pages/adesao.
   ["/coordenacao/pedidos", "Pedidos", "RIFA-003"],
   ["/coordenacao/rankings", "Rankings", "RIFA-010"],
   ["/coordenacao/bumbo", "Bumbo", "RIFA-011"],
   ["/coordenacao/conferencia", "Conferência", "RIFA-012"],
 ] as const;
 
-// Menu da coordenação: texto do link e para onde leva (o título da tela é o mesmo texto).
+// Menu da coordenação (papel coordenacao): texto do link e para onde leva (o título da tela é o mesmo texto).
 const MENU_COORDENACAO = [
   ["Visão geral", "/coordenacao"],
   ["Campanha", "/coordenacao/campanha"],
@@ -33,6 +37,12 @@ const MENU_COORDENACAO = [
   ["Rankings", "/coordenacao/rankings"],
   ["Bumbo", "/coordenacao/bumbo"],
   ["Conferência", "/coordenacao/conferencia"],
+] as const;
+
+// O admin vê também a gestão dos acessos, no fim.
+const MENU_ADMIN = [
+  ...MENU_COORDENACAO,
+  ["Acessos", "/coordenacao/acessos"],
 ] as const;
 
 function tituloDaPagina(nome: string) {
@@ -98,9 +108,26 @@ describe("CA1: cada rota mostra a tela certa", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("telas abertas (/, /entrar) não têm a navegação da coordenação", () => {
-    for (const caminho of ["/", "/entrar"]) {
-      const { unmount } = renderizarRota(caminho);
+  it("telas abertas (/, /entrar, /acesso) não têm a navegação da coordenação", async () => {
+    // Sem sessão: /entrar pergunta à API (401) e fica; /acesso mostra a confirmação do link.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        respostaJson(
+          { erro: { codigo: "nao_autenticado", mensagem: "Sem sessão" } },
+          401,
+        ),
+      ),
+    );
+    for (const [caminho, titulo] of [
+      ["/", "Ranking da campanha"],
+      ["/entrar", "Entrar"],
+      [`/acesso/${"a".repeat(43)}`, "Entrar no sistema da Rifa Videira Kids"],
+    ] as const) {
+      const { unmount } = renderizarRota(caminho, { usuario: null });
+      expect(
+        await screen.findByRole("heading", { level: 1, name: titulo }),
+      ).toBeInTheDocument();
       expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
       unmount();
     }
@@ -108,28 +135,35 @@ describe("CA1: cada rota mostra a tela certa", () => {
 });
 
 describe("CA2: navegação da coordenação", () => {
-  it("tem um link para cada tela filha", () => {
-    renderizarRota("/coordenacao");
-    const menu = screen.getByRole("navigation", { name: "Coordenação" });
+  it.each([
+    ["coordenacao", undefined, MENU_COORDENACAO],
+    ["admin", ADMIN_DE_TESTE, MENU_ADMIN],
+  ] as const)(
+    "papel %s: um link para cada tela que ele pode ver",
+    (_papel, usuario, menuEsperado) => {
+      renderizarRota("/coordenacao", { usuario });
+      const menu = screen.getByRole("navigation", { name: "Coordenação" });
 
-    const links = within(menu).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(
-      MENU_COORDENACAO.map(([rotulo]) => rotulo),
-    );
-    for (const [rotulo, caminho] of MENU_COORDENACAO) {
-      expect(within(menu).getByRole("link", { name: rotulo })).toHaveAttribute(
-        "href",
-        caminho,
+      const links = within(menu).getAllByRole("link");
+      expect(links.map((link) => link.textContent)).toEqual(
+        menuEsperado.map(([rotulo]) => rotulo),
       );
-    }
-  });
+      for (const [rotulo, caminho] of menuEsperado) {
+        expect(
+          within(menu).getByRole("link", { name: rotulo }),
+        ).toHaveAttribute("href", caminho);
+      }
+    },
+  );
 
   it("cada link leva à tela e só ele fica marcado com aria-current", async () => {
     // Começa na última tela para que o primeiro clique também seja uma navegação.
-    const { roteador } = renderizarRota("/coordenacao/conferencia");
+    const { roteador } = renderizarRota("/coordenacao/conferencia", {
+      usuario: ADMIN_DE_TESTE,
+    });
     const menu = screen.getByRole("navigation", { name: "Coordenação" });
 
-    for (const [rotulo, caminho] of MENU_COORDENACAO) {
+    for (const [rotulo, caminho] of MENU_ADMIN) {
       fireEvent.click(within(menu).getByRole("link", { name: rotulo }));
 
       expect(
@@ -159,7 +193,14 @@ describe("CA2: menu compacto (celular)", () => {
     renderizarRota("/coordenacao");
     const botao = screen.getByRole("button", { name: "Menu" });
     const menu = screen.getByRole("navigation", { name: "Coordenação" });
-    expect(botao).toHaveAttribute("aria-controls", menu.id);
+    // Controla o painel do menu: a navegação e a conta (nome e "Sair").
+    const painel = document.getElementById(
+      botao.getAttribute("aria-controls") ?? "",
+    );
+    expect(painel).toContainElement(menu);
+    expect(painel).toContainElement(
+      screen.getByRole("button", { name: "Sair" }),
+    );
     expect(botao).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(botao);
@@ -202,19 +243,19 @@ describe("CA2: menu compacto (celular)", () => {
     expect(botao).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("fecha com Tab depois do último link, mesmo sem próximo elemento", async () => {
+  it("fecha com Tab depois do último item (Sair), mesmo sem próximo elemento", async () => {
     const { botao, menu } = renderizarComMenuAberto();
-    const bumbo = within(menu).getByRole("link", { name: "Bumbo" });
-    const ultimo = within(menu).getByRole("link", { name: "Conferência" });
-    act(() => bumbo.focus());
+    const ultimoLink = within(menu).getByRole("link", { name: "Conferência" });
+    const ultimo = screen.getByRole("button", { name: "Sair" });
+    act(() => ultimoLink.focus());
 
-    // Tab dentro do menu: continua aberto.
-    fireEvent.keyDown(bumbo, { key: "Tab" });
+    // Tab do último link para o Sair (fora da <nav>, mas no painel do menu): continua aberto.
+    fireEvent.keyDown(ultimoLink, { key: "Tab" });
     act(() => ultimo.focus());
     await act(() => new Promise((resolver) => setTimeout(resolver, 0)));
     expect(botao).toHaveAttribute("aria-expanded", "true");
 
-    // Tab no último link: o foco sai da página (focusout sem destino).
+    // Tab no Sair: o foco sai da página (focusout sem destino).
     fireEvent.keyDown(ultimo, { key: "Tab" });
     act(() => ultimo.blur());
 
@@ -248,6 +289,9 @@ describe("Regra: telas públicas não mostram valores em R$", () => {
       [
         "./pages/ranking-publico/**/*.{ts,tsx}",
         "./pages/telao/**/*.{ts,tsx}",
+        // Abertas também (sem sessão): a entrada da coordenação.
+        "./pages/acesso/**/*.{ts,tsx}",
+        "./pages/entrar/**/*.{ts,tsx}",
         "!**/*.test.{ts,tsx}",
       ],
       { query: "?raw", import: "default", eager: true },

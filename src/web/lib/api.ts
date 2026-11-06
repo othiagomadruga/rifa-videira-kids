@@ -3,6 +3,7 @@
 //   { "erro": { "codigo": string, "mensagem": string, "detalhes"?: unknown } },
 // o ErroApi traz esse código e essa mensagem; nos demais casos, um dos
 // CODIGOS_CLIENTE com uma mensagem que pode ser mostrada ao usuário.
+// Toda resposta 401 também avisa quem se inscreveu em aoReceber401 (a sessão).
 
 // Corpo de erro padrão: o tipo vem do contrato. Só o tipo: o schema poria o zod
 // no pacote do site (+24 kB gzip); lerCorpoErro confere o formato à mão.
@@ -64,6 +65,23 @@ export type OpcoesRequisicao = {
 
 type OpcoesSemCorpo = Omit<OpcoesRequisicao, "metodo" | "corpo">;
 
+/** Recebe o caminho pedido (ex.: "/api/admin/campanha") de uma resposta 401. */
+export type Ouvinte401 = (caminho: string) => void;
+
+const ouvintes401 = new Set<Ouvinte401>();
+
+/**
+ * Gancho de 401 (sem sessão ou sessão vencida): `ouvinte` é chamado a cada resposta 401 da API, com o
+ * caminho pedido, logo antes de a chamada falhar com o ErroApi. Devolve a função que desliga o gancho.
+ * Quem usa: o provedor da sessão (lib/sessao.tsx), que leva a coordenação para /entrar.
+ */
+export function aoReceber401(ouvinte: Ouvinte401): () => void {
+  ouvintes401.add(ouvinte);
+  return () => {
+    ouvintes401.delete(ouvinte);
+  };
+}
+
 /**
  * Faz a requisição e devolve o JSON da resposta (undefined se vier sem corpo).
  * O tipo T não é validado em tempo de execução.
@@ -115,6 +133,9 @@ export async function requisitarJson<T = unknown>(
 
   const json = lerJson(texto);
   if (!resposta.ok) {
+    if (resposta.status === 401) {
+      for (const ouvinte of [...ouvintes401]) ouvinte(caminho);
+    }
     const erroPadrao = json.valido ? lerCorpoErro(json.valor) : null;
     throw new ErroApi(
       erroPadrao

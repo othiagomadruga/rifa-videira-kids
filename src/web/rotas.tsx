@@ -1,6 +1,9 @@
 import { Outlet, type RouteObject } from "react-router";
 import { PublicShell } from "./components/ui";
+import { ProvedorSessao } from "./lib/sessao";
+import { AcessoPage } from "./pages/acesso/AcessoPage";
 import { CoordenacaoLayout } from "./pages/coordenacao/CoordenacaoLayout";
+import { ExigirPapel } from "./pages/coordenacao/ExigirPapel";
 import { TELAS_COORDENACAO } from "./pages/coordenacao/telas";
 import { EntrarPage } from "./pages/entrar/EntrarPage";
 import { ErroRota } from "./pages/erro/ErroRota";
@@ -14,13 +17,18 @@ import { TelaoPage } from "./pages/telao/TelaoPage";
 //
 //   /                 ranking público (sem valores em R$)
 //   /telao            telão do culto (sem navegação)
-//   /entrar           login da coordenação
-//   /coordenacao/...  área da coordenação (menu lateral)
+//   /acesso/<token>   link pessoal da coordenação: confirma e só então entra
+//   /entrar           como entrar (sem sessão)
+//   /coordenacao/...  área da coordenação (menu lateral), só com sessão
 //   /status           saúde da API
 //   qualquer outra    404
+//
+// A sessão (lib/sessao.tsx) fica na raiz: só a guarda da coordenação e as telas de
+// entrada perguntam à API; as telas abertas não fazem chamada nenhuma por ela.
 export const rotas: RouteObject[] = [
   {
     path: "/",
+    Component: RaizDoSite,
     ErrorBoundary: ErroGeral,
     children: [
       { path: "telao", Component: TelaoPage },
@@ -33,10 +41,18 @@ export const rotas: RouteObject[] = [
             ErrorBoundary: ErroRota,
             children: [
               ...TELAS_COORDENACAO.map(
-                ({ segmento, Component }): RouteObject =>
-                  segmento === ""
-                    ? { index: true, Component }
-                    : { path: segmento, Component },
+                ({ segmento, rotulo, papeis, Component }): RouteObject => {
+                  const element = papeis ? (
+                    <ExigirPapel papeis={papeis} titulo={rotulo}>
+                      <Component />
+                    </ExigirPapel>
+                  ) : (
+                    <Component />
+                  );
+                  return segmento === ""
+                    ? { index: true, element }
+                    : { path: segmento, element };
+                },
               ),
               {
                 path: "*",
@@ -50,6 +66,8 @@ export const rotas: RouteObject[] = [
         Component: LayoutPublico,
         children: [
           { index: true, Component: RankingPublicoPage },
+          // O token fica depois de /acesso/; a tela o tira do endereço ao abrir.
+          { path: "acesso/*", Component: AcessoPage },
           { path: "entrar", Component: EntrarPage },
           { path: "status", Component: StatusPage },
           { path: "*", Component: NaoEncontradaPage },
@@ -58,6 +76,14 @@ export const rotas: RouteObject[] = [
     ],
   },
 ];
+
+function RaizDoSite() {
+  return (
+    <ProvedorSessao>
+      <Outlet />
+    </ProvedorSessao>
+  );
+}
 
 function LayoutPublico() {
   return (

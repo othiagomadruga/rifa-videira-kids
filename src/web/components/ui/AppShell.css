@@ -60,12 +60,13 @@
   background: var(--cor-superficie-2);
 }
 
-.ui-app-shell__nav {
+/* Painel do menu: a navegação e, no fim, a conta. No celular, só aparece com o menu aberto. */
+.ui-app-shell__painel {
   display: none;
   padding: 0 var(--margem-pagina) var(--espaco-3);
 }
 
-.ui-app-shell[data-menu-aberto] .ui-app-shell__nav {
+.ui-app-shell[data-menu-aberto] .ui-app-shell__painel {
   display: block;
 }
 
@@ -97,6 +98,36 @@
   color: var(--cor-primaria-forte);
   font-weight: var(--peso-forte);
   box-shadow: inset 3px 0 0 var(--cor-primaria);
+}
+
+/* Conta: quem está conectado e o botão "Sair". */
+.ui-app-shell__conta {
+  display: grid;
+  gap: var(--espaco-2);
+  margin-top: var(--espaco-3);
+  padding-top: var(--espaco-3);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.ui-app-shell__usuario {
+  padding: 0 var(--espaco-3);
+  overflow-wrap: anywhere;
+}
+
+.ui-app-shell__nome {
+  display: block;
+  font-weight: var(--peso-forte);
+}
+
+.ui-app-shell__detalhe {
+  display: block;
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.ui-app-shell__erro {
+  font-size: var(--texto-sm);
+  color: var(--cor-perigo);
 }
 
 .ui-app-shell__conteudo {
@@ -131,6 +162,8 @@
 
   .ui-app-shell__lateral,
   .ui-app-shell[data-menu-aberto] .ui-app-shell__lateral {
+    display: flex;
+    flex-direction: column;
     height: 100vh;
     height: 100dvh;
     overflow-y: auto;
@@ -148,10 +181,21 @@
     display: none;
   }
 
-  .ui-app-shell__nav,
-  .ui-app-shell[data-menu-aberto] .ui-app-shell__nav {
-    display: block;
+  /* A conta fica no pé da barra lateral. */
+  .ui-app-shell__painel,
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__painel {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
     padding: 0 var(--espaco-3) var(--espaco-5);
+  }
+
+  .ui-app-shell__conta {
+    margin-top: auto;
+  }
+
+  .ui-app-shell__nav {
+    margin-bottom: var(--espaco-3);
   }
 
   .ui-app-shell__conteudo {

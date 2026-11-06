@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router";
+import { Button } from "./Button";
 import { Marca } from "./Marca";
 import "./AppShell.css";
 
@@ -11,10 +12,23 @@ export type ItemNavegacao = {
   exato?: boolean;
 };
 
+/** Quem está conectado: nome e botão "Sair" no fim do menu. */
+export type ContaAppShell = {
+  nome: string;
+  /** Linha abaixo do nome (ex.: o papel). */
+  detalhe?: string;
+  aoSair: () => void;
+  /** Saindo: o botão fica desabilitado e mostra "Saindo…". */
+  saindo?: boolean;
+  /** Falha ao sair, abaixo do botão (role="alert"). */
+  erro?: string | null;
+};
+
 type Props = {
   /** Nome da área: aparece ao lado da marca e dá nome à navegação. */
   area: string;
   itens: readonly ItemNavegacao[];
+  conta?: ContaAppShell;
   children: ReactNode;
 };
 
@@ -22,10 +36,11 @@ type Props = {
 // compacto (botão "Menu") no celular. O link da tela atual ganha aria-current="page".
 // Aberto, o menu fecha com o próprio botão, com Esc (o foco volta ao botão), com
 // toque fora da barra e quando o foco sai dela (inclusive com Tab para fora da
-// página); escolher uma tela fecha e leva o foco ao conteúdo.
-export function AppShell({ area, itens, children }: Props) {
+// página); escolher uma tela fecha e leva o foco ao conteúdo. O painel do menu tem
+// a navegação e, no fim, a conta (nome de quem está conectado e "Sair").
+export function AppShell({ area, itens, conta, children }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
-  const idNavegacao = useId();
+  const idPainel = useId();
   // Área do menu: a barra do topo (com o botão) e a navegação.
   const refAreaMenu = useRef<HTMLDivElement>(null);
   const refBotaoMenu = useRef<HTMLButtonElement>(null);
@@ -103,29 +118,32 @@ export function AppShell({ area, itens, children }: Props) {
             type="button"
             className="ui-app-shell__botao-menu"
             aria-expanded={menuAberto}
-            aria-controls={idNavegacao}
+            aria-controls={idPainel}
             onClick={() => setMenuAberto((aberto) => !aberto)}
           >
             <IconeMenu aberto={menuAberto} />
             Menu
           </button>
         </header>
-        <nav id={idNavegacao} className="ui-app-shell__nav" aria-label={area}>
-          <ul className="ui-app-shell__lista">
-            {itens.map((item) => (
-              <li key={item.para}>
-                <NavLink
-                  to={item.para}
-                  end={item.exato}
-                  className="ui-app-shell__link"
-                  onClick={aoEscolherTela}
-                >
-                  {item.rotulo}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <div id={idPainel} className="ui-app-shell__painel">
+          <nav className="ui-app-shell__nav" aria-label={area}>
+            <ul className="ui-app-shell__lista">
+              {itens.map((item) => (
+                <li key={item.para}>
+                  <NavLink
+                    to={item.para}
+                    end={item.exato}
+                    className="ui-app-shell__link"
+                    onClick={aoEscolherTela}
+                  >
+                    {item.rotulo}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          {conta && <Conta {...conta} />}
+        </div>
       </div>
       <main
         id="conteudo"
@@ -135,6 +153,36 @@ export function AppShell({ area, itens, children }: Props) {
       >
         <div className="ui-app-shell__pagina">{children}</div>
       </main>
+    </div>
+  );
+}
+
+function Conta({ nome, detalhe, aoSair, saindo = false, erro }: ContaAppShell) {
+  return (
+    <div className="ui-app-shell__conta">
+      <p className="ui-app-shell__usuario">
+        <span className="visualmente-oculto">Conectado como </span>
+        <span className="ui-app-shell__nome">{nome}</span>
+        {detalhe && (
+          <>
+            {" "}
+            <span className="ui-app-shell__detalhe">{detalhe}</span>
+          </>
+        )}
+      </p>
+      <Button
+        variante="secundario"
+        larguraTotal
+        disabled={saindo}
+        onClick={aoSair}
+      >
+        {saindo ? "Saindo…" : "Sair"}
+      </Button>
+      {erro && (
+        <p className="ui-app-shell__erro" role="alert">
+          {erro}
+        </p>
+      )}
     </div>
   );
 }

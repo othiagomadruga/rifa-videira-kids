@@ -1,0 +1,29 @@
+/* Link pessoal (/acesso): confirmação curta, centralizada, com o botão grande. */
+.acesso {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+.acesso-cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.acesso-resultado:empty {
+  display: none;
+}
+
+/* Recebe o foco só para não perdê-lo quando o botão some; a mensagem já se destaca. */
+.acesso-resultado:focus {
+  outline: none;
+}
+
+.acesso-nota {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}

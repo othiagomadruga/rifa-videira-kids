@@ -13,7 +13,7 @@ src/web/
   rotas.tsx             tabela de rotas do site
   styles.css            CSS global: importa tema/tokens.css e tema/base.css
   tema/                 tokens.css (variáveis), base.css (reset, foco, utilitários), marca.ts (nomes)
-  lib/                  api.ts (cliente da API) e formatadores.ts (pt-BR)
+  lib/                  api.ts (cliente da API), sessao.tsx (sessão da coordenação) e formatadores.ts (pt-BR)
   components/ui/        componentes base; importe de "components/ui" (index.ts)
   components/EmConstrucao.tsx   aviso das telas que ainda são só a casca
   pages/<tela>/         uma pasta por tela: componente, CSS, chamadas à API e testes da tela
@@ -26,7 +26,8 @@ src/web/
 | --- | --- | --- | --- | --- |
 | `/` | Ranking da campanha | `ranking-publico` | RIFA-010/011 | público (WhatsApp), **sem R$** |
 | `/telao` | Telão | `telao` | RIFA-011 | telão do culto, **sem R$**, sem navegação |
-| `/entrar` | Entrar | `entrar` | RIFA-007 | coordenação |
+| `/acesso/<token>` | Entrar no sistema da Rifa Videira Kids | `acesso` | RIFA-007 | coordenação (link pessoal do WhatsApp) |
+| `/entrar` | Entrar | `entrar` | RIFA-007 | coordenação (sem sessão) |
 | `/coordenacao` | Visão geral | `visao-geral` | RIFA-009 | coordenação |
 | `/coordenacao/campanha` | Campanha | `campanha` | RIFA-004 | coordenação |
 | `/coordenacao/hierarquia` | Hierarquia | `hierarquia` | RIFA-005 | coordenação |
@@ -35,11 +36,12 @@ src/web/
 | `/coordenacao/rankings` | Rankings | `rankings` | RIFA-010 | coordenação |
 | `/coordenacao/bumbo` | Bumbo | `bumbo` | RIFA-011 | coordenação |
 | `/coordenacao/conferencia` | Conferência | `conferencia` | RIFA-012 | coordenação |
+| `/coordenacao/acessos` | Acessos | `acessos` | RIFA-007 | só admin |
 | `/status` | Status do sistema | `status` | RIFA-001 | técnico (saúde da API) |
 | qualquer outra | Página não encontrada | `nao-encontrada` | | todos |
 
-- As telas da coordenação ficam no layout com menu (`pages/coordenacao/`). A lista `TELAS_COORDENACAO` em `pages/coordenacao/telas.ts` gera as rotas filhas **e** o menu.
-- `/`, `/entrar`, `/status` e a 404 usam o layout aberto (`PublicShell`: marca + conteúdo, sem navegação). `/telao` não usa layout.
+- As telas da coordenação ficam no layout com menu (`pages/coordenacao/`), **só com sessão** (veja "Sessão e acesso da coordenação"). A lista `TELAS_COORDENACAO` em `pages/coordenacao/telas.ts` gera as rotas filhas **e** o menu; `papeis: ["admin"]` numa tela tira o link do menu dos outros papéis e mostra "sem permissão" na rota (`pages/coordenacao/ExigirPapel.tsx`).
+- `/`, `/acesso`, `/entrar`, `/status` e a 404 usam o layout aberto (`PublicShell`: marca + conteúdo, sem navegação). `/telao` não usa layout.
 - Uma tela que quebra ao renderizar mostra `pages/erro/ErroRota.tsx` (na coordenação, dentro do layout, sem perder o menu).
 - O Worker devolve o `index.html` para qualquer caminho fora de `/api/*` (modo SPA); quem decide a tela é o React.
 
@@ -68,11 +70,23 @@ src/web/
 7. Testes ao lado do código (`<Tela>Page.test.tsx`), renderizando pela rota de verdade (veja "Testes").
 8. Arquivos compartilhados (`rotas.tsx`, `pages/coordenacao/telas.ts`, `components/ui/`, `tema/`, `lib/`) só mudam quando a tarefa pedir; diga no relatório o que mudou. Tela nova da coordenação: uma entrada em `telas.ts` (rota e menu juntos) e o caso em `rotas.test.tsx`.
 
+## Sessão e acesso da coordenação (RIFA-007)
+
+A API está em `docs/acesso.md`. No site:
+
+- **Sessão** (`lib/sessao.tsx`): o `ProvedorSessao` fica na raiz das rotas. O cookie é HttpOnly: o site pergunta a `GET /api/sessao` quem está conectado, e só quando precisa (guarda da coordenação e `/entrar`); as telas abertas não fazem chamada por ela. `useSessao()` dá `estado` (`desconhecida`, `verificando`, `conectada` com o `usuario`, `desconectada` com o `motivo`: `sem_sessao`, `expirou` ou `saiu`, e `erro`), `verificar()`, `entrar(token)` e `sair()`. Nas telas da coordenação, `useUsuarioConectado()` devolve `{ id, nome, papel }`; `ROTULO_PAPEL` dá o nome do papel.
+- **Guarda** (`pages/coordenacao/CoordenacaoLayout.tsx`): toda rota `/coordenacao/*` confere a sessão; enquanto isso, só o carregando ("Conferindo o seu acesso…", `role="status"`). Sem sessão, vai para `/entrar` (com `replace`) e guarda a tela pedida; um 401 de qualquer rota durante o uso (gancho do `lib/api.ts`) faz o mesmo, com o aviso "Sua sessão terminou". Falha sem resposta mostra o erro com "Tentar de novo". Os 401 das próprias rotas da sessão não contam (o do `POST /api/sessao` é link inválido e não derruba a sessão aberta).
+- **Voltar depois de entrar**: a tela pedida fica no `localStorage` (só o caminho, só caminhos `/coordenacao...`, por uma hora, apagada ao usar e ao sair), porque o link do WhatsApp costuma abrir outra aba. `/acesso` usa esse destino depois do login; `/entrar` usa o `state.de` quando já há sessão.
+- **`/acesso/<token>`** (`pages/acesso`): o token fica só na memória da tela. Ao abrir, a entrada do histórico vira `/acesso` (`navigate` com `replace`, que no navegador é `history.replaceState` sem o token) antes de a página aparecer; o token não vai para título, `state` do histórico, log nem outra chamada. Nada é pedido à API ao abrir (o preview do WhatsApp abre a URL): só o toque em "Entrar" faz `POST /api/sessao`. 401: "Este link não vale mais: peça um link novo à coordenação". Token fora do formato: "Este link está incompleto", sem chamar a API. `/acesso` sem token (recarregou) vai para `/entrar`.
+- **`/entrar`** (`pages/entrar`): explica que o acesso é pelo link pessoal, sem senha, que chega pelo WhatsApp. Com sessão, vai para `/coordenacao` (ou para o `state.de`). Depois de "Sair", mostra "Você saiu do sistema neste aparelho".
+- **Menu e conta**: o `AppShell` recebe `conta` (nome, papel e "Sair": `POST /api/sessao/sair` → `/entrar`). O item "Acessos" só aparece para o admin (`papeis` em `telas.ts`).
+- **`/coordenacao/acessos`** (`pages/acessos`, só admin): um cartão por pessoa (nome, papel, ativo, links válidos com "Revogar", aparelhos conectados), "Nova pessoa", "Gerar link novo", "Desativar acesso"/"Reativar acesso". O link com o token só existe na resposta que o cria: a tela o mostra uma vez, num `Dialogo` com o alerta "Este link só aparece agora", "Copiar link" (área de transferência; sem ela, seleciona o link no campo) e "Enviar pelo WhatsApp" (`https://wa.me/?text=` com uma mensagem curta e o link), e o esquece ao fechar. Os 409 `em_uso` aparecem em português, conforme o caso (a si mesmo, o último admin ativo, o último link válido de admin). Valores do contrato (caminhos, papéis, limites, formato do token) são cópias, conferidas por `pages/acessos/acessos-contrato.test.ts`.
+
 ## Componentes base (`components/ui`)
 
 | Componente | Para quê | Props principais |
 | --- | --- | --- |
-| `AppShell` | Layout da coordenação: barra lateral a partir de 64rem, botão "Menu" no celular (fecha com o próprio botão, Esc, que devolve o foco ao botão, toque fora ou foco saindo do menu; escolher uma tela fecha e leva o foco ao `<main>`), `aria-current="page"` no link atual, link "Pular para o conteúdo" | `area`, `itens` (`{ para, rotulo, exato? }`), `children` |
+| `AppShell` | Layout da coordenação: barra lateral a partir de 64rem, botão "Menu" no celular (fecha com o próprio botão, Esc, que devolve o foco ao botão, toque fora ou foco saindo do menu; escolher uma tela fecha e leva o foco ao `<main>`), `aria-current="page"` no link atual, link "Pular para o conteúdo". O botão "Menu" controla o painel: a navegação e, no fim, a conta (nome, papel e "Sair"; no computador, no pé da barra lateral) | `area`, `itens` (`{ para, rotulo, exato? }`), `conta?` (`{ nome, detalhe?, aoSair, saindo?, erro? }`), `children` |
 | `PublicShell` | Layout das telas abertas: marca e conteúdo, sem navegação | `children` |
 | `PageHeader` | Cabeçalho da tela: `<h1>` e título da aba ("Pedidos · Rifa Videira Kids") | `titulo`, `descricao?`, `acoes?` |
 | `Card` | Cartão de conteúdo | `titulo?` (`<h2>`), `acoes?`, `children` |
@@ -113,6 +127,7 @@ Notas:
   - sem resposta: `SEM_CONEXAO`, `TEMPO_ESGOTADO` ou `CANCELADA`;
   - sucesso com corpo que não é JSON: `RESPOSTA_INVALIDA`.
 - `mensagemDoErro(erro)` devolve o texto para o usuário (a mensagem do `ErroApi`, ou um texto genérico para outros erros, sem detalhes internos).
+- Gancho de 401: `aoReceber401(ouvinte)` chama `ouvinte(caminho)` a cada resposta 401, logo antes de a chamada falhar, e devolve a função que desliga. Quem usa é a sessão (`lib/sessao.tsx`): as telas não tratam o 401, a guarda leva para `/entrar`.
 
 ## Formatadores (`lib/formatadores.ts`)
 
@@ -150,6 +165,7 @@ Notas:
 
 - `npx vitest run --project web` roda só os testes do site (jsdom + Testing Library).
 - `renderizarRota("/coordenacao/pedidos")` (em `test/renderizar.tsx`) renderiza o site inteiro com as rotas reais e um roteador em memória, e devolve também o `roteador` (para conferir `roteador.state.location.pathname`).
+- A sessão já vem conhecida nos testes, sem `GET /api/sessao`: `USUARIO_DE_TESTE` (papel coordenacao). `renderizarRota(caminho, { usuario: ADMIN_DE_TESTE })` entra como admin; `{ usuario: null }` faz o site perguntar à API, como no navegador (o `fetch` simulado responde `GET /api/sessao`).
 - Para a API, troque o `fetch`: `vi.stubGlobal("fetch", vi.fn(async () => respostaJson({ ... }, 200)))` e, no `afterEach`, `vi.unstubAllGlobals()`.
 - O `@testing-library/user-event` não está instalado: use `fireEvent`.
 - Nada de `.only` nem `.skip` no que vai para a `main`.

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { respostaJson } from "../test/renderizar";
 import {
+  aoReceber401,
   api,
   CODIGOS_CLIENTE,
   ErroApi,
@@ -225,6 +226,73 @@ describe("cliente da API: tempo limite e cancelamento", () => {
       api.get("/api/x", { signal: controle.signal }),
     ).rejects.toMatchObject({ codigo: CODIGOS_CLIENTE.cancelada });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cliente da API: gancho de 401 (sessão)", () => {
+  const SEM_SESSAO = () =>
+    respostaJson(
+      { erro: { codigo: "nao_autenticado", mensagem: "Sem sessão" } },
+      401,
+    );
+
+  it("avisa cada ouvinte com o caminho pedido, antes de a chamada falhar com o 401", async () => {
+    simularFetch(async () => SEM_SESSAO());
+    const ordem: string[] = [];
+    const primeiro = vi.fn((caminho: string) =>
+      ordem.push(`ouvinte ${caminho}`),
+    );
+    const segundo = vi.fn();
+    const desligarPrimeiro = aoReceber401(primeiro);
+    const desligarSegundo = aoReceber401(segundo);
+
+    try {
+      await api.get("/api/admin/campanha").catch((erro: unknown) => {
+        ordem.push("falhou");
+        expect(erro).toMatchObject({ status: 401, codigo: "nao_autenticado" });
+      });
+    } finally {
+      desligarPrimeiro();
+      desligarSegundo();
+    }
+
+    expect(ordem).toEqual(["ouvinte /api/admin/campanha", "falhou"]);
+    expect(segundo).toHaveBeenCalledExactlyOnceWith("/api/admin/campanha");
+  });
+
+  it("não avisa em outros erros (403, 404, 500, sem conexão) nem em sucesso", async () => {
+    const ouvinte = vi.fn();
+    const desligar = aoReceber401(ouvinte);
+    try {
+      for (const status of [403, 404, 500]) {
+        simularFetch(async () => respostaJson({}, status));
+        await expect(api.get("/api/x")).rejects.toMatchObject({ status });
+      }
+      simularFetch(async () => {
+        throw new TypeError("Failed to fetch");
+      });
+      await expect(api.get("/api/x")).rejects.toMatchObject({
+        codigo: CODIGOS_CLIENTE.semConexao,
+      });
+      simularFetch(async () => respostaJson({ ok: true }));
+      await expect(api.get("/api/x")).resolves.toEqual({ ok: true });
+    } finally {
+      desligar();
+    }
+
+    expect(ouvinte).not.toHaveBeenCalled();
+  });
+
+  it("depois de desligado, o ouvinte não é mais chamado", async () => {
+    simularFetch(async () => SEM_SESSAO());
+    const ouvinte = vi.fn();
+    aoReceber401(ouvinte)();
+
+    await expect(api.post("/api/admin/redes", {})).rejects.toBeInstanceOf(
+      ErroApi,
+    );
+
+    expect(ouvinte).not.toHaveBeenCalled();
   });
 });
 
