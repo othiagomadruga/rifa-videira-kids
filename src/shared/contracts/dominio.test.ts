@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import expiredOrder from "../../../test/fixtures/rifei/expired_order.json";
 import newOrderAfiliado from "../../../test/fixtures/rifei/new_order.afiliado.json";
 import paidOrderAfiliado from "../../../test/fixtures/rifei/paid_order.afiliado.json";
@@ -12,10 +12,12 @@ import {
   decidirTransicaoPedido,
   discipuladorEntradaSchema,
   eventoWebhookSchema,
+  novoEventoWebhookSchema,
   pedidoSchema,
   redeEntradaSchema,
   RESULTADOS_EVENTO_WEBHOOK,
   STATUS_PEDIDO,
+  type NovoEventoWebhook,
   type StatusPedido,
 } from "./dominio";
 import { payloadRifeiSchema, redigirPayloadRifei } from "./rifei";
@@ -25,7 +27,7 @@ const AGORA = "2026-11-06T18:00:00.000Z";
 const campanhaDaAta = {
   nome: "Rifa Videira Kids",
   slug_rifei: "videira-kids-teste",
-  data_inicio: "2026-12-01",
+  data_inicio: "2026-11-23",
   preco_bilhete_centavos: 2000,
   meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
   periodos: [
@@ -87,31 +89,31 @@ describe("CA2: campanha (configuração)", () => {
       ...campanhaDaAta,
       id: 1,
       fuso_horario: "America/Belem",
-      data_fim: "2026-12-24",
+      data_fim: "2026-12-16",
       periodos: [
         {
           ordem: 1,
           nome: "Semana 1",
           dias: 10,
           percentual_bp: 3500,
-          data_inicio: "2026-12-01",
-          data_fim: "2026-12-10",
+          data_inicio: "2026-11-23",
+          data_fim: "2026-12-02",
         },
         {
           ordem: 2,
           nome: "Semana 2",
           dias: 7,
           percentual_bp: 2500,
-          data_inicio: "2026-12-11",
-          data_fim: "2026-12-17",
+          data_inicio: "2026-12-03",
+          data_fim: "2026-12-09",
         },
         {
           ordem: 3,
           nome: "Semana 3",
           dias: 7,
           percentual_bp: 4500,
-          data_inicio: "2026-12-18",
-          data_fim: "2026-12-24",
+          data_inicio: "2026-12-10",
+          data_fim: "2026-12-16",
         },
       ],
       soma_percentuais_bp: 10_500,
@@ -212,6 +214,9 @@ describe("CA2: hierarquia e afiliado", () => {
     expect(afiliadoSchema.safeParse({ ...orfao, origem: "csv" }).success).toBe(
       false,
     );
+    expect(
+      afiliadoSchema.safeParse({ ...orfao, affiliate_id: 0 }).success,
+    ).toBe(false);
   });
 });
 
@@ -266,6 +271,31 @@ describe("CA2: pedido e evento de webhook", () => {
     );
   });
 
+  it("pedido: campos informativos podem ser null (payload tolerado); essenciais não", () => {
+    const informativosNulos = {
+      ...pedido,
+      status_rifei: null,
+      status_detail_rifei: null,
+      subtotal_centavos: null,
+      metodo_pagamento: null,
+      rifinha: null,
+      criado_em: null,
+      expira_em: null,
+    };
+    expect(pedidoSchema.safeParse(informativosNulos).success).toBe(true);
+    for (const essencial of [
+      "id",
+      "campanha_id",
+      "status",
+      "qtd_bilhetes",
+      "total_centavos",
+    ]) {
+      expect(
+        pedidoSchema.safeParse({ ...pedido, [essencial]: null }).success,
+      ).toBe(false);
+    }
+  });
+
   it("pedido: nenhum campo de dado pessoal do comprador", () => {
     const proibidos =
       /nome|name|email|document|cpf|nascimento|birth|endereco|address|telefone|phone|observation|fbp|fbc/;
@@ -295,6 +325,7 @@ describe("CA2: pedido e evento de webhook", () => {
         payloadRifeiSchema.parse(paidOrderAfiliado),
       ),
       erro: null,
+      avisos: null,
     };
     expect(eventoWebhookSchema.safeParse(processado).success).toBe(true);
     expect(
@@ -312,10 +343,74 @@ describe("CA2: pedido e evento de webhook", () => {
       status_resultante: null,
       payload_redigido: null,
       erro: [
-        { caminho: ["id"], codigo: "invalid_type", mensagem: "Invalid input" },
+        {
+          caminho: ["id"],
+          codigo: "invalid_type",
+          mensagem: "Invalid input",
+          ocorrencias: 1,
+        },
       ],
     };
     expect(eventoWebhookSchema.safeParse(invalido).success).toBe(true);
+    expect(
+      eventoWebhookSchema.safeParse({ ...invalido, erro: [] }).success,
+    ).toBe(false);
+    const comAvisos = {
+      ...processado,
+      avisos: [
+        {
+          caminho: ["status"],
+          codigo: "invalid_type",
+          mensagem: "Invalid input",
+          ocorrencias: 1,
+        },
+      ],
+    };
+    expect(eventoWebhookSchema.safeParse(comAvisos).success).toBe(true);
+    expect(
+      eventoWebhookSchema.safeParse({ ...processado, avisos: "texto" }).success,
+    ).toBe(false);
+    // Lista vazia não existe: sem avisos é null.
+    expect(
+      eventoWebhookSchema.safeParse({ ...processado, avisos: [] }).success,
+    ).toBe(false);
+    // Aviso sem contagem de ocorrências não é aviso.
+    expect(
+      eventoWebhookSchema.safeParse({
+        ...processado,
+        avisos: [{ caminho: ["status"], codigo: "x", mensagem: "x" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("NovoEventoWebhook: a linha a gravar carrega avisos e não tem id", () => {
+    expectTypeOf<NovoEventoWebhook>().toHaveProperty("avisos");
+    expectTypeOf<NovoEventoWebhook>().not.toHaveProperty("id");
+    const novo = {
+      recebido_em: AGORA,
+      evento: "paid_order",
+      pedido_id: "PEDTESTE0004",
+      slug: "videira-kids-teste",
+      resultado: "processado",
+      status_anterior: null,
+      status_resultante: "approved",
+      payload_redigido: redigirPayloadRifei(
+        payloadRifeiSchema.parse(paidOrderAfiliado),
+      ),
+      erro: null,
+      avisos: [
+        {
+          caminho: ["numbers", "*"],
+          codigo: "invalid_type",
+          mensagem: "Invalid input",
+          ocorrencias: 5000,
+        },
+      ],
+    };
+    expect(novoEventoWebhookSchema.safeParse(novo).success).toBe(true);
+    const semAvisos: Record<string, unknown> = { ...novo };
+    delete semAvisos.avisos;
+    expect(novoEventoWebhookSchema.safeParse(semAvisos).success).toBe(false);
   });
 });
 

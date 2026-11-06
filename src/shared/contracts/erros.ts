@@ -19,6 +19,7 @@ export const CODIGOS_ERRO = [
   "nao_encontrado",
   "nome_duplicado",
   "em_uso",
+  "corpo_muito_grande",
   "erro_interno",
   "nao_configurado",
   "banco_indisponivel",
@@ -38,6 +39,7 @@ export const STATUS_HTTP_DO_ERRO = {
   nao_encontrado: 404,
   nome_duplicado: 409,
   em_uso: 409,
+  corpo_muito_grande: 413,
   erro_interno: 500,
   nao_configurado: 503,
   banco_indisponivel: 503,
@@ -92,4 +94,56 @@ export function detalhesDeValidacao(erro: {
     codigo: problema.code,
     mensagem: problema.message,
   }));
+}
+
+/** Máximo de itens numa lista gravada de problemas ou avisos; o resto vira um item final de contagem. */
+export const LIMITE_DETALHES = 50;
+
+/**
+ * Problema ou aviso agrupado por caminho sem índices (`["numbers", "*"]`) e código, com o número de
+ * ocorrências: 5.000 bilhetes inválidos viram UM item com `ocorrencias: 5000`. Nunca traz o valor.
+ */
+export const detalheResumidoSchema = detalheValidacaoSchema.extend({
+  ocorrencias: z.number().int().min(1),
+});
+export type DetalheResumido = z.infer<typeof detalheResumidoSchema>;
+
+/**
+ * Agrupa por caminho (índices viram "*") e código, e corta em LIMITE_DETALHES grupos. O que passar do
+ * limite vira um item final `itens_omitidos` com o total de ocorrências omitidas. Mantém pequeno o
+ * registro do evento (o D1 recusa linhas acima de 2 MB).
+ */
+export function resumirDetalhes(
+  detalhes: readonly DetalheValidacao[],
+): DetalheResumido[] {
+  const grupos = new Map<string, DetalheResumido>();
+  for (const detalhe of detalhes) {
+    const caminho = detalhe.caminho.map((parte) =>
+      typeof parte === "number" ? "*" : parte,
+    );
+    const chave = JSON.stringify([caminho, detalhe.codigo]);
+    const grupo = grupos.get(chave);
+    if (grupo) {
+      grupo.ocorrencias += 1;
+    } else {
+      grupos.set(chave, {
+        caminho,
+        codigo: detalhe.codigo,
+        mensagem: detalhe.mensagem,
+        ocorrencias: 1,
+      });
+    }
+  }
+  const resumo = [...grupos.values()];
+  if (resumo.length <= LIMITE_DETALHES) return resumo;
+  const omitidos = resumo.slice(LIMITE_DETALHES);
+  return [
+    ...resumo.slice(0, LIMITE_DETALHES),
+    {
+      caminho: [],
+      codigo: "itens_omitidos",
+      mensagem: `${omitidos.length} itens omitidos (limite de ${LIMITE_DETALHES})`,
+      ocorrencias: omitidos.reduce((soma, item) => soma + item.ocorrencias, 0),
+    },
+  ];
 }

@@ -26,7 +26,8 @@ erDiagram
 ## 2. Convenções
 
 - Nomes em português, snake_case. Os ids são `INTEGER PRIMARY KEY`, com duas exceções que vêm da Rifei: `pedidos.id` (texto) e `afiliados.affiliate_id` (inteiro).
-- **Dinheiro em centavos** (`INTEGER`), conforme D2. **Percentuais em pontos-base** (3500 = 35%).
+- **Dinheiro em centavos** (`INTEGER`), conforme D2, convertido de forma exata a partir do decimal, com fração de centavo arredondada meio para cima ([integracao-rifei.md](integracao-rifei.md#6-valores-d2-e-fuso-d8)). **Percentuais em pontos-base** (3500 = 35%).
+- Dinheiro, contadores e ids da Rifei têm `CHECK (typeof(x) = 'integer')`. A afinidade `INTEGER` do SQLite aceitaria `60.5` ou `'abc'` sem reclamar.
 - **Instantes em UTC**, texto ISO 8601 com milissegundos e `Z` (`2026-12-01T12:20:31.512Z`). Com um formato único, a ordem alfabética é a cronológica, e o filtro por intervalo usa índice. O padrão das colunas `criado_em` e `atualizado_em` é `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`.
 - **Datas locais** da campanha em `YYYY-MM-DD`, no fuso da campanha (D8).
 - Os formatos de data e instante são checados com `date()` e `strftime()` (`CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', x) IS x)`), e não com `GLOB`: o D1 recusa padrões GLOB/LIKE longos ("LIKE or GLOB pattern too complex"). A checagem também recusa datas impossíveis, como 30/02.
@@ -78,13 +79,13 @@ Períodos **consecutivos** a partir de `campanhas.data_inicio`, na `ordem` (ex.:
 | `discipuladores` | `rede_id` → redes, `nome` | `nome` único; índice por `rede_id` |
 | `celulas` | `discipulador_id` → discipuladores, `nome`, `qtd_pessoas`, `lider_nome`, `lider_email`, `lider_telefone` | `nome` único; `qtd_pessoas` 1–1000 (é a base da meta); e-mail e telefone opcionais; índice por `discipulador_id` |
 
-Os nomes são únicos com `COLLATE NOCASE`, que só ignora maiúsculas ASCII. A API compara nomes ignorando também maiúsculas acentuadas e espaços extras. Os nomes servem de chave na importação por CSV.
+Os nomes são únicos com `COLLATE NOCASE`, que só ignora maiúsculas ASCII. A API compara nomes ignorando também maiúsculas acentuadas e os espaços nas pontas. Os nomes servem de chave na importação por CSV.
 
 ### `afiliados` (D7)
 
 | Coluna | Tipo | Regra |
 |---|---|---|
-| `affiliate_id` | INTEGER PK | id do afiliado na Rifei |
+| `affiliate_id` | INT PK NOT NULL, > 0 | id do afiliado na Rifei. É `INT`, e não `INTEGER`, de propósito: assim não é alias do rowid, e um INSERT com NULL falha em vez de criar um afiliado fantasma |
 | `celula_id` | INTEGER FK → celulas, NULL | NULL = **não vinculado** (fila de órfãos) |
 | `rotulo` | TEXT NULL | nota da coordenação (ex.: usuário do líder na Rifei) |
 | `origem` | TEXT | `webhook` (apareceu numa venda) ou `manual` (pré-cadastro) |
@@ -97,24 +98,28 @@ Uma célula pode ter mais de um afiliado, por exemplo se o líder tiver duas con
 
 Estado **atual** de cada pedido da Rifei. **Só `status = 'approved'` conta como venda.**
 
+Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavos`, `metodo_pagamento`, `rifinha`, `criado_em`, `expira_em`) ficam NULL quando a Rifei manda o campo ausente ou com tipo errado: o webhook aceita a venda e registra o aviso em `webhook_eventos.avisos` (RIFA-002b). Os essenciais nunca ficam NULL: `id`, `campanha_id`, `status`, `qtd_bilhetes` e `total_centavos`.
+
 | Coluna | Tipo | Origem no payload |
 |---|---|---|
-| `id` | TEXT PK (1–128) | `id` |
+| `id` | TEXT PK NOT NULL (1–128) | `id`. O NOT NULL é explícito porque, no SQLite, uma PRIMARY KEY que não é INTEGER aceita NULL |
 | `campanha_id` | INTEGER FK → campanhas | campanha ativa cujo `slug_rifei` = `slug` |
 | `affiliate_id` | INTEGER FK → afiliados, NULL | `affiliate_id` (NULL = sem afiliado) |
 | `status` | TEXT | `in_process`, `approved` ou `expired` (máquina D4) |
-| `status_rifei`, `status_detail_rifei` | TEXT | `status`, `status_detail` do último evento processado |
+| `status_rifei`, `status_detail_rifei` | TEXT NULL | `status`, `status_detail` do último evento processado |
 | `qtd_bilhetes` | INTEGER ≥ 0 | `numbers_count` |
 | `numeros` | TEXT (JSON) NULL | `numbers`, usado na reconciliação |
-| `subtotal_centavos`, `total_centavos` | INTEGER ≥ 0 | `subtotal`, `total` (D2); `total` é o arrecadado |
+| `subtotal_centavos` | INTEGER ≥ 0 NULL | `subtotal` (D2) |
+| `total_centavos` | INTEGER ≥ 0 | `total` (D2): é o arrecadado; essencial, nunca NULL |
 | `desconto_promocao_centavos`, `desconto_cupom_centavos` | INTEGER NULL | `promotion_discount`, `coupon_discount` |
 | `cupom_id` | INTEGER NULL | `coupon_id` |
-| `metodo_pagamento` | TEXT | `payment_method` |
-| `rifinha` | INTEGER 0/1 | `is_rifinha` |
+| `metodo_pagamento` | TEXT NULL | `payment_method` |
+| `rifinha` | INTEGER 0/1 NULL | `is_rifinha` |
 | `ddd` | TEXT NULL | derivado de `buyer.phone`; só para o Brasil (CHECK `ddd IS NULL OR pais = '55'`) |
 | `pais` | TEXT NULL | código de discagem do país, derivado de `buyer.phone` (`55` = Brasil) |
 | `utm_source` … `utm_term` | TEXT NULL | `utm.*` |
-| `criado_em`, `expira_em` | TEXT (UTC) | `created_at`, `expires_at` |
+| `criado_em` | TEXT (UTC) NULL | `created_at`; NULL se vier ausente ou inválido |
+| `expira_em` | TEXT (UTC) NULL | `expires_at` |
 | `aprovado_em` | TEXT (UTC) NULL | `approved_at`; obrigatório quando `approved` (CHECK). Se a Rifei mandar null, vale o instante do recebimento |
 | `expirado_em` | TEXT (UTC) NULL | `expired_at` |
 | `registrado_em`, `atualizado_em` | TEXT (UTC) | nossos: primeira gravação e última alteração |
@@ -132,7 +137,8 @@ Uma linha por entrega **autenticada**, inclusive duplicadas e inválidas. Entreg
 | `status_anterior` | TEXT NULL | estado do pedido antes do evento (NULL se não existia) |
 | `status_resultante` | TEXT NULL | preenchido em `processado`, `duplicado` e `ignorado_transicao` |
 | `payload_redigido` | TEXT (JSON) NULL | `payloadRifeiRedigidoSchema`; NULL só em `erro_validacao` |
-| `erro` | TEXT (JSON) NULL | lista de problemas (caminho, código, mensagem, sem valores); preenchido **se e somente se** `erro_validacao` |
+| `erro` | TEXT (JSON) NULL | lista de problemas, agrupados e limitados como os avisos, sem valores; preenchido **se e somente se** `erro_validacao` |
+| `avisos` | TEXT (JSON) NULL | lista **não vazia** das diferenças do payload aceito em relação à doc (RIFA-002b): itens `{ caminho, codigo, mensagem, ocorrencias }`, agrupados por caminho sem índice, no máximo 50 mais um item final `itens_omitidos`, sem valores. CHECK: `json_type = 'array'` e pelo menos 1 item. NULL quando não há aviso (nunca `[]`); nunca em `erro_validacao` |
 
 `pedido_id` não tem FK, porque eventos ignorados ou inválidos não geram pedido. Como o payload redigido fica guardado, dá para **reprocessar** eventos depois (por exemplo, os `ignorado_outra_campanha` recebidos antes de a campanha ser configurada).
 
@@ -153,12 +159,12 @@ Pedidos `approved` com a hierarquia resolvida por `LEFT JOIN`: afiliado → cél
 | `webhook_eventos_por_pedido`, `webhook_eventos_por_resultado (resultado, recebido_em)` | auditoria de um pedido; listar erros e ignorados recentes |
 | `campanhas_uma_ativa` (parcial, único) | garantir uma única campanha ativa |
 
-Exemplo, ranking de células no período, com `[início, fim)` já convertido para UTC:
+Exemplo, ranking de células da campanha `?1` no período, com `[início, fim)` já convertido para UTC (`?2`, `?3`):
 
 ```sql
 SELECT celula_id, count(*) AS pedidos, sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS total_centavos
 FROM vendas_aprovadas
-WHERE aprovado_em >= ?1 AND aprovado_em < ?2 AND celula_id IS NOT NULL
+WHERE campanha_id = ?1 AND aprovado_em >= ?2 AND aprovado_em < ?3 AND celula_id IS NOT NULL
 GROUP BY celula_id;
 ```
 
@@ -171,7 +177,8 @@ GROUP BY celula_id;
 | `expired` | ignorado_transicao | processado → `approved` | duplicado |
 | `approved` | ignorado_transicao | duplicado | ignorado_transicao |
 
-- Em `processado`, o pedido recebe os dados **do evento processado** (valores, instantes, afiliado, DDD, utm). `registrado_em` não muda.
+- Pedido novo: recebe os dados do evento. Pedido existente: o `status` segue a máquina de estados, e os campos informativos (`affiliate_id`, `criado_em`, `expirado_em`, `utm_*`, cupom e descontos, `subtotal_centavos`, `status_rifei`, `status_detail_rifei`, `metodo_pagamento`) só são sobrescritos por valor **não nulo** (`COALESCE`). Um null de tolerância nunca apaga valor bom. `registrado_em` não muda.
+- Afiliado tardio: pedido sem afiliado recebe o `affiliate_id` válido de **qualquer** evento dele, inclusive `duplicado` e `ignorado_transicao`.
 - A gravação é idempotente: reentregar não duplica nada. Para continuar correta com entregas simultâneas, a transição usa UPSERT condicional (`ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN (...)`), dentro de um `db.batch` junto com o afiliado e o evento.
 - Fonte executável: `decidirTransicaoPedido` em `dominio.ts`.
 
@@ -250,7 +257,7 @@ Exemplo: 36 células com 450 pessoas, regra `por_pessoa`, 10 bilhetes por pessoa
   - `arrecadacao` = soma de `total_centavos`.
 - **Empates** dividem a posição (1, 2, 2, 4). Dentro do empate, a ordem é por nome. Uma instância sem meta (sem células) vai para o fim.
 - **Vendas sem célula** não entram em nenhum ranking. O painel mostra essas vendas à parte (`vendas_sem_celula`).
-- **Visão pública** (`/api/publico/ranking`): mesma ordem, só posição, nome e divisão, limitada a `publico_limite_ranking` posições (padrão 3; quem empata na última posição entra). O `% da meta` só aparece se `publico_mostra_percentual_meta = 1`. **Nunca há valores em R$.**
+- **Visão pública** (`/api/publico/ranking`): mesma ordem, só posição, nome e divisão, com as posições até `publico_limite_ranking` (padrão 3). Quem empata na última posição entra, então a lista pode ter mais itens que o limite (ex.: 1, 2, 3, 3). O `% da meta` só aparece se `publico_mostra_percentual_meta = 1`. **Nunca há valores em R$.**
 
 ## 8. O que não é guardado (D1)
 

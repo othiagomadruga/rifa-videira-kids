@@ -54,14 +54,15 @@ Toda resposta que não é 2xx tem este corpo:
 |---|---|---|
 | `requisicao_invalida` | 400 | corpo, consulta ou parâmetros fora do schema (`detalhes` = problemas) |
 | `json_invalido` | 400 | corpo não é JSON |
-| `payload_invalido` | 400 | webhook fora do schema da Rifei |
-| `csv_invalido` | 400 | CSV sem cabeçalho, sem coluna obrigatória ou acima do limite |
+| `payload_invalido` | 400 | webhook sem o essencial: `event`, `id`, `slug`, `numbers_count` ou `total` (ausente, inválido ou acima do limite) |
+| `csv_invalido` | 400 | CSV sem cabeçalho, sem coluna obrigatória ou acima do limite (`detalhes`: `detalhesCsvInvalidoSchema`) |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
 | `nao_autenticado` | 401 | sem credencial ou credencial inválida |
 | `proibido` | 403 | autenticado, sem permissão |
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado |
 | `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados |
+| `corpo_muito_grande` | 413 | corpo do webhook acima de 1 MiB (`LIMITE_CORPO_WEBHOOK_BYTES`) |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
 | `nao_configurado` | 503 | segredo do webhook ausente |
 | `banco_indisponivel` | 503 | health sem banco |
@@ -82,20 +83,25 @@ O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use 
 
 ### `POST /api/webhooks/rifei` (`rifei_bearer`)
 
-- Recebe o payload oficial da Rifei (`payloadRifeiSchema`). O passo a passo completo está em [integracao-rifei.md](integracao-rifei.md#5-processamento-de-cada-entrega).
-- O corpo é validado **dentro do handler**, e não por middleware, porque o erro precisa ser gravado antes da resposta 400.
+- Recebe o payload oficial da Rifei e o analisa com `analisarPayloadRifei` (RIFA-002b). Só recusa (400) quando falta o que torna o pedido gravável: `event` reconhecido, `id`, `slug`, `numbers_count` e `total`. O resto é tolerado: ausente ou com tipo errado vira null, e a diferença fica em `webhook_eventos.avisos`. Motivo: a Rifei não reenvia, e um 400 é venda perdida.
+- O passo a passo completo está em [integracao-rifei.md](integracao-rifei.md#5-processamento-de-cada-entrega).
+- O corpo é validado **dentro do handler**, com `analisarPayloadRifei`, e não por middleware: o erro precisa ser gravado antes da resposta 400, e os avisos precisam chegar ao evento.
+- Caminho com ou sem barra no fim (`CAMINHOS_WEBHOOK_RIFEI`).
+- **Limite de tamanho do corpo: 1 MiB** (`LIMITE_CORPO_WEBHOOK_BYTES`), conferido **depois** da autenticação. Acima disso, a resposta é **413** `corpo_muito_grande`, e o evento é gravado como `erro_validacao`, sem payload.
+- `problemas` (no 400 e no 413) e `avisos` (no evento aceito) vêm agrupados por caminho sem índice, cada item com `ocorrencias`, no máximo 50 itens mais um item final `itens_omitidos` (`detalheResumidoSchema`).
 
 | Status | Corpo | Gravado em `webhook_eventos`? |
 |---|---|---|
 | **200** | `{ "resultado": "processado" \| "duplicado" \| "ignorado_outra_campanha" \| "ignorado_transicao", "evento_id": 123 }` | sim, depois de gravar (D9) |
 | **400** `json_invalido` / `payload_invalido` | erro; `detalhes` = `{ "evento_id": 124, "problemas": [...] }` | sim, como `erro_validacao` (sem dado pessoal) |
+| **413** `corpo_muito_grande` | erro; `detalhes` = `{ "evento_id": 125, "problemas": [...] }` | sim, como `erro_validacao`, sem payload |
 | **401** `nao_autenticado` | erro | não |
 | **503** `nao_configurado` | erro | não |
 | **500** `erro_interno` | erro | não (falhou ao gravar) |
 
 - `ignorado_outra_campanha`: o `slug` é diferente do `slug_rifei` da campanha ativa, ou não há campanha ativa (D5).
 - `ignorado_transicao`: o evento não é permitido no estado atual, como um `expired_order` depois de `approved` (D4).
-- No `json_invalido`, `problemas` = `[{ "caminho": [], "codigo": "json_invalido", "mensagem": "O corpo não é um JSON válido" }]`. A mensagem é fixa: a do `JSON.parse` traz um trecho do corpo (dado pessoal, D1) e nunca é gravada, devolvida nem logada.
+- No `json_invalido`, `problemas` = `[{ "caminho": [], "codigo": "json_invalido", "mensagem": "O corpo não é um JSON válido", "ocorrencias": 1 }]`. A mensagem é fixa: a do `JSON.parse` traz um trecho do corpo (dado pessoal, D1) e nunca é gravada, devolvida nem logada.
 
 ### `GET /api/admin/campanha` e `PUT /api/admin/campanha` (`coordenacao`)
 
@@ -111,7 +117,7 @@ Corpo do PUT:
   "nome": "Rifa Videira Kids",
   "slug_rifei": "videira-kids",
   "fuso_horario": "America/Belem",
-  "data_inicio": "2026-12-01",
+  "data_inicio": "2026-11-23",
   "preco_bilhete_centavos": 2000,
   "meta": { "unidade": "bilhetes", "regra": "por_pessoa", "valor": 10 },
   "periodos": [
@@ -138,12 +144,12 @@ A resposta acrescenta os campos calculados:
 ```json
 {
   "id": 1, "nome": "Rifa Videira Kids", "slug_rifei": "videira-kids", "fuso_horario": "America/Belem",
-  "data_inicio": "2026-12-01", "data_fim": "2026-12-24", "preco_bilhete_centavos": 2000,
+  "data_inicio": "2026-11-23", "data_fim": "2026-12-16", "preco_bilhete_centavos": 2000,
   "meta": { "unidade": "bilhetes", "regra": "por_pessoa", "valor": 10 },
   "periodos": [
-    { "ordem": 1, "nome": "Semana 1", "dias": 10, "percentual_bp": 3500, "data_inicio": "2026-12-01", "data_fim": "2026-12-10" },
-    { "ordem": 2, "nome": "Semana 2", "dias": 7, "percentual_bp": 2500, "data_inicio": "2026-12-11", "data_fim": "2026-12-17" },
-    { "ordem": 3, "nome": "Semana 3", "dias": 7, "percentual_bp": 4500, "data_inicio": "2026-12-18", "data_fim": "2026-12-24" }
+    { "ordem": 1, "nome": "Semana 1", "dias": 10, "percentual_bp": 3500, "data_inicio": "2026-11-23", "data_fim": "2026-12-02" },
+    { "ordem": 2, "nome": "Semana 2", "dias": 7, "percentual_bp": 2500, "data_inicio": "2026-12-03", "data_fim": "2026-12-09" },
+    { "ordem": 3, "nome": "Semana 3", "dias": 7, "percentual_bp": 4500, "data_inicio": "2026-12-10", "data_fim": "2026-12-16" }
   ],
   "soma_percentuais_bp": 10500,
   "ranking": { "criterio": "percentual_meta" },
@@ -219,9 +225,12 @@ Rede Adulta Ficticia,adultos,,Discipulador Ficticio B,Célula Ficticia 03,15,Lid
   - se existe e mudou, é atualizada (um discipulador pode mudar de rede e uma célula, de discipulador);
   - se existe e não mudou, fica "inalterada".
 - Coluna opcional **ausente do cabeçalho** mantém o valor atual. Coluna **presente e vazia** apaga o valor (null).
-- O arquivo precisa ser coerente. A mesma rede com divisões diferentes, o mesmo discipulador em redes diferentes ou a mesma célula repetida é erro na linha que contradiz a anterior.
+- O arquivo precisa ser coerente. A mesma rede com divisões diferentes, o mesmo discipulador em redes diferentes ou uma célula repetida com dados diferentes é erro na linha que contradiz a anterior. Uma linha idêntica repetida conta uma vez.
 - **Atômico**: se qualquer linha tem erro, nada é gravado. O que não está no arquivo não é apagado.
-- **400** `csv_invalido`: sem cabeçalho, sem coluna obrigatória (`detalhes` = colunas faltando) ou mais de 2000 linhas.
+- **400** `csv_invalido`, com `detalhes` no formato `detalhesCsvInvalidoSchema`:
+  - `{ "motivo": "sem_cabecalho" }`: arquivo vazio ou sem cabeçalho;
+  - `{ "motivo": "colunas_faltando", "colunas": ["qtd_pessoas"] }`: falta coluna obrigatória;
+  - `{ "motivo": "linhas_demais", "limite": 2000, "total_linhas": 2500 }`: mais de 2000 linhas de dados.
 
 **200** (`respostaImportarHierarquiaSchema`) para o CSV acima, num banco vazio:
 
@@ -336,7 +345,7 @@ As regras de cálculo estão em [modelo-de-dados.md, seção 7](modelo-de-dados.
 
 - **Consulta**: `nivel`, `divisao` e `periodo`, como no painel, sem `data`.
 - **200** (`respostaRankingPublicoSchema`, estrito): `{ nivel, divisao, janela, itens: [{ posicao, nome, divisao, percentual_meta_bp? }], atualizado_em }`.
-  - Até `publico.limite_ranking` posições (padrão top 3; quem empata na última posição entra).
+  - Itens com `posicao` até `publico.limite_ranking` (padrão 3). Quem empata na última posição entra, então pode haver mais itens que o limite (ex.: 1, 2, 3, 3).
   - `percentual_meta_bp` só aparece se `publico.mostra_percentual_meta = true`.
   - Nunca aparecem centavos, bilhetes, meta ou realizado.
 
