@@ -1,4 +1,10 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderizarRota, respostaJson } from "./test/renderizar";
 
@@ -137,23 +143,96 @@ describe("CA2: navegação da coordenação", () => {
       expect(atuais[0]).toHaveAccessibleName(rotulo);
     }
   });
+});
 
-  it("menu compacto: o botão abre e fecha o menu, e escolher uma tela fecha", async () => {
+describe("CA2: menu compacto (celular)", () => {
+  function renderizarComMenuAberto() {
     renderizarRota("/coordenacao");
     const botao = screen.getByRole("button", { name: "Menu" });
     const menu = screen.getByRole("navigation", { name: "Coordenação" });
+    fireEvent.click(botao);
+    expect(botao).toHaveAttribute("aria-expanded", "true");
+    return { botao, menu };
+  }
 
+  it("o botão abre o menu e, clicado de novo, fecha", () => {
+    renderizarRota("/coordenacao");
+    const botao = screen.getByRole("button", { name: "Menu" });
+    const menu = screen.getByRole("navigation", { name: "Coordenação" });
     expect(botao).toHaveAttribute("aria-controls", menu.id);
     expect(botao).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(botao);
     expect(botao).toHaveAttribute("aria-expanded", "true");
 
+    fireEvent.click(botao);
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("Esc fecha o menu e devolve o foco ao botão Menu", () => {
+    const { botao, menu } = renderizarComMenuAberto();
+    const link = within(menu).getByRole("link", { name: "Pedidos" });
+    act(() => link.focus());
+
+    fireEvent.keyDown(link, { key: "Escape" });
+
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    expect(botao).toHaveFocus();
+  });
+
+  it("toque fora fecha o menu; toque dentro não", () => {
+    const { botao, menu } = renderizarComMenuAberto();
+
+    fireEvent.pointerDown(within(menu).getByRole("link", { name: "Bumbo" }));
+    fireEvent.pointerDown(botao);
+    expect(botao).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.pointerDown(screen.getByRole("main"));
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("fecha quando o foco sai do menu para outro elemento da página", () => {
+    const { botao, menu } = renderizarComMenuAberto();
+    act(() => within(menu).getByRole("link", { name: "Bumbo" }).focus());
+    act(() => within(menu).getByRole("link", { name: "Conferência" }).focus());
+    expect(botao).toHaveAttribute("aria-expanded", "true");
+
+    act(() => screen.getByRole("main").focus());
+
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("fecha com Tab depois do último link, mesmo sem próximo elemento", async () => {
+    const { botao, menu } = renderizarComMenuAberto();
+    const bumbo = within(menu).getByRole("link", { name: "Bumbo" });
+    const ultimo = within(menu).getByRole("link", { name: "Conferência" });
+    act(() => bumbo.focus());
+
+    // Tab dentro do menu: continua aberto.
+    fireEvent.keyDown(bumbo, { key: "Tab" });
+    act(() => ultimo.focus());
+    await act(() => new Promise((resolver) => setTimeout(resolver, 0)));
+    expect(botao).toHaveAttribute("aria-expanded", "true");
+
+    // Tab no último link: o foco sai da página (focusout sem destino).
+    fireEvent.keyDown(ultimo, { key: "Tab" });
+    act(() => ultimo.blur());
+
+    await waitFor(() =>
+      expect(botao).toHaveAttribute("aria-expanded", "false"),
+    );
+  });
+
+  it("escolher uma tela fecha o menu e leva o foco ao conteúdo", async () => {
+    const { botao, menu } = renderizarComMenuAberto();
+
     fireEvent.click(within(menu).getByRole("link", { name: "Pedidos" }));
+
     expect(
       await screen.findByRole("heading", { level: 1, name: "Pedidos" }),
     ).toBeInTheDocument();
     expect(botao).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("main")).toHaveFocus();
   });
 });
 
@@ -164,7 +243,7 @@ describe("Regra: telas públicas não mostram valores em R$", () => {
     expect(document.body.textContent).not.toMatch(/R\$/);
   });
 
-  it("o código das telas públicas não usa formatarMoeda nem R$", () => {
+  it("o código das telas públicas não formata nem lê dinheiro", () => {
     const fontes = import.meta.glob<string>(
       [
         "./pages/ranking-publico/**/*.{ts,tsx}",
@@ -175,8 +254,12 @@ describe("Regra: telas públicas não mostram valores em R$", () => {
     );
 
     expect(Object.keys(fontes).length).toBeGreaterThan(0);
+    // formatarMoeda e "R$": formatação; currency e BRL: Intl direto; _centavos:
+    // campos de dinheiro do contrato (total_centavos, preco_bilhete_centavos...).
     for (const [arquivo, fonte] of Object.entries(fontes)) {
-      expect(fonte, arquivo).not.toMatch(/formatarMoeda|R\$/);
+      expect(fonte, arquivo).not.toMatch(
+        /formatarMoeda|R\$|currency|BRL|_centavos/,
+      );
     }
   });
 });

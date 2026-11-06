@@ -72,7 +72,7 @@ src/web/
 
 | Componente | Para quê | Props principais |
 | --- | --- | --- |
-| `AppShell` | Layout da coordenação: barra lateral a partir de 64rem, botão "Menu" no celular, `aria-current="page"` no link atual, link "Pular para o conteúdo" | `area`, `itens` (`{ para, rotulo, exato? }`), `children` |
+| `AppShell` | Layout da coordenação: barra lateral a partir de 64rem, botão "Menu" no celular (fecha com o próprio botão, Esc, que devolve o foco ao botão, toque fora ou foco saindo do menu; escolher uma tela fecha e leva o foco ao `<main>`), `aria-current="page"` no link atual, link "Pular para o conteúdo" | `area`, `itens` (`{ para, rotulo, exato? }`), `children` |
 | `PublicShell` | Layout das telas abertas: marca e conteúdo, sem navegação | `children` |
 | `PageHeader` | Cabeçalho da tela: `<h1>` e título da aba ("Pedidos · Rifa Videira Kids") | `titulo`, `descricao?`, `acoes?` |
 | `Card` | Cartão de conteúdo | `titulo?` (`<h2>`), `acoes?`, `children` |
@@ -133,7 +133,7 @@ Notas:
 
 ## Regras
 
-1. **O público nunca recebe R$.** `/` e `/telao` (e qualquer tela futura aberta ao público) mostram só posições, top 3 e percentuais, nunca valores em dinheiro. Nessas pastas não se importa `formatarMoeda` nem se escreve "R$": o `rotas.test.tsx` confere a tela renderizada e o código. Esse teste lê só os arquivos dessas pastas (não segue os imports): tela pública nova entra no `import.meta.glob` dele, e componente usado por tela pública também não formata dinheiro. Esconder no front não basta, porque o que chega ao navegador é público: a tela pública só chama rotas da API que não devolvem valores.
+1. **O público nunca recebe R$.** `/` e `/telao` (e qualquer tela futura aberta ao público) mostram só posições, top 3 e percentuais, nunca valores em dinheiro. Nessas pastas o código não tem `formatarMoeda`, "R$", `currency`, `BRL` nem campos `_centavos`: o `rotas.test.tsx` confere a tela renderizada e o código. Esse teste lê só os arquivos dessas pastas (não segue os imports): tela pública nova entra no `import.meta.glob` dele, e componente usado por tela pública também não formata dinheiro. Esconder no front não basta, porque o que chega ao navegador é público: a tela pública só chama rotas da API que não devolvem valores.
 2. Dinheiro em centavos inteiros, percentuais em pontos-base e datas no fuso de Belém, sempre pelos formatadores.
 3. Sem bibliotecas de UI ou de CSS, sem fonte externa, sem CDN.
 4. Acessibilidade: um `<h1>` por tela (o do `PageHeader`); campo sempre com rótulo; status nunca só pela cor; alvos de toque com 44 px ou mais (`--alvo-toque`); foco visível.

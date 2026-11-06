@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router";
 import { Marca } from "./Marca";
 import "./AppShell.css";
@@ -20,9 +20,72 @@ type Props = {
 
 // Layout da coordenação: barra lateral no computador (a partir de 64rem) e menu
 // compacto (botão "Menu") no celular. O link da tela atual ganha aria-current="page".
+// Aberto, o menu fecha com o próprio botão, com Esc (o foco volta ao botão), com
+// toque fora da barra e quando o foco sai dela (inclusive com Tab para fora da
+// página); escolher uma tela fecha e leva o foco ao conteúdo.
 export function AppShell({ area, itens, children }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
   const idNavegacao = useId();
+  // Área do menu: a barra do topo (com o botão) e a navegação.
+  const refAreaMenu = useRef<HTMLDivElement>(null);
+  const refBotaoMenu = useRef<HTMLButtonElement>(null);
+  const refConteudo = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const areaMenu = refAreaMenu.current;
+    if (!menuAberto || !areaMenu) return;
+
+    let conferenciaDoTab: ReturnType<typeof setTimeout> | undefined;
+
+    const aoTeclar = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") {
+        setMenuAberto(false);
+        refBotaoMenu.current?.focus();
+      } else if (evento.key === "Tab") {
+        // O navegador move o foco depois do keydown: confere logo em seguida. Cobre
+        // o Tab que sai da página (sem próximo elemento), em que o focusout vem sem
+        // destino.
+        clearTimeout(conferenciaDoTab);
+        conferenciaDoTab = setTimeout(() => {
+          if (!areaMenu.contains(document.activeElement)) setMenuAberto(false);
+        }, 0);
+      }
+    };
+    const fecharComToqueFora = (evento: PointerEvent) => {
+      if (
+        !(evento.target instanceof Node) ||
+        !areaMenu.contains(evento.target)
+      ) {
+        setMenuAberto(false);
+      }
+    };
+    // Foco foi para um elemento fora do menu. Sem destino (troca de janela, toque
+    // em parte do menu que não recebe foco) não fecha.
+    const fecharQuandoOFocoSai = (evento: FocusEvent) => {
+      const destino = evento.relatedTarget;
+      if (destino instanceof Node && !areaMenu.contains(destino)) {
+        setMenuAberto(false);
+      }
+    };
+
+    document.addEventListener("keydown", aoTeclar);
+    document.addEventListener("pointerdown", fecharComToqueFora);
+    areaMenu.addEventListener("focusout", fecharQuandoOFocoSai);
+    return () => {
+      clearTimeout(conferenciaDoTab);
+      document.removeEventListener("keydown", aoTeclar);
+      document.removeEventListener("pointerdown", fecharComToqueFora);
+      areaMenu.removeEventListener("focusout", fecharQuandoOFocoSai);
+    };
+  }, [menuAberto]);
+
+  // Escolheu uma tela no menu do celular: fecha e leva o foco ao conteúdo (o <main>
+  // continua o mesmo entre as telas, só o que está dentro dele muda).
+  function aoEscolherTela() {
+    if (!menuAberto) return;
+    setMenuAberto(false);
+    refConteudo.current?.focus();
+  }
 
   return (
     <div
@@ -32,10 +95,11 @@ export function AppShell({ area, itens, children }: Props) {
       <a className="ui-app-shell__pular" href="#conteudo">
         Pular para o conteúdo
       </a>
-      <div className="ui-app-shell__lateral">
+      <div className="ui-app-shell__lateral" ref={refAreaMenu}>
         <header className="ui-app-shell__topo">
           <Marca complemento={area} />
           <button
+            ref={refBotaoMenu}
             type="button"
             className="ui-app-shell__botao-menu"
             aria-expanded={menuAberto}
@@ -54,7 +118,7 @@ export function AppShell({ area, itens, children }: Props) {
                   to={item.para}
                   end={item.exato}
                   className="ui-app-shell__link"
-                  onClick={() => setMenuAberto(false)}
+                  onClick={aoEscolherTela}
                 >
                   {item.rotulo}
                 </NavLink>
@@ -63,7 +127,12 @@ export function AppShell({ area, itens, children }: Props) {
           </ul>
         </nav>
       </div>
-      <main id="conteudo" className="ui-app-shell__conteudo" tabIndex={-1}>
+      <main
+        id="conteudo"
+        ref={refConteudo}
+        className="ui-app-shell__conteudo"
+        tabIndex={-1}
+      >
         <div className="ui-app-shell__pagina">{children}</div>
       </main>
     </div>
