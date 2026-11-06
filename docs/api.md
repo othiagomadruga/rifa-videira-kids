@@ -95,7 +95,7 @@ O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use 
 
 - `ignorado_outra_campanha`: o `slug` é diferente do `slug_rifei` da campanha ativa, ou não há campanha ativa (D5).
 - `ignorado_transicao`: o evento não é permitido no estado atual, como um `expired_order` depois de `approved` (D4).
-- No `json_invalido`, `problemas` = `[{ "caminho": [], "codigo": "json_invalido", "mensagem": "..." }]`.
+- No `json_invalido`, `problemas` = `[{ "caminho": [], "codigo": "json_invalido", "mensagem": "O corpo não é um JSON válido" }]`. A mensagem é fixa: a do `JSON.parse` traz um trecho do corpo (dado pessoal, D1) e nunca é gravada, devolvida nem logada.
 
 ### `GET /api/admin/campanha` e `PUT /api/admin/campanha` (`coordenacao`)
 
@@ -385,5 +385,7 @@ app.put(
   },
 );
 ```
+
+JSON malformado ou corpo vazio não chegam ao hook: o validador do Hono lança `HTTPException` 400 (texto puro "Malformed JSON in request body"). O `app.onError` precisa responder a essa exceção com `400 json_invalido` no formato único, e não com `500 erro_interno`.
 
 No front, use os mesmos caminhos (`ROTAS.listarRedes.caminho`) e os tipos (`Campanha`, `Celula`, `AfiliadoResumo`…). Para validar respostas em desenvolvimento, use `ROTAS.<rota>.sucesso.corpo.parse(json)`.

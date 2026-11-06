@@ -108,7 +108,7 @@ A ordem importa:
 
 1. Segredo `RIFEI_WEBHOOK_TOKEN` ausente: **503** `nao_configurado` e nada é gravado (D6).
 2. `Authorization` ausente ou inválido: **401** `nao_autenticado` e nada é gravado (D6).
-3. Corpo que não é JSON: grava um evento `erro_validacao` e responde **400** `json_invalido` (D9).
+3. Corpo que não é JSON: grava um evento `erro_validacao` e responde **400** `json_invalido` (D9). A mensagem do problema é fixa: a do `JSON.parse` traz um trecho do corpo e nunca é gravada, devolvida nem logada (D1).
 4. `payloadRifeiSchema` falha: grava um evento `erro_validacao` com `identificarPayloadInvalido` (só os textos de `event`, `id` e `slug`) e os problemas sem valores, e responde **400** `payload_invalido` (D9).
 5. Redige o payload (D1).
 6. Sem campanha ativa, ou `slug` diferente de `campanhas.slug_rifei`: grava um evento `ignorado_outra_campanha` (com o payload redigido) e responde **200** (D5). Sem campanha ativa, o evento também cai aqui (SUPOSIÇÃO): o payload redigido fica guardado e pode ser reprocessado depois que a campanha for configurada.
