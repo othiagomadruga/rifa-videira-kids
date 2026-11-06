@@ -343,10 +343,18 @@ describe("CA2: pedido e evento de webhook", () => {
       status_resultante: null,
       payload_redigido: null,
       erro: [
-        { caminho: ["id"], codigo: "invalid_type", mensagem: "Invalid input" },
+        {
+          caminho: ["id"],
+          codigo: "invalid_type",
+          mensagem: "Invalid input",
+          ocorrencias: 1,
+        },
       ],
     };
     expect(eventoWebhookSchema.safeParse(invalido).success).toBe(true);
+    expect(
+      eventoWebhookSchema.safeParse({ ...invalido, erro: [] }).success,
+    ).toBe(false);
     const comAvisos = {
       ...processado,
       avisos: [
@@ -354,12 +362,24 @@ describe("CA2: pedido e evento de webhook", () => {
           caminho: ["status"],
           codigo: "invalid_type",
           mensagem: "Invalid input",
+          ocorrencias: 1,
         },
       ],
     };
     expect(eventoWebhookSchema.safeParse(comAvisos).success).toBe(true);
     expect(
       eventoWebhookSchema.safeParse({ ...processado, avisos: "texto" }).success,
+    ).toBe(false);
+    // Lista vazia não existe: sem avisos é null.
+    expect(
+      eventoWebhookSchema.safeParse({ ...processado, avisos: [] }).success,
+    ).toBe(false);
+    // Aviso sem contagem de ocorrências não é aviso.
+    expect(
+      eventoWebhookSchema.safeParse({
+        ...processado,
+        avisos: [{ caminho: ["status"], codigo: "x", mensagem: "x" }],
+      }).success,
     ).toBe(false);
   });
 
@@ -380,9 +400,10 @@ describe("CA2: pedido e evento de webhook", () => {
       erro: null,
       avisos: [
         {
-          caminho: ["total"],
+          caminho: ["numbers", "*"],
           codigo: "invalid_type",
           mensagem: "Invalid input",
+          ocorrencias: 5000,
         },
       ],
     };

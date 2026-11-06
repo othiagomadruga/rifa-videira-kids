@@ -175,9 +175,12 @@ CREATE TABLE webhook_eventos (
   payload_redigido   TEXT    CHECK (payload_redigido IS NULL OR json_valid(payload_redigido)),
   -- JSON: lista de problemas de validação (caminho, código, mensagem; nunca o valor).
   erro               TEXT    CHECK (erro IS NULL OR json_valid(erro)),
-  -- JSON: diferenças do payload aceito em relação à doc (caminho, código, mensagem; nunca o valor).
-  -- NULL quando não há nenhuma. Nunca em erro_validacao (lá os problemas vão em erro).
-  avisos             TEXT    CHECK (avisos IS NULL OR json_valid(avisos)),
+  -- JSON: lista NÃO vazia das diferenças do payload aceito em relação à doc, agrupadas por caminho
+  -- (caminho, código, mensagem, ocorrências; nunca o valor). NULL quando não há nenhuma (nunca '[]').
+  -- Nunca em erro_validacao (lá os problemas vão em erro). O CASE garante que json_type só roda em
+  -- JSON válido (em texto inválido ele lançaria erro em vez de reprovar o CHECK).
+  avisos             TEXT    CHECK (avisos IS NULL OR CASE WHEN json_valid(avisos)
+                       THEN json_type(avisos) = 'array' AND json_array_length(avisos) > 0 ELSE 0 END),
   CHECK ((resultado = 'erro_validacao') = (erro IS NOT NULL)),
   CHECK (resultado = 'erro_validacao' OR payload_redigido IS NOT NULL),
   CHECK (resultado <> 'erro_validacao' OR avisos IS NULL),

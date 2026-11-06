@@ -29,7 +29,7 @@ import {
   redeSchema,
   resultadoEventoWebhookSchema,
 } from "./dominio";
-import { detalheValidacaoSchema } from "./erros";
+import { detalheResumidoSchema } from "./erros";
 import { payloadRifeiSchema } from "./rifei";
 
 // ---------------------------------------------------------------------------------------------------
@@ -81,8 +81,22 @@ export const respostaHealthSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------------------------------
-// POST /api/webhooks/rifei (corpo: payloadRifeiSchema, validado dentro do handler)
+// POST /api/webhooks/rifei. O handler valida o corpo com analisarPayloadRifei(corpo), e não com
+// payloadRifeiSchema direto: só assim os avisos chegam a webhook_eventos.avisos (avisosParaGravar).
 // ---------------------------------------------------------------------------------------------------
+
+/**
+ * Tamanho máximo do corpo do webhook (1 MiB). É conferido depois da autenticação: acima disso, 413
+ * `corpo_muito_grande` (o evento é registrado como `erro_validacao`, sem payload). Um pedido real
+ * ocupa poucos KB; o limite protege memória e CPU do Worker.
+ */
+export const LIMITE_CORPO_WEBHOOK_BYTES = 1_048_576;
+
+/** Caminhos aceitos do webhook: com e sem barra no fim. */
+export const CAMINHOS_WEBHOOK_RIFEI = [
+  "/api/webhooks/rifei",
+  "/api/webhooks/rifei/",
+] as const;
 
 /** 200: o evento foi gravado em webhook_eventos (com o resultado). */
 export const respostaWebhookRifeiSchema = z.object({
@@ -91,10 +105,13 @@ export const respostaWebhookRifeiSchema = z.object({
 });
 export type RespostaWebhookRifei = z.infer<typeof respostaWebhookRifeiSchema>;
 
-/** `detalhes` do erro 400 do webhook (json_invalido ou payload_invalido). */
+/**
+ * `detalhes` dos erros do webhook que gravam evento: 400 `json_invalido` ou `payload_invalido` e 413
+ * `corpo_muito_grande`. Os problemas vêm agrupados e limitados (resumirDetalhes).
+ */
 export const detalhesErroWebhookSchema = z.object({
   evento_id: idSchema,
-  problemas: z.array(detalheValidacaoSchema),
+  problemas: z.array(detalheResumidoSchema).min(1),
 });
 
 // ---------------------------------------------------------------------------------------------------

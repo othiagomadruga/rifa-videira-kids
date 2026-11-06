@@ -26,7 +26,7 @@ erDiagram
 ## 2. Convenções
 
 - Nomes em português, snake_case. Os ids são `INTEGER PRIMARY KEY`, com duas exceções que vêm da Rifei: `pedidos.id` (texto) e `afiliados.affiliate_id` (inteiro).
-- **Dinheiro em centavos** (`INTEGER`), conforme D2. **Percentuais em pontos-base** (3500 = 35%).
+- **Dinheiro em centavos** (`INTEGER`), conforme D2, convertido de forma exata a partir do decimal, com fração de centavo arredondada meio para cima ([integracao-rifei.md](integracao-rifei.md#6-valores-d2-e-fuso-d8)). **Percentuais em pontos-base** (3500 = 35%).
 - Dinheiro, contadores e ids da Rifei têm `CHECK (typeof(x) = 'integer')`. A afinidade `INTEGER` do SQLite aceitaria `60.5` ou `'abc'` sem reclamar.
 - **Instantes em UTC**, texto ISO 8601 com milissegundos e `Z` (`2026-12-01T12:20:31.512Z`). Com um formato único, a ordem alfabética é a cronológica, e o filtro por intervalo usa índice. O padrão das colunas `criado_em` e `atualizado_em` é `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`.
 - **Datas locais** da campanha em `YYYY-MM-DD`, no fuso da campanha (D8).
@@ -137,8 +137,8 @@ Uma linha por entrega **autenticada**, inclusive duplicadas e inválidas. Entreg
 | `status_anterior` | TEXT NULL | estado do pedido antes do evento (NULL se não existia) |
 | `status_resultante` | TEXT NULL | preenchido em `processado`, `duplicado` e `ignorado_transicao` |
 | `payload_redigido` | TEXT (JSON) NULL | `payloadRifeiRedigidoSchema`; NULL só em `erro_validacao` |
-| `erro` | TEXT (JSON) NULL | lista de problemas (caminho, código, mensagem, sem valores); preenchido **se e somente se** `erro_validacao` |
-| `avisos` | TEXT (JSON) NULL | diferenças do payload aceito em relação à doc, no mesmo formato e sem valores (RIFA-002b); NULL quando não há nenhuma; nunca em `erro_validacao` |
+| `erro` | TEXT (JSON) NULL | lista de problemas, agrupados e limitados como os avisos, sem valores; preenchido **se e somente se** `erro_validacao` |
+| `avisos` | TEXT (JSON) NULL | lista **não vazia** das diferenças do payload aceito em relação à doc (RIFA-002b): itens `{ caminho, codigo, mensagem, ocorrencias }`, agrupados por caminho sem índice, no máximo 50 mais um item final `itens_omitidos`, sem valores. CHECK: `json_type = 'array'` e pelo menos 1 item. NULL quando não há aviso (nunca `[]`); nunca em `erro_validacao` |
 
 `pedido_id` não tem FK, porque eventos ignorados ou inválidos não geram pedido. Como o payload redigido fica guardado, dá para **reprocessar** eventos depois (por exemplo, os `ignorado_outra_campanha` recebidos antes de a campanha ser configurada).
 
@@ -177,7 +177,8 @@ GROUP BY celula_id;
 | `expired` | ignorado_transicao | processado → `approved` | duplicado |
 | `approved` | ignorado_transicao | duplicado | ignorado_transicao |
 
-- Em `processado`, o pedido recebe os dados **do evento processado** (valores, instantes, afiliado, DDD, utm). `registrado_em` não muda.
+- Pedido novo: recebe os dados do evento. Pedido existente: o `status` segue a máquina de estados, e os campos informativos (`affiliate_id`, `criado_em`, `expirado_em`, `utm_*`, cupom e descontos, `subtotal_centavos`, `status_rifei`, `status_detail_rifei`, `metodo_pagamento`) só são sobrescritos por valor **não nulo** (`COALESCE`). Um null de tolerância nunca apaga valor bom. `registrado_em` não muda.
+- Afiliado tardio: pedido sem afiliado recebe o `affiliate_id` válido de **qualquer** evento dele, inclusive `duplicado` e `ignorado_transicao`.
 - A gravação é idempotente: reentregar não duplica nada. Para continuar correta com entregas simultâneas, a transição usa UPSERT condicional (`ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN (...)`), dentro de um `db.batch` junto com o afiliado e o evento.
 - Fonte executável: `decidirTransicaoPedido` em `dominio.ts`.
 

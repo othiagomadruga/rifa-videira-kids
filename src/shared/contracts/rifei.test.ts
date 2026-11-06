@@ -8,9 +8,11 @@ import paidOrderAposExpirado from "../../../test/fixtures/rifei/paid_order.apos_
 import paidOrderOficial from "../../../test/fixtures/rifei/paid_order.oficial.json";
 import paidOrderOutraCampanha from "../../../test/fixtures/rifei/paid_order.outra_campanha.json";
 import paidOrderTiposEstranhos from "../../../test/fixtures/rifei/paid_order.tipos_estranhos.json";
+import { LIMITE_DETALHES, resumirDetalhes } from "./erros";
 import {
   CAMPOS_DESCARTADOS_NA_REDACAO,
   analisarPayloadRifei,
+  avisosParaGravar,
   derivarTelefone,
   identificarPayloadInvalido,
   payloadRifeiDocSchema,
@@ -18,6 +20,7 @@ import {
   payloadRifeiSchema,
   reaisParaCentavos,
   redigirPayloadRifei,
+  textoDecimalParaCentavos,
   type AnalisePayloadRifei,
   type PayloadRifeiRedigido,
 } from "./rifei";
@@ -174,13 +177,17 @@ describe("CA1: payload do webhook da Rifei (doc oficial e tolerância)", () => {
     ["id", undefined],
     ["id", null],
     ["id", ""],
-    ["id", 12345],
+    ["id", 1.5],
+    ["id", true],
+    ["id", { numero: 1 }],
     ["id", "x".repeat(129)],
     ["event", "refunded_order"],
     ["event", undefined],
     ["slug", null],
     ["slug", ""],
+    ["slug", "   "],
     ["numbers_count", null],
+    ["numbers_count", 1_000_001],
     ["numbers_count", 2.5],
     ["numbers_count", "12.5"],
     ["numbers_count", -1],
@@ -188,13 +195,20 @@ describe("CA1: payload do webhook da Rifei (doc oficial e tolerância)", () => {
     ["total", "1,25"],
     ["total", "abc"],
     ["total", -1],
+    ["total", 10_000_000.01],
+    ["total", 1e20],
+    ["total", "100000000"],
   ])("recusa (400) quando o essencial falha: %s = %j", (campo, valor) => {
     const { problemas } = recusa({ ...paidOrderOficial, [campo]: valor });
     expect(campos(problemas)).toContain(campo);
   });
 
   it.each([
+    ["id", 12345, "12345"],
+    ["slug", " videira-kids-teste ", "videira-kids-teste"],
     ["numbers_count", "12", 12],
+    ["numbers_count", "12.0", 12],
+    ["total", "1.005", 1.01],
     ["total", "19.90", 19.9],
     ["total", " 20 ", 20],
     ["affiliate_id", "1042", 1042],
@@ -235,6 +249,10 @@ describe("CA1: payload do webhook da Rifei (doc oficial e tolerância)", () => {
     ["observation", 42],
     ["fbp", {}],
     ["fbc", []],
+    ["subtotal", 1e20],
+    ["status", "x".repeat(101)],
+    ["upsells", Array.from({ length: 51 }, () => "Upsell")],
+    ["numbers", Array.from({ length: 10_001 }, (_, i) => i)],
   ])("tolera %s = %j: vira null e gera aviso", (campo, valor) => {
     const { payload, avisos } = aceita({ ...paidOrderOficial, [campo]: valor });
     expect(payload[campo as keyof typeof payload]).toBeNull();
@@ -350,6 +368,10 @@ describe("CA1: payload do webhook da Rifei (doc oficial e tolerância)", () => {
       "slug",
       "total",
     ]);
+    // Problemas também vêm agrupados e limitados (formato DetalheResumido).
+    expect(problemas.every((problema) => problema.ocorrencias === 1)).toBe(
+      true,
+    );
     const json = JSON.stringify(problemas);
     for (const texto of textosPessoais(malformado)) {
       expect(json).not.toContain(texto);
@@ -387,6 +409,110 @@ describe("CA1: payload do webhook da Rifei (doc oficial e tolerância)", () => {
     expect(identificarPayloadInvalido({ id: "x".repeat(500) }).pedido_id).toBe(
       "x".repeat(128),
     );
+    expect(identificarPayloadInvalido({ id: 12345 }).pedido_id).toBe("12345");
+  });
+
+  it("limites com mensagem clara: total acima de R$ 10 mi e mais de 1 milhão de bilhetes", () => {
+    const valor = recusa({ ...paidOrderOficial, total: 1e20 });
+    expect(JSON.stringify(valor.problemas)).toContain("R$ 10.000.000,00");
+    const bilhetes = recusa({ ...paidOrderOficial, numbers_count: 1_000_001 });
+    expect(JSON.stringify(bilhetes.problemas)).toContain("1.000.000");
+    expect(
+      aceita({ ...paidOrderOficial, total: 10_000_000 }).payload.total,
+    ).toBe(10_000_000);
+  });
+
+  const tamanhoEmBytes = (valor: unknown) =>
+    new TextEncoder().encode(JSON.stringify(valor)).length;
+
+  it("20.000 bilhetes inválidos: aceito, numbers vira null e os avisos ficam pequenos (< 10 KB)", () => {
+    const numeros = Array.from({ length: 20_000 }, (_, i) => String(i));
+    const { payload, avisos } = aceita({
+      ...paidOrderOficial,
+      numbers: numeros,
+      lucky_numbers: numeros,
+      numbers_count: 20_000,
+    });
+    expect(payload.numbers).toBeNull();
+    expect(payload.lucky_numbers).toBeNull();
+    expect(payload.numbers_count).toBe(20_000);
+    // Acima de LIMITE_NUMEROS_GUARDADOS o zod nem olha os elementos: um aviso too_big por campo.
+    expect(
+      avisos
+        .map((aviso) => `${aviso.caminho.join(".")}:${aviso.codigo}`)
+        .sort(),
+    ).toEqual(["lucky_numbers:too_big", "numbers:too_big"]);
+    expect(tamanhoEmBytes(avisos)).toBeLessThan(10_000);
+  });
+
+  it("10.000 bilhetes inválidos (no limite): UM aviso agrupado em numbers[*] com 10.000 ocorrências", () => {
+    const numeros = Array.from({ length: 10_000 }, (_, i) => String(i));
+    const { payload, avisos } = aceita({
+      ...paidOrderOficial,
+      numbers: numeros,
+    });
+    expect(payload.numbers).toBeNull();
+    expect(avisos).toEqual([
+      {
+        caminho: ["numbers", "*"],
+        codigo: "invalid_type",
+        mensagem: expect.any(String),
+        ocorrencias: 10_000,
+      },
+    ]);
+    expect(tamanhoEmBytes(avisos)).toBeLessThan(10_000);
+  });
+
+  it("agrupa os avisos por caminho sem índice e limita a lista com um aviso final", () => {
+    const problema = (caminho: (string | number)[]) => ({
+      caminho,
+      codigo: "invalid_type",
+      mensagem: "Invalid input",
+    });
+    expect(
+      resumirDetalhes([problema(["numbers", 0]), problema(["numbers", 1])]),
+    ).toEqual([
+      {
+        caminho: ["numbers", "*"],
+        codigo: "invalid_type",
+        mensagem: "Invalid input",
+        ocorrencias: 2,
+      },
+    ]);
+    const muitos = Array.from({ length: 60 }, (_, i) =>
+      problema([`campo_${i}`]),
+    );
+    const resumo = resumirDetalhes([...muitos, problema(["campo_59"])]);
+    expect(resumo).toHaveLength(LIMITE_DETALHES + 1);
+    expect(resumo.at(-1)).toEqual({
+      caminho: [],
+      codigo: "itens_omitidos",
+      mensagem: "10 itens omitidos (limite de 50)",
+      ocorrencias: 11,
+    });
+  });
+
+  it("sem avisos grava NULL (a coluna nunca guarda [])", () => {
+    expect(avisosParaGravar(aceita(paidOrderOficial).avisos)).toBeNull();
+    const comAviso = aceita({ ...paidOrderOficial, status: 42 }).avisos;
+    expect(avisosParaGravar(comAviso)).toEqual(comAviso);
+  });
+
+  it("fração de centavo é arredondada meio para cima, de forma exata, e gera aviso", () => {
+    const numero = aceita({ ...paidOrderOficial, total: 1.005 });
+    expect(reaisParaCentavos(numero.payload.total)).toBe(101);
+    expect(numero.avisos.map((aviso) => aviso.codigo)).toEqual([
+      "fracao_de_centavo",
+    ]);
+    const texto = aceita({ ...paidOrderOficial, total: "1.005" });
+    expect(reaisParaCentavos(texto.payload.total)).toBe(101);
+    expect(texto.avisos.map((aviso) => aviso.codigo).sort()).toEqual([
+      "fracao_de_centavo",
+      "invalid_type",
+    ]);
+    expect(textoDecimalParaCentavos("19.90")).toBe(1990);
+    expect(textoDecimalParaCentavos("1234567.0049999999999")).toBe(123456700);
+    expect(textoDecimalParaCentavos("19,90")).toBeNull();
   });
 
   it("o tipo da análise obriga a tratar recusa e aceite", () => {
@@ -502,6 +628,10 @@ describe("CA1/CA6: payload redigido (D1)", () => {
     [19.99, 1999],
     [0.1 + 0.2, 30],
     [0, 0],
+    [1.005, 101],
+    [2.675, 268],
+    [1.004, 100],
+    [10_000_000, 1_000_000_000],
   ])("D2: R$ %d vira %d centavos", (reais, centavos) => {
     expect(reaisParaCentavos(reais)).toBe(centavos);
   });

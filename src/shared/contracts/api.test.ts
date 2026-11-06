@@ -14,6 +14,9 @@ import {
   respostaRankingSchema,
   respostaWebhookRifeiSchema,
   detalhesCsvInvalidoSchema,
+  detalhesErroWebhookSchema,
+  CAMINHOS_WEBHOOK_RIFEI,
+  LIMITE_CORPO_WEBHOOK_BYTES,
 } from "./api";
 import {
   CODIGOS_ERRO,
@@ -148,6 +151,7 @@ describe("CA3: formato único de erro", () => {
     expect(STATUS_HTTP_DO_ERRO.nao_autenticado).toBe(401);
     expect(STATUS_HTTP_DO_ERRO.nao_configurado).toBe(503);
     expect(STATUS_HTTP_DO_ERRO.payload_invalido).toBe(400);
+    expect(STATUS_HTTP_DO_ERRO.corpo_muito_grande).toBe(413);
   });
 });
 
@@ -231,6 +235,34 @@ describe("CA3: parâmetros, consultas e corpos", () => {
       rotulo: null,
     });
     expect(corpoSalvarAfiliadoSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("webhook: corpo até 1 MiB, URL com ou sem barra no fim, problemas resumidos no erro", () => {
+    expect(LIMITE_CORPO_WEBHOOK_BYTES).toBe(1024 * 1024);
+    expect(CAMINHOS_WEBHOOK_RIFEI).toEqual([
+      "/api/webhooks/rifei",
+      "/api/webhooks/rifei/",
+    ]);
+    const problema = {
+      caminho: ["numbers_count"],
+      codigo: "too_big",
+      mensagem: "Quantidade de bilhetes acima do limite de 1.000.000",
+      ocorrencias: 1,
+    };
+    expect(
+      detalhesErroWebhookSchema.safeParse({
+        evento_id: 7,
+        problemas: [problema],
+      }).success,
+    ).toBe(true);
+    const { ocorrencias: _ocorrencias, ...semContagem } = problema;
+    expect(_ocorrencias).toBe(1);
+    expect(
+      detalhesErroWebhookSchema.safeParse({
+        evento_id: 7,
+        problemas: [semContagem],
+      }).success,
+    ).toBe(false);
   });
 
   it("webhook: a resposta 200 nunca é erro_validacao", () => {

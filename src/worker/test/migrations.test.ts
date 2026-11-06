@@ -125,7 +125,7 @@ describe("migrações: schema do D1", () => {
     expect(fantasmas).toEqual({ n: 0 });
   });
 
-  it("webhook_eventos: avisos (JSON) só em evento aceito", async () => {
+  it("webhook_eventos: avisos é lista JSON não vazia, só em evento aceito", async () => {
     const evento = await env.DB.prepare(
       `INSERT INTO webhook_eventos (evento, pedido_id, slug, resultado, status_resultante,
          payload_redigido, avisos)
@@ -135,9 +135,10 @@ describe("migrações: schema do D1", () => {
       .bind(
         JSON.stringify([
           {
-            caminho: ["status"],
+            caminho: ["numbers", "*"],
             codigo: "invalid_type",
             mensagem: "Invalid input",
+            ocorrencias: 5000,
           },
         ]),
       )
@@ -155,12 +156,17 @@ describe("migrações: schema do D1", () => {
          VALUES ('erro_validacao', '[]', '[]')`,
       ).run(),
     ).rejects.toThrow(/CHECK constraint failed/);
-    await expect(
-      env.DB.prepare(
-        `INSERT INTO webhook_eventos (resultado, payload_redigido, avisos)
-         VALUES ('ignorado_outra_campanha', '{}', '[nao json')`,
-      ).run(),
-    ).rejects.toThrow(/CHECK constraint failed/);
+    // Lista vazia, objeto e texto que não é JSON: o CHECK reprova (sem avisos, grava-se NULL).
+    for (const avisos of ["[]", "{}", '"texto"', "[nao json"]) {
+      await expect(
+        env.DB.prepare(
+          `INSERT INTO webhook_eventos (resultado, payload_redigido, avisos)
+           VALUES ('ignorado_outra_campanha', '{}', ?)`,
+        )
+          .bind(avisos)
+          .run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+    }
   });
 
   it("grava pedidos e a view atribui a venda à célula do afiliado (D7)", async () => {

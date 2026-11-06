@@ -7,7 +7,7 @@
  * `*EntradaSchema` = corpo de criação/edição; `*Schema` = como a API devolve.
  */
 import { z } from "zod";
-import { detalheValidacaoSchema } from "./erros";
+import { detalheResumidoSchema } from "./erros";
 import {
   codigoPaisSchema,
   dddSchema,
@@ -356,10 +356,13 @@ export const eventoWebhookSchema = z.object({
   status_resultante: statusPedidoSchema.nullable(),
   /** null só em erro_validacao. */
   payload_redigido: payloadRifeiRedigidoSchema.nullable(),
-  /** Problemas de validação (sem valores); só em erro_validacao. */
-  erro: z.array(detalheValidacaoSchema).nullable(),
-  /** Diferenças do payload aceito em relação à doc (sem valores); null quando não há nenhuma. */
-  avisos: z.array(detalheValidacaoSchema).nullable(),
+  /** Problemas de validação, agrupados e limitados como os avisos (sem valores); só em erro_validacao. */
+  erro: z.array(detalheResumidoSchema).min(1).nullable(),
+  /**
+   * Diferenças do payload aceito em relação à doc, agrupadas por caminho (índices viram "*") e
+   * limitadas (LIMITE_DETALHES + um item final). Sem valores. null quando não há nenhuma: nunca `[]`.
+   */
+  avisos: z.array(detalheResumidoSchema).min(1).nullable(),
 });
 export type EventoWebhook = z.infer<typeof eventoWebhookSchema>;
 
