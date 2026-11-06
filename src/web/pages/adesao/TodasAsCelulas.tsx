@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import {
+  Aviso,
   Badge,
   Button,
   Card,
@@ -18,17 +19,18 @@ import {
   situacaoDaCelula,
   type SituacaoCelula,
 } from "./formatos";
-
-/** Salva o vínculo e, se der certo, mostra `sucesso`. Se falhar, lança o erro (ErroApi). */
-export type AoSalvarVinculo = (
-  affiliateId: number,
-  celulaId: number | null,
-  sucesso: string,
-) => Promise<void>;
+import {
+  avisoDaCelula,
+  type AoSalvarVinculo,
+  type AvisoDeSucesso,
+  type LocalDoAviso,
+} from "./vinculo";
 
 type Props = {
   celulas: CelulaAdesao[];
   orfaos: AfiliadoResumo[];
+  /** Último vínculo salvo: aparece no cartão da célula onde foi feito. */
+  aviso: AvisoDeSucesso | null;
   aoSalvar: AoSalvarVinculo;
 };
 
@@ -40,7 +42,7 @@ const SITUACOES: Record<SituacaoCelula, { rotulo: string; tom: TomBadge }> = {
 
 // Todas as células, com a situação de cada uma. Aqui a coordenação também informa o código de afiliado
 // que o líder já sabe (pré-cadastro), troca um afiliado de célula ou desvincula.
-export function TodasAsCelulas({ celulas, orfaos, aoSalvar }: Props) {
+export function TodasAsCelulas({ celulas, orfaos, aviso, aoSalvar }: Props) {
   const [busca, setBusca] = useState("");
   const filtradas = celulas.filter((celula) => celulaCombina(celula, busca));
   const idTitulo = useId();
@@ -71,6 +73,7 @@ export function TodasAsCelulas({ celulas, orfaos, aoSalvar }: Props) {
                     celula={celula}
                     celulas={celulas}
                     orfaos={orfaos}
+                    aviso={aviso}
                     aoSalvar={aoSalvar}
                   />
                 </li>
@@ -85,14 +88,49 @@ export function TodasAsCelulas({ celulas, orfaos, aoSalvar }: Props) {
 
 type PropsCartao = Props & { celula: CelulaAdesao };
 
-function CartaoCelula({ celula, celulas, orfaos, aoSalvar }: PropsCartao) {
+/** O que as ações do cartão recebem: onde fica o aviso e para onde vai o foco depois de salvar. */
+type PropsAcao = {
+  celula: CelulaAdesao;
+  celulas: CelulaAdesao[];
+  aoSalvar: AoSalvarVinculo;
+  local: LocalDoAviso;
+  /** Leva o foco ao título do cartão, que continua na tela depois da atualização. */
+  aoConcluir: () => void;
+};
+
+function CartaoCelula({
+  celula,
+  celulas,
+  orfaos,
+  aviso,
+  aoSalvar,
+}: PropsCartao) {
   const situacao = SITUACOES[situacaoDaCelula(celula)];
+  const refTitulo = useRef<HTMLHeadingElement>(null);
+  const local: LocalDoAviso = { secao: "celula", celulaId: celula.celula_id };
+  const textoAviso = avisoDaCelula(aviso, celula.celula_id);
+  const acao = {
+    celula,
+    celulas,
+    aoSalvar,
+    local,
+    aoConcluir: () => refTitulo.current?.focus(),
+  };
   return (
     <article className="adesao-celula">
       <div className="adesao-item__cabecalho">
-        <h3 className="adesao-item__titulo">{celula.celula_nome}</h3>
+        <h3
+          ref={refTitulo}
+          tabIndex={-1}
+          className="adesao-item__titulo adesao-alvo-foco"
+        >
+          {celula.celula_nome}
+        </h3>
         <Badge tom={situacao.tom}>{situacao.rotulo}</Badge>
       </div>
+      {textoAviso && (
+        <Aviso tom="sucesso" anuncio="nenhum" titulo={textoAviso} />
+      )}
       <p className="adesao-item__detalhe">
         Líder: {celula.lider_nome} · {celula.rede_nome}
       </p>
@@ -110,35 +148,28 @@ function CartaoCelula({ celula, celulas, orfaos, aoSalvar }: PropsCartao) {
         <ul className="adesao-afiliados">
           {celula.afiliados.map((codigo) => (
             <li key={codigo}>
-              <AfiliadoDaCelula
-                codigo={codigo}
-                celula={celula}
-                celulas={celulas}
-                aoSalvar={aoSalvar}
-              />
+              <AfiliadoDaCelula codigo={codigo} {...acao} />
             </li>
           ))}
         </ul>
       )}
-      <FormCodigo
-        celula={celula}
-        celulas={celulas}
-        orfaos={orfaos}
-        aoSalvar={aoSalvar}
-      />
+      <FormCodigo orfaos={orfaos} {...acao} />
     </article>
   );
 }
 
-type PropsAfiliado = Omit<PropsCartao, "orfaos"> & { codigo: number };
-
-/** Um afiliado da célula, com "Trocar" (escolhe outra célula) e "Desvincular" (pede confirmação). */
+/**
+ * Um afiliado da célula, com "Trocar" (escolhe outra célula) e "Desvincular" (pede confirmação). Os dois
+ * tiram o afiliado deste cartão: depois de salvar, o foco vai para o título do cartão.
+ */
 function AfiliadoDaCelula({
   codigo,
   celula,
   celulas,
   aoSalvar,
-}: PropsAfiliado) {
+  local,
+  aoConcluir,
+}: PropsAcao & { codigo: number }) {
   const [acao, setAcao] = useState<"trocar" | "desvincular" | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -167,12 +198,14 @@ function AfiliadoDaCelula({
     setEnviando(true);
     setErro(null);
     try {
-      await aoSalvar(
-        codigo,
-        null,
-        `Afiliado ${codigo} desvinculado. Ele voltou para “Sem célula”.`,
-      );
+      await aoSalvar({
+        affiliateId: codigo,
+        celulaId: null,
+        sucesso: `Afiliado ${codigo} desvinculado. Ele voltou para “Sem célula”.`,
+        local,
+      });
       setAcao(null);
+      aoConcluir();
     } catch (falha) {
       setErro(mensagemDoErro(falha));
     } finally {
@@ -214,12 +247,14 @@ function AfiliadoDaCelula({
           legenda={`Nova célula do afiliado ${codigo}`}
           textoConfirmar={(nova) => `Trocar para: ${nova.celula_nome}`}
           aoConfirmar={async (nova) => {
-            await aoSalvar(
-              codigo,
-              nova.celula_id,
-              `Afiliado ${codigo} trocado para: ${nova.celula_nome}.`,
-            );
-            fechar(refTrocar);
+            await aoSalvar({
+              affiliateId: codigo,
+              celulaId: nova.celula_id,
+              sucesso: `Afiliado ${codigo} trocado para: ${nova.celula_nome}.`,
+              local,
+            });
+            setAcao(null);
+            aoConcluir();
           }}
           aoCancelar={() => fechar(refTrocar)}
         />
@@ -262,9 +297,17 @@ function AfiliadoDaCelula({
 /**
  * Código de afiliado que o líder já sabe (pré-cadastro). Célula sem afiliado: o campo fica à mostra.
  * Célula com afiliado: atrás de "Adicionar outro código" (o líder pode ter duas contas na Rifei).
- * Se o código já está em outra célula, pede confirmação antes de trocar.
+ * Se o código já está em outra célula, pede confirmação antes de trocar. Depois de salvar, o foco vai para
+ * o título do cartão (o formulário fecha ou vira "Adicionar outro código").
  */
-function FormCodigo({ celula, celulas, orfaos, aoSalvar }: PropsCartao) {
+function FormCodigo({
+  celula,
+  celulas,
+  orfaos,
+  aoSalvar,
+  local,
+  aoConcluir,
+}: PropsAcao & { orfaos: AfiliadoResumo[] }) {
   const [aberto, setAberto] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -279,10 +322,16 @@ function FormCodigo({ celula, celulas, orfaos, aoSalvar }: PropsCartao) {
     setEnviando(true);
     setErro(null);
     try {
-      await aoSalvar(id, celula.celula_id, sucesso);
+      await aoSalvar({
+        affiliateId: id,
+        celulaId: celula.celula_id,
+        sucesso,
+        local,
+      });
       setCodigo("");
       setTroca(null);
       setAberto(false);
+      aoConcluir();
     } catch (falha) {
       setTroca(null);
       setErro(mensagemDoErro(falha));

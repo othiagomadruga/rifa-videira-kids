@@ -17,22 +17,25 @@
   margin-top: var(--espaco-3);
 }
 
+/* Hora da última atualização e "Atualizar agora" na mesma linha (no celular, o texto quebra ao lado). */
+.adesao-status__linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-3);
+}
+
+.adesao-status__linha > p {
+  flex: 1 1 12rem;
+}
+
 .adesao-status__falha:not(:empty) {
   padding: var(--espaco-2) var(--espaco-3);
   border: 1px solid var(--cor-alerta);
   border-radius: var(--raio-2);
   background: var(--cor-alerta-suave);
   color: var(--cor-alerta);
-  font-weight: var(--peso-forte);
-}
-
-.adesao-aviso:not(:empty) {
-  padding: var(--espaco-3) var(--espaco-4);
-  font-size: var(--texto-md);
-  border: 1px solid var(--cor-sucesso);
-  border-radius: var(--raio-2);
-  background: var(--cor-sucesso-suave);
-  color: var(--cor-sucesso);
   font-weight: var(--peso-forte);
 }
 
@@ -43,6 +46,52 @@
 
 .adesao-resumo__numeros {
   --grade-min: 12rem;
+}
+
+/* Celular: os três números numa linha de etiquetas, para a fila "Sem célula" caber na primeira tela. */
+.adesao-resumo-compacto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adesao-resumo-compacto > li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--espaco-1);
+  padding: var(--espaco-1) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-superficie);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.adesao-resumo-compacto strong {
+  color: var(--cor-texto);
+  font-size: var(--texto-md);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Há órfãos esperando: a etiqueta chama a atenção para a fila logo abaixo (o texto diz o mesmo). */
+.adesao-resumo-compacto > li[data-destaque],
+.adesao-resumo-compacto > li[data-destaque] strong {
+  border-color: var(--cor-alerta);
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+}
+
+/*
+ * Para onde o foco vai depois de salvar (título da seção ou do cartão, botão do próximo órfão) e o aviso
+ * de sucesso da fila: a margem deixa o alvo fora de baixo da barra fixa do topo, no celular, quando a tela
+ * rola até ele.
+ */
+.adesao-alvo-foco {
+  scroll-margin-top: 5rem;
+  scroll-margin-bottom: var(--espaco-4);
 }
 
 .adesao-colunas {

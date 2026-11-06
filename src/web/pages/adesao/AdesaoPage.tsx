@@ -8,28 +8,73 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
-import { salvarVinculo, type PainelAdesao } from "./adesao-api";
+import {
+  salvarVinculo,
+  type AfiliadoResumo,
+  type PainelAdesao,
+} from "./adesao-api";
 import { formatarHoraComSegundos } from "./formatos";
 import { QuemFalta } from "./QuemFalta";
 import { ResumoAdesao } from "./ResumoAdesao";
 import { SemCelula } from "./SemCelula";
-import { TodasAsCelulas, type AoSalvarVinculo } from "./TodasAsCelulas";
+import { TodasAsCelulas } from "./TodasAsCelulas";
 import { INTERVALO_ATUALIZACAO_MS, usePainelAdesao } from "./usePainelAdesao";
+import { useTelaLarga } from "./useTelaLarga";
+import type { AoSalvarVinculo, AvisoDeSucesso } from "./vinculo";
 import "./adesao.css";
 
 const SEGUNDOS_ENTRE_ATUALIZACOES = INTERVALO_ATUALIZACAO_MS / 1000;
+
+/** Órfão vinculado nesta tela e quando (Date.now() da resposta do PUT). */
+type VinculadoAgora = { affiliateId: number; em: number };
+
+/**
+ * A fila sem os órfãos que acabaram de ser vinculados aqui: eles somem na hora e só voltam a valer os
+ * dados da API quando chegar uma consulta terminada depois do vínculo (o "Atualizar" que vem em seguida).
+ */
+function filaSemOsVinculadosAgora(
+  painel: PainelAdesao,
+  vinculados: VinculadoAgora[],
+): AfiliadoResumo[] {
+  return painel.orfaos.filter(
+    (orfao) =>
+      !vinculados.some(
+        (vinculado) =>
+          vinculado.affiliateId === orfao.affiliate_id &&
+          painel.obtidoEm < vinculado.em,
+      ),
+  );
+}
 
 // Painel da reunião de cadastro dos líderes, pensado para o celular: quem já virou afiliado na Rifei,
 // a fila de códigos sem célula (para vincular) e quem falta (para chamar o líder ali mesmo).
 export function AdesaoPage() {
   const { estado, atualizando, atualizarAgora, tentarDeNovo } =
     usePainelAdesao();
-  // Último vínculo salvo, anunciado aos leitores de tela (role="status").
-  const [aviso, setAviso] = useState("");
+  const telaLarga = useTelaLarga();
+  // Último vínculo salvo: aparece perto de onde a pessoa estava e é anunciado pela região viva abaixo.
+  const [aviso, setAviso] = useState<AvisoDeSucesso | null>(null);
+  const [vinculadosAgora, setVinculadosAgora] = useState<VinculadoAgora[]>([]);
 
-  const aoSalvar: AoSalvarVinculo = async (affiliateId, celulaId, sucesso) => {
+  const aoSalvar: AoSalvarVinculo = async ({
+    affiliateId,
+    celulaId,
+    sucesso,
+    local,
+  }) => {
     await salvarVinculo(affiliateId, celulaId);
-    setAviso(sucesso);
+    if (celulaId !== null) {
+      const em = Date.now();
+      const obtidoEm = estado.tipo === "ok" ? estado.painel.obtidoEm : 0;
+      // Os de antes da última consulta já não escondem nada: saem da lista.
+      setVinculadosAgora((lista) => [
+        ...lista.filter(
+          (item) => item.affiliateId !== affiliateId && item.em > obtidoEm,
+        ),
+        { affiliateId, em },
+      ]);
+    }
+    setAviso({ texto: sucesso, local });
     atualizarAgora();
   };
 
@@ -37,14 +82,7 @@ export function AdesaoPage() {
     <>
       <PageHeader
         titulo="Adesão"
-        descricao="Quem já virou afiliado na Rifei e quem falta. Ligue cada afiliado à célula do líder."
-        acoes={
-          estado.tipo === "ok" && (
-            <Button variante="secundario" onClick={atualizarAgora}>
-              Atualizar agora
-            </Button>
-          )
-        }
+        descricao="Quem já virou afiliado na Rifei e quem falta."
       />
       {estado.tipo === "carregando" && (
         <Loading texto="Carregando a adesão das células…" />
@@ -58,39 +96,59 @@ export function AdesaoPage() {
       {estado.tipo === "ok" && (
         <>
           <div className="adesao-status">
-            <p>
-              {atualizando
-                ? "Atualizando…"
-                : `Atualizado às ${formatarHoraComSegundos(estado.painel.obtidoEm)}.`}{" "}
-              Atualiza sozinho a cada {SEGUNDOS_ENTRE_ATUALIZACOES} segundos.
-            </p>
+            <div className="adesao-status__linha">
+              <p>
+                {atualizando
+                  ? "Atualizando…"
+                  : `Atualizado às ${formatarHoraComSegundos(estado.painel.obtidoEm)}.`}{" "}
+                Atualiza sozinho a cada {SEGUNDOS_ENTRE_ATUALIZACOES} s.
+              </p>
+              <Button variante="secundario" onClick={atualizarAgora}>
+                Atualizar agora
+              </Button>
+            </div>
             <p className="adesao-status__falha" role="status">
               {estado.falha !== null &&
                 `A última atualização falhou: ${mensagemDoErro(estado.falha)} Os dados são das ${formatarHoraComSegundos(estado.painel.obtidoEm)}; tentando de novo sozinho.`}
             </p>
-            <p className="adesao-aviso" role="status">
-              {aviso}
+            {/* Região viva fixa: um role="status" que já entra com o texto pode não ser lido. */}
+            <p className="visualmente-oculto" role="status">
+              {aviso?.texto}
             </p>
           </div>
-          <Painel painel={estado.painel} aoSalvar={aoSalvar} />
+          <Painel
+            painel={estado.painel}
+            orfaos={filaSemOsVinculadosAgora(estado.painel, vinculadosAgora)}
+            telaLarga={telaLarga}
+            aviso={aviso}
+            aoSalvar={aoSalvar}
+          />
         </>
       )}
     </>
   );
 }
 
-function Painel({
-  painel: { adesao, orfaos, obtidoEm },
-  aoSalvar,
-}: {
+type PropsPainel = {
   painel: PainelAdesao;
+  /** A fila de órfãos que a tela mostra. */
+  orfaos: AfiliadoResumo[];
+  telaLarga: boolean;
+  aviso: AvisoDeSucesso | null;
   aoSalvar: AoSalvarVinculo;
-}) {
+};
+
+// As seções seguem a mesma ordem no celular e no computador (resumo, "Sem célula", "Quem falta" e todas
+// as células): a fila de órfãos fica logo abaixo do resumo, e nada muda de lugar a cada atualização (mover
+// uma seção no DOM tiraria o foco de quem está nela).
+function Painel({ painel, orfaos, telaLarga, aviso, aoSalvar }: PropsPainel) {
+  const { adesao, obtidoEm } = painel;
   const semCelula = (
     <SemCelula
       orfaos={orfaos}
       celulas={adesao.itens}
       agora={obtidoEm}
+      aviso={aviso}
       aoSalvar={aoSalvar}
     />
   );
@@ -115,7 +173,11 @@ function Painel({
 
   return (
     <>
-      <ResumoAdesao resumo={adesao.resumo} afiliadosSemCelula={orfaos.length} />
+      <ResumoAdesao
+        resumo={adesao.resumo}
+        afiliadosSemCelula={orfaos.length}
+        compacto={!telaLarga}
+      />
       <div className="adesao-colunas">
         {semCelula}
         <QuemFalta celulas={adesao.itens} />
@@ -123,6 +185,7 @@ function Painel({
       <TodasAsCelulas
         celulas={adesao.itens}
         orfaos={orfaos}
+        aviso={aviso}
         aoSalvar={aoSalvar}
       />
     </>

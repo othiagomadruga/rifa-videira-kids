@@ -104,12 +104,25 @@ function simularApi(inicial: EstadoApi) {
   const inesperadas: string[] = [];
   const contagem = { adesao: 0, orfaos: 0 };
   const falhas = { gets: 0, putCelulaInexistente: false };
+  // Portão fechado: as consultas (GET) esperam. Dá para ver a tela entre o PUT e a atualização.
+  let portao: Promise<void> | null = null;
+  function segurarConsultas() {
+    let abrir = () => {};
+    portao = new Promise<void>((resolver) => {
+      abrir = resolver;
+    });
+    return () => {
+      portao = null;
+      abrir();
+    };
+  }
 
   const fetchMock = vi.fn(
     async (url: string, init?: RequestInit): Promise<Response> => {
       const metodo = init?.method ?? "GET";
       if (metodo === "GET" && url === "/api/admin/adesao") {
         contagem.adesao += 1;
+        if (portao) await portao;
         if (falhas.gets > 0) {
           falhas.gets -= 1;
           throw new TypeError("Failed to fetch");
@@ -129,6 +142,7 @@ function simularApi(inicial: EstadoApi) {
       }
       if (metodo === "GET" && url === "/api/admin/afiliados?vinculado=false") {
         contagem.orfaos += 1;
+        if (portao) await portao;
         return respostaJson(
           respostaListaAfiliadosSchema.parse({
             itens: estado.orfaos,
@@ -207,7 +221,15 @@ function simularApi(inicial: EstadoApi) {
   }
 
   vi.stubGlobal("fetch", fetchMock);
-  return { estado, puts, contagem, falhas, inesperadas, fetchMock };
+  return {
+    estado,
+    puts,
+    contagem,
+    falhas,
+    inesperadas,
+    fetchMock,
+    segurarConsultas,
+  };
 }
 
 let api: ReturnType<typeof simularApi>;
@@ -230,6 +252,11 @@ const cartao = (titulo: string, dentro: HTMLElement = document.body) => {
 /** Cartão da célula na lista "Todas as células" (a célula também pode estar em "Quem falta"). */
 const celulaNaLista = (nome: string) =>
   cartao(nome, regiao(/^Todas as células$/));
+const tituloDaCelula = (nome: string) =>
+  within(regiao(/^Todas as células$/)).getByRole("heading", {
+    level: 3,
+    name: nome,
+  });
 const titulosNivel3 = (elemento: HTMLElement) =>
   within(elemento)
     .queryAllByRole("heading", { level: 3 })
@@ -252,7 +279,64 @@ function definirVisibilidade(estado: DocumentVisibilityState) {
   });
 }
 
+type Tela = "celular" | "computador";
+const matchMediaOriginal = Object.getOwnPropertyDescriptor(
+  window,
+  "matchMedia",
+);
+let mudarTela: (tela: Tela) => void = () => {};
+
+/** Simula a largura da tela para o matchMedia da página (o jsdom não tem matchMedia). */
+function simularTela(inicial: Tela) {
+  let larga = inicial === "computador";
+  const ouvintes = new Set<() => void>();
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (consulta: string) => ({
+      get matches() {
+        return larga;
+      },
+      media: consulta,
+      onchange: null,
+      addEventListener: (_tipo: string, ouvinte: () => void) => {
+        ouvintes.add(ouvinte);
+      },
+      removeEventListener: (_tipo: string, ouvinte: () => void) => {
+        ouvintes.delete(ouvinte);
+      },
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+  mudarTela = (tela) => {
+    larga = tela === "computador";
+    act(() => ouvintes.forEach((ouvinte) => ouvinte()));
+  };
+}
+
+/** Nomes das seções (regiões) na ordem da página. */
+const ordemDasSecoes = () =>
+  screen
+    .getAllByRole("region")
+    .map(
+      (secao) =>
+        document.getElementById(secao.getAttribute("aria-labelledby") ?? "")
+          ?.textContent,
+    );
+
+// O jsdom não tem scrollIntoView: o simulado guarda quem pediu para aparecer na tela.
+const rolarAte = vi.fn();
+/** Textos dos elementos levados à vista (scrollIntoView), na ordem. */
+const levadosAVista = () =>
+  rolarAte.mock.contexts.map((elemento) => (elemento as Element).textContent);
+
 beforeEach(() => {
+  // A reunião é no celular: é a tela padrão dos testes.
+  simularTela("celular");
+  rolarAte.mockClear();
+  Element.prototype.scrollIntoView = rolarAte;
   // Só os temporizadores e o Date: as promessas e o agendador do React continuam reais.
   vi.useFakeTimers({
     now: AGORA,
@@ -273,10 +357,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(document, "visibilityState");
   Reflect.deleteProperty(navigator, "clipboard");
+  if (matchMediaOriginal)
+    Object.defineProperty(window, "matchMedia", matchMediaOriginal);
+  else Reflect.deleteProperty(window, "matchMedia");
+  Reflect.deleteProperty(Element.prototype, "scrollIntoView");
 });
 
 describe("CA3: painel de adesão (/coordenacao/adesao)", () => {
-  it("mostra o resumo em destaque, os órfãos (o mais recente no topo), quem falta e a situação de cada célula", async () => {
+  it("no computador: mostra o resumo em destaque, os órfãos (o mais recente no topo), quem falta e a situação de cada célula", async () => {
+    simularTela("computador");
     await abrirTela();
 
     expect(
@@ -374,7 +463,7 @@ describe("CA3: painel de adesão (/coordenacao/adesao)", () => {
       "Afiliado 1043",
     ]);
     expect(cartao("Afiliado 1050")).toHaveTextContent("apareceu agora mesmo");
-    expect(regiao(/^Resumo$/)).toHaveTextContent("Afiliados sem célula3");
+    expect(regiao(/^Resumo$/)).toHaveTextContent("3 sem célula");
   });
 
   it("sem células cadastradas: avisa e leva para a Hierarquia", async () => {
@@ -478,14 +567,19 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     );
 
     expect(
-      await screen.findByText("Afiliado 1043 vinculado: Célula Ágape."),
-    ).toHaveAttribute("role", "status");
+      await within(regiao(/^Sem célula/)).findByText(
+        "Afiliado 1043 vinculado: Célula Ágape.",
+      ),
+    ).toBeVisible();
     expect(api.puts).toEqual([{ affiliateId: 1043, corpo: { celula_id: 1 } }]);
     await waitFor(() =>
       expect(titulosNivel3(regiao(/^Sem célula/))).toEqual(["Afiliado 1044"]),
     );
-    expect(titulosNivel3(regiao(/^Quem falta/))).toEqual(["Célula Débora"]);
-    expect(regiao(/^Resumo$/)).toHaveTextContent("Células vinculadas3 de 4");
+    // A fila muda na hora; as células, quando chega a atualização feita depois do vínculo.
+    await waitFor(() =>
+      expect(titulosNivel3(regiao(/^Quem falta/))).toEqual(["Célula Débora"]),
+    );
+    expect(regiao(/^Resumo$/)).toHaveTextContent("3 de 4 vinculadas");
     const agape = within(regiao(/^Todas as células$/))
       .getByRole("heading", { level: 3, name: "Célula Ágape" })
       .closest("article");
@@ -529,6 +623,7 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     expect(await within(item).findByRole("alert")).toHaveTextContent(
       "A célula 1 não existe",
     );
+    expect(levadosAVista()).toEqual([]);
     expect(api.puts).toHaveLength(1);
     expect(within(item).getByRole("searchbox")).toBeInTheDocument();
     expect(screen.queryByText(/vinculado:/)).not.toBeInTheDocument();
@@ -561,15 +656,23 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     );
 
     expect(
-      await screen.findByText("Afiliado 1001 trocado para: Célula Canaã."),
-    ).toBeInTheDocument();
+      await within(celulaNaLista("Célula Betel")).findByText(
+        "Afiliado 1001 trocado para: Célula Canaã.",
+      ),
+    ).toBeVisible();
+    expect(tituloDaCelula("Célula Betel")).toHaveFocus();
     expect(api.puts).toEqual([{ affiliateId: 1001, corpo: { celula_id: 3 } }]);
+    // O afiliado (com os botões dele) mudou de cartão; na Betel fica só o aviso da troca.
+    const botaoTrocar = { name: "Trocar a célula do afiliado 1001" };
     await waitFor(() =>
-      expect(celulaNaLista("Célula Canaã")).toHaveTextContent("Afiliado 1001"),
+      expect(
+        within(celulaNaLista("Célula Canaã")).getByRole("button", botaoTrocar),
+      ).toBeInTheDocument(),
     );
-    expect(celulaNaLista("Célula Betel")).not.toHaveTextContent(
-      "Afiliado 1001",
-    );
+    expect(
+      within(celulaNaLista("Célula Betel")).queryByRole("button", botaoTrocar),
+    ).not.toBeInTheDocument();
+    expect(tituloDaCelula("Célula Betel")).toHaveFocus();
   });
 
   it("Desvincular: pede confirmação e devolve o afiliado para 'Sem célula'", async () => {
@@ -596,10 +699,11 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     fireEvent.click(confirmar);
 
     expect(
-      await screen.findByText(
+      await within(celulaNaLista("Célula Canaã")).findByText(
         "Afiliado 1002 desvinculado. Ele voltou para “Sem célula”.",
       ),
-    ).toBeInTheDocument();
+    ).toBeVisible();
+    expect(tituloDaCelula("Célula Canaã")).toHaveFocus();
     expect(api.puts).toEqual([
       { affiliateId: 1002, corpo: { celula_id: null } },
     ]);
@@ -627,10 +731,11 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     );
 
     expect(
-      await screen.findByText(
+      await within(celulaNaLista("Célula Débora")).findByText(
         "Código 5005 pré-cadastrado: Célula Débora. As vendas dele já vão contar para a célula.",
       ),
-    ).toBeInTheDocument();
+    ).toBeVisible();
+    expect(tituloDaCelula("Célula Débora")).toHaveFocus();
     expect(api.puts).toEqual([{ affiliateId: 5005, corpo: { celula_id: 4 } }]);
     await waitFor(() =>
       expect(celulaNaLista("Célula Débora")).toHaveTextContent("Afiliado 5005"),
@@ -700,8 +805,11 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     fireEvent.click(trocar);
 
     expect(
-      await screen.findByText("Afiliado 1001 trocado para: Célula Ágape."),
-    ).toBeInTheDocument();
+      await within(celulaNaLista("Célula Ágape")).findByText(
+        "Afiliado 1001 trocado para: Célula Ágape.",
+      ),
+    ).toBeVisible();
+    expect(tituloDaCelula("Célula Ágape")).toHaveFocus();
     expect(api.puts).toEqual([{ affiliateId: 1001, corpo: { celula_id: 1 } }]);
   });
 
@@ -719,8 +827,10 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
     );
 
     expect(
-      await screen.findByText("Afiliado 1044 vinculado: Célula Débora."),
-    ).toBeInTheDocument();
+      await within(celulaNaLista("Célula Débora")).findByText(
+        "Afiliado 1044 vinculado: Célula Débora.",
+      ),
+    ).toBeVisible();
     expect(api.puts).toEqual([{ affiliateId: 1044, corpo: { celula_id: 4 } }]);
     await waitFor(() =>
       expect(titulosNivel3(regiao(/^Sem célula/))).toEqual(["Afiliado 1043"]),
@@ -797,5 +907,203 @@ describe("CA3/CA4: atualização automática", () => {
     await act(() => vi.advanceTimersByTimeAsync(3 * INTERVALO_ATUALIZACAO_MS));
 
     expect(api.contagem).toEqual({ adesao: 1, orfaos: 1 });
+  });
+});
+
+describe("RIFA-006b: no celular, a fila logo no topo; depois de vincular, aviso perto e foco estável", () => {
+  it("celular: resumo compacto em etiquetas e a fila 'Sem célula' logo abaixo dele, antes de 'Quem falta'", async () => {
+    await abrirTela();
+
+    const resumo = regiao(/^Resumo$/);
+    expect(
+      within(resumo)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["2 de 4 vinculadas", "1 já venderam", "2 sem célula"]);
+    // Sem os três indicadores grandes nem a barra, que empurravam a fila para baixo da dobra.
+    expect(
+      within(resumo).queryByText("Células que já venderam"),
+    ).not.toBeInTheDocument();
+    expect(within(resumo).queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(ordemDasSecoes()).toEqual([
+      "Resumo",
+      "Sem célula (2)",
+      "Quem falta (2)",
+      "Todas as células",
+    ]);
+    // Nada entre o resumo e a fila; o "Atualizar agora" fica na linha da hora, acima do resumo.
+    expect(resumo.nextElementSibling?.firstElementChild).toBe(
+      regiao(/^Sem célula/),
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Atualizar agora" })
+        .compareDocumentPosition(resumo) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("computador: os três indicadores e a barra de adesão, com as seções na mesma ordem", async () => {
+    simularTela("computador");
+    await abrirTela();
+
+    const resumo = regiao(/^Resumo$/);
+    expect(within(resumo).queryByRole("list")).not.toBeInTheDocument();
+    expect(resumo).toHaveTextContent("Células vinculadas2 de 4");
+    expect(
+      within(resumo).getByRole("progressbar", { name: "Adesão das células" }),
+    ).toBeInTheDocument();
+    expect(ordemDasSecoes()).toEqual([
+      "Resumo",
+      "Sem célula (2)",
+      "Quem falta (2)",
+      "Todas as células",
+    ]);
+  });
+
+  it("sem matchMedia (navegador antigo): vale o celular, com o resumo compacto", async () => {
+    Reflect.deleteProperty(window, "matchMedia");
+    await abrirTela();
+
+    expect(within(regiao(/^Resumo$/)).getByRole("list")).toBeInTheDocument();
+    expect(
+      within(regiao(/^Resumo$/)).queryByRole("progressbar"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("girar o aparelho (mudar a largura da tela) troca o resumo na hora", async () => {
+    await abrirTela();
+    expect(within(regiao(/^Resumo$/)).getByRole("list")).toBeInTheDocument();
+
+    mudarTela("computador");
+
+    expect(
+      within(regiao(/^Resumo$/)).queryByRole("list"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(regiao(/^Resumo$/)).getByRole("progressbar"),
+    ).toBeInTheDocument();
+  });
+
+  it("sem órfãos: a seção fica curta e explica de onde vêm os códigos", async () => {
+    await abrirTela({ ...cenarioDaReuniao(), orfaos: [] });
+
+    const semCelula = regiao(/^Sem célula \(0\)$/);
+    expect(semCelula).toHaveTextContent(
+      "Nenhum afiliado sem célula agora. Quando o líder iniciar uma compra pelo próprio link de afiliado (sem pagar), o código dele aparece aqui em segundos.",
+    );
+    expect(within(semCelula).queryByRole("list")).not.toBeInTheDocument();
+    expect(regiao(/^Resumo$/)).toHaveTextContent("0 sem célula");
+  });
+
+  it("vincular o primeiro da fila: ele sai na hora, o aviso aparece na seção (e é anunciado) e o foco vai para o próximo órfão, onde fica depois da atualização", async () => {
+    await abrirTela();
+    // Regiões vivas que já estavam na tela: o anúncio tem de sair numa delas.
+    const regioesVivas = screen.getAllByRole("status");
+    const proximo = screen.getByRole("button", {
+      name: "Vincular o afiliado 1043",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Vincular o afiliado 1044" }),
+    );
+    fireEvent.click(
+      within(cartao("Afiliado 1044")).getByRole("radio", {
+        name: /^Célula Ágape/,
+      }),
+    );
+    const liberarConsultas = api.segurarConsultas();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Vincular: Célula Ágape" }),
+    );
+
+    // Antes da atualização chegar: o vinculado já saiu da fila e o foco está no próximo.
+    await waitFor(() => expect(proximo).toHaveFocus());
+    expect(screen.getByText(/^Atualizando…/)).toBeInTheDocument();
+    const semCelula = regiao(/^Sem célula \(1\)$/);
+    expect(titulosNivel3(semCelula)).toEqual(["Afiliado 1043"]);
+    expect(
+      within(semCelula).getByText("Afiliado 1044 vinculado: Célula Ágape."),
+    ).toBeVisible();
+    expect(regioesVivas.map((regiaoViva) => regiaoViva.textContent)).toContain(
+      "Afiliado 1044 vinculado: Célula Ágape.",
+    );
+    expect(regiao(/^Resumo$/)).toHaveTextContent("1 sem célula");
+    // O aviso ocupa o lugar do cartão que saiu, logo acima do próximo, e os dois vão para a vista.
+    expect(
+      cartao("Afiliado 1043").closest("li")?.previousElementSibling,
+    ).toHaveTextContent("Afiliado 1044 vinculado: Célula Ágape.");
+    expect(levadosAVista()).toEqual([
+      proximo.textContent,
+      expect.stringContaining("Afiliado 1044 vinculado: Célula Ágape."),
+    ]);
+
+    liberarConsultas();
+    await esperarAtualizacao();
+
+    expect(proximo).toBeInTheDocument();
+    expect(proximo).toHaveFocus();
+    expect(titulosNivel3(regiao(/^Sem célula/))).toEqual(["Afiliado 1043"]);
+  });
+
+  it("vincular o último da fila: o foco vai para o órfão de cima", async () => {
+    await abrirTela();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Vincular o afiliado 1043" }),
+    );
+    fireEvent.click(
+      within(cartao("Afiliado 1043")).getByRole("radio", {
+        name: /^Célula Débora/,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Vincular: Célula Débora" }),
+    );
+
+    const acima = screen.getByRole("button", {
+      name: "Vincular o afiliado 1044",
+    });
+    await waitFor(() => expect(acima).toHaveFocus());
+    expect(
+      cartao("Afiliado 1044").closest("li")?.nextElementSibling,
+    ).toHaveTextContent("Afiliado 1043 vinculado: Célula Débora.");
+    expect(levadosAVista()).toEqual([
+      acima.textContent,
+      expect.stringContaining("Afiliado 1043 vinculado: Célula Débora."),
+    ]);
+    await esperarAtualizacao();
+    expect(acima).toHaveFocus();
+    expect(titulosNivel3(regiao(/^Sem célula/))).toEqual(["Afiliado 1044"]);
+  });
+
+  it("a fila esvaziou: o foco vai para o título 'Sem célula', que continua na tela", async () => {
+    await abrirTela({ ...cenarioDaReuniao(), orfaos: [afiliado(1043)] });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Vincular o afiliado 1043" }),
+    );
+    fireEvent.click(
+      within(cartao("Afiliado 1043")).getByRole("radio", {
+        name: /^Célula Ágape/,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Vincular: Célula Ágape" }),
+    );
+
+    const titulo = await screen.findByText("Sem célula (0)");
+    await waitFor(() => expect(titulo).toHaveFocus());
+    expect(levadosAVista()).toEqual([
+      "Sem célula (0)",
+      expect.stringContaining("Afiliado 1043 vinculado: Célula Ágape."),
+    ]);
+    expect(
+      within(regiao(/^Sem célula/)).getByText(
+        "Afiliado 1043 vinculado: Célula Ágape.",
+      ),
+    ).toBeVisible();
+    await esperarAtualizacao();
+    expect(screen.getByText("Sem célula (0)")).toHaveFocus();
+    expect(api.puts).toEqual([{ affiliateId: 1043, corpo: { celula_id: 1 } }]);
   });
 });

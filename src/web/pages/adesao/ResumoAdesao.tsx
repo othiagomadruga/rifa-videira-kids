@@ -10,35 +10,54 @@ type Props = {
    * números baterem mesmo que um afiliado chegue entre as duas consultas.
    */
   afiliadosSemCelula: number;
+  /**
+   * Celular: os três números numa linha de etiquetas, para a fila "Sem célula" ficar logo abaixo, dentro
+   * da primeira tela. Computador: os três indicadores e a barra de adesão.
+   */
+  compacto: boolean;
 };
 
 // Os números da reunião em destaque: células vinculadas, células que já venderam e órfãos.
-export function ResumoAdesao({ resumo, afiliadosSemCelula }: Props) {
+export function ResumoAdesao({ resumo, afiliadosSemCelula, compacto }: Props) {
   const idTitulo = useId();
+  const vinculadas = `${formatarNumero(resumo.vinculadas)} de ${formatarNumero(resumo.celulas)}`;
   return (
     <section className="adesao-resumo" aria-labelledby={idTitulo}>
       <h2 id={idTitulo} className="visualmente-oculto">
         Resumo
       </h2>
-      <div className="grade adesao-resumo__numeros">
-        <Stat
-          rotulo="Células vinculadas"
-          valor={`${formatarNumero(resumo.vinculadas)} de ${formatarNumero(resumo.celulas)}`}
-        />
-        <Stat
-          rotulo="Células que já venderam"
-          valor={formatarNumero(resumo.com_venda)}
-        />
-        <Stat
-          rotulo="Afiliados sem célula"
-          valor={formatarNumero(afiliadosSemCelula)}
-        />
-      </div>
-      <ProgressBar
-        rotulo="Adesão das células"
-        valor={resumo.vinculadas}
-        meta={resumo.celulas}
-      />
+      {compacto ? (
+        <ul className="adesao-resumo-compacto">
+          <li>
+            <strong>{vinculadas}</strong> vinculadas
+          </li>
+          <li>
+            <strong>{formatarNumero(resumo.com_venda)}</strong> já venderam
+          </li>
+          <li data-destaque={afiliadosSemCelula > 0 ? "" : undefined}>
+            <strong>{formatarNumero(afiliadosSemCelula)}</strong> sem célula
+          </li>
+        </ul>
+      ) : (
+        <>
+          <div className="grade adesao-resumo__numeros">
+            <Stat rotulo="Células vinculadas" valor={vinculadas} />
+            <Stat
+              rotulo="Células que já venderam"
+              valor={formatarNumero(resumo.com_venda)}
+            />
+            <Stat
+              rotulo="Afiliados sem célula"
+              valor={formatarNumero(afiliadosSemCelula)}
+            />
+          </div>
+          <ProgressBar
+            rotulo="Adesão das células"
+            valor={resumo.vinculadas}
+            meta={resumo.celulas}
+          />
+        </>
+      )}
     </section>
   );
 }
