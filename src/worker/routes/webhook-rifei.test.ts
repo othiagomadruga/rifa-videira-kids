@@ -857,6 +857,85 @@ describe("CA4: gravação do pedido", () => {
   });
 });
 
+describe("CA4: afiliado ao atualizar um pedido que já existe (D7)", () => {
+  const pagoSemAffiliateId: Record<string, unknown> = { ...paidOrderAfiliado };
+  delete pagoSemAffiliateId["affiliate_id"];
+
+  it.each<[string, unknown]>([
+    ["null", { ...paidOrderAfiliado, affiliate_id: null }],
+    ["ausente", pagoSemAffiliateId],
+    ["igual ao gravado", paidOrderAfiliado],
+  ])(
+    "evento posterior com affiliate_id %s mantém o afiliado gravado e não gera aviso",
+    async (_caso, pago) => {
+      const consoleWarn = vi.spyOn(console, "warn");
+      await processar(newOrderAfiliado);
+
+      const resposta = await processar(pago);
+
+      expect(resposta.resultado).toBe("processado");
+      expect(await lerPedido("PEDTESTE0001")).toMatchObject({
+        status: "approved",
+        affiliate_id: 1042,
+      });
+      const { results } = await db
+        .prepare("SELECT pedido_id, affiliate_id FROM vendas_aprovadas")
+        .all();
+      expect(results).toEqual([
+        { pedido_id: "PEDTESTE0001", affiliate_id: 1042 },
+      ]);
+      expect(consoleWarn).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each<[string, number | null]>([
+    ["outro afiliado", 1042],
+    ["pedido sem afiliado", null],
+  ])(
+    "evento posterior com outro affiliate_id (%s): vale o do evento, e a troca vai para o log sem dado pessoal",
+    async (_caso, anterior) => {
+      const consoleWarn = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+      await processar({ ...newOrderAfiliado, affiliate_id: anterior });
+
+      const resposta = await processar({
+        ...paidOrderAfiliado,
+        affiliate_id: 1043,
+      });
+
+      expect(resposta.resultado).toBe("processado");
+      expect(await lerPedido("PEDTESTE0001")).toMatchObject({
+        status: "approved",
+        affiliate_id: 1043,
+      });
+      expect(
+        (await lerAfiliados()).map((afiliado) => afiliado["affiliate_id"]),
+      ).toEqual(anterior === null ? [1043] : [1042, 1043]);
+      expect(consoleWarn).toHaveBeenCalledOnce();
+      expect(consoleWarn).toHaveBeenCalledWith({
+        aviso: "afiliado_alterado",
+        mensagem:
+          "webhook Rifei: o evento trouxe um affiliate_id diferente do gravado no pedido; vale o do evento",
+        evento_id: resposta.evento_id,
+        pedido_id: "PEDTESTE0001",
+        affiliate_id_anterior: anterior,
+        affiliate_id_novo: 1043,
+      });
+      const log = JSON.stringify(consoleWarn.mock.calls);
+      for (const valor of valoresPessoais(paidOrderAfiliado)) {
+        expect(log).not.toContain(valor);
+      }
+      // No banco, cada evento guarda o affiliate_id que trouxe (o anterior está no evento de antes).
+      expect(
+        (await lerEventos()).map(
+          (evento) => evento.payload_redigido?.affiliate_id,
+        ),
+      ).toEqual([anterior, 1043]);
+    },
+  );
+});
+
 // ---------------------------------------------------------------------------------------------------
 // CA5: idempotência e ordem (D3, D4)
 // ---------------------------------------------------------------------------------------------------

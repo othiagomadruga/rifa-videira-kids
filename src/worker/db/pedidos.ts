@@ -17,15 +17,20 @@ import { prepararRegistroEventoSeStatusAtual } from "./webhook-eventos";
  */
 const MAX_TENTATIVAS = 4;
 
-export async function buscarStatusPedido(
+/** O que o processamento lê do pedido gravado: o status (guarda da transição, D4) e o afiliado (D7). */
+interface PedidoAtual {
+  status: StatusPedido;
+  affiliate_id: number | null;
+}
+
+export async function buscarPedidoAtual(
   db: D1Database,
   id: string,
-): Promise<StatusPedido | null> {
-  const linha = await db
-    .prepare("SELECT status FROM pedidos WHERE id = ?1")
+): Promise<PedidoAtual | null> {
+  return db
+    .prepare("SELECT status, affiliate_id FROM pedidos WHERE id = ?1")
     .bind(id)
-    .first<{ status: StatusPedido }>();
-  return linha?.status ?? null;
+    .first<PedidoAtual>();
 }
 
 /** Estados a partir dos quais `alvo` é transição permitida (D4): a guarda do UPSERT condicional. */
@@ -59,7 +64,8 @@ interface GravacaoPedido {
 /**
  * Cria ou atualiza o pedido com os dados DESTE evento (D2 centavos, D8 UTC, D1 só ddd e país).
  * Grava só se o pedido ainda está em `statusAnterior` (a mesma guarda do evento, no mesmo batch) e,
- * no conflito, só a partir de um estado que permite a transição (D4). `registrado_em` não muda.
+ * no conflito, só a partir de um estado que permite a transição (D4). `registrado_em` não muda, e um
+ * affiliate_id null no evento nunca apaga o afiliado gravado (D7; troca: avisarTrocaDeAfiliado).
  */
 function prepararGravacaoPedido(
   db: D1Database,
@@ -84,7 +90,7 @@ function prepararGravacaoPedido(
        WHERE (SELECT status FROM pedidos WHERE id = ?1) IS ?28
        ON CONFLICT (id) DO UPDATE SET
          campanha_id = excluded.campanha_id,
-         affiliate_id = excluded.affiliate_id,
+         affiliate_id = COALESCE(excluded.affiliate_id, pedidos.affiliate_id),
          status = excluded.status,
          status_rifei = excluded.status_rifei,
          status_detail_rifei = excluded.status_detail_rifei,
@@ -144,6 +150,29 @@ function prepararGravacaoPedido(
     );
 }
 
+/**
+ * D7, ao atualizar um pedido que já existe: um affiliate_id não nulo diferente do gravado (outro
+ * afiliado, ou o pedido estava sem) vale, e a troca vai para o log para auditoria. Só ids, nenhum dado
+ * pessoal (D1). O affiliate_id de cada entrega também fica no payload_redigido do evento.
+ */
+function avisarTrocaDeAfiliado(
+  atual: PedidoAtual,
+  payload: PayloadRifeiRedigido,
+  eventoId: number,
+): void {
+  const novo = payload.affiliate_id;
+  if (novo === null || novo === atual.affiliate_id) return;
+  console.warn({
+    aviso: "afiliado_alterado",
+    mensagem:
+      "webhook Rifei: o evento trouxe um affiliate_id diferente do gravado no pedido; vale o do evento",
+    evento_id: eventoId,
+    pedido_id: payload.id,
+    affiliate_id_anterior: atual.affiliate_id,
+    affiliate_id_novo: novo,
+  });
+}
+
 interface EventoDoPedido {
   campanhaId: number;
   /** Payload já redigido (D1) e da campanha ativa (D5). */
@@ -164,7 +193,8 @@ export async function processarEventoPedido(
   { campanhaId, payload, recebidoEm }: EventoDoPedido,
 ): Promise<RespostaWebhookRifei> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    const statusAnterior = await buscarStatusPedido(db, payload.id);
+    const atual = await buscarPedidoAtual(db, payload.id);
+    const statusAnterior = atual?.status ?? null;
     const decisao = decidirTransicaoPedido(statusAnterior, payload.event);
 
     const comandos: D1PreparedStatement[] = [];
@@ -202,6 +232,10 @@ export async function processarEventoPedido(
     const resultados = await db.batch<{ id: number }>(comandos);
     const eventoId = resultados[posicaoEvento]?.results[0]?.id;
     if (eventoId !== undefined) {
+      // Gravou com a guarda: o pedido ainda era o lido em `atual`.
+      if (atual !== null && decisao.resultado === "processado") {
+        avisarTrocaDeAfiliado(atual, payload, eventoId);
+      }
       return { resultado: decisao.resultado, evento_id: eventoId };
     }
   }
