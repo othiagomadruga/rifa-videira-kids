@@ -50,7 +50,7 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
 - **Pastas:**
   - `src/worker/`: API. `index.ts` (app Hono), `routes/` (uma rota por arquivo, montada em `/api/...`),
     `worker-env.d.ts` (tipos dos bindings: binding novo no `wrangler.jsonc` é declarado aqui também).
-  - `src/web/`: site. `main.tsx`, `App.tsx`, `pages/`, `components/`, `api.ts` (chamadas à API).
+  - `src/web/`: site. `main.tsx`, `App.tsx`, `rotas.tsx`, `lib/api.ts` (cliente da API), `pages/<tela>/` (uma pasta por tela, com as chamadas à API dela), `components/`. Convenções em `docs/frontend.md`.
   - `src/shared/contracts/`: contrato da API (tipos usados pelo Worker e pelo site). Só o SM altera.
   - `migrations/`: migrações D1 em SQL, numeradas (`0001_<nome>.sql`...). Migração aplicada não se edita: crie outra.
   - `docs/`: `decisions.md` (decisões técnicas) e demais documentos.
