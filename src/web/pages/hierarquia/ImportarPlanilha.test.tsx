@@ -182,7 +182,8 @@ describe("CA3: importação em 2 passos", () => {
     expect(api.chamadasA("POST", IMPORTAR)).toEqual([
       { metodo: "POST", caminho: IMPORTAR, corpo: { csv: CSV, simular: true } },
     ]);
-    expect(resultado).toHaveFocus();
+    // O foco chega por um efeito depois da renderização: esperar evita teste instável.
+    await waitFor(() => expect(resultado).toHaveFocus());
     expect(resultado).toHaveAccessibleDescription(/A planilha tem 2 erros/);
     expect(resultado).toHaveTextContent("Nada foi gravado.");
     expect(resultado).toHaveTextContent(
