@@ -1,0 +1,59 @@
+/* Celular primeiro: as abas quebram em linhas e dividem a largura; no computador, a lista fica do
+   tamanho das abas (e só quebra se não couber). */
+.ui-abas {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.ui-abas__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-1);
+  padding: var(--espaco-1);
+  background: var(--cor-superficie-2);
+  border-radius: var(--raio-3);
+}
+
+.ui-abas__aba {
+  flex: 1 1 auto;
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-4);
+  border: 1px solid transparent;
+  border-radius: var(--raio-2);
+  background: transparent;
+  color: var(--cor-texto-suave);
+  font-weight: var(--peso-medio);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    color var(--transicao);
+}
+
+.ui-abas__aba:hover {
+  color: var(--cor-texto);
+}
+
+/* A aba atual muda de fundo, de peso e ganha borda: não depende só da cor. */
+.ui-abas__aba[aria-selected="true"] {
+  background: var(--cor-superficie);
+  border-color: var(--cor-borda-forte);
+  color: var(--cor-primaria-forte);
+  font-weight: var(--peso-forte);
+  box-shadow: var(--sombra-1);
+}
+
+.ui-abas__painel {
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .ui-abas__lista {
+    justify-self: start;
+  }
+
+  .ui-abas__aba {
+    flex: none;
+  }
+}

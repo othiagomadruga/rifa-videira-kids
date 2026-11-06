@@ -1,0 +1,115 @@
+/* Celular primeiro: painel com a largura da tela (menos a margem) e botões do rodapé lado a lado. */
+.ui-dialogo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--espaco-4);
+  background: color-mix(in srgb, var(--cor-texto) 55%, transparent);
+}
+
+.ui-dialogo__painel {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 36rem);
+  max-height: calc(100vh - 2 * var(--espaco-4));
+  max-height: calc(100dvh - 2 * var(--espaco-4));
+  background: var(--cor-superficie);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-3);
+}
+
+.ui-dialogo__cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  padding: var(--espaco-4) var(--espaco-4) var(--espaco-3);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.ui-dialogo__textos {
+  display: grid;
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+.ui-dialogo__titulo {
+  font-size: var(--texto-xl);
+}
+
+.ui-dialogo__descricao {
+  color: var(--cor-texto-suave);
+}
+
+.ui-dialogo__fechar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--alvo-toque);
+  height: var(--alvo-toque);
+  margin: calc(-1 * var(--espaco-2)) calc(-1 * var(--espaco-2)) 0 0;
+  border: 0;
+  border-radius: var(--raio-2);
+  background: transparent;
+  color: var(--cor-texto-suave);
+  cursor: pointer;
+}
+
+.ui-dialogo__fechar:hover {
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto);
+}
+
+/* O formulário (quando há) ocupa o lugar do corpo + rodapé e deixa o corpo rolar. */
+.ui-dialogo__formulario {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ui-dialogo__corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--espaco-4);
+}
+
+.ui-dialogo__rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3) var(--espaco-4) var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.ui-dialogo__rodape > * {
+  flex: 1 1 auto;
+}
+
+@media (min-width: 48rem) {
+  .ui-dialogo {
+    padding: var(--espaco-6);
+  }
+
+  .ui-dialogo__painel {
+    max-height: calc(100vh - 2 * var(--espaco-6));
+    max-height: calc(100dvh - 2 * var(--espaco-6));
+  }
+
+  .ui-dialogo__cabecalho,
+  .ui-dialogo__corpo {
+    padding-left: var(--espaco-5);
+    padding-right: var(--espaco-5);
+  }
+
+  .ui-dialogo__rodape {
+    padding: var(--espaco-4) var(--espaco-5);
+  }
+
+  .ui-dialogo__rodape > * {
+    flex: none;
+  }
+}

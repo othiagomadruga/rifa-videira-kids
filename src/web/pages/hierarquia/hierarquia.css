@@ -1,0 +1,189 @@
+/* Tela da hierarquia. Celular primeiro: tudo empilhado; a partir de 48rem, filtros lado a lado. */
+.hierarquia-resumo {
+  --grade-min: 9rem;
+}
+
+.hierarquia-painel,
+.hierarquia-importar,
+.hierarquia-formulario,
+.hierarquia-relatorio,
+.hierarquia-passo {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.hierarquia-filtros {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.hierarquia-contagem {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+}
+
+.hierarquia-suave {
+  color: var(--cor-texto-suave);
+}
+
+/* Botões de cada linha (Editar e Excluir): altura de toque inteira, menos espaço dos lados. */
+.hierarquia-acoes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+}
+
+.hierarquia-acoes .ui-button {
+  padding-left: var(--espaco-3);
+  padding-right: var(--espaco-3);
+}
+
+.hierarquia-contato {
+  display: inline-grid;
+  justify-items: end;
+  min-width: 0;
+  font-size: var(--texto-sm);
+}
+
+.hierarquia-contato a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--espaco-5);
+}
+
+.hierarquia-sem-quebra {
+  white-space: nowrap;
+}
+
+/* Grupo "Líder" do formulário da célula. */
+.hierarquia-grupo {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+}
+
+.hierarquia-grupo__titulo {
+  padding: 0 var(--espaco-1);
+  font-weight: var(--peso-forte);
+}
+
+/* Passos da importação: o número fica no título, num círculo. */
+.hierarquia-passos {
+  display: grid;
+  gap: var(--espaco-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hierarquia-passo__titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  font-size: var(--texto-lg);
+}
+
+.hierarquia-passo__numero {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--espaco-6);
+  height: var(--espaco-6);
+  border-radius: 50%;
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+  font-size: var(--texto-md);
+  font-weight: var(--peso-negrito);
+}
+
+.hierarquia-detalhes {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.hierarquia-detalhes summary {
+  min-height: var(--alvo-toque);
+  display: flex;
+  align-items: center;
+  color: var(--cor-link);
+  font-weight: var(--peso-forte);
+  cursor: pointer;
+}
+
+.hierarquia-detalhes[open] > :not(summary) {
+  margin-top: var(--espaco-2);
+}
+
+.hierarquia-colunas {
+  display: grid;
+  gap: var(--espaco-2);
+}
+
+.hierarquia-colunas__item {
+  display: grid;
+  gap: 0 var(--espaco-3);
+}
+
+.hierarquia-colunas__item dt {
+  font-weight: var(--peso-medio);
+}
+
+.hierarquia-colunas__item dd {
+  margin: 0;
+  color: var(--cor-texto-suave);
+}
+
+.hierarquia-relatorio {
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.hierarquia-relatorio__titulo {
+  font-size: var(--texto-lg);
+}
+
+/* Título visível de cada tabela do relatório (a legenda da tabela fica para o leitor de tela). */
+.hierarquia-bloco {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+/* h5: o base.css só zera a margem até o h4. */
+.hierarquia-bloco__titulo {
+  margin: 0;
+  font-size: var(--texto-md);
+}
+
+@media (min-width: 48rem) {
+  /* Tabelas da hierarquia um pouco mais compactas, para os nomes caberem numa linha. */
+  .hierarquia-tabela .ui-data-table .ui-data-table__tabela :is(th, td) {
+    padding-left: var(--espaco-3);
+    padding-right: var(--espaco-3);
+  }
+
+  .hierarquia-filtros {
+    grid-template-columns: repeat(2, minmax(0, 13rem)) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .hierarquia-acoes {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  .hierarquia-contato {
+    justify-items: start;
+  }
+
+  .hierarquia-colunas__item {
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  }
+}

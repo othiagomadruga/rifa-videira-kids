@@ -14,8 +14,8 @@ const TELAS = [
   ["/telao", "Telão", "RIFA-011"],
   ["/entrar", "Entrar", "RIFA-007"],
   ["/coordenacao", "Visão geral", "RIFA-009"],
-  // /coordenacao/campanha (RIFA-004) já é a tela de verdade: pages/campanha/CampanhaPage.test.tsx.
-  ["/coordenacao/hierarquia", "Hierarquia", "RIFA-005"],
+  // /coordenacao/campanha (RIFA-004) e /coordenacao/hierarquia (RIFA-005) já são telas de verdade:
+  // ver pages/campanha/CampanhaPage.test.tsx e pages/hierarquia/HierarquiaPage.test.tsx.
   ["/coordenacao/adesao", "Adesão", "RIFA-006"],
   ["/coordenacao/pedidos", "Pedidos", "RIFA-003"],
   ["/coordenacao/rankings", "Rankings", "RIFA-010"],

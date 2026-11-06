@@ -79,10 +79,14 @@ src/web/
 | `Button` | Botão (`type="button"` por padrão) | `variante`: `primario` \| `secundario` \| `discreto` \| `perigo`; `tamanho`: `normal` \| `pequeno`; `larguraTotal`; props de `<button>` |
 | `classesBotao()` | Cara de botão para links | `<Link className={classesBotao({ variante: "secundario" })}>` |
 | `Input`, `Select`, `Textarea` | Campos com rótulo, dica e erro (liga `label`, `aria-describedby` e `aria-invalid`) | `rotulo`, `dica?`, `erro?` e as props nativas; as opções do `Select` vão como filhas |
+| `SeletorArquivo` | Escolha de arquivo com a cara dos campos: o `<input type="file">` fica escondido só visualmente (o teclado e o leitor de tela usam ele) e o botão é um `<label>` dele; mostra o nome escolhido e limpa o campo a cada escolha (escolher o mesmo arquivo corrigido avisa de novo) | `rotulo`, `arquivo` (controlado), `aoEscolher(arquivo)`, `aceitar?`, `dica?`, `erro?`, `desabilitado?`, `textoBotao?`, `textoSemArquivo?` |
 | `DataTable` | Tabela no computador (a partir de 48rem) e cartões empilhados no celular, com o mesmo HTML | `colunas` (`{ chave, titulo, celula, alinhamento?: "fim", principal? }`), `linhas`, `chaveDaLinha`, `legenda`, `mostrarLegenda?`, `vazio?` |
+| `Dialogo` | Diálogo modal acessível, num portal no `<body>`: `aria-modal`, nome (título `<h2>`) e descrição; o foco entra ao abrir, fica preso (Tab e Shift+Tab dão a volta), Esc e o × pedem para fechar e o foco volta para quem abriu; o resto da página fica `inert` e sem rolagem. Clicar fora não fecha | `aberto`, `titulo`, `descricao?`, `aoFechar`, `children`, `rodape?`, `aoEnviar?` (corpo e rodapé num `<form noValidate>`), `papel?: "dialog" \| "alertdialog"`, `focoInicial?`, `focoAoFechar?` (refs) |
+| `Abas` | Abas no padrão WAI-ARIA (tablist/tab/tabpanel): só a aba atual entra no Tab, setas (dão a volta), Home e End trocam e levam o foco; os painéis ficam montados (`hidden`), então nada se perde ao trocar | `rotulo` (nome da lista), `abas` (`{ id, rotulo, conteudo }`), `abaAtiva`, `aoMudar(id)` (controlada), `id?`; `idDaAba(id, aba)` dá o id do botão de uma aba |
 | `Stat` | Indicador: rótulo, valor e variação | `rotulo`, `valor` (já formatado), `variacao?` (`{ texto, sentido: "subiu" \| "caiu" \| "estavel", tom? }`) |
 | `ProgressBar` | Percentual da meta, acessível (`role="progressbar"`, `aria-valuenow` de 0 a 100) | `rotulo`, `valor`, `meta` (mesma unidade), `textoValor?` |
 | `Badge` | Status | `tom`: `neutro` \| `info` \| `sucesso` \| `alerta` \| `perigo`; o texto precisa fazer sentido sem a cor |
+| `Aviso` | Mensagem na própria tela (não flutua nem some sozinha): resultado de uma ação, aviso ou erro | `tom`: `info` \| `sucesso` \| `alerta` \| `perigo`; `titulo?`, `children?`, `acao?`, `aoFechar?` (botão "Fechar aviso"), `anuncio?`: `alerta` (role="alert"; padrão em alerta e perigo) \| `status` (padrão em info e sucesso) \| `nenhum` |
 | `EmptyState` | Nada para mostrar | `titulo`, `descricao?`, `acao?` |
 | `ErrorState` | Falha (`role="alert"`) | `titulo?`, `mensagem?`, `aoTentarDeNovo?` (mostra "Tentar de novo") |
 | `Loading` | Carregando (`role="status"`) | `texto?` |
@@ -90,9 +94,12 @@ src/web/
 
 Notas:
 
-- `DataTable`: marque a coluna que identifica a linha com `principal` (vira o título do cartão no celular) e use `alinhamento: "fim"` em números e valores. Tabela larga demais rola só dentro dela, nunca a página.
+- `DataTable`: marque a coluna que identifica a linha com `principal` (vira o título do cartão no celular) e use `alinhamento: "fim"` em números e valores. Tabela larga demais rola só dentro dela, nunca a página. Defeito conhecido: com `mostrarLegenda`, no celular (cartões) a legenda fica espremida, uma palavra por linha; até a correção, ponha o título visível fora da tabela e deixe a `legenda` só para o leitor de tela (como no relatório da importação, em `pages/hierarquia`).
 - `ProgressBar` trunca o percentual (99,99% aparece "99%", nunca "100%" antes da hora). Acima da meta, a barra fica cheia, o texto mostra o percentual real ("120%") e a cor muda. O leitor de tela recebe só o percentual, nunca o valor bruto. Nas telas públicas, passe pontos-base: `valor={pontosBase} meta={10000}`.
 - Layout: `.pilha` empilha com espaço (`--pilha-espaco` muda o espaço); `.grade` monta uma grade que se ajusta à largura (`--grade-min`, padrão 14rem); `.visualmente-oculto` esconde texto que é só para leitores de tela.
+- `Dialogo`: renderize o formulário só quando abrir (`{editando && <MeuDialogo />}`, com `aberto` fixo) para o estado começar do zero a cada abertura. `aoFechar` é um pedido: quem usa pode ignorar (ex.: enquanto salva). Numa confirmação destrutiva use `papel="alertdialog"` e ponha "Cancelar" antes do botão de perigo: sem nada focável no corpo, o foco inicial vai para o primeiro botão do rodapé. Se o botão que abriu vai sumir (ex.: excluiu a linha), aponte `focoAoFechar` para outro elemento antes de fechar. No teste, foque o botão antes do `fireEvent.click` (o jsdom não foca no clique) para conferir a volta do foco.
+- `Aviso`: um `role="status"` que já entra na tela com o texto pode não ser lido. Para anunciar com certeza o resultado de uma ação, deixe uma região viva fixa na tela (ex.: `<p className="visualmente-oculto" role="status">{mensagem}</p>`) e use `anuncio="nenhum"` no `Aviso` visível.
+- Botão com o nome do item só para leitor de tela: `Editar <span className="visualmente-oculto">{nome}</span>`, com o espaço **fora** do `<span>` (dentro dele, o espaço some no cálculo do nome acessível, ao menos no Testing Library, e o nome vira "EditarCélula").
 
 ## Cliente da API (`lib/api.ts`)
 
