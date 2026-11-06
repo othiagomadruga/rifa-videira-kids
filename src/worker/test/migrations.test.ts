@@ -1,4 +1,4 @@
-// Schema do D1 (migrations/0000_setup.sql + 0001_init.sql), aplicado pelo setup
+// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql e 0002_acessos.sql), aplicado pelo setup
 // apply-migrations.ts no D1 local dos testes, dentro do workerd.
 import { env } from "cloudflare:workers";
 import { describe, expect, it, onTestFinished } from "vitest";
@@ -10,8 +10,11 @@ const TABELAS = [
   "campanhas",
   "celulas",
   "discipuladores",
+  "links_acesso",
   "pedidos",
   "redes",
+  "sessoes",
+  "usuarios",
   "webhook_eventos",
 ];
 
@@ -43,8 +46,13 @@ describe("migrações: schema do D1", () => {
 
     const pessoal =
       /comprador|buyer|name|cpf|document|nascimento|birth|endereco|address|cep|zipcode|phone|telefone|email|observa|fbp|fbc/;
-    // Contato do LÍDER de célula é cadastro da equipe da igreja, não do comprador.
-    const equipe = new Set(["celulas.lider_email", "celulas.lider_telefone"]);
+    // Contato do LÍDER de célula e e-mail de quem usa o sistema (usuarios, RIFA-007) são cadastro da
+    // equipe da igreja, não do comprador.
+    const equipe = new Set([
+      "celulas.lider_email",
+      "celulas.lider_telefone",
+      "usuarios.email",
+    ]);
     const suspeitas = results
       .filter(
         ({ tabela, coluna }) =>
@@ -68,6 +76,12 @@ describe("migrações: schema do D1", () => {
       webhook_eventos: [
         "webhook_eventos_por_pedido",
         "webhook_eventos_por_resultado",
+      ],
+      links_acesso: ["links_acesso_por_usuario"],
+      sessoes: [
+        "sessoes_por_usuario",
+        "sessoes_por_link",
+        "sessoes_por_expiracao",
       ],
     };
     for (const [tabela, indices] of Object.entries(esperados)) {

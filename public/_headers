@@ -1,0 +1,8 @@
+# Cabeçalhos de segurança do site (RIFA-007b). O Vite copia public/ para dist/client e o Workers Static
+# Assets aplica estas regras aos arquivos do site. As respostas da API (Worker) recebem os mesmos cabeçalhos
+# pelo middleware src/worker/middleware/cabecalhos-seguranca.ts; um teste confere que as listas são iguais.
+/*
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'

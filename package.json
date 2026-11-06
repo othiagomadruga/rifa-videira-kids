@@ -19,6 +19,7 @@
     "webhook:simular": "node scripts/simular-webhook.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "acesso:criar": "node scripts/criar-acesso.mjs",
     "deploy": "npm run build && npm run db:migrate:remote && wrangler deploy"
   },
   "dependencies": {
