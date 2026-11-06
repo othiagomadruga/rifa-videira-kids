@@ -1,0 +1,32 @@
+{
+  "event": "order_refunded",
+  "slug": "videira-kids-teste",
+  "is_rifinha": "nao",
+  "buyer": {
+    "name": "Comprador Ficticio Malformado",
+    "phone": "+5591900000009",
+    "email": "malformado@example.com",
+    "document": "00000000000",
+    "date_of_birth": "31/12/1999",
+    "address": null
+  },
+  "numbers": [1, 2],
+  "numbers_count": -1,
+  "lucky_numbers": null,
+  "subtotal": "60,00",
+  "total": "60,00",
+  "promotion_discount": null,
+  "coupon_discount": null,
+  "payment_method": "pix",
+  "status": "approved",
+  "status_detail": "accredited",
+  "coupon_id": null,
+  "affiliate_id": "1042",
+  "created_at": "01/12/2026 09:15",
+  "expires_at": "2026-12-01T09:45:00.000-03:00",
+  "approved_at": null,
+  "expired_at": null,
+  "upsells": [],
+  "observation": null,
+  "utm": null
+}
