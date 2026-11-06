@@ -1,0 +1,19 @@
+{
+  "event": "new_order",
+  "id": "PEDTESTE0003",
+  "slug": "videira-kids-teste",
+  "is_rifinha": false,
+  "buyer": {
+    "name": "Comprador Ficticio Quatro",
+    "phone": "+5591900000004"
+  },
+  "numbers_count": 1,
+  "subtotal": 20,
+  "total": 20,
+  "payment_method": "pix",
+  "status": "in_process",
+  "status_detail": "pending",
+  "created_at": "2026-12-03T19:00:00.000-03:00",
+  "expires_at": "2026-12-03T19:30:00.000-03:00",
+  "upsells": []
+}

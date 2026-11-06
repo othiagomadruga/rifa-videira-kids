@@ -1,0 +1,50 @@
+{
+  "event": "paid_order",
+  "id": "PEDOUTRA0001",
+  "slug": "outra-campanha-da-conta",
+  "is_rifinha": false,
+  "buyer": {
+    "name": "Comprador Ficticio Tres",
+    "phone": "+5511900000003",
+    "email": "comprador.tres@example.com",
+    "document": "00000000000",
+    "date_of_birth": "15/06/1985",
+    "address": {
+      "country": "BR",
+      "zipcode": "00000000",
+      "address": "Rua Ficticia",
+      "number": "123",
+      "neighborhood": "Bairro Ficticio",
+      "complement": null,
+      "state": "PA",
+      "city": "Cidade Ficticia"
+    }
+  },
+  "numbers": [9001],
+  "numbers_count": 1,
+  "lucky_numbers": [],
+  "subtotal": 20,
+  "total": 20,
+  "promotion_discount": null,
+  "coupon_discount": null,
+  "payment_method": "pix",
+  "status": "approved",
+  "status_detail": "accredited",
+  "coupon_id": null,
+  "affiliate_id": null,
+  "created_at": "2026-12-02T14:00:00.000-03:00",
+  "expires_at": "2026-12-02T14:30:00.000-03:00",
+  "approved_at": "2026-12-02T14:03:12.000-03:00",
+  "expired_at": null,
+  "upsells": [],
+  "observation": null,
+  "fbp": null,
+  "fbc": null,
+  "utm": {
+    "source": "instagram",
+    "campaign": "outra",
+    "medium": "bio",
+    "content": null,
+    "term": null
+  }
+}

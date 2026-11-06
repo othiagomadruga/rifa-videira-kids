@@ -1,0 +1,41 @@
+{
+  "event": "expired_order",
+  "id": "PEDTESTE0002",
+  "slug": "videira-kids-teste",
+  "is_rifinha": false,
+  "buyer": {
+    "name": "Compradora Ficticia Dois",
+    "phone": "+351910000002",
+    "email": "compradora.dois@example.com",
+    "document": null,
+    "date_of_birth": null,
+    "address": null
+  },
+  "numbers": [404, 505],
+  "numbers_count": 2,
+  "lucky_numbers": null,
+  "subtotal": 40,
+  "total": 36,
+  "promotion_discount": null,
+  "coupon_discount": 4,
+  "payment_method": "pix",
+  "status": "expired",
+  "status_detail": "expired",
+  "coupon_id": 77,
+  "affiliate_id": 1043,
+  "created_at": "2026-12-01T10:00:00.000-03:00",
+  "expires_at": "2026-12-01T10:30:00.000-03:00",
+  "approved_at": null,
+  "expired_at": "2026-12-01T10:30:02.104-03:00",
+  "upsells": [],
+  "observation": null,
+  "fbp": null,
+  "fbc": null,
+  "utm": {
+    "source": null,
+    "campaign": null,
+    "medium": null,
+    "content": null,
+    "term": null
+  }
+}
