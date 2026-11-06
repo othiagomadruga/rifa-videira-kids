@@ -48,10 +48,11 @@
   font-size: var(--texto-sm);
 }
 
+/* No celular, e-mail e telefone têm a altura de toque dos botões (são tocados na reunião de cadastro). */
 .hierarquia-contato a {
   display: inline-flex;
   align-items: center;
-  min-height: var(--espaco-5);
+  min-height: var(--alvo-toque);
 }
 
 .hierarquia-sem-quebra {
@@ -181,6 +182,10 @@
 
   .hierarquia-contato {
     justify-items: start;
+  }
+
+  .hierarquia-contato a {
+    min-height: var(--espaco-5);
   }
 
   .hierarquia-colunas__item {

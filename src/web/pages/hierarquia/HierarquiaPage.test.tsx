@@ -154,6 +154,34 @@ describe("CA1: visão da hierarquia", () => {
     );
   });
 
+  it("e-mail e telefone do líder são links (tel: só com dígitos e o + inicial); telefone que não é um número só fica como texto", async () => {
+    const api = criarApiFalsa();
+    const [, fe, agape, vida] = api.dados.celulas;
+    fe.lider_telefone = "+55 (91) 98888-7777";
+    agape.lider_telefone = "(91) 98888-7777 / (91) 3222-1111";
+    vida.lider_telefone = "(91) 3222-1111 ramal 2";
+    await abrirTela(api);
+
+    expect(
+      screen.getByRole("link", { name: "nina@example.com" }),
+    ).toHaveAttribute("href", "mailto:nina@example.com");
+    expect(
+      screen.getByRole("link", { name: "+55 (91) 98888-7777" }),
+    ).toHaveAttribute("href", "tel:+5591988887777");
+    // Dois números no mesmo campo ou um ramal discariam outro número: ficam como texto.
+    for (const telefone of [
+      "(91) 98888-7777 / (91) 3222-1111",
+      "(91) 3222-1111 ramal 2",
+    ]) {
+      expect(screen.getByText(telefone).closest("a")).toBeNull();
+    }
+    const discagens = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"))
+      .filter((href) => href?.startsWith("tel:"));
+    expect(discagens).toEqual(["tel:91900000001", "tel:+5591988887777"]);
+  });
+
   it("filtra por divisão e por rede (a lista de redes acompanha a divisão)", async () => {
     await abrirTela();
 

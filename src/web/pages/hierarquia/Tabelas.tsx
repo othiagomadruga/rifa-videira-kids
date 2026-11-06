@@ -422,18 +422,31 @@ function Contato({
   if (!email && !telefone) {
     return <span className="hierarquia-suave">Não informado</span>;
   }
-  const discagem = telefone?.replace(/[^\d+]/g, "") ?? "";
+  const discagem = telefone ? enderecoTel(telefone) : null;
   return (
     <span className="hierarquia-contato">
       {email && <a href={`mailto:${email}`}>{email}</a>}
       {telefone &&
-        (discagem.replace("+", "").length >= 8 ? (
-          <a href={`tel:${discagem}`}>{telefone}</a>
+        (discagem ? (
+          <a href={discagem}>{telefone}</a>
         ) : (
           <span>{telefone}</span>
         ))}
     </span>
   );
+}
+
+/**
+ * `tel:` só com dígitos (e o + do código do país, se vier no começo). Só um número escrito como telefone
+ * (dígitos, espaços, parênteses, hífen e ponto), com 8 a 15 dígitos, vira link: dois números no mesmo
+ * campo ou "ramal 2" discariam outro número e ficam como texto.
+ */
+function enderecoTel(telefone: string): string | null {
+  const texto = telefone.trim();
+  if (!/^\+?[\d\s().-]+$/.test(texto)) return null;
+  const digitos = texto.replace(/\D/g, "");
+  if (digitos.length < 8 || digitos.length > 15) return null;
+  return `tel:${texto.startsWith("+") ? "+" : ""}${digitos}`;
 }
 
 function BotoesDaLinha({
