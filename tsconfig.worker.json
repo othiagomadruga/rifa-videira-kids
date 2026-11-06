@@ -1,0 +1,10 @@
+{
+  // API (Cloudflare Worker) e seus testes, que rodam no workerd.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+    "lib": ["es2024"],
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"]
+  },
+  "include": ["src/worker", "src/shared"]
+}

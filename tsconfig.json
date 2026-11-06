@@ -1,0 +1,9 @@
+{
+  // Solução: cada parte do código tem seu tsconfig (`npm run typecheck` roda `tsc -b`).
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.worker.json" },
+    { "path": "./tsconfig.web.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

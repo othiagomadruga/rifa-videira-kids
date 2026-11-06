@@ -1,0 +1,6 @@
+# Variáveis e segredos do Worker em desenvolvimento local.
+# Copie para .dev.vars (ignorado pelo git) e troque os valores; nunca versione o .dev.vars.
+# Em produção, cadastre cada segredo com: npx wrangler secret put <NOME>
+
+# Token que autentica o webhook de pedidos da Rifei.
+RIFEI_WEBHOOK_TOKEN=troque-me

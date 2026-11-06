@@ -1,0 +1,8 @@
+# Gerados
+dist/
+.wrangler/
+coverage/
+package-lock.json
+
+# Markdown fica fora do Prettier (docs escritas por vários agentes)
+*.md
