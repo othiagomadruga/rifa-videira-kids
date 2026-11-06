@@ -13,7 +13,7 @@ export const idBotaoAtivo = (usuarioId: number) => `acessos-ativo-${usuarioId}`;
 
 type Props = {
   pessoa: Usuario;
-  /** É quem está conectado. */
+  /** É quem está conectado: o cartão não oferece "Desativar acesso" (a API recusaria com 409). */
   ehVoce: boolean;
   /** Ação desta pessoa em andamento (gerar link ou reativar). */
   ocupada: "gerando" | "reativando" | null;
@@ -120,19 +120,21 @@ export function PessoaCartao({
               <span className="visualmente-oculto">para {pessoa.nome}</span>
             </Button>
           )}
-          <Button
-            id={idBotaoAtivo(pessoa.id)}
-            variante="secundario"
-            onClick={pessoa.ativo ? aoDesativar : aoReativar}
-            aria-disabled={ocupada !== null || undefined}
-          >
-            {pessoa.ativo
-              ? "Desativar acesso"
-              : ocupada === "reativando"
-                ? "Reativando…"
-                : "Reativar acesso"}{" "}
-            <span className="visualmente-oculto">de {pessoa.nome}</span>
-          </Button>
+          {!(ehVoce && pessoa.ativo) && (
+            <Button
+              id={idBotaoAtivo(pessoa.id)}
+              variante="secundario"
+              onClick={pessoa.ativo ? aoDesativar : aoReativar}
+              aria-disabled={ocupada !== null || undefined}
+            >
+              {pessoa.ativo
+                ? "Desativar acesso"
+                : ocupada === "reativando"
+                  ? "Reativando…"
+                  : "Reativar acesso"}{" "}
+              <span className="visualmente-oculto">de {pessoa.nome}</span>
+            </Button>
+          )}
         </div>
       </div>
     </Card>

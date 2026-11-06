@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
-import { retirarDestino } from "../../lib/sessao";
+import { guardarDestino, retirarDestino } from "../../lib/sessao";
 import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
@@ -209,6 +209,8 @@ describe("CA4: nome de quem está conectado, Sair e menu conforme o papel", () =
       "POST /api/sessao/sair": () => new Response(null, { status: 204 }),
     });
     const { roteador } = renderizarRota("/coordenacao/pedidos");
+    // Um destino que tinha ficado guardado (ex.: por um 401 em outra aba) também é apagado.
+    guardarDestino("/coordenacao/hierarquia");
 
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
 

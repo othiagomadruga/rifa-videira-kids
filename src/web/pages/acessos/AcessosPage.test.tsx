@@ -472,25 +472,25 @@ describe("CA5: desativar e reativar", () => {
     );
   });
 
-  it("desativar a si mesmo: 409 'Você não pode desativar o seu próprio acesso'", async () => {
+  it("no próprio cartão não há 'Desativar acesso' (a API recusaria com 409); nos dos outros, há", async () => {
     const { api } = await abrirTela();
 
-    acionar(
-      within(cartao("Admin de Teste")).getByRole("button", {
-        name: "Desativar acesso de Admin de Teste",
+    const meu = cartao("Admin de Teste");
+    expect(within(meu).getByText("Você")).toBeInTheDocument();
+    expect(
+      within(meu).queryByRole("button", { name: /Desativar acesso/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(meu).getByRole("button", {
+        name: "Gerar link novo para Admin de Teste",
       }),
-    );
-    const confirmacao = screen.getByRole("alertdialog", {
-      name: "Desativar o acesso de Admin de Teste?",
-    });
-    fireEvent.click(
-      within(confirmacao).getByRole("button", { name: "Desativar acesso" }),
-    );
-
-    expect(await within(confirmacao).findByRole("alert")).toHaveTextContent(
-      "Você não pode desativar o seu próprio acesso: peça a outro admin.",
-    );
-    expect(api.pessoas[0].ativo).toBe(true);
+    ).toBeInTheDocument();
+    expect(
+      within(cartao("Felipe Coordenador")).getByRole("button", {
+        name: "Desativar acesso de Felipe Coordenador",
+      }),
+    ).toBeInTheDocument();
+    expect(api.chamadasA("PATCH", "/api/admin/usuarios/901")).toEqual([]);
   });
 
   it("desativar outra pessoa e receber 409 (último admin ativo): explica em português", async () => {

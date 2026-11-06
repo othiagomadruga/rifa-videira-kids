@@ -79,8 +79,9 @@ Usuário na administração (`usuarioSchema`):
 
 ### O que o site (front) deve fazer
 
-- Rota `/acesso/:token`: mostrar a confirmação e só no clique fazer `POST /api/sessao` com `{ token }`. Em 200, ir para a área da coordenação. Em 401, mostrar "Link inválido ou expirado: peça um novo à coordenação".
+- Rota `/acesso/:token`: mostrar a confirmação e só no clique fazer `POST /api/sessao` com `{ token }`. Em 200, ir para a área da coordenação. Em 401, mostrar "Este link não vale mais: peça um link novo à coordenação" (o mesmo texto da tela, `src/web/pages/acesso/AcessoPage.tsx`).
 - Antes do POST, tirar o token da barra de endereço e do histórico (`history.replaceState(null, "", "/acesso")`) e não mandar a URL com o token para logs ou analytics.
+  - O `replaceState` limpa o histórico da aba (voltar/avançar), mas o histórico geral do navegador continua com a visita a `/acesso/<token>` (conferido no Chromium). Isso vem do token no endereço e o site não consegue apagar: num aparelho compartilhado ou emprestado, revogue o link e gere outro.
 - Rota `/entrar` (sem sessão, depois de um 401): explicar que a entrada é pelo link pessoal recebido no WhatsApp.
 - Chamadas com `fetch` normal, na mesma origem: o cookie vai sozinho. Tratar 401 (sem sessão: ir para `/entrar`) e 403 (sem permissão).
 - `FORMATO_TOKEN_ACESSO` (contrato) permite avisar cedo que um link chegou cortado.
