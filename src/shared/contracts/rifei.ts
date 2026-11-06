@@ -170,7 +170,8 @@ const COMPRADOR_VAZIO = {
  * - informativos: is_rifinha, status, status_detail, payment_method, expires_at, expired_at, upsells,
  *   numbers, lucky_numbers, subtotal, descontos, coupon_id e utm.*;
  * - affiliate_id: inteiro, ou texto só com dígitos; outro valor vira null (venda "sem afiliado");
- * - created_at e approved_at inválidos viram null (o processamento usa a hora do recebimento).
+ * - created_at e approved_at inválidos viram null (pedidos.criado_em fica NULL; um pedido aprovado sem
+ *   approved_at usa a hora do recebimento em aprovado_em).
  */
 export const payloadRifeiSchema = z.object({
   event: eventoRifeiSchema,

@@ -98,11 +98,11 @@ Uma célula pode ter mais de um afiliado, por exemplo se o líder tiver duas con
 
 Estado **atual** de cada pedido da Rifei. **Só `status = 'approved'` conta como venda.**
 
-Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavos`, `metodo_pagamento`, `rifinha`, `expira_em`) ficam NULL quando a Rifei manda o campo ausente ou com tipo errado: o webhook aceita a venda e registra o aviso em `webhook_eventos.avisos` (RIFA-002b). `qtd_bilhetes` e `total_centavos` são essenciais e nunca ficam NULL.
+Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavos`, `metodo_pagamento`, `rifinha`, `criado_em`, `expira_em`) ficam NULL quando a Rifei manda o campo ausente ou com tipo errado: o webhook aceita a venda e registra o aviso em `webhook_eventos.avisos` (RIFA-002b). Os essenciais nunca ficam NULL: `id`, `campanha_id`, `status`, `qtd_bilhetes` e `total_centavos`.
 
 | Coluna | Tipo | Origem no payload |
 |---|---|---|
-| `id` | TEXT PK (1–128) | `id` |
+| `id` | TEXT PK NOT NULL (1–128) | `id`. O NOT NULL é explícito porque, no SQLite, uma PRIMARY KEY que não é INTEGER aceita NULL |
 | `campanha_id` | INTEGER FK → campanhas | campanha ativa cujo `slug_rifei` = `slug` |
 | `affiliate_id` | INTEGER FK → afiliados, NULL | `affiliate_id` (NULL = sem afiliado) |
 | `status` | TEXT | `in_process`, `approved` ou `expired` (máquina D4) |
@@ -118,7 +118,7 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `ddd` | TEXT NULL | derivado de `buyer.phone`; só para o Brasil (CHECK `ddd IS NULL OR pais = '55'`) |
 | `pais` | TEXT NULL | código de discagem do país, derivado de `buyer.phone` (`55` = Brasil) |
 | `utm_source` … `utm_term` | TEXT NULL | `utm.*` |
-| `criado_em` | TEXT (UTC) | `created_at`; se vier ausente ou inválido, vale o instante do recebimento |
+| `criado_em` | TEXT (UTC) NULL | `created_at`; NULL se vier ausente ou inválido |
 | `expira_em` | TEXT (UTC) NULL | `expires_at` |
 | `aprovado_em` | TEXT (UTC) NULL | `approved_at`; obrigatório quando `approved` (CHECK). Se a Rifei mandar null, vale o instante do recebimento |
 | `expirado_em` | TEXT (UTC) NULL | `expired_at` |

@@ -58,7 +58,7 @@ Corpo JSON, como a Rifei documenta. Os nomes dos campos ficam como a Rifei manda
 | `numbers_count` | integer | **sim**: inteiro ≥ 0; texto só com dígitos (`"12"`) é convertido, com aviso | 400 | `pedidos.qtd_bilhetes` (metas em bilhetes) |
 | `total` | number (reais) | **sim**: número ≥ 0; texto numérico com ponto (`"19.90"`) é convertido, com aviso; vírgula decimal não | 400 | `total_centavos`: é o valor arrecadado |
 | `affiliate_id` | null/integer | não: inteiro > 0, ou texto só com dígitos (`"1042"`, com aviso) | null + aviso: a venda vai para "sem afiliado" e aparece na conferência | liga a venda à célula (D7) |
-| `created_at` | ISO 8601 | não | null + aviso; `pedidos.criado_em` recebe o instante do recebimento | `criado_em` (em UTC) |
+| `created_at` | ISO 8601 | não | null + aviso; `pedidos.criado_em` fica NULL | `criado_em` (em UTC) |
 | `approved_at` | null/ISO 8601 | não | null (+ aviso se o tipo for errado); pedido aprovado usa o instante do recebimento | `aprovado_em` (em UTC) |
 | `expires_at` | ISO 8601 | não | null + aviso | `expira_em` (em UTC) |
 | `expired_at` | null/ISO 8601 | não; falta no exemplo oficial | null (+ aviso se o tipo for errado) | `expirado_em` (em UTC) |
@@ -117,7 +117,7 @@ A ordem importa:
 7. Decide a transição com `decidirTransicaoPedido(status atual, event)` (D3, D4; tabela abaixo).
 8. Se `affiliate_id` não é nulo e ainda não existe: cria o afiliado **não vinculado**, com `celula_id` nulo e `origem = 'webhook'`. É a fila de órfãos (D7).
 9. Se o resultado é `processado`: cria ou atualiza o pedido com os dados **deste** evento (valores em centavos, instantes em UTC, `ddd`/`pais`, `utm`; campos informativos podem ser null).
-   - `created_at` nulo: `criado_em` recebe o instante do recebimento.
+   - `created_at` nulo: `criado_em` fica NULL.
    - Pedido `approved` com `approved_at` nulo: `aprovado_em` recebe o instante do recebimento.
 10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido e `avisos`, ou null se não houver) e responde **200** `{ "resultado", "evento_id" }`.
 11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a reconciliação por CSV recupera.

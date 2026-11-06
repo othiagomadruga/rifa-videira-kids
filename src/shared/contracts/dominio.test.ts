@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import expiredOrder from "../../../test/fixtures/rifei/expired_order.json";
 import newOrderAfiliado from "../../../test/fixtures/rifei/new_order.afiliado.json";
 import paidOrderAfiliado from "../../../test/fixtures/rifei/paid_order.afiliado.json";
@@ -12,10 +12,12 @@ import {
   decidirTransicaoPedido,
   discipuladorEntradaSchema,
   eventoWebhookSchema,
+  novoEventoWebhookSchema,
   pedidoSchema,
   redeEntradaSchema,
   RESULTADOS_EVENTO_WEBHOOK,
   STATUS_PEDIDO,
+  type NovoEventoWebhook,
   type StatusPedido,
 } from "./dominio";
 import { payloadRifeiSchema, redigirPayloadRifei } from "./rifei";
@@ -277,10 +279,17 @@ describe("CA2: pedido e evento de webhook", () => {
       subtotal_centavos: null,
       metodo_pagamento: null,
       rifinha: null,
+      criado_em: null,
       expira_em: null,
     };
     expect(pedidoSchema.safeParse(informativosNulos).success).toBe(true);
-    for (const essencial of ["total_centavos", "qtd_bilhetes", "criado_em"]) {
+    for (const essencial of [
+      "id",
+      "campanha_id",
+      "status",
+      "qtd_bilhetes",
+      "total_centavos",
+    ]) {
       expect(
         pedidoSchema.safeParse({ ...pedido, [essencial]: null }).success,
       ).toBe(false);
@@ -352,6 +361,35 @@ describe("CA2: pedido e evento de webhook", () => {
     expect(
       eventoWebhookSchema.safeParse({ ...processado, avisos: "texto" }).success,
     ).toBe(false);
+  });
+
+  it("NovoEventoWebhook: a linha a gravar carrega avisos e não tem id", () => {
+    expectTypeOf<NovoEventoWebhook>().toHaveProperty("avisos");
+    expectTypeOf<NovoEventoWebhook>().not.toHaveProperty("id");
+    const novo = {
+      recebido_em: AGORA,
+      evento: "paid_order",
+      pedido_id: "PEDTESTE0004",
+      slug: "videira-kids-teste",
+      resultado: "processado",
+      status_anterior: null,
+      status_resultante: "approved",
+      payload_redigido: redigirPayloadRifei(
+        payloadRifeiSchema.parse(paidOrderAfiliado),
+      ),
+      erro: null,
+      avisos: [
+        {
+          caminho: ["total"],
+          codigo: "invalid_type",
+          mensagem: "Invalid input",
+        },
+      ],
+    };
+    expect(novoEventoWebhookSchema.safeParse(novo).success).toBe(true);
+    const semAvisos: Record<string, unknown> = { ...novo };
+    delete semAvisos.avisos;
+    expect(novoEventoWebhookSchema.safeParse(semAvisos).success).toBe(false);
   });
 });
 

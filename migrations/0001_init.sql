@@ -110,15 +110,16 @@ CREATE INDEX afiliados_por_celula ON afiliados (celula_id);
 
 -- Estado atual de cada pedido da Rifei (D3, D4). Só status 'approved' conta como venda.
 CREATE TABLE pedidos (
-  -- id do pedido na Rifei.
-  id                          TEXT    PRIMARY KEY CHECK (length(id) BETWEEN 1 AND 128),
+  -- id do pedido na Rifei. NOT NULL explícito: no SQLite, PRIMARY KEY que não é INTEGER aceita NULL.
+  id                          TEXT    PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 128),
   campanha_id                 INTEGER NOT NULL REFERENCES campanhas (id) ON DELETE RESTRICT,
   -- NULL = venda sem afiliado.
   affiliate_id                INTEGER REFERENCES afiliados (affiliate_id) ON DELETE RESTRICT CHECK (affiliate_id IS NULL OR typeof(affiliate_id) = 'integer'),
   status                      TEXT    NOT NULL CHECK (status IN ('in_process', 'approved', 'expired')),
   -- status e status_detail como vieram no último evento processado. Os campos informativos do payload
-  -- (status, status_detail, subtotal, método, rifinha, expires_at) são NULL quando a Rifei manda
-  -- ausente ou com tipo errado: o webhook aceita e registra um aviso (RIFA-002b).
+  -- (status, status_detail, subtotal, método, rifinha, created_at, expires_at) são NULL quando a Rifei
+  -- manda ausente ou com tipo errado: o webhook aceita e registra um aviso (RIFA-002b). Essenciais,
+  -- sempre NOT NULL: id, campanha_id, status, qtd_bilhetes e total_centavos.
   status_rifei                TEXT,
   status_detail_rifei         TEXT,
   qtd_bilhetes                INTEGER NOT NULL CHECK (typeof(qtd_bilhetes) = 'integer' AND qtd_bilhetes >= 0),
@@ -141,8 +142,8 @@ CREATE TABLE pedidos (
   utm_content                 TEXT,
   utm_term                    TEXT,
   -- Instantes da Rifei (created_at, expires_at, approved_at, expired_at) normalizados para UTC.
-  -- created_at ausente ou inválido: o webhook grava o instante do recebimento.
-  criado_em                   TEXT    NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', criado_em) IS criado_em),
+  -- created_at ausente ou inválido fica NULL (só approved_at nulo num aprovado usa o recebimento).
+  criado_em                   TEXT    CHECK (criado_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', criado_em) IS criado_em),
   expira_em                   TEXT    CHECK (expira_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expira_em) IS expira_em),
   aprovado_em                 TEXT    CHECK (aprovado_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', aprovado_em) IS aprovado_em),
   expirado_em                 TEXT    CHECK (expirado_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expirado_em) IS expirado_em),

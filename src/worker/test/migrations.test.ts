@@ -212,16 +212,49 @@ describe("migrações: schema do D1", () => {
       )
       .bind(campanha)
       .run();
-    // Pedido sem afiliado e com os campos informativos nulos (payload tolerado com avisos).
+    // Pedido sem afiliado e com todos os campos informativos nulos (payload tolerado com avisos),
+    // inclusive criado_em, expira_em, status_rifei, status_detail_rifei, subtotal e método.
     await db
       .prepare(
-        `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos,
-           criado_em, aprovado_em)
-         VALUES ('TESTE-MIGRACAO-2', ?, 'approved', 2, 4000,
-           '2026-12-01T13:00:00.000Z', '2026-12-01T13:00:00.000Z')`,
+        `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos, aprovado_em)
+         VALUES ('TESTE-MIGRACAO-2', ?, 'approved', 2, 4000, '2026-12-01T13:00:00.000Z')`,
       )
       .bind(campanha)
       .run();
+    const informativos = await db
+      .prepare(
+        `SELECT criado_em, expira_em, status_rifei, status_detail_rifei, subtotal_centavos,
+           metodo_pagamento, rifinha FROM pedidos WHERE id = 'TESTE-MIGRACAO-2'`,
+      )
+      .first();
+    expect(informativos).toEqual({
+      criado_em: null,
+      expira_em: null,
+      status_rifei: null,
+      status_detail_rifei: null,
+      subtotal_centavos: null,
+      metodo_pagamento: null,
+      rifinha: null,
+    });
+    // Os essenciais continuam NOT NULL: id, campanha_id, status, qtd_bilhetes e total_centavos.
+    const colunasEssenciais = {
+      id: "'TESTE-MIGRACAO-3'",
+      campanha_id: String(campanha),
+      status: "'approved'",
+      qtd_bilhetes: "1",
+      total_centavos: "2000",
+    };
+    for (const essencial of Object.keys(colunasEssenciais)) {
+      const valores = { ...colunasEssenciais, [essencial]: "NULL" };
+      await expect(
+        db
+          .prepare(
+            `INSERT INTO pedidos (${Object.keys(valores).join(", ")}, aprovado_em)
+             VALUES (${Object.values(valores).join(", ")}, '2026-12-01T14:00:00.000Z')`,
+          )
+          .run(),
+      ).rejects.toThrow(/NOT NULL constraint failed/);
+    }
     onTestFinished(async () => {
       await db.batch([
         db.prepare(

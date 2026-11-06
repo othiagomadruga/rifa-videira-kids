@@ -307,8 +307,9 @@ export const pedidoSchema = z.object({
   status: statusPedidoSchema,
   /**
    * `status` e `status_detail` como vieram no último evento processado. Os campos informativos do
-   * payload (status, status_detail, subtotal, método, rifinha, expires_at) são null quando a Rifei
-   * mandou ausente ou com tipo errado (RIFA-002b).
+   * payload (status, status_detail, subtotal, método, rifinha, created_at, expires_at) são null quando
+   * a Rifei mandou ausente ou com tipo errado (RIFA-002b). Essenciais, nunca null: id, campanha_id,
+   * status, qtd_bilhetes e total_centavos.
    */
   status_rifei: z.string().min(1).nullable(),
   status_detail_rifei: z.string().nullable(),
@@ -325,8 +326,8 @@ export const pedidoSchema = z.object({
   /** Código de discagem do país do comprador ("55" = Brasil). */
   pais: codigoPaisSchema.nullable(),
   utm: utmSchema,
-  /** Instantes da Rifei normalizados para UTC. created_at ausente ou inválido: instante do recebimento. */
-  criado_em: instanteSchema,
+  /** Instantes da Rifei normalizados para UTC; null quando a Rifei mandou ausente ou inválido. */
+  criado_em: instanteSchema.nullable(),
   expira_em: instanteSchema.nullable(),
   /** approved_at; se a Rifei mandar null num pedido aprovado, vale o instante do recebimento. */
   aprovado_em: instanteSchema.nullable(),
@@ -361,6 +362,14 @@ export const eventoWebhookSchema = z.object({
   avisos: z.array(detalheValidacaoSchema).nullable(),
 });
 export type EventoWebhook = z.infer<typeof eventoWebhookSchema>;
+
+/**
+ * Linha a gravar em webhook_eventos (sem o `id`, que o banco gera e vira o `evento_id` da resposta).
+ * Inclui `avisos`: null quando o payload segue a doc ou foi recusado; a lista, quando foi aceito com
+ * diferenças (RIFA-002b).
+ */
+export const novoEventoWebhookSchema = eventoWebhookSchema.omit({ id: true });
+export type NovoEventoWebhook = z.infer<typeof novoEventoWebhookSchema>;
 
 // ---------------------------------------------------------------------------------------------------
 // D4: máquina de estados do pedido
