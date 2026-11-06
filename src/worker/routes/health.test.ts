@@ -19,7 +19,7 @@ describe("GET /api/health", () => {
     });
   });
 
-  it("responde 503 com erro claro quando o D1 falha", async () => {
+  it("responde 503 banco_indisponivel no formato único quando o D1 falha", async () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
@@ -37,9 +37,10 @@ describe("GET /api/health", () => {
 
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({
-      ok: false,
-      db: "erro",
-      erro: "Falha ao consultar o banco de dados",
+      erro: {
+        codigo: "banco_indisponivel",
+        mensagem: "Falha ao consultar o banco de dados",
+      },
     });
     expect(consoleError).toHaveBeenCalledOnce();
   });

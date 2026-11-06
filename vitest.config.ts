@@ -16,6 +16,8 @@ export default defineConfig({
             miniflare: {
               bindings: {
                 TEST_MIGRATIONS: await readD1Migrations(pastaMigracoes),
+                // Segredo do webhook da Rifei nos testes (valor fictício; em dev vem do .dev.vars).
+                RIFEI_WEBHOOK_TOKEN: "token-ficticio-dos-testes-do-webhook",
               },
             },
           })),

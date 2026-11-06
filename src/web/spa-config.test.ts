@@ -13,8 +13,8 @@ describe("wrangler.jsonc: site servido como SPA pelo mesmo Worker", () => {
     expect(config.assets?.not_found_handling).toBe("single-page-application");
   });
 
-  it("/api/* vai para o Worker antes dos assets", () => {
-    expect(config.assets?.run_worker_first).toEqual(["/api/*"]);
+  it("/api e /api/* vão para o Worker antes dos assets", () => {
+    expect(config.assets?.run_worker_first).toEqual(["/api", "/api/*"]);
   });
 
   it("tem o D1 no binding DB com as migrações em migrations/", () => {

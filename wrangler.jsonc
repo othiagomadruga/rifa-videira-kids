@@ -12,8 +12,9 @@
   "assets": {
     // Rota desconhecida do site devolve o index.html (o React decide o que mostrar).
     "not_found_handling": "single-page-application",
-    // /api/* vai sempre para o Worker (Hono), nunca para os assets.
-    "run_worker_first": ["/api/*"],
+    // /api e /api/* vão sempre para o Worker (Hono), nunca para os assets. O padrão
+    // "/api/*" não cobre o "/api" exato, que sem a primeira entrada cairia no index.html.
+    "run_worker_first": ["/api", "/api/*"],
   },
   "d1_databases": [
     {

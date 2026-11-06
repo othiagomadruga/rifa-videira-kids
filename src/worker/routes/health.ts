@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { responderErro } from "../lib/respostas-erro";
 
 export const health = new Hono<{ Bindings: Cloudflare.Env }>();
 
@@ -10,9 +11,10 @@ health.get("/", async (c) => {
     await c.env.DB.prepare("SELECT COUNT(*) AS total FROM _meta").first();
   } catch (erro) {
     console.error("GET /api/health: falha ao consultar o D1", erro);
-    return c.json(
-      { ok: false, db: "erro", erro: "Falha ao consultar o banco de dados" },
-      503,
+    return responderErro(
+      c,
+      "banco_indisponivel",
+      "Falha ao consultar o banco de dados",
     );
   }
   return c.json({ ok: true, db: "ok", latenciaMs: Date.now() - inicio });
