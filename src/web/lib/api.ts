@@ -4,10 +4,9 @@
 // o ErroApi traz esse código e essa mensagem; nos demais casos, um dos
 // CODIGOS_CLIENTE com uma mensagem que pode ser mostrada ao usuário.
 
-/** Corpo de erro padrão da API. */
-export type CorpoErroApi = {
-  erro: { codigo: string; mensagem: string; detalhes?: unknown };
-};
+// Corpo de erro padrão: o tipo vem do contrato. Só o tipo: o schema poria o zod
+// no pacote do site (+24 kB gzip); lerCorpoErro confere o formato à mão.
+import type { ErroApi as CorpoErroApi } from "../../shared/contracts/erros";
 
 /** Códigos gerados pelo próprio cliente (sem resposta ou resposta fora do padrão). */
 export const CODIGOS_CLIENTE = {
