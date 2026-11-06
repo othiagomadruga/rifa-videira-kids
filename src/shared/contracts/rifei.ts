@@ -6,13 +6,17 @@
  *
  * Nomes dos campos do payload ficam como a Rifei manda (inglês). O que é nosso fica em português.
  */
-import { z } from 'zod';
+import { z } from "zod";
 
 /** Nome do segredo do Worker com o token que a Rifei manda em `Authorization: Bearer <token>` (D6). */
-export const SEGREDO_WEBHOOK_RIFEI = 'RIFEI_WEBHOOK_TOKEN';
+export const SEGREDO_WEBHOOK_RIFEI = "RIFEI_WEBHOOK_TOKEN";
 
 /** Eventos do webhook ("Novo pedido", "Pedido pago" e "Pedido expirado" na tela da Rifei). */
-export const EVENTOS_RIFEI = ['new_order', 'paid_order', 'expired_order'] as const;
+export const EVENTOS_RIFEI = [
+  "new_order",
+  "paid_order",
+  "expired_order",
+] as const;
 export const eventoRifeiSchema = z.enum(EVENTOS_RIFEI);
 export type EventoRifei = z.infer<typeof eventoRifeiSchema>;
 
@@ -20,7 +24,7 @@ export type EventoRifei = z.infer<typeof eventoRifeiSchema>;
  * Valores de `status` citados na doc oficial. O schema aceita qualquer texto não vazio porque o valor
  * num `expired_order` não é documentado (SUPOSIÇÃO). O estado do pedido vem do `event` (D4), não daqui.
  */
-export const STATUS_RIFEI_DOCUMENTADOS = ['in_process', 'approved'] as const;
+export const STATUS_RIFEI_DOCUMENTADOS = ["in_process", "approved"] as const;
 
 /** Instante ISO 8601 com fuso, como a Rifei manda (ex.: 2024-08-23T11:28:45.035-03:00). */
 export const instanteRifeiSchema = z.iso.datetime({ offset: true });
@@ -128,15 +132,15 @@ export type PayloadRifeiEntrada = z.input<typeof payloadRifeiSchema>;
 
 /** Caminhos do payload bruto que NUNCA são gravados (D1). Do `buyer` sobram só ddd e pais, derivados do telefone. */
 export const CAMPOS_DESCARTADOS_NA_REDACAO = [
-  'buyer.name',
-  'buyer.phone',
-  'buyer.email',
-  'buyer.document',
-  'buyer.date_of_birth',
-  'buyer.address',
-  'observation',
-  'fbp',
-  'fbc',
+  "buyer.name",
+  "buyer.phone",
+  "buyer.email",
+  "buyer.document",
+  "buyer.date_of_birth",
+  "buyer.address",
+  "observation",
+  "fbp",
+  "fbc",
 ] as const;
 
 /** DDD brasileiro: dois dígitos de 1 a 9 (11 a 99, sem zero). */
@@ -185,15 +189,15 @@ export const payloadRifeiRedigidoSchema = z.strictObject({
 export type PayloadRifeiRedigido = z.infer<typeof payloadRifeiRedigidoSchema>;
 
 /** Códigos de país (E.164) com 1 e 2 dígitos. Os demais têm 3 (os códigos não são prefixo uns dos outros). */
-const DDI_COM_1_DIGITO = new Set(['1', '7']);
+const DDI_COM_1_DIGITO = new Set(["1", "7"]);
 const DDI_COM_2_DIGITOS = new Set(
   [
-    '20 27 30 31 32 33 34 36 39 40 41 43 44 45 46 47 48 49',
-    '51 52 53 54 55 56 57 58 60 61 62 63 64 65 66',
-    '81 82 84 86 90 91 92 93 94 95 98',
+    "20 27 30 31 32 33 34 36 39 40 41 43 44 45 46 47 48 49",
+    "51 52 53 54 55 56 57 58 60 61 62 63 64 65 66",
+    "81 82 84 86 90 91 92 93 94 95 98",
   ]
-    .join(' ')
-    .split(' '),
+    .join(" ")
+    .split(" "),
 );
 
 /**
@@ -201,17 +205,21 @@ const DDI_COM_2_DIGITOS = new Set(
  * ignorados. Sem "+" inicial ou fora do E.164: tudo null. DDD só para o Brasil (+55) com número de
  * 10 ou 11 dígitos depois do país.
  */
-export function derivarTelefone(telefone: string | null | undefined): TelefoneRedigido {
+export function derivarTelefone(
+  telefone: string | null | undefined,
+): TelefoneRedigido {
   const vazio: TelefoneRedigido = { ddd: null, pais: null };
   if (!telefone) return vazio;
-  const digitos = /^\+([1-9]\d{6,14})$/.exec(telefone.replace(/[\s().-]/g, ''))?.[1];
+  const digitos = /^\+([1-9]\d{6,14})$/.exec(
+    telefone.replace(/[\s().-]/g, ""),
+  )?.[1];
   if (digitos === undefined) return vazio;
   const pais = DDI_COM_1_DIGITO.has(digitos.slice(0, 1))
     ? digitos.slice(0, 1)
     : DDI_COM_2_DIGITOS.has(digitos.slice(0, 2))
       ? digitos.slice(0, 2)
       : digitos.slice(0, 3);
-  if (pais !== '55') return { ddd: null, pais };
+  if (pais !== "55") return { ddd: null, pais };
   const nacional = digitos.slice(2);
   return /^[1-9]{2}\d{8,9}$/.test(nacional)
     ? { ddd: nacional.slice(0, 2), pais }
@@ -227,7 +235,9 @@ export function reaisParaCentavos(reais: number): number {
  * D1: monta o payload redigido campo a campo (lista de permissão). Nada do `buyer` além de ddd/pais,
  * e nada de observation, fbp ou fbc.
  */
-export function redigirPayloadRifei(payload: PayloadRifei): PayloadRifeiRedigido {
+export function redigirPayloadRifei(
+  payload: PayloadRifei,
+): PayloadRifeiRedigido {
   return {
     event: payload.event,
     id: payload.id,
@@ -272,14 +282,20 @@ export interface IdentificacaoPayloadInvalido {
  * Extrai event, id e slug de um corpo inválido para o registro `erro_validacao`. Nenhum outro campo é
  * lido, então nada pessoal é gravado. Textos maiores que os limites da tabela são cortados.
  */
-export function identificarPayloadInvalido(corpo: unknown): IdentificacaoPayloadInvalido {
+export function identificarPayloadInvalido(
+  corpo: unknown,
+): IdentificacaoPayloadInvalido {
   const objeto =
-    typeof corpo === 'object' && corpo !== null ? (corpo as Record<string, unknown>) : {};
+    typeof corpo === "object" && corpo !== null
+      ? (corpo as Record<string, unknown>)
+      : {};
   const texto = (valor: unknown, limite: number): string | null =>
-    typeof valor === 'string' && valor.length > 0 ? valor.slice(0, limite) : null;
+    typeof valor === "string" && valor.length > 0
+      ? valor.slice(0, limite)
+      : null;
   return {
-    evento: texto(objeto['event'], 64),
-    pedido_id: texto(objeto['id'], 128),
-    slug: texto(objeto['slug'], 200),
+    evento: texto(objeto["event"], 64),
+    pedido_id: texto(objeto["id"], 128),
+    slug: texto(objeto["slug"], 200),
   };
 }

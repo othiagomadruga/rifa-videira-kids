@@ -6,9 +6,14 @@
  * (3500 = 35%); instantes em UTC ("2026-12-01T12:20:31.512Z"); datas locais da campanha em "YYYY-MM-DD".
  * `*EntradaSchema` = corpo de criação/edição; `*Schema` = como a API devolve.
  */
-import { z } from 'zod';
-import { detalheValidacaoSchema } from './erros';
-import { codigoPaisSchema, dddSchema, payloadRifeiRedigidoSchema, type EventoRifei } from './rifei';
+import { z } from "zod";
+import { detalheValidacaoSchema } from "./erros";
+import {
+  codigoPaisSchema,
+  dddSchema,
+  payloadRifeiRedigidoSchema,
+  type EventoRifei,
+} from "./rifei";
 
 // ---------------------------------------------------------------------------------------------------
 // Primitivos
@@ -26,11 +31,11 @@ export const instanteSchema = z.iso.datetime({ precision: 3 });
 export const affiliateIdSchema = z.number().int().nonnegative();
 
 /** D8: fuso padrão da campanha. */
-export const FUSO_PADRAO = 'America/Belem';
+export const FUSO_PADRAO = "America/Belem";
 
 function fusoHorarioValido(fuso: string): boolean {
   try {
-    new Intl.DateTimeFormat('pt-BR', { timeZone: fuso });
+    new Intl.DateTimeFormat("pt-BR", { timeZone: fuso });
     return true;
   } catch {
     return false;
@@ -42,7 +47,9 @@ export const fusoHorarioSchema = z
   .string()
   .min(1)
   .max(64)
-  .refine(fusoHorarioValido, { message: 'Fuso horário IANA inválido (ex.: America/Belem)' });
+  .refine(fusoHorarioValido, {
+    message: "Fuso horário IANA inválido (ex.: America/Belem)",
+  });
 
 const nomeSchema = z.string().trim().min(1).max(120);
 const textoOpcionalSchema = z.string().trim().min(1).max(120).nullable();
@@ -53,39 +60,49 @@ const telefoneContatoSchema = z.string().trim().min(1).max(40);
 // Enumerações
 // ---------------------------------------------------------------------------------------------------
 
-export const DIVISOES = ['jovens', 'adultos'] as const;
+export const DIVISOES = ["jovens", "adultos"] as const;
 export const divisaoSchema = z.enum(DIVISOES);
 export type Divisao = z.infer<typeof divisaoSchema>;
 
 /** Estado do pedido (D4). Só `approved` conta como venda. */
-export const STATUS_PEDIDO = ['in_process', 'approved', 'expired'] as const;
+export const STATUS_PEDIDO = ["in_process", "approved", "expired"] as const;
 export const statusPedidoSchema = z.enum(STATUS_PEDIDO);
 export type StatusPedido = z.infer<typeof statusPedidoSchema>;
 
 /** Resultado de cada entrega do webhook (D3, D4, D5, D9). */
 export const RESULTADOS_EVENTO_WEBHOOK = [
-  'processado',
-  'duplicado',
-  'ignorado_outra_campanha',
-  'ignorado_transicao',
-  'erro_validacao',
+  "processado",
+  "duplicado",
+  "ignorado_outra_campanha",
+  "ignorado_transicao",
+  "erro_validacao",
 ] as const;
 export const resultadoEventoWebhookSchema = z.enum(RESULTADOS_EVENTO_WEBHOOK);
-export type ResultadoEventoWebhook = z.infer<typeof resultadoEventoWebhookSchema>;
+export type ResultadoEventoWebhook = z.infer<
+  typeof resultadoEventoWebhookSchema
+>;
 
 /** Em que unidade a meta é medida. */
-export const UNIDADES_META = ['bilhetes', 'centavos'] as const;
+export const UNIDADES_META = ["bilhetes", "centavos"] as const;
 /**
  * Como a meta de cada célula sai de `meta.valor`:
  * - por_pessoa: valor × qtd_pessoas da célula;
  * - total_proporcional: valor (total da campanha) × qtd_pessoas / soma de qtd_pessoas de todas as células;
  * - fixa_por_celula: valor, igual para todas.
  */
-export const REGRAS_META = ['por_pessoa', 'total_proporcional', 'fixa_por_celula'] as const;
+export const REGRAS_META = [
+  "por_pessoa",
+  "total_proporcional",
+  "fixa_por_celula",
+] as const;
 /** Critério de ordenação dos rankings. */
-export const CRITERIOS_RANKING = ['percentual_meta', 'bilhetes', 'arrecadacao'] as const;
+export const CRITERIOS_RANKING = [
+  "percentual_meta",
+  "bilhetes",
+  "arrecadacao",
+] as const;
 /** Como o afiliado entrou no sistema: pelo webhook (órfão, D7) ou cadastrado pela coordenação. */
-export const ORIGENS_AFILIADO = ['webhook', 'manual'] as const;
+export const ORIGENS_AFILIADO = ["webhook", "manual"] as const;
 
 export type UnidadeMeta = (typeof UNIDADES_META)[number];
 export type RegraMeta = (typeof REGRAS_META)[number];
@@ -136,7 +153,10 @@ export const publicoConfigSchema = z.object({
   limite_ranking: z.number().int().min(1).max(100).nullable(),
 });
 
-export const PUBLICO_PADRAO = { mostra_percentual_meta: false, limite_ranking: 3 } as const;
+export const PUBLICO_PADRAO = {
+  mostra_percentual_meta: false,
+  limite_ranking: 3,
+} as const;
 
 export const campanhaEntradaSchema = z.object({
   nome: nomeSchema,
@@ -151,9 +171,12 @@ export const campanhaEntradaSchema = z.object({
     .array(periodoCampanhaEntradaSchema)
     .min(1)
     .max(53)
-    .refine((periodos) => periodos.some((periodo) => periodo.percentual_bp > 0), {
-      message: 'Pelo menos um período precisa ter percentual maior que zero',
-    }),
+    .refine(
+      (periodos) => periodos.some((periodo) => periodo.percentual_bp > 0),
+      {
+        message: "Pelo menos um período precisa ter percentual maior que zero",
+      },
+    ),
   ranking: rankingConfigSchema,
   publico: publicoConfigSchema.default(() => ({ ...PUBLICO_PADRAO })),
 });
@@ -339,20 +362,23 @@ export type EventoWebhook = z.infer<typeof eventoWebhookSchema>;
 
 /** Estado que cada evento pede. */
 export const STATUS_ALVO_POR_EVENTO = {
-  new_order: 'in_process',
-  paid_order: 'approved',
-  expired_order: 'expired',
+  new_order: "in_process",
+  paid_order: "approved",
+  expired_order: "expired",
 } as const satisfies Record<EventoRifei, StatusPedido>;
 
 /** Transições permitidas: in_process → approved | expired; expired → approved; approved é terminal. */
 export const TRANSICOES_PERMITIDAS = {
-  in_process: ['approved', 'expired'],
-  expired: ['approved'],
+  in_process: ["approved", "expired"],
+  expired: ["approved"],
   approved: [],
 } as const satisfies Record<StatusPedido, readonly StatusPedido[]>;
 
 export interface DecisaoTransicao {
-  resultado: Extract<ResultadoEventoWebhook, 'processado' | 'duplicado' | 'ignorado_transicao'>;
+  resultado: Extract<
+    ResultadoEventoWebhook,
+    "processado" | "duplicado" | "ignorado_transicao"
+  >;
   /** Estado do pedido depois do evento (igual ao atual quando nada muda). */
   status_resultante: StatusPedido;
 }
@@ -369,10 +395,13 @@ export function decidirTransicaoPedido(
   evento: EventoRifei,
 ): DecisaoTransicao {
   const alvo = STATUS_ALVO_POR_EVENTO[evento];
-  if (statusAtual === null) return { resultado: 'processado', status_resultante: alvo };
-  if (statusAtual === alvo) return { resultado: 'duplicado', status_resultante: statusAtual };
-  const permitidos: readonly StatusPedido[] = TRANSICOES_PERMITIDAS[statusAtual];
+  if (statusAtual === null)
+    return { resultado: "processado", status_resultante: alvo };
+  if (statusAtual === alvo)
+    return { resultado: "duplicado", status_resultante: statusAtual };
+  const permitidos: readonly StatusPedido[] =
+    TRANSICOES_PERMITIDAS[statusAtual];
   return permitidos.includes(alvo)
-    ? { resultado: 'processado', status_resultante: alvo }
-    : { resultado: 'ignorado_transicao', status_resultante: statusAtual };
+    ? { resultado: "processado", status_resultante: alvo }
+    : { resultado: "ignorado_transicao", status_resultante: statusAtual };
 }

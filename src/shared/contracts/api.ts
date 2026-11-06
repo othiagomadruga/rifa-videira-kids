@@ -8,7 +8,7 @@
  * - O webhook valida o corpo dentro do handler (precisa registrar `erro_validacao` antes de responder 400);
  *   as demais rotas podem usar @hono/zod-validator com um hook que devolve `requisicao_invalida`.
  */
-import { z } from 'zod';
+import { z } from "zod";
 import {
   CRITERIOS_RANKING,
   UNIDADES_META,
@@ -28,9 +28,9 @@ import {
   redeEntradaSchema,
   redeSchema,
   resultadoEventoWebhookSchema,
-} from './dominio';
-import { detalheValidacaoSchema } from './erros';
-import { payloadRifeiSchema } from './rifei';
+} from "./dominio";
+import { detalheValidacaoSchema } from "./erros";
+import { payloadRifeiSchema } from "./rifei";
 
 // ---------------------------------------------------------------------------------------------------
 // Autorização e utilitários
@@ -41,10 +41,14 @@ import { payloadRifeiSchema } from './rifei';
  * - rifei_bearer: `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>` (/api/webhooks/*);
  * - coordenacao: equipe da campanha (/api/admin/* e /api/painel/*); o mecanismo sai na RIFA-007.
  */
-export const GRUPOS_AUTORIZACAO = ['aberto', 'rifei_bearer', 'coordenacao'] as const;
+export const GRUPOS_AUTORIZACAO = [
+  "aberto",
+  "rifei_bearer",
+  "coordenacao",
+] as const;
 export type GrupoAutorizacao = (typeof GRUPOS_AUTORIZACAO)[number];
 
-export const SITUACOES_ROTA = ['detalhada', 'rascunho'] as const;
+export const SITUACOES_ROTA = ["detalhada", "rascunho"] as const;
 export type SituacaoRota = (typeof SITUACOES_ROTA)[number];
 
 /** Resposta de listagem: `{ itens: [...] }`, sem paginação na v1. */
@@ -53,7 +57,9 @@ export function lista<T extends z.ZodType>(item: T) {
 }
 
 /** Parâmetro `:id` numérico (vem como texto na URL). */
-export const parametroIdSchema = z.object({ id: z.coerce.number().int().positive() });
+export const parametroIdSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
 
 /** Totais de vendas aprovadas (só pedidos `approved` contam, D4). */
 export const totaisVendasSchema = z.object({
@@ -67,10 +73,11 @@ export type TotaisVendas = z.infer<typeof totaisVendasSchema>;
 // GET /api/health
 // ---------------------------------------------------------------------------------------------------
 
+/** Formato que o esqueleto (RIFA-001) já serve e o site já lê (`src/web/api.ts`). */
 export const respostaHealthSchema = z.object({
-  status: z.literal('ok'),
-  versao_api: z.literal('v1'),
-  banco: z.literal('ok'),
+  ok: z.literal(true),
+  db: z.literal("ok"),
+  latenciaMs: z.number().nonnegative(),
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -79,7 +86,7 @@ export const respostaHealthSchema = z.object({
 
 /** 200: o evento foi gravado em webhook_eventos (com o resultado). */
 export const respostaWebhookRifeiSchema = z.object({
-  resultado: resultadoEventoWebhookSchema.exclude(['erro_validacao']),
+  resultado: resultadoEventoWebhookSchema.exclude(["erro_validacao"]),
   evento_id: idSchema,
 });
 export type RespostaWebhookRifei = z.infer<typeof respostaWebhookRifeiSchema>;
@@ -121,25 +128,25 @@ export const respostaListaCelulasSchema = lista(celulaSchema);
 
 /** Colunas do CSV, na ordem sugerida. Cabeçalho obrigatório; nomes sem acento, em minúsculas. */
 export const COLUNAS_CSV_HIERARQUIA = [
-  'rede',
-  'divisao',
-  'rede_responsavel',
-  'discipulador',
-  'celula',
-  'qtd_pessoas',
-  'lider_nome',
-  'lider_email',
-  'lider_telefone',
+  "rede",
+  "divisao",
+  "rede_responsavel",
+  "discipulador",
+  "celula",
+  "qtd_pessoas",
+  "lider_nome",
+  "lider_email",
+  "lider_telefone",
 ] as const;
 export type ColunaCsvHierarquia = (typeof COLUNAS_CSV_HIERARQUIA)[number];
 
 export const COLUNAS_CSV_HIERARQUIA_OBRIGATORIAS = [
-  'rede',
-  'divisao',
-  'discipulador',
-  'celula',
-  'qtd_pessoas',
-  'lider_nome',
+  "rede",
+  "divisao",
+  "discipulador",
+  "celula",
+  "qtd_pessoas",
+  "lider_nome",
 ] as const satisfies readonly ColunaCsvHierarquia[];
 
 /** Máximo de linhas de dados por arquivo. */
@@ -154,9 +161,9 @@ export const corpoImportarHierarquiaSchema = z.object({
 
 /** Célula de texto do CSV: tira espaços das pontas; vazio vira null. */
 function textoCsv(valor: unknown): unknown {
-  if (typeof valor !== 'string') return valor;
+  if (typeof valor !== "string") return valor;
   const limpo = valor.trim();
-  return limpo === '' ? null : limpo;
+  return limpo === "" ? null : limpo;
 }
 
 const nomeCsvSchema = z.preprocess(textoCsv, z.string().min(1).max(120));
@@ -170,7 +177,7 @@ const opcionalCsv = <T extends z.ZodType>(schema: T) =>
 export const linhaCsvHierarquiaSchema = z.object({
   rede: nomeCsvSchema,
   divisao: z.preprocess(
-    (valor) => (typeof valor === 'string' ? valor.trim().toLowerCase() : valor),
+    (valor) => (typeof valor === "string" ? valor.trim().toLowerCase() : valor),
     divisaoSchema,
   ),
   rede_responsavel: opcionalCsv(z.string().min(1).max(120)),
@@ -180,7 +187,7 @@ export const linhaCsvHierarquiaSchema = z.object({
     textoCsv,
     z
       .string()
-      .regex(/^\d+$/, { message: 'Use um número inteiro' })
+      .regex(/^\d+$/, { message: "Use um número inteiro" })
       .transform(Number)
       .pipe(z.number().int().min(1).max(1000)),
   ),
@@ -217,7 +224,9 @@ export const respostaImportarHierarquiaSchema = z.object({
   inalterados: contagemHierarquiaSchema,
   erros: z.array(erroLinhaImportacaoSchema),
 });
-export type RespostaImportarHierarquia = z.infer<typeof respostaImportarHierarquiaSchema>;
+export type RespostaImportarHierarquia = z.infer<
+  typeof respostaImportarHierarquiaSchema
+>;
 
 // ---------------------------------------------------------------------------------------------------
 // GET /api/admin/afiliados e PUT /api/admin/afiliados/:affiliateId
@@ -293,12 +302,18 @@ export const respostaAdesaoSchema = z.object({
 // RASCUNHO (Sprints 3–4): GET /api/painel/resumo
 // ---------------------------------------------------------------------------------------------------
 
-export const ESCOPOS_PAINEL = ['campanha', 'divisao', 'rede', 'discipulador', 'celula'] as const;
-const ESCOPOS_COM_ID: readonly string[] = ['rede', 'discipulador', 'celula'];
+export const ESCOPOS_PAINEL = [
+  "campanha",
+  "divisao",
+  "rede",
+  "discipulador",
+  "celula",
+] as const;
+const ESCOPOS_COM_ID: readonly string[] = ["rede", "discipulador", "celula"];
 
 export const consultaPainelResumoSchema = z
   .object({
-    escopo: z.enum(ESCOPOS_PAINEL).default('campanha'),
+    escopo: z.enum(ESCOPOS_PAINEL).default("campanha"),
     /** id da rede, do discipulador ou da célula (obrigatório nesses escopos). */
     id: z.coerce.number().int().positive().optional(),
     /** Obrigatória no escopo `divisao`. */
@@ -306,16 +321,24 @@ export const consultaPainelResumoSchema = z
     /** Data de referência (local); padrão: hoje no fuso da campanha. */
     data: dataLocalSchema.optional(),
   })
-  .refine((consulta) => !ESCOPOS_COM_ID.includes(consulta.escopo) || consulta.id !== undefined, {
-    message: 'Informe id para este escopo',
-    path: ['id'],
-  })
-  .refine((consulta) => consulta.escopo !== 'divisao' || consulta.divisao !== undefined, {
-    message: 'Informe a divisão',
-    path: ['divisao'],
-  });
+  .refine(
+    (consulta) =>
+      !ESCOPOS_COM_ID.includes(consulta.escopo) || consulta.id !== undefined,
+    {
+      message: "Informe id para este escopo",
+      path: ["id"],
+    },
+  )
+  .refine(
+    (consulta) =>
+      consulta.escopo !== "divisao" || consulta.divisao !== undefined,
+    {
+      message: "Informe a divisão",
+      path: ["divisao"],
+    },
+  );
 
-export const FASES_CAMPANHA = ['antes', 'durante', 'encerrada'] as const;
+export const FASES_CAMPANHA = ["antes", "durante", "encerrada"] as const;
 
 /** Ritmo numa janela, na unidade da meta. Percentuais em pontos-base. */
 export const ritmoSchema = z.object({
@@ -355,11 +378,15 @@ export const respostaPainelResumoSchema = z.object({
   }),
   unidade: z.enum(UNIDADES_META),
   /** Hoje. `meta_ajustada` = o que falta da meta do período ÷ dias restantes (inclui hoje). */
-  dia: ritmoSchema.extend({ meta_ajustada: z.number().nonnegative().nullable() }),
+  dia: ritmoSchema.extend({
+    meta_ajustada: z.number().nonnegative().nullable(),
+  }),
   /** Período atual (null fora da campanha). */
   periodo: ritmoSchema.nullable(),
   /** Do início até a data de referência. `projecao_final` = realizado ÷ fração esperada até hoje. */
-  campanha: ritmoSchema.extend({ projecao_final: z.number().nonnegative().nullable() }),
+  campanha: ritmoSchema.extend({
+    projecao_final: z.number().nonnegative().nullable(),
+  }),
   vendas: totaisVendasSchema,
   /** Só no escopo campanha: vendas sem célula (sem afiliado ou afiliado não vinculado). */
   vendas_sem_celula: totaisVendasSchema.nullable(),
@@ -369,15 +396,20 @@ export const respostaPainelResumoSchema = z.object({
 // RASCUNHO: GET /api/painel/ranking (coordenação, com valores)
 // ---------------------------------------------------------------------------------------------------
 
-export const NIVEIS_RANKING = ['celula', 'discipulador', 'rede', 'divisao'] as const;
-export const JANELAS_RANKING = ['atual', 'campanha'] as const;
+export const NIVEIS_RANKING = [
+  "celula",
+  "discipulador",
+  "rede",
+  "divisao",
+] as const;
+export const JANELAS_RANKING = ["atual", "campanha"] as const;
 
 export const consultaRankingSchema = z.object({
-  nivel: z.enum(NIVEIS_RANKING).default('celula'),
+  nivel: z.enum(NIVEIS_RANKING).default("celula"),
   /** Filtra uma divisão (rankings separados de jovens e adultos). */
   divisao: divisaoSchema.optional(),
   /** `atual` = período que contém a data; `campanha` = do início até a data. */
-  periodo: z.enum(JANELAS_RANKING).default('atual'),
+  periodo: z.enum(JANELAS_RANKING).default("atual"),
   data: dataLocalSchema.optional(),
 });
 
@@ -417,7 +449,9 @@ export const respostaRankingSchema = z.object({
 // Schemas estritos: um campo a mais (ex.: total_centavos) invalida a resposta.
 // ---------------------------------------------------------------------------------------------------
 
-export const consultaRankingPublicoSchema = consultaRankingSchema.omit({ data: true });
+export const consultaRankingPublicoSchema = consultaRankingSchema.omit({
+  data: true,
+});
 
 export const itemRankingPublicoSchema = z.strictObject({
   posicao: z.number().int().min(1),
@@ -458,11 +492,11 @@ export const corpoReconciliacaoSchema = z.object({
 });
 
 export const TIPOS_DIVERGENCIA = [
-  'ausente_no_sistema',
-  'ausente_no_csv',
-  'status_divergente',
-  'valor_divergente',
-  'afiliado_divergente',
+  "ausente_no_sistema",
+  "ausente_no_csv",
+  "status_divergente",
+  "valor_divergente",
+  "afiliado_divergente",
 ] as const;
 
 const ladoReconciliacaoSchema = z.object({
@@ -490,7 +524,7 @@ export const respostaReconciliacaoSchema = z.object({
 // Catálogo de rotas
 // ---------------------------------------------------------------------------------------------------
 
-export type MetodoHttp = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type MetodoHttp = "GET" | "POST" | "PUT" | "DELETE";
 
 export interface DefinicaoRota {
   readonly metodo: MetodoHttp;
@@ -502,231 +536,234 @@ export interface DefinicaoRota {
   readonly consulta?: z.ZodType;
   readonly corpo?: z.ZodType;
   /** Status de sucesso e schema do corpo da resposta (null = sem corpo). */
-  readonly sucesso: { readonly status: 200 | 201 | 204; readonly corpo: z.ZodType | null };
+  readonly sucesso: {
+    readonly status: 200 | 201 | 204;
+    readonly corpo: z.ZodType | null;
+  };
 }
 
 export const ROTAS = {
   health: {
-    metodo: 'GET',
-    caminho: '/api/health',
-    grupo: 'aberto',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/health",
+    grupo: "aberto",
+    situacao: "detalhada",
     sucesso: { status: 200, corpo: respostaHealthSchema },
   },
   webhookRifei: {
-    metodo: 'POST',
-    caminho: '/api/webhooks/rifei',
-    grupo: 'rifei_bearer',
-    situacao: 'detalhada',
+    metodo: "POST",
+    caminho: "/api/webhooks/rifei",
+    grupo: "rifei_bearer",
+    situacao: "detalhada",
     corpo: payloadRifeiSchema,
     sucesso: { status: 200, corpo: respostaWebhookRifeiSchema },
   },
   obterCampanha: {
-    metodo: 'GET',
-    caminho: '/api/admin/campanha',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/campanha",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     sucesso: { status: 200, corpo: respostaCampanhaSchema },
   },
   salvarCampanha: {
-    metodo: 'PUT',
-    caminho: '/api/admin/campanha',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "PUT",
+    caminho: "/api/admin/campanha",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     corpo: corpoSalvarCampanhaSchema,
     sucesso: { status: 200, corpo: respostaCampanhaSchema },
   },
   listarRedes: {
-    metodo: 'GET',
-    caminho: '/api/admin/redes',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/redes",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     sucesso: { status: 200, corpo: respostaListaRedesSchema },
   },
   obterRede: {
-    metodo: 'GET',
-    caminho: '/api/admin/redes/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/redes/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     sucesso: { status: 200, corpo: redeSchema },
   },
   criarRede: {
-    metodo: 'POST',
-    caminho: '/api/admin/redes',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "POST",
+    caminho: "/api/admin/redes",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     corpo: redeEntradaSchema,
     sucesso: { status: 201, corpo: redeSchema },
   },
   atualizarRede: {
-    metodo: 'PUT',
-    caminho: '/api/admin/redes/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "PUT",
+    caminho: "/api/admin/redes/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     corpo: redeEntradaSchema,
     sucesso: { status: 200, corpo: redeSchema },
   },
   removerRede: {
-    metodo: 'DELETE',
-    caminho: '/api/admin/redes/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "DELETE",
+    caminho: "/api/admin/redes/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     sucesso: { status: 204, corpo: null },
   },
   listarDiscipuladores: {
-    metodo: 'GET',
-    caminho: '/api/admin/discipuladores',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/discipuladores",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     consulta: consultaDiscipuladoresSchema,
     sucesso: { status: 200, corpo: respostaListaDiscipuladoresSchema },
   },
   obterDiscipulador: {
-    metodo: 'GET',
-    caminho: '/api/admin/discipuladores/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/discipuladores/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     sucesso: { status: 200, corpo: discipuladorSchema },
   },
   criarDiscipulador: {
-    metodo: 'POST',
-    caminho: '/api/admin/discipuladores',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "POST",
+    caminho: "/api/admin/discipuladores",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     corpo: discipuladorEntradaSchema,
     sucesso: { status: 201, corpo: discipuladorSchema },
   },
   atualizarDiscipulador: {
-    metodo: 'PUT',
-    caminho: '/api/admin/discipuladores/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "PUT",
+    caminho: "/api/admin/discipuladores/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     corpo: discipuladorEntradaSchema,
     sucesso: { status: 200, corpo: discipuladorSchema },
   },
   removerDiscipulador: {
-    metodo: 'DELETE',
-    caminho: '/api/admin/discipuladores/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "DELETE",
+    caminho: "/api/admin/discipuladores/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     sucesso: { status: 204, corpo: null },
   },
   listarCelulas: {
-    metodo: 'GET',
-    caminho: '/api/admin/celulas',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/celulas",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     consulta: consultaCelulasSchema,
     sucesso: { status: 200, corpo: respostaListaCelulasSchema },
   },
   obterCelula: {
-    metodo: 'GET',
-    caminho: '/api/admin/celulas/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/celulas/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     sucesso: { status: 200, corpo: celulaSchema },
   },
   criarCelula: {
-    metodo: 'POST',
-    caminho: '/api/admin/celulas',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "POST",
+    caminho: "/api/admin/celulas",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     corpo: celulaEntradaSchema,
     sucesso: { status: 201, corpo: celulaSchema },
   },
   atualizarCelula: {
-    metodo: 'PUT',
-    caminho: '/api/admin/celulas/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "PUT",
+    caminho: "/api/admin/celulas/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     corpo: celulaEntradaSchema,
     sucesso: { status: 200, corpo: celulaSchema },
   },
   removerCelula: {
-    metodo: 'DELETE',
-    caminho: '/api/admin/celulas/:id',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "DELETE",
+    caminho: "/api/admin/celulas/:id",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroIdSchema,
     sucesso: { status: 204, corpo: null },
   },
   importarHierarquia: {
-    metodo: 'POST',
-    caminho: '/api/admin/hierarquia/importar',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "POST",
+    caminho: "/api/admin/hierarquia/importar",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     corpo: corpoImportarHierarquiaSchema,
     sucesso: { status: 200, corpo: respostaImportarHierarquiaSchema },
   },
   listarAfiliados: {
-    metodo: 'GET',
-    caminho: '/api/admin/afiliados',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/afiliados",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     consulta: consultaAfiliadosSchema,
     sucesso: { status: 200, corpo: respostaListaAfiliadosSchema },
   },
   salvarAfiliado: {
-    metodo: 'PUT',
-    caminho: '/api/admin/afiliados/:affiliateId',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "PUT",
+    caminho: "/api/admin/afiliados/:affiliateId",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     parametros: parametroAffiliateIdSchema,
     corpo: corpoSalvarAfiliadoSchema,
     sucesso: { status: 200, corpo: afiliadoResumoSchema },
   },
   adesao: {
-    metodo: 'GET',
-    caminho: '/api/admin/adesao',
-    grupo: 'coordenacao',
-    situacao: 'detalhada',
+    metodo: "GET",
+    caminho: "/api/admin/adesao",
+    grupo: "coordenacao",
+    situacao: "detalhada",
     sucesso: { status: 200, corpo: respostaAdesaoSchema },
   },
   painelResumo: {
-    metodo: 'GET',
-    caminho: '/api/painel/resumo',
-    grupo: 'coordenacao',
-    situacao: 'rascunho',
+    metodo: "GET",
+    caminho: "/api/painel/resumo",
+    grupo: "coordenacao",
+    situacao: "rascunho",
     consulta: consultaPainelResumoSchema,
     sucesso: { status: 200, corpo: respostaPainelResumoSchema },
   },
   painelRanking: {
-    metodo: 'GET',
-    caminho: '/api/painel/ranking',
-    grupo: 'coordenacao',
-    situacao: 'rascunho',
+    metodo: "GET",
+    caminho: "/api/painel/ranking",
+    grupo: "coordenacao",
+    situacao: "rascunho",
     consulta: consultaRankingSchema,
     sucesso: { status: 200, corpo: respostaRankingSchema },
   },
   rankingPublico: {
-    metodo: 'GET',
-    caminho: '/api/publico/ranking',
-    grupo: 'aberto',
-    situacao: 'rascunho',
+    metodo: "GET",
+    caminho: "/api/publico/ranking",
+    grupo: "aberto",
+    situacao: "rascunho",
     consulta: consultaRankingPublicoSchema,
     sucesso: { status: 200, corpo: respostaRankingPublicoSchema },
   },
   bumbo: {
-    metodo: 'GET',
-    caminho: '/api/publico/bumbo',
-    grupo: 'aberto',
-    situacao: 'rascunho',
+    metodo: "GET",
+    caminho: "/api/publico/bumbo",
+    grupo: "aberto",
+    situacao: "rascunho",
     consulta: consultaBumboSchema,
     sucesso: { status: 200, corpo: respostaBumboSchema },
   },
   reconciliacao: {
-    metodo: 'POST',
-    caminho: '/api/admin/reconciliacao',
-    grupo: 'coordenacao',
-    situacao: 'rascunho',
+    metodo: "POST",
+    caminho: "/api/admin/reconciliacao",
+    grupo: "coordenacao",
+    situacao: "rascunho",
     corpo: corpoReconciliacaoSchema,
     sucesso: { status: 200, corpo: respostaReconciliacaoSchema },
   },

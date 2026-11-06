@@ -68,13 +68,15 @@ Toda resposta que não é 2xx tem este corpo:
 
 O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use `criarErroApi()`; para converter um erro do zod em `detalhes`, use `detalhesDeValidacao()`.
 
+> **Pendente na implementação:** no esqueleto (RIFA-001), o 404 de rota inexistente, o 500 do `onError` e o 503 do health ainda respondem `{ "ok": false, "erro": "..." }` (o health também manda `"db": "erro"`). Pelo contrato, os três passam ao formato único, com os códigos `nao_encontrado`, `erro_interno` e `banco_indisponivel`. O ajuste fica para a tarefa da API, junto com os testes do Worker que conferem esses corpos.
+
 ---
 
 ## Rotas detalhadas (Sprints 1–2)
 
 ### `GET /api/health` (aberto)
 
-- **200**: `{ "status": "ok", "versao_api": "v1", "banco": "ok" }` (`respostaHealthSchema`).
+- **200**: `{ "ok": true, "db": "ok", "latenciaMs": 3 }` (`respostaHealthSchema`). É o formato que o esqueleto (RIFA-001) já serve e o site já lê; por isso `latenciaMs` fica em camelCase.
 - **503** `banco_indisponivel`: o banco não respondeu.
 - Não revela configuração, como a existência do segredo do webhook.
 
@@ -360,18 +362,25 @@ As regras de cálculo estão em [modelo-de-dados.md, seção 7](modelo-de-dados.
 No Worker, com `@hono/zod-validator` (verificado com hono 4.13.16, @hono/zod-validator 0.9.1 e zod 4.6.7):
 
 ```ts
-import { zValidator } from '@hono/zod-validator';
-import { ROTAS, criarErroApi, detalhesDeValidacao } from '../shared/contracts';
+import { zValidator } from "@hono/zod-validator";
+import { ROTAS, criarErroApi, detalhesDeValidacao } from "../shared/contracts";
 
 app.put(
   ROTAS.salvarCampanha.caminho,
-  zValidator('json', ROTAS.salvarCampanha.corpo, (resultado, c) =>
+  zValidator("json", ROTAS.salvarCampanha.corpo, (resultado, c) =>
     resultado.success
       ? undefined
-      : c.json(criarErroApi('requisicao_invalida', 'Dados inválidos', detalhesDeValidacao(resultado.error)), 400),
+      : c.json(
+          criarErroApi(
+            "requisicao_invalida",
+            "Dados inválidos",
+            detalhesDeValidacao(resultado.error),
+          ),
+          400,
+        ),
   ),
   (c) => {
-    const campanha = c.req.valid('json'); // tipada; fuso_horario e publico já com os padrões
+    const campanha = c.req.valid("json"); // tipada; fuso_horario e publico já com os padrões
     // ...
   },
 );

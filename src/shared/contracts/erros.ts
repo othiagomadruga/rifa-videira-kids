@@ -5,23 +5,23 @@
  * Os clientes devem tratar `codigo` como texto aberto: códigos novos podem surgir sem quebrar o contrato.
  * Documentação: docs/api.md, seção "Erros".
  */
-import { z } from 'zod';
+import { z } from "zod";
 
 /** Códigos de erro conhecidos na v1. */
 export const CODIGOS_ERRO = [
-  'requisicao_invalida',
-  'json_invalido',
-  'payload_invalido',
-  'csv_invalido',
-  'referencia_invalida',
-  'nao_autenticado',
-  'proibido',
-  'nao_encontrado',
-  'nome_duplicado',
-  'em_uso',
-  'erro_interno',
-  'nao_configurado',
-  'banco_indisponivel',
+  "requisicao_invalida",
+  "json_invalido",
+  "payload_invalido",
+  "csv_invalido",
+  "referencia_invalida",
+  "nao_autenticado",
+  "proibido",
+  "nao_encontrado",
+  "nome_duplicado",
+  "em_uso",
+  "erro_interno",
+  "nao_configurado",
+  "banco_indisponivel",
 ] as const;
 
 export type CodigoErro = (typeof CODIGOS_ERRO)[number];
@@ -64,7 +64,11 @@ export const erroApiSchema = z.object({
 export type ErroApi = z.infer<typeof erroApiSchema>;
 
 /** Monta o corpo de erro padrão. */
-export function criarErroApi(codigo: CodigoErro, mensagem: string, detalhes?: unknown): ErroApi {
+export function criarErroApi(
+  codigo: CodigoErro,
+  mensagem: string,
+  detalhes?: unknown,
+): ErroApi {
   return detalhes === undefined
     ? { erro: { codigo, mensagem } }
     : { erro: { codigo, mensagem, detalhes } };
@@ -82,7 +86,9 @@ export function detalhesDeValidacao(erro: {
   readonly issues: readonly ProblemaZod[];
 }): DetalheValidacao[] {
   return erro.issues.map((problema) => ({
-    caminho: problema.path.map((parte) => (typeof parte === 'number' ? parte : String(parte))),
+    caminho: problema.path.map((parte) =>
+      typeof parte === "number" ? parte : String(parte),
+    ),
     codigo: problema.code,
     mensagem: problema.message,
   }));
