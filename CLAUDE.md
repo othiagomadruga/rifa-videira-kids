@@ -33,6 +33,7 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
 - **Definition of Done (tarefa):** teste automatizado por critério de aceite; testes, lint e build verdes;
   revisão APROVADA por um agente diferente do autor; push da branch; merge pelo SM com a `main` verde; status no DevMission.
 - **Dúvida de produto:** não inventar; vai para PERGUNTAS AO PO. Dúvida técnica: opção mais simples e reversível, declarada em SUPOSIÇÕES.
+- **Antes de pedir algo ao Thiago:** tentar fazer de fato (CLI, API, MCP); só pedir o que for impossível daqui, dizendo o que foi tentado. Decisões reversíveis ou técnicas: tomar e informar.
 
 ## Segurança
 
