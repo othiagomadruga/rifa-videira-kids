@@ -13,7 +13,10 @@ import paidOrderAfiliado from "../../test/fixtures/rifei/paid_order.afiliado.jso
 import {
   ROTAS,
   ROTAS_ACESSO,
+  afiliadoResumoSchema,
   erroApiSchema,
+  respostaAdesaoSchema,
+  respostaListaAfiliadosSchema,
   respostaWebhookRifeiSchema,
   type CodigoErro,
   type Papel,
@@ -202,8 +205,8 @@ describe("a) toda rota da coordenação exige sessão", () => {
     const protegidas = rotasRegistradas().filter((rota) =>
       eDaCoordenacao(rota.caminho),
     );
-    // Hierarquia (16) e usuários e links (5) na Sprint 2; campanha, afiliados e adesão entram depois.
-    expect(protegidas.length).toBeGreaterThanOrEqual(21);
+    // Sprint 2: hierarquia (16), usuários e links (5), campanha (2) e afiliados e adesão (3).
+    expect(protegidas.length).toBeGreaterThanOrEqual(26);
 
     for (const rota of protegidas) {
       const res = await requisitar(rota.metodo, concreto(rota.caminho), {
@@ -268,6 +271,8 @@ describe("a) toda rota da coordenação exige sessão", () => {
     for (const caminho of [
       "/api/admin/celulas",
       `/api/admin/celulas/${celulaId}`,
+      // O painel de adesão também traz o telefone do líder (para cobrar quem falta).
+      "/api/admin/adesao",
     ]) {
       const semSessao = await requisitar("GET", caminho);
       const texto = await semSessao.text();
@@ -279,6 +284,80 @@ describe("a) toda rota da coordenação exige sessão", () => {
       expect(comSessao.status).toBe(200);
       expect(await comSessao.text()).toContain("90000-0999");
     }
+  });
+
+  it("afiliados e adesão (RIFA-006) estão montados atrás do login: sem cookie 401, com sessão de coordenacao respondem", async () => {
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    for (const rota of [
+      ROTAS.listarAfiliados,
+      ROTAS.salvarAfiliado,
+      ROTAS.adesao,
+    ]) {
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    }
+    const affiliateId = 424242;
+    const caminhoPut = `/api/admin/afiliados/${affiliateId}`;
+    const corpo = JSON.stringify({ celula_id: null });
+    const existe = async () =>
+      (await env.DB.prepare("SELECT 1 FROM afiliados WHERE affiliate_id = ?")
+        .bind(affiliateId)
+        .first()) !== null;
+
+    // Sem cookie: 401 nas três rotas; de outra origem, 403 mesmo com sessão. O PUT não cria nada.
+    for (const [metodo, caminho] of [
+      ["GET", "/api/admin/afiliados"],
+      ["GET", "/api/admin/afiliados?vinculado=false"],
+      ["PUT", caminhoPut],
+      ["GET", "/api/admin/adesao"],
+    ] as const) {
+      await esperarErro(
+        await requisitar(metodo, caminho, { Origin: ORIGEM }, corpo),
+        401,
+        "nao_autenticado",
+      );
+    }
+    await esperarErro(
+      await requisitar(
+        "PUT",
+        caminhoPut,
+        { ...coordenacao, Origin: ORIGEM_MALICIOSA },
+        corpo,
+      ),
+      403,
+      "proibido",
+    );
+    expect(await existe()).toBe(false);
+
+    // Com a sessão de coordenacao: o PUT pré-cadastra o afiliado e as leituras respondem no contrato.
+    const salvo = await requisitar("PUT", caminhoPut, coordenacao, corpo);
+    expect(salvo.status).toBe(200);
+    expect(afiliadoResumoSchema.parse(await salvo.json())).toMatchObject({
+      affiliate_id: affiliateId,
+      celula_id: null,
+      origem: "manual",
+    });
+    expect(await existe()).toBe(true);
+
+    const orfaos = await requisitar(
+      "GET",
+      "/api/admin/afiliados?vinculado=false",
+      coordenacao,
+    );
+    expect(orfaos.status).toBe(200);
+    expect(
+      respostaListaAfiliadosSchema
+        .parse(await orfaos.json())
+        .itens.map((item) => item.affiliate_id),
+    ).toContain(affiliateId);
+
+    const adesao = await requisitar("GET", "/api/admin/adesao", coordenacao);
+    expect(adesao.status).toBe(200);
+    expect(
+      respostaAdesaoSchema.parse(await adesao.json()).resumo
+        .afiliados_nao_vinculados,
+    ).toBeGreaterThanOrEqual(1);
   });
 });
 

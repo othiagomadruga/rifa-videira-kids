@@ -9,18 +9,13 @@
  * /api/admin, depois do middleware da coordenação: `app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao)`.
  */
 import { zValidator } from "@hono/zod-validator";
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
-import {
-  ROTAS,
-  STATUS_HTTP_DO_ERRO,
-  criarErroApi,
-  detalhesDeValidacao,
-  type CodigoErro,
-} from "../../shared/contracts";
+import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
 import { listarAfiliados, obterAdesao, salvarAfiliado } from "../db/adesao";
+import { responderErro } from "../lib/respostas-erro";
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
@@ -35,18 +30,6 @@ function local<T extends `${typeof PREFIXO_AFILIADOS_ADESAO}/${string}`>(
   caminho: T,
 ): CaminhoLocal<T> {
   return caminho.slice(PREFIXO_AFILIADOS_ADESAO.length) as CaminhoLocal<T>;
-}
-
-function responderErro(
-  c: Context,
-  codigo: CodigoErro,
-  mensagem: string,
-  detalhes?: unknown,
-) {
-  return c.json(
-    criarErroApi(codigo, mensagem, detalhes),
-    STATUS_HTTP_DO_ERRO[codigo],
-  );
 }
 
 const MENSAGEM_DE_INVALIDO = {

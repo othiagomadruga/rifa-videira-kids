@@ -63,7 +63,7 @@ Toda resposta que não é 2xx tem este corpo:
 | Código | HTTP | Quando |
 |---|---|---|
 | `requisicao_invalida` | 400 | corpo, consulta ou parâmetros fora do schema (`detalhes` = problemas) |
-| `json_invalido` | 400 | corpo não é JSON (em `PUT /api/admin/campanha`, também sem `Content-Type` JSON) |
+| `json_invalido` | 400 | corpo não é JSON (em `PUT /api/admin/campanha` e `PUT /api/admin/afiliados/:affiliateId`, também sem `Content-Type` JSON) |
 | `payload_invalido` | 400 | webhook sem o essencial: `event`, `id`, `slug`, `numbers_count` ou `total` (ausente, inválido ou acima do limite) |
 | `csv_invalido` | 400 | CSV sem cabeçalho, sem coluna obrigatória ou acima do limite (`detalhes`: `detalhesCsvInvalidoSchema`) |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
@@ -79,7 +79,7 @@ Toda resposta que não é 2xx tem este corpo:
 
 O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use `criarErroApi()`; para converter um erro do zod em `detalhes`, use `detalhesDeValidacao()`.
 
-No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, o 404 de rota inexistente (`nao_encontrado`) e o 500 do `onError` (`erro_interno`).
+No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, campanha, afiliados e adesão, o 404 de rota inexistente (`nao_encontrado`) e o 500 do `onError` (`erro_interno`).
 
 ---
 
@@ -272,6 +272,7 @@ Rede Adulta Ficticia,adultos,,Discipulador Ficticio B,Célula Ficticia 03,15,Lid
   - `?vinculado=true`: só os ligados a uma célula;
   - `?vinculado=false`: a fila de órfãos;
   - sem o parâmetro: todos.
+- **Ordem**: os não vinculados primeiro; em cada grupo, o mais recente no topo (`criado_em` decrescente; no empate, o `affiliate_id` maior).
 - **200** (`respostaListaAfiliadosSchema`):
 
 ```json
@@ -298,8 +299,9 @@ Vincula ou desvincula uma célula. Se o afiliado ainda não existe, ele é **cri
   - `celula_id: null` desvincula.
   - Sem `rotulo`, o rótulo atual é mantido; `rotulo: null` apaga.
 - **200**: o afiliado no mesmo formato de um item da lista.
-- **400** `referencia_invalida`: a célula não existe.
-- Efeito: `vinculado_em` = agora (ou null ao desvincular). Todas as vendas do afiliado passam para a célula **na hora** (D7).
+- **400** `referencia_invalida`: a célula não existe; nada é gravado (nem o pré-cadastro). `detalhes` aponta o campo, como na validação: `[{ "caminho": ["celula_id"], "codigo": "referencia_invalida", "mensagem": "A célula 999 não existe" }]`.
+- **400** `json_invalido`: corpo malformado, vazio ou sem `Content-Type: application/json`. **400** `requisicao_invalida`: `:affiliateId` não é inteiro positivo ou o corpo está fora do schema.
+- Efeito (num comando só, atômico): `vinculado_em` = agora ao vincular ou trocar de célula; null ao desvincular; **mantido** se a célula é a mesma de antes (ex.: só o `rotulo` mudou). `origem` e `criado_em` nunca mudam. Todas as vendas do afiliado passam para a célula **na hora** (D7): a view `vendas_aprovadas` resolve a célula na leitura, sem alterar os pedidos.
 
 ### `GET /api/admin/adesao` (`coordenacao`)
 
@@ -320,6 +322,7 @@ Painel de "quem falta": uma linha por célula.
 }
 ```
 
+- `itens` em ordem do nome da célula em português (sem diferenciar acentos e maiúsculas; "Célula 2" antes de "Célula 10").
 - `vinculada`: a célula tem ao menos um afiliado.
 - `primeira_venda_em`: o primeiro pedido aprovado de qualquer afiliado da célula.
 - `lider_telefone` serve para a coordenação cobrar quem falta.

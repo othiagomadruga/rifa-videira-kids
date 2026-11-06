@@ -5,6 +5,10 @@ import { cabecalhosSeguranca } from "./middleware/cabecalhos-seguranca";
 import { exigirSessao } from "./middleware/sessao";
 import { sessao } from "./routes/acesso";
 import { adminUsuarios } from "./routes/admin-usuarios";
+import {
+  PREFIXO_AFILIADOS_ADESAO,
+  afiliadosAdesao,
+} from "./routes/afiliados-adesao";
 import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
@@ -46,6 +50,8 @@ app.route("/", webhookRifei);
 app.route(PREFIXO_HIERARQUIA, hierarquia);
 // Campanha (RIFA-004): GET/PUT da configuração sob /api/admin, protegidos pelo passo 4.
 app.route(PREFIXO_CAMPANHA, campanha);
+// Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4).
+app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
 
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);
