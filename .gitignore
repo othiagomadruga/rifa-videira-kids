@@ -1,0 +1,24 @@
+# dependências e builds
+node_modules/
+dist/
+build/
+.next/
+.output/
+.wrangler/
+.vercel/
+coverage/
+
+# segredos: nunca versionar (use .env.example)
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+
+# sistema/editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
