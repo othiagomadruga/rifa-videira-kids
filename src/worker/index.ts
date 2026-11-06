@@ -5,6 +5,7 @@ import { cabecalhosSeguranca } from "./middleware/cabecalhos-seguranca";
 import { exigirSessao } from "./middleware/sessao";
 import { sessao } from "./routes/acesso";
 import { adminUsuarios } from "./routes/admin-usuarios";
+import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
 import { webhookRifei } from "./routes/webhook-rifei";
@@ -43,6 +44,8 @@ app.route("/api/admin", adminUsuarios);
 app.route("/", webhookRifei);
 // Hierarquia (RIFA-005): CRUD e importação sob /api/admin, protegidos pelo passo 4.
 app.route(PREFIXO_HIERARQUIA, hierarquia);
+// Campanha (RIFA-004): GET/PUT da configuração sob /api/admin, protegidos pelo passo 4.
+app.route(PREFIXO_CAMPANHA, campanha);
 
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);
