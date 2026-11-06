@@ -412,7 +412,8 @@ describe("CA2: importação da hierarquia", () => {
           {
             linha: 5,
             coluna: null,
-            mensagem: 'A célula "Célula 1" já aparece na linha 2',
+            mensagem:
+              'A célula "Célula 1" já aparece na linha 2 com dados diferentes (discipulador, lider_nome): deixe uma linha só ou, se forem células diferentes, diferencie os nomes',
           },
           {
             linha: 7,
@@ -424,6 +425,65 @@ describe("CA2: importação da hierarquia", () => {
       }),
     );
     expect(await listarRedes()).toEqual([]);
+  });
+
+  it("linha de célula repetida com os mesmos dados é tolerada e conta uma vez; com dados diferentes é erro", async () => {
+    const cabecalho =
+      "rede;divisao;rede_responsavel;discipulador;celula;qtd_pessoas;lider_nome;lider_email;lider_telefone";
+    const celula01 =
+      "Rede A;jovens;Pastor Um;Discipulador A;Célula 01;12;Líder 01;lider01@example.com;(91) 90000-0001";
+    const celula02 = "Rede A;jovens;;Discipulador A;Célula 02;9;Líder 02;;";
+    const repetidas = [
+      cabecalho,
+      celula01,
+      celula02,
+      // A linha 2 de novo, só com espaços nas pontas e maiúsculas diferentes.
+      " REDE A ;Jovens;PASTOR UM;discipulador a; CÉLULA 01 ; 12 ;LÍDER 01;Lider01@Example.com;(91) 90000-0001",
+      celula02,
+    ].join("\r\n");
+
+    expect(await importarComSucesso(repetidas)).toEqual(
+      relatorio({
+        total_linhas: 4,
+        criados: { redes: 1, discipuladores: 1, celulas: 2 },
+      }),
+    );
+    // Vale a grafia da primeira linha de cada célula.
+    expect(
+      (await listarCelulas()).map((c) => [
+        c.nome,
+        c.qtd_pessoas,
+        c.lider_nome,
+        c.lider_email,
+      ]),
+    ).toEqual([
+      ["Célula 01", 12, "Líder 01", "lider01@example.com"],
+      ["Célula 02", 9, "Líder 02", null],
+    ]);
+
+    // Repetida com algum dado diferente: erro na linha repetida, citando as colunas, e nada é gravado.
+    await limparHierarquia();
+    const divergente = [
+      cabecalho,
+      celula01,
+      "Rede A;jovens;Pastor Um;Discipulador A;célula 01;13;Líder 01;;(91) 90000-0001",
+    ].join("\r\n");
+    expect(await importarComSucesso(divergente)).toEqual(
+      relatorio({
+        aplicado: false,
+        total_linhas: 2,
+        criados: { redes: 1, discipuladores: 1, celulas: 1 },
+        erros: [
+          {
+            linha: 3,
+            coluna: null,
+            mensagem:
+              'A célula "Célula 01" já aparece na linha 2 com dados diferentes (qtd_pessoas, lider_email): deixe uma linha só ou, se forem células diferentes, diferencie os nomes',
+          },
+        ],
+      }),
+    );
+    expect(await listarCelulas()).toEqual([]);
   });
 
   it("é atômico também no banco: se a gravação falha no meio, nada do arquivo fica", async () => {

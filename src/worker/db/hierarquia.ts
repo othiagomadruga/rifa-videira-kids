@@ -18,6 +18,7 @@ import {
   linhaCsvHierarquiaSchema,
   type Celula,
   type CodigoErro,
+  type ColunaCsvHierarquia,
   type DetalheValidacao,
   type Discipulador,
   type Divisao,
@@ -622,8 +623,24 @@ function errosDeValidacao(
 }
 
 /**
+ * Colunas em que duas linhas do arquivo diferem, na comparação da importação: textos pela chave de nome
+ * (espaços das pontas e maiúsculas não contam); números e vazios como vieram do schema.
+ */
+function colunasDiferentes(
+  a: LinhaCsvHierarquia,
+  b: LinhaCsvHierarquia,
+): ColunaCsvHierarquia[] {
+  const normalizar = (valor: unknown) =>
+    typeof valor === "string" ? chaveDeNome(valor) : valor;
+  return COLUNAS_CSV_HIERARQUIA.filter(
+    (coluna) => normalizar(a[coluna]) !== normalizar(b[coluna]),
+  );
+}
+
+/**
  * Confere a coerência do arquivo e monta as entidades. Uma linha que contradiz outra anterior (rede com
- * outra divisão ou outro responsável, discipulador em outra rede, célula repetida) vira erro e fica de fora.
+ * outra divisão ou outro responsável, discipulador em outra rede, célula repetida com dados diferentes)
+ * vira erro e fica de fora. A célula repetida com os mesmos dados é tolerada: a linha já foi lida.
  */
 function lerEntidades(linhas: LinhaValida[]) {
   const redes = new Map<string, RedeDoArquivo>();
@@ -639,6 +656,9 @@ function lerEntidades(linhas: LinhaValida[]) {
     const discipulador = discipuladores.get(chaveDiscipulador);
     const celula = celulas.get(chaveCelula);
     const responsavel = dados.rede_responsavel;
+    const diferencas = celula ? colunasDiferentes(celula.dados, dados) : [];
+    // Linha repetida com os mesmos dados (ex.: colada duas vezes): não é erro e a célula conta uma vez.
+    if (celula && diferencas.length === 0) continue;
 
     const conflitos: ErroLinha[] = [];
     if (rede && rede.divisao !== dados.divisao)
@@ -668,7 +688,7 @@ function lerEntidades(linhas: LinhaValida[]) {
       conflitos.push({
         linha,
         coluna: null,
-        mensagem: `A célula "${celula.dados.celula}" já aparece na linha ${celula.linha}`,
+        mensagem: `A célula "${celula.dados.celula}" já aparece na linha ${celula.linha} com dados diferentes (${diferencas.join(", ")}): deixe uma linha só ou, se forem células diferentes, diferencie os nomes`,
       });
     if (conflitos.length > 0) {
       erros.push(...conflitos);

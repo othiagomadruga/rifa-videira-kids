@@ -33,7 +33,7 @@ Regras do arquivo:
 - **O arquivo precisa ser coerente**:
   - a mesma rede sempre com a mesma divisão (e, quando preenchido, com o mesmo responsável);
   - o mesmo discipulador sempre na mesma rede. Se forem duas pessoas com o mesmo nome, diferencie (ex.: "João Silva" e "João Souza");
-  - cada célula em uma linha só.
+  - cada célula em uma linha só. Uma linha repetida com os **mesmos dados** em todas as colunas (por exemplo, colada duas vezes) não é erro: ela é ignorada e a célula conta uma vez. Aqui também espaços nas pontas e maiúsculas não contam como diferença. Se a linha repetida tiver **algum dado diferente**, é erro.
 - Linhas em branco são ignoradas.
 - No máximo **2000 linhas** de dados e 1 MB por arquivo.
 
@@ -88,7 +88,7 @@ Os erros de linha trazem o número da linha na planilha (o cabeçalho é a linha
 | A rede "X" já aparece na linha N com a divisão "jovens" | a mesma rede está com divisões diferentes: escolha uma |
 | A rede "X" já aparece na linha N com o responsável "Y" | a mesma rede está com responsáveis diferentes: deixe um só (ou preencha só uma linha) |
 | O discipulador "X" já aparece na linha N na rede "Y" | o discipulador está em duas redes; se forem pessoas diferentes, diferencie os nomes |
-| A célula "X" já aparece na linha N | linha repetida, ou duas células com o mesmo nome: apague a repetida ou diferencie os nomes |
+| A célula "X" já aparece na linha N com dados diferentes (colunas) | a mesma célula está em duas linhas que diferem nas colunas citadas: deixe uma linha só, com os dados certos, ou, se forem células diferentes, diferencie os nomes |
 
 Alguns problemas impedem a leitura do arquivo inteiro (resposta `csv_invalido`, sem relatório por linha):
 
