@@ -15,11 +15,11 @@ import {
   PAPEIS,
   VALIDADE_SESSAO_DIAS,
   corpoCriarSessaoSchema,
-  criarErroApi,
   type RespostaSessao,
 } from "../../shared/contracts";
 import { apagarSessao, buscarLinkValido, criarSessao } from "../db/acessos";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
+import { responderErro } from "../lib/respostas-erro";
 import {
   apagarCookieSessao,
   exigirMesmaOrigem,
@@ -35,12 +35,10 @@ const DIA_MS = 24 * 60 * 60 * 1000;
 export const sessao = new Hono<AmbienteSessao>();
 
 function respostaLinkInvalido(c: Context) {
-  return c.json(
-    criarErroApi(
-      "nao_autenticado",
-      "Link de acesso inválido, expirado ou revogado",
-    ),
-    401,
+  return responderErro(
+    c,
+    "nao_autenticado",
+    "Link de acesso inválido, expirado ou revogado",
   );
 }
 

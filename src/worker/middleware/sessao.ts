@@ -11,12 +11,12 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import {
   NOME_COOKIE_SESSAO,
-  criarErroApi,
   type Papel,
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { buscarUsuarioDaSessao } from "../db/acessos";
 import { FORMATO_SEGREDO, sha256Hex } from "../lib/cripto";
+import { responderErro } from "../lib/respostas-erro";
 
 /** `__Host-sessao` (contrato): o navegador só aceita esse nome com Secure, Path=/ e sem Domain. */
 export const COOKIE_SESSAO = NOME_COOKIE_SESSAO;
@@ -79,9 +79,10 @@ export function requisicaoDaMesmaOrigem(c: Context): boolean {
 }
 
 function respostaOrigemProibida(c: Context) {
-  return c.json(
-    criarErroApi("proibido", "Requisição de outra origem não é aceita"),
-    403,
+  return responderErro(
+    c,
+    "proibido",
+    "Requisição de outra origem não é aceita",
   );
 }
 
@@ -117,12 +118,10 @@ export function exigirSessao(papeis: readonly Papel[]) {
             );
       if (encontrado === null) {
         if (getCookie(c, COOKIE_SESSAO) !== undefined) apagarCookieSessao(c);
-        return c.json(
-          criarErroApi(
-            "nao_autenticado",
-            "Sessão ausente ou expirada: abra o seu link de acesso",
-          ),
-          401,
+        return responderErro(
+          c,
+          "nao_autenticado",
+          "Sessão ausente ou expirada: abra o seu link de acesso",
         );
       }
       usuario = encontrado;
@@ -130,10 +129,7 @@ export function exigirSessao(papeis: readonly Papel[]) {
     }
 
     if (!papeis.includes(usuario.papel)) {
-      return c.json(
-        criarErroApi("proibido", "Seu acesso não permite esta ação"),
-        403,
-      );
+      return responderErro(c, "proibido", "Seu acesso não permite esta ação");
     }
     await next();
     c.header("Cache-Control", "no-store");

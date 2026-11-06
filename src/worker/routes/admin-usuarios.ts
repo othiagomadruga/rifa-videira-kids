@@ -16,7 +16,6 @@ import {
   VALIDADE_LINK_DIAS,
   corpoAtualizarUsuarioSchema,
   corpoCriarUsuarioSchema,
-  criarErroApi,
   parametroIdSchema,
   type LinkAcessoCriado,
   type Usuario,
@@ -31,6 +30,7 @@ import {
   type NovoLink,
 } from "../db/acessos";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
+import { responderErro } from "../lib/respostas-erro";
 import { exigirSessao, type AmbienteSessao } from "../middleware/sessao";
 import { validarJson, validarParametros } from "../middleware/validacao";
 
@@ -77,12 +77,12 @@ function linkCriado(
 }
 
 function respostaUsuarioNaoEncontrado(c: Context) {
-  return c.json(criarErroApi("nao_encontrado", "Usuário não encontrado"), 404);
+  return responderErro(c, "nao_encontrado", "Usuário não encontrado");
 }
 
 /** 409 `em_uso`: a desativação deixaria alguém (ou a equipe toda) sem acesso de admin. */
 function respostaDesativacaoRecusada(c: Context, mensagem: string) {
-  return c.json(criarErroApi("em_uso", mensagem), 409);
+  return responderErro(c, "em_uso", mensagem);
 }
 
 adminUsuarios.post(
@@ -164,14 +164,12 @@ adminUsuarios.delete(
     const { id } = c.req.valid("param");
     const resultado = await revogarLink(c.env.DB, id, new Date().toISOString());
     if (resultado === "nao_encontrado")
-      return c.json(criarErroApi("nao_encontrado", "Link não encontrado"), 404);
+      return responderErro(c, "nao_encontrado", "Link não encontrado");
     if (resultado === "ultimo_link_admin")
-      return c.json(
-        criarErroApi(
-          "em_uso",
-          "Este é o último link válido de um admin ativo: gere um link novo para um admin antes de revogar este",
-        ),
-        409,
+      return responderErro(
+        c,
+        "em_uso",
+        "Este é o último link válido de um admin ativo: gere um link novo para um admin antes de revogar este",
       );
     return c.body(null, 204);
   },

@@ -10,7 +10,8 @@ import { zValidator } from "@hono/zod-validator";
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
-import { criarErroApi, detalhesDeValidacao } from "../../shared/contracts";
+import { detalhesDeValidacao } from "../../shared/contracts";
+import { responderErro } from "../lib/respostas-erro";
 
 /** Corpo JSON validado: no handler, `c.req.valid("json")` já vem tipado e com os padrões do schema. */
 export function validarJson<T extends z.ZodType>(schema: T) {
@@ -23,23 +24,19 @@ export function validarJson<T extends z.ZodType>(schema: T) {
     try {
       corpo = await c.req.json();
     } catch {
-      return c.json(
-        criarErroApi(
-          "json_invalido",
-          "O corpo da requisição não é um JSON válido",
-        ),
-        400,
+      return responderErro(
+        c,
+        "json_invalido",
+        "O corpo da requisição não é um JSON válido",
       );
     }
     const resultado = await schema.safeParseAsync(corpo);
     if (!resultado.success) {
-      return c.json(
-        criarErroApi(
-          "requisicao_invalida",
-          "Dados inválidos",
-          detalhesDeValidacao(resultado.error),
-        ),
-        400,
+      return responderErro(
+        c,
+        "requisicao_invalida",
+        "Dados inválidos",
+        detalhesDeValidacao(resultado.error),
       );
     }
     c.req.addValidatedData("json", resultado.data as object);
@@ -52,13 +49,11 @@ export function validarParametros<T extends z.ZodType>(schema: T) {
   return zValidator("param", schema, (resultado, c) =>
     resultado.success
       ? undefined
-      : c.json(
-          criarErroApi(
-            "requisicao_invalida",
-            "Parâmetros inválidos",
-            detalhesDeValidacao(resultado.error),
-          ),
-          400,
+      : responderErro(
+          c,
+          "requisicao_invalida",
+          "Parâmetros inválidos",
+          detalhesDeValidacao(resultado.error),
         ),
   );
 }

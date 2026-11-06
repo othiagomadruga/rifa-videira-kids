@@ -10,13 +10,7 @@ import { Hono, type Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
-import {
-  ROTAS,
-  STATUS_HTTP_DO_ERRO,
-  criarErroApi,
-  detalhesDeValidacao,
-  type CodigoErro,
-} from "../../shared/contracts";
+import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
 import {
   atualizarCelula,
   atualizarDiscipulador,
@@ -36,6 +30,7 @@ import {
   removerRede,
   type Resultado,
 } from "../db/hierarquia";
+import { responderErro } from "../lib/respostas-erro";
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
@@ -50,18 +45,6 @@ function local<T extends `${typeof PREFIXO_HIERARQUIA}/${string}`>(
   caminho: T,
 ): CaminhoLocal<T> {
   return caminho.slice(PREFIXO_HIERARQUIA.length) as CaminhoLocal<T>;
-}
-
-function responderErro(
-  c: Context,
-  codigo: CodigoErro,
-  mensagem: string,
-  detalhes?: unknown,
-) {
-  return c.json(
-    criarErroApi(codigo, mensagem, detalhes),
-    STATUS_HTTP_DO_ERRO[codigo],
-  );
 }
 
 function responder<T>(

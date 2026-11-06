@@ -8,6 +8,7 @@ O contrato executável está em `src/shared/contracts/`:
 | `dominio.ts` | entidades e configuração |
 | `rifei.ts` | payload do webhook e redação |
 | `erros.ts` | formato de erro e códigos |
+| `acesso.ts` | acesso da equipe: papéis, sessão, usuários e links, e o catálogo `ROTAS_ACESSO` ([acesso.md](acesso.md)) |
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
@@ -33,11 +34,20 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 
 | Grupo | Rotas | Mecanismo | Falhas |
 |---|---|---|---|
-| `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>`, comparado em tempo constante (D6) | `401 nao_autenticado`; segredo não configurado: `503 nao_configurado` |
-| `coordenacao` | `/api/admin/*`, `/api/painel/*` | equipe da campanha; o mecanismo será definido na RIFA-007 | `401 nao_autenticado`, `403 proibido` |
-| `aberto` | `/api/health`, `/api/publico/*` | nenhum | **`/api/publico/*` nunca devolve valores financeiros** |
+| `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>`, comparado em tempo constante (D6). Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; segredo não configurado: `503 nao_configurado` |
+| `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
+| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores financeiros** |
 
 Os schemas de `/api/publico/*` são **estritos**: um campo a mais, como `total_centavos`, invalida a resposta. Um teste confere que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas.
+
+**Coordenação** (RIFA-007; contrato em `acesso.ts`, detalhes em [acesso.md](acesso.md)):
+
+- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
+- `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403).
+- **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
+- **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
+- As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e `Content-Security-Policy: frame-ancestors 'none'`.
 
 ## Erros
 
@@ -58,10 +68,10 @@ Toda resposta que não é 2xx tem este corpo:
 | `csv_invalido` | 400 | CSV sem cabeçalho, sem coluna obrigatória ou acima do limite (`detalhes`: `detalhesCsvInvalidoSchema`) |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
 | `nao_autenticado` | 401 | sem credencial ou credencial inválida |
-| `proibido` | 403 | autenticado, sem permissão |
+| `proibido` | 403 | autenticado, sem permissão; ou escrita de outra origem (CSRF) |
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado |
-| `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados |
+| `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin |
 | `corpo_muito_grande` | 413 | corpo do webhook acima de 1 MiB (`LIMITE_CORPO_WEBHOOK_BYTES`) |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
 | `nao_configurado` | 503 | segredo do webhook ausente |
@@ -69,7 +79,7 @@ Toda resposta que não é 2xx tem este corpo:
 
 O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use `criarErroApi()`; para converter um erro do zod em `detalhes`, use `detalhesDeValidacao()`.
 
-> **Pendente na implementação:** no esqueleto (RIFA-001), o 404 de rota inexistente, o 500 do `onError` e o 503 do health ainda respondem `{ "ok": false, "erro": "..." }` (o health também manda `"db": "erro"`). Pelo contrato, os três passam ao formato único, com os códigos `nao_encontrado`, `erro_interno` e `banco_indisponivel`. O ajuste fica para a tarefa da API, junto com os testes do Worker que conferem esses corpos.
+No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, o 404 de rota inexistente (`nao_encontrado`) e o 500 do `onError` (`erro_interno`).
 
 ---
 
