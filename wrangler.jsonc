@@ -19,10 +19,9 @@
     {
       "binding": "DB",
       "database_name": "rifa-videira-kids",
-      // Placeholder: preencher quando a conta Cloudflare existir
-      // (`npx wrangler d1 create rifa-videira-kids` devolve o id real).
-      // Em desenvolvimento e nos testes o banco é local e este valor não importa.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Banco de produção na conta Cloudflare do Thiago (região ENAM), criado em 06/11/2026.
+      // Em desenvolvimento e nos testes o banco é local e este valor não é usado.
+      "database_id": "256a7113-3b0d-4ae9-af73-45c2d279a9c7",
       "migrations_dir": "migrations",
     },
   ],
