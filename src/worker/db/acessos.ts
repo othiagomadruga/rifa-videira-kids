@@ -45,6 +45,7 @@ export interface NovaSessao {
   idHash: string;
   linkId: number;
   criadoEm: string;
+  /** Validade pedida (login + VALIDADE_SESSAO_DIAS); a gravada é o menor entre esta e o fim do link. */
   expiraEm: string;
   /** Hash do cookie que o navegador já tinha: essa sessão antiga é encerrada no login. */
   idHashAnterior: string | null;
@@ -250,24 +251,47 @@ export async function buscarLinkValido(
   };
 }
 
+/** "ultimo_link_admin": revogar deixaria nenhum admin ativo com link válido (nada muda). */
+export type ResultadoRevogarLink =
+  "ok" | "nao_encontrado" | "ultimo_link_admin";
+
 /**
- * Revoga o link (mantém a data da primeira revogação) e apaga as sessões abertas por ele.
- * true se o link existe.
+ * Revoga o link (mantém a data da primeira revogação) e apaga as sessões abertas por ele. Recusa revogar um
+ * link válido de admin ativo se nenhum outro admin ativo tiver link válido: a equipe ficaria sem como entrar
+ * como admin quando as sessões acabassem. A condição fica no próprio UPDATE, como em definirAtivo: duas
+ * revogações ao mesmo tempo dos dois últimos links não passam juntas (a segunda já vê só um link).
  */
 export async function revogarLink(
   db: D1Database,
   linkId: number,
   agora: string,
-): Promise<boolean> {
-  const [revogacao] = await db.batch([
+): Promise<ResultadoRevogarLink> {
+  const [revogacao, , existente] = await db.batch([
     db
       .prepare(
-        "UPDATE links_acesso SET revogado_em = coalesce(revogado_em, ?2) WHERE id = ?1",
+        `UPDATE links_acesso SET revogado_em = coalesce(revogado_em, ?2)
+         WHERE id = ?1
+           AND NOT (revogado_em IS NULL AND expira_em > ?2
+                    AND usuario_id IN (SELECT id FROM usuarios WHERE papel = 'admin' AND ativo = 1)
+                    AND NOT EXISTS (
+                      SELECT 1 FROM links_acesso AS outro JOIN usuarios AS u ON u.id = outro.usuario_id
+                      WHERE outro.id <> ?1 AND outro.revogado_em IS NULL AND outro.expira_em > ?2
+                        AND u.papel = 'admin' AND u.ativo = 1))`,
       )
       .bind(linkId, agora),
-    db.prepare("DELETE FROM sessoes WHERE link_id = ?1").bind(linkId),
+    // Só se o link está revogado: recusada a revogação, as sessões abertas por ele continuam.
+    db
+      .prepare(
+        `DELETE FROM sessoes WHERE link_id = ?1
+           AND EXISTS (SELECT 1 FROM links_acesso WHERE id = ?1 AND revogado_em IS NOT NULL)`,
+      )
+      .bind(linkId),
+    db
+      .prepare("SELECT 1 AS existe FROM links_acesso WHERE id = ?1")
+      .bind(linkId),
   ]);
-  return revogacao.meta.changes > 0;
+  if (revogacao.meta.changes > 0) return "ok";
+  return existente.results.length > 0 ? "ultimo_link_admin" : "nao_encontrado";
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -275,20 +299,23 @@ export async function revogarLink(
 // ---------------------------------------------------------------------------------------------------
 
 /**
- * Abre a sessão se o link ainda vale (a condição é conferida de novo dentro da transação), marca o uso do
- * link e apaga as sessões vencidas e a sessão anterior deste navegador. false se o link deixou de valer.
+ * Abre a sessão se o link ainda vale (a condição é conferida de novo dentro da transação), com validade até o
+ * menor entre `expiraEm` e o fim do link: a sessão nunca dura mais que o link que a abriu. Marca o uso do
+ * link e apaga as sessões vencidas e a sessão anterior deste navegador. Devolve a validade gravada, ou null
+ * se o link deixou de valer.
  */
 export async function criarSessao(
   db: D1Database,
   sessao: NovaSessao,
-): Promise<boolean> {
-  const [criacao] = await db.batch([
+): Promise<string | null> {
+  const [criacao] = await db.batch<{ expira_em: string }>([
     db
       .prepare(
         `INSERT INTO sessoes (id_hash, usuario_id, link_id, criado_em, expira_em, ultimo_uso_em)
-         SELECT ?1, l.usuario_id, l.id, ?3, ?4, ?3
+         SELECT ?1, l.usuario_id, l.id, ?3, min(?4, l.expira_em), ?3
          FROM links_acesso AS l JOIN usuarios AS u ON u.id = l.usuario_id
-         WHERE l.id = ?2 AND l.revogado_em IS NULL AND l.expira_em > ?3 AND u.ativo = 1`,
+         WHERE l.id = ?2 AND l.revogado_em IS NULL AND l.expira_em > ?3 AND u.ativo = 1
+         RETURNING expira_em`,
       )
       .bind(sessao.idHash, sessao.linkId, sessao.criadoEm, sessao.expiraEm),
     db
@@ -301,7 +328,7 @@ export async function criarSessao(
       .prepare("DELETE FROM sessoes WHERE expira_em <= ?1 OR id_hash = ?2")
       .bind(sessao.criadoEm, sessao.idHashAnterior),
   ]);
-  return criacao.meta.changes === 1;
+  return criacao.results[0]?.expira_em ?? null;
 }
 
 /** Usuário da sessão, se ela vale: existe, não venceu e o usuário está ativo. */

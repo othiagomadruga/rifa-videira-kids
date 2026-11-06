@@ -358,6 +358,95 @@ describe("CA4: revogar link", () => {
   });
 });
 
+describe("CA4: o último link válido de admin não é revogado", () => {
+  it("revogar o único link válido de admin ativo: 409 em_uso e nada muda; com um link novo, a revogação passa", async () => {
+    const a = await sessaoDe(app, "admin");
+    // Durante o teste, A é o único admin ativo (os outros voltam no fim, com as sessões).
+    const { results: outros } = await env.DB.prepare(
+      "UPDATE usuarios SET ativo = 0 WHERE papel = 'admin' AND ativo = 1 AND id <> ?1 RETURNING id",
+    )
+      .bind(a.usuarioId)
+      .all<{ id: number }>();
+    try {
+      const recusada = await chamar(
+        app,
+        "DELETE",
+        `/api/admin/links/${a.linkId}`,
+        {
+          sessao: a.sessao,
+        },
+      );
+
+      expect(recusada.status).toBe(409);
+      const corpo = (await recusada.json()) as { erro: { mensagem: string } };
+      expect(corpo).toEqual(erro("em_uso"));
+      expect(corpo.erro.mensagem).toMatch(
+        /último link válido.*gere um link novo/,
+      );
+      // Nada mudou: o link ainda abre sessão e a sessão aberta por ele continua.
+      expect(await sessaoValida(a.sessao)).toBe(true);
+      expect(await statusDoLogin(a.token)).toBe(200);
+
+      // Com um link novo para A, o antigo pode ser revogado (e a sessão aberta por ele cai).
+      const novo = await chamar(
+        app,
+        "POST",
+        `/api/admin/usuarios/${a.usuarioId}/links`,
+        {
+          sessao: a.sessao,
+        },
+      );
+      const linkNovo = respostaCriarLinkSchema.parse(await novo.json()).link;
+      const revogada = await chamar(
+        app,
+        "DELETE",
+        `/api/admin/links/${a.linkId}`,
+        {
+          sessao: a.sessao,
+        },
+      );
+      expect(revogada.status).toBe(204);
+      expect(await sessaoValida(a.sessao)).toBe(false);
+
+      // Agora o link novo é o último: também fica protegido.
+      const sessaoNova = await entrar(app, tokenDaUrl(linkNovo.url));
+      const deNovo = await chamar(
+        app,
+        "DELETE",
+        `/api/admin/links/${linkNovo.id}`,
+        {
+          sessao: sessaoNova,
+        },
+      );
+      expect(deNovo.status).toBe(409);
+      expect(await sessaoValida(sessaoNova)).toBe(true);
+    } finally {
+      await env.DB.prepare(
+        "UPDATE usuarios SET ativo = 1 WHERE id IN (SELECT value FROM json_each(?1))",
+      )
+        .bind(JSON.stringify(outros.map((linha) => linha.id)))
+        .run();
+    }
+  });
+
+  it("com outro admin ativo com link válido, o link de um admin é revogado normalmente", async () => {
+    const outroAdmin = await sessaoDe(app, "admin");
+
+    const res = await chamar(
+      app,
+      "DELETE",
+      `/api/admin/links/${outroAdmin.linkId}`,
+      {
+        sessao: admin,
+      },
+    );
+
+    expect(res.status).toBe(204);
+    expect(await statusDoLogin(outroAdmin.token)).toBe(401);
+    expect(await sessaoValida(outroAdmin.sessao)).toBe(false);
+  });
+});
+
 describe("CA4: desativar usuário", () => {
   it("PATCH { ativo: false } derruba as sessões e o link para de funcionar; reativar devolve o acesso", async () => {
     const criado = await criarUsuario({

@@ -2,6 +2,7 @@
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { beforeAll, describe, expect, it } from "vitest";
+import { NOME_COOKIE_SESSAO } from "../../shared/contracts";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import { sessao as rotasSessao } from "../routes/acesso";
 import { adminUsuarios } from "../routes/admin-usuarios";
@@ -106,7 +107,7 @@ describe("CA3: papel", () => {
       "/api/admin/links/1",
       {
         method: "DELETE",
-        headers: { Cookie: `sessao=${sessao}`, Origin: ORIGEM },
+        headers: { Cookie: `${NOME_COOKIE_SESSAO}=${sessao}`, Origin: ORIGEM },
       },
       env,
     );

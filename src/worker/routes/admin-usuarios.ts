@@ -7,7 +7,8 @@
  * - PATCH /api/admin/usuarios/:id { ativo } → 200 usuário: desativar encerra as sessões dele; 409 `em_uso`
  *   ao desativar a si mesmo ou o último admin ativo (não há troca de papel, então não há como rebaixá-lo);
  * - POST /api/admin/usuarios/:id/links → 201 { link }: link novo (os anteriores continuam valendo);
- * - DELETE /api/admin/links/:id → 204: revoga o link e encerra as sessões abertas por ele.
+ * - DELETE /api/admin/links/:id → 204: revoga o link e encerra as sessões abertas por ele; 409 `em_uso` se
+ *   nenhum admin ativo ficaria com link válido (a equipe perderia o acesso de admin).
  */
 import { Hono, type Context } from "hono";
 import {
@@ -161,8 +162,17 @@ adminUsuarios.delete(
   validarParametros(parametroIdSchema),
   async (c) => {
     const { id } = c.req.valid("param");
-    return (await revogarLink(c.env.DB, id, new Date().toISOString()))
-      ? c.body(null, 204)
-      : c.json(criarErroApi("nao_encontrado", "Link não encontrado"), 404);
+    const resultado = await revogarLink(c.env.DB, id, new Date().toISOString());
+    if (resultado === "nao_encontrado")
+      return c.json(criarErroApi("nao_encontrado", "Link não encontrado"), 404);
+    if (resultado === "ultimo_link_admin")
+      return c.json(
+        criarErroApi(
+          "em_uso",
+          "Este é o último link válido de um admin ativo: gere um link novo para um admin antes de revogar este",
+        ),
+        409,
+      );
+    return c.body(null, 204);
   },
 );

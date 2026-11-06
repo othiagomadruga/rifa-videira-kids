@@ -4,8 +4,8 @@
  *
  * - Cada pessoa recebe um link `<origem>/acesso/<token>`. O site mostra uma confirmação e só o
  *   `POST /api/sessao` cria a sessão: o preview de link do WhatsApp abre a URL, mas não faz o POST.
- * - A sessão vai no cookie `sessao` (HttpOnly, Secure, SameSite=Lax). O site não lê o cookie: pergunta a
- *   `GET /api/sessao` quem está conectado.
+ * - A sessão vai no cookie `__Host-sessao` (HttpOnly, Secure, SameSite=Lax, Path=/, sem Domain). O site não
+ *   lê o cookie: pergunta a `GET /api/sessao` quem está conectado.
  * - O link (com o token) só aparece na resposta que o cria. Nenhuma outra resposta devolve token ou hash.
  * - Escritas (POST, PUT, PATCH, DELETE) só são aceitas da mesma origem do site (proteção contra CSRF).
  * - Erros: formato único de ./erros (401 `nao_autenticado`, 403 `proibido`, 404 `nao_encontrado`...).
@@ -34,9 +34,17 @@ export type Papel = z.infer<typeof papelSchema>;
 /**
  * Validade de um link novo e de uma sessão nova, em dias. 45 dias cobrem a campanha (vendas de 23/11 a meados de
  * dezembro de 2026): com 30, um link entregue antes do início venceria no meio das vendas.
+ * A sessão nunca dura mais que o link que a abriu: vale até o menor entre (login + 45 dias) e o fim do link.
  */
 export const VALIDADE_LINK_DIAS = 45;
 export const VALIDADE_SESSAO_DIAS = 45;
+
+/**
+ * Nome do cookie da sessão. Com o prefixo `__Host-`, o navegador só aceita o cookie com Secure, Path=/ e sem
+ * Domain, gravado pelo próprio host: outro site do mesmo domínio-pai (ex.: outro Worker em *.workers.dev) não
+ * consegue gravar um cookie com este nome por cima do nosso.
+ */
+export const NOME_COOKIE_SESSAO = "__Host-sessao";
 
 /** Caminho do link no site: `<origem>/acesso/<token>`. */
 export const PREFIXO_LINK_ACESSO = "/acesso/";
@@ -212,6 +220,10 @@ export const ROTAS_ACESSO = {
     parametros: parametroIdSchema,
     sucesso: { status: 201, corpo: respostaCriarLinkSchema },
   },
+  /**
+   * Revoga o link e encerra as sessões abertas por ele. 409 `em_uso` se a revogação deixaria nenhum admin
+   * ativo com link válido (gere outro link antes).
+   */
   revogarLink: {
     metodo: "DELETE",
     caminho: "/api/admin/links/:id",

@@ -221,6 +221,22 @@ describe("CA6: scripts/criar-acesso.mjs", () => {
       "origem com caminho",
       ["--nome", "Fulano", "--papel", "admin", "--origem", "https://x.org/a"],
     ],
+    [
+      "opção desconhecida com valor",
+      ["--nome", "Fulano", "--papel", "admin", "--senha=x"],
+    ],
+    [
+      "opção em maiúsculas",
+      ["--nome", "Fulano", "--papel", "admin", "--Remote"],
+    ],
+    [
+      "valor solto depois de uma flag",
+      ["--nome", "Fulano", "--papel", "admin", "--remote", "false"],
+    ],
+    [
+      "--local e --remote juntos",
+      ["--nome", "Fulano", "--papel", "admin", "--local", "--remote"],
+    ],
   ])("uso errado (%s) sai com código 2 e mostra o uso", async (_caso, argv) => {
     const execucao = await rodar(argv);
 
@@ -228,6 +244,34 @@ describe("CA6: scripts/criar-acesso.mjs", () => {
     expect(execucao.erros).toContain("Uso: npm run acesso:criar");
     expect(execucao.chamadas).toHaveLength(0);
   });
+
+  it.each([
+    "--remote=false",
+    "--remote=true",
+    "--remote=",
+    "--local=0",
+    "--help=1",
+  ])(
+    "flag booleana com valor (%s) é recusada: não liga o D1 remoto nem chama o wrangler",
+    async (flag) => {
+      const execucao = await rodar([
+        "--nome",
+        "Fulano",
+        "--papel",
+        "admin",
+        "--origem",
+        "https://rifa.example.org",
+        flag,
+      ]);
+
+      expect(execucao.codigo).toBe(2);
+      expect(execucao.erros).toContain(
+        `${flag.split("=")[0]} não aceita valor`,
+      );
+      expect(execucao.chamadas).toHaveLength(0);
+      expect(execucao.saida).toBe("");
+    },
+  );
 
   it("falha do wrangler (ex.: migrações não aplicadas) sai com código 1, dá a dica e não imprime link", async () => {
     const execucao = await rodar(

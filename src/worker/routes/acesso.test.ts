@@ -1,7 +1,11 @@
 // RIFA-007: POST /api/sessao (link → sessão), GET /api/sessao e POST /api/sessao/sair, no workerd com D1.
 import { env } from "cloudflare:workers";
-import { beforeAll, describe, expect, it } from "vitest";
-import { respostaSessaoSchema } from "../../shared/contracts";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  NOME_COOKIE_SESSAO,
+  VALIDADE_SESSAO_DIAS,
+  respostaSessaoSchema,
+} from "../../shared/contracts";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import {
   chamar,
@@ -19,6 +23,25 @@ beforeAll(() => {
 });
 
 const NO_PASSADO = "2026-01-01T00:00:00.000Z";
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+async function sessaoGravada(idSessao: string) {
+  return env.DB.prepare(
+    "SELECT criado_em, expira_em FROM sessoes WHERE id_hash = ?",
+  )
+    .bind(await sha256Hex(idSessao))
+    .first<{ criado_em: string; expira_em: string }>();
+}
+
+async function expiraEmDoLink(linkId: number): Promise<string> {
+  const linha = await env.DB.prepare(
+    "SELECT expira_em FROM links_acesso WHERE id = ?",
+  )
+    .bind(linkId)
+    .first<{ expira_em: string }>();
+  return linha!.expira_em;
+}
 
 async function sessoesNoBanco(idSessao: string): Promise<number> {
   const linha = await env.DB.prepare(
@@ -45,28 +68,47 @@ describe("CA1: link → sessão → cookie", () => {
     expect(respostaSessaoSchema.safeParse(corpo).success).toBe(true);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
 
+    // Cookie __Host-: Secure, Path=/ e sem Domain (o navegador recusa o prefixo sem isso).
+    expect(res.headers.get("Set-Cookie")).toMatch(/^__Host-sessao=/);
+    expect(res.headers.get("Set-Cookie")).not.toMatch(/domain=/i);
     const cookie = cookieDaResposta(res);
     expect(cookie?.valor).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // O id da sessão não é o token do link.
+    expect(cookie?.valor).not.toBe(acesso.token);
+    // O Max-Age é o que falta para a sessão vencer no servidor (link recém-criado: vence com o link).
+    const gravada = await sessaoGravada(cookie!.valor);
+    const maxAge = Math.floor(
+      (Date.parse(gravada!.expira_em) - Date.parse(gravada!.criado_em)) / 1000,
+    );
     expect(cookie?.atributos.sort()).toEqual(
       [
         "HttpOnly",
-        "Max-Age=3888000", // 45 dias
+        `Max-Age=${maxAge}`,
         "Path=/",
         "SameSite=Lax",
         "Secure",
       ].sort(),
     );
-    // O id da sessão não é o token do link.
-    expect(cookie?.valor).not.toBe(acesso.token);
-    // A validade que vale é a do servidor: a mesma do cookie.
-    const gravada = await env.DB.prepare(
-      "SELECT criado_em, expira_em FROM sessoes WHERE id_hash = ?",
-    )
-      .bind(await sha256Hex(cookie!.valor))
-      .first<{ criado_em: string; expira_em: string }>();
-    expect(
-      Date.parse(gravada!.expira_em) - Date.parse(gravada!.criado_em),
-    ).toBe(45 * 24 * 60 * 60 * 1000);
+    expect(gravada!.expira_em).toBe(await expiraEmDoLink(acesso.linkId));
+    expect(maxAge).toBeLessThanOrEqual(VALIDADE_SESSAO_DIAS * 24 * 60 * 60);
+    expect(maxAge).toBeGreaterThan((VALIDADE_SESSAO_DIAS - 1) * 24 * 60 * 60);
+  });
+
+  it("o cookie sem o prefixo __Host- não vale, e um cookie plantado com outro nome não atrapalha", async () => {
+    const acesso = await criarAcessoNoBanco("coordenacao");
+    const sessao = await entrar(app, acesso.token);
+
+    const semPrefixo = await chamar(app, "GET", "/api/sessao", {
+      cabecalhos: { Cookie: `sessao=${sessao}` },
+    });
+    const comPlantado = await chamar(app, "GET", "/api/sessao", {
+      cabecalhos: {
+        Cookie: `sessao=${gerarSegredo()}; ${NOME_COOKIE_SESSAO}=${sessao}; tema=escuro`,
+      },
+    });
+
+    expect(semPrefixo.status).toBe(401);
+    expect(comPlantado.status).toBe(200);
   });
 
   it("GET /api/sessao com o cookie devolve o usuário da sessão", async () => {
@@ -108,6 +150,78 @@ describe("CA1: link → sessão → cookie", () => {
       .first<{ ultimo_uso_em: string | null }>();
     expect(link?.ultimo_uso_em).not.toBeNull();
     expect(link!.ultimo_uso_em! >= antes).toBe(true);
+  });
+});
+
+describe("a sessão não dura mais que o link que a abriu", () => {
+  it("link que vence em 2 dias: a sessão e o cookie vencem junto com o link", async () => {
+    const acesso = await criarAcessoNoBanco("coordenacao");
+    const fimDoLink = new Date(Date.now() + 2 * DIA_MS).toISOString();
+    await env.DB.prepare("UPDATE links_acesso SET expira_em = ? WHERE id = ?")
+      .bind(fimDoLink, acesso.linkId)
+      .run();
+
+    const res = await chamar(app, "POST", "/api/sessao", {
+      corpo: { token: acesso.token },
+    });
+
+    expect(res.status).toBe(200);
+    const cookie = cookieDaResposta(res)!;
+    const gravada = await sessaoGravada(cookie.valor);
+    expect(gravada?.expira_em).toBe(fimDoLink);
+    const maxAge = Number(
+      cookie.atributos
+        .find((atributo) => atributo.startsWith("Max-Age="))!
+        .slice(8),
+    );
+    expect(maxAge).toBe(
+      Math.floor(
+        (Date.parse(fimDoLink) - Date.parse(gravada!.criado_em)) / 1000,
+      ),
+    );
+    expect(maxAge).toBeLessThanOrEqual(2 * 24 * 60 * 60);
+  });
+
+  it("quando o link vence, a sessão aberta por ele para de valer (relógio adiantado)", async () => {
+    const acesso = await criarAcessoNoBanco("admin");
+    const fimDoLink = new Date(Date.now() + DIA_MS).toISOString();
+    await env.DB.prepare("UPDATE links_acesso SET expira_em = ? WHERE id = ?")
+      .bind(fimDoLink, acesso.linkId)
+      .run();
+    const sessao = await entrar(app, acesso.token);
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.parse(fimDoLink) - 60_000);
+      expect((await chamar(app, "GET", "/api/sessao", { sessao })).status).toBe(
+        200,
+      );
+      vi.setSystemTime(Date.parse(fimDoLink) + 1);
+      expect((await chamar(app, "GET", "/api/sessao", { sessao })).status).toBe(
+        401,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("link antigo (aberto há 40 dias) só dá sessão até o fim dele, não por mais 45 dias", async () => {
+    const acesso = await criarAcessoNoBanco("coordenacao");
+    const criado = new Date(Date.now() - 40 * DIA_MS);
+    const fimDoLink = new Date(criado.getTime() + 45 * DIA_MS).toISOString();
+    await env.DB.prepare(
+      "UPDATE links_acesso SET criado_em = ?, expira_em = ? WHERE id = ?",
+    )
+      .bind(criado.toISOString(), fimDoLink, acesso.linkId)
+      .run();
+
+    const sessao = await entrar(app, acesso.token);
+
+    const gravada = await sessaoGravada(sessao);
+    expect(gravada?.expira_em).toBe(fimDoLink);
+    expect(
+      Date.parse(gravada!.expira_em) - Date.parse(gravada!.criado_em),
+    ).toBeLessThanOrEqual(5 * DIA_MS);
   });
 });
 

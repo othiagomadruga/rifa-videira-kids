@@ -1,8 +1,9 @@
 /**
  * Sessão da equipe (RIFA-007), montada em /api/sessao. Documentação: docs/acesso.md.
  *
- * - POST /api/sessao { token }: o link pessoal vira uma sessão (cookie `sessao`). Link inválido → 401.
- *   O mesmo link pode abrir outras sessões (outro aparelho, ou de novo) até expirar ou ser revogado.
+ * - POST /api/sessao { token }: o link pessoal vira uma sessão (cookie `__Host-sessao`). Link inválido → 401.
+ *   O mesmo link pode abrir outras sessões (outro aparelho, ou de novo) até expirar ou ser revogado, e
+ *   nenhuma sessão dura mais que o link que a abriu.
  * - GET /api/sessao: quem está conectado (401 sem sessão válida).
  * - POST /api/sessao/sair: encerra a sessão deste navegador e expira o cookie (204, mesmo sem sessão).
  *
@@ -62,7 +63,8 @@ sessao.post(
 
     const idSessao = gerarSegredo();
     const anterior = lerCookieSessao(c);
-    const criada = await criarSessao(c.env.DB, {
+    // Até o menor entre login + VALIDADE_SESSAO_DIAS e o fim do link (o banco aplica e devolve).
+    const expiraEm = await criarSessao(c.env.DB, {
       idHash: await sha256Hex(idSessao),
       linkId: link.linkId,
       criadoEm: agora.toISOString(),
@@ -71,9 +73,9 @@ sessao.post(
       ).toISOString(),
       idHashAnterior: anterior === null ? null : await sha256Hex(anterior),
     });
-    if (!criada) return respostaLinkInvalido(c);
+    if (expiraEm === null) return respostaLinkInvalido(c);
 
-    gravarCookieSessao(c, idSessao);
+    gravarCookieSessao(c, idSessao, expiraEm, agora);
     return c.json({ usuario: link.usuario } satisfies RespostaSessao, 200);
   },
 );

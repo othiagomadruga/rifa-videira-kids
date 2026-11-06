@@ -19,6 +19,7 @@ import {
   buscarLinkValido,
   buscarUsuarioDaSessao,
   definirAtivo,
+  revogarLink,
 } from "./acessos";
 
 const db = env.DB;
@@ -240,6 +241,69 @@ describe("último admin ativo (definirAtivo)", () => {
       expect(await definirAtivo(db, b.usuarioId, false)).toBe("ultimo_admin");
       // Reativar nunca é recusado.
       expect(await definirAtivo(db, a.usuarioId, true)).toBe("ok");
+    } finally {
+      await db
+        .prepare(
+          "UPDATE usuarios SET ativo = 1 WHERE id IN (SELECT value FROM json_each(?1))",
+        )
+        .bind(JSON.stringify(outros.map((linha) => linha.id)))
+        .run();
+    }
+  });
+});
+
+describe("último link válido de admin (revogarLink)", () => {
+  it("recusa deixar nenhum admin ativo com link válido; duas revogações ao mesmo tempo não passam juntas", async () => {
+    const a = await criarAcessoNoBanco("admin");
+    const b = await criarAcessoNoBanco("admin");
+    // Durante o teste, A e B são os únicos admins ativos (os outros voltam no fim).
+    const { results: outros } = await db
+      .prepare(
+        "UPDATE usuarios SET ativo = 0 WHERE papel = 'admin' AND ativo = 1 AND id NOT IN (?1, ?2) RETURNING id",
+      )
+      .bind(a.usuarioId, b.usuarioId)
+      .all<{ id: number }>();
+    const agora = new Date().toISOString();
+    const linksValidosDeAdmin = async () =>
+      (
+        await db
+          .prepare(
+            `SELECT count(*) AS total FROM links_acesso AS l JOIN usuarios AS u ON u.id = l.usuario_id
+             WHERE u.papel = 'admin' AND u.ativo = 1 AND l.revogado_em IS NULL AND l.expira_em > ?1`,
+          )
+          .bind(agora)
+          .first<{ total: number }>()
+      )?.total;
+    try {
+      // Links de coordenação e ids inexistentes seguem como antes.
+      const coordenacao = await criarAcessoNoBanco("coordenacao");
+      expect(await revogarLink(db, coordenacao.linkId, agora)).toBe("ok");
+      expect(await revogarLink(db, 999_999_999, agora)).toBe("nao_encontrado");
+
+      const resultados = await Promise.all([
+        revogarLink(db, a.linkId, agora),
+        revogarLink(db, b.linkId, agora),
+      ]);
+
+      expect([...resultados].sort()).toEqual(["ok", "ultimo_link_admin"]);
+      expect(await linksValidosDeAdmin()).toBe(1);
+      const [revogado, restante] = resultados[0] === "ok" ? [a, b] : [b, a];
+      // O que sobrou continua protegido; revogar de novo o já revogado é aceito (idempotente).
+      expect(await revogarLink(db, restante.linkId, agora)).toBe(
+        "ultimo_link_admin",
+      );
+      expect(await revogarLink(db, revogado.linkId, agora)).toBe("ok");
+      // Link de admin já vencido não conta e pode ser revogado.
+      const vencido = await criarAcessoNoBanco("admin");
+      await db
+        .prepare("UPDATE links_acesso SET expira_em = ?2 WHERE id = ?1")
+        .bind(vencido.linkId, "2026-01-01T00:00:00.000Z")
+        .run();
+      expect(await revogarLink(db, vencido.linkId, agora)).toBe("ok");
+      expect(await revogarLink(db, restante.linkId, agora)).toBe(
+        "ultimo_link_admin",
+      );
+      expect(await linksValidosDeAdmin()).toBe(1);
     } finally {
       await db
         .prepare(

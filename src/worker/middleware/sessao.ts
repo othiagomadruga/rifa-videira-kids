@@ -1,6 +1,6 @@
 /**
- * Sessão da equipe (RIFA-007): cookie `sessao` → usuário em `c.var.usuario`, papéis e proteção contra
- * CSRF. Documentação: docs/acesso.md.
+ * Sessão da equipe (RIFA-007): cookie `__Host-sessao` → usuário em `c.var.usuario`, papéis e proteção
+ * contra CSRF. Documentação: docs/acesso.md.
  *
  * Montagem no app (src/worker/index.ts), antes de qualquer rota de /api/admin/* e /api/painel/*:
  *   app.use("/api/admin/*", exigirSessao(["admin", "coordenacao"]));
@@ -10,7 +10,7 @@ import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import {
-  VALIDADE_SESSAO_DIAS,
+  NOME_COOKIE_SESSAO,
   criarErroApi,
   type Papel,
   type UsuarioSessao,
@@ -18,8 +18,8 @@ import {
 import { buscarUsuarioDaSessao } from "../db/acessos";
 import { FORMATO_SEGREDO, sha256Hex } from "../lib/cripto";
 
-export const COOKIE_SESSAO = "sessao";
-export const VALIDADE_SESSAO_SEGUNDOS = VALIDADE_SESSAO_DIAS * 24 * 60 * 60;
+/** `__Host-sessao` (contrato): o navegador só aceita esse nome com Secure, Path=/ e sem Domain. */
+export const COOKIE_SESSAO = NOME_COOKIE_SESSAO;
 
 /** Env das rotas que usam a sessão: depois de exigirSessao, `c.var.usuario` é quem está conectado. */
 export interface AmbienteSessao {
@@ -34,11 +34,22 @@ const OPCOES_COOKIE = {
   path: "/",
 } as const;
 
-/** `Set-Cookie: sessao=<id>; Max-Age=<VALIDADE_SESSAO_DIAS em segundos>; Path=/; HttpOnly; Secure; SameSite=Lax`. */
-export function gravarCookieSessao(c: Context, idSessao: string): void {
+/**
+ * `Set-Cookie: __Host-sessao=<id>; Max-Age=<segundos até expiraEm>; Path=/; HttpOnly; Secure; SameSite=Lax`.
+ * O Max-Age acompanha a validade da sessão no banco (arredondado para baixo): o cookie não dura mais que ela.
+ */
+export function gravarCookieSessao(
+  c: Context,
+  idSessao: string,
+  expiraEm: string,
+  agora: Date,
+): void {
   setCookie(c, COOKIE_SESSAO, idSessao, {
     ...OPCOES_COOKIE,
-    maxAge: VALIDADE_SESSAO_SEGUNDOS,
+    maxAge: Math.max(
+      0,
+      Math.floor((Date.parse(expiraEm) - agora.getTime()) / 1000),
+    ),
   });
 }
 
@@ -47,7 +58,7 @@ export function apagarCookieSessao(c: Context): void {
   deleteCookie(c, COOKIE_SESSAO, OPCOES_COOKIE);
 }
 
-/** O valor do cookie `sessao`, se tiver o formato de um id de sessão. */
+/** O valor do cookie `__Host-sessao`, se tiver o formato de um id de sessão. */
 export function lerCookieSessao(c: Context): string | null {
   const valor = getCookie(c, COOKIE_SESSAO);
   return valor !== undefined && FORMATO_SEGREDO.test(valor) ? valor : null;

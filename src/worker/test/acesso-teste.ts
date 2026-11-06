@@ -4,9 +4,14 @@
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { expect } from "vitest";
-import { VALIDADE_LINK_DIAS, type Papel } from "../../shared/contracts";
+import {
+  NOME_COOKIE_SESSAO,
+  VALIDADE_LINK_DIAS,
+  type Papel,
+} from "../../shared/contracts";
 import { criarSessao, criarUsuarioComLink } from "../db/acessos";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
+import { cabecalhosSeguranca } from "../middleware/cabecalhos-seguranca";
 import { exigirSessao, type AmbienteSessao } from "../middleware/sessao";
 import { sessao } from "../routes/acesso";
 import { adminUsuarios } from "../routes/admin-usuarios";
@@ -27,6 +32,7 @@ function rotasDeExemplo() {
 export function criarAppDeTeste() {
   const app = new Hono<{ Bindings: Cloudflare.Env }>();
   // --- mesmo trecho que vai para o src/worker/index.ts ---
+  app.use("*", cabecalhosSeguranca);
   app.route("/api/sessao", sessao);
   app.use("/api/admin/*", exigirSessao(["admin", "coordenacao"]));
   app.use("/api/painel/*", exigirSessao(["admin", "coordenacao"]));
@@ -41,7 +47,7 @@ export type AppDeTeste = ReturnType<typeof criarAppDeTeste>;
 
 export interface OpcoesChamada {
   corpo?: unknown;
-  /** Valor do cookie `sessao`. */
+  /** Valor do cookie da sessão (`__Host-sessao`). */
   sessao?: string;
   /** Cabeçalho Origin; padrão: ORIGEM nas escritas e nenhum no GET. null = sem Origin. */
   origem?: string | null;
@@ -58,7 +64,7 @@ export function chamar(
   if (opcoes.corpo !== undefined)
     cabecalhos.set("Content-Type", "application/json");
   if (opcoes.sessao !== undefined)
-    cabecalhos.set("Cookie", `sessao=${opcoes.sessao}`);
+    cabecalhos.set("Cookie", `${NOME_COOKIE_SESSAO}=${opcoes.sessao}`);
   const origem = opcoes.origem === undefined ? ORIGEM : opcoes.origem;
   if (metodo !== "GET" && origem !== null) cabecalhos.set("Origin", origem);
   const corpo =
@@ -76,14 +82,15 @@ export function chamar(
   );
 }
 
-/** O Set-Cookie de `sessao` da resposta (valor e atributos), ou null. */
+/** O Set-Cookie da sessão (`__Host-sessao`) na resposta (valor e atributos), ou null. */
 export function cookieDaResposta(
   res: Response,
 ): { valor: string; atributos: string[] } | null {
   const cabecalho = res.headers.get("Set-Cookie");
-  if (cabecalho === null || !cabecalho.startsWith("sessao=")) return null;
+  const prefixo = `${NOME_COOKIE_SESSAO}=`;
+  if (cabecalho === null || !cabecalho.startsWith(prefixo)) return null;
   const [par, ...atributos] = cabecalho.split(";").map((parte) => parte.trim());
-  return { valor: par.slice("sessao=".length), atributos };
+  return { valor: par.slice(prefixo.length), atributos };
 }
 
 /** Cria um usuário com um link direto no banco (como o bootstrap faz) e devolve o token. */
@@ -143,15 +150,16 @@ export async function cabecalhosDeSessao(
   const { linkId } = await criarAcessoNoBanco(papel);
   const idSessao = gerarSegredo();
   const agora = Date.now();
-  const criada = await criarSessao(env.DB, {
+  const expiraEm = await criarSessao(env.DB, {
     idHash: await sha256Hex(idSessao),
     linkId,
     criadoEm: new Date(agora).toISOString(),
     expiraEm: new Date(agora + 24 * 60 * 60 * 1000).toISOString(),
     idHashAnterior: null,
   });
-  if (!criada) throw new Error("não foi possível criar a sessão de teste");
-  return { Cookie: `sessao=${idSessao}`, Origin: origem };
+  if (expiraEm === null)
+    throw new Error("não foi possível criar a sessão de teste");
+  return { Cookie: `${NOME_COOKIE_SESSAO}=${idSessao}`, Origin: origem };
 }
 
 /** Corpo de erro no formato único. */

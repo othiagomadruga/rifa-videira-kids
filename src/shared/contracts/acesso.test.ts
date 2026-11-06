@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   FORMATO_TOKEN_ACESSO,
+  NOME_COOKIE_SESSAO,
   PAPEIS,
   ROTAS_ACESSO,
   VALIDADE_LINK_DIAS,
@@ -204,6 +205,10 @@ describe("contrato do acesso: corpos", () => {
     expect(
       corpoAtualizarUsuarioSchema.safeParse({ ativo: "false" }).success,
     ).toBe(false);
+  });
+
+  it("o cookie da sessão usa o prefixo __Host- (Secure, Path=/, sem Domain)", () => {
+    expect(NOME_COOKIE_SESSAO).toBe("__Host-sessao");
   });
 
   it("link e sessão valem 45 dias (cobrem a campanha, de 23/11 a meados de dezembro)", () => {

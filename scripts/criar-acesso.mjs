@@ -87,7 +87,10 @@ export function normalizarOrigem(origem, remoto = false) {
   return url.origin;
 }
 
-/** Lê as opções da linha de comando. Opção desconhecida ou faltando: ErroDeUso. */
+/**
+ * Lê as opções da linha de comando. Opção desconhecida, faltando ou com valor onde não cabe: ErroDeUso.
+ * As flags (--remote, --local, --help) não aceitam valor: `--remote=false` é erro, e não liga o D1 remoto.
+ */
 export function lerArgumentos(argv) {
   const opcoes = {
     nome: undefined,
@@ -95,6 +98,7 @@ export function lerArgumentos(argv) {
     remoto: false,
     origem: undefined,
   };
+  const destinos = new Set();
   for (let i = 0; i < argv.length; i += 1) {
     const argumento = argv[i];
     const igual = argumento.startsWith("--") ? argumento.indexOf("=") : -1;
@@ -108,6 +112,11 @@ export function lerArgumentos(argv) {
       i += 1;
       return proximo;
     };
+    const semValor = () => {
+      if (igual !== -1) {
+        throw new ErroDeUso(`${chave} não aceita valor: use só ${chave}`);
+      }
+    };
     switch (chave) {
       case "--nome":
         opcoes.nome = valor();
@@ -119,18 +128,21 @@ export function lerArgumentos(argv) {
         opcoes.origem = valor();
         break;
       case "--remote":
-        opcoes.remoto = true;
-        break;
       case "--local":
-        opcoes.remoto = false;
+        semValor();
+        destinos.add(chave);
+        opcoes.remoto = chave === "--remote";
         break;
       case "--help":
       case "-h":
+        semValor();
         return { ajuda: true };
       default:
         throw new ErroDeUso(`opção desconhecida: ${chave}`);
     }
   }
+  if (destinos.size > 1)
+    throw new ErroDeUso("use --local ou --remote, não os dois");
   if (opcoes.nome === undefined) throw new ErroDeUso("informe --nome");
   if (opcoes.papel === undefined)
     throw new ErroDeUso("informe --papel admin ou --papel coordenacao");
