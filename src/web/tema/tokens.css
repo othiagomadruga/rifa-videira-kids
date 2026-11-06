@@ -1,0 +1,156 @@
+/*
+ * Tokens do tema. Os componentes e as telas só usam estas variáveis: para trocar
+ * a marca, mude os valores aqui (e o símbolo em components/ui/Marca.tsx).
+ * Contraste conferido: texto >= 4.5:1 (AA) e bordas/foco >= 3:1 no tema claro;
+ * texto >= 7:1 (AAA) no telão.
+ *
+ * Pontos de quebra (media queries não aceitam variáveis):
+ * - 48rem (768 px): tabelas deixam de ser cartões empilhados;
+ * - 64rem (1024 px): a navegação da coordenação vira barra lateral.
+ */
+:root {
+  color-scheme: light;
+
+  /* Superfícies e texto */
+  --cor-fundo: #f5f6f8;
+  --cor-superficie: #ffffff;
+  --cor-superficie-2: #eceef2;
+  --cor-borda: #dde1e7;
+  --cor-borda-forte: #7c8697;
+  --cor-texto: #18202b;
+  --cor-texto-suave: #4f5968;
+
+  /* Marca e ação */
+  --cor-primaria: #24476b;
+  --cor-primaria-forte: #1a3552;
+  --cor-primaria-suave: #e7eef6;
+  --cor-sobre-primaria: #ffffff;
+  --cor-link: var(--cor-primaria);
+  --cor-foco: #1f63d6;
+
+  /* Estados (texto sobre o fundo "suave" correspondente) */
+  --cor-neutro: #3c4552;
+  --cor-neutro-suave: #eceef2;
+  --cor-info: #1c4f9c;
+  --cor-info-suave: #e6eefb;
+  --cor-sucesso: #17633a;
+  --cor-sucesso-suave: #e3f3e9;
+  --cor-alerta: #7a4b00;
+  --cor-alerta-suave: #fbf0d9;
+  --cor-perigo: #a5281b;
+  --cor-perigo-suave: #fce8e6;
+  --cor-perigo-forte: #b42318;
+
+  /* Barra de progresso */
+  --cor-trilho: #dfe3ea;
+  --cor-progresso: var(--cor-primaria);
+  --cor-progresso-completo: #1e7a46;
+
+  /* Tipografia: fonte do sistema (sem fonte externa) */
+  --fonte-base:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif;
+  --fonte-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --texto-xs: 0.8125rem;
+  --texto-sm: 0.875rem;
+  --texto-md: 1rem;
+  --texto-lg: 1.125rem;
+  --texto-xl: 1.25rem;
+  --texto-2xl: 1.5rem;
+  --texto-3xl: 1.875rem;
+  --texto-4xl: 2.25rem;
+  --peso-normal: 400;
+  --peso-medio: 500;
+  --peso-forte: 600;
+  --peso-negrito: 700;
+  --altura-linha: 1.5;
+  --altura-linha-titulo: 1.2;
+
+  /* Espaçamento (escala de 4 px) */
+  --espaco-1: 0.25rem;
+  --espaco-2: 0.5rem;
+  --espaco-3: 0.75rem;
+  --espaco-4: 1rem;
+  --espaco-5: 1.5rem;
+  --espaco-6: 2rem;
+  --espaco-7: 3rem;
+  --espaco-8: 4rem;
+
+  /* Raios */
+  --raio-1: 0.25rem;
+  --raio-2: 0.5rem;
+  --raio-3: 0.75rem;
+  --raio-pilula: 999px;
+
+  /* Sombras */
+  --sombra-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.08);
+  --sombra-2: 0 4px 12px rgb(16 24 40 / 0.08), 0 2px 4px rgb(16 24 40 / 0.06);
+  --sombra-3: 0 12px 32px rgb(16 24 40 / 0.14);
+
+  /* Foco visível */
+  --foco-anel: 3px solid var(--cor-foco);
+  --foco-distancia: 2px;
+
+  /* Movimento (zerado com prefers-reduced-motion em base.css) */
+  --transicao: 150ms ease-out;
+
+  /* Medidas de layout */
+  --largura-conteudo: 72rem;
+  --largura-publica: 48rem;
+  --largura-navegacao: 16rem;
+  --margem-pagina: var(--espaco-4);
+  --alvo-toque: 2.75rem;
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --margem-pagina: var(--espaco-6);
+  }
+}
+
+/*
+ * Telão (1920×1080, lido a ~8 m): fundo escuro, alto contraste e texto que cresce
+ * com a tela. Aplique com data-tema="telao" no elemento raiz da tela.
+ */
+[data-tema="telao"] {
+  color-scheme: dark;
+
+  --cor-fundo: #06080c;
+  --cor-superficie: #121821;
+  --cor-superficie-2: #1b2330;
+  --cor-borda: #2a3340;
+  --cor-borda-forte: #5b6676;
+  --cor-texto: #ffffff;
+  --cor-texto-suave: #c8d0db;
+
+  --cor-primaria: #ffd447;
+  --cor-primaria-forte: #ffe17a;
+  --cor-primaria-suave: #2b2611;
+  --cor-sobre-primaria: #06080c;
+  --cor-link: var(--cor-primaria);
+  --cor-foco: #7fb2ff;
+
+  --cor-neutro: #c8d0db;
+  --cor-neutro-suave: #1b2330;
+  --cor-info: #8cc4ff;
+  --cor-info-suave: #0f2236;
+  --cor-sucesso: #5fdc8f;
+  --cor-sucesso-suave: #0e2a1a;
+  --cor-alerta: #ffd447;
+  --cor-alerta-suave: #2b2611;
+  --cor-perigo: #ff8a80;
+  --cor-perigo-suave: #33130f;
+  --cor-perigo-forte: #ff8a80;
+
+  --cor-trilho: #2a3340;
+  --cor-progresso: #ffd447;
+  --cor-progresso-completo: #5fdc8f;
+
+  --sombra-1: none;
+  --sombra-2: none;
+  --sombra-3: none;
+
+  /* Texto-base do telão: ~46 px em 1920×1080 (limitado também pela altura). */
+  --telao-texto-base: clamp(1.25rem, min(2.4vw, 4.25vh), 4rem);
+}

@@ -1,0 +1,29 @@
+.ui-public-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.ui-public-shell__topo {
+  padding: var(--espaco-3) var(--margem-pagina);
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.ui-public-shell__limite {
+  width: 100%;
+  max-width: var(--largura-publica);
+  margin: 0 auto;
+}
+
+.ui-public-shell__conteudo {
+  flex: 1;
+  padding: var(--espaco-5) var(--margem-pagina) var(--espaco-7);
+}
+
+.ui-public-shell__pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+}

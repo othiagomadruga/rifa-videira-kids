@@ -1,10 +1,12 @@
-import { StatusPage } from "./pages/StatusPage";
+import type { DataRouter } from "react-router";
+import { RouterProvider } from "react-router/dom";
 
-export function App() {
-  return (
-    <main>
-      <h1>Rifa Videira Kids</h1>
-      <StatusPage />
-    </main>
-  );
+type Props = {
+  // createBrowserRouter(rotas) no main.tsx; createMemoryRouter(rotas) nos testes
+  // (veja test/renderizar.tsx).
+  roteador: DataRouter;
+};
+
+export function App({ roteador }: Props) {
+  return <RouterProvider router={roteador} />;
 }

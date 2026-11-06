@@ -1,0 +1,41 @@
+.ui-progress {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.ui-progress__cabecalho {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.ui-progress__rotulo {
+  min-width: 0;
+  font-weight: var(--peso-forte);
+}
+
+.ui-progress__valor {
+  flex: none;
+  font-weight: var(--peso-negrito);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-progress__trilho {
+  height: 0.75em;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--cor-trilho);
+}
+
+.ui-progress__barra {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cor-progresso);
+  transition: width 400ms ease-out;
+}
+
+.ui-progress[data-completa] .ui-progress__barra {
+  background: var(--cor-progresso-completo);
+}

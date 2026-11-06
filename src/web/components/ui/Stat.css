@@ -1,0 +1,42 @@
+.ui-stat {
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-1);
+  min-width: 0;
+  padding: var(--espaco-4) var(--espaco-5);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+.ui-stat__rotulo {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--cor-texto-suave);
+}
+
+.ui-stat__valor {
+  font-size: clamp(var(--texto-2xl), 1.25rem + 1vw, var(--texto-3xl));
+  font-weight: var(--peso-negrito);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.ui-stat__variacao {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+.ui-stat__variacao--positivo {
+  color: var(--cor-sucesso);
+}
+
+.ui-stat__variacao--negativo {
+  color: var(--cor-perigo);
+}
+
+.ui-stat__variacao--neutro {
+  color: var(--cor-texto-suave);
+}

@@ -1,15 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App } from "./App";
+import { renderizarRota, respostaJson } from "../../test/renderizar";
 
-function respostaJson(corpo: unknown, status = 200) {
-  return new Response(JSON.stringify(corpo), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-describe("App: página de status", () => {
+describe("StatusPage (/status)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -20,7 +13,7 @@ describe("App: página de status", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<App />);
+    renderizarRota("/status");
 
     expect(await screen.findByText("API ok")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/health", expect.anything());
@@ -32,7 +25,7 @@ describe("App: página de status", () => {
       vi.fn(async () => respostaJson({ ok: false, db: "erro" }, 503)),
     );
 
-    render(<App />);
+    renderizarRota("/status");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Erro na API: A API respondeu com falha (HTTP 503).",
@@ -48,10 +41,38 @@ describe("App: página de status", () => {
       }),
     );
 
-    render(<App />);
+    renderizarRota("/status");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Erro na API: Não foi possível conectar à API.",
     );
+  });
+
+  it("mostra a mensagem do erro padrão da API e tenta de novo", async () => {
+    const fetchMock = vi
+      .fn<() => Promise<Response>>()
+      .mockResolvedValueOnce(
+        respostaJson(
+          {
+            erro: {
+              codigo: "BANCO_INDISPONIVEL",
+              mensagem: "Falha ao consultar o banco de dados.",
+            },
+          },
+          503,
+        ),
+      )
+      .mockResolvedValueOnce(respostaJson({ ok: true, db: "ok" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderizarRota("/status");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Erro na API: Falha ao consultar o banco de dados.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    expect(await screen.findByText("API ok")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

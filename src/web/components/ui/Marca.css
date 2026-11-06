@@ -1,0 +1,37 @@
+.ui-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-width: 0;
+  color: var(--cor-texto);
+}
+
+.ui-marca__simbolo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25em;
+  height: 2.25em;
+  border-radius: var(--raio-2);
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-negrito);
+  letter-spacing: 0.04em;
+}
+
+.ui-marca__textos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.ui-marca__nome {
+  font-weight: var(--peso-negrito);
+}
+
+.ui-marca__complemento {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}

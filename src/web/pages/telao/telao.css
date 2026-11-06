@@ -1,0 +1,50 @@
+/*
+ * Telão: ocupa exatamente a janela (sem rolagem em 1920×1080). Tamanhos em em,
+ * a partir de --telao-texto-base, que acompanha a largura e a altura da tela.
+ */
+.telao {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 3vh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 4vh 4vw;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  font-size: var(--telao-texto-base);
+  line-height: 1.25;
+}
+
+.telao .ui-marca {
+  gap: 0.5em;
+}
+
+.telao .ui-marca__simbolo {
+  font-size: 0.6em;
+}
+
+.telao .ui-marca__nome {
+  font-size: 0.8em;
+}
+
+.telao__conteudo {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75em;
+  min-height: 0;
+  text-align: center;
+}
+
+.telao__titulo {
+  font-size: 3.5em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.telao__aviso {
+  font-size: 1em;
+  font-weight: var(--peso-forte);
+  color: var(--cor-primaria);
+}

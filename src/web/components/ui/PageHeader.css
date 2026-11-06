@@ -1,0 +1,30 @@
+.ui-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--espaco-3) var(--espaco-5);
+}
+
+.ui-page-header__textos {
+  display: grid;
+  gap: var(--espaco-1);
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.ui-page-header__titulo {
+  font-size: clamp(var(--texto-2xl), 1.25rem + 1.2vw, var(--texto-3xl));
+  font-weight: var(--peso-negrito);
+  letter-spacing: -0.01em;
+}
+
+.ui-page-header__descricao {
+  color: var(--cor-texto-suave);
+}
+
+.ui-page-header__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}

@@ -1,0 +1,33 @@
+.ui-card {
+  min-width: 0;
+  padding: var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+.ui-card__cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-4);
+  margin-bottom: var(--espaco-4);
+}
+
+.ui-card__titulo {
+  font-size: var(--texto-lg);
+}
+
+.ui-card__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+@media (min-width: 48rem) {
+  .ui-card {
+    padding: var(--espaco-5);
+  }
+}

@@ -1,0 +1,160 @@
+/* Celular primeiro: barra no topo com botão "Menu"; o menu abre abaixo dela. */
+.ui-app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.ui-app-shell__pular {
+  position: absolute;
+  top: var(--espaco-2);
+  left: var(--espaco-2);
+  z-index: 100;
+  padding: var(--espaco-2) var(--espaco-4);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  box-shadow: var(--sombra-2);
+  font-weight: var(--peso-forte);
+  transform: translateY(-200%);
+}
+
+.ui-app-shell__pular:focus {
+  transform: none;
+}
+
+.ui-app-shell__lateral {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.ui-app-shell[data-menu-aberto] .ui-app-shell__lateral {
+  box-shadow: var(--sombra-3);
+}
+
+.ui-app-shell__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  min-height: 3.5rem;
+  padding: var(--espaco-2) var(--margem-pagina);
+}
+
+.ui-app-shell__botao-menu {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-height: var(--alvo-toque);
+  padding: 0 var(--espaco-4);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  font-weight: var(--peso-forte);
+  cursor: pointer;
+}
+
+.ui-app-shell__botao-menu:hover {
+  background: var(--cor-superficie-2);
+}
+
+.ui-app-shell__nav {
+  display: none;
+  padding: 0 var(--margem-pagina) var(--espaco-3);
+}
+
+.ui-app-shell[data-menu-aberto] .ui-app-shell__nav {
+  display: block;
+}
+
+.ui-app-shell__lista {
+  display: grid;
+  gap: var(--espaco-1);
+  padding: 0;
+  list-style: none;
+}
+
+.ui-app-shell__link {
+  display: flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-3);
+  border-radius: var(--raio-2);
+  color: var(--cor-texto);
+  font-weight: var(--peso-medio);
+  text-decoration: none;
+}
+
+.ui-app-shell__link:hover {
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto);
+}
+
+.ui-app-shell__link[aria-current="page"] {
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria-forte);
+  font-weight: var(--peso-forte);
+  box-shadow: inset 3px 0 0 var(--cor-primaria);
+}
+
+.ui-app-shell__conteudo {
+  padding: var(--espaco-5) var(--margem-pagina) var(--espaco-7);
+}
+
+.ui-app-shell__conteudo:focus {
+  outline: none;
+}
+
+.ui-app-shell__pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+  max-width: var(--largura-conteudo);
+  margin: 0 auto;
+}
+
+/* Computador: navegação lateral fixa à esquerda. */
+@media (min-width: 64rem) {
+  .ui-app-shell {
+    display: grid;
+    grid-template-columns: var(--largura-navegacao) minmax(0, 1fr);
+    /* A barra lateral é sticky (altura da janela): o fundo da coluna vai até o fim da página. */
+    background: linear-gradient(
+      to right,
+      var(--cor-superficie) calc(var(--largura-navegacao) - 1px),
+      var(--cor-borda) 0 var(--largura-navegacao),
+      transparent 0
+    );
+  }
+
+  .ui-app-shell__lateral,
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__lateral {
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-right: 1px solid var(--cor-borda);
+    box-shadow: none;
+  }
+
+  .ui-app-shell__topo {
+    min-height: 0;
+    padding: var(--espaco-5) var(--espaco-4) var(--espaco-4);
+  }
+
+  .ui-app-shell__botao-menu {
+    display: none;
+  }
+
+  .ui-app-shell__nav,
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__nav {
+    display: block;
+    padding: 0 var(--espaco-3) var(--espaco-5);
+  }
+
+  .ui-app-shell__conteudo {
+    padding-top: var(--espaco-6);
+  }
+}

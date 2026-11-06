@@ -1,0 +1,62 @@
+/* EmptyState, ErrorState e Loading. */
+.ui-estado {
+  display: grid;
+  justify-items: center;
+  gap: var(--espaco-2);
+  padding: var(--espaco-6) var(--espaco-4);
+  border-radius: var(--raio-3);
+  text-align: center;
+}
+
+.ui-estado--vazio {
+  background: var(--cor-superficie);
+  border: 1px dashed var(--cor-borda-forte);
+  color: var(--cor-texto-suave);
+}
+
+.ui-estado--erro {
+  background: var(--cor-perigo-suave);
+  border: 1px solid var(--cor-perigo);
+  color: var(--cor-perigo);
+}
+
+.ui-estado__titulo {
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto);
+}
+
+.ui-estado--erro .ui-estado__titulo {
+  color: var(--cor-perigo);
+}
+
+.ui-estado__descricao {
+  max-width: 36rem;
+}
+
+.ui-estado__acao {
+  margin-top: var(--espaco-2);
+}
+
+.ui-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  color: var(--cor-texto-suave);
+}
+
+.ui-loading__indicador {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid var(--cor-trilho);
+  border-top-color: var(--cor-primaria);
+  border-radius: 50%;
+  animation: ui-girar 0.8s linear infinite;
+}
+
+@keyframes ui-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}

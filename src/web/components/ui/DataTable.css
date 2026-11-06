@@ -1,0 +1,157 @@
+/* Celular primeiro: cada linha é um cartão; cada célula, "rótulo: valor". */
+.ui-data-table__tabela,
+.ui-data-table__tabela tbody,
+.ui-data-table__tabela tr,
+.ui-data-table__tabela td {
+  display: block;
+}
+
+.ui-data-table__tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-data-table__legenda {
+  margin-bottom: var(--espaco-3);
+  font-weight: var(--peso-forte);
+  text-align: left;
+}
+
+/* Os cabeçalhos continuam no HTML (para leitores de tela), mas fora da tela. */
+.ui-data-table__cabecalho {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ui-data-table__tabela tbody tr {
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+.ui-data-table__tabela tbody tr + tr {
+  margin-top: var(--espaco-3);
+}
+
+.ui-data-table__tabela td {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-4);
+  padding: var(--espaco-1) 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.ui-data-table__tabela td::before {
+  content: attr(data-rotulo);
+  flex: none;
+  max-width: 50%;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  text-align: left;
+}
+
+.ui-data-table__tabela td[data-principal] {
+  display: block;
+  padding-bottom: var(--espaco-2);
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+  text-align: left;
+}
+
+.ui-data-table__tabela td[data-principal]::before {
+  content: none;
+}
+
+/* Computador: tabela de verdade, com rolagem horizontal só dentro dela se precisar. */
+@media (min-width: 48rem) {
+  .ui-data-table {
+    overflow-x: auto;
+    background: var(--cor-superficie);
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio-3);
+    box-shadow: var(--sombra-1);
+  }
+
+  .ui-data-table__tabela {
+    display: table;
+  }
+
+  .ui-data-table__tabela tbody {
+    display: table-row-group;
+  }
+
+  .ui-data-table__tabela tr,
+  .ui-data-table__tabela tbody tr {
+    display: table-row;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .ui-data-table__tabela tbody tr + tr {
+    margin-top: 0;
+  }
+
+  .ui-data-table__cabecalho {
+    position: static;
+    display: table-header-group;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .ui-data-table__tabela th,
+  .ui-data-table__tabela td,
+  .ui-data-table__tabela td[data-principal] {
+    display: table-cell;
+    padding: var(--espaco-3) var(--espaco-4);
+    font-size: var(--texto-md);
+    font-weight: var(--peso-normal);
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--cor-borda);
+    overflow-wrap: normal;
+  }
+
+  .ui-data-table__tabela td[data-principal] {
+    font-weight: var(--peso-forte);
+  }
+
+  .ui-data-table__tabela td::before {
+    content: none;
+  }
+
+  .ui-data-table__tabela th {
+    background: var(--cor-superficie-2);
+    color: var(--cor-texto-suave);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-forte);
+    white-space: nowrap;
+  }
+
+  .ui-data-table__tabela [data-alinhamento="fim"] {
+    text-align: right;
+  }
+
+  .ui-data-table__tabela tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .ui-data-table__tabela tbody tr:hover td {
+    background: var(--cor-fundo);
+  }
+}

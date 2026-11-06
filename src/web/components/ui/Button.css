@@ -1,0 +1,75 @@
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-2);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-5);
+  border: 1px solid transparent;
+  border-radius: var(--raio-2);
+  font-weight: var(--peso-forte);
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao),
+    color var(--transicao);
+}
+
+.ui-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-button--primario {
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+}
+
+.ui-button--primario:hover:not(:disabled) {
+  background: var(--cor-primaria-forte);
+  color: var(--cor-sobre-primaria);
+}
+
+.ui-button--secundario {
+  background: var(--cor-superficie);
+  border-color: var(--cor-borda-forte);
+  color: var(--cor-texto);
+}
+
+.ui-button--secundario:hover:not(:disabled) {
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto);
+}
+
+.ui-button--discreto {
+  background: transparent;
+  color: var(--cor-primaria);
+}
+
+.ui-button--discreto:hover:not(:disabled) {
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria-forte);
+}
+
+.ui-button--perigo {
+  background: var(--cor-perigo-forte);
+  color: var(--cor-sobre-primaria);
+}
+
+.ui-button--perigo:hover:not(:disabled) {
+  background: var(--cor-perigo);
+  color: var(--cor-sobre-primaria);
+}
+
+.ui-button--pequeno {
+  min-height: 2.25rem;
+  padding: var(--espaco-1) var(--espaco-3);
+  font-size: var(--texto-sm);
+}
+
+.ui-button--largura-total {
+  width: 100%;
+}
