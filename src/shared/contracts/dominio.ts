@@ -27,8 +27,8 @@ export const pontosBaseSchema = z.number().int().min(0).max(10_000);
 export const dataLocalSchema = z.iso.date();
 /** Instante em UTC com milissegundos: "2026-12-01T12:20:31.512Z" (ordem alfabética = cronológica). */
 export const instanteSchema = z.iso.datetime({ precision: 3 });
-/** id de afiliado da Rifei (inteiro). */
-export const affiliateIdSchema = z.number().int().nonnegative();
+/** id de afiliado da Rifei (inteiro positivo). */
+export const affiliateIdSchema = z.number().int().positive();
 
 /** D8: fuso padrão da campanha. */
 export const FUSO_PADRAO = "America/Belem";
@@ -305,25 +305,29 @@ export const pedidoSchema = z.object({
   /** null = venda sem afiliado. A célula é resolvida na leitura, pelo afiliado (D7). */
   affiliate_id: affiliateIdSchema.nullable(),
   status: statusPedidoSchema,
-  /** `status` e `status_detail` como vieram no último evento processado. */
-  status_rifei: z.string().min(1),
-  status_detail_rifei: z.string(),
+  /**
+   * `status` e `status_detail` como vieram no último evento processado. Os campos informativos do
+   * payload (status, status_detail, subtotal, método, rifinha, expires_at) são null quando a Rifei
+   * mandou ausente ou com tipo errado (RIFA-002b).
+   */
+  status_rifei: z.string().min(1).nullable(),
+  status_detail_rifei: z.string().nullable(),
   qtd_bilhetes: z.number().int().nonnegative(),
   numeros: z.array(z.number().int().nonnegative()).nullable(),
-  subtotal_centavos: centavosSchema,
+  subtotal_centavos: centavosSchema.nullable(),
   total_centavos: centavosSchema,
   desconto_promocao_centavos: centavosSchema.nullable(),
   desconto_cupom_centavos: centavosSchema.nullable(),
   cupom_id: z.number().int().nullable(),
-  metodo_pagamento: z.string(),
-  rifinha: z.boolean(),
+  metodo_pagamento: z.string().nullable(),
+  rifinha: z.boolean().nullable(),
   ddd: dddSchema.nullable(),
   /** Código de discagem do país do comprador ("55" = Brasil). */
   pais: codigoPaisSchema.nullable(),
   utm: utmSchema,
-  /** Instantes da Rifei normalizados para UTC. */
+  /** Instantes da Rifei normalizados para UTC. created_at ausente ou inválido: instante do recebimento. */
   criado_em: instanteSchema,
-  expira_em: instanteSchema,
+  expira_em: instanteSchema.nullable(),
   /** approved_at; se a Rifei mandar null num pedido aprovado, vale o instante do recebimento. */
   aprovado_em: instanteSchema.nullable(),
   expirado_em: instanteSchema.nullable(),
@@ -353,6 +357,8 @@ export const eventoWebhookSchema = z.object({
   payload_redigido: payloadRifeiRedigidoSchema.nullable(),
   /** Problemas de validação (sem valores); só em erro_validacao. */
   erro: z.array(detalheValidacaoSchema).nullable(),
+  /** Diferenças do payload aceito em relação à doc (sem valores); null quando não há nenhuma. */
+  avisos: z.array(detalheValidacaoSchema).nullable(),
 });
 export type EventoWebhook = z.infer<typeof eventoWebhookSchema>;
 

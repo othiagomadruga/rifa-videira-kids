@@ -13,6 +13,7 @@ import {
   respostaRankingPublicoSchema,
   respostaRankingSchema,
   respostaWebhookRifeiSchema,
+  detalhesCsvInvalidoSchema,
 } from "./api";
 import {
   CODIGOS_ERRO,
@@ -204,6 +205,9 @@ describe("CA3: parâmetros, consultas e corpos", () => {
       affiliateId: 1042,
     });
     expect(parametroIdSchema.safeParse({ id: "abc" }).success).toBe(false);
+    expect(
+      parametroAffiliateIdSchema.safeParse({ affiliateId: "0" }).success,
+    ).toBe(false);
   });
 
   it("afiliados: vinculado=false é false (sem coerção ingênua de texto)", () => {
@@ -331,6 +335,22 @@ describe("CA3: parâmetros, consultas e corpos", () => {
         linhaCsvHierarquiaSchema.safeParse({ ...semOpcionais, ...erro })
           .success,
       ).toBe(false);
+    }
+  });
+  it("csv_invalido: detalhes dizem o motivo (sem cabeçalho, colunas faltando, linhas demais)", () => {
+    for (const detalhes of [
+      { motivo: "sem_cabecalho" },
+      { motivo: "colunas_faltando", colunas: ["qtd_pessoas", "lider_nome"] },
+      { motivo: "linhas_demais", limite: 2000, total_linhas: 2500 },
+    ]) {
+      expect(detalhesCsvInvalidoSchema.safeParse(detalhes).success).toBe(true);
+    }
+    for (const detalhes of [
+      { motivo: "colunas_faltando", colunas: [] },
+      { motivo: "outro" },
+      { motivo: "linhas_demais", limite: 2000 },
+    ]) {
+      expect(detalhesCsvInvalidoSchema.safeParse(detalhes).success).toBe(false);
     }
   });
 });

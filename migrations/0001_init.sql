@@ -4,7 +4,9 @@
 -- Convenções
 -- * Nomes em português, snake_case. Ids inteiros (INTEGER PRIMARY KEY), exceto pedidos.id e
 --   afiliados.affiliate_id, que são os ids da Rifei.
--- * Dinheiro em centavos (INTEGER, D2). Percentuais em pontos-base (3500 = 35%).
+-- * Dinheiro em centavos (INTEGER, D2). Percentuais em pontos-base (3500 = 35%). Dinheiro,
+--   contadores e ids da Rifei têm CHECK typeof(x) = 'integer': a afinidade INTEGER do SQLite
+--   aceitaria 60.5 ou 'abc' sem reclamar.
 -- * Instantes em UTC, texto ISO 8601 com milissegundos e "Z" (2026-12-01T12:20:31.512Z): a ordem
 --   alfabética é a cronológica. Datas locais da campanha em "YYYY-MM-DD" (fuso da campanha, D8).
 --   Os formatos são checados com strftime()/date() ("x IS strftime(..., x)"), e não com GLOB: o D1
@@ -23,15 +25,15 @@ CREATE TABLE campanhas (
   fuso_horario                    TEXT    NOT NULL DEFAULT 'America/Belem',
   -- Primeiro dia de vendas (data local). O fim sai da soma dos dias dos períodos.
   data_inicio                     TEXT    NOT NULL CHECK (date(data_inicio) IS data_inicio),
-  preco_bilhete_centavos          INTEGER NOT NULL CHECK (preco_bilhete_centavos > 0),
+  preco_bilhete_centavos          INTEGER NOT NULL CHECK (typeof(preco_bilhete_centavos) = 'integer' AND preco_bilhete_centavos > 0),
   meta_unidade                    TEXT    NOT NULL CHECK (meta_unidade IN ('bilhetes', 'centavos')),
   meta_regra                      TEXT    NOT NULL CHECK (meta_regra IN ('por_pessoa', 'total_proporcional', 'fixa_por_celula')),
   -- Na unidade da meta; o significado depende da regra (por pessoa, total da campanha ou por célula).
-  meta_valor                      INTEGER NOT NULL CHECK (meta_valor > 0),
+  meta_valor                      INTEGER NOT NULL CHECK (typeof(meta_valor) = 'integer' AND meta_valor > 0),
   ranking_criterio                TEXT    NOT NULL CHECK (ranking_criterio IN ('percentual_meta', 'bilhetes', 'arrecadacao')),
   -- Visão pública: nunca mostra R$. Estes campos só ligam o % da meta e limitam as posições (null = todas).
   publico_mostra_percentual_meta  INTEGER NOT NULL DEFAULT 0 CHECK (publico_mostra_percentual_meta IN (0, 1)),
-  publico_limite_ranking          INTEGER DEFAULT 3 CHECK (publico_limite_ranking IS NULL OR publico_limite_ranking BETWEEN 1 AND 100),
+  publico_limite_ranking          INTEGER DEFAULT 3 CHECK (publico_limite_ranking IS NULL OR (typeof(publico_limite_ranking) = 'integer' AND publico_limite_ranking BETWEEN 1 AND 100)),
   criado_em                       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   atualizado_em                   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -42,10 +44,10 @@ CREATE UNIQUE INDEX campanhas_uma_ativa ON campanhas (ativa) WHERE ativa = 1;
 -- somar 10000: o cálculo normaliza (peso = percentual_bp / soma).
 CREATE TABLE campanha_periodos (
   campanha_id    INTEGER NOT NULL REFERENCES campanhas (id) ON DELETE CASCADE,
-  ordem          INTEGER NOT NULL CHECK (ordem >= 1),
+  ordem          INTEGER NOT NULL CHECK (typeof(ordem) = 'integer' AND ordem >= 1),
   nome           TEXT    NOT NULL CHECK (length(trim(nome)) BETWEEN 1 AND 60),
-  dias           INTEGER NOT NULL CHECK (dias BETWEEN 1 AND 366),
-  percentual_bp  INTEGER NOT NULL CHECK (percentual_bp BETWEEN 0 AND 10000),
+  dias           INTEGER NOT NULL CHECK (typeof(dias) = 'integer' AND dias BETWEEN 1 AND 366),
+  percentual_bp  INTEGER NOT NULL CHECK (typeof(percentual_bp) = 'integer' AND percentual_bp BETWEEN 0 AND 10000),
   PRIMARY KEY (campanha_id, ordem)
 );
 
@@ -77,7 +79,7 @@ CREATE TABLE celulas (
   discipulador_id  INTEGER NOT NULL REFERENCES discipuladores (id) ON DELETE RESTRICT,
   nome             TEXT    NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(nome)) BETWEEN 1 AND 120),
   -- Base da meta proporcional.
-  qtd_pessoas      INTEGER NOT NULL CHECK (qtd_pessoas BETWEEN 1 AND 1000),
+  qtd_pessoas      INTEGER NOT NULL CHECK (typeof(qtd_pessoas) = 'integer' AND qtd_pessoas BETWEEN 1 AND 1000),
   lider_nome       TEXT    NOT NULL CHECK (length(trim(lider_nome)) BETWEEN 1 AND 120),
   lider_email      TEXT    CHECK (lider_email IS NULL OR (length(lider_email) <= 254 AND lider_email LIKE '%_@_%')),
   lider_telefone   TEXT    CHECK (lider_telefone IS NULL OR length(trim(lider_telefone)) BETWEEN 1 AND 40),
@@ -90,8 +92,10 @@ CREATE INDEX celulas_por_discipulador ON celulas (discipulador_id);
 -- D7: affiliate_id da Rifei → célula. celula_id NULL = não vinculado (fila de órfãos). Um affiliate_id
 -- desconhecido no webhook cria a linha na hora (origem 'webhook'). Vincular reatribui todas as vendas
 -- do afiliado na hora: a célula de um pedido é resolvida por JOIN na leitura.
+-- affiliate_id é INT (não INTEGER) PRIMARY KEY NOT NULL de propósito: não é alias do rowid, então
+-- um INSERT com NULL falha em vez de criar um afiliado fantasma com id automático.
 CREATE TABLE afiliados (
-  affiliate_id   INTEGER PRIMARY KEY CHECK (affiliate_id >= 0),
+  affiliate_id   INT     PRIMARY KEY NOT NULL CHECK (typeof(affiliate_id) = 'integer' AND affiliate_id > 0),
   celula_id      INTEGER REFERENCES celulas (id) ON DELETE RESTRICT,
   -- Nota livre da coordenação (ex.: usuário do líder na Rifei).
   rotulo         TEXT    CHECK (rotulo IS NULL OR length(trim(rotulo)) BETWEEN 1 AND 120),
@@ -110,22 +114,24 @@ CREATE TABLE pedidos (
   id                          TEXT    PRIMARY KEY CHECK (length(id) BETWEEN 1 AND 128),
   campanha_id                 INTEGER NOT NULL REFERENCES campanhas (id) ON DELETE RESTRICT,
   -- NULL = venda sem afiliado.
-  affiliate_id                INTEGER REFERENCES afiliados (affiliate_id) ON DELETE RESTRICT,
+  affiliate_id                INTEGER REFERENCES afiliados (affiliate_id) ON DELETE RESTRICT CHECK (affiliate_id IS NULL OR typeof(affiliate_id) = 'integer'),
   status                      TEXT    NOT NULL CHECK (status IN ('in_process', 'approved', 'expired')),
-  -- status e status_detail como vieram no último evento processado.
-  status_rifei                TEXT    NOT NULL,
-  status_detail_rifei         TEXT    NOT NULL,
-  qtd_bilhetes                INTEGER NOT NULL CHECK (qtd_bilhetes >= 0),
+  -- status e status_detail como vieram no último evento processado. Os campos informativos do payload
+  -- (status, status_detail, subtotal, método, rifinha, expires_at) são NULL quando a Rifei manda
+  -- ausente ou com tipo errado: o webhook aceita e registra um aviso (RIFA-002b).
+  status_rifei                TEXT,
+  status_detail_rifei         TEXT,
+  qtd_bilhetes                INTEGER NOT NULL CHECK (typeof(qtd_bilhetes) = 'integer' AND qtd_bilhetes >= 0),
   -- Números dos bilhetes (array JSON), para a reconciliação.
   numeros                     TEXT    CHECK (numeros IS NULL OR json_valid(numeros)),
-  subtotal_centavos           INTEGER NOT NULL CHECK (subtotal_centavos >= 0),
+  subtotal_centavos           INTEGER CHECK (subtotal_centavos IS NULL OR (typeof(subtotal_centavos) = 'integer' AND subtotal_centavos >= 0)),
   -- Valor arrecadado (depois dos descontos).
-  total_centavos              INTEGER NOT NULL CHECK (total_centavos >= 0),
-  desconto_promocao_centavos  INTEGER CHECK (desconto_promocao_centavos IS NULL OR desconto_promocao_centavos >= 0),
-  desconto_cupom_centavos     INTEGER CHECK (desconto_cupom_centavos IS NULL OR desconto_cupom_centavos >= 0),
-  cupom_id                    INTEGER,
-  metodo_pagamento            TEXT    NOT NULL,
-  rifinha                     INTEGER NOT NULL CHECK (rifinha IN (0, 1)),
+  total_centavos              INTEGER NOT NULL CHECK (typeof(total_centavos) = 'integer' AND total_centavos >= 0),
+  desconto_promocao_centavos  INTEGER CHECK (desconto_promocao_centavos IS NULL OR (typeof(desconto_promocao_centavos) = 'integer' AND desconto_promocao_centavos >= 0)),
+  desconto_cupom_centavos     INTEGER CHECK (desconto_cupom_centavos IS NULL OR (typeof(desconto_cupom_centavos) = 'integer' AND desconto_cupom_centavos >= 0)),
+  cupom_id                    INTEGER CHECK (cupom_id IS NULL OR typeof(cupom_id) = 'integer'),
+  metodo_pagamento            TEXT,
+  rifinha                     INTEGER CHECK (rifinha IS NULL OR rifinha IN (0, 1)),
   -- Derivados de buyer.phone (E.164). DDD só para o Brasil.
   ddd                         TEXT    CHECK (ddd IS NULL OR ddd GLOB '[1-9][1-9]'),
   pais                        TEXT    CHECK (pais IS NULL OR pais GLOB '[1-9]' OR pais GLOB '[1-9][0-9]' OR pais GLOB '[1-9][0-9][0-9]'),
@@ -135,8 +141,9 @@ CREATE TABLE pedidos (
   utm_content                 TEXT,
   utm_term                    TEXT,
   -- Instantes da Rifei (created_at, expires_at, approved_at, expired_at) normalizados para UTC.
+  -- created_at ausente ou inválido: o webhook grava o instante do recebimento.
   criado_em                   TEXT    NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', criado_em) IS criado_em),
-  expira_em                   TEXT    NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', expira_em) IS expira_em),
+  expira_em                   TEXT    CHECK (expira_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expira_em) IS expira_em),
   aprovado_em                 TEXT    CHECK (aprovado_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', aprovado_em) IS aprovado_em),
   expirado_em                 TEXT    CHECK (expirado_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expirado_em) IS expirado_em),
   -- Nossos: primeira gravação e última alteração.
@@ -167,8 +174,12 @@ CREATE TABLE webhook_eventos (
   payload_redigido   TEXT    CHECK (payload_redigido IS NULL OR json_valid(payload_redigido)),
   -- JSON: lista de problemas de validação (caminho, código, mensagem; nunca o valor).
   erro               TEXT    CHECK (erro IS NULL OR json_valid(erro)),
+  -- JSON: diferenças do payload aceito em relação à doc (caminho, código, mensagem; nunca o valor).
+  -- NULL quando não há nenhuma. Nunca em erro_validacao (lá os problemas vão em erro).
+  avisos             TEXT    CHECK (avisos IS NULL OR json_valid(avisos)),
   CHECK ((resultado = 'erro_validacao') = (erro IS NOT NULL)),
   CHECK (resultado = 'erro_validacao' OR payload_redigido IS NOT NULL),
+  CHECK (resultado <> 'erro_validacao' OR avisos IS NULL),
   CHECK ((resultado IN ('processado', 'duplicado', 'ignorado_transicao')) = (status_resultante IS NOT NULL))
 );
 

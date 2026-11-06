@@ -20,7 +20,7 @@ Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e
 | D6 | `Authorization: Bearer` comparado em tempo constante com `RIFEI_WEBHOOK_TOKEN`. Inválido ou ausente: 401. Segredo não configurado: 503. | `SEGREDO_WEBHOOK_RIFEI`; grupo `rifei_bearer`; códigos `nao_autenticado` e `nao_configurado` |
 | D7 | `affiliate_id` → afiliado → célula. Afiliado desconhecido entra como não vinculado (fila de órfãos); venda sem afiliado fica em "sem afiliado". A célula é resolvida por JOIN na leitura. | tabela `afiliados` (`celula_id` NULL), view `vendas_aprovadas` |
 | D8 | Fuso da campanha `America/Belem` para dia e semana | `campanhas.fuso_horario` (padrão), `FUSO_PADRAO`; instantes guardados em UTC |
-| D9 | 200 depois de gravar; payload malformado: 400, registrado com erro; falha de banco: 500 | resultado `erro_validacao`; códigos `json_invalido`, `payload_invalido` e `erro_interno` |
+| D9 | 200 depois de gravar; payload sem o essencial (`event`, `id`, `slug`, `numbers_count`, `total`): 400, registrado com erro; o resto é tolerado com avisos (RIFA-002b); falha de banco: 500 | `analisarPayloadRifei`; resultado `erro_validacao`; `webhook_eventos.avisos`; códigos `json_invalido`, `payload_invalido` e `erro_interno` |
 
 ## 1. Configurar o webhook na Rifei
 
@@ -48,48 +48,50 @@ Para trocar o token, faça a mudança nos dois lados em sequência: primeiro o s
 
 Corpo JSON, como a Rifei documenta. Os nomes dos campos ficam como a Rifei manda.
 
-| Campo | Tipo (doc) | No schema | O que o sistema faz |
-|---|---|---|---|
-| `event` | string | `new_order`, `paid_order` ou `expired_order` (outro valor: 400) | define a transição (D4) |
-| `id` | string | 1 a 128 caracteres | chave do pedido (D3) |
-| `slug` | string | 1 a 200 caracteres | filtro da campanha (D5) |
-| `is_rifinha` | boolean | obrigatório | `pedidos.rifinha` |
-| `buyer.name` | string | obrigatório | **descartado** (D1) |
-| `buyer.phone` | string E.164 | obrigatório; formato não validado | vira só `ddd` e `pais` (D1) |
-| `buyer.email` | null/string | null ou ausente | **descartado** |
-| `buyer.document` | null/string | null ou ausente | **descartado** |
-| `buyer.date_of_birth` | null/string | null ou ausente | **descartado** |
-| `buyer.address` | null/objeto | null ou ausente; 8 subcampos texto/null | **descartado** |
-| `numbers` | null/int[] | inteiros ≥ 0 | `pedidos.numeros` (para a reconciliação) |
-| `numbers_count` | integer | inteiro ≥ 0 | `pedidos.qtd_bilhetes` |
-| `lucky_numbers` | null/int[] | inteiros ≥ 0 | só no payload redigido |
-| `subtotal` | number (reais) | ≥ 0 | `subtotal_centavos` (D2) |
-| `total` | number (reais) | ≥ 0 | `total_centavos`: é o valor arrecadado |
-| `promotion_discount` | null/number | ≥ 0 | `desconto_promocao_centavos` |
-| `coupon_discount` | null/number | ≥ 0 | `desconto_cupom_centavos` |
-| `payment_method` | string | texto | `metodo_pagamento` |
-| `status` | string (`in_process`, `approved`) | qualquer texto não vazio | `status_rifei` (informativo) |
-| `status_detail` | string | texto | `status_detail_rifei` (informativo) |
-| `coupon_id` | null/integer | inteiro | `cupom_id` |
-| `affiliate_id` | null/integer | inteiro ≥ 0 | liga a venda à célula (D7) |
-| `created_at`, `expires_at` | ISO 8601 | com fuso, ex. `-03:00` | `criado_em`, `expira_em` (em UTC) |
-| `approved_at` | null/ISO 8601 | null ou ausente | `aprovado_em` (em UTC) |
-| `expired_at` | null/ISO 8601 | null ou **ausente** (falta no exemplo oficial) | `expirado_em` (em UTC) |
-| `upsells` | string[] | obrigatório | só no payload redigido |
-| `observation` | null/string | null ou ausente | **descartado** |
-| `fbp`, `fbc` | null/string | null ou **ausentes** (faltam no exemplo oficial) | **descartados** |
-| `utm.source/campaign/medium/content/term` | null/string | null ou ausentes; `utm` inteiro ausente ou null também é aceito (SUPOSIÇÃO) | `utm_*` |
+**A Rifei não reenvia avisos: um 400 é uma venda perdida.** Por isso o webhook só recusa quando falta o que torna o pedido gravável (coluna "Essencial"). Todo o resto é tolerado: se vier ausente ou com tipo errado, vira `null` e a diferença é registrada como **aviso**.
+
+| Campo | Tipo (doc) | Essencial? | Se vier ausente ou com tipo errado | O que o sistema faz |
+|---|---|---|---|---|
+| `event` | string | **sim**: `new_order`, `paid_order` ou `expired_order` | 400 | define a transição (D4) |
+| `id` | string | **sim**: texto de 1 a 128 caracteres | 400 | chave do pedido (D3) |
+| `slug` | string | **sim**: texto de 1 a 200 caracteres | 400 | filtro da campanha (D5) |
+| `numbers_count` | integer | **sim**: inteiro ≥ 0; texto só com dígitos (`"12"`) é convertido, com aviso | 400 | `pedidos.qtd_bilhetes` (metas em bilhetes) |
+| `total` | number (reais) | **sim**: número ≥ 0; texto numérico com ponto (`"19.90"`) é convertido, com aviso; vírgula decimal não | 400 | `total_centavos`: é o valor arrecadado |
+| `affiliate_id` | null/integer | não: inteiro > 0, ou texto só com dígitos (`"1042"`, com aviso) | null + aviso: a venda vai para "sem afiliado" e aparece na conferência | liga a venda à célula (D7) |
+| `created_at` | ISO 8601 | não | null + aviso; `pedidos.criado_em` recebe o instante do recebimento | `criado_em` (em UTC) |
+| `approved_at` | null/ISO 8601 | não | null (+ aviso se o tipo for errado); pedido aprovado usa o instante do recebimento | `aprovado_em` (em UTC) |
+| `expires_at` | ISO 8601 | não | null + aviso | `expira_em` (em UTC) |
+| `expired_at` | null/ISO 8601 | não; falta no exemplo oficial | null (+ aviso se o tipo for errado) | `expirado_em` (em UTC) |
+| `is_rifinha` | boolean | não | null + aviso | `pedidos.rifinha` |
+| `status` | string (`in_process`, `approved`) | não; aceita qualquer texto não vazio | null + aviso | `status_rifei` (informativo) |
+| `status_detail` | string | não | null + aviso | `status_detail_rifei` (informativo) |
+| `payment_method` | string | não | null + aviso | `metodo_pagamento` |
+| `subtotal` | number (reais) | não; texto numérico é convertido, com aviso | null + aviso | `subtotal_centavos` (D2) |
+| `promotion_discount`, `coupon_discount` | null/number | não | null (+ aviso se o tipo for errado) | `desconto_*_centavos` |
+| `coupon_id` | null/integer | não | null (+ aviso se o tipo for errado) | `cupom_id` |
+| `numbers`, `lucky_numbers` | null/int[] | não | null (+ aviso se o tipo for errado) | `pedidos.numeros` (reconciliação); `lucky_numbers` só no payload redigido |
+| `upsells` | string[] | não | null + aviso | só no payload redigido |
+| `utm.source/campaign/medium/content/term` | null/string | não; `utm` inteiro ausente ou null também é aceito (SUPOSIÇÃO) | null (+ aviso se o tipo for errado) | `utm_*` |
+| `buyer` inteiro (`name`, `phone`, `email`, `document`, `date_of_birth`, `address`) | objeto | não; qualquer tipo, inclusive `address` em texto | null (+ aviso) | **descartado** (D1); só `buyer.phone` é lido, para derivar `ddd` e `pais` |
+| `observation`, `fbp`, `fbc` | null/string | não; `fbp` e `fbc` faltam no exemplo oficial | null (+ aviso se o tipo for errado) | **descartados** (D1) |
 
 O exemplo oficial está, idêntico, em [`test/fixtures/rifei/paid_order.oficial.json`](../test/fixtures/rifei/paid_order.oficial.json).
 
-### Regras de validação (`payloadRifeiSchema`)
+### Validação e avisos (`analisarPayloadRifei`)
 
-- Tipos conforme a documentação. Valores em reais com vírgula (`"2,50"`), datas fora do ISO 8601 ou `affiliate_id` em texto são rejeitados.
-- Todo campo que a documentação marca como `null/...` aceita `null` **e também a ausência**, que vira `null`. É o caso de `expired_at`, `fbp` e `fbc`, que faltam no exemplo oficial.
-- Campos desconhecidos são **tolerados e descartados**: a Rifei pode acrescentar campos sem quebrar a integração.
-- `status` aceita qualquer texto, porque o valor num `expired_order` não é documentado. O estado do pedido vem do `event`, não do `status`.
-- O telefone não tem o formato validado: um telefone fora do E.164 só deixa `ddd` e `pais` nulos, sem rejeitar o pedido.
-- Os erros de validação (zod 4) trazem caminho, código e mensagem, mas **nunca o valor recebido**. Por isso podem ser gravados e devolvidos sem vazar dado pessoal (há teste para isso).
+O contrato tem dois schemas para o mesmo payload, e `analisarPayloadRifei(corpo)` aplica os dois:
+
+- **`payloadRifeiSchema` (tolerante)** decide. Recusa só os essenciais da tabela; o resto vira `null` com `.catch(null)`.
+- **`payloadRifeiDocSchema` (fiel à documentação)** não decide nada: cada diferença em relação à doc vira um aviso (caminho, código e mensagem do zod, **nunca o valor recebido**).
+
+O resultado é `{ aceito: true, payload, avisos }` ou `{ aceito: false, problemas }`:
+
+- Campo que a doc marca como `null/...` e vem ausente não gera aviso: é o caso de `expired_at`, `fbp` e `fbc` no exemplo oficial. Campo obrigatório na doc que vem ausente gera aviso.
+- Conversões feitas (`numbers_count: "12"`, `total: "19.90"`, `affiliate_id: "1042"`) também geram aviso, porque fogem da doc.
+- Campos desconhecidos são **tolerados e descartados**, sem aviso: a Rifei pode acrescentar campos sem quebrar a integração.
+- O telefone não tem o formato validado: um telefone fora do E.164 só deixa `ddd` e `pais` nulos.
+- Nem os problemas nem os avisos carregam dado pessoal; há teste para isso com as fixtures malformada e de tipos estranhos.
+- Os avisos vão para `webhook_eventos.avisos` (JSON; null quando a lista é vazia) e servem para a conferência: dá para listar as entregas aceitas com avisos e conferir a venda.
 
 ## 4. Redação na entrada (D1)
 
@@ -98,7 +100,7 @@ O payload bruto **só existe na memória da requisição**. O que se grava, e ta
 - A redação usa **lista de permissão**: é montada campo a campo, e o que não está nela é descartado, inclusive campos novos que a Rifei venha a mandar.
 - O `buyer` inteiro sai e entra `comprador: { ddd, pais }`, derivados de `buyer.phone` por `derivarTelefone`:
   - `pais` é o código de discagem do país (DDI) em dígitos, ex. `"55"`. É calculado pela tabela E.164 de códigos com 1 e 2 dígitos; os demais têm 3.
-  - `ddd` só existe para `+55` com 10 ou 11 dígitos nacionais e DDD sem zero. Ex.: `+5591988887777` dá `{ ddd: "91", pais: "55" }`; `+351910000002` dá `{ ddd: null, pais: "351" }`; um telefone sem `+` dá tudo `null`.
+  - `ddd` só existe para `+55` com 10 ou 11 dígitos nacionais e DDD sem zero. Ex.: `+5591988887777` dá `{ ddd: "91", pais: "55" }`; `+351910000002` dá `{ ddd: null, pais: "351" }`; um telefone sem `+`, ou que não seja texto, dá tudo `null`.
 - Saem também `observation`, `fbp` e `fbc`.
 - O schema redigido é **estrito**: qualquer campo a mais (ex.: `buyer`) faz a validação falhar. Os testes conferem o tipo (`expectTypeOf`) e o valor: nenhum texto pessoal de nenhuma fixture sobra no JSON redigido.
 
@@ -109,16 +111,21 @@ A ordem importa:
 1. Segredo `RIFEI_WEBHOOK_TOKEN` ausente: **503** `nao_configurado` e nada é gravado (D6).
 2. `Authorization` ausente ou inválido: **401** `nao_autenticado` e nada é gravado (D6).
 3. Corpo que não é JSON: grava um evento `erro_validacao` e responde **400** `json_invalido` (D9). A mensagem do problema é fixa: a do `JSON.parse` traz um trecho do corpo e nunca é gravada, devolvida nem logada (D1).
-4. `payloadRifeiSchema` falha: grava um evento `erro_validacao` com `identificarPayloadInvalido` (só os textos de `event`, `id` e `slug`) e os problemas sem valores, e responde **400** `payload_invalido` (D9).
-5. Redige o payload (D1).
-6. Sem campanha ativa, ou `slug` diferente de `campanhas.slug_rifei`: grava um evento `ignorado_outra_campanha` (com o payload redigido) e responde **200** (D5). Sem campanha ativa, o evento também cai aqui (SUPOSIÇÃO): o payload redigido fica guardado e pode ser reprocessado depois que a campanha for configurada.
+4. `analisarPayloadRifei` recusa (falta um essencial): grava um evento `erro_validacao` com `identificarPayloadInvalido` (só os textos de `event`, `id` e `slug`) e os `problemas`, e responde **400** `payload_invalido` (D9).
+5. Redige o payload aceito (D1). Os `avisos` acompanham o evento até a gravação.
+6. Sem campanha ativa, ou `slug` diferente de `campanhas.slug_rifei`: grava um evento `ignorado_outra_campanha` (com o payload redigido e os avisos) e responde **200** (D5). Sem campanha ativa, o evento também cai aqui (SUPOSIÇÃO): o payload redigido fica guardado e pode ser reprocessado depois que a campanha for configurada.
 7. Decide a transição com `decidirTransicaoPedido(status atual, event)` (D3, D4; tabela abaixo).
 8. Se `affiliate_id` não é nulo e ainda não existe: cria o afiliado **não vinculado**, com `celula_id` nulo e `origem = 'webhook'`. É a fila de órfãos (D7).
-9. Se o resultado é `processado`: cria ou atualiza o pedido com os dados **deste** evento (valores em centavos, instantes em UTC, `ddd`/`pais`, `utm`). Se o pedido fica `approved` e `approved_at` vem nulo, `aprovado_em` recebe o instante do recebimento.
-10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido) e responde **200** `{ "resultado", "evento_id" }`.
+9. Se o resultado é `processado`: cria ou atualiza o pedido com os dados **deste** evento (valores em centavos, instantes em UTC, `ddd`/`pais`, `utm`; campos informativos podem ser null).
+   - `created_at` nulo: `criado_em` recebe o instante do recebimento.
+   - Pedido `approved` com `approved_at` nulo: `aprovado_em` recebe o instante do recebimento.
+10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido e `avisos`, ou null se não houver) e responde **200** `{ "resultado", "evento_id" }`.
 11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a reconciliação por CSV recupera.
 
-Os passos 8 a 10 vão num único `db.batch` (uma transação no D1). A transição deve ser gravada com um UPSERT condicional, para continuar correta com entregas simultâneas do mesmo pedido. Exemplo para `paid_order`: `ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN ('in_process', 'expired')`.
+**Concorrência.** Os passos 8 a 10 vão num único `db.batch` (uma transação no D1). A transição é gravada com um UPSERT condicional, por exemplo para `paid_order`: `ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN ('in_process', 'expired')`. Com duas entregas simultâneas do mesmo pedido, o status lido no passo 7 pode estar velho. Por isso o **resultado gravado no evento vem do `meta.changes` do UPSERT**, e não da leitura:
+
+- `changes = 1`: o pedido foi criado ou mudou, e o resultado é `processado`;
+- `changes = 0`: nada mudou. O status atual é lido de novo e classificado pela tabela: `duplicado` se já está no estado do evento, `ignorado_transicao` se não.
 
 ### Máquina de estados (D4) e idempotência (D3)
 
@@ -161,7 +168,8 @@ Todas são fictícias. A única exceção é a oficial, que é o exemplo da pró
 | `paid_order.apos_expirado.json` | o mesmo pedido pago depois de expirar | válido; `expired` → `approved` |
 | `paid_order.outra_campanha.json` | slug `outra-campanha-da-conta`, endereço completo | válido; `ignorado_outra_campanha` |
 | `new_order.minimo.json` | todos os campos `null/...` ausentes, inclusive `utm` | válido; ausentes viram null |
-| `malformado.json` | evento desconhecido, sem `id`, valores em texto, data fora do ISO, `affiliate_id` em texto | rejeitado (400) e sem vazar dado pessoal no erro |
+| `paid_order.tipos_estranhos.json` | tipos errados em todos os campos informativos e no `buyer`; `numbers_count`, `total` e `affiliate_id` em texto | **aceito**, com os essenciais convertidos, o resto null e um aviso por campo |
+| `malformado.json` | evento desconhecido, sem `id`, `slug` vazio, `numbers_count` negativo e `total` com vírgula | recusado (400), com os problemas só nesses cinco campos e sem vazar dado pessoal |
 
 Os valores de `status_detail` em `new_order` (`"pending"`) e em `expired_order` (`"expired"`) também são SUPOSIÇÃO.
 

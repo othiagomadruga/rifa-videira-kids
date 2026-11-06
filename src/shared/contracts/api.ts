@@ -152,6 +152,27 @@ export const COLUNAS_CSV_HIERARQUIA_OBRIGATORIAS = [
 /** Máximo de linhas de dados por arquivo. */
 export const LIMITE_LINHAS_CSV_HIERARQUIA = 2000;
 
+/**
+ * `detalhes` do erro 400 `csv_invalido` (importação da hierarquia e, depois, a reconciliação): o
+ * arquivo não pôde nem ser lido linha a linha.
+ */
+export const detalhesCsvInvalidoSchema = z.discriminatedUnion("motivo", [
+  /** Arquivo vazio ou sem linha de cabeçalho. */
+  z.object({ motivo: z.literal("sem_cabecalho") }),
+  /** Faltam colunas obrigatórias no cabeçalho. */
+  z.object({
+    motivo: z.literal("colunas_faltando"),
+    colunas: z.array(z.string().min(1)).min(1),
+  }),
+  /** Mais linhas de dados que o limite. */
+  z.object({
+    motivo: z.literal("linhas_demais"),
+    limite: z.number().int().positive(),
+    total_linhas: z.number().int().positive(),
+  }),
+]);
+export type DetalhesCsvInvalido = z.infer<typeof detalhesCsvInvalidoSchema>;
+
 export const corpoImportarHierarquiaSchema = z.object({
   /** Conteúdo do arquivo (UTF-8, separador "," ou ";", aspas como no RFC 4180). */
   csv: z.string().min(1).max(1_000_000),
@@ -206,7 +227,7 @@ export const contagemHierarquiaSchema = z.object({
 export const erroLinhaImportacaoSchema = z.object({
   /** Linha no arquivo, contando o cabeçalho como linha 1. */
   linha: z.number().int().min(2),
-  /** null quando o problema é da linha inteira (ex.: célula repetida no arquivo com dados diferentes). */
+  /** null quando o problema é da linha inteira (ex.: célula repetida com dados diferentes). */
   coluna: z.enum(COLUNAS_CSV_HIERARQUIA).nullable(),
   mensagem: z.string().min(1),
 });
@@ -238,7 +259,7 @@ export const consultaAfiliadosSchema = z.object({
 });
 
 export const parametroAffiliateIdSchema = z.object({
-  affiliateId: z.coerce.number().int().nonnegative(),
+  affiliateId: z.coerce.number().int().positive(),
 });
 
 /** Cria o afiliado se ainda não existe (pré-cadastro, origem `manual`). */
@@ -465,7 +486,10 @@ export const respostaRankingPublicoSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING),
   divisao: divisaoSchema.nullable(),
   janela: janelaRankingSchema,
-  /** No máximo `publico.limite_ranking` itens (padrão: top 3). */
+  /**
+   * Itens com `posicao` até `publico.limite_ranking` (padrão 3). Empates na última posição entram
+   * todos, então pode haver mais itens que o limite (ex.: 1, 2, 3, 3).
+   */
   itens: z.array(itemRankingPublicoSchema),
   atualizado_em: instanteSchema,
 });
