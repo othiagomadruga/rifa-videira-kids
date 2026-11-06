@@ -4,7 +4,7 @@
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { expect } from "vitest";
-import type { Papel } from "../../shared/contracts";
+import { VALIDADE_LINK_DIAS, type Papel } from "../../shared/contracts";
 import { criarSessao, criarUsuarioComLink } from "../db/acessos";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import { exigirSessao, type AmbienteSessao } from "../middleware/sessao";
@@ -99,7 +99,9 @@ export async function criarAcessoNoBanco(
     {
       tokenHash: await sha256Hex(token),
       criadoEm: new Date(agora).toISOString(),
-      expiraEm: new Date(agora + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      expiraEm: new Date(
+        agora + VALIDADE_LINK_DIAS * 24 * 60 * 60 * 1000,
+      ).toISOString(),
     },
   );
   return { token, usuarioId, linkId, nome };

@@ -1,4 +1,5 @@
 // RIFA-007: administração dos acessos (/api/admin/usuarios e /api/admin/links), só para admin.
+import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   ROTAS_ACESSO,
@@ -40,6 +41,8 @@ async function criarUsuario(corpo: Record<string, unknown>) {
     sessao: admin,
   });
   expect(res.status).toBe(201);
+  // A resposta traz o link com o token: nenhum cache pode guardá-la.
+  expect(res.headers.get("Cache-Control")).toBe("no-store");
   return respostaCriarUsuarioSchema.parse(await res.json());
 }
 
@@ -156,10 +159,10 @@ describe("CA4: criação de usuário e de link", () => {
         situacao: "valido",
       },
     ]);
-    // Validade padrão: 30 dias.
+    // Validade padrão: 45 dias.
     expect(
       Date.parse(criado.link.expira_em) - Date.parse(criado.link.criado_em),
-    ).toBe(30 * 24 * 60 * 60 * 1000);
+    ).toBe(45 * 24 * 60 * 60 * 1000);
 
     const token = tokenDaUrl(criado.link.url);
     const res = await chamar(app, "POST", "/api/sessao", { corpo: { token } });
@@ -400,6 +403,74 @@ describe("CA4: desativar usuário", () => {
     // As sessões antigas não voltam; o link (ainda válido) abre uma nova.
     expect(await sessaoValida(celular)).toBe(false);
     expect(await statusDoLogin(token)).toBe(200);
+  });
+
+  it("admin não desativa o próprio acesso: 409 em_uso, e continua ativo e conectado", async () => {
+    const proprio = await sessaoDe(app, "admin");
+    const caminho = `/api/admin/usuarios/${proprio.usuarioId}`;
+
+    const res = await chamar(app, "PATCH", caminho, {
+      corpo: { ativo: false },
+      sessao: proprio.sessao,
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual(erro("em_uso"));
+    expect(await sessaoValida(proprio.sessao)).toBe(true);
+    expect((await usuarioNaLista(proprio.usuarioId)).ativo).toBe(true);
+    // Outro admin pode desativá-lo; "reativar" a si mesmo (nada muda) continua aceito.
+    const reativar = await chamar(app, "PATCH", caminho, {
+      corpo: { ativo: true },
+      sessao: proprio.sessao,
+    });
+    expect(reativar.status).toBe(200);
+    const porOutro = await chamar(app, "PATCH", caminho, {
+      corpo: { ativo: false },
+      sessao: admin,
+    });
+    expect(porOutro.status).toBe(200);
+    expect(await sessaoValida(proprio.sessao)).toBe(false);
+  });
+
+  it("dois admins desativando um ao outro ao mesmo tempo: um consegue, o outro recebe 409 e sobra um admin", async () => {
+    const a = await sessaoDe(app, "admin");
+    const b = await sessaoDe(app, "admin");
+    // Durante o teste, A e B são os únicos admins ativos (os outros voltam no fim, com as sessões).
+    const { results: outros } = await env.DB.prepare(
+      "UPDATE usuarios SET ativo = 0 WHERE papel = 'admin' AND ativo = 1 AND id NOT IN (?1, ?2) RETURNING id",
+    )
+      .bind(a.usuarioId, b.usuarioId)
+      .all<{ id: number }>();
+    try {
+      // As duas requisições passam pelo middleware antes de qualquer UPDATE.
+      const [aDesativaB, bDesativaA] = await Promise.all([
+        chamar(app, "PATCH", `/api/admin/usuarios/${b.usuarioId}`, {
+          corpo: { ativo: false },
+          sessao: a.sessao,
+        }),
+        chamar(app, "PATCH", `/api/admin/usuarios/${a.usuarioId}`, {
+          corpo: { ativo: false },
+          sessao: b.sessao,
+        }),
+      ]);
+
+      expect([aDesativaB.status, bDesativaA.status].sort()).toEqual([200, 409]);
+      // Quem fica ativo é o alvo da requisição recusada.
+      const [recusada, quemFica] =
+        aDesativaB.status === 409 ? [aDesativaB, b] : [bDesativaA, a];
+      expect(await recusada.json()).toEqual(erro("em_uso"));
+      expect(await sessaoValida(quemFica.sessao)).toBe(true);
+      const ativos = await env.DB.prepare(
+        "SELECT count(*) AS total FROM usuarios WHERE papel = 'admin' AND ativo = 1",
+      ).first<{ total: number }>();
+      expect(ativos?.total).toBe(1);
+    } finally {
+      await env.DB.prepare(
+        "UPDATE usuarios SET ativo = 1 WHERE id IN (SELECT value FROM json_each(?1))",
+      )
+        .bind(JSON.stringify(outros.map((linha) => linha.id)))
+        .run();
+    }
   });
 
   it("aceita só { ativo }: outro campo responde 400; usuário inexistente, 404", async () => {

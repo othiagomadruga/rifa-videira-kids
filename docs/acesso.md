@@ -10,9 +10,9 @@ A coordenação (Fábio, Felipe, pastor, gestor do bumbo) entra pelo celular, a 
 
 1. Um **admin** cadastra a pessoa (`POST /api/admin/usuarios`) e recebe, **uma única vez**, o link `https://<site>/acesso/<token>`. Ele manda o link no WhatsApp da pessoa.
 2. A pessoa abre o link. A página `/acesso/:token` do site mostra uma confirmação ("Entrar como coordenação"). O preview de link do WhatsApp também abre a URL, mas não clica no botão: **só o POST cria a sessão**.
-3. O botão faz `POST /api/sessao { token }`. A API confere o link e responde com o cookie `sessao` (30 dias) e o usuário.
+3. O botão faz `POST /api/sessao { token }`. A API confere o link e responde com o cookie `sessao` (45 dias) e o usuário.
 4. O site pergunta `GET /api/sessao` para saber quem está conectado. As rotas `/api/admin/*` e `/api/painel/*` passam a responder.
-5. O link continua valendo por 30 dias: serve para entrar de novo (outro aparelho, cookie apagado). O admin pode gerar um link novo, revogar um link ou desativar a pessoa.
+5. O link continua valendo por 45 dias (o bastante para a campanha inteira: vendas de 23/11 a meados de dezembro): serve para entrar de novo (outro aparelho, cookie apagado). O admin pode gerar um link novo, revogar um link ou desativar a pessoa.
 
 ## 2. Papéis
 
@@ -32,7 +32,7 @@ Erros no formato único (`docs/api.md`, seção "Erros").
 | `POST /api/sessao/sair` | aberto (mesma origem) | **204**, apaga a sessão e expira o cookie (também sem sessão) | 403 (outra origem) |
 | `POST /api/admin/usuarios` `{ nome, email?, papel }` | admin | **201** `{ usuario, link }`: `link.url` só aparece aqui | 400, 401, 403 |
 | `GET /api/admin/usuarios` | admin | **200** `{ itens: [usuario] }`, sem token, URL ou hash | 401, 403 |
-| `PATCH /api/admin/usuarios/:id` `{ ativo }` | admin | **200** usuário | 400 (outro campo além de `ativo`), 401, 403, 404 |
+| `PATCH /api/admin/usuarios/:id` `{ ativo }` | admin | **200** usuário | 400 (outro campo além de `ativo`), 401, 403, 404, 409 `em_uso` (desativar a si mesmo ou o último admin ativo) |
 | `POST /api/admin/usuarios/:id/links` | admin | **201** `{ link }`, com `link.url` | 400, 401, 403, 404 |
 | `DELETE /api/admin/links/:id` | admin | **204** (de novo: 204, mantém a data da primeira revogação) | 400, 401, 403, 404 |
 
@@ -43,7 +43,7 @@ Usuário na administração (`usuarioSchema`):
   "id": 3, "nome": "Coordenadora Ficticia", "email": null, "papel": "coordenacao", "ativo": true,
   "criado_em": "2026-11-06T18:00:00.000Z", "sessoes_ativas": 1,
   "links": [
-    { "id": 7, "criado_em": "2026-11-06T18:00:00.000Z", "expira_em": "2026-12-06T18:00:00.000Z",
+    { "id": 7, "criado_em": "2026-11-06T18:00:00.000Z", "expira_em": "2026-12-21T18:00:00.000Z",
       "revogado_em": null, "ultimo_uso_em": "2026-11-06T18:05:12.345Z", "situacao": "valido" }
   ]
 }
@@ -52,20 +52,21 @@ Usuário na administração (`usuarioSchema`):
 - `situacao`: `valido`, `expirado` ou `revogado`. `links` vem do mais novo para o mais antigo.
 - Na criação, `link` traz também `"url": "https://<site>/acesso/<token>"`. A origem da URL é a da requisição do admin.
 - **Desativar** (`ativo: false`) apaga todas as sessões da pessoa e os links param de abrir sessão. **Reativar** não traz as sessões de volta; os links ainda dentro da validade voltam a funcionar.
+- **Ninguém desativa o próprio acesso**, e o **último admin ativo** não pode ser desativado: 409 `em_uso`, nada muda. A condição fica no próprio `UPDATE`, então dois admins desativando um ao outro ao mesmo tempo não deixam a equipe sem admin. Não há troca de papel na API (o `PATCH` só aceita `ativo`), então também não há como rebaixar o último admin.
 - **Revogar** um link apaga as sessões abertas **por ele**. As sessões abertas por outros links da mesma pessoa continuam.
 - **Link novo** não revoga os anteriores (revogue explicitamente, se for o caso).
 
 ## 4. Segurança
 
 - **Segredos**: o token do link e o id da sessão têm 32 bytes de `crypto.getRandomValues` (256 bits), em base64url sem `=` (43 caracteres). No banco fica só o **SHA-256 em hex**, e a busca é sempre pelo hash. Quem copiar o banco não consegue montar um link nem um cookie. Um `CHECK` nas colunas `token_hash` e `id_hash` recusa qualquer valor que não seja um hash (64 hex minúsculos).
-- **Cookie**: `sessao=<id>; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax`.
+- **Cookie**: `sessao=<id>; Max-Age=3888000; Path=/; HttpOnly; Secure; SameSite=Lax` (45 dias).
   - `HttpOnly`: o JavaScript da página não lê o cookie.
   - `Secure`: só vai por https (os navegadores aceitam também em `http://localhost`).
   - `SameSite=Lax`: não acompanha POSTs vindos de outro site.
   - O site não lê o cookie: pergunta a `GET /api/sessao`.
 - **CSRF**: toda escrita (POST, PUT, PATCH, DELETE) em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só é aceita com `Origin` igual à origem da requisição, ou com `Sec-Fetch-Site: same-origin`. Sem nenhum dos dois, a resposta é 403. Os navegadores mandam esses cabeçalhos sozinhos. Fora do navegador (curl), mande `-H "Origin: https://<site>"`. A origem é conferida antes da sessão.
 - **Cache**: as respostas autenticadas e as de sessão saem com `Cache-Control: no-store`.
-- **Sessão**: dura 30 dias a partir do login (não renova sozinha). Entrar de novo no mesmo navegador encerra a sessão anterior dele. A cada login, as sessões vencidas são apagadas. O `ultimo_uso_em` é regravado no máximo uma vez por minuto.
+- **Sessão**: dura 45 dias a partir do login (não renova sozinha). Entrar de novo no mesmo navegador encerra a sessão anterior dele. A cada login, as sessões vencidas são apagadas. O `ultimo_uso_em` é regravado no máximo uma vez por minuto.
 - **Cookie inválido** (sessão inexistente, vencida ou de usuário desativado): 401, e a resposta expira o cookie.
 - **Sem limite de tentativas**: com 256 bits, adivinhar um token não é viável.
 
@@ -98,7 +99,7 @@ Acesso criado no D1 local: Fulano de Tal (admin), usuário 1.
 
   http://localhost:5173/acesso/<token>
 
-O link vale até 2026-12-06T16:44:08.737Z (UTC) e pode ser aberto mais de uma vez nesse prazo.
+O link vale até 2026-12-21T16:44:08.737Z (UTC) e pode ser aberto mais de uma vez nesse prazo.
 Ele não será mostrado de novo. Mande só para a própria pessoa: quem tiver o link entra como ela.
 ```
 
@@ -143,8 +144,8 @@ Instantes em UTC no formato de `0001_init.sql`. Links e sessões caem junto se u
 |---|---|
 | `src/worker/routes/acesso.test.ts` | link → sessão → cookie com as flags; `GET /api/sessao`; links expirado, revogado, de usuário inativo, inexistente ou cortado (401); reuso do link; saída |
 | `src/worker/middleware/sessao.test.ts` | 401 sem sessão e com sessão expirada; 403 por papel; 403 em POST/PUT/PATCH/DELETE de outra origem; `c.var.usuario` |
-| `src/worker/routes/admin-usuarios.test.ts` | só admin administra; o link só na criação; link novo; revogar; desativar e reativar |
-| `src/worker/db/acessos.test.ts` | varredura de todas as tabelas atrás de tokens e ids de sessão; busca pelo hash; `CHECK` de formato |
+| `src/worker/routes/admin-usuarios.test.ts` | só admin administra; o link só na criação; link novo; revogar; desativar e reativar; ninguém desativa a si mesmo e sobra sempre um admin (inclusive com dois admins desativando um ao outro ao mesmo tempo) |
+| `src/worker/db/acessos.test.ts` | varredura de todas as tabelas atrás de tokens e ids de sessão; busca pelo hash; `CHECK` de formato; o último admin ativo não é desativado |
 | `src/worker/test/criar-acesso.test.ts` | o script cria um admin no D1 e o link impresso abre sessão; `--remote`; nomes perigosos recusados |
 | `src/worker/lib/cripto.test.ts` | formato dos segredos, SHA-256 e equivalência com o script |
 | `src/shared/contracts/acesso.test.ts` | catálogo, papéis e ausência de segredos nas respostas |

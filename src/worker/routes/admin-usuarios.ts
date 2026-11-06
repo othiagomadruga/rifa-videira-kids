@@ -4,7 +4,8 @@
  *
  * - POST /api/admin/usuarios { nome, email?, papel } → 201 { usuario, link }: a URL do link só aparece aqui;
  * - GET /api/admin/usuarios → 200 { itens }: usuários com os links (sem token) e as sessões ativas;
- * - PATCH /api/admin/usuarios/:id { ativo } → 200 usuário: desativar encerra as sessões dele;
+ * - PATCH /api/admin/usuarios/:id { ativo } → 200 usuário: desativar encerra as sessões dele; 409 `em_uso`
+ *   ao desativar a si mesmo ou o último admin ativo (não há troca de papel, então não há como rebaixá-lo);
  * - POST /api/admin/usuarios/:id/links → 201 { link }: link novo (os anteriores continuam valendo);
  * - DELETE /api/admin/links/:id → 204: revoga o link e encerra as sessões abertas por ele.
  */
@@ -78,6 +79,11 @@ function respostaUsuarioNaoEncontrado(c: Context) {
   return c.json(criarErroApi("nao_encontrado", "Usuário não encontrado"), 404);
 }
 
+/** 409 `em_uso`: a desativação deixaria alguém (ou a equipe toda) sem acesso de admin. */
+function respostaDesativacaoRecusada(c: Context, mensagem: string) {
+  return c.json(criarErroApi("em_uso", mensagem), 409);
+}
+
 adminUsuarios.post(
   "/usuarios",
   validarJson(corpoCriarUsuarioSchema),
@@ -118,8 +124,18 @@ adminUsuarios.patch(
   async (c) => {
     const { id } = c.req.valid("param");
     const { ativo } = c.req.valid("json");
-    if (!(await definirAtivo(c.env.DB, id, ativo)))
-      return respostaUsuarioNaoEncontrado(c);
+    if (!ativo && id === c.var.usuario.id)
+      return respostaDesativacaoRecusada(
+        c,
+        "Você não pode desativar o seu próprio acesso: peça a outro admin",
+      );
+    const resultado = await definirAtivo(c.env.DB, id, ativo);
+    if (resultado === "nao_encontrado") return respostaUsuarioNaoEncontrado(c);
+    if (resultado === "ultimo_admin")
+      return respostaDesativacaoRecusada(
+        c,
+        "Este é o último admin ativo: crie ou reative outro admin antes de desativá-lo",
+      );
     const usuario = await buscarUsuario(c.env.DB, id, new Date().toISOString());
     return usuario === null
       ? respostaUsuarioNaoEncontrado(c)

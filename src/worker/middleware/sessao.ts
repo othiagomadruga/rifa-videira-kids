@@ -34,7 +34,7 @@ const OPCOES_COOKIE = {
   path: "/",
 } as const;
 
-/** `Set-Cookie: sessao=<id>; Max-Age=<30 dias>; Path=/; HttpOnly; Secure; SameSite=Lax`. */
+/** `Set-Cookie: sessao=<id>; Max-Age=<VALIDADE_SESSAO_DIAS em segundos>; Path=/; HttpOnly; Secure; SameSite=Lax`. */
 export function gravarCookieSessao(c: Context, idSessao: string): void {
   setCookie(c, COOKIE_SESSAO, idSessao, {
     ...OPCOES_COOKIE,

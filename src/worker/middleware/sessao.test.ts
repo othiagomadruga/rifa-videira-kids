@@ -162,6 +162,7 @@ describe("CA3: CSRF nas escritas", () => {
     ],
     ["Origin null", "null", { "Sec-Fetch-Site": "cross-site" }],
     ["outra porta", "http://localhost:8080", {}],
+    ["Origin em maiúsculas", "HTTP://LOCALHOST", {}],
   ] as const)("escrita %s responde 403", async (_caso, origem, cabecalhos) => {
     const { sessao } = await sessaoDe(app, "admin");
 

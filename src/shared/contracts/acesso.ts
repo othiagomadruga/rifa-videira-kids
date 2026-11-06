@@ -31,9 +31,12 @@ export const PAPEIS = ["admin", "coordenacao"] as const;
 export const papelSchema = z.enum(PAPEIS);
 export type Papel = z.infer<typeof papelSchema>;
 
-/** Validade de um link novo e de uma sessão nova, em dias. */
-export const VALIDADE_LINK_DIAS = 30;
-export const VALIDADE_SESSAO_DIAS = 30;
+/**
+ * Validade de um link novo e de uma sessão nova, em dias. 45 dias cobrem a campanha (vendas de 23/11 a meados de
+ * dezembro de 2026): com 30, um link entregue antes do início venceria no meio das vendas.
+ */
+export const VALIDADE_LINK_DIAS = 45;
+export const VALIDADE_SESSAO_DIAS = 45;
 
 /** Caminho do link no site: `<origem>/acesso/<token>`. */
 export const PREFIXO_LINK_ACESSO = "/acesso/";
@@ -127,7 +130,10 @@ export const respostaCriarLinkSchema = z.object({
   link: linkAcessoCriadoSchema,
 });
 
-/** PATCH /api/admin/usuarios/:id. Desativar encerra as sessões do usuário; reativar não cria link. */
+/**
+ * PATCH /api/admin/usuarios/:id. Desativar encerra as sessões do usuário; reativar não cria link.
+ * 409 `em_uso`: ninguém desativa o próprio acesso, e o último admin ativo não pode ser desativado.
+ */
 export const corpoAtualizarUsuarioSchema = z.strictObject({
   ativo: z.boolean(),
 });

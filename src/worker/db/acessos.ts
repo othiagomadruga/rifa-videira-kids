@@ -170,22 +170,42 @@ export async function criarUsuarioComLink(
   return { usuarioId, linkId };
 }
 
-/** true se o usuário existe. Desativar apaga as sessões dele na mesma transação. */
+/** "ultimo_admin": desativar deixaria a equipe sem nenhum admin ativo (nada muda). */
+export type ResultadoDefinirAtivo = "ok" | "nao_encontrado" | "ultimo_admin";
+
+/**
+ * Ativa ou desativa o usuário. Desativar apaga as sessões dele na mesma transação e é recusado se ele for o
+ * último admin ativo. A condição fica no próprio UPDATE: dois admins desativando um ao outro ao mesmo tempo
+ * não deixam a equipe sem admin (o segundo UPDATE já vê só um admin ativo).
+ */
 export async function definirAtivo(
   db: D1Database,
   usuarioId: number,
   ativo: boolean,
-): Promise<boolean> {
+): Promise<ResultadoDefinirAtivo> {
   const valor = ativo ? 1 : 0;
-  const [atualizacao] = await db.batch([
+  const [atualizacao, , existente] = await db.batch([
     db
-      .prepare("UPDATE usuarios SET ativo = ?2 WHERE id = ?1")
+      .prepare(
+        `UPDATE usuarios SET ativo = ?2
+         WHERE id = ?1
+           AND NOT (?2 = 0 AND papel = 'admin' AND ativo = 1
+                    AND (SELECT count(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1) = 1)`,
+      )
+      .bind(usuarioId, valor),
+    // Só se a desativação aconteceu: recusada, o usuário continua ativo e as sessões ficam.
+    db
+      .prepare(
+        `DELETE FROM sessoes WHERE usuario_id = ?1 AND ?2 = 0
+           AND EXISTS (SELECT 1 FROM usuarios WHERE id = ?1 AND ativo = 0)`,
+      )
       .bind(usuarioId, valor),
     db
-      .prepare("DELETE FROM sessoes WHERE usuario_id = ?1 AND ?2 = 0")
-      .bind(usuarioId, valor),
+      .prepare("SELECT 1 AS existe FROM usuarios WHERE id = ?1")
+      .bind(usuarioId),
   ]);
-  return atualizacao.meta.changes > 0;
+  if (atualizacao.meta.changes > 0) return "ok";
+  return existente.results.length > 0 ? "ultimo_admin" : "nao_encontrado";
 }
 
 // ---------------------------------------------------------------------------------------------------

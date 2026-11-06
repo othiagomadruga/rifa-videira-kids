@@ -18,7 +18,8 @@
  */
 
 export const PAPEIS = ["admin", "coordenacao"];
-export const VALIDADE_LINK_DIAS = 30;
+// Igual a VALIDADE_LINK_DIAS do contrato (src/shared/contracts/acesso.ts); um teste confere.
+export const VALIDADE_LINK_DIAS = 45;
 export const ORIGEM_LOCAL = "http://localhost:5173";
 export const PREFIXO_LINK_ACESSO = "/acesso/";
 

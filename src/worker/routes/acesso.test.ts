@@ -50,7 +50,7 @@ describe("CA1: link → sessão → cookie", () => {
     expect(cookie?.atributos.sort()).toEqual(
       [
         "HttpOnly",
-        "Max-Age=2592000",
+        "Max-Age=3888000", // 45 dias
         "Path=/",
         "SameSite=Lax",
         "Secure",
@@ -58,6 +58,15 @@ describe("CA1: link → sessão → cookie", () => {
     );
     // O id da sessão não é o token do link.
     expect(cookie?.valor).not.toBe(acesso.token);
+    // A validade que vale é a do servidor: a mesma do cookie.
+    const gravada = await env.DB.prepare(
+      "SELECT criado_em, expira_em FROM sessoes WHERE id_hash = ?",
+    )
+      .bind(await sha256Hex(cookie!.valor))
+      .first<{ criado_em: string; expira_em: string }>();
+    expect(
+      Date.parse(gravada!.expira_em) - Date.parse(gravada!.criado_em),
+    ).toBe(45 * 24 * 60 * 60 * 1000);
   });
 
   it("GET /api/sessao com o cookie devolve o usuário da sessão", async () => {

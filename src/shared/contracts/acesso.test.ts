@@ -50,7 +50,7 @@ const usuarioExemplo = {
     {
       id: 3,
       criado_em: "2026-11-06T18:00:00.000Z",
-      expira_em: "2026-12-06T18:00:00.000Z",
+      expira_em: "2026-12-21T18:00:00.000Z",
       revogado_em: null,
       ultimo_uso_em: "2026-11-06T18:05:00.000Z",
       situacao: "valido",
@@ -206,8 +206,8 @@ describe("contrato do acesso: corpos", () => {
     ).toBe(false);
   });
 
-  it("link e sessão valem 30 dias", () => {
-    expect(VALIDADE_LINK_DIAS).toBe(30);
-    expect(VALIDADE_SESSAO_DIAS).toBe(30);
+  it("link e sessão valem 45 dias (cobrem a campanha, de 23/11 a meados de dezembro)", () => {
+    expect(VALIDADE_LINK_DIAS).toBe(45);
+    expect(VALIDADE_SESSAO_DIAS).toBe(45);
   });
 });

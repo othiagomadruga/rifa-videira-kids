@@ -1,4 +1,5 @@
-// RIFA-007: o banco nunca guarda token de link nem id de sessão em texto; a busca é pelo hash.
+// RIFA-007: o banco nunca guarda token de link nem id de sessão em texto; a busca é pelo hash. E o último
+// admin ativo não é desativado.
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import {
@@ -14,7 +15,11 @@ import {
   criarAppDeTeste,
   entrar,
 } from "../test/acesso-teste";
-import { buscarLinkValido, buscarUsuarioDaSessao } from "./acessos";
+import {
+  buscarLinkValido,
+  buscarUsuarioDaSessao,
+  definirAtivo,
+} from "./acessos";
 
 const db = env.DB;
 const HASH = /^[0-9a-f]{64}$/;
@@ -202,5 +207,46 @@ describe("CA5: a busca é pelo hash", () => {
     expect(comTokenHash.status).toBe(401);
     expect(cookieDaResposta(comTokenHash)).toBeNull();
     expect(comIdHash.status).toBe(401);
+  });
+});
+
+describe("último admin ativo (definirAtivo)", () => {
+  it("recusa desativar o último admin ativo sem mexer nas sessões; com outro admin ativo, desativa", async () => {
+    const app = criarAppDeTeste();
+    const a = await criarAcessoNoBanco("admin");
+    const sessaoA = await sha256Hex(await entrar(app, a.token));
+    const usuarioDaSessaoA = () =>
+      buscarUsuarioDaSessao(db, sessaoA, new Date().toISOString());
+    // Durante o teste, A é o único admin ativo (os outros voltam no fim, com as sessões).
+    const { results: outros } = await db
+      .prepare(
+        "UPDATE usuarios SET ativo = 0 WHERE papel = 'admin' AND ativo = 1 AND id <> ?1 RETURNING id",
+      )
+      .bind(a.usuarioId)
+      .all<{ id: number }>();
+    try {
+      expect(await definirAtivo(db, a.usuarioId, false)).toBe("ultimo_admin");
+      expect(await usuarioDaSessaoA()).toMatchObject({ id: a.usuarioId });
+
+      // Coordenação e usuário inexistente seguem como antes.
+      const coordenacao = await criarAcessoNoBanco("coordenacao");
+      expect(await definirAtivo(db, coordenacao.usuarioId, false)).toBe("ok");
+      expect(await definirAtivo(db, 999_999_999, false)).toBe("nao_encontrado");
+
+      // Com um segundo admin ativo, A sai (e as sessões dele caem); aí B passa a ser o último.
+      const b = await criarAcessoNoBanco("admin");
+      expect(await definirAtivo(db, a.usuarioId, false)).toBe("ok");
+      expect(await usuarioDaSessaoA()).toBeNull();
+      expect(await definirAtivo(db, b.usuarioId, false)).toBe("ultimo_admin");
+      // Reativar nunca é recusado.
+      expect(await definirAtivo(db, a.usuarioId, true)).toBe("ok");
+    } finally {
+      await db
+        .prepare(
+          "UPDATE usuarios SET ativo = 1 WHERE id IN (SELECT value FROM json_each(?1))",
+        )
+        .bind(JSON.stringify(outros.map((linha) => linha.id)))
+        .run();
+    }
   });
 });
