@@ -10,7 +10,8 @@ import { webhookRifei } from "./routes/webhook-rifei";
 const app = new Hono<{ Bindings: Cloudflare.Env }>();
 
 app.route(ROTAS.health.caminho, health);
-app.route(ROTAS.webhookRifei.caminho, webhookRifei);
+// O webhook declara os próprios caminhos (CAMINHOS_WEBHOOK_RIFEI: com e sem barra no fim).
+app.route("/", webhookRifei);
 
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);

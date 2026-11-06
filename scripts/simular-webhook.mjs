@@ -7,6 +7,7 @@
 // Sai com código 1 se a resposta não for 2xx e 2 se faltar argumento, arquivo ou token.
 // Passo a passo: docs/integracao-rifei.md, seção "Como testar localmente".
 import { readFile } from "node:fs/promises";
+import { lerVariavel } from "./dev-vars.mjs";
 
 const URL_PADRAO = "http://localhost:5173/api/webhooks/rifei";
 const DEV_VARS = new URL("../.dev.vars", import.meta.url);
@@ -15,18 +16,6 @@ const NOME_DO_SEGREDO = "RIFEI_WEBHOOK_TOKEN";
 function sair(mensagem) {
   console.error(mensagem);
   process.exit(2);
-}
-
-/** Lê uma variável do .dev.vars (formato dotenv: NOME=valor, aspas e comentários opcionais). */
-function lerVariavel(conteudo, nome) {
-  for (const linha of conteudo.split(/\r?\n/)) {
-    const par = /^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*)$/.exec(linha);
-    if (par === null || par[1] !== nome) continue;
-    const valor = par[2].trim();
-    const entreAspas = /^(["'])(.*)\1$/.exec(valor);
-    return entreAspas ? entreAspas[2] : valor.replace(/\s+#.*$/, "");
-  }
-  return undefined;
 }
 
 const [arquivo, url = URL_PADRAO] = process.argv.slice(2);

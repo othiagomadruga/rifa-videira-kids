@@ -2,20 +2,23 @@
 import {
   STATUS_PEDIDO,
   TRANSICOES_PERMITIDAS,
+  avisosParaGravar,
   decidirTransicaoPedido,
   reaisParaCentavos,
+  type AvisoPayloadRifei,
   type PayloadRifeiRedigido,
   type RespostaWebhookRifei,
   type StatusPedido,
 } from "../../shared/contracts";
 import { prepararRegistroAfiliadoOrfao } from "./afiliados";
-import { prepararRegistroEventoSeStatusAtual } from "./webhook-eventos";
+import { prepararRegistroEventoSePedidoIgual } from "./webhook-eventos";
 
 /**
- * Uma tentativa só falha se o status mudou entre a leitura e a gravação. Na vida de um pedido o status
- * muda no máximo 3 vezes (nenhum → in_process → expired → approved), então a 4ª sempre grava.
+ * Uma tentativa só falha se o pedido (status ou afiliado) mudou entre a leitura e a gravação. Na vida
+ * de um pedido isso acontece no máximo 4 vezes: a criação, 2 transições (in_process → expired →
+ * approved) e o preenchimento do afiliado tardio (de null para um id, uma vez só). A 5ª sempre grava.
  */
-const MAX_TENTATIVAS = 4;
+const MAX_TENTATIVAS = 5;
 
 /** O que o processamento lê do pedido gravado: o status (guarda da transição, D4) e o afiliado (D7). */
 interface PedidoAtual {
@@ -41,14 +44,14 @@ function origensPermitidas(alvo: StatusPedido): StatusPedido[] {
   });
 }
 
-// Campos informativos são tratados como anuláveis: um valor ausente segue como null, sem inventar dado.
+// Campos informativos são anuláveis (RIFA-002b): um valor ausente ou inválido segue como null.
 
 /** D8: instantes da Rifei (com fuso) são guardados em UTC. */
 function utcOuNulo(instante: string | null): string | null {
   return instante === null ? null : new Date(instante).toISOString();
 }
 
-/** D2: reais para centavos inteiros. */
+/** D2: reais para centavos inteiros, exatos (reaisParaCentavos do contrato). */
 function centavosOuNulo(reais: number | null): number | null {
   return reais === null ? null : reaisParaCentavos(reais);
 }
@@ -56,16 +59,19 @@ function centavosOuNulo(reais: number | null): number | null {
 interface GravacaoPedido {
   campanhaId: number;
   payload: PayloadRifeiRedigido;
-  statusAnterior: StatusPedido | null;
+  atual: PedidoAtual | null;
   statusResultante: StatusPedido;
   recebidoEm: string;
 }
 
 /**
  * Cria ou atualiza o pedido com os dados DESTE evento (D2 centavos, D8 UTC, D1 só ddd e país).
- * Grava só se o pedido ainda está em `statusAnterior` (a mesma guarda do evento, no mesmo batch) e,
- * no conflito, só a partir de um estado que permite a transição (D4). `registrado_em` não muda, e um
- * affiliate_id null no evento nunca apaga o afiliado gravado (D7; troca: avisarTrocaDeAfiliado).
+ * - Pedido novo: todos os campos vêm do evento.
+ * - Pedido existente: status, qtd_bilhetes e total_centavos vêm do evento; os informativos só são
+ *   sobrescritos por valor não nulo (COALESCE), para um null tolerado nunca apagar um valor bom.
+ *   ddd e pais andam juntos (CHECK: ddd só com país 55): vêm do evento quando ele traz o país.
+ * Grava só se o pedido ainda está como foi lido (a mesma guarda do evento, no mesmo batch) e, no
+ * conflito, só a partir de um estado que permite a transição (D4). `registrado_em` não muda.
  */
 function prepararGravacaoPedido(
   db: D1Database,
@@ -88,34 +94,37 @@ function prepararGravacaoPedido(
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
          ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?27
        WHERE (SELECT status FROM pedidos WHERE id = ?1) IS ?28
+         AND (SELECT affiliate_id FROM pedidos WHERE id = ?1) IS ?29
        ON CONFLICT (id) DO UPDATE SET
          campanha_id = excluded.campanha_id,
-         affiliate_id = COALESCE(excluded.affiliate_id, pedidos.affiliate_id),
          status = excluded.status,
-         status_rifei = excluded.status_rifei,
-         status_detail_rifei = excluded.status_detail_rifei,
          qtd_bilhetes = excluded.qtd_bilhetes,
-         numeros = excluded.numeros,
-         subtotal_centavos = excluded.subtotal_centavos,
          total_centavos = excluded.total_centavos,
-         desconto_promocao_centavos = excluded.desconto_promocao_centavos,
-         desconto_cupom_centavos = excluded.desconto_cupom_centavos,
-         cupom_id = excluded.cupom_id,
-         metodo_pagamento = excluded.metodo_pagamento,
-         rifinha = excluded.rifinha,
-         ddd = excluded.ddd,
-         pais = excluded.pais,
-         utm_source = excluded.utm_source,
-         utm_campaign = excluded.utm_campaign,
-         utm_medium = excluded.utm_medium,
-         utm_content = excluded.utm_content,
-         utm_term = excluded.utm_term,
-         criado_em = excluded.criado_em,
-         expira_em = excluded.expira_em,
-         aprovado_em = excluded.aprovado_em,
-         expirado_em = excluded.expirado_em,
+         affiliate_id = COALESCE(excluded.affiliate_id, pedidos.affiliate_id),
+         status_rifei = COALESCE(excluded.status_rifei, pedidos.status_rifei),
+         status_detail_rifei = COALESCE(excluded.status_detail_rifei, pedidos.status_detail_rifei),
+         numeros = COALESCE(excluded.numeros, pedidos.numeros),
+         subtotal_centavos = COALESCE(excluded.subtotal_centavos, pedidos.subtotal_centavos),
+         desconto_promocao_centavos =
+           COALESCE(excluded.desconto_promocao_centavos, pedidos.desconto_promocao_centavos),
+         desconto_cupom_centavos =
+           COALESCE(excluded.desconto_cupom_centavos, pedidos.desconto_cupom_centavos),
+         cupom_id = COALESCE(excluded.cupom_id, pedidos.cupom_id),
+         metodo_pagamento = COALESCE(excluded.metodo_pagamento, pedidos.metodo_pagamento),
+         rifinha = COALESCE(excluded.rifinha, pedidos.rifinha),
+         ddd = CASE WHEN excluded.pais IS NULL THEN pedidos.ddd ELSE excluded.ddd END,
+         pais = COALESCE(excluded.pais, pedidos.pais),
+         utm_source = COALESCE(excluded.utm_source, pedidos.utm_source),
+         utm_campaign = COALESCE(excluded.utm_campaign, pedidos.utm_campaign),
+         utm_medium = COALESCE(excluded.utm_medium, pedidos.utm_medium),
+         utm_content = COALESCE(excluded.utm_content, pedidos.utm_content),
+         utm_term = COALESCE(excluded.utm_term, pedidos.utm_term),
+         criado_em = COALESCE(excluded.criado_em, pedidos.criado_em),
+         expira_em = COALESCE(excluded.expira_em, pedidos.expira_em),
+         aprovado_em = COALESCE(excluded.aprovado_em, pedidos.aprovado_em),
+         expirado_em = COALESCE(excluded.expirado_em, pedidos.expirado_em),
          atualizado_em = excluded.atualizado_em
-       WHERE pedidos.status IN (SELECT value FROM json_each(?29))`,
+       WHERE pedidos.status IN (SELECT value FROM json_each(?30))`,
     )
     .bind(
       payload.id,
@@ -127,41 +136,64 @@ function prepararGravacaoPedido(
       payload.numbers_count,
       payload.numbers === null ? null : JSON.stringify(payload.numbers),
       centavosOuNulo(payload.subtotal),
-      centavosOuNulo(payload.total),
+      reaisParaCentavos(payload.total),
       centavosOuNulo(payload.promotion_discount),
       centavosOuNulo(payload.coupon_discount),
       payload.coupon_id,
       payload.payment_method,
-      payload.is_rifinha ? 1 : 0,
+      payload.is_rifinha === null ? null : payload.is_rifinha ? 1 : 0,
       payload.comprador.ddd,
       payload.comprador.pais,
-      payload.utm?.source ?? null,
-      payload.utm?.campaign ?? null,
-      payload.utm?.medium ?? null,
-      payload.utm?.content ?? null,
-      payload.utm?.term ?? null,
+      payload.utm.source,
+      payload.utm.campaign,
+      payload.utm.medium,
+      payload.utm.content,
+      payload.utm.term,
       utcOuNulo(payload.created_at),
       utcOuNulo(payload.expires_at),
       aprovadoEm,
       utcOuNulo(payload.expired_at),
       recebidoEm,
-      gravacao.statusAnterior,
+      gravacao.atual?.status ?? null,
+      gravacao.atual?.affiliate_id ?? null,
       JSON.stringify(origensPermitidas(statusResultante)),
     );
 }
 
 /**
- * D7, ao atualizar um pedido que já existe: um affiliate_id não nulo diferente do gravado (outro
- * afiliado, ou o pedido estava sem) vale, e a troca vai para o log para auditoria. Só ids, nenhum dado
- * pessoal (D1). O affiliate_id de cada entrega também fica no payload_redigido do evento.
+ * D7, afiliado tardio: o pedido está sem afiliado e um evento que não o grava (duplicado ou
+ * ignorado_transicao) traz affiliate_id. Só o afiliado (e atualizado_em) muda; o resultado do evento,
+ * não. Mesma guarda do evento: o pedido ainda tem o status lido e continua sem afiliado.
  */
-function avisarTrocaDeAfiliado(
+function prepararAfiliadoTardio(
+  db: D1Database,
+  payload: PayloadRifeiRedigido,
+  statusLido: StatusPedido,
+  recebidoEm: string,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE pedidos SET affiliate_id = ?1, atualizado_em = ?2
+       WHERE id = ?3 AND status = ?4 AND affiliate_id IS NULL`,
+    )
+    .bind(payload.affiliate_id, recebidoEm, payload.id, statusLido);
+}
+
+/** Vai para os avisos do evento quando ele muda o afiliado de um pedido que já existia. */
+const AVISO_AFILIADO_ALTERADO: AvisoPayloadRifei = {
+  caminho: ["affiliate_id"],
+  codigo: "afiliado_alterado",
+  mensagem:
+    "O affiliate_id do evento é diferente do gravado no pedido: vale o do evento",
+  ocorrencias: 1,
+};
+
+/** A troca também vai para o log, para auditoria. Só ids, nenhum dado pessoal (D1). */
+function registrarTrocaDeAfiliado(
   atual: PedidoAtual,
   payload: PayloadRifeiRedigido,
   eventoId: number,
 ): void {
-  const novo = payload.affiliate_id;
-  if (novo === null || novo === atual.affiliate_id) return;
   console.warn({
     aviso: "afiliado_alterado",
     mensagem:
@@ -169,7 +201,7 @@ function avisarTrocaDeAfiliado(
     evento_id: eventoId,
     pedido_id: payload.id,
     affiliate_id_anterior: atual.affiliate_id,
-    affiliate_id_novo: novo,
+    affiliate_id_novo: payload.affiliate_id,
   });
 }
 
@@ -177,25 +209,37 @@ interface EventoDoPedido {
   campanhaId: number;
   /** Payload já redigido (D1) e da campanha ativa (D5). */
   payload: PayloadRifeiRedigido;
+  /** Diferenças do payload em relação à doc (analisarPayloadRifei). */
+  avisos: readonly AvisoPayloadRifei[];
   recebidoEm: string;
 }
 
 /**
  * Processa um evento da campanha ativa (passos 7 a 10 de docs/integracao-rifei.md): decide a
- * transição (D4) e grava, num único db.batch (uma transação), o afiliado órfão (D7), o evento e o
- * pedido. Concorrência otimista: o evento e o pedido levam a mesma guarda ("o status ainda é o lido"),
- * então o resultado gravado é sempre o da escrita que de fato aconteceu. Se outra entrega do mesmo
- * pedido gravou no meio do caminho, nada é gravado (o INSERT do evento não devolve id) e a decisão é
- * refeita com o status novo: duas entregas simultâneas do mesmo evento dão processado + duplicado.
+ * transição (D4) e grava, num único db.batch (uma transação), o afiliado órfão (D7), o evento, o
+ * pedido e o afiliado tardio. Concorrência otimista: tudo leva a mesma guarda ("o pedido ainda é o
+ * lido": status e afiliado), então o resultado gravado é sempre o da escrita que de fato aconteceu. Se
+ * outra entrega do mesmo pedido gravou no meio do caminho, nada é gravado (o INSERT do evento não
+ * devolve id) e a decisão é refeita: duas entregas simultâneas do mesmo evento dão processado + duplicado.
  */
 export async function processarEventoPedido(
   db: D1Database,
-  { campanhaId, payload, recebidoEm }: EventoDoPedido,
+  { campanhaId, payload, avisos, recebidoEm }: EventoDoPedido,
 ): Promise<RespostaWebhookRifei> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     const atual = await buscarPedidoAtual(db, payload.id);
-    const statusAnterior = atual?.status ?? null;
-    const decisao = decidirTransicaoPedido(statusAnterior, payload.event);
+    const decisao = decidirTransicaoPedido(
+      atual?.status ?? null,
+      payload.event,
+    );
+    const processado = decisao.resultado === "processado";
+    // O afiliado do pedido muda quando o evento o grava (processado, COALESCE) ou, sem gravar,
+    // preenche um pedido que estava sem afiliado (afiliado tardio).
+    const trocaAfiliado =
+      atual !== null &&
+      payload.affiliate_id !== null &&
+      payload.affiliate_id !== atual.affiliate_id &&
+      (processado || atual.affiliate_id === null);
 
     const comandos: D1PreparedStatement[] = [];
     if (payload.affiliate_id !== null) {
@@ -205,41 +249,49 @@ export async function processarEventoPedido(
     }
     const posicaoEvento =
       comandos.push(
-        prepararRegistroEventoSeStatusAtual(db, {
-          recebido_em: recebidoEm,
-          evento: payload.event,
-          pedido_id: payload.id,
-          slug: payload.slug,
-          resultado: decisao.resultado,
-          status_anterior: statusAnterior,
-          status_resultante: decisao.status_resultante,
-          payload_redigido: payload,
-          erro: null,
-        }),
+        prepararRegistroEventoSePedidoIgual(
+          db,
+          {
+            recebido_em: recebidoEm,
+            evento: payload.event,
+            pedido_id: payload.id,
+            slug: payload.slug,
+            resultado: decisao.resultado,
+            status_anterior: atual?.status ?? null,
+            status_resultante: decisao.status_resultante,
+            payload_redigido: payload,
+            erro: null,
+            avisos: avisosParaGravar(
+              trocaAfiliado ? [...avisos, AVISO_AFILIADO_ALTERADO] : avisos,
+            ),
+          },
+          atual?.affiliate_id ?? null,
+        ),
       ) - 1;
-    if (decisao.resultado === "processado") {
+    if (processado) {
       comandos.push(
         prepararGravacaoPedido(db, {
           campanhaId,
           payload,
-          statusAnterior,
+          atual,
           statusResultante: decisao.status_resultante,
           recebidoEm,
         }),
+      );
+    } else if (trocaAfiliado) {
+      comandos.push(
+        prepararAfiliadoTardio(db, payload, atual.status, recebidoEm),
       );
     }
 
     const resultados = await db.batch<{ id: number }>(comandos);
     const eventoId = resultados[posicaoEvento]?.results[0]?.id;
     if (eventoId !== undefined) {
-      // Gravou com a guarda: o pedido ainda era o lido em `atual`.
-      if (atual !== null && decisao.resultado === "processado") {
-        avisarTrocaDeAfiliado(atual, payload, eventoId);
-      }
+      if (trocaAfiliado) registrarTrocaDeAfiliado(atual, payload, eventoId);
       return { resultado: decisao.resultado, evento_id: eventoId };
     }
   }
   throw new Error(
-    `webhook Rifei: o status do pedido mudou durante ${MAX_TENTATIVAS} tentativas seguidas`,
+    `webhook Rifei: o pedido mudou durante ${MAX_TENTATIVAS} tentativas seguidas`,
   );
 }

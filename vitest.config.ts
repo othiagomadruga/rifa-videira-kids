@@ -30,11 +30,16 @@ export default defineConfig({
       },
       {
         // Testes do site (e do código compartilhado): jsdom + Testing Library.
+        // scripts/ (Node) entra aqui com `// @vitest-environment node` no arquivo de teste.
         plugins: [react()],
         test: {
           name: "web",
           environment: "jsdom",
-          include: ["src/web/**/*.test.{ts,tsx}", "src/shared/**/*.test.ts"],
+          include: [
+            "src/web/**/*.test.{ts,tsx}",
+            "src/shared/**/*.test.ts",
+            "scripts/**/*.test.mjs",
+          ],
           setupFiles: ["./src/web/test/setup.ts"],
         },
       },

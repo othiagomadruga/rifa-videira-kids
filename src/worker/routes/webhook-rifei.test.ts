@@ -11,7 +11,9 @@ import paidOrderAfiliado from "../../../test/fixtures/rifei/paid_order.afiliado.
 import paidOrderAposExpirado from "../../../test/fixtures/rifei/paid_order.apos_expirado.json";
 import paidOrderOficial from "../../../test/fixtures/rifei/paid_order.oficial.json";
 import paidOrderOutraCampanha from "../../../test/fixtures/rifei/paid_order.outra_campanha.json";
+import paidOrderTiposEstranhos from "../../../test/fixtures/rifei/paid_order.tipos_estranhos.json";
 import {
+  LIMITE_CORPO_WEBHOOK_BYTES,
   derivarTelefone,
   detalhesErroWebhookSchema,
   erroApiSchema,
@@ -50,8 +52,10 @@ function tokenDosTestes(): string {
 interface OpcoesEnvio {
   /** Header Authorization; null = sem o header. Padrão: Bearer com o token certo. */
   autorizacao?: string | null;
-  /** Corpo cru, no lugar do JSON do payload. */
-  corpoCru?: string;
+  /** Corpo cru, no lugar do JSON do payload (um fluxo vai sem Content-Length). */
+  corpoCru?: string | ReadableStream<Uint8Array>;
+  /** Caminho da requisição. Padrão: /api/webhooks/rifei. */
+  caminho?: string;
   /** Bindings trocados: a requisição vai direto ao app Hono com este env. */
   env?: Partial<Cloudflare.Env>;
 }
@@ -69,8 +73,9 @@ async function enviar(
     headers,
     body: opcoes.corpoCru ?? JSON.stringify(payload),
   };
-  if (opcoes.env) return app.request(CAMINHO, init, { ...env, ...opcoes.env });
-  return exports.default.fetch(`http://localhost${CAMINHO}`, init);
+  const caminho = opcoes.caminho ?? CAMINHO;
+  if (opcoes.env) return app.request(caminho, init, { ...env, ...opcoes.env });
+  return exports.default.fetch(`http://localhost${caminho}`, init);
 }
 
 /** Envia e exige 200 com o corpo do contrato. */
@@ -137,22 +142,26 @@ async function criarCelula(): Promise<number> {
 async function lerEventos() {
   const { results } = await db
     .prepare("SELECT * FROM webhook_eventos ORDER BY id")
-    .all<{ payload_redigido: string | null; erro: string | null }>();
+    .all<{
+      payload_redigido: string | null;
+      erro: string | null;
+      avisos: string | null;
+    }>();
+  const json = (texto: string | null): unknown =>
+    texto === null ? null : JSON.parse(texto);
   return results.map((linha) =>
     eventoWebhookSchema.parse({
       ...linha,
-      payload_redigido:
-        linha.payload_redigido === null
-          ? null
-          : JSON.parse(linha.payload_redigido),
-      erro: linha.erro === null ? null : JSON.parse(linha.erro),
+      payload_redigido: json(linha.payload_redigido),
+      erro: json(linha.erro),
+      avisos: json(linha.avisos),
     }),
   );
 }
 
 type LinhaPedido = Record<string, unknown> & {
   numeros: string | null;
-  rifinha: number;
+  rifinha: number | null;
 };
 
 /** O pedido como está no banco; também confere que ele se converte no `Pedido` do contrato. */
@@ -165,7 +174,7 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
     pedidoSchema.parse({
       ...linha,
       numeros: linha.numeros === null ? null : JSON.parse(linha.numeros),
-      rifinha: linha.rifinha === 1,
+      rifinha: linha.rifinha === null ? null : linha.rifinha === 1,
       utm: {
         source: linha.utm_source,
         campaign: linha.utm_campaign,
@@ -196,22 +205,24 @@ async function contar(
 
 /**
  * Textos pessoais de uma fixture: tudo o que há em `buyer` (nome, telefone, e-mail, documento,
- * nascimento, endereço), `observation`, `fbp` e `fbc`, mais o telefone sem "+", sem o país e sem o DDD.
- * Só os de 5+ caracteres, para a busca não acusar coincidências como "SP" ou "123".
+ * nascimento, endereço), `observation`, `fbp` e `fbc`, inclusive números e textos dentro de listas
+ * (tipos errados, RIFA-002b), mais o telefone sem "+", sem o país e sem o DDD. Só os de 5+
+ * caracteres, para a busca não acusar coincidências como "SP" ou "123".
  */
 function valoresPessoais(fixture: unknown): string[] {
   const { buyer, observation, fbp, fbc } = fixture as Record<string, unknown>;
   const textos: string[] = [];
   const coletar = (valor: unknown): void => {
-    if (typeof valor === "string") textos.push(valor);
+    if (typeof valor === "string" || typeof valor === "number")
+      textos.push(String(valor));
     else if (typeof valor === "object" && valor !== null)
       Object.values(valor).forEach(coletar);
   };
   [buyer, observation, fbp, fbc].forEach(coletar);
   const telefone = (buyer as Record<string, unknown> | undefined)?.["phone"];
-  if (typeof telefone === "string") {
-    const digitos = telefone.replace(/\D/g, "");
-    const { pais } = derivarTelefone(telefone);
+  if (typeof telefone === "string" || typeof telefone === "number") {
+    const digitos = String(telefone).replace(/\D/g, "");
+    const { pais } = derivarTelefone(`+${digitos}`);
     textos.push(digitos);
     if (pais !== null) {
       const nacional = digitos.slice(pais.length);
@@ -438,23 +449,23 @@ describe("CA2: payload malformado (D9)", () => {
     const { erro } = erroApiSchema.parse(JSON.parse(texto));
     expect(erro.codigo).toBe("payload_invalido");
     expect(erro.mensagem).toBe(
-      "O corpo não segue o formato do webhook da Rifei",
+      "O corpo não traz o essencial do webhook da Rifei",
     );
+    // RIFA-002b: só os essenciais recusam; o resto do corpo malformado é tolerado.
     const detalhes = detalhesErroWebhookSchema.parse(erro.detalhes);
     expect(
-      detalhes.problemas.map((problema) => problema.caminho.join(".")),
-    ).toEqual(
-      expect.arrayContaining([
-        "event",
-        "id",
-        "is_rifinha",
-        "numbers_count",
-        "subtotal",
-        "total",
-        "affiliate_id",
-        "created_at",
+      detalhes.problemas.map((problema) => [
+        problema.caminho.join("."),
+        problema.codigo,
+        problema.ocorrencias,
       ]),
-    );
+    ).toEqual([
+      ["event", "invalid_value", 1],
+      ["id", "invalid_union", 1],
+      ["slug", "too_small", 1],
+      ["numbers_count", "too_small", 1],
+      ["total", "invalid_union", 1],
+    ]);
 
     expect(await lerEventos()).toEqual([
       {
@@ -462,12 +473,13 @@ describe("CA2: payload malformado (D9)", () => {
         recebido_em: expect.any(String),
         evento: "order_refunded",
         pedido_id: null,
-        slug: SLUG,
+        slug: null,
         resultado: "erro_validacao",
         status_anterior: null,
         status_resultante: null,
         payload_redigido: null,
         erro: detalhes.problemas,
+        avisos: null,
       },
     ]);
     expect(await contar("pedidos")).toBe(0);
@@ -509,7 +521,8 @@ describe("CA2: payload malformado (D9)", () => {
         {
           caminho: [],
           codigo: "json_invalido",
-          mensagem: "O corpo da requisição não é um JSON válido",
+          mensagem: "O corpo não é um JSON válido",
+          ocorrencias: 1,
         },
       ]);
       expect(await lerEventos()).toEqual([
@@ -524,6 +537,7 @@ describe("CA2: payload malformado (D9)", () => {
           status_resultante: null,
           payload_redigido: null,
           erro: detalhes.problemas,
+          avisos: null,
         },
       ]);
       for (const valor of valoresPessoais(newOrderAfiliado)) {
@@ -583,10 +597,25 @@ describe("CA3: filtro pela campanha ativa (D5)", () => {
         status_resultante: null,
         payload_redigido: redigido(outraComAfiliado),
         erro: null,
+        avisos: null,
       },
     ]);
     expect(await contar("pedidos")).toBe(0);
     expect(await contar("afiliados")).toBe(0);
+  });
+
+  it("evento de outra campanha com diferenças da doc também guarda os avisos", async () => {
+    const resposta = await processar({
+      ...paidOrderTiposEstranhos,
+      slug: "outra-campanha-da-conta",
+    });
+
+    expect(resposta.resultado).toBe("ignorado_outra_campanha");
+    const [evento] = await lerEventos();
+    expect(evento.avisos?.map((aviso) => aviso.caminho.join("."))).toEqual(
+      expect.arrayContaining(["is_rifinha", "subtotal", "utm"]),
+    );
+    expect(evento.avisos).toHaveLength(27);
   });
 
   it("sem campanha ativa, todo evento é ignorado_outra_campanha e fica guardado (redigido) para reprocessar", async () => {
@@ -656,6 +685,7 @@ describe("CA4: gravação do pedido", () => {
       status_resultante: "in_process",
       payload_redigido: redigido(newOrderAfiliado),
       erro: null,
+      avisos: null,
     });
     expect(await lerPedido("PEDTESTE0001")).toEqual({
       ...pedidoNovoDoAfiliado(),
@@ -885,6 +915,10 @@ describe("CA4: afiliado ao atualizar um pedido que já existe (D7)", () => {
         { pedido_id: "PEDTESTE0001", affiliate_id: 1042 },
       ]);
       expect(consoleWarn).not.toHaveBeenCalled();
+      expect((await lerEventos()).map((evento) => evento.avisos)).toEqual([
+        null,
+        null,
+      ]);
     },
   );
 
@@ -926,14 +960,384 @@ describe("CA4: afiliado ao atualizar um pedido que já existe (D7)", () => {
       for (const valor of valoresPessoais(paidOrderAfiliado)) {
         expect(log).not.toContain(valor);
       }
-      // No banco, cada evento guarda o affiliate_id que trouxe (o anterior está no evento de antes).
+      // No banco, cada evento guarda o affiliate_id que trouxe (o anterior está no evento de antes),
+      // e o evento que trocou o afiliado leva o aviso afiliado_alterado (sem valores).
+      const eventos = await lerEventos();
       expect(
-        (await lerEventos()).map(
-          (evento) => evento.payload_redigido?.affiliate_id,
-        ),
+        eventos.map((evento) => evento.payload_redigido?.affiliate_id),
       ).toEqual([anterior, 1043]);
+      expect(eventos.map((evento) => evento.avisos)).toEqual([
+        null,
+        [AVISO_AFILIADO_ALTERADO],
+      ]);
     },
   );
+});
+
+/** O aviso que vai para o evento quando ele muda o afiliado de um pedido que já existia. */
+const AVISO_AFILIADO_ALTERADO = {
+  caminho: ["affiliate_id"],
+  codigo: "afiliado_alterado",
+  mensagem:
+    "O affiliate_id do evento é diferente do gravado no pedido: vale o do evento",
+  ocorrencias: 1,
+};
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-002b: payload tolerante, avisos e regra de atualização
+// ---------------------------------------------------------------------------------------------------
+
+describe("RIFA-002b: payload tolerante com avisos", () => {
+  it("tipos errados nos informativos: aceito, essenciais convertidos, o resto null e um aviso por campo", async () => {
+    const resposta = await processar(paidOrderTiposEstranhos);
+
+    expect(resposta.resultado).toBe("processado");
+    const [evento] = await lerEventos();
+    expect(
+      evento.avisos?.map((aviso) => [
+        aviso.caminho.join("."),
+        aviso.codigo,
+        aviso.ocorrencias,
+      ]),
+    ).toEqual([
+      ["is_rifinha", "invalid_type", 1],
+      ["buyer.name", "invalid_type", 1],
+      ["buyer.phone", "invalid_type", 1],
+      ["buyer.email", "invalid_type", 1],
+      ["buyer.document", "invalid_type", 1],
+      ["buyer.date_of_birth", "invalid_type", 1],
+      ["buyer.address", "invalid_type", 1],
+      ["numbers.*", "invalid_type", 2],
+      ["numbers_count", "invalid_type", 1],
+      ["lucky_numbers", "invalid_type", 1],
+      ["subtotal", "invalid_type", 1],
+      ["total", "invalid_type", 1],
+      ["promotion_discount", "invalid_type", 1],
+      ["coupon_discount", "invalid_type", 1],
+      ["payment_method", "invalid_type", 1],
+      ["status", "invalid_type", 1],
+      ["status_detail", "invalid_type", 1],
+      ["coupon_id", "invalid_type", 1],
+      ["affiliate_id", "invalid_type", 1],
+      ["created_at", "invalid_format", 1],
+      ["expires_at", "invalid_type", 1],
+      ["expired_at", "invalid_format", 1],
+      ["upsells", "invalid_type", 1],
+      ["observation", "invalid_type", 1],
+      ["fbp", "invalid_type", 1],
+      ["fbc", "invalid_type", 1],
+      ["utm", "invalid_type", 1],
+    ]);
+    expect(await lerPedido("PEDTESTE0004")).toEqual({
+      id: "PEDTESTE0004",
+      campanha_id: campanhaId,
+      affiliate_id: 1042,
+      status: "approved",
+      status_rifei: null,
+      status_detail_rifei: null,
+      qtd_bilhetes: 2,
+      numeros: null,
+      subtotal_centavos: null,
+      total_centavos: 4000,
+      desconto_promocao_centavos: null,
+      desconto_cupom_centavos: null,
+      cupom_id: null,
+      metodo_pagamento: null,
+      rifinha: null,
+      ddd: null,
+      pais: null,
+      utm_source: null,
+      utm_campaign: null,
+      utm_medium: null,
+      utm_content: null,
+      utm_term: null,
+      criado_em: null,
+      expira_em: null,
+      aprovado_em: "2026-12-01T12:20:31.000Z",
+      expirado_em: null,
+      registrado_em: evento.recebido_em,
+      atualizado_em: evento.recebido_em,
+    });
+    expect(await lerAfiliados()).toMatchObject([
+      { affiliate_id: 1042, celula_id: null, origem: "webhook" },
+    ]);
+    const gravado = JSON.stringify(await lerEventos());
+    for (const valor of valoresPessoais(paidOrderTiposEstranhos)) {
+      expect(gravado).not.toContain(valor);
+    }
+  });
+
+  it("fração de centavo é arredondada meio para cima (1,005 → 101) e vira aviso", async () => {
+    await processar({ ...newOrderAfiliado, total: 1.005, subtotal: 1.005 });
+
+    expect(await lerPedido("PEDTESTE0001")).toMatchObject({
+      total_centavos: 101,
+      subtotal_centavos: 101,
+    });
+    const [evento] = await lerEventos();
+    expect(evento.avisos).toEqual([
+      {
+        caminho: ["subtotal"],
+        codigo: "fracao_de_centavo",
+        mensagem: "Fração de centavo arredondada meio para cima",
+        ocorrencias: 1,
+      },
+      {
+        caminho: ["total"],
+        codigo: "fracao_de_centavo",
+        mensagem: "Fração de centavo arredondada meio para cima",
+        ocorrencias: 1,
+      },
+    ]);
+  });
+});
+
+describe("RIFA-002b: atualização de um pedido que já existe", () => {
+  it("informativo nulo ou inválido no evento seguinte não apaga o valor gravado (COALESCE); status, bilhetes e total vêm do evento", async () => {
+    await processar(newOrderAfiliado);
+    const pago = {
+      ...paidOrderAfiliado,
+      numbers_count: 4,
+      total: 80,
+      status: 1,
+      status_detail: null,
+      payment_method: null,
+      created_at: "ontem",
+      expires_at: 5,
+      numbers: ["a"],
+      subtotal: "oitenta",
+      coupon_id: "x",
+      is_rifinha: "nao",
+      utm: "x",
+      affiliate_id: "abc",
+      buyer: { ...paidOrderAfiliado.buyer, phone: 123 },
+    };
+
+    const resposta = await processar(pago);
+
+    expect(resposta.resultado).toBe("processado");
+    const [novo, pagou] = await lerEventos();
+    expect(pagou.avisos?.length).toBeGreaterThanOrEqual(10);
+    expect(await lerPedido("PEDTESTE0001")).toEqual({
+      ...pedidoNovoDoAfiliado(),
+      status: "approved",
+      qtd_bilhetes: 4,
+      total_centavos: 8000,
+      aprovado_em: "2026-12-01T12:20:31.512Z",
+      registrado_em: novo.recebido_em,
+      atualizado_em: pagou.recebido_em,
+    });
+  });
+
+  it.each([
+    [
+      "telefone de outro país: DDD e país vêm juntos do evento",
+      "+351910000002",
+      null,
+      "351",
+    ],
+    ["telefone inválido: DDD e país gravados ficam", "91900000001", "91", "55"],
+  ])("%s", async (_caso, telefone, ddd, pais) => {
+    await processar(newOrderAfiliado);
+
+    await processar({
+      ...paidOrderAfiliado,
+      buyer: { ...paidOrderAfiliado.buyer, phone: telefone },
+    });
+
+    expect(await lerPedido("PEDTESTE0001")).toMatchObject({
+      status: "approved",
+      ddd,
+      pais,
+    });
+  });
+});
+
+describe("RIFA-002b: afiliado tardio (D7)", () => {
+  it.each<[string, unknown, string, StatusPedido]>([
+    [
+      "duplicado",
+      { ...newOrderAfiliado, affiliate_id: null },
+      "duplicado",
+      "in_process",
+    ],
+    [
+      "ignorado_transicao",
+      { ...paidOrderAfiliado, affiliate_id: null },
+      "ignorado_transicao",
+      "approved",
+    ],
+  ])(
+    "pedido sem afiliado + evento %s com affiliate_id: preenche o afiliado sem mudar o resultado nem o resto do pedido",
+    async (_caso, primeiro, resultado, status) => {
+      const consoleWarn = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+      await processar(primeiro);
+      const antes = await lerPedido("PEDTESTE0001");
+
+      const resposta = await processar(newOrderAfiliado);
+
+      expect(resposta.resultado).toBe(resultado);
+      const [, tardio] = await lerEventos();
+      expect(tardio).toMatchObject({
+        resultado,
+        status_anterior: status,
+        status_resultante: status,
+        avisos: [AVISO_AFILIADO_ALTERADO],
+      });
+      expect(await lerPedido("PEDTESTE0001")).toEqual({
+        ...antes,
+        affiliate_id: 1042,
+        atualizado_em: tardio.recebido_em,
+      });
+      expect(await lerAfiliados()).toMatchObject([
+        { affiliate_id: 1042, celula_id: null, origem: "webhook" },
+      ]);
+      expect(consoleWarn).toHaveBeenCalledOnce();
+      expect(consoleWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aviso: "afiliado_alterado",
+          evento_id: resposta.evento_id,
+          affiliate_id_anterior: null,
+          affiliate_id_novo: 1042,
+        }),
+      );
+    },
+  );
+
+  it("pedido que já tem afiliado: evento duplicado com outro affiliate_id não muda nada nem gera aviso", async () => {
+    const consoleWarn = vi.spyOn(console, "warn");
+    await processar(newOrderAfiliado);
+    const antes = await lerPedido("PEDTESTE0001");
+
+    const resposta = await processar({
+      ...newOrderAfiliado,
+      affiliate_id: 1043,
+    });
+
+    expect(resposta.resultado).toBe("duplicado");
+    expect(await lerPedido("PEDTESTE0001")).toEqual(antes);
+    expect((await lerEventos()).map((evento) => evento.avisos)).toEqual([
+      null,
+      null,
+    ]);
+    expect(consoleWarn).not.toHaveBeenCalled();
+  });
+});
+
+describe("RIFA-002b: caminho e tamanho do corpo", () => {
+  it("aceita o caminho com barra no fim (CAMINHOS_WEBHOOK_RIFEI)", async () => {
+    const res = await enviar(newOrderAfiliado, {
+      caminho: "/api/webhooks/rifei/",
+    });
+
+    expect(res.status).toBe(200);
+    expect(respostaWebhookRifeiSchema.parse(await res.json()).resultado).toBe(
+      "processado",
+    );
+  });
+
+  /** Corpo válido com exatamente `bytes` bytes: o observation (descartado na redação) completa. */
+  function corpoComTamanho(bytes: number): string {
+    const base = JSON.stringify({ ...newOrderAfiliado, observation: "" });
+    const corpo = JSON.stringify({
+      ...newOrderAfiliado,
+      observation: "x".repeat(bytes - new TextEncoder().encode(base).length),
+    });
+    expect(new TextEncoder().encode(corpo).length).toBe(bytes);
+    return corpo;
+  }
+
+  function emPartes(texto: string): ReadableStream<Uint8Array> {
+    const bytes = new TextEncoder().encode(texto);
+    let posicao = 0;
+    return new ReadableStream({
+      pull(controle) {
+        if (posicao >= bytes.length) return controle.close();
+        controle.enqueue(bytes.subarray(posicao, posicao + 65_536));
+        posicao += 65_536;
+      },
+    });
+  }
+
+  it.each([
+    [
+      "com Content-Length",
+      () => corpoComTamanho(LIMITE_CORPO_WEBHOOK_BYTES + 1),
+    ],
+    [
+      "em partes, sem Content-Length",
+      () => emPartes(corpoComTamanho(LIMITE_CORPO_WEBHOOK_BYTES + 1)),
+    ],
+  ])(
+    "corpo acima de 1 MiB (%s): 413 corpo_muito_grande e evento erro_validacao sem payload",
+    async (_caso, criarCorpo) => {
+      const res = await enviar(null, { corpoCru: criarCorpo() });
+
+      expect(res.status).toBe(413);
+      const { erro } = erroApiSchema.parse(await res.json());
+      expect(erro.codigo).toBe("corpo_muito_grande");
+      const detalhes = detalhesErroWebhookSchema.parse(erro.detalhes);
+      expect(detalhes.problemas).toEqual([
+        {
+          caminho: [],
+          codigo: "corpo_muito_grande",
+          mensagem: "O corpo passa do limite de 1048576 bytes (1 MiB)",
+          ocorrencias: 1,
+        },
+      ]);
+      expect(await lerEventos()).toEqual([
+        {
+          id: detalhes.evento_id,
+          recebido_em: expect.any(String),
+          evento: null,
+          pedido_id: null,
+          slug: null,
+          resultado: "erro_validacao",
+          status_anterior: null,
+          status_resultante: null,
+          payload_redigido: null,
+          erro: detalhes.problemas,
+          avisos: null,
+        },
+      ]);
+      expect(await contar("pedidos")).toBe(0);
+    },
+  );
+
+  it.each([
+    ["com Content-Length", () => corpoComTamanho(LIMITE_CORPO_WEBHOOK_BYTES)],
+    [
+      "em partes, sem Content-Length",
+      () => emPartes(corpoComTamanho(LIMITE_CORPO_WEBHOOK_BYTES)),
+    ],
+  ])(
+    "corpo de exatamente 1 MiB (%s) é aceito e o texto longo não é gravado",
+    async (_caso, criarCorpo) => {
+      const res = await enviar(null, { corpoCru: criarCorpo() });
+
+      expect(res.status).toBe(200);
+      expect(respostaWebhookRifeiSchema.parse(await res.json()).resultado).toBe(
+        "processado",
+      );
+      const gravado = JSON.stringify([
+        await lerEventos(),
+        await lerPedido("PEDTESTE0001"),
+      ]);
+      expect(gravado).not.toContain("x".repeat(100));
+    },
+  );
+
+  it("o limite vem depois da autenticação: corpo grande sem token é 401 e nada é gravado", async () => {
+    const res = await enviar(null, {
+      corpoCru: corpoComTamanho(LIMITE_CORPO_WEBHOOK_BYTES + 1),
+      autorizacao: "Bearer token-errado",
+    });
+
+    expect(res.status).toBe(401);
+    expect(await contar("webhook_eventos")).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -1171,6 +1575,38 @@ describe("CA5: idempotência e ordem dos eventos (D3, D4)", () => {
       ["new_order", "ignorado_transicao", "approved", "approved"],
     ]);
   });
+
+  it("afiliado tardio gravado por outra entrega entre a leitura e a gravação: a decisão é refeita e o aviso não se repete", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await processar({ ...newOrderAfiliado, affiliate_id: null });
+    const corrida = dbComEntregaNoMeio(newOrderAfiliado);
+
+    const res = await enviar(paidOrderAfiliado, { env: { DB: corrida.db } });
+
+    const outra = respostaWebhookRifeiSchema.parse(
+      await corrida.estado.outra?.json(),
+    );
+    expect(outra.resultado).toBe("duplicado");
+    expect(respostaWebhookRifeiSchema.parse(await res.json()).resultado).toBe(
+      "processado",
+    );
+    expect(
+      (await lerEventos()).map((evento) => [
+        evento.evento,
+        evento.resultado,
+        evento.avisos,
+      ]),
+    ).toEqual([
+      ["new_order", "processado", null],
+      ["new_order", "duplicado", [AVISO_AFILIADO_ALTERADO]],
+      ["paid_order", "processado", null],
+    ]);
+    expect(await lerPedido("PEDTESTE0001")).toMatchObject({
+      status: "approved",
+      affiliate_id: 1042,
+    });
+    expect(consoleWarn).toHaveBeenCalledOnce();
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -1185,7 +1621,8 @@ describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
     for (const fixture of fixtures) {
       // 1) Campanha do slug da fixture ativa: processamento completo (afiliado, pedido e evento).
       const { slug } = fixture as Record<string, unknown>;
-      if (typeof slug === "string") await ativarCampanha(slug);
+      if (typeof slug === "string" && slug.trim() !== "")
+        await ativarCampanha(slug);
       await enviar(fixture);
       // 2) Outra campanha ativa: ignorado_outra_campanha, com o payload redigido guardado.
       await ativarCampanha("campanha-de-controle");
@@ -1216,6 +1653,11 @@ describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
         "Rua Ficticia",
         "Bairro Ficticio",
         "Texto livre ficticio do checkout",
+        // paid_order.tipos_estranhos: dados pessoais em número, lista e texto fora do lugar.
+        "12345",
+        "5591900000004",
+        "comprador.quatro@example.com",
+        "Rua Ficticia Quatro, 10",
       ]),
     );
     // Controle: dados não pessoais que precisam estar gravados (a varredura enxerga cada tabela).
@@ -1225,6 +1667,7 @@ describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
       "1042": "afiliados.affiliate_id",
       '"comprador":{"ddd":"91","pais":"55"}':
         "webhook_eventos.payload_redigido",
+      '"caminho":["buyer","name"]': "webhook_eventos.avisos",
     };
 
     const { tabelas, ocorrencias } = await varrerBanco([

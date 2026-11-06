@@ -17,7 +17,7 @@ import {
 const JSON_INVALIDO = {
   erro: {
     codigo: "json_invalido",
-    mensagem: "O corpo da requisição não é um JSON válido",
+    mensagem: "O corpo não é um JSON válido",
   },
 };
 
@@ -31,6 +31,18 @@ function appDeTeste() {
     (c) => c.json(c.req.valid("json")),
   );
   app.post("/com-req-json", async (c) => c.json(await c.req.json()));
+  app.post(
+    "/com-zvalidator-form",
+    zValidator("form", z.object({ nome: z.string() })),
+    (c) => c.json(c.req.valid("form")),
+  );
+  app.get("/syntax-error-sem-json", () => {
+    // SyntaxError que não é de JSON (expressão regular inválida montada em tempo de execução).
+    return new Response(String(new RegExp(["(", "sem fechar"].join(""))));
+  });
+  app.get("/http-exception-400-outra", () => {
+    throw new HTTPException(400, { message: "Outro problema" });
+  });
   app.get("/http-exception-com-resposta", () => {
     throw new HTTPException(401, {
       res: Response.json(
@@ -158,11 +170,50 @@ describe("CA7: formato único de erro nos tratadores do app", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("HTTPException sem resposta própria (fora do 400) mantém o status e a mensagem dela", async () => {
-    const res = await appDeTeste().request("/http-exception-simples");
+  it.each([
+    ["403", "/http-exception-simples", 403, "Sem permissão"],
+    [
+      "400 que não é de JSON",
+      "/http-exception-400-outra",
+      400,
+      "Outro problema",
+    ],
+  ])(
+    "HTTPException %s sem resposta própria mantém o status e a mensagem dela",
+    async (_caso, caminho, status, mensagem) => {
+      const res = await appDeTeste().request(caminho);
 
-    expect(res.status).toBe(403);
-    expect(await res.text()).toBe("Sem permissão");
+      expect(res.status).toBe(status);
+      expect(await res.text()).toBe(mensagem);
+    },
+  );
+
+  it("FormData malformado não vira json_invalido: segue como a HTTPException do Hono", async () => {
+    const consoleError = vi.spyOn(console, "error");
+
+    const res = await appDeTeste().request("/com-zvalidator-form", {
+      method: "POST",
+      headers: { "Content-Type": "multipart/form-data; boundary=limite" },
+      body: "isto não é multipart",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.text()).toMatch(/^Malformed FormData request\./);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("SyntaxError que não é de JSON segue o caminho genérico: 500 erro_interno e log", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const res = await appDeTeste().request("/syntax-error-sem-json");
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      erro: { codigo: "erro_interno", mensagem: "Erro interno" },
+    });
+    expect(consoleError).toHaveBeenCalledOnce();
   });
 
   it.each(CODIGOS_ERRO)(

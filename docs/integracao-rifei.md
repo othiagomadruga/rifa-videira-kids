@@ -227,7 +227,7 @@ O CSV traz nome, e-mail e telefone dos compradores. Ele é lido **só em memóri
 
 Simula a Rifei contra o `npm run dev`, com as fixtures de `test/fixtures/rifei/`. Não precisa de conta Cloudflare.
 
-1. **Segredo local**: `cp .dev.vars.example .dev.vars` e troque o valor de `RIFEI_WEBHOOK_TOKEN` (ex.: `openssl rand -hex 32`). O `.dev.vars` está no `.gitignore`. Depois de mudar o `.dev.vars`, reinicie o `npm run dev`.
+1. **Segredo local**: `cp .dev.vars.example .dev.vars` e troque o valor de `RIFEI_WEBHOOK_TOKEN` (ex.: `openssl rand -hex 32`). O `.dev.vars` está no `.gitignore` e é lido como o dotenv lê: aspas e comentário no fim valem (`RIFEI_WEBHOOK_TOKEN="abc" # local` dá `abc`). Depois de mudar o `.dev.vars`, reinicie o `npm run dev`.
 2. **Suba o sistema**: `npm run dev` (aplica as migrações no D1 local e serve em http://localhost:5173).
 3. **Campanha ativa** com o slug das fixtures (`videira-kids-teste`). Enquanto o `PUT /api/admin/campanha` não existe, grave direto no D1 local, em outro terminal:
    ```sh
@@ -240,10 +240,10 @@ Simula a Rifei contra o `npm run dev`, com as fixtures de `test/fixtures/rifei/`
    # ou, sem o atalho do npm:
    node scripts/simular-webhook.mjs test/fixtures/rifei/new_order.afiliado.json [url]
    ```
-   O `scripts/simular-webhook.mjs` lê o `RIFEI_WEBHOOK_TOKEN` do `.dev.vars`, manda o arquivo como está (até um JSON inválido) para a URL (padrão `http://localhost:5173/api/webhooks/rifei`) com `Authorization: Bearer <token>` e imprime o status e o corpo da resposta. O token nunca é impresso. Sai com código 1 se a resposta não for 2xx e 2 se faltar o arquivo ou o token.
+   O `scripts/simular-webhook.mjs` lê o `RIFEI_WEBHOOK_TOKEN` do `.dev.vars` (com `scripts/dev-vars.mjs`), manda o arquivo como está (até um JSON inválido) para a URL (padrão `http://localhost:5173/api/webhooks/rifei`; com barra no fim também vale) com `Authorization: Bearer <token>` e imprime o status e o corpo da resposta. O token nunca é impresso. Sai com código 1 se a resposta não for 2xx e 2 se faltar o arquivo ou o token.
 5. **Confira o que foi gravado**:
    ```sh
-   npx wrangler d1 execute DB --local --command "SELECT id, evento, pedido_id, resultado, status_anterior, status_resultante FROM webhook_eventos ORDER BY id"
+   npx wrangler d1 execute DB --local --command "SELECT id, evento, pedido_id, resultado, status_anterior, status_resultante, json_array_length(avisos) AS avisos FROM webhook_eventos ORDER BY id"
    npx wrangler d1 execute DB --local --command "SELECT id, status, affiliate_id, total_centavos, ddd, pais, aprovado_em, expirado_em FROM pedidos"
    npx wrangler d1 execute DB --local --command "SELECT affiliate_id, celula_id, origem FROM afiliados"
    ```
@@ -260,11 +260,13 @@ Roteiro, na ordem, com a campanha do passo 3 (conferido em 06/11/2026):
 | `expired_order.json` (de novo) | 200 `ignorado_transicao` | continua `approved` |
 | `new_order.minimo.json` | 200 `processado` | pedido sem afiliado |
 | `paid_order.outra_campanha.json` | 200 `ignorado_outra_campanha` | só o evento, com o payload redigido |
-| `malformado.json` | 400 `payload_invalido` | evento `erro_validacao`, sem dado pessoal |
+| `paid_order.tipos_estranhos.json` | 200 `processado` | `PEDTESTE0004` `approved` com os essenciais convertidos e os informativos NULL; o evento guarda 27 avisos (RIFA-002b) |
+| `malformado.json` | 400 `payload_invalido` | evento `erro_validacao` com os problemas só nos 5 essenciais, sem dado pessoal |
 
 Outros casos:
 
 - Token errado: `curl -i -X POST http://localhost:5173/api/webhooks/rifei -H "Authorization: Bearer errado" -d '{}'` responde 401 `nao_autenticado` e não grava nada.
 - Sem segredo (`RIFEI_WEBHOOK_TOKEN=` vazio no `.dev.vars` e o `npm run dev` reiniciado): 503 `nao_configurado`.
 - Corpo que não é JSON (ex.: um arquivo truncado): 400 `json_invalido`, registrado como `erro_validacao` sem nenhum trecho do corpo.
+- Corpo acima de 1 MiB (ex.: `head -c 1100000 /dev/zero | tr '\0' x > /tmp/grande.json` e o simulador com esse arquivo): 413 `corpo_muito_grande`, registrado como `erro_validacao` sem payload. Sem o token certo, o mesmo corpo dá 401 e nada é gravado.
 - Para recomeçar do zero: `npx wrangler d1 execute DB --local --command "DELETE FROM webhook_eventos; DELETE FROM pedidos; DELETE FROM afiliados"`.

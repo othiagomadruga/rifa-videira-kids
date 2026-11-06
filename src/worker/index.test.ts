@@ -23,16 +23,17 @@ describe("CA7: API responde erros no formato único", () => {
     },
   );
 
-  it("método sem rota (GET no webhook) também é 404 no formato único", async () => {
-    const res = await exports.default.fetch(
-      "http://localhost/api/webhooks/rifei",
-    );
+  it.each(["/api/webhooks/rifei", "/api/webhooks/rifei/"])(
+    "método sem rota (GET em %s) também é 404 no formato único",
+    async (caminho) => {
+      const res = await exports.default.fetch(`http://localhost${caminho}`);
 
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({
-      erro: { codigo: "nao_encontrado", mensagem: "Rota não encontrada" },
-    });
-  });
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({
+        erro: { codigo: "nao_encontrado", mensagem: "Rota não encontrada" },
+      });
+    },
+  );
 
   it("falha inesperada numa rota real (D1 fora do ar no webhook) vira 500 erro_interno", async () => {
     const consoleError = vi
