@@ -2,7 +2,7 @@
  * Contrato HTTP da API v1: schemas de parâmetros, consulta, corpo e resposta de cada rota, e o catálogo
  * `ROTAS`. Documentação: docs/api.md.
  *
- * - Rotas "detalhadas" (Sprints 1–2) estão fechadas. Rotas "rascunho" (Sprints 3–4) podem mudar quando
+ * - Rotas "detalhadas" (Sprints 1–3) estão fechadas. Rotas "rascunho" (Sprint 4) podem mudar quando
  *   forem implementadas; só o SM altera o contrato.
  * - Erros: sempre o formato de ./erros (`{ erro: { codigo, mensagem, detalhes? } }`).
  * - O webhook valida o corpo dentro do handler (precisa registrar `erro_validacao` antes de responder 400);
@@ -391,7 +391,65 @@ export const respostaAdesaoSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------------------------------
-// RASCUNHO (Sprints 3–4): GET /api/painel/resumo
+// Painel, rankings, visão pública e bumbo (RIFA-008). As respostas saem das funções `montar*` de
+// ./calculos (montarResumoPainel, montarRankingPainel, montarRankingPublico e montarBumbo); regras,
+// fontes e arredondamento em docs/regras-de-calculo.md.
+//
+// - `meta`, `esperado`, `realizado`, `diferenca`, `projecao` e as metas do dia estão na unidade da meta
+//   da campanha (`unidade`: bilhetes ou centavos). Alvos são arredondados para cima, em unidades inteiras.
+// - Percentuais `*_bp` são pontos-base inteiros, truncados, e passam de 10000 quando a meta é superada.
+// - "Esperado" é sempre até o fim de ONTEM (dias fechados): o dia corrente tem a meta do dia à parte.
+// - Schemas estritos: um campo a mais invalida a resposta (nas rotas abertas, é a prova de que nenhum
+//   valor financeiro escapa).
+// ---------------------------------------------------------------------------------------------------
+
+export const FASES_CAMPANHA = ["antes", "durante", "encerrada"] as const;
+
+/**
+ * Situação de uma instância numa janela (docs/regras-de-calculo.md, R4):
+ * - em_dia: o realizado até agora cobre o esperado até o fim de ontem;
+ * - abaixo: não cobre (`diferenca` negativa);
+ * - sem_meta: a meta da instância na janela é zero (não há o que cobrar).
+ */
+export const SITUACOES_RITMO = ["em_dia", "abaixo", "sem_meta"] as const;
+export type SituacaoRitmo = (typeof SITUACOES_RITMO)[number];
+
+const quantidadeSchema = z.number().int().nonnegative();
+/** Pontos-base truncados, sem teto (passam de 10000 acima da meta). */
+const percentualBpSchema = z.number().int().nonnegative();
+
+/** Fase, dia e período numa data local. Não tem valores: também vai para as rotas abertas. */
+export const referenciaCampanhaSchema = z.strictObject({
+  /** Data de referência: hoje no fuso da campanha ou a `data` consultada. */
+  data: dataLocalSchema,
+  fase: z.enum(FASES_CAMPANHA),
+  data_inicio: dataLocalSchema,
+  data_fim: dataLocalSchema,
+  duracao_dias: z.number().int().min(1),
+  /** Dia da campanha (1 = primeiro dia de vendas); null fora dela. */
+  dia_campanha: z.number().int().min(1).nullable(),
+  /** Dias que faltam contando hoje: antes = duração; no último dia = 1; encerrada = 0. */
+  dias_restantes: quantidadeSchema,
+  /** Só antes do início: dias até o primeiro dia (véspera = 1). */
+  dias_para_inicio: z.number().int().min(1).nullable(),
+  /** Período que contém a data; null fora da campanha. */
+  periodo: z
+    .strictObject({
+      ordem: z.number().int().min(1),
+      nome: z.string().min(1),
+      data_inicio: dataLocalSchema,
+      data_fim: dataLocalSchema,
+      dias: z.number().int().min(1),
+      dia_no_periodo: z.number().int().min(1),
+      /** Contando hoje: no último dia do período = 1. */
+      dias_restantes: z.number().int().min(1),
+    })
+    .nullable(),
+});
+export type ReferenciaCampanha = z.infer<typeof referenciaCampanhaSchema>;
+
+// ---------------------------------------------------------------------------------------------------
+// GET /api/painel/resumo (coordenação, com valores)
 // ---------------------------------------------------------------------------------------------------
 
 export const ESCOPOS_PAINEL = [
@@ -401,6 +459,7 @@ export const ESCOPOS_PAINEL = [
   "discipulador",
   "celula",
 ] as const;
+export type EscopoPainel = (typeof ESCOPOS_PAINEL)[number];
 const ESCOPOS_COM_ID: readonly string[] = ["rede", "discipulador", "celula"];
 
 export const consultaPainelResumoSchema = z
@@ -410,7 +469,7 @@ export const consultaPainelResumoSchema = z
     id: z.coerce.number().int().positive().optional(),
     /** Obrigatória no escopo `divisao`. */
     divisao: divisaoSchema.optional(),
-    /** Data de referência (local); padrão: hoje no fuso da campanha. */
+    /** Data de referência (local), no máximo hoje; padrão: hoje no fuso da campanha. */
     data: dataLocalSchema.optional(),
   })
   .refine(
@@ -429,83 +488,117 @@ export const consultaPainelResumoSchema = z
       path: ["divisao"],
     },
   );
+export type ConsultaPainelResumo = z.output<typeof consultaPainelResumoSchema>;
 
-export const FASES_CAMPANHA = ["antes", "durante", "encerrada"] as const;
+/** Ritmo de uma instância numa janela (campanha inteira ou período atual). */
+export const ritmoSchema = z.strictObject({
+  /** Meta da instância na janela. */
+  meta: quantidadeSchema,
+  /** Esperado pela curva até o fim de ontem, dentro da janela. */
+  esperado: quantidadeSchema,
+  /** Vendido na janela até agora (inclui hoje). */
+  realizado: quantidadeSchema,
+  /** Vendido na janela até o fim de ontem. */
+  realizado_ate_ontem: quantidadeSchema,
+  /** realizado − esperado (negativo = abaixo da curva). */
+  diferenca: z.number().int(),
+  situacao: z.enum(SITUACOES_RITMO),
+  /** realizado ÷ meta; null sem meta. */
+  percentual_meta_bp: percentualBpSchema.nullable(),
+  /** Onde a curva manda estar: esperado ÷ meta; null sem meta. */
+  percentual_esperado_bp: percentualBpSchema.max(10_000).nullable(),
+  /** realizado_ate_ontem ÷ esperado (dias fechados); null enquanto o esperado é zero. */
+  ritmo_bp: percentualBpSchema.nullable(),
+});
+export type Ritmo = z.infer<typeof ritmoSchema>;
 
-/** Ritmo numa janela, na unidade da meta. Percentuais em pontos-base. */
-export const ritmoSchema = z.object({
-  meta: z.number().nonnegative(),
-  esperado: z.number().nonnegative(),
-  realizado: z.number().nonnegative(),
-  /** realizado − esperado (negativo = abaixo do ritmo). */
-  diferenca: z.number(),
-  /** realizado / meta; null se a meta é zero. */
-  percentual_meta_bp: z.number().int().nonnegative().nullable(),
-  /** realizado / esperado; null se o esperado é zero. */
-  percentual_ritmo_bp: z.number().int().nonnegative().nullable(),
+/** Meta do dia corrente (docs/regras-de-calculo.md, R3). */
+export const metaDoDiaSchema = z.strictObject({
+  data: dataLocalSchema,
+  /** Esperado até o fim de hoje − realizado até ontem, nunca negativa: o que faltou entra aqui. */
+  meta: quantidadeSchema,
+  /** A parte da curva neste dia, sem o ajuste do que faltou ou sobrou antes. */
+  meta_base: quantidadeSchema,
+  realizado: quantidadeSchema,
+  /** max(0, meta − realizado). */
+  falta: quantidadeSchema,
+  /** realizado ÷ meta; null quando a meta do dia é zero. */
+  percentual_meta_bp: percentualBpSchema.nullable(),
+  batida: z.boolean(),
 });
 
-export const respostaPainelResumoSchema = z.object({
-  escopo: z.object({
+/** Um dia da curva (gráfico): esperado e realizado acumulados ao fim do dia. */
+export const pontoCurvaSchema = z.strictObject({
+  dia: z.number().int().min(1),
+  data: dataLocalSchema,
+  esperado: quantidadeSchema,
+  /** null nos dias depois da data de referência. */
+  realizado: quantidadeSchema.nullable(),
+  realizado_no_dia: quantidadeSchema.nullable(),
+});
+
+export const respostaPainelResumoSchema = z.strictObject({
+  escopo: z.strictObject({
     tipo: z.enum(ESCOPOS_PAINEL),
+    /** null nos escopos campanha e divisão. */
     id: idSchema.nullable(),
+    /** A divisão do escopo (a da rede, nos escopos rede, discipulador e célula); null na campanha. */
     divisao: divisaoSchema.nullable(),
     nome: z.string().min(1),
   }),
-  referencia: z.object({
-    data: dataLocalSchema,
-    fase: z.enum(FASES_CAMPANHA),
-    dia_campanha: z.number().int().min(1).nullable(),
-    total_dias: z.number().int().min(1),
-    periodo: z
-      .object({
-        ordem: z.number().int().min(1),
-        nome: z.string().min(1),
-        data_inicio: dataLocalSchema,
-        data_fim: dataLocalSchema,
-        dias: z.number().int().min(1),
-        dia_no_periodo: z.number().int().min(1),
-      })
-      .nullable(),
-  }),
+  referencia: referenciaCampanhaSchema,
   unidade: z.enum(UNIDADES_META),
-  /** Hoje. `meta_ajustada` = o que falta da meta do período ÷ dias restantes (inclui hoje). */
-  dia: ritmoSchema.extend({
-    meta_ajustada: z.number().nonnegative().nullable(),
-  }),
-  /** Período atual (null fora da campanha). */
+  /** Meta e venda de hoje; só durante a campanha. */
+  hoje: metaDoDiaSchema.nullable(),
+  /** Período atual; só durante a campanha. */
   periodo: ritmoSchema.nullable(),
-  /** Do início até a data de referência. `projecao_final` = realizado ÷ fração esperada até hoje. */
+  /** Campanha inteira, com a projeção do fim no ritmo dos dias fechados. */
   campanha: ritmoSchema.extend({
-    projecao_final: z.number().nonnegative().nullable(),
+    /** Na unidade da meta (para baixo). Null antes do início e no 1º dia; depois do fim, o resultado. */
+    projecao: quantidadeSchema.nullable(),
+    projecao_percentual_meta_bp: percentualBpSchema.nullable(),
   }),
+  /** Um ponto por dia da campanha. */
+  curva: z.array(pontoCurvaSchema),
+  /** Vendas aprovadas do escopo dentro da janela da campanha, até a data de referência. */
   vendas: totaisVendasSchema,
-  /** Só no escopo campanha: vendas sem célula (sem afiliado ou afiliado não vinculado). */
+  /** Só no escopo campanha: as vendas sem célula (já somadas em `vendas`). */
   vendas_sem_celula: totaisVendasSchema.nullable(),
+  /** Só no escopo campanha: aprovadas fora da janela (não contam em nada), para a coordenação ver. */
+  vendas_fora_da_janela: z
+    .strictObject({
+      antes_do_inicio: totaisVendasSchema,
+      depois_do_fim: totaisVendasSchema,
+    })
+    .nullable(),
+  atualizado_em: instanteSchema,
 });
+export type RespostaPainelResumo = z.infer<typeof respostaPainelResumoSchema>;
 
 // ---------------------------------------------------------------------------------------------------
-// RASCUNHO: GET /api/painel/ranking (coordenação, com valores)
+// GET /api/painel/ranking (coordenação, com valores)
 // ---------------------------------------------------------------------------------------------------
 
-export const NIVEIS_RANKING = [
-  "celula",
-  "discipulador",
-  "rede",
-  "divisao",
-] as const;
+export const NIVEIS_RANKING = ["celula", "discipulador", "rede"] as const;
+export type NivelRanking = (typeof NIVEIS_RANKING)[number];
 export const JANELAS_RANKING = ["atual", "campanha"] as const;
+export type JanelaRanking = (typeof JANELAS_RANKING)[number];
 
 export const consultaRankingSchema = z.object({
   nivel: z.enum(NIVEIS_RANKING).default("celula"),
   /** Filtra uma divisão (rankings separados de jovens e adultos). */
   divisao: divisaoSchema.optional(),
-  /** `atual` = período que contém a data; `campanha` = do início até a data. */
+  /**
+   * `atual` = período que contém a data (antes do início, o 1º; depois do fim, o último);
+   * `campanha` = do primeiro dia até a data.
+   */
   periodo: z.enum(JANELAS_RANKING).default("atual"),
+  /** Data de referência (local), no máximo hoje; padrão: hoje no fuso da campanha. */
   data: dataLocalSchema.optional(),
 });
+export type ConsultaRanking = z.output<typeof consultaRankingSchema>;
 
-const janelaRankingSchema = z.strictObject({
+export const janelaRankingSchema = z.strictObject({
   tipo: z.enum(JANELAS_RANKING),
   /** Ordem do período (null quando a janela é a campanha). */
   ordem: z.number().int().min(1).nullable(),
@@ -514,68 +607,106 @@ const janelaRankingSchema = z.strictObject({
   data_fim: dataLocalSchema,
 });
 
-export const itemRankingSchema = z.object({
-  /** Empates dividem a posição (1, 2, 2, 4). */
-  posicao: z.number().int().min(1),
-  /** id da célula, do discipulador ou da rede; null no nível divisão. */
-  id: idSchema.nullable(),
+const vinculoRankingSchema = z.strictObject({
+  id: idSchema,
   nome: z.string().min(1),
-  divisao: divisaoSchema,
-  meta: z.number().nonnegative(),
-  realizado: z.number().nonnegative(),
-  percentual_meta_bp: z.number().int().nonnegative().nullable(),
-  vendas: totaisVendasSchema,
 });
 
-export const respostaRankingSchema = z.object({
+/** Quem está logo acima ou logo abaixo (na posição vizinha; empatados não são vizinhos). */
+export const vizinhoRankingSchema = z.strictObject({
+  id: idSchema,
+  nome: z.string().min(1),
+  posicao: z.number().int().min(1),
+  /** Distância no critério (pontos-base, bilhetes ou centavos); null se um dos dois está sem meta. */
+  diferenca: z.number().int().nonnegative().nullable(),
+});
+
+export const itemRankingSchema = z.strictObject({
+  /** Empates dividem a posição (1, 1, 3). */
+  posicao: z.number().int().min(1),
+  /** id da célula, do discipulador ou da rede. */
+  id: idSchema,
+  nome: z.string().min(1),
+  divisao: divisaoSchema,
+  /** Só no nível célula. */
+  discipulador: vinculoRankingSchema.nullable(),
+  /** Nos níveis célula e discipulador. */
+  rede: vinculoRankingSchema.nullable(),
+  meta: quantidadeSchema,
+  esperado: quantidadeSchema,
+  realizado: quantidadeSchema,
+  diferenca: z.number().int(),
+  situacao: z.enum(SITUACOES_RITMO),
+  percentual_meta_bp: percentualBpSchema.nullable(),
+  vendas: totaisVendasSchema,
+  acima: vizinhoRankingSchema.nullable(),
+  abaixo: vizinhoRankingSchema.nullable(),
+});
+export type ItemRanking = z.infer<typeof itemRankingSchema>;
+
+export const respostaRankingSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING),
   divisao: divisaoSchema.nullable(),
   janela: janelaRankingSchema,
   criterio: z.enum(CRITERIOS_RANKING),
   unidade: z.enum(UNIDADES_META),
+  referencia: referenciaCampanhaSchema,
+  /** Todas as instâncias do nível (e da divisão), inclusive as que ainda não venderam. */
   itens: z.array(itemRankingSchema),
+  atualizado_em: instanteSchema,
 });
+export type RespostaRanking = z.infer<typeof respostaRankingSchema>;
 
 // ---------------------------------------------------------------------------------------------------
-// RASCUNHO: GET /api/publico/ranking e GET /api/publico/bumbo (abertos: NENHUM valor financeiro)
-// Schemas estritos: um campo a mais (ex.: total_centavos) invalida a resposta.
+// GET /api/publico/ranking e GET /api/publico/bumbo (abertos: NENHUM valor financeiro)
 // ---------------------------------------------------------------------------------------------------
 
 export const consultaRankingPublicoSchema = consultaRankingSchema.omit({
   data: true,
 });
+export type ConsultaRankingPublico = z.output<
+  typeof consultaRankingPublicoSchema
+>;
 
 export const itemRankingPublicoSchema = z.strictObject({
   posicao: z.number().int().min(1),
   nome: z.string().min(1),
   divisao: divisaoSchema,
   /** Só aparece se a campanha liga `publico.mostra_percentual_meta`. */
-  percentual_meta_bp: z.number().int().nonnegative().optional(),
+  percentual_meta_bp: percentualBpSchema.optional(),
 });
 
 export const respostaRankingPublicoSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING),
   divisao: divisaoSchema.nullable(),
   janela: janelaRankingSchema,
+  criterio: z.enum(CRITERIOS_RANKING),
+  referencia: referenciaCampanhaSchema,
   /**
-   * Itens com `posicao` até `publico.limite_ranking` (padrão 3). Empates na última posição entram
-   * todos, então pode haver mais itens que o limite (ex.: 1, 2, 3, 3).
+   * Só quem já vendeu na janela, com `posicao` até `publico.limite_ranking` (padrão 3; null = todos).
+   * As posições são as do ranking completo; empates na última posição entram todos (1, 2, 3, 3).
    */
   itens: z.array(itemRankingPublicoSchema),
   atualizado_em: instanteSchema,
 });
+export type RespostaRankingPublico = z.infer<
+  typeof respostaRankingPublicoSchema
+>;
 
 export const consultaBumboSchema = z.object({
-  /** Dia da mensagem (local); padrão: hoje. */
+  /** Dia da mensagem (local), no máximo hoje; padrão: hoje. A mensagem fala do dia anterior. */
   data: dataLocalSchema.optional(),
 });
+export type ConsultaBumbo = z.output<typeof consultaBumboSchema>;
 
 export const respostaBumboSchema = z.strictObject({
   data: dataLocalSchema,
-  /** Mensagem pronta para colar no WhatsApp. Nunca contém valores em R$. */
+  referencia: referenciaCampanhaSchema,
+  /** Mensagem pronta para colar no WhatsApp. Nunca contém valores em R$ (nem centavos). */
   texto: z.string().min(1).max(4000),
   gerado_em: instanteSchema,
 });
+export type RespostaBumbo = z.infer<typeof respostaBumboSchema>;
 
 // ---------------------------------------------------------------------------------------------------
 // RASCUNHO: POST /api/admin/reconciliacao (CSV "Exportar Pedidos" da Rifei → divergências)
@@ -826,7 +957,7 @@ export const ROTAS = {
     metodo: "GET",
     caminho: "/api/painel/resumo",
     grupo: "coordenacao",
-    situacao: "rascunho",
+    situacao: "detalhada",
     consulta: consultaPainelResumoSchema,
     sucesso: { status: 200, corpo: respostaPainelResumoSchema },
   },
@@ -834,7 +965,7 @@ export const ROTAS = {
     metodo: "GET",
     caminho: "/api/painel/ranking",
     grupo: "coordenacao",
-    situacao: "rascunho",
+    situacao: "detalhada",
     consulta: consultaRankingSchema,
     sucesso: { status: 200, corpo: respostaRankingSchema },
   },
@@ -842,7 +973,7 @@ export const ROTAS = {
     metodo: "GET",
     caminho: "/api/publico/ranking",
     grupo: "aberto",
-    situacao: "rascunho",
+    situacao: "detalhada",
     consulta: consultaRankingPublicoSchema,
     sucesso: { status: 200, corpo: respostaRankingPublicoSchema },
   },
@@ -850,7 +981,7 @@ export const ROTAS = {
     metodo: "GET",
     caminho: "/api/publico/bumbo",
     grupo: "aberto",
-    situacao: "rascunho",
+    situacao: "detalhada",
     consulta: consultaBumboSchema,
     sucesso: { status: 200, corpo: respostaBumboSchema },
   },

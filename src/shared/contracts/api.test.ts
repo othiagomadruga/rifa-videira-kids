@@ -4,12 +4,17 @@ import {
   COLUNAS_CSV_HIERARQUIA,
   ROTAS,
   consultaAfiliadosSchema,
+  consultaBumboSchema,
   consultaPainelResumoSchema,
+  consultaRankingPublicoSchema,
+  consultaRankingSchema,
   corpoImportarHierarquiaSchema,
   corpoSalvarAfiliadoSchema,
   linhaCsvHierarquiaSchema,
   parametroAffiliateIdSchema,
   parametroIdSchema,
+  respostaBumboSchema,
+  respostaPainelResumoSchema,
   respostaRankingPublicoSchema,
   respostaRankingSchema,
   respostaWebhookRifeiSchema,
@@ -51,7 +56,7 @@ function nomesDeCampos(schema: z.ZodType): string[] {
 }
 
 describe("CA3: catálogo de rotas", () => {
-  it("traz todas as rotas detalhadas das Sprints 1–2", () => {
+  it("traz todas as rotas detalhadas das Sprints 1–3", () => {
     const detalhadas = rotas
       .filter(([, rota]) => rota.situacao === "detalhada")
       .map(([, rota]) => `${rota.metodo} ${rota.caminho}`);
@@ -72,23 +77,19 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/admin/afiliados",
         "PUT /api/admin/afiliados/:affiliateId",
         "GET /api/admin/adesao",
-      ].sort(),
-    );
-  });
-
-  it("marca como rascunho exatamente as 5 rotas das Sprints 3–4", () => {
-    const rascunhos = rotas
-      .filter(([, rota]) => rota.situacao === "rascunho")
-      .map(([, rota]) => `${rota.metodo} ${rota.caminho}`);
-    expect(rascunhos.sort()).toEqual(
-      [
         "GET /api/painel/resumo",
         "GET /api/painel/ranking",
         "GET /api/publico/ranking",
         "GET /api/publico/bumbo",
-        "POST /api/admin/reconciliacao",
       ].sort(),
     );
+  });
+
+  it("marca como rascunho só a reconciliação (Sprint 4)", () => {
+    const rascunhos = rotas
+      .filter(([, rota]) => rota.situacao === "rascunho")
+      .map(([, rota]) => `${rota.metodo} ${rota.caminho}`);
+    expect(rascunhos).toEqual(["POST /api/admin/reconciliacao"]);
   });
 
   it("o grupo de autorização de cada rota bate com o prefixo do caminho", () => {
@@ -175,33 +176,155 @@ describe("CA3: rotas abertas nunca devolvem valores financeiros", () => {
     },
   );
 
-  it("o ranking público é estrito: um valor a mais invalida a resposta", () => {
-    const resposta = {
-      nivel: "celula",
-      divisao: null,
-      janela: {
-        tipo: "atual",
-        ordem: 1,
-        nome: "Semana 1",
-        data_inicio: "2026-12-01",
-        data_fim: "2026-12-10",
-      },
-      itens: [{ posicao: 1, nome: "Célula Ficticia 01", divisao: "jovens" }],
-      atualizado_em: "2026-12-02T15:00:00.000Z",
-    };
-    expect(respostaRankingPublicoSchema.safeParse(resposta).success).toBe(true);
-    const comValor = {
-      ...resposta,
-      itens: [{ ...resposta.itens[0], total_centavos: 6000 }],
-    };
-    expect(respostaRankingPublicoSchema.safeParse(comValor).success).toBe(
-      false,
+  const referencia = {
+    data: "2026-12-02",
+    fase: "durante",
+    data_inicio: "2026-12-01",
+    data_fim: "2026-12-24",
+    duracao_dias: 24,
+    dia_campanha: 2,
+    dias_restantes: 23,
+    dias_para_inicio: null,
+    periodo: {
+      ordem: 1,
+      nome: "Semana 1",
+      data_inicio: "2026-12-01",
+      data_fim: "2026-12-10",
+      dias: 10,
+      dia_no_periodo: 2,
+      dias_restantes: 9,
+    },
+  };
+  const rankingPublico = {
+    nivel: "celula",
+    divisao: null,
+    janela: {
+      tipo: "atual",
+      ordem: 1,
+      nome: "Semana 1",
+      data_inicio: "2026-12-01",
+      data_fim: "2026-12-10",
+    },
+    criterio: "percentual_meta",
+    referencia,
+    itens: [{ posicao: 1, nome: "Célula Ficticia 01", divisao: "jovens" }],
+    atualizado_em: "2026-12-02T15:00:00.000Z",
+  };
+
+  it("o ranking público é estrito: um valor a mais invalida a resposta, em qualquer nível", () => {
+    expect(respostaRankingPublicoSchema.safeParse(rankingPublico).success).toBe(
+      true,
     );
+    const comValor = [
+      { ...rankingPublico, total_centavos: 6000 },
+      {
+        ...rankingPublico,
+        itens: [{ ...rankingPublico.itens[0], total_centavos: 6000 }],
+      },
+      {
+        ...rankingPublico,
+        janela: { ...rankingPublico.janela, bilhetes: 10 },
+      },
+      {
+        ...rankingPublico,
+        referencia: { ...referencia, realizado: 10 },
+      },
+      {
+        ...rankingPublico,
+        referencia: {
+          ...referencia,
+          periodo: { ...referencia.periodo, meta: 10 },
+        },
+      },
+    ];
+    for (const resposta of comValor)
+      expect(respostaRankingPublicoSchema.safeParse(resposta).success).toBe(
+        false,
+      );
   });
 
-  it("o ranking da coordenação, ao contrário, traz os valores", () => {
+  it("o bumbo é estrito: só data, referência, texto e gerado_em", () => {
+    const bumbo = {
+      data: "2026-12-02",
+      referencia,
+      texto: "*Rifa Videira Kids · Dia 2 de 24*",
+      gerado_em: "2026-12-02T12:00:00.000Z",
+    };
+    expect(respostaBumboSchema.safeParse(bumbo).success).toBe(true);
+    expect(
+      respostaBumboSchema.safeParse({ ...bumbo, total_centavos: 1 }).success,
+    ).toBe(false);
+    expect(
+      respostaBumboSchema.safeParse({ ...bumbo, texto: "x".repeat(4001) })
+        .success,
+    ).toBe(false);
+  });
+
+  it("as rotas abertas só têm campos de uma lista fechada (campo novo exige revisar este teste)", () => {
+    const PERMITIDOS = [
+      // ranking público
+      "nivel",
+      "divisao",
+      "janela",
+      "tipo",
+      "ordem",
+      "nome",
+      "data_inicio",
+      "data_fim",
+      "criterio",
+      "itens",
+      "posicao",
+      "percentual_meta_bp",
+      "atualizado_em",
+      // referência (fase, dia e período)
+      "referencia",
+      "data",
+      "fase",
+      "duracao_dias",
+      "dia_campanha",
+      "dias_restantes",
+      "dias_para_inicio",
+      "periodo",
+      "dias",
+      "dia_no_periodo",
+      // bumbo
+      "texto",
+      "gerado_em",
+      // health
+      "ok",
+      "db",
+      "latenciaMs",
+    ];
+    const abertas = rotas.filter(([, rota]) => rota.grupo === "aberto");
+    for (const [nome, rota] of abertas) {
+      const corpo = rota.sucesso.corpo;
+      if (!corpo) continue;
+      const fora = nomesDeCampos(corpo).filter(
+        (campo) => !PERMITIDOS.includes(campo),
+      );
+      expect({ nome, fora }).toEqual({ nome, fora: [] });
+    }
+  });
+
+  it("o ranking e o resumo da coordenação, ao contrário, trazem os valores", () => {
     expect(nomesDeCampos(respostaRankingSchema)).toEqual(
-      expect.arrayContaining(["total_centavos", "bilhetes"]),
+      expect.arrayContaining([
+        "total_centavos",
+        "bilhetes",
+        "meta",
+        "realizado",
+        "acima",
+        "abaixo",
+      ]),
+    );
+    expect(nomesDeCampos(respostaPainelResumoSchema)).toEqual(
+      expect.arrayContaining([
+        "total_centavos",
+        "vendas_sem_celula",
+        "vendas_fora_da_janela",
+        "projecao",
+        "curva",
+      ]),
     );
   });
 });
@@ -284,7 +407,7 @@ describe("CA3: parâmetros, consultas e corpos", () => {
     ).toBe(false);
   });
 
-  it("painel (rascunho): escopos rede, discipulador e célula exigem id; divisão exige a divisão", () => {
+  it("painel: escopos rede, discipulador e célula exigem id; divisão exige a divisão", () => {
     expect(consultaPainelResumoSchema.parse({})).toEqual({
       escopo: "campanha",
     });
@@ -306,6 +429,49 @@ describe("CA3: parâmetros, consultas e corpos", () => {
         divisao: "adultos",
       }).success,
     ).toBe(true);
+  });
+
+  it("ranking: padrão célula e período atual; níveis célula, discipulador e rede; data válida", () => {
+    expect(consultaRankingSchema.parse({})).toEqual({
+      nivel: "celula",
+      periodo: "atual",
+    });
+    expect(
+      consultaRankingSchema.parse({
+        nivel: "rede",
+        divisao: "jovens",
+        periodo: "campanha",
+        data: "2026-12-09",
+      }),
+    ).toEqual({
+      nivel: "rede",
+      divisao: "jovens",
+      periodo: "campanha",
+      data: "2026-12-09",
+    });
+    for (const consulta of [
+      { nivel: "divisao" },
+      { periodo: "semana" },
+      { divisao: "kids" },
+      { data: "2026-02-30" },
+    ])
+      expect(consultaRankingSchema.safeParse(consulta).success).toBe(false);
+  });
+
+  it("público: sem data (é sempre hoje); bumbo: data opcional", () => {
+    expect(
+      consultaRankingPublicoSchema.parse({
+        nivel: "discipulador",
+        data: "2026-12-01",
+      }),
+    ).toEqual({ nivel: "discipulador", periodo: "atual" });
+    expect(consultaBumboSchema.parse({})).toEqual({});
+    expect(consultaBumboSchema.parse({ data: "2026-12-08" })).toEqual({
+      data: "2026-12-08",
+    });
+    expect(consultaBumboSchema.safeParse({ data: "08/12/2026" }).success).toBe(
+      false,
+    );
   });
 
   it("importação: corpo com o CSV e simular opcional", () => {

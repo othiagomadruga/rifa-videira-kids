@@ -9,11 +9,13 @@ O contrato executável está em `src/shared/contracts/`:
 | `rifei.ts` | payload do webhook e redação |
 | `erros.ts` | formato de erro e códigos |
 | `acesso.ts` | acesso da equipe: papéis, sessão, usuários e links, e o catálogo `ROTAS_ACESSO` ([acesso.md](acesso.md)) |
+| `calendario.ts` | calendário da campanha: datas dos períodos, data final, fase e normalização dos percentuais |
+| `calculos.ts` | regras de cálculo (metas, curva, ritmo, projeção, ranking, bumbo) e as funções que montam as respostas do painel e das rotas abertas ([regras-de-calculo.md](regras-de-calculo.md)) |
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
-- **Detalhadas** (Sprints 1–2): fechadas. Front e back implementam em paralelo.
-- **RASCUNHO** (Sprints 3–4): forma provável, que pode mudar quando forem implementadas.
+- **Detalhadas** (Sprints 1–3): fechadas. Front e back implementam em paralelo.
+- **RASCUNHO** (Sprint 4): forma provável, que pode mudar quando forem implementadas.
 
 ## Convenções
 
@@ -38,7 +40,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
 | `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores financeiros** |
 
-Os schemas de `/api/publico/*` são **estritos**: um campo a mais, como `total_centavos`, invalida a resposta. Um teste confere que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas.
+Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada.
 
 **Coordenação** (RIFA-007; contrato em `acesso.ts`, detalhes em [acesso.md](acesso.md)):
 
@@ -338,50 +340,213 @@ Painel de "quem falta": uma linha por célula.
 
 ---
 
-## Rotas RASCUNHO (Sprints 3–4)
+## Painel, rankings e visão pública (Sprint 3, RIFA-008)
 
-As regras de cálculo estão em [modelo-de-dados.md, seção 7](modelo-de-dados.md#7-como-ritmo-metas-e-ranking-serão-calculados-sprints-34). Os schemas abaixo já estão em `api.ts`, marcados como `situacao: 'rascunho'`.
+Regras, fontes, exemplos e suposições: [regras-de-calculo.md](regras-de-calculo.md), que substitui a seção 7 de [modelo-de-dados.md](modelo-de-dados.md). Os schemas estão em `api.ts` e as respostas saem prontas das funções de `calculos.ts`:
 
-### RASCUNHO `GET /api/painel/resumo` (`coordenacao`)
+| Rota | Função |
+|---|---|
+| `GET /api/painel/resumo` | `montarResumoPainel(entrada, { escopo, data }, agora)` |
+| `GET /api/painel/ranking` | `montarRankingPainel(entrada, consulta, agora)` |
+| `GET /api/publico/ranking` | `montarRankingPublico(entrada, consulta, agora)` |
+| `GET /api/publico/bumbo` | `montarBumbo(entrada, { data }, agora, BUMBO_PADRAO)` |
 
-- **Consulta**:
+**O que a rota faz** (passo a passo em [regras-de-calculo.md, seção 5](regras-de-calculo.md#5-como-o-worker-alimenta-as-funções)):
+
+1. Valida a consulta com o schema (`400 requisicao_invalida` fora dele).
+2. Lê a campanha ativa: sem campanha, `404 nao_encontrado`.
+3. Se veio `data` depois de hoje no fuso da campanha (`hojeNoFuso` + `diasEntre`), `400 requisicao_invalida` com `detalhes` = `[{ "caminho": ["data"], "codigo": "data_futura", "mensagem": "A data não pode ser depois de hoje" }]`.
+4. Lê **todas** as células com a hierarquia e as vendas aprovadas agrupadas por célula e dia local (`EntradaCalculo`), de qualquer data.
+5. Chama a função com `agora = new Date()` e devolve o resultado como está.
+
+**Convenções destas quatro rotas**
+
+- `meta`, `esperado`, `realizado`, `diferenca`, `projecao` e as metas do dia estão na unidade da meta (`unidade`: `bilhetes` ou `centavos`). Alvos vêm arredondados para cima; percentuais `*_bp` vêm truncados e passam de 10000 acima da meta.
+- **Esperado** é sempre até o fim de **ontem**: o dia de hoje entra no realizado e tem a meta do dia à parte (`hoje`).
+- `referencia` traz a fase (`antes`, `durante`, `encerrada`), o dia N de `duracao_dias`, os dias restantes (contando hoje) e o período atual. Não tem valores, por isso também vai para as rotas abertas.
+- Os schemas das quatro respostas são **estritos**: um campo a mais invalida a resposta.
+
+Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pessoa) com as três células fictícias da importação (12, 9 e 15 pessoas: meta 360), consultada em 04/12/2026 às 15:30 de Belém (dia 12 de 24, 2º dia da Semana 2).
+
+### `GET /api/painel/resumo` (`coordenacao`)
+
+- **Consulta** (`consultaPainelResumoSchema`):
   - `escopo` = `campanha` (padrão), `divisao`, `rede`, `discipulador` ou `celula`;
-  - `id` é obrigatório nos escopos rede, discipulador e célula;
-  - `divisao` é obrigatória no escopo divisao;
-  - `data` (`YYYY-MM-DD`; padrão: hoje no fuso da campanha).
+  - `id`: obrigatório nos escopos rede, discipulador e célula;
+  - `divisao`: obrigatória no escopo divisão;
+  - `data` (`YYYY-MM-DD`, no máximo hoje): padrão hoje no fuso da campanha. Com data passada, o retrato é o do fim daquele dia.
+- A rota resolve o escopo antes de chamar a função: confere se o `id` existe (`404 nao_encontrado`, senão) e passa `{ tipo, id, divisao, nome }`. Na campanha, `nome` é o da campanha e `divisao` é null; na divisão, `nome` é `NOMES_DIVISAO[divisao]`; nos outros, o nome da entidade e a divisão da rede dela.
 - **200** (`respostaPainelResumoSchema`):
-  - `escopo`;
-  - `referencia`: data, fase `antes`/`durante`/`encerrada`, dia da campanha, total de dias e período atual;
-  - `unidade`;
-  - `dia`, `periodo` e `campanha`, cada um com `meta`, `esperado`, `realizado`, `diferenca`, `percentual_meta_bp` e `percentual_ritmo_bp`; `dia` traz também `meta_ajustada`, e `campanha` traz `projecao_final`;
-  - `vendas` (totais aprovados);
-  - `vendas_sem_celula` (só no escopo campanha).
 
-### RASCUNHO `GET /api/painel/ranking` (`coordenacao`, com valores)
+```json
+{
+  "escopo": { "tipo": "campanha", "id": null, "divisao": null, "nome": "Rifa Videira Kids" },
+  "referencia": {
+    "data": "2026-12-04", "fase": "durante", "data_inicio": "2026-11-23", "data_fim": "2026-12-16",
+    "duracao_dias": 24, "dia_campanha": 12, "dias_restantes": 13, "dias_para_inicio": null,
+    "periodo": {
+      "ordem": 2, "nome": "Semana 2", "data_inicio": "2026-12-03", "data_fim": "2026-12-09",
+      "dias": 7, "dia_no_periodo": 2, "dias_restantes": 6
+    }
+  },
+  "unidade": "bilhetes",
+  "hoje": { "data": "2026-12-04", "meta": 11, "meta_base": 12, "realizado": 5, "falta": 6, "percentual_meta_bp": 4545, "batida": false },
+  "periodo": {
+    "meta": 86, "esperado": 13, "realizado": 14, "realizado_ate_ontem": 9, "diferenca": 1, "situacao": "em_dia",
+    "percentual_meta_bp": 1633, "percentual_esperado_bp": 1428, "ritmo_bp": 7350
+  },
+  "campanha": {
+    "meta": 360, "esperado": 133, "realizado": 139, "realizado_ate_ontem": 134, "diferenca": 6, "situacao": "em_dia",
+    "percentual_meta_bp": 3861, "percentual_esperado_bp": 3673, "ritmo_bp": 10132,
+    "projecao": 364, "projecao_percentual_meta_bp": 10132
+  },
+  "curva": [
+    { "dia": 11, "data": "2026-12-03", "esperado": 133, "realizado": 134, "realizado_no_dia": 9 },
+    { "dia": 12, "data": "2026-12-04", "esperado": 145, "realizado": 139, "realizado_no_dia": 5 },
+    { "dia": 13, "data": "2026-12-05", "esperado": 157, "realizado": null, "realizado_no_dia": null }
+  ],
+  "vendas": { "pedidos_aprovados": 54, "bilhetes": 139, "total_centavos": 278000 },
+  "vendas_sem_celula": { "pedidos_aprovados": 1, "bilhetes": 3, "total_centavos": 6000 },
+  "vendas_fora_da_janela": {
+    "antes_do_inicio": { "pedidos_aprovados": 1, "bilhetes": 1, "total_centavos": 2000 },
+    "depois_do_fim": { "pedidos_aprovados": 0, "bilhetes": 0, "total_centavos": 0 }
+  },
+  "atualizado_em": "2026-12-04T18:30:00.000Z"
+}
+```
 
-- **Consulta**:
-  - `nivel` = `celula` (padrão), `discipulador`, `rede` ou `divisao` (adultos × jovens);
-  - `divisao` (filtro);
-  - `periodo` = `atual` (padrão) ou `campanha`;
-  - `data`.
-- **200** (`respostaRankingSchema`):
-  - `janela` (`tipo`, `ordem`, `nome`, `data_inicio`, `data_fim`), `criterio` e `unidade`;
-  - `itens[]` com `posicao`, `id` (null no nível divisão), `nome`, `divisao`, `meta`, `realizado`, `percentual_meta_bp` e `vendas`.
-- Empates dividem a posição.
+(A `curva` tem um ponto por dia da campanha, 24 aqui; o exemplo mostra os dias 11 a 13.)
 
-### RASCUNHO `GET /api/publico/ranking` (aberto, **sem nenhum valor em R$**)
+| Campo | Conteúdo |
+|---|---|
+| `hoje` | Só durante a campanha. `meta` = esperado até o fim de hoje − realizado até ontem, nunca negativa (aqui, 12 da curva − 1 que sobrou); `meta_base` = só a parte da curva; `falta`, `percentual_meta_bp` (null com meta zero) e `batida` |
+| `periodo` | Período atual, só durante a campanha: meta do período, esperado até ontem dentro dele, realizado e situação. Aqui a semana fechou ontem abaixo (9 de 13, ritmo 73,5%), e as 5 vendas de hoje já a deixaram em dia |
+| `campanha` | Do 1º dia até agora. `situacao`: `em_dia` (realizado ≥ esperado), `abaixo` ou `sem_meta`; `ritmo_bp` = realizado até ontem ÷ esperado; `projecao` = onde termina no ritmo dos dias fechados (null antes do início e no 1º dia; depois do fim, o resultado) |
+| `curva` | Para o gráfico: esperado e realizado acumulados ao fim de cada dia; `realizado` null nos dias depois da data de referência |
+| `vendas` | Vendas aprovadas do escopo dentro da janela da campanha, até a data de referência. Na campanha, inclui as sem célula |
+| `vendas_sem_celula` | Só no escopo campanha (null nos outros): sem afiliado ou com afiliado não vinculado; já estão em `vendas` |
+| `vendas_fora_da_janela` | Só no escopo campanha: aprovadas antes do 1º dia (ex.: compra de teste na reunião de cadastro) ou depois do último. Não contam em nada |
 
-- **Consulta**: `nivel`, `divisao` e `periodo`, como no painel, sem `data`.
-- **200** (`respostaRankingPublicoSchema`, estrito): `{ nivel, divisao, janela, itens: [{ posicao, nome, divisao, percentual_meta_bp? }], atualizado_em }`.
-  - Itens com `posicao` até `publico.limite_ranking` (padrão 3). Quem empata na última posição entra, então pode haver mais itens que o limite (ex.: 1, 2, 3, 3).
-  - `percentual_meta_bp` só aparece se `publico.mostra_percentual_meta = true`.
-  - Nunca aparecem centavos, bilhetes, meta ou realizado.
+- **Erros**: 400 `requisicao_invalida` (consulta fora do schema ou `data` futura), 401 `nao_autenticado`, 404 `nao_encontrado` (sem campanha ativa ou `id` inexistente).
 
-### RASCUNHO `GET /api/publico/bumbo` (aberto)
+### `GET /api/painel/ranking` (`coordenacao`, com valores)
 
-- **Consulta**: `data` (padrão hoje).
-- **200** (`respostaBumboSchema`, estrito): `{ "data": "2026-12-08", "texto": "...", "gerado_em": "..." }`.
-- `texto` é a mensagem pronta para o grupo de WhatsApp: dia da campanha, ritmo contra a curva, as 3 primeiras posições e uma chamada final. **Nunca contém valores em R$.** O modelo do texto será fechado na Sprint 4.
+- **Consulta** (`consultaRankingSchema`):
+  - `nivel` = `celula` (padrão), `discipulador` ou `rede`;
+  - `divisao` = `jovens` ou `adultos` (filtro: rankings separados);
+  - `periodo` = `atual` (padrão: o período que contém a data; antes do início, o 1º; depois do fim, o último) ou `campanha` (do 1º dia até a data);
+  - `data` (no máximo hoje): padrão hoje. Serve, por exemplo, para ver a Semana 2 fechada (`periodo=atual&data=<último dia dela>`).
+- **200** (`respostaRankingSchema`): todas as instâncias do nível (e da divisão), inclusive as que não venderam, na ordem do ranking.
+
+```json
+{
+  "nivel": "celula", "divisao": null,
+  "janela": { "tipo": "atual", "ordem": 2, "nome": "Semana 2", "data_inicio": "2026-12-03", "data_fim": "2026-12-09" },
+  "criterio": "percentual_meta", "unidade": "bilhetes",
+  "referencia": { "data": "2026-12-04", "fase": "durante", "...": "igual ao do resumo" },
+  "itens": [
+    {
+      "posicao": 1, "id": 1, "nome": "Célula Ficticia 01", "divisao": "jovens",
+      "discipulador": { "id": 1, "nome": "Discipulador Ficticio A" }, "rede": { "id": 1, "nome": "Rede Jovem Ficticia" },
+      "meta": 29, "esperado": 5, "realizado": 7, "diferenca": 2, "situacao": "em_dia", "percentual_meta_bp": 2450,
+      "vendas": { "pedidos_aprovados": 3, "bilhetes": 7, "total_centavos": 14000 },
+      "acima": null,
+      "abaixo": { "id": 3, "nome": "Célula Ficticia 03", "posicao": 2, "diferenca": 1050 }
+    },
+    {
+      "posicao": 2, "id": 3, "nome": "Célula Ficticia 03", "divisao": "adultos",
+      "discipulador": { "id": 2, "nome": "Discipulador Ficticio B" }, "rede": { "id": 2, "nome": "Rede Adulta Ficticia" },
+      "meta": 36, "esperado": 6, "realizado": 5, "diferenca": -1, "situacao": "abaixo", "percentual_meta_bp": 1400,
+      "vendas": { "pedidos_aprovados": 2, "bilhetes": 5, "total_centavos": 10000 },
+      "acima": { "id": 1, "nome": "Célula Ficticia 01", "posicao": 1, "diferenca": 1050 },
+      "abaixo": { "id": 2, "nome": "Célula Ficticia 02", "posicao": 3, "diferenca": 467 }
+    },
+    {
+      "posicao": 3, "id": 2, "nome": "Célula Ficticia 02", "divisao": "jovens",
+      "discipulador": { "id": 1, "nome": "Discipulador Ficticio A" }, "rede": { "id": 1, "nome": "Rede Jovem Ficticia" },
+      "meta": 22, "esperado": 4, "realizado": 2, "diferenca": -2, "situacao": "abaixo", "percentual_meta_bp": 933,
+      "vendas": { "pedidos_aprovados": 1, "bilhetes": 2, "total_centavos": 4000 },
+      "acima": { "id": 3, "nome": "Célula Ficticia 03", "posicao": 2, "diferenca": 467 },
+      "abaixo": null
+    }
+  ],
+  "atualizado_em": "2026-12-04T18:30:00.000Z"
+}
+```
+
+(No exemplo, `referencia` foi encurtada; a resposta traz o objeto inteiro, igual ao do resumo.)
+
+- **Ordem** pelo critério configurado (`ranking.criterio`): `percentual_meta` (realizado na janela ÷ meta na janela), `bilhetes` ou `arrecadacao`. Empates dividem a posição (1, 1, 3) e seguem o nome. No critério % da meta, quem está sem meta vai para o fim.
+- `meta`, `esperado`, `realizado`, `diferenca`, `situacao` e `percentual_meta_bp` são da janela; `vendas` são os totais aprovados na janela.
+- `discipulador` só no nível célula; `rede` nos níveis célula e discipulador.
+- `acima` e `abaixo`: o vizinho na posição anterior e na seguinte (empatados não são vizinhos), com a distância no critério (pontos-base, bilhetes ou centavos; null se um dos dois está sem meta).
+- **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 404 `nao_encontrado` (sem campanha ativa).
+
+### `GET /api/publico/ranking` (aberto, **sem nenhum valor em R$**)
+
+- **Consulta** (`consultaRankingPublicoSchema`): `nivel`, `divisao` e `periodo`, como no painel, **sem** `data` (é sempre hoje; um `data` na URL é ignorado).
+- **200** (`respostaRankingPublicoSchema`):
+
+```json
+{
+  "nivel": "celula", "divisao": null,
+  "janela": { "tipo": "atual", "ordem": 2, "nome": "Semana 2", "data_inicio": "2026-12-03", "data_fim": "2026-12-09" },
+  "criterio": "percentual_meta",
+  "referencia": {
+    "data": "2026-12-04", "fase": "durante", "data_inicio": "2026-11-23", "data_fim": "2026-12-16",
+    "duracao_dias": 24, "dia_campanha": 12, "dias_restantes": 13, "dias_para_inicio": null,
+    "periodo": {
+      "ordem": 2, "nome": "Semana 2", "data_inicio": "2026-12-03", "data_fim": "2026-12-09",
+      "dias": 7, "dia_no_periodo": 2, "dias_restantes": 6
+    }
+  },
+  "itens": [
+    { "posicao": 1, "nome": "Célula Ficticia 01", "divisao": "jovens" },
+    { "posicao": 2, "nome": "Célula Ficticia 03", "divisao": "adultos" },
+    { "posicao": 3, "nome": "Célula Ficticia 02", "divisao": "jovens" }
+  ],
+  "atualizado_em": "2026-12-04T18:30:00.000Z"
+}
+```
+
+- Mesma ordem e mesmas posições do ranking da coordenação, mas só com quem **já vendeu** na janela e com `posicao` até `publico.limite_ranking` (padrão 3; null = todas). Quem empata na última posição entra (1, 2, 3, 3). Antes da primeira venda, `itens` vem vazio.
+- `percentual_meta_bp` só aparece se `publico.mostra_percentual_meta = true`.
+- Nunca aparecem centavos, bilhetes, meta, esperado, realizado, diferença ou projeção. O teste de `api.test.ts` confere que os campos das rotas abertas estão numa lista fechada.
+- **Erros**: 400 `requisicao_invalida`, 404 `nao_encontrado` (sem campanha ativa).
+
+### `GET /api/publico/bumbo` (aberto)
+
+- **Consulta** (`consultaBumboSchema`): `data` (dia da mensagem, no máximo hoje); padrão hoje. A mensagem fala sempre do dia anterior, já fechado.
+- **200** (`respostaBumboSchema`): `{ "data", "referencia", "texto", "gerado_em" }`, com `referencia` do dia da mensagem (o mesmo objeto das outras rotas). Para o exemplo, `texto` é:
+
+```text
+*Rifa Videira Kids · Dia 12 de 24*
+
+*Ontem (dia 11):* vendemos 112% da meta do dia.
+*Acumulado:* 37% da meta. Pela curva, o esperado até ontem era 36%.
+Estamos em dia: no ritmo atual, chegamos a 101% da meta.
+
+*Ranking · Semana 2 (até ontem)*
+_Jovens_
+1º Célula Ficticia 01
+_Adultos_
+1º Célula Ficticia 03
+
+*Quem mais subiu ontem:* Célula Ficticia 01 e Célula Ficticia 03.
+
+Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o link da sua célula com quem é de fora da igreja!
+```
+
+- Partes: venda de ontem (% da meta do dia), acumulado contra a curva e projeção, top 3 do período por divisão (como no ranking público: só quem vendeu, nunca mais posições que `publico.limite_ranking`), as 3 células que mais subiram ontem (em % da própria meta) e a chamada final. Antes do início, no 1º dia, no último dia e depois do fim, o texto muda (contagem regressiva, largada, último dia e resultado final).
+- **Nunca contém R$ nem centavos.** Quantidade de bilhetes só com `mostrar_bilhetes`, que não existe ainda na configuração: a rota usa `BUMBO_PADRAO` (sem bilhetes). % por célula só se `publico.mostra_percentual_meta`.
+- Até 4000 caracteres, com o *negrito* e o _itálico_ do WhatsApp.
+- **Erros**: 400 `requisicao_invalida` (inclusive `data` futura), 404 `nao_encontrado` (sem campanha ativa).
+
+---
+
+## Rotas RASCUNHO (Sprint 4)
+
+Forma provável, que pode mudar quando for implementada. O schema já está em `api.ts`, marcado como `situacao: 'rascunho'`.
 
 ### RASCUNHO `POST /api/admin/reconciliacao` (`coordenacao`)
 
