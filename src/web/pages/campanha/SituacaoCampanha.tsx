@@ -1,12 +1,12 @@
-import type { Campanha } from "../../../shared/contracts";
-import { Badge, Card, type TomBadge } from "../../components/ui";
-import { formatarData } from "../../lib/formatadores";
 import {
   diasEntre,
   faseDaCampanha,
   hojeNoFuso,
+  type Campanha,
   type FaseCampanha,
-} from "./calendario";
+} from "../../../shared/contracts";
+import { Badge, Card, type TomBadge } from "../../components/ui";
+import { formatarData } from "../../lib/formatadores";
 
 const BADGE_DA_FASE: Record<FaseCampanha, { tom: TomBadge; texto: string }> = {
   antes: { tom: "info", texto: "Antes do início" },

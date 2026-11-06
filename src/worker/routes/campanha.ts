@@ -5,20 +5,20 @@
  * `app.route(PREFIXO_CAMPANHA, campanha)`. Caminhos e schemas vêm do contrato (`ROTAS`).
  *
  * - GET: 200 com a campanha; 404 `nao_encontrado` enquanto nada foi configurado.
- * - PUT: valida com `corpoSalvarCampanhaSchema`; 400 `json_invalido` (corpo que não é JSON) ou
- *   `requisicao_invalida` (fora do schema, com os problemas em `detalhes`). Cria a campanha ativa ou
- *   substitui a configuração dela, numa transação. É a partir daí que o webhook passa a contar as
- *   vendas da Rifei com esse `slug_rifei` (D5).
+ * - PUT: valida com `corpoSalvarCampanhaSchema`; 400 `json_invalido` (corpo que não é JSON, ou sem
+ *   Content-Type JSON) ou `requisicao_invalida` (fora do schema, com os problemas em `detalhes`);
+ *   409 `nome_duplicado` (slug de outra campanha). O primeiro PUT cria a campanha já ativa; os
+ *   seguintes substituem a configuração dela, numa transação. É a partir daí que o webhook passa a
+ *   contar as vendas da Rifei com esse `slug_rifei` (D5).
  */
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
+import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
 import {
-  ROTAS,
-  STATUS_HTTP_DO_ERRO,
-  criarErroApi,
-  detalhesDeValidacao,
-  type CodigoErro,
-} from "../../shared/contracts";
-import { obterCampanhaAtiva, salvarCampanhaAtiva } from "../db/campanha";
+  buscarCampanhaAtiva,
+  montarCampanha,
+  salvarCampanhaAtiva,
+} from "../db/campanha";
+import { responderErro } from "../lib/respostas-erro";
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
@@ -32,24 +32,12 @@ const CAMINHO = ROTAS.obterCampanha.caminho.slice(PREFIXO_CAMPANHA.length);
 const CONTEUDO_JSON =
   /^application\/([a-z.-]+\+)?json(;\s*[a-zA-Z0-9-]+=([^;]+))*$/i;
 
-function responderErro(
-  c: Context,
-  codigo: CodigoErro,
-  mensagem: string,
-  detalhes?: unknown,
-) {
-  return c.json(
-    criarErroApi(codigo, mensagem, detalhes),
-    STATUS_HTTP_DO_ERRO[codigo],
-  );
-}
-
 export const campanha = new Hono<Ambiente>();
 
 campanha.get(CAMINHO, async (c) => {
-  const atual = await obterCampanhaAtiva(c.env.DB);
-  return atual
-    ? c.json(atual, 200)
+  const ativa = await buscarCampanhaAtiva(c.env.DB);
+  return ativa
+    ? c.json(montarCampanha(ativa), 200)
     : responderErro(
         c,
         "nao_encontrado",

@@ -1,9 +1,9 @@
+import { percentuaisNormalizados } from "../../../shared/contracts";
 import { Button, EmptyState, Input } from "../../components/ui";
 import { formatarData } from "../../lib/formatadores";
 import {
   LIMITE_PERIODOS,
   MODELO_SANTO_ANDRE,
-  percentuaisNormalizados,
   textoPercentual,
   type ErrosFormulario,
   type PeriodoFormulario,

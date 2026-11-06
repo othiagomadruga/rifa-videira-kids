@@ -10,6 +10,7 @@ import {
   CRITERIOS_RANKING,
   REGRAS_META,
   UNIDADES_META,
+  diaDoCalendario,
   type Campanha,
   type CriterioRanking,
   type RegraMeta,
@@ -18,7 +19,6 @@ import {
 import { Button, Card, Input, Select } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/formatadores";
-import { diaDoCalendario } from "./calendario";
 import { salvarCampanha } from "./campanha-api";
 import {
   EditorPeriodos,

@@ -5,21 +5,19 @@
 import {
   FUSO_PADRAO,
   PUBLICO_PADRAO,
+  calcularCalendario,
   corpoSalvarCampanhaSchema,
   detalhesDeValidacao,
+  diaDoCalendario,
   type Campanha,
   type CriterioRanking,
+  type DatasPeriodo,
   type DetalheValidacao,
   type RegraMeta,
   type UnidadeMeta,
 } from "../../../shared/contracts";
 import type { z } from "zod";
 import { formatarNumero, formatarPercentual } from "../../lib/formatadores";
-import {
-  calcularCalendario,
-  diaDoCalendario,
-  type DatasPeriodo,
-} from "./calendario";
 
 export type PeriodoFormulario = {
   /** Identifica a linha na lista (não vai para a API). */
@@ -249,18 +247,6 @@ export function percentuaisDoFormulario(
   return percentuais.every((valor) => valor !== null)
     ? (percentuais as number[])
     : null;
-}
-
-/**
- * Quanto cada período vale depois de normalizar (peso = percentual ÷ soma), em pontos-base
- * arredondados ao décimo de ponto percentual: 3500, 2500 e 4500 → 3330, 2380 e 4290.
- */
-export function percentuaisNormalizados(
-  percentuais: readonly number[],
-): number[] {
-  const soma = percentuais.reduce((total, valor) => total + valor, 0);
-  if (soma === 0) return percentuais.map(() => 0);
-  return percentuais.map((valor) => Math.round((valor * 1000) / soma) * 10);
 }
 
 /** Se o texto parece um link, a última parte do caminho (onde fica o slug); senão null. */

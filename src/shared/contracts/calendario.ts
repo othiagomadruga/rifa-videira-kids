@@ -1,13 +1,13 @@
-// Calendário da campanha: datas de cada período, data final, soma dos percentuais e fase.
+// Calendário da campanha: datas de cada período, data final, soma e normalização dos percentuais
+// e fase.
 //
-// Regra (docs/modelo-de-dados.md, seção 7.1): os períodos são consecutivos a partir de
+// Regra (docs/modelo-de-dados.md, seções 7.1 e 7.3): os períodos são consecutivos a partir de
 // data_inicio, na ordem, e cada um dura `dias` dias; a data final é data_inicio + soma dos
 // dias − 1. As datas são do calendário ("YYYY-MM-DD"), sem fuso.
 //
-// Módulo puro (sem DOM, sem banco e sem zod): a tela e o Worker (src/worker/db/campanha.ts)
-// usam este mesmo código, para a regra existir num lugar só. O lugar definitivo é o contrato
-// (src/shared/contracts/dominio.ts), que só o SM altera.
-import type { FASES_CAMPANHA } from "../../../shared/contracts";
+// Módulo puro (sem DOM, sem banco e sem zod), parte do contrato: o Worker (src/worker/db/
+// campanha.ts) e a tela da campanha usam este mesmo código, para a regra existir num lugar só.
+import type { FASES_CAMPANHA } from "./api";
 
 /** antes | durante | encerrada, como no contrato (FASES_CAMPANHA). */
 export type FaseCampanha = (typeof FASES_CAMPANHA)[number];
@@ -97,6 +97,19 @@ export function somarPercentuais(
   periodos: readonly { percentual_bp: number }[],
 ): number {
   return periodos.reduce((soma, periodo) => soma + periodo.percentual_bp, 0);
+}
+
+/**
+ * Quanto cada período vale depois de normalizar (peso = percentual ÷ soma), em pontos-base
+ * arredondados ao décimo de ponto percentual: 3500, 2500 e 4500 → 3330, 2380 e 4290. É para
+ * mostrar: o cálculo usa o peso exato, sem arredondar (docs/modelo-de-dados.md, seção 7.3).
+ */
+export function percentuaisNormalizados(
+  percentuais: readonly number[],
+): number[] {
+  const soma = percentuais.reduce((total, valor) => total + valor, 0);
+  if (soma === 0) return percentuais.map(() => 0);
+  return percentuais.map((valor) => Math.round((valor * 1000) / soma) * 10);
 }
 
 /** Data de hoje ("YYYY-MM-DD") no fuso da campanha. */

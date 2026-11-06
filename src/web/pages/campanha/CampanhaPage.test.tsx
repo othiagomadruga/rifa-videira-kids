@@ -1,9 +1,13 @@
 // CA2 a CA4: tela /coordenacao/campanha pela rota de verdade, com a API simulada (fetch trocado).
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Campanha, CampanhaEntrada } from "../../../shared/contracts";
+import {
+  calcularCalendario,
+  somarPercentuais,
+  type Campanha,
+  type CampanhaEntrada,
+} from "../../../shared/contracts";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
-import { calcularCalendario, somarPercentuais } from "./calendario";
 
 type Chamada = { metodo: string; caminho: string; corpo: unknown };
 

@@ -11,7 +11,11 @@ import {
   type CampanhaEntrada,
   type CodigoErro,
 } from "../../shared/contracts";
-import { salvarCampanhaAtiva, type DadosCampanha } from "../db/campanha";
+import {
+  buscarCampanhaAtiva,
+  salvarCampanhaAtiva,
+  type DadosCampanha,
+} from "../db/campanha";
 import { PREFIXO_CAMPANHA, campanha } from "./campanha";
 
 const app = new Hono<{ Bindings: Cloudflare.Env }>().route(
@@ -100,12 +104,16 @@ async function contar(sql: string): Promise<number> {
   return linha?.n ?? -1;
 }
 
-/** O que o webhook lê para decidir se a venda conta (D5): a campanha ativa e o slug dela. */
+/**
+ * O que o webhook vê para decidir se a venda conta (D5): a campanha ativa, lida pela mesma função
+ * que ele usa, e quantas linhas estão ativas (nunca mais de uma).
+ */
 async function campanhaAtivaDoWebhook() {
-  const { results } = await env.DB.prepare(
-    "SELECT id, slug_rifei FROM campanhas WHERE ativa = 1",
-  ).all<{ id: number; slug_rifei: string }>();
-  return results;
+  const ativa = await buscarCampanhaAtiva(env.DB);
+  return {
+    ativas: await contar("SELECT count(*) AS n FROM campanhas WHERE ativa = 1"),
+    campanha: ativa && { id: ativa.id, slug_rifei: ativa.slug_rifei },
+  };
 }
 
 beforeEach(async () => {
@@ -280,13 +288,17 @@ describe("CA1: PUT /api/admin/campanha grava campanha e períodos", () => {
 
 describe("CA1: fases conforme o contrato (só existe a campanha ativa)", () => {
   it("o primeiro PUT ativa a campanha: só a partir dele o webhook acha o slug que conta", async () => {
-    expect(await campanhaAtivaDoWebhook()).toEqual([]);
+    expect(await campanhaAtivaDoWebhook()).toEqual({
+      ativas: 0,
+      campanha: null,
+    });
 
     const ativada = campanhaConforme(await chamar("PUT", entradaValida()));
 
-    expect(await campanhaAtivaDoWebhook()).toEqual([
-      { id: ativada.id, slug_rifei: "videira-kids-teste" },
-    ]);
+    expect(await campanhaAtivaDoWebhook()).toEqual({
+      ativas: 1,
+      campanha: { id: ativada.id, slug_rifei: "videira-kids-teste" },
+    });
   });
 
   it("trocar o slug muda quais vendas contam, sem nunca criar uma segunda campanha ativa", async () => {
@@ -306,9 +318,10 @@ describe("CA1: fases conforme o contrato (só existe a campanha ativa)", () => {
       }),
     );
 
-    expect(await campanhaAtivaDoWebhook()).toEqual([
-      { id: ativada.id, slug_rifei: "slug-novo-teste" },
-    ]);
+    expect(await campanhaAtivaDoWebhook()).toEqual({
+      ativas: 1,
+      campanha: { id: ativada.id, slug_rifei: "slug-novo-teste" },
+    });
     expect(await contar("SELECT count(*) AS n FROM campanhas")).toBe(1);
   });
 

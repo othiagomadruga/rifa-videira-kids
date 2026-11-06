@@ -10,7 +10,7 @@ import {
   type DetalheResumido,
   type RespostaWebhookRifei,
 } from "../../shared/contracts";
-import { buscarCampanhaAtiva } from "../db/campanha-ativa";
+import { buscarCampanhaAtiva } from "../db/campanha";
 import { processarEventoPedido } from "../db/pedidos";
 import { registrarEvento } from "../db/webhook-eventos";
 import { lerCorpoComLimite } from "../lib/corpo-limitado";

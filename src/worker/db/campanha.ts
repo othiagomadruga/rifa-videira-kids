@@ -1,23 +1,26 @@
-// Campanha ativa: leitura e gravação da configuração (docs/api.md, GET e PUT /api/admin/campanha).
+// Campanha: a leitura da campanha ativa e a gravação da configuração (docs/api.md, GET e PUT
+// /api/admin/campanha).
 //
 // - A API v1 trabalha só com a campanha ativa, e o índice parcial campanhas_uma_ativa garante no
-//   máximo uma. O PUT cria a campanha ativa ou substitui a configuração dela (mesmo id, então os
-//   pedidos já gravados continuam ligados a ela); os períodos são substituídos inteiros.
-// - Tudo vai num único db.batch (uma transação no D1): campanha, períodos e a leitura de volta.
-//   Se qualquer comando falha, nada muda.
-// - As datas dos períodos, a data final e a soma dos percentuais saem de ../../web/pages/campanha/
-//   calendario.ts, o mesmo código que a tela usa (a regra fica num lugar só).
+//   máximo uma. buscarCampanhaAtiva é a ÚNICA leitura dela: o webhook (D5: só conta o slug_rifei da
+//   ativa) e a configuração (GET e a resposta do PUT) usam a mesma função.
+// - A leitura é um comando só (a linha e os períodos agregados em JSON): sai inteira, de um mesmo
+//   instante do banco, sem db.batch. O webhook a faz antes do db.batch dele, como sempre fez.
+// - O PUT cria a campanha ativa ou substitui a configuração dela (mesmo id, então os pedidos já
+//   gravados continuam ligados a ela); os períodos são substituídos inteiros. Tudo vai num único
+//   db.batch (uma transação no D1): campanha, períodos e a leitura de volta. Se qualquer comando
+//   falha, nada muda.
+// - As datas dos períodos, a data final e a soma dos percentuais saem do contrato
+//   (src/shared/contracts/calendario.ts), o mesmo código que a tela usa.
 import type { z } from "zod";
 import {
+  calcularCalendario,
   respostaCampanhaSchema,
+  somarPercentuais,
   type Campanha,
   type DetalheValidacao,
   type corpoSalvarCampanhaSchema,
 } from "../../shared/contracts";
-import {
-  calcularCalendario,
-  somarPercentuais,
-} from "../../web/pages/campanha/calendario";
 
 /** Corpo do PUT depois da validação (com os padrões de fuso_horario e publico já aplicados). */
 export type DadosCampanha = z.output<typeof corpoSalvarCampanhaSchema>;
@@ -31,7 +34,20 @@ export type ResultadoSalvarCampanha =
       detalhes: DetalheValidacao[];
     };
 
-interface LinhaCampanha {
+/** Período como está gravado em campanha_periodos. */
+export interface PeriodoGravado {
+  ordem: number;
+  nome: string;
+  dias: number;
+  percentual_bp: number;
+}
+
+/**
+ * A campanha ativa como está no banco: as colunas de `campanhas` e os períodos, na ordem. Não passa
+ * pelo contrato: o webhook só usa `id` e `slug_rifei` (e funciona mesmo com uma campanha gravada sem
+ * períodos); a resposta da API sai de `montarCampanha`.
+ */
+export interface CampanhaAtiva {
   id: number;
   nome: string;
   slug_rifei: string;
@@ -46,14 +62,23 @@ interface LinhaCampanha {
   publico_limite_ranking: number | null;
   criado_em: string;
   atualizado_em: string;
+  periodos: PeriodoGravado[];
 }
 
-interface LinhaPeriodo {
-  ordem: number;
-  nome: string;
-  dias: number;
-  percentual_bp: number;
-}
+/** Linha da consulta: os períodos chegam como texto JSON. */
+type LinhaCampanhaAtiva = Omit<CampanhaAtiva, "periodos"> & {
+  periodos: string;
+};
+
+// A ativa e os períodos dela num comando só (json_group_array devolve "[]" sem períodos).
+const SELECIONAR_CAMPANHA_ATIVA = `
+  SELECT c.id, c.nome, c.slug_rifei, c.fuso_horario, c.data_inicio, c.preco_bilhete_centavos,
+    c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio,
+    c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.criado_em, c.atualizado_em,
+    (SELECT json_group_array(json_object('ordem', p.ordem, 'nome', p.nome, 'dias', p.dias,
+        'percentual_bp', p.percentual_bp))
+      FROM campanha_periodos AS p WHERE p.campanha_id = c.id) AS periodos
+  FROM campanhas AS c WHERE c.ativa = 1 LIMIT 1`;
 
 const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 
@@ -78,29 +103,27 @@ const GRAVAR_CAMPANHA = `
     publico_limite_ranking = excluded.publico_limite_ranking,
     atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
 
-function lerCampanhaAtiva(db: D1Database) {
-  return [
-    db.prepare(
-      `SELECT id, nome, slug_rifei, fuso_horario, data_inicio, preco_bilhete_centavos,
-         meta_unidade, meta_regra, meta_valor, ranking_criterio, publico_mostra_percentual_meta,
-         publico_limite_ranking, criado_em, atualizado_em
-       FROM campanhas WHERE ativa = 1`,
-    ),
-    db.prepare(
-      `SELECT p.ordem, p.nome, p.dias, p.percentual_bp
-       FROM campanha_periodos AS p JOIN campanhas AS c ON c.id = p.campanha_id
-       WHERE c.ativa = 1 ORDER BY p.ordem`,
-    ),
-  ];
+function campanhaDaLinha(
+  linha: LinhaCampanhaAtiva | null | undefined,
+): CampanhaAtiva | null {
+  if (!linha) return null;
+  // A ordem dos itens do json_group_array não é garantida: ordena aqui.
+  const periodos = (JSON.parse(linha.periodos) as PeriodoGravado[]).sort(
+    (a, b) => a.ordem - b.ordem,
+  );
+  return { ...linha, periodos };
 }
 
-/** A campanha ativa no formato do contrato, ou null enquanto nada foi configurado. */
-export async function obterCampanhaAtiva(
+/**
+ * A campanha ativa (no máximo uma), ou null enquanto nenhuma foi ativada. É a única leitura dela:
+ * o webhook (D5) e a configuração (GET e PUT /api/admin/campanha) usam esta função.
+ */
+export async function buscarCampanhaAtiva(
   db: D1Database,
-): Promise<Campanha | null> {
-  // Campanha e períodos na mesma transação: nunca uma configuração pela metade.
-  const [campanhas, periodos] = await db.batch(lerCampanhaAtiva(db));
-  return montarCampanha(campanhas, periodos);
+): Promise<CampanhaAtiva | null> {
+  return campanhaDaLinha(
+    await db.prepare(SELECIONAR_CAMPANHA_ATIVA).first<LinhaCampanhaAtiva>(),
+  );
 }
 
 /** Cria a campanha ativa ou substitui a configuração dela, numa transação só. */
@@ -139,7 +162,11 @@ export async function salvarCampanhaAtiva(
 
   let resultados: D1Result[];
   try {
-    resultados = await db.batch([...gravacao, ...lerCampanhaAtiva(db)]);
+    // A leitura de volta vai na mesma transação: a resposta é o que ficou gravado.
+    resultados = await db.batch([
+      ...gravacao,
+      db.prepare(SELECIONAR_CAMPANHA_ATIVA),
+    ]);
   } catch (erro) {
     if (slugJaUsado(erro)) {
       const mensagem =
@@ -156,34 +183,31 @@ export async function salvarCampanhaAtiva(
     throw erro;
   }
 
-  const [campanhas, periodos] = resultados.slice(-2);
-  const campanha = montarCampanha(campanhas, periodos);
-  if (!campanha) throw new Error("A campanha gravada não foi encontrada");
-  return { ok: true, campanha };
+  const gravada = campanhaDaLinha(
+    resultados.at(-1)?.results[0] as LinhaCampanhaAtiva | undefined,
+  );
+  if (!gravada) throw new Error("A campanha gravada não foi encontrada");
+  return { ok: true, campanha: montarCampanha(gravada) };
 }
 
-function montarCampanha(
-  resultadoCampanha: D1Result | undefined,
-  resultadoPeriodos: D1Result | undefined,
-): Campanha | null {
-  const [linha] = (resultadoCampanha?.results ?? []) as LinhaCampanha[];
-  if (!linha) return null;
-  const periodos = (resultadoPeriodos?.results ?? []) as LinhaPeriodo[];
-  const calendario = calcularCalendario(linha.data_inicio, periodos);
+/** A campanha no formato do contrato, com as datas dos períodos, a data final e a soma calculadas. */
+export function montarCampanha(campanha: CampanhaAtiva): Campanha {
+  const { periodos } = campanha;
+  const calendario = calcularCalendario(campanha.data_inicio, periodos);
   // O parse garante a resposta no formato do contrato (enums, datas, faixas), mesmo se o banco
   // tiver sido mexido à mão.
   return respostaCampanhaSchema.parse({
-    id: linha.id,
-    nome: linha.nome,
-    slug_rifei: linha.slug_rifei,
-    fuso_horario: linha.fuso_horario,
-    data_inicio: linha.data_inicio,
+    id: campanha.id,
+    nome: campanha.nome,
+    slug_rifei: campanha.slug_rifei,
+    fuso_horario: campanha.fuso_horario,
+    data_inicio: campanha.data_inicio,
     data_fim: calendario.data_fim,
-    preco_bilhete_centavos: linha.preco_bilhete_centavos,
+    preco_bilhete_centavos: campanha.preco_bilhete_centavos,
     meta: {
-      unidade: linha.meta_unidade,
-      regra: linha.meta_regra,
-      valor: linha.meta_valor,
+      unidade: campanha.meta_unidade,
+      regra: campanha.meta_regra,
+      valor: campanha.meta_valor,
     },
     periodos: periodos.map((periodo, indice) => ({
       ordem: periodo.ordem,
@@ -193,13 +217,13 @@ function montarCampanha(
       ...calendario.periodos[indice],
     })),
     soma_percentuais_bp: somarPercentuais(periodos),
-    ranking: { criterio: linha.ranking_criterio },
+    ranking: { criterio: campanha.ranking_criterio },
     publico: {
-      mostra_percentual_meta: linha.publico_mostra_percentual_meta === 1,
-      limite_ranking: linha.publico_limite_ranking,
+      mostra_percentual_meta: campanha.publico_mostra_percentual_meta === 1,
+      limite_ranking: campanha.publico_limite_ranking,
     },
-    criado_em: linha.criado_em,
-    atualizado_em: linha.atualizado_em,
+    criado_em: campanha.criado_em,
+    atualizado_em: campanha.atualizado_em,
   });
 }
 

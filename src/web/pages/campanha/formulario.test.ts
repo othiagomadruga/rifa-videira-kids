@@ -8,7 +8,6 @@ import {
   lerReais,
   montarCorpo,
   ordenarChavesDeErro,
-  percentuaisNormalizados,
   percentualParaTexto,
   periodosDoModeloSantoAndre,
   reaisParaTexto,
@@ -70,13 +69,6 @@ describe("percentual em pontos-base", () => {
     expect(percentualParaTexto(3500)).toBe("35");
     expect(percentualParaTexto(1250)).toBe("12,5");
     expect(percentualParaTexto(1205)).toBe("12,05");
-  });
-
-  it("normalização: 35/25/45 (soma 105%) vale 33,3/23,8/42,9% da meta", () => {
-    expect(percentuaisNormalizados([3500, 2500, 4500])).toEqual([
-      3330, 2380, 4290,
-    ]);
-    expect(percentuaisNormalizados([0, 0])).toEqual([0, 0]);
   });
 });
 

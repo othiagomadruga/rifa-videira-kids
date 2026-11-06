@@ -1,14 +1,23 @@
-// Calendário da campanha (o mesmo código que a API usa para devolver as datas).
+// Calendário da campanha (o mesmo código que a API e a tela usam para as datas e os percentuais).
 import { describe, expect, it } from "vitest";
+import * as contrato from ".";
 import {
   calcularCalendario,
   diaDoCalendario,
   diasEntre,
   faseDaCampanha,
   hojeNoFuso,
+  percentuaisNormalizados,
   somarDias,
   somarPercentuais,
 } from "./calendario";
+
+it("as regras do calendário saem pelo index do contrato (Worker e site importam de lá)", () => {
+  expect(contrato.calcularCalendario).toBe(calcularCalendario);
+  expect(contrato.somarPercentuais).toBe(somarPercentuais);
+  expect(contrato.percentuaisNormalizados).toBe(percentuaisNormalizados);
+  expect(contrato.faseDaCampanha).toBe(faseDaCampanha);
+});
 
 describe("calcularCalendario", () => {
   it("modelo de Santo André a partir de 23/11/2026: períodos seguidos e fim em 16/12/2026", () => {
@@ -79,6 +88,13 @@ describe("datas do calendário", () => {
         { percentual_bp: 4500 },
       ]),
     ).toBe(10_500);
+  });
+
+  it("normalização: 35/25/45 (soma 105%) vale 33,3/23,8/42,9% da meta", () => {
+    expect(percentuaisNormalizados([3500, 2500, 4500])).toEqual([
+      3330, 2380, 4290,
+    ]);
+    expect(percentuaisNormalizados([0, 0])).toEqual([0, 0]);
   });
 });
 

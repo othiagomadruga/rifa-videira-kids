@@ -63,14 +63,14 @@ Toda resposta que não é 2xx tem este corpo:
 | Código | HTTP | Quando |
 |---|---|---|
 | `requisicao_invalida` | 400 | corpo, consulta ou parâmetros fora do schema (`detalhes` = problemas) |
-| `json_invalido` | 400 | corpo não é JSON |
+| `json_invalido` | 400 | corpo não é JSON (em `PUT /api/admin/campanha`, também sem `Content-Type` JSON) |
 | `payload_invalido` | 400 | webhook sem o essencial: `event`, `id`, `slug`, `numbers_count` ou `total` (ausente, inválido ou acima do limite) |
 | `csv_invalido` | 400 | CSV sem cabeçalho, sem coluna obrigatória ou acima do limite (`detalhes`: `detalhesCsvInvalidoSchema`) |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
 | `nao_autenticado` | 401 | sem credencial ou credencial inválida |
 | `proibido` | 403 | autenticado, sem permissão; ou escrita de outra origem (CSRF) |
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
-| `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado |
+| `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
 | `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin |
 | `corpo_muito_grande` | 413 | corpo do webhook acima de 1 MiB (`LIMITE_CORPO_WEBHOOK_BYTES`) |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
@@ -117,8 +117,14 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 
 Configuração da campanha ativa: tudo que é regra de campanha vive aqui, e não no código.
 
-- **GET**: **200** `Campanha` (`campanhaSchema`). **404** `nao_encontrado` enquanto nada foi configurado.
-- **PUT**: o corpo é `campanhaEntradaSchema`. Cria a campanha ativa ou substitui a configuração dela, e os períodos são substituídos inteiros. **200** `Campanha`; **400** `requisicao_invalida`.
+- **GET**: **200** `Campanha` (`campanhaSchema`). **404** `nao_encontrado` enquanto nenhuma campanha foi ativada.
+- **PUT**: o corpo é `campanhaEntradaSchema`, em JSON.
+  - **O primeiro PUT cria a campanha já ativa**: o contrato não tem rascunho nem passo separado de ativação. A partir dele, o webhook passa a contar as vendas da Rifei com esse `slug_rifei` (D5). Preço e meta podem entrar provisórios e ser corrigidos depois.
+  - Os PUTs seguintes substituem a configuração da mesma campanha (mesmo `id`: os pedidos já gravados continuam ligados a ela), e os períodos são substituídos inteiros. Campanha e períodos vão numa transação: se algo falha, nada muda. Nunca há duas campanhas ativas.
+  - **200** `Campanha`, como ficou gravada.
+  - **400** `json_invalido`: o corpo não é JSON, ou veio sem `Content-Type: application/json` (ou `application/<tipo>+json`), mesmo que o texto seja JSON.
+  - **400** `requisicao_invalida`: fora do schema (`detalhes` = problemas).
+  - **409** `nome_duplicado`: o `slug_rifei` já é de outra campanha (inativa) do sistema, e nada é gravado. `detalhes` = `[{ "caminho": ["slug_rifei"], "codigo": "slug_duplicado", "mensagem": "Este slug já pertence a outra campanha (inativa) do sistema" }]`.
 
 Corpo do PUT:
 
