@@ -146,6 +146,8 @@ export function relatorio(
     inalterados: zero,
     erros: [],
     ...dados,
+    // A RIFA-005b tornou `avisos` obrigatório na resposta (lista possivelmente vazia).
+    avisos: dados.avisos ?? [],
   };
 }
 
