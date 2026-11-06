@@ -582,6 +582,10 @@ export type RespostaPainelResumo = z.infer<typeof respostaPainelResumoSchema>;
 export const NIVEIS_RANKING = ["celula", "discipulador", "rede"] as const;
 export type NivelRanking = (typeof NIVEIS_RANKING)[number];
 export const JANELAS_RANKING = ["atual", "campanha"] as const;
+/**
+ * Janela PEDIDA na consulta (`periodo`): "atual" | "campanha". O objeto que sai na resposta (tipo,
+ * ordem, nome e datas) é `janelaRankingSchema`, com o tipo nomeado `JanelaRankingResposta` em calculos.ts.
+ */
 export type JanelaRanking = (typeof JANELAS_RANKING)[number];
 
 export const consultaRankingSchema = z.object({
@@ -598,6 +602,7 @@ export const consultaRankingSchema = z.object({
 });
 export type ConsultaRanking = z.output<typeof consultaRankingSchema>;
 
+/** A janela como sai na resposta; `tipo` é a `JanelaRanking` pedida. Tipo: `JanelaRankingResposta`. */
 export const janelaRankingSchema = z.strictObject({
   tipo: z.enum(JANELAS_RANKING),
   /** Ordem do período (null quando a janela é a campanha). */
@@ -702,7 +707,7 @@ export type ConsultaBumbo = z.output<typeof consultaBumboSchema>;
 export const respostaBumboSchema = z.strictObject({
   data: dataLocalSchema,
   referencia: referenciaCampanhaSchema,
-  /** Mensagem pronta para colar no WhatsApp. Nunca contém valores em R$ (nem centavos). */
+  /** Mensagem pronta para colar no WhatsApp. Nunca contém R$, centavos nem quantidade de bilhetes. */
   texto: z.string().min(1).max(4000),
   gerado_em: instanteSchema,
 });

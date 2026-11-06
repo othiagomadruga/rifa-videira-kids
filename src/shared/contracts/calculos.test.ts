@@ -1,16 +1,23 @@
 // Regras de cálculo (RIFA-008): cada regra de docs/regras-de-calculo.md com exemplos numéricos
 // calculados à mão. Os montadores são conferidos contra os schemas estritos das rotas (CA3).
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { z } from "zod";
 import * as contrato from ".";
 import {
   JANELAS_RANKING,
   NIVEIS_RANKING,
+  itemRankingPublicoSchema,
+  janelaRankingSchema,
+  metaDoDiaSchema,
+  pontoCurvaSchema,
   referenciaCampanhaSchema,
   respostaBumboSchema,
   respostaPainelResumoSchema,
   respostaRankingPublicoSchema,
   respostaRankingSchema,
+  vizinhoRankingSchema,
   type ConsultaRanking,
+  type RespostaPainelResumo,
   type SituacaoRitmo,
 } from "./api";
 import {
@@ -22,6 +29,7 @@ import {
   curvaEsperada,
   diaLocalDoInstante,
   esperadoAteODia,
+  hojeNoFuso,
   intervaloUtcDoDia,
   janelaUtcDaCampanha,
   metaArredondada,
@@ -41,10 +49,26 @@ import {
   type CelulaCalculo,
   type EntradaCalculo,
   type EscopoResolvido,
+  type ItemRankingPublico,
+  type JanelaRanking,
+  type JanelaRankingResposta,
+  type MetaDoDia,
+  type PeriodoDaReferencia,
+  type PontoCurva,
+  type RitmoCampanha,
   type VendaAprovada,
   type VendasDoDia,
+  type VendasForaDaJanela,
+  type VinculoRanking,
+  type VizinhoRanking,
 } from "./calculos";
-import { diasEntre, somarDias } from "./calendario";
+import fonteCalculos from "./calculos.ts?raw";
+import {
+  diasEntre,
+  hojeNoFuso as hojeNoFusoDoCalendario,
+  somarDias,
+} from "./calendario";
+import fonteCalendario from "./calendario.ts?raw";
 import { CRITERIOS_RANKING, DIVISOES, REGRAS_META } from "./dominio";
 
 // ---------------------------------------------------------------------------------------------------
@@ -201,6 +225,83 @@ it("as regras saem pelo index do contrato (Worker e site importam de lá)", () =
   expect(contrato.vendaContaNaCampanha).toBe(vendaContaNaCampanha);
   expect([...ORDEM_DIVISOES]).toEqual([...DIVISOES]);
   expect(Object.keys(NOMES_DIVISAO).sort()).toEqual([...DIVISOES].sort());
+});
+
+describe("RIFA-008b: o que as rotas e as telas importam", () => {
+  it("'hoje no fuso' é uma função só: hojeNoFuso, e diaLocalDoInstante delega para ela", () => {
+    expect(hojeNoFuso).toBe(hojeNoFusoDoCalendario);
+    expect(contrato.hojeNoFuso).toBe(hojeNoFusoDoCalendario);
+    for (const instante of [
+      "2026-11-23T02:59:59.999Z",
+      "2026-11-23T03:00:00.000Z",
+      "2026-12-31T23:59:59.999Z",
+      "2028-02-29T12:00:00.000Z",
+    ])
+      for (const fuso of ["America/Belem", "UTC", "America/Sao_Paulo"])
+        expect(diaLocalDoInstante(instante, fuso), `${instante} ${fuso}`).toBe(
+          hojeNoFuso(fuso, new Date(instante)),
+        );
+  });
+
+  it("tipos nomeados para as telas são os das respostas (conferido pelo typecheck)", () => {
+    expectTypeOf<MetaDoDia>().toEqualTypeOf<z.infer<typeof metaDoDiaSchema>>();
+    expectTypeOf<PontoCurva>().toEqualTypeOf<
+      z.infer<typeof pontoCurvaSchema>
+    >();
+    expectTypeOf<ItemRankingPublico>().toEqualTypeOf<
+      z.infer<typeof itemRankingPublicoSchema>
+    >();
+    expectTypeOf<VizinhoRanking>().toEqualTypeOf<
+      z.infer<typeof vizinhoRankingSchema>
+    >();
+    expectTypeOf<JanelaRankingResposta>().toEqualTypeOf<
+      z.infer<typeof janelaRankingSchema>
+    >();
+    expectTypeOf<RitmoCampanha>().toEqualTypeOf<
+      RespostaPainelResumo["campanha"]
+    >();
+    expectTypeOf<VendasForaDaJanela>().toEqualTypeOf<
+      NonNullable<RespostaPainelResumo["vendas_fora_da_janela"]>
+    >();
+    expectTypeOf<PeriodoDaReferencia>().toEqualTypeOf<
+      NonNullable<RespostaPainelResumo["referencia"]["periodo"]>
+    >();
+    expectTypeOf<VinculoRanking>().toEqualTypeOf<{
+      id: number;
+      nome: string;
+    }>();
+    // JanelaRanking é o valor pedido na consulta; o objeto da resposta é JanelaRankingResposta.
+    expectTypeOf<JanelaRanking>().toEqualTypeOf<"atual" | "campanha">();
+    expectTypeOf<
+      JanelaRankingResposta["tipo"]
+    >().toEqualTypeOf<JanelaRanking>();
+  });
+
+  it("calculos.ts e calendario.ts não carregam o zod: de zod e dos schemas só vêm tipos", () => {
+    // Sem os comentários (primeiro as linhas `//`, que podem citar "/api/painel/*"; depois os blocos).
+    const declaracoes = (fonte: string) =>
+      fonte
+        .replace(/^\s*\/\/.*$/gm, "")
+        .replace(/^\s*\/\*[\s\S]*?\*\//gm, "")
+        .match(/^(?:import|export)\b[^;]*?\bfrom\s+"[^"]+";/gms) ?? [];
+    const comZod =
+      /from\s+"(?:zod|\.|\.\/(?:api|dominio|rifei|erros|acesso|index))"/;
+    for (const [arquivo, fonte] of [
+      ["calculos.ts", fonteCalculos],
+      ["calendario.ts", fonteCalendario],
+    ] as const) {
+      const lista = declaracoes(fonte);
+      expect(lista.length, arquivo).toBeGreaterThan(0);
+      for (const declaracao of lista.filter((d) => comZod.test(d)))
+        expect(declaracao, arquivo).toMatch(/^(?:import|export) type\b/);
+    }
+    // calculos.ts traz os valores só de calendario.ts.
+    expect(
+      declaracoes(fonteCalculos)
+        .filter((d) => !/^(?:import|export) type\b/.test(d))
+        .map((d) => /from\s+"([^"]+)"/.exec(d)?.[1]),
+    ).toEqual(["./calendario"]);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -1526,13 +1627,17 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
     );
   });
 
-  it("bilhetes só com a opção ligada", () => {
-    const texto = bumbo(dia(9), CAMPANHA, { mostrar_bilhetes: true });
-    expect(texto).toContain(
-      "*Ontem (dia 8):* 21 bilhetes, 33% da meta do dia.",
+  it("R9: o bumbo é público e nunca mostra bilhetes, nem com a opção ligada (ela é ignorada)", () => {
+    const comOpcao = bumbo(dia(9), CAMPANHA, { mostrar_bilhetes: true });
+    expect(comOpcao).toBe(bumbo(dia(9)));
+    expect(comOpcao).not.toMatch(/bilhete/i);
+    // Chamada sem o 4º argumento (o que a rota precisa) dá o mesmo texto.
+    const semOpcoes = montarBumbo(
+      entrada(vendas),
+      { data: dia(9) },
+      new Date(`${dia(9)}T13:00:00.000Z`),
     );
-    expect(texto).toContain("*Acumulado:* 180 bilhetes, 30% da meta.");
-    expect(bumbo(dia(9))).not.toMatch(/bilhete/i);
+    expect(semOpcoes.texto).toBe(comOpcao);
   });
 
   it("fala só do dia fechado: as vendas de hoje não mudam o texto", () => {
@@ -1591,7 +1696,7 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
     expect(texto).toContain("1º Célula Betel");
   });
 
-  it("guarda: nunca R$ nem centavos; sem a opção, nenhum bilhete (todas as fases, duas campanhas)", () => {
+  it("guarda: nunca R$, centavos nem bilhetes, com ou sem a opção (todas as fases, duas campanhas)", () => {
     const centavos: CampanhaCalculo = {
       ...CAMPANHA,
       meta: {
@@ -1632,16 +1737,97 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
           { mostrar_bilhetes: true },
           distintas,
         );
-        for (const texto of [semBilhetes, comBilhetes])
+        for (const texto of [semBilhetes, comBilhetes]) {
           for (const proibido of proibidosSempre)
             expect(texto, `${data}: ${proibido}`).not.toMatch(proibido);
-        expect(semBilhetes, data).not.toMatch(
-          /bilhete|4\.567|4567|3\.891|3891|2\.345|2345/i,
-        );
+          expect(texto, data).not.toMatch(
+            /bilhete|4\.567|4567|3\.891|3891|2\.345|2345|6\.236|10\.803/i,
+          );
+        }
       }
-    expect(
-      bumbo(dia(9), centavos, { mostrar_bilhetes: true }, distintas),
-    ).toContain("6.236 bilhetes");
+  });
+
+  // Pior caso do limite de 4000 caracteres: 36 células de cada divisão empatadas, nomes de 120
+  // caracteres (o máximo da célula), campanha e período com o nome no máximo e % por célula ligado.
+  it("S22: com empates longos o texto corta em 'e mais N' e sempre cabe nos 4000 caracteres", () => {
+    const nomeLongo = (rotulo: string) => rotulo.padEnd(120, "x");
+    const celulasEmpatadas = Array.from({ length: 72 }, (_, indice) =>
+      celula(
+        indice + 1,
+        nomeLongo(`Célula ${String(indice + 1).padStart(2, "0")} `),
+        10,
+        indice < 36 ? ABEL : CALEB,
+        indice < 36 ? JOVEM : ADULTA,
+      ),
+    );
+    const campanhaLonga: CampanhaCalculo = {
+      ...CAMPANHA,
+      nome: nomeLongo("Rifa "),
+      periodos: CAMPANHA.periodos.map((periodo) => ({
+        ...periodo,
+        nome: periodo.nome.padEnd(60, "y"),
+      })),
+      publico: { mostra_percentual_meta: true, limite_ranking: null },
+    };
+    // Todas vendem o mesmo (e muito: % com muitos dígitos), todos os dias: empate em 1º.
+    const empatadas = celulasEmpatadas.flatMap((c) =>
+      porDia(c.id, 1, 21, 9_000_000),
+    );
+    for (let n = -3; n <= 24; n++) {
+      const resposta = montarBumbo(
+        entrada(empatadas, campanhaLonga, celulasEmpatadas),
+        { data: dia(n) },
+        new Date(`${dia(n)}T13:00:00.000Z`),
+      );
+      expect(respostaBumboSchema.parse(resposta)).toEqual(resposta);
+      expect(resposta.texto.length, dia(n)).toBeLessThanOrEqual(4000);
+      if (n >= 2) {
+        expect(resposta.texto).toContain("e mais 31 empatadas no 1º lugar");
+        expect(resposta.texto.match(/^1º /gm)).toHaveLength(10);
+      }
+    }
+  });
+
+  it("S22: o corte só aparece acima de 5 nomes e diz quantas ficaram de fora e em que lugar", () => {
+    const seteJovens = Array.from({ length: 7 }, (_, indice) =>
+      celula(indice + 1, `Célula ${indice + 1}`, 10, ABEL, JOVEM),
+    );
+    const vendasIguais = (quantas: number) =>
+      seteJovens.slice(0, quantas).map((c) => venda(c.id, dia(8), 10));
+    const ranking = (quantas: number) =>
+      bumbo(dia(9), CAMPANHA, BUMBO_PADRAO, vendasIguais(quantas), seteJovens)
+        .split("\n")
+        .filter((linha) => /^\dº |^e mais/.test(linha));
+    expect(ranking(5)).toEqual([
+      "1º Célula 1",
+      "1º Célula 2",
+      "1º Célula 3",
+      "1º Célula 4",
+      "1º Célula 5",
+    ]);
+    expect(ranking(6).slice(-2)).toEqual([
+      "1º Célula 5",
+      "e mais 1 empatada no 1º lugar",
+    ]);
+    expect(ranking(7)).toHaveLength(6);
+    expect(ranking(7).at(-1)).toBe("e mais 2 empatadas no 1º lugar");
+    // 1º, 2º e 3º com cinco empatadas em 3º: lista 1º, 2º e três dos 3º.
+    const comDegraus = [
+      venda(1, dia(8), 30),
+      venda(2, dia(8), 20),
+      ...[3, 4, 5, 6, 7].map((id) => venda(id, dia(8), 10)),
+    ];
+    const linhas = bumbo(dia(9), CAMPANHA, BUMBO_PADRAO, comDegraus, seteJovens)
+      .split("\n")
+      .filter((linha) => /^\dº |^e mais/.test(linha));
+    expect(linhas).toEqual([
+      "1º Célula 1",
+      "2º Célula 2",
+      "3º Célula 3",
+      "3º Célula 4",
+      "3º Célula 5",
+      "e mais 2 empatadas no 3º lugar",
+    ]);
   });
 });
 
@@ -2327,7 +2513,7 @@ describe("Revisão: propriedades e bordas (entradas sorteadas)", () => {
     }
   });
 
-  it("R10: o bumbo nunca traz R$, centavos nem número cru; bilhetes só com a opção e sempre bilhetes de verdade", () => {
+  it("R10: o bumbo nunca traz R$, centavos, bilhetes nem número cru, com ou sem a opção", () => {
     const s = sorteador(11);
     const proibidos = [
       /R\$/,
@@ -2339,10 +2525,6 @@ describe("Revisão: propriedades e bordas (entradas sorteadas)", () => {
     ];
     for (let rodada = 0; rodada < 50; rodada++) {
       const { entrada: e, duracao } = cenarioSorteado(s);
-      const naJanela = e.vendas.filter((v) => {
-        const n = diasEntre(e.campanha.data_inicio, v.dia) + 1;
-        return n >= 1 && n <= duracao;
-      });
       for (let n = -2; n <= duracao + 2; n++)
         for (const mostrar_bilhetes of [false, true]) {
           const resposta = montarBumbo(
@@ -2356,23 +2538,15 @@ describe("Revisão: propriedades e bordas (entradas sorteadas)", () => {
             expect(resposta.texto, `${dia(n)}: ${proibido}`).not.toMatch(
               proibido,
             );
-          if (!mostrar_bilhetes) {
-            expect(resposta.texto).not.toMatch(/bilhete/i);
-            continue;
-          }
-          // Com a opção, só aparecem os bilhetes de ontem e os acumulados até ontem.
-          const ontem = dia(n - 1);
-          const somar = (lista: VendasDoDia[]) =>
-            lista.reduce((soma, v) => soma + v.bilhetes, 0);
-          const permitidos = [
-            somar(naJanela.filter((v) => v.dia === ontem)),
-            somar(naJanela.filter((v) => diasEntre(v.dia, ontem) >= 0)),
-          ].map((valor) => new Intl.NumberFormat("pt-BR").format(valor));
-          for (const [, numero] of resposta.texto.matchAll(
-            /([\d.]+) bilhetes?\b/g,
-          ))
-            expect(permitidos, `${dia(n)}: ${numero} bilhetes`).toContain(
-              numero,
+          // R9: o bumbo é público; a opção não muda nada (é ignorada).
+          expect(resposta.texto, dia(n)).not.toMatch(/bilhete/i);
+          if (mostrar_bilhetes)
+            expect(resposta.texto).toBe(
+              montarBumbo(
+                e,
+                { data: dia(n) },
+                new Date(`${dia(n)}T13:00:00.000Z`),
+              ).texto,
             );
         }
     }

@@ -38,7 +38,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 |---|---|---|---|
 | `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>`, comparado em tempo constante (D6). Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; segredo não configurado: `503 nao_configurado` |
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
-| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores financeiros** |
+| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** |
 
 Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada.
 
@@ -349,13 +349,15 @@ Regras, fontes, exemplos e suposições: [regras-de-calculo.md](regras-de-calcul
 | `GET /api/painel/resumo` | `montarResumoPainel(entrada, { escopo, data }, agora)` |
 | `GET /api/painel/ranking` | `montarRankingPainel(entrada, consulta, agora)` |
 | `GET /api/publico/ranking` | `montarRankingPublico(entrada, consulta, agora)` |
-| `GET /api/publico/bumbo` | `montarBumbo(entrada, { data }, agora, BUMBO_PADRAO)` |
+| `GET /api/publico/bumbo` | `montarBumbo(entrada, { data }, agora)` (um 4º argumento `OpcoesBumbo`, como `BUMBO_PADRAO`, é aceito e ignorado) |
+
+Tipos nomeados para as telas (em `calculos.ts`): `MetaDoDia`, `PontoCurva`, `RitmoCampanha`, `VendasForaDaJanela`, `PeriodoDaReferencia`, `ItemRankingPublico`, `VizinhoRanking`, `VinculoRanking` e `JanelaRankingResposta`; `calculos.ts` também reexporta os tipos das respostas (`RespostaPainelResumo`, `RespostaRanking`, `ItemRanking`, `ReferenciaCampanha`…). Atenção: `JanelaRanking` é o valor pedido na consulta (`atual` | `campanha`); o objeto `janela` da resposta é `JanelaRankingResposta`. O site importa tudo isso de `src/shared/contracts/calculos` (sem zod), nunca do index.
 
 **O que a rota faz** (passo a passo em [regras-de-calculo.md, seção 5](regras-de-calculo.md#5-como-o-worker-alimenta-as-funções)):
 
 1. Valida a consulta com o schema (`400 requisicao_invalida` fora dele).
 2. Lê a campanha ativa: sem campanha, `404 nao_encontrado`.
-3. Se veio `data` depois de hoje no fuso da campanha (`hojeNoFuso` + `diasEntre`), `400 requisicao_invalida` com `detalhes` = `[{ "caminho": ["data"], "codigo": "data_futura", "mensagem": "A data não pode ser depois de hoje" }]`.
+3. Se veio `data` depois de hoje no fuso da campanha, `400 requisicao_invalida` com `detalhes` = `[{ "caminho": ["data"], "codigo": "data_futura", "mensagem": "A data não pode ser depois de hoje" }]`. "Hoje" é sempre `hojeNoFuso(campanha.fuso_horario, agora)`, a função única (`diaLocalDoInstante` delega para ela); compare com `diasEntre`.
 4. Lê **todas** as células com a hierarquia e as vendas aprovadas agrupadas por célula e dia local (`EntradaCalculo`), de qualquer data.
 5. Chama a função com `agora = new Date()` e devolve o resultado como está.
 
@@ -511,7 +513,7 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 
 - Mesma ordem e mesmas posições do ranking da coordenação, mas só com quem **já vendeu** na janela e com `posicao` até `publico.limite_ranking` (padrão 3; null = todas). Quem empata na última posição entra (1, 2, 3, 3). Antes da primeira venda, `itens` vem vazio.
 - `percentual_meta_bp` só aparece se `publico.mostra_percentual_meta = true`.
-- Nunca aparecem centavos, bilhetes, meta, esperado, realizado, diferença ou projeção. O teste de `api.test.ts` confere que os campos das rotas abertas estão numa lista fechada.
+- Nunca valores em unidades, R$ ou bilhetes, com qualquer configuração: não aparecem centavos, bilhetes, meta, esperado, realizado, diferença ou projeção. O teste de `api.test.ts` confere que os campos das rotas abertas estão numa lista fechada.
 - **Erros**: 400 `requisicao_invalida`, 404 `nao_encontrado` (sem campanha ativa).
 
 ### `GET /api/publico/bumbo` (aberto)
@@ -538,8 +540,9 @@ Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o link da sua célula com 
 ```
 
 - Partes: venda de ontem (% da meta do dia), acumulado contra a curva e projeção, top 3 do período por divisão (como no ranking público: só quem vendeu, nunca mais posições que `publico.limite_ranking`), as 3 células que mais subiram ontem (em % da própria meta) e a chamada final. Antes do início, no 1º dia, no último dia e depois do fim, o texto muda (contagem regressiva, largada, último dia e resultado final).
-- **Nunca contém R$ nem centavos.** Quantidade de bilhetes só com `mostrar_bilhetes`, que não existe ainda na configuração: a rota usa `BUMBO_PADRAO` (sem bilhetes). % por célula só se `publico.mostra_percentual_meta`.
-- Até 4000 caracteres, com o *negrito* e o _itálico_ do WhatsApp.
+- Cada divisão lista no máximo 5 células (`NOMES_POR_DIVISAO_NO_BUMBO`); as demais empatadas viram a linha "e mais N empatadas no Pº lugar".
+- **Nunca contém R$, centavos nem quantidade de bilhetes**, com qualquer configuração (R9). Os % (da meta, da curva e da projeção) aparecem; % por célula só se `publico.mostra_percentual_meta`. Um bumbo interno da coordenação, com bilhetes, é pendência ([regras-de-calculo.md, seção 6](regras-de-calculo.md#6-pendências)).
+- Sempre cabe em 4000 caracteres (o pior caso, com 72 células empatadas e nomes de 120 caracteres, dá 2436), com o *negrito* e o _itálico_ do WhatsApp.
 - **Erros**: 400 `requisicao_invalida` (inclusive `data` futura), 404 `nao_encontrado` (sem campanha ativa).
 
 ---

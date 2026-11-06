@@ -50,6 +50,7 @@ src/web/
 1. Trabalhe só na pasta da tela (`pages/<tela>/`). A casca já existe e já está ligada à rota e ao menu.
 2. No componente `<Tela>Page.tsx`, comece por `<PageHeader titulo="..." />` (vira o `<h1>` e o título da aba) e troque o `<EmConstrucao>` pelo conteúdo.
 3. Chamadas à API ficam na própria pasta (ex.: `pages/pedidos/pedidos-api.ts`), usando `api` de `lib/api.ts`. Tipos de requisição e resposta vêm do contrato em `src/shared/contracts`.
+   - Painel, rankings, telão e bumbo: regras e tipos (`MetaDoDia`, `PontoCurva`, `ItemRankingPublico`, `hojeNoFuso`…) vêm de `src/shared/contracts/calculos` (sem zod), nunca do index `src/shared/contracts`.
 4. CSS da tela em `pages/<tela>/<tela>.css`, importado pelo componente. Classes com o prefixo da tela (`.pedidos-filtros`), valores sempre das variáveis do tema. Os componentes base usam o prefixo `ui-`.
 5. Mostre os três estados: `<Loading />` enquanto carrega, `<ErrorState mensagem={mensagemDoErro(erro)} aoTentarDeNovo={...} />` na falha e `<EmptyState />` sem dados. Exemplo pronto: `pages/status/StatusPage.tsx`.
 6. Cancele a requisição ao sair da tela e ignore o resultado cancelado:

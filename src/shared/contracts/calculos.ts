@@ -15,6 +15,7 @@ import type {
   ConsultaRanking,
   ConsultaRankingPublico,
   EscopoPainel,
+  ItemRanking,
   JanelaRanking,
   NivelRanking,
   ReferenciaCampanha,
@@ -31,6 +32,7 @@ import {
   diaDoCalendario,
   diasEntre,
   faseDaCampanha,
+  hojeNoFuso,
   somarDias,
   type CalendarioCampanha,
 } from "./calendario";
@@ -106,6 +108,56 @@ export const ORDEM_DIVISOES = [
   "jovens",
   "adultos",
 ] as const satisfies readonly Divisao[];
+
+// ---------------------------------------------------------------------------------------------------
+// Tipos das respostas, com nome, para as telas. O site importa regras e tipos daqui (módulo sem zod),
+// nunca do index do contrato (docs/frontend.md). Os tipos de api.ts reexportados aqui são os mesmos.
+// ---------------------------------------------------------------------------------------------------
+
+export type {
+  ConsultaBumbo,
+  ConsultaPainelResumo,
+  ConsultaRanking,
+  ConsultaRankingPublico,
+  EscopoPainel,
+  ItemRanking,
+  JanelaRanking,
+  NivelRanking,
+  ReferenciaCampanha,
+  RespostaBumbo,
+  RespostaPainelResumo,
+  RespostaRanking,
+  RespostaRankingPublico,
+  Ritmo,
+  SituacaoRitmo,
+  TotaisVendas,
+} from "./api";
+export type { FaseCampanha } from "./calendario";
+export type { CriterioRanking, Divisao, UnidadeMeta } from "./dominio";
+
+/** Meta e venda de hoje no painel (`RespostaPainelResumo["hoje"]` sem o null). */
+export type MetaDoDia = NonNullable<RespostaPainelResumo["hoje"]>;
+/** Ritmo da campanha inteira, com a projeção (`RespostaPainelResumo["campanha"]`). */
+export type RitmoCampanha = RespostaPainelResumo["campanha"];
+/** Um dia da curva do gráfico (`RespostaPainelResumo["curva"][number]`). */
+export type PontoCurva = RespostaPainelResumo["curva"][number];
+/** Vendas antes do início e depois do fim (só no escopo campanha). */
+export type VendasForaDaJanela = NonNullable<
+  RespostaPainelResumo["vendas_fora_da_janela"]
+>;
+/** Período atual da referência (`ReferenciaCampanha["periodo"]` sem o null). */
+export type PeriodoDaReferencia = NonNullable<ReferenciaCampanha["periodo"]>;
+/**
+ * A janela como sai na resposta dos rankings: tipo, ordem, nome e datas. Não confundir com
+ * `JanelaRanking`, que é só o valor pedido na consulta ("atual" | "campanha") e vira o `tipo` daqui.
+ */
+export type JanelaRankingResposta = RespostaRanking["janela"];
+/** Quem está logo acima ou logo abaixo de um item do ranking da coordenação. */
+export type VizinhoRanking = NonNullable<ItemRanking["acima"]>;
+/** Discipulador ou rede de um item do ranking: `{ id, nome }`. */
+export type VinculoRanking = NonNullable<ItemRanking["rede"]>;
+/** Um item do ranking público (sem valores). */
+export type ItemRankingPublico = RespostaRankingPublico["itens"][number];
 
 // ---------------------------------------------------------------------------------------------------
 // Frações exatas (R11)
@@ -216,13 +268,21 @@ function milissegundos(instante: Date | string): number {
   return valor;
 }
 
-/** Dia local ("YYYY-MM-DD") de um instante no fuso: 2026-11-23T02:59:59.999Z em Belém → 2026-11-22. */
+/**
+ * Dia local ("YYYY-MM-DD") de um instante no fuso: 2026-11-23T02:59:59.999Z em Belém → 2026-11-22.
+ * É a mesma regra de `hojeNoFuso` (calendario.ts), para a qual delega; aqui o instante também pode
+ * ser o texto ISO do banco (com fuso explícito). Para "hoje no fuso da campanha", rotas e telas usam
+ * `hojeNoFuso(campanha.fuso_horario, agora)`, que este módulo também exporta.
+ */
 export function diaLocalDoInstante(
   instante: Date | string,
   fuso: string,
 ): string {
-  return dataDoRelogio(relogioLocal(fuso, milissegundos(instante)));
+  return hojeNoFuso(fuso, new Date(milissegundos(instante)));
 }
+
+/** "Hoje" no fuso: a função única (de calendario.ts), exportada também por aqui para o site. */
+export { hojeNoFuso };
 
 /** Primeiro instante do dia local (vale também para fusos com horário de verão à meia-noite). */
 function inicioDoDia(data: string, fuso: string): number {
@@ -1316,15 +1376,19 @@ export function montarRankingPublico(
 }
 
 // ---------------------------------------------------------------------------------------------------
-// R10. Bumbo do dia: texto para o grupo dos líderes, sem nenhum valor em R$
+// R10. Bumbo do dia: texto para o grupo dos líderes, sem R$ nem quantidade de bilhetes (R9)
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * Opções do bumbo. `mostrar_bilhetes` é reservado para um futuro bumbo INTERNO da coordenação
+ * (pendência em docs/regras-de-calculo.md): o bumbo de `montarBumbo` é público e nunca mostra
+ * quantidade de bilhetes nem R$ (R9), com qualquer valor desta opção.
+ */
 export type OpcoesBumbo = {
-  /** Se o texto mostra quantidades de bilhetes (padrão: não). R$ e centavos nunca aparecem. */
   mostrar_bilhetes: boolean;
 };
 
-/** Enquanto a campanha não tiver a opção na configuração, a rota usa este padrão. */
+/** Opções padrão (mantidas por compatibilidade: `montarBumbo` as aceita e ignora). */
 export const BUMBO_PADRAO: Readonly<OpcoesBumbo> = Object.freeze({
   mostrar_bilhetes: false,
 });
@@ -1335,13 +1399,18 @@ export const BUMBO_PADRAO: Readonly<OpcoesBumbo> = Object.freeze({
  */
 export const POSICOES_NO_BUMBO = 3;
 
+/**
+ * Máximo de células listadas por divisão no bumbo. Empatadas além disso viram uma linha
+ * "e mais N empatadas no Pº lugar": com isso o texto cabe sempre no limite de 4000 caracteres da
+ * resposta, mesmo com dezenas de células empatadas e nomes de 120 caracteres (SUPOSIÇÃO S22).
+ */
+export const NOMES_POR_DIVISAO_NO_BUMBO = 5;
+
 const formatoInteiro = new Intl.NumberFormat("pt-BR");
 const textoPercentual = (bp: number) =>
   `${formatoInteiro.format(Math.floor(bp / 100))}%`;
 const textoDias = (dias: number) =>
   dias === 1 ? "1 dia" : `${formatoInteiro.format(dias)} dias`;
-const textoBilhetes = (bilhetes: number) =>
-  bilhetes === 1 ? "1 bilhete" : `${formatoInteiro.format(bilhetes)} bilhetes`;
 const dataCurta = (data: string) => `${data.slice(8, 10)}/${data.slice(5, 7)}`;
 
 function juntarNomes(nomes: readonly string[]): string {
@@ -1357,12 +1426,20 @@ const CHAMADA_LINK =
  * (% da meta do dia), acumulado contra a curva e projeção, as primeiras posições do ranking do
  * período (por divisão), as células que mais subiram ontem e uma chamada final. Antes do início,
  * no 1º dia e depois do fim, o texto muda (contagem regressiva, largada e resultado final).
+ *
+ * É público: nunca há R$, centavos nem quantidade de bilhetes no texto (R9). O 4º argumento
+ * (`OpcoesBumbo`) continua aceito por compatibilidade e é ignorado.
  */
 export function montarBumbo(
   entrada: EntradaCalculo,
   consulta: { data?: string },
   agora: Date,
-  opcoes: OpcoesBumbo = BUMBO_PADRAO,
+  opcoes?: OpcoesBumbo,
+): RespostaBumbo;
+export function montarBumbo(
+  entrada: EntradaCalculo,
+  consulta: { data?: string },
+  agora: Date,
 ): RespostaBumbo {
   const { campanha } = entrada;
   const data = dataDaConsulta(campanha, agora, consulta.data);
@@ -1370,7 +1447,7 @@ export function montarBumbo(
   return {
     data,
     referencia,
-    texto: textoDoBumbo(entrada, data, referencia, opcoes),
+    texto: textoDoBumbo(entrada, data, referencia),
     gerado_em: agora.toISOString(),
   };
 }
@@ -1379,7 +1456,6 @@ function textoDoBumbo(
   entrada: EntradaCalculo,
   data: string,
   referencia: ReferenciaCampanha,
-  opcoes: OpcoesBumbo,
 ): string {
   const { campanha } = entrada;
   const duracao = referencia.duracao_dias;
@@ -1425,7 +1501,7 @@ function textoDoBumbo(
     },
     true,
   );
-  const { ritmo: acumulado, totais: totaisAcumulados } = ritmoNaJanela(
+  const { ritmo: acumulado } = ritmoNaJanela(
     base,
     instancia,
     janelaDaCampanha(base),
@@ -1461,32 +1537,26 @@ function textoDoBumbo(
     const rotulo = encerrada
       ? `*Último dia (dia ${dia - 1}):*`
       : `*Ontem (dia ${dia - 1}):*`;
-    const bilhetes = opcoes.mostrar_bilhetes
-      ? `${textoBilhetes(vendasDeOntem.bilhetes)}, `
-      : "";
     const percentual = percentualBp(
       fracao(naUnidade(vendasDeOntem, unidade)),
       fracao(metaDeOntem),
     );
     linhas.push(
       percentual === null
-        ? `${rotulo} ${bilhetes}a meta do dia já estava coberta.`
-        : `${rotulo} ${opcoes.mostrar_bilhetes ? bilhetes : "vendemos "}${textoPercentual(percentual)} da meta do dia.`,
+        ? `${rotulo} a meta do dia já estava coberta.`
+        : `${rotulo} vendemos ${textoPercentual(percentual)} da meta do dia.`,
     );
   }
 
   // Acumulado contra a curva e projeção (só com meta).
   if (acumulado.percentual_meta_bp !== null) {
-    const bilhetes = opcoes.mostrar_bilhetes
-      ? `${textoBilhetes(totaisAcumulados.bilhetes)}, `
-      : "";
     if (encerrada) {
       linhas.push(
-        `*Resultado final:* ${bilhetes}${textoPercentual(acumulado.percentual_meta_bp)} da meta.`,
+        `*Resultado final:* ${textoPercentual(acumulado.percentual_meta_bp)} da meta.`,
       );
     } else {
       linhas.push(
-        `*Acumulado:* ${bilhetes}${textoPercentual(acumulado.percentual_meta_bp)} da meta. Pela curva, o esperado até ontem era ${textoPercentual(acumulado.percentual_esperado_bp ?? 0)}.`,
+        `*Acumulado:* ${textoPercentual(acumulado.percentual_meta_bp)} da meta. Pela curva, o esperado até ontem era ${textoPercentual(acumulado.percentual_esperado_bp ?? 0)}.`,
       );
       if (projecao.percentual_meta_bp !== null)
         linhas.push(
@@ -1535,10 +1605,22 @@ function textoDoBumbo(
         continue;
       }
       if (titulo) linhas.push(titulo);
-      for (const { item, posicao } of visiveis) {
+      const listadas = visiveis.slice(0, NOMES_POR_DIVISAO_NO_BUMBO);
+      for (const { item, posicao } of listadas) {
         const percentual = item.calculo.ritmo.percentual_meta_bp;
         linhas.push(
           `${posicao}º ${item.nome}${mostraPercentualCelulas && percentual !== null ? ` · ${textoPercentual(percentual)}` : ""}`,
+        );
+      }
+      // Com no máximo 3 posições, as que sobram estão todas empatadas na última posição listada.
+      const sobra = visiveis.slice(listadas.length);
+      if (sobra.length > 0) {
+        const posicoesDaSobra = new Set(sobra.map((linha) => linha.posicao));
+        const [posicao] = posicoesDaSobra;
+        linhas.push(
+          posicoesDaSobra.size === 1
+            ? `e mais ${sobra.length} ${sobra.length === 1 ? "empatada" : "empatadas"} no ${posicao}º lugar`
+            : `e mais ${sobra.length}`,
         );
       }
     }

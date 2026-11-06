@@ -26,6 +26,8 @@ Este documento **substituiu o conteúdo de cálculo da seção 7 de [modelo-de-d
   - Consequência, testada: para um realizado inteiro, "realizado ≥ alvo arredondado" vale exatamente quando "percentual ≥ 100%", e nada aparece como 100% antes de a meta ser batida (a mesma regra do `formatarPercentual` do site).
 - **Dias.** "Dia N" é o dia da campanha (1 = primeiro dia de vendas). "Dias fechados" são os dias da campanha que já terminaram antes da data de referência. O dia de hoje conta no realizado, mas **não** entra no esperado (R4).
 - **Data de referência.** Hoje no fuso da campanha, ou a `data` consultada (no máximo hoje). Com uma data passada, o retrato é o do fim daquele dia: vendas de dias posteriores ficam de fora.
+- **"Hoje no fuso" é uma função só:** `hojeNoFuso(campanha.fuso_horario, agora)` (de `calendario.ts`, exportada também por `calculos.ts`). `diaLocalDoInstante` é a mesma regra para um instante qualquer (aceita o texto ISO do banco) e delega para ela. Rotas e telas usam `hojeNoFuso`.
+- **De onde importar.** O Worker importa do index do contrato. O site importa as regras e os tipos destas telas de `src/shared/contracts/calculos` (módulo sem zod; valores só de `calendario.ts`, o que um teste confere), nunca do index.
 
 ---
 
@@ -113,7 +115,7 @@ Este documento **substituiu o conteúdo de cálculo da seção 7 de [modelo-de-d
 - **Esperado de uma janela** = esperado até o fim de **ontem** (dias fechados), dentro da janela.
 - **Em dia** quando o realizado até agora (inclusive o de hoje) ≥ esperado (SUPOSIÇÃO S1); senão **abaixo**. `diferenca = realizado − esperado` ("estamos 30 abaixo"). Com meta zero na janela (célula sem pessoas, S6, ou período a 0%), **sem meta**.
 - Quem estava abaixo ontem fica em dia assim que vende hoje o que faltou; a meta do dia (R3) segue à parte e diz quanto falta para fechar hoje no ritmo.
-- **Ritmo** (`ritmo_bp`) = realizado até ontem ÷ esperado até ontem (só dias fechados, para a venda parcial de hoje não inflar). Null enquanto o esperado é zero (1º dia da janela).
+- **Ritmo** (`ritmo_bp`) = realizado até ontem ÷ esperado até ontem (só dias fechados, para a venda parcial de hoje não inflar; SUPOSIÇÃO S20). Null enquanto o esperado é zero (1º dia da janela).
 - Janelas: a campanha inteira e o período atual. No período, meta = M × peso do período e esperado = parte do período já fechada.
 
 **Fonte**
@@ -176,7 +178,7 @@ Este documento **substituiu o conteúdo de cálculo da seção 7 de [modelo-de-d
 
 Janela UTC: `2026-11-23T03:00:00.000Z` (inclusive) a `2026-12-14T03:00:00.000Z` (exclusive). A data de referência também vira às 03:00Z: às 02:59Z de 30/11 ainda é o dia 7.
 
-**Funções:** `diaLocalDoInstante`, `intervaloUtcDoDia`, `janelaUtcDaCampanha`, `vendaContaNaCampanha`, `agruparVendasPorDia`.
+**Funções:** `hojeNoFuso` (hoje), `diaLocalDoInstante` (um instante qualquer; delega para `hojeNoFuso`), `intervaloUtcDoDia`, `janelaUtcDaCampanha`, `vendaContaNaCampanha`, `agruparVendasPorDia`.
 
 ### R7. Fase, dia N de total e período atual
 
@@ -196,14 +198,14 @@ Janela UTC: `2026-11-23T03:00:00.000Z` (inclusive) a `2026-12-14T03:00:00.000Z` 
 
 **Regra**
 - **Níveis:** célula, discipulador e rede. Filtro opcional de divisão (jovens ou adultos): são rankings separados (SUPOSIÇÃO S15).
-- **Janela:** `atual` = período que contém a data (antes do início, o 1º; depois do fim, o último); `campanha` = do 1º dia até a data.
+- **Janela:** `atual` = período que contém a data (antes do início, o 1º; depois do fim, o último: SUPOSIÇÃO S18); `campanha` = do 1º dia até a data. Na consulta, a janela é o enum `JanelaRanking` (`atual` | `campanha`); na resposta, o objeto `janela` (tipo, ordem, nome e datas), com o tipo nomeado `JanelaRankingResposta`.
 - **Critério** (`ranking.criterio`, configurado):
   - `percentual_meta`: realizado na janela ÷ meta da instância na janela (na semana, M × peso da semana), em pontos-base truncados. Dividir pelo esperado daria a mesma ordem, porque a fração do tempo é igual para todos.
   - `bilhetes`: bilhetes vendidos na janela.
   - `arrecadacao`: centavos arrecadados na janela.
 - **Empates** dividem a posição: 1º, 1º, 3º. Empate = mesmo valor do critério (no % da meta, o mesmo número de pontos-base). Dentro do empate, a lista segue o nome (português, sem diferenciar acentos e maiúsculas; "Célula 2" antes de "Célula 10") (SUPOSIÇÃO S10).
 - Sem meta na janela, no critério % da meta: vai para o fim, empatado com os outros sem meta. Nos outros critérios, entra normalmente.
-- **Vizinhos:** cada item traz `acima` (o último da posição anterior) e `abaixo` (o primeiro da posição seguinte), com a posição e a distância no critério (pontos-base, bilhetes ou centavos). Empatados não são vizinhos entre si. É a base da visão individual (RF08).
+- **Vizinhos:** cada item traz `acima` (o último da posição anterior) e `abaixo` (o primeiro da posição seguinte), com a posição e a distância no critério (pontos-base, bilhetes ou centavos). Empatados não são vizinhos entre si (SUPOSIÇÃO S19). É a base da visão individual (RF08).
 - Cada item traz também meta, esperado, realizado, diferença e situação na janela (R4): é a lista de "quem está acima ou abaixo da meta".
 - Instâncias sem nenhuma célula (ex.: discipulador recém-criado) não aparecem.
 
@@ -228,7 +230,7 @@ No critério % da meta, Ágape tem `acima` = Betel (1º, 2500 pontos-base) e `ab
 ### R9. Visão pública
 
 **Regra**
-- `/api/publico/*` **nunca** devolve valor em R$, centavos, bilhetes, meta, esperado, realizado, diferença ou projeção, com qualquer configuração. Os schemas são estritos e um teste varre os campos contra uma lista fechada.
+- **Nunca valores em unidades, R$ ou bilhetes**, com qualquer configuração: `/api/publico/*` não devolve R$, centavos, quantidade de bilhetes, meta, esperado, realizado, diferença nem projeção em unidades, nem nos campos nem no texto do bumbo. Os percentuais (da meta, da curva e da projeção) podem aparecer. Os schemas são estritos, um teste varre os campos contra uma lista fechada e outro varre o texto do bumbo.
 - Ranking público: mesma ordem e mesmas posições da coordenação, só com posição, nome, divisão e, **se** `publico.mostra_percentual_meta`, o % da meta.
 - Aparecem só as instâncias que já venderam na janela (SUPOSIÇÃO S9), com posição até `publico.limite_ranking` (padrão 3; null = todas). Quem empata na última posição entra (1, 2, 3, 3).
 - Sempre na data de hoje (sem `data`). Antes da primeira venda, a lista é vazia; `referencia` permite à tela contar os dias.
@@ -237,6 +239,7 @@ No critério % da meta, Ágape tem `acima` = Betel (1º, 2500 pontos-base) e `ab
 - O que vai para o grupo mostra só o 1º, o 2º e o 3º lugares e esconde os valores financeiros, a pedido do pastor, para não desanimar quem está atrás: RF07, [00:40:16]–[00:41:33]; risco R7.
 - DevMission, decisão 7: o ranking público não mostra valores, e a permissão é do servidor, não da tela.
 - Configuração `publico` em `dominio.ts` (`PUBLICO_PADRAO`: sem %, top 3).
+- Bilhetes também ficam de fora das rotas abertas: ajuste da Sprint 3 (RIFA-008b).
 
 **Exemplo:** Betel 75%, Ágape 50%, Canaã 40%, Dorcas 40%, Éfeso sem venda → público: 1º Betel, 2º Ágape, 3º Canaã, 3º Dorcas (Éfeso não aparece).
 
@@ -250,10 +253,10 @@ No critério % da meta, Ágape tem `acima` = Betel (1º, 2500 pontos-base) e `ab
   1. Cabeçalho: nome da campanha e "Dia N de total".
   2. **Venda de ontem**: % da meta do dia de ontem (R3). Se a meta de ontem já estava coberta, diz isso.
   3. **Acumulado contra a curva**: % da meta da campanha e o % que a curva esperava até ontem; depois, em dia ou abaixo da curva e a projeção ("no ritmo atual, chegamos a X% da meta").
-  4. **Posições**: top 3 das células no período que contém ontem, por divisão (jovens e adultos separados), pelo critério configurado, como no ranking público (só quem vendeu; nunca mais posições que `publico.limite_ranking`). No período que acabou ontem, "resultado final".
+  4. **Posições**: top 3 das células no período que contém ontem, por divisão (jovens e adultos separados), pelo critério configurado, como no ranking público (só quem vendeu; nunca mais posições que `publico.limite_ranking`: SUPOSIÇÃO S21). No período que acabou ontem, "resultado final". Cada divisão lista no máximo 5 células (`NOMES_POR_DIVISAO_NO_BUMBO`); as demais empatadas viram "e mais N empatadas no Pº lugar", para o texto caber sempre nos 4000 caracteres (SUPOSIÇÃO S22; o pior caso, 72 células empatadas com nomes de 120 caracteres, dá 2436).
   5. **As 3 células que mais subiram ontem**: maior avanço ontem em % da própria meta (justo entre células de tamanhos diferentes); empate pelo nome.
   6. **Chamada final**: dias que faltam e o convite a compartilhar o link da célula com quem é de fora da igreja.
-- Sem R$ e sem centavos, nunca. Quantidade de bilhetes só com a opção `mostrar_bilhetes` (padrão: não; SUPOSIÇÃO S14). % por célula (no ranking e no "quem mais subiu") só se `publico.mostra_percentual_meta`; os % da campanha aparecem sempre.
+- Nunca R$, centavos nem quantidade de bilhetes (R9), com qualquer configuração. `montarBumbo` ainda aceita `OpcoesBumbo` como 4º argumento, por compatibilidade, e o ignora: `mostrar_bilhetes` fica para um bumbo interno da coordenação (pendência na seção 6). % por célula (no ranking e no "quem mais subiu") só se `publico.mostra_percentual_meta`; os % da campanha aparecem sempre.
 - Fases: antes do início, contagem regressiva; no 1º dia, a largada; no último dia, "hoje é o último dia"; depois do fim, o resultado final e o ranking final da campanha (no dia seguinte ao fim, também a venda do último dia).
 - Percentuais em números inteiros truncados ("33%"); datas em "dd/mm"; *negrito* e _itálico_ do WhatsApp.
 
@@ -261,7 +264,7 @@ No critério % da meta, Ágape tem `acima` = Betel (1º, 2500 pontos-base) e `ab
 - DevMission, decisão 9: o sistema monta a mensagem com a venda de ontem, o acumulado contra a curva, as 3 células que mais subiram e uma chamada final; o coordenador encaminha (sem integração com o WhatsApp).
 - Quem "toca o bumbo" alimenta o grupo dos líderes: [00:18:35]–[00:18:47], [00:22:09]–[00:22:20]; copia a visão sem valores, só com os 3 primeiros, e anuncia quem passou quem e quem lidera: [00:22:28]–[00:22:34], [00:40:58]–[00:41:27] (F3, passo 4).
 - Rankings separados de jovens e adultos: [00:28:45]–[00:29:02]. Vender para fora da igreja: [00:24:33]–[00:25:05].
-- Regra-base da Sprint 3 (texto sem R$, em % e posições, bilhetes só se a configuração permitir).
+- Regra-base da Sprint 3 (texto sem R$, em % e posições); sem bilhetes em nenhuma configuração: ajuste da RIFA-008b.
 
 **Exemplo** (dia 9 do cenário dos testes, sobre o dia 8: meta da campanha 600, meta do dia 8 = 221 − 159 = 62, vendidos 21)
 
@@ -284,7 +287,7 @@ _Adultos_
 Faltam 13 dias e dá para virar o jogo: compartilhe hoje o link da sua célula com quem é de fora da igreja!
 ```
 
-**Função:** `montarBumbo` (opções em `OpcoesBumbo`; padrão `BUMBO_PADRAO`).
+**Função:** `montarBumbo(entrada, { data }, agora)` (um 4º argumento `OpcoesBumbo` é aceito e ignorado).
 
 ### R11. Arredondamento e exatidão
 
@@ -313,10 +316,15 @@ Decisões nossas, simples e reversíveis, que o PO precisa confirmar ou trocar:
 11. **S11. Bumbo sobre ontem:** venda de ontem em % da meta do dia; acumulado em % da meta, com o esperado da curva e a projeção; posições do período que contém ontem, por divisão; na campanha encerrada, ranking final da campanha.
 12. **S12. "As 3 que mais subiram"** = maior avanço ontem em % da própria meta, e não posições ganhas no ranking (que não existem no 1º dia e mudam de janela na virada da semana).
 13. **S13. % por célula no bumbo** só quando `publico.mostra_percentual_meta` está ligado; os % da campanha aparecem sempre.
-14. **S14. Bilhetes no bumbo:** desligados. Ligar pede um campo novo na configuração da campanha (mudança de contrato proposta; por enquanto a rota usa `BUMBO_PADRAO`).
+14. **S14. Bilhetes no bumbo:** nunca no bumbo público (regra R9, ajustada na RIFA-008b). A opção `mostrar_bilhetes` fica para um bumbo interno da coordenação, que ainda não existe (pendência na seção 6).
 15. **S15. Ranking só de célula, discipulador e rede;** a comparação jovens × adultos fica no painel (escopo divisão), não num ranking de dois itens.
 16. **S16. Redação do bumbo** (frases, chamada, negrito do WhatsApp, sem emojis) é proposta e pode ser ajustada sem mexer nas regras.
 17. **S17. Data passada no painel e no ranking** mostra o retrato do fim daquele dia; data futura é recusada (400).
+18. **S18. Janela "atual" fora da campanha:** antes do início, é o 1º período (todos zerados, empatados); depois do fim, o último período.
+19. **S19. Empatados não são vizinhos:** `acima` é o último da posição anterior e `abaixo` o primeiro da posição seguinte; quem divide a posição não aparece como vizinho do outro.
+20. **S20. `ritmo_bp` usa só os dias fechados** (realizado até ontem ÷ esperado até ontem), como a projeção (S4): a venda parcial de hoje não o infla.
+21. **S21. O limite público também corta o bumbo:** o bumbo mostra no máximo 3 posições por divisão, e menos se `publico.limite_ranking` for menor.
+22. **S22. Empates longos no bumbo:** cada divisão lista no máximo 5 células; as demais empatadas viram "e mais N empatadas no Pº lugar", para o texto sempre caber nos 4000 caracteres.
 
 Perguntas que continuam abertas no requisito e afetam estes números: P3 (meta, preço e a divisão por semana, já que 35/25/45 somam 105%) e P4 (critério oficial da premiação: % da meta ou absoluto, por célula ou por rede).
 
@@ -345,4 +353,13 @@ Perguntas que continuam abertas no requisito e afetam estes números: P3 (meta, 
      São no máximo (células + 1) × dias linhas, o que cabe folgado no limite de CPU do Worker.
    - Para um fuso com horário de verão, leia as linhas e agrupe no Worker com `agruparVendasPorDia`.
    - Para filtrar por instante (ex.: contar só a janela), use `janelaUtcDaCampanha`.
-4. Chame `montarResumoPainel`, `montarRankingPainel`, `montarRankingPublico` ou `montarBumbo` com `agora = new Date()`. A resposta já é a do schema da rota.
+4. Para conferir a `data` consultada (no máximo hoje), use `hojeNoFuso(campanha.fuso_horario, agora)` e `diasEntre`.
+5. Chame `montarResumoPainel`, `montarRankingPainel`, `montarRankingPublico` ou `montarBumbo(entrada, { data }, agora)` com `agora = new Date()`. A resposta já é a do schema da rota.
+
+Tipos nomeados para as telas, em `calculos.ts`: `MetaDoDia`, `PontoCurva`, `RitmoCampanha`, `VendasForaDaJanela`, `PeriodoDaReferencia`, `ItemRankingPublico`, `VizinhoRanking`, `VinculoRanking` e `JanelaRankingResposta`, além dos tipos das respostas reexportados de `api.ts` (`RespostaPainelResumo`, `RespostaRanking`, `ItemRanking`, `ReferenciaCampanha`, `Ritmo` e outros).
+
+---
+
+## 6. Pendências
+
+- **Bumbo interno da coordenação, com quantidade de bilhetes.** O bumbo das rotas abertas nunca mostra bilhetes (R9). Um texto interno, para a coordenação, pode mostrar: precisa de uma rota da coordenação e de um campo na configuração da campanha. Até lá, `OpcoesBumbo.mostrar_bilhetes` e `BUMBO_PADRAO` ficam no contrato sem efeito.
