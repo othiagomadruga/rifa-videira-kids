@@ -1,0 +1,141 @@
+/**
+ * Vínculo afiliado → célula e painel de adesão, do grupo `coordenacao` (docs/api.md):
+ * - GET /api/admin/afiliados: afiliados com as vendas aprovadas (`?vinculado=false` = fila de órfãos);
+ * - PUT /api/admin/afiliados/:affiliateId: vincula, troca ou desvincula a célula; se o afiliado ainda não
+ *   existe, cria (pré-cadastro, origem `manual`). As vendas dele mudam de célula na hora (D7);
+ * - GET /api/admin/adesao: resumo e uma linha por célula ("quem falta").
+ *
+ * Os caminhos e os schemas vêm do contrato (`ROTAS`). Este sub-app NÃO autentica: o index.ts o monta sob
+ * /api/admin, depois do middleware da coordenação: `app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao)`.
+ */
+import { zValidator } from "@hono/zod-validator";
+import { Hono, type Context } from "hono";
+import { createMiddleware } from "hono/factory";
+import { HTTPException } from "hono/http-exception";
+import type { z } from "zod";
+import {
+  ROTAS,
+  STATUS_HTTP_DO_ERRO,
+  criarErroApi,
+  detalhesDeValidacao,
+  type CodigoErro,
+} from "../../shared/contracts";
+import { listarAfiliados, obterAdesao, salvarAfiliado } from "../db/adesao";
+
+type Ambiente = { Bindings: Cloudflare.Env };
+
+/** Onde o index.ts monta este sub-app. */
+export const PREFIXO_AFILIADOS_ADESAO = "/api/admin";
+
+type CaminhoLocal<T extends string> =
+  T extends `${typeof PREFIXO_AFILIADOS_ADESAO}${infer Resto}` ? Resto : never;
+
+/** Caminho de ROTAS sem o prefixo de montagem ("/api/admin/adesao" → "/adesao"). */
+function local<T extends `${typeof PREFIXO_AFILIADOS_ADESAO}/${string}`>(
+  caminho: T,
+): CaminhoLocal<T> {
+  return caminho.slice(PREFIXO_AFILIADOS_ADESAO.length) as CaminhoLocal<T>;
+}
+
+function responderErro(
+  c: Context,
+  codigo: CodigoErro,
+  mensagem: string,
+  detalhes?: unknown,
+) {
+  return c.json(
+    criarErroApi(codigo, mensagem, detalhes),
+    STATUS_HTTP_DO_ERRO[codigo],
+  );
+}
+
+const MENSAGEM_DE_INVALIDO = {
+  json: "Dados inválidos",
+  param: "Parâmetro inválido no caminho",
+  query: "Consulta inválida",
+} as const;
+
+/** Valida com o schema do contrato; fora dele, 400 `requisicao_invalida` com os problemas em `detalhes`. */
+function validar<
+  Alvo extends keyof typeof MENSAGEM_DE_INVALIDO,
+  Schema extends z.ZodType,
+>(alvo: Alvo, schema: Schema) {
+  return zValidator(alvo, schema, (resultado, c) => {
+    if (!resultado.success)
+      return responderErro(
+        c,
+        "requisicao_invalida",
+        MENSAGEM_DE_INVALIDO[alvo],
+        detalhesDeValidacao(resultado.error),
+      );
+  });
+}
+
+/** A mesma regra que o validador do Hono usa para decidir se lê o corpo como JSON. */
+const CONTEUDO_JSON =
+  /^application\/([a-z.-]+\+)?json(;\s*[a-zA-Z0-9-]+=([^;]+))*$/i;
+
+/**
+ * Corpo sem `Content-Type: application/json` não é JSON: 400 `json_invalido`. Sem isto, o validador do
+ * Hono validaria um corpo vazio e responderia que falta `celula_id`, o que engana quem chamou.
+ */
+const exigirJson = createMiddleware<Ambiente>(async (c, next) => {
+  if (!CONTEUDO_JSON.test(c.req.header("Content-Type") ?? ""))
+    return responderErro(
+      c,
+      "json_invalido",
+      "Envie o corpo em JSON, com o cabeçalho Content-Type: application/json",
+    );
+  await next();
+});
+
+export const afiliadosAdesao = new Hono<Ambiente>();
+
+afiliadosAdesao.get(
+  local(ROTAS.listarAfiliados.caminho),
+  validar("query", ROTAS.listarAfiliados.consulta),
+  async (c) => c.json(await listarAfiliados(c.env.DB, c.req.valid("query"))),
+);
+
+afiliadosAdesao.put(
+  local(ROTAS.salvarAfiliado.caminho),
+  validar("param", ROTAS.salvarAfiliado.parametros),
+  exigirJson,
+  validar("json", ROTAS.salvarAfiliado.corpo),
+  async (c) => {
+    const corpo = c.req.valid("json");
+    const resultado = await salvarAfiliado(
+      c.env.DB,
+      c.req.valid("param").affiliateId,
+      corpo,
+      new Date().toISOString(),
+    );
+    if (resultado.ok) return c.json(resultado.afiliado);
+    // Como nos erros de validação, `detalhes` aponta o campo do corpo.
+    const mensagem = `A célula ${corpo.celula_id} não existe`;
+    return responderErro(c, "referencia_invalida", mensagem, [
+      { caminho: ["celula_id"], codigo: "referencia_invalida", mensagem },
+    ]);
+  },
+);
+
+afiliadosAdesao.get(local(ROTAS.adesao.caminho), async (c) =>
+  c.json(await obterAdesao(c.env.DB)),
+);
+
+// Vale só para as rotas deste sub-app (o Hono embrulha cada uma com este tratador ao montar).
+afiliadosAdesao.onError((erro, c) => {
+  // O validador do Hono lança HTTPException 400 (sem resposta própria) quando o corpo se diz JSON, mas
+  // não é. A mensagem do SyntaxError cita trechos do corpo: não vai para a resposta nem para o log.
+  if (erro instanceof HTTPException) {
+    return erro.status === 400 && erro.res === undefined
+      ? responderErro(
+          c,
+          "json_invalido",
+          "O corpo da requisição não é um JSON válido",
+        )
+      : erro.getResponse();
+  }
+  console.error(`${c.req.method} ${c.req.path}: erro não tratado`, erro);
+  return responderErro(c, "erro_interno", "Erro interno");
+});
