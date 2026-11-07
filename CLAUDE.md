@@ -14,7 +14,7 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
 - **Durante:** cada item do backlog é uma missão (`create_quest`). Começou: `status=progress`.
   Travou: `status=blocked` + `blockedReason`. Decisões e notas: `add_quest_item`.
 - **Entregou:** `status=review` (nunca `done`: quem valida é o Thiago).
-- **Fim de sessão/sprint:** `log_progress` (1 a 2 frases + `nextSteps`); `update_retrato` se estiver velho.
+- **Fim de sessão/sprint:** `log_progress` (1 a 2 frases + `nextSteps`); `update_retrato` se estiver velho (se a ferramenta não existir, atualize a descrição do projeto com `update_project`).
 - **Time de agentes:** só o orquestrador (Scrum Master) escreve no DevMission; os subagentes devolvem no relatório o que registrar.
 - **Acesso:** MCP `devmission` (`claude mcp add --transport http devmission https://devmission.pages.dev/api/mcp --header "Authorization: Bearer <token>"`).
   O token é pessoal do Thiago e nunca entra no repositório nem no DevMission.
