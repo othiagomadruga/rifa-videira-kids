@@ -262,7 +262,7 @@ describe("CA3: importação em 2 passos", () => {
       { csv: CSV, simular: true },
       { csv: CSV, simular: false },
     ]);
-    expect(resultado).toHaveFocus();
+    await waitFor(() => expect(resultado).toHaveFocus());
     expect(resultado).toHaveAccessibleDescription(/Planilha importada/);
     expect(
       linhasDe(
@@ -284,7 +284,9 @@ describe("CA3: importação em 2 passos", () => {
     fireEvent.click(
       within(resultado).getByRole("button", { name: "Ver células" }),
     );
-    expect(screen.getByRole("tab", { name: "Células" })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Células" })).toHaveFocus(),
+    );
     expect(
       await screen.findByRole("cell", { name: "Célula Nova" }),
     ).toBeInTheDocument();
@@ -312,7 +314,7 @@ describe("CA3: importação em 2 passos", () => {
     expect(alerta).toHaveTextContent(
       "Faltam colunas obrigatórias no cabeçalho (linha 1): qtd_pessoas",
     );
-    expect(alerta.parentElement).toHaveFocus();
+    await waitFor(() => expect(alerta.parentElement).toHaveFocus());
     expect(botao("Importar")).toBeDisabled();
   });
 
