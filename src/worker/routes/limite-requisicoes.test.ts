@@ -6,10 +6,9 @@
 import { env, exports } from "cloudflare:workers";
 import { Hono } from "hono";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { erroApiSchema } from "../../shared/contracts";
+import { STATUS_HTTP_DO_ERRO, erroApiSchema } from "../../shared/contracts";
 import { SEM_CACHE } from "../lib/cache-publico";
 import { LIMITE_LOGIN, LIMITE_PUBLICO } from "../lib/limite-requisicoes";
-import { CODIGO_MUITAS_REQUISICOES } from "../lib/respostas-erro";
 import { ORIGEM } from "../test/acesso-teste";
 import { semearCampanha } from "../test/painel-apoio";
 import { PREFIXO_PUBLICO, criarPublico } from "./publico";
@@ -45,12 +44,14 @@ function entrar(ip: string | null, corpo = '{"token":"link-que-nao-existe"}') {
 }
 
 async function esperar429(res: Response): Promise<void> {
+  // O código do catálogo (erros.ts) e o status dele no contrato.
   expect(res.status).toBe(429);
+  expect(res.status).toBe(STATUS_HTTP_DO_ERRO.muitas_requisicoes);
   expect(res.headers.get("Retry-After")).toBe("60");
   expect(res.headers.get("Cache-Control")).toBe("no-store");
   const corpo: unknown = await res.json();
   expect(erroApiSchema.parse(corpo)).toEqual({
-    erro: { codigo: CODIGO_MUITAS_REQUISICOES, mensagem: expect.any(String) },
+    erro: { codigo: "muitas_requisicoes", mensagem: expect.any(String) },
   });
 }
 

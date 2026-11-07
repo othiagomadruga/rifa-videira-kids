@@ -75,14 +75,14 @@ Toda resposta que não é 2xx tem este corpo:
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
 | `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin |
 | `corpo_muito_grande` | 413 | corpo acima do limite (abaixo): do webhook (1 MiB, `LIMITE_CORPO_WEBHOOK_BYTES`), do `POST /api/sessao` (4 KiB) ou das escritas da coordenação (1 MiB) |
-| `muitas_requisicoes` | 429 | passou do limite de requisições por IP (abaixo), com `Retry-After` em segundos. Ainda fora de `CODIGOS_ERRO` (o catálogo é do SM) |
+| `muitas_requisicoes` | 429 | passou do limite de requisições por IP (abaixo), com `Retry-After` em segundos |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
 | `nao_configurado` | 503 | segredo do webhook ausente |
 | `banco_indisponivel` | 503 | health sem banco |
 
 O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use `criarErroApi()`; para converter um erro do zod em `detalhes`, use `detalhesDeValidacao()`.
 
-No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, campanha, afiliados e adesão, o 404 de rota inexistente (`nao_encontrado`) e o 500 do `onError` (`erro_interno`). O 429 sai de `responderMuitasRequisicoes()`, no mesmo formato, até `muitas_requisicoes` entrar no catálogo.
+No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, campanha, afiliados e adesão, o 404 de rota inexistente (`nao_encontrado`), o 500 do `onError` (`erro_interno`) e o 429 do limite de requisições (`muitas_requisicoes`, em `responderLimiteExcedido()` de `src/worker/lib/limite-requisicoes.ts`, que também põe `Retry-After` e `no-store`).
 
 ### Limites de tamanho e de requisições (RIFA-013b; docs/decisions.md D11)
 

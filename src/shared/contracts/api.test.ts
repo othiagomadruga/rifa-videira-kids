@@ -160,6 +160,9 @@ describe("CA3: formato único de erro", () => {
     expect(STATUS_HTTP_DO_ERRO.nao_configurado).toBe(503);
     expect(STATUS_HTTP_DO_ERRO.payload_invalido).toBe(400);
     expect(STATUS_HTTP_DO_ERRO.corpo_muito_grande).toBe(413);
+    // Limite de requisições por IP (RIFA-013b), no catálogo desde a revisão.
+    expect(CODIGOS_ERRO).toContain("muitas_requisicoes");
+    expect(STATUS_HTTP_DO_ERRO.muitas_requisicoes).toBe(429);
   });
 });
 

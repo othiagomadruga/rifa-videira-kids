@@ -4,7 +4,7 @@
  * - rotas abertas (/api/publico/* e /api/health): LIMITE_PUBLICO (60 por minuto), só as idas ao banco
  *   contam. A resposta que sai do cache (30 s) é barata e não conta: muita gente atrás do mesmo IP (o Wi-Fi
  *   da igreja, a operadora do celular) abre o ranking sem esbarrar no limite.
- * Acima do limite: 429 no formato único (lib/respostas-erro.ts), com `Retry-After`.
+ * Acima do limite: 429 `muitas_requisicoes` no formato único (responderErro), com `Retry-After`.
  *
  * Chave: o IP do cliente, do `CF-Connecting-IP` (a Cloudflare põe o IP real e o cliente não consegue
  * trocar); IPv6 pelo prefixo /64, porque uma casa ou um celular recebe um /64 inteiro. Sem o cabeçalho
@@ -18,7 +18,7 @@
  */
 import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
-import { responderMuitasRequisicoes } from "./respostas-erro";
+import { responderErro } from "./respostas-erro";
 
 /** Bindings de Rate Limiting declarados no wrangler.jsonc (e em worker-env.d.ts). */
 export type NomeDoLimitador = "LIMITE_PUBLICO" | "LIMITE_LOGIN";
@@ -154,12 +154,23 @@ export async function dentroDoLimite(
   }
 }
 
-/** 429 no formato único, com Retry-After do período da regra. */
+/**
+ * 429 `muitas_requisicoes` (status do contrato, por responderErro), com `Retry-After` (o período da regra,
+ * em segundos) e `no-store`: o cliente espera o período e tenta de novo.
+ */
 export function responderLimiteExcedido(
   c: Context,
   regra: RegraDeLimite,
 ): Response {
-  return responderMuitasRequisicoes(c, regra.periodoSegundos);
+  const segundos = regra.periodoSegundos;
+  c.header("Retry-After", String(segundos));
+  c.header("Cache-Control", "no-store");
+  const espera = segundos === 60 ? "um minuto" : `${segundos} segundos`;
+  return responderErro(
+    c,
+    "muitas_requisicoes",
+    `Muitas requisições em pouco tempo: espere ${espera} e tente de novo`,
+  );
 }
 
 /** Middleware: conta a requisição na regra e responde 429 acima do limite. */

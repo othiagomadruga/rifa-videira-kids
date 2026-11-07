@@ -27,36 +27,6 @@ export function responderErro(
 }
 
 /**
- * Código do 429 (limite de requisições, RIFA-013b). Ainda fora de CODIGOS_ERRO: o catálogo é do SM
- * (erros.ts), e o contrato já manda o cliente tratar `codigo` como texto aberto. Quando entrar no
- * catálogo, esta resposta passa a usar responderErro.
- */
-export const CODIGO_MUITAS_REQUISICOES = "muitas_requisicoes";
-
-/**
- * 429 no formato único, com `Retry-After` (segundos) e `no-store`: o cliente espera o período e tenta
- * de novo.
- */
-export function responderMuitasRequisicoes(
-  c: Context,
-  esperarSegundos: number,
-): Response {
-  c.header("Retry-After", String(esperarSegundos));
-  c.header("Cache-Control", "no-store");
-  const espera =
-    esperarSegundos === 60 ? "um minuto" : `${esperarSegundos} segundos`;
-  return c.json(
-    {
-      erro: {
-        codigo: CODIGO_MUITAS_REQUISICOES,
-        mensagem: `Muitas requisições em pouco tempo: espere ${espera} e tente de novo`,
-      },
-    },
-    429,
-  );
-}
-
-/**
  * Corpo que não é JSON: o SyntaxError do JSON.parse / c.req.json() (as mensagens do V8 citam "JSON")
  * ou a HTTPException 400, sem resposta própria, que o validador de JSON do Hono lança antes do hook
  * do zValidator. Outros erros de corpo (ex.: FormData malformado) não entram aqui.
