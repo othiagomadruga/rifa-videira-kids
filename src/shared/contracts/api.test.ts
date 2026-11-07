@@ -1231,4 +1231,81 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
         ok: false,
       });
   });
+
+  it("curva: vazia sem meta (mesmo antes do início), dias de 1 a N com as datas da campanha e, depois do fim, o último ponto igual ao % da campanha", () => {
+    const foraDaCampanha = {
+      ...desempenho,
+      hoje: null,
+      periodo: null,
+      bilhetes: { campanha: 0, hoje: null },
+    };
+    const antes = {
+      ...visao,
+      referencia: {
+        ...referencia,
+        data: "2026-11-15",
+        fase: "antes",
+        dia_campanha: null,
+        dias_restantes: 24,
+        dias_para_inicio: 8,
+        periodo: null,
+      },
+      curva: curva.map((ponto) => ({ ...ponto, realizado_bp: null })),
+      ranking: { ...ranking, primeiros: [] },
+      equipe: [],
+    };
+    const semMeta = {
+      ...foraDaCampanha,
+      campanha: {
+        ...desempenho.campanha,
+        meta: 0,
+        situacao: "sem_meta",
+        percentual_meta_bp: null,
+        percentual_esperado_bp: null,
+      },
+    };
+    expect(valida({ ...antes, desempenho: semMeta, curva: [] })).toBe(true);
+    expect(valida({ ...antes, desempenho: semMeta })).toBe(false);
+    const encerrada = {
+      ...antes,
+      referencia: {
+        ...antes.referencia,
+        data: "2026-12-17",
+        fase: "encerrada",
+        dias_restantes: 0,
+        dias_para_inicio: null,
+      },
+      desempenho: {
+        ...foraDaCampanha,
+        campanha: { ...desempenho.campanha, percentual_meta_bp: 4083 },
+      },
+      curva: curva.map((ponto) => ({ ...ponto, realizado_bp: 4083 })),
+    };
+    expect(valida(encerrada)).toBe(true);
+    const invalidas: unknown[] = [
+      {
+        ...encerrada,
+        curva: encerrada.curva.map((ponto) =>
+          ponto.dia === 24 ? { ...ponto, realizado_bp: 4082 } : ponto,
+        ),
+      },
+      {
+        ...visao,
+        curva: curva.map((ponto) =>
+          ponto.dia === 5 ? { ...ponto, dia: 6 } : ponto,
+        ),
+      },
+      {
+        ...visao,
+        curva: curva.map((ponto) =>
+          ponto.dia === 5 ? { ...ponto, data: "2026-11-28" } : ponto,
+        ),
+      },
+    ];
+    for (const resposta of invalidas)
+      expect({ resposta, ok: valida(resposta) }).toEqual({
+        resposta,
+        ok: false,
+      });
+  });
 });

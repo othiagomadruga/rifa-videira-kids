@@ -1097,7 +1097,23 @@ export const respostaVisaoIndividualSchema = z
         problema(["curva"], "Sem meta não há curva em percentual (vazia)");
     } else if (visao.curva.length !== duracao_dias)
       problema(["curva"], "Um ponto por dia da campanha");
+    const [ano, mes, diaInicio] = visao.referencia.data_inicio
+      .split("-")
+      .map(Number);
     visao.curva.forEach((ponto, indice) => {
+      if (ponto.dia !== indice + 1)
+        problema(
+          ["curva", indice, "dia"],
+          "Os dias da curva vão de 1 a N, em ordem",
+        );
+      const dataDoDia = new Date(Date.UTC(ano, mes - 1, diaInicio + indice))
+        .toISOString()
+        .slice(0, 10);
+      if (ponto.data !== dataDoDia)
+        problema(
+          ["curva", indice, "data"],
+          "A data acompanha o dia da campanha",
+        );
       const depoisDeHoje =
         fase === "antes" ||
         (fase === "durante" &&
@@ -1118,6 +1134,16 @@ export const respostaVisaoIndividualSchema = z
           "O ponto de hoje é o percentual da meta da campanha",
         );
     });
+    const ultimo = visao.curva.at(-1);
+    if (
+      fase === "encerrada" &&
+      ultimo !== undefined &&
+      ultimo.realizado_bp !== visao.desempenho.campanha.percentual_meta_bp
+    )
+      problema(
+        ["curva", visao.curva.length - 1, "realizado_bp"],
+        "Depois do fim, o último ponto é o percentual da meta da campanha",
+      );
     if (visao.ranking.nivel !== visao.alvo.tipo)
       problema(["ranking", "nivel"], "O nível do ranking é o do alvo");
     if (visao.ranking.primeiros.filter((item) => item.eu).length > 1)
