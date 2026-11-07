@@ -87,7 +87,11 @@ describe("CA3: /entrar", () => {
     await waitFor(() =>
       expect(roteador.state.location.pathname).toBe("/coordenacao"),
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Só a sessão conta aqui: a Visão geral (/coordenacao) carrega os próprios dados.
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/sessao",
+      expect.anything(),
+    );
   });
 
   it("veio da guarda com a tela pedida e a sessão já existe (entrou em outra aba e recarregou): volta para a tela", async () => {

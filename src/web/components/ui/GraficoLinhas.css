@@ -1,0 +1,277 @@
+/*
+ * Gráfico de linhas. As cores são papéis ligados às variáveis do tema, então valem no tema claro e no
+ * do telão (data-tema="telao") sem nada a mais; o contraste está conferido em GraficoLinhas.test.tsx:
+ * - destaque: --cor-info (linha cheia, área a 10% e marcador), >= 3:1 sobre a superfície;
+ * - referência: --cor-borda-forte (linha tracejada), >= 3:1 sobre a superfície;
+ * - grade: --cor-borda (fio de 1 px, discreto); textos: --cor-texto-suave e --cor-texto (>= 4,5:1).
+ */
+.ui-grafico {
+  --grafico-destaque: var(--cor-info);
+  --grafico-referencia: var(--cor-borda-forte);
+  --grafico-grade: var(--cor-borda);
+  --grafico-texto: var(--cor-texto-suave);
+
+  /* A cor do texto vem do tema de quem envolve o gráfico (claro ou telão), sem depender da herança. */
+  color: var(--cor-texto);
+  display: grid;
+  /* A coluna não cresce com a tabela: ela rola só dentro de .ui-grafico__rolagem. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.ui-grafico__legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-1) var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.ui-grafico__legenda-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.ui-grafico__chave {
+  flex: none;
+  overflow: visible;
+}
+
+/* Área do desenho: a dica fica por cima, dentro dela (sem rolagem horizontal). */
+.ui-grafico__area {
+  position: relative;
+  min-width: 0;
+}
+
+.ui-grafico__svg {
+  display: block;
+  overflow: visible;
+  /* No toque, arrastar na horizontal move a mira; na vertical, rola a página. */
+  touch-action: pan-y;
+  border-radius: var(--raio-2);
+}
+
+.ui-grafico__svg:focus {
+  outline: none;
+}
+
+.ui-grafico__svg:focus-visible {
+  outline: var(--foco-anel);
+  outline-offset: var(--foco-distancia);
+}
+
+.ui-grafico__grade {
+  stroke: var(--grafico-grade);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.ui-grafico__texto-eixo {
+  fill: var(--grafico-texto);
+  font-size: var(--texto-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-grafico__linha {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ui-grafico__linha--destaque {
+  stroke: var(--grafico-destaque);
+}
+
+.ui-grafico__linha--referencia {
+  stroke: var(--grafico-referencia);
+  stroke-dasharray: 6 5;
+}
+
+.ui-grafico__area-serie {
+  fill: var(--grafico-destaque);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+
+/* Marcadores com um anel da cor da superfície, para destacarem sobre as linhas. */
+.ui-grafico__marcador {
+  stroke: var(--cor-superficie);
+  stroke-width: 2;
+}
+
+.ui-grafico__marcador--destaque {
+  fill: var(--grafico-destaque);
+}
+
+.ui-grafico__marcador--referencia {
+  fill: var(--grafico-referencia);
+}
+
+/* Rótulo direto (fim das linhas): cor de texto, com contorno da superfície por trás. */
+.ui-grafico__rotulo {
+  fill: var(--cor-texto);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--cor-superficie);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.ui-grafico__mira-linha {
+  stroke: var(--cor-texto-suave);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.ui-grafico__dica {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: var(--espaco-1);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  box-shadow: var(--sombra-2);
+  font-size: var(--texto-sm);
+  pointer-events: none;
+}
+
+.ui-grafico__dica-titulo {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-xs);
+}
+
+.ui-grafico__dica-lista {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Valor primeiro (forte), o nome da série depois. */
+.ui-grafico__dica-lista > li {
+  display: grid;
+  grid-template-columns: 1.5rem auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.ui-grafico__dica-lista strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-grafico__dica-lista span {
+  min-width: 0;
+  color: var(--cor-texto-suave);
+}
+
+.ui-grafico__dica-extra > strong {
+  grid-column: 2;
+}
+
+.ui-grafico__dados > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+  color: var(--cor-link);
+  font-weight: var(--peso-forte);
+  cursor: pointer;
+}
+
+.ui-grafico__dados > summary:hover {
+  color: var(--cor-primaria-forte);
+}
+
+/*
+ * Tabela larga demais rola só dentro dela, nunca a página. O position: relative prende aqui os textos
+ * só para leitor de tela (.visualmente-oculto, absolutos): sem ele, eles escapam do recorte e esticam a
+ * página.
+ */
+.ui-grafico__rolagem {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--raio-2);
+}
+
+.ui-grafico__tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--texto-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-grafico__tabela th,
+.ui-grafico__tabela td {
+  padding: var(--espaco-1) var(--espaco-2);
+  border-bottom: 1px solid var(--cor-borda);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ui-grafico__tabela thead th {
+  color: var(--cor-texto-suave);
+  font-weight: var(--peso-forte);
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+.ui-grafico__tabela th:first-child {
+  text-align: left;
+}
+
+.ui-grafico__tabela tbody th {
+  font-weight: var(--peso-normal);
+}
+
+.ui-grafico__tabela tr[aria-current] > * {
+  background: var(--cor-primaria-suave);
+  font-weight: var(--peso-forte);
+}
+
+/* Alto contraste do sistema: a linha tracejada e a legenda seguem dizendo qual é qual. */
+@media (forced-colors: active) {
+  .ui-grafico__linha--destaque {
+    stroke: Highlight;
+  }
+
+  .ui-grafico__linha--referencia {
+    stroke: CanvasText;
+  }
+
+  .ui-grafico__marcador {
+    stroke: Canvas;
+  }
+
+  .ui-grafico__marcador--destaque {
+    fill: Highlight;
+  }
+
+  .ui-grafico__marcador--referencia {
+    fill: CanvasText;
+  }
+
+  .ui-grafico__area-serie {
+    fill: none;
+  }
+
+  .ui-grafico__texto-eixo,
+  .ui-grafico__rotulo {
+    fill: CanvasText;
+  }
+
+  .ui-grafico__grade,
+  .ui-grafico__mira-linha {
+    stroke: GrayText;
+  }
+}

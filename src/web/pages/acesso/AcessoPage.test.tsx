@@ -47,6 +47,10 @@ function simularApi(
   return { chamadas, fetchMock };
 }
 
+/** Só as chamadas da sessão: depois de entrar, a Visão geral (/coordenacao) carrega os próprios dados. */
+const daSessao = (chamadas: Chamada[]) =>
+  chamadas.filter((chamada) => chamada.caminho.startsWith("/api/sessao"));
+
 const LINK_INVALIDO = () =>
   respostaJson(
     {
@@ -147,7 +151,7 @@ describe("CA1: o link no navegador (barra de endereço e histórico)", () => {
       await screen.findByRole("heading", { level: 1, name: "Visão geral" }),
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/coordenacao");
-    expect(chamadas).toEqual([
+    expect(daSessao(chamadas)).toEqual([
       { metodo: "POST", caminho: "/api/sessao", corpo: { token: TOKEN } },
     ]);
     expect(screen.getByText("Coordenadora Fictícia")).toBeInTheDocument();
@@ -194,7 +198,7 @@ describe("CA1: confirmação e resposta da API", () => {
     await waitFor(() =>
       expect(roteador.state.location.pathname).toBe("/coordenacao"),
     );
-    expect(chamadas.map((chamada) => chamada.corpo)).toEqual([
+    expect(daSessao(chamadas).map((chamada) => chamada.corpo)).toEqual([
       { token: TOKEN },
       { token: TOKEN },
     ]);
@@ -216,7 +220,7 @@ describe("CA1: confirmação e resposta da API", () => {
     await waitFor(() =>
       expect(roteador.state.location.pathname).toBe("/coordenacao"),
     );
-    expect(chamadas).toHaveLength(1);
+    expect(daSessao(chamadas)).toHaveLength(1);
   });
 
   it("depois de entrar, volta para a tela que a guarda tinha guardado", async () => {

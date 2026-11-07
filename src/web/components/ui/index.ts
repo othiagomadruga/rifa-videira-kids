@@ -23,6 +23,13 @@ export { DataTable, type ColunaTabela } from "./DataTable";
 export { Dialogo } from "./Dialogo";
 export { EmptyState } from "./EmptyState";
 export { ErrorState } from "./ErrorState";
+export {
+  GraficoLinhas,
+  type ColunaExtraGrafico,
+  type EstiloSerie,
+  type SerieGrafico,
+} from "./GraficoLinhas";
+export { IndicadorSituacao, type TomSituacao } from "./IndicadorSituacao";
 export { Loading } from "./Loading";
 export { Marca } from "./Marca";
 export { PageHeader } from "./PageHeader";

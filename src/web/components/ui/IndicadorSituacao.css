@@ -1,0 +1,65 @@
+/* Situação de um indicador: cores dos estados do tema (texto sobre o fundo "suave", AA conferido). */
+.ui-situacao {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--situacao-cor);
+  border-radius: var(--raio-2);
+  background: var(--situacao-fundo);
+  color: var(--cor-texto);
+}
+
+.ui-situacao--sucesso {
+  --situacao-cor: var(--cor-sucesso);
+  --situacao-fundo: var(--cor-sucesso-suave);
+}
+
+.ui-situacao--alerta {
+  --situacao-cor: var(--cor-alerta);
+  --situacao-fundo: var(--cor-alerta-suave);
+}
+
+.ui-situacao--perigo {
+  --situacao-cor: var(--cor-perigo);
+  --situacao-fundo: var(--cor-perigo-suave);
+}
+
+.ui-situacao--neutro {
+  --situacao-cor: var(--cor-neutro);
+  --situacao-fundo: var(--cor-neutro-suave);
+}
+
+.ui-situacao__icone {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--situacao-cor);
+  color: var(--situacao-fundo);
+  font-weight: var(--peso-negrito);
+  line-height: 1;
+}
+
+.ui-situacao__textos {
+  display: grid;
+  min-width: 0;
+}
+
+.ui-situacao__titulo {
+  font-weight: var(--peso-negrito);
+  color: var(--situacao-cor);
+}
+
+.ui-situacao__detalhe {
+  font-size: var(--texto-sm);
+}
+
+@media (forced-colors: active) {
+  .ui-situacao {
+    border: 1px solid CanvasText;
+    border-left-width: 4px;
+  }
+}

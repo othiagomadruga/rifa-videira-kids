@@ -1,0 +1,250 @@
+/* Visão geral (painel de ritmo): celular primeiro; no computador, os cartões lado a lado. */
+
+/* Filtro e atualização numa faixa só, acima de tudo o que eles afetam. */
+.visao-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3) var(--espaco-5);
+}
+
+.visao-filtro {
+  flex: 1 1 16rem;
+  max-width: 26rem;
+}
+
+.visao-atualizacao {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-3);
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.visao-atualizacao > p {
+  flex: 1 1 10rem;
+}
+
+/* Vazia, a região viva não ocupa espaço (o espaçamento da página é por gap). */
+.visao-falha:empty {
+  display: none;
+}
+
+.visao-falha {
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-alerta);
+  border-radius: var(--raio-2);
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+.visao-painel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-4);
+  min-width: 0;
+  transition: opacity var(--transicao);
+}
+
+/* Trocando o filtro: o quadro anterior fica, esmaecido, até chegarem os dados novos. */
+.visao-painel[data-trocando] {
+  opacity: 0.55;
+}
+
+.visao-referencia {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.visao-referencia__escopo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--espaco-1) var(--espaco-2);
+  font-size: var(--texto-sm);
+}
+
+.visao-referencia__tipo {
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  line-height: 1.6;
+}
+
+.visao-referencia__fase {
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrito);
+}
+
+/* Inteira numa linha quando cabe; se não couber, quebra por dentro (nunca estoura a largura). */
+.visao-referencia__parte {
+  display: inline-block;
+}
+
+.visao-referencia__detalhe {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* Cartões: um por linha no celular; dois ou três por linha conforme a largura. */
+.visao-cartoes {
+  display: grid;
+  gap: var(--espaco-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: start;
+}
+
+.visao-cartao__data {
+  color: var(--cor-texto-suave);
+  font-weight: var(--peso-medio);
+}
+
+.visao-cartao__corpo {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.visao-cartao__subtitulo {
+  margin-top: calc(-1 * var(--espaco-3));
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.visao-cartao__numero {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.visao-cartao__rotulo {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+/* O número do dia: grande, com algarismos proporcionais (número sozinho, não coluna). */
+.visao-cartao__destaque {
+  font-size: clamp(var(--texto-3xl), 1.5rem + 2vw, var(--texto-4xl));
+  font-weight: var(--peso-negrito);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.visao-cartao__nota {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.visao-cartao__falta {
+  font-weight: var(--peso-forte);
+}
+
+/* Pares rótulo/valor do cartão da campanha. */
+.visao-dados {
+  display: grid;
+  gap: var(--espaco-2);
+}
+
+.visao-dados > div {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.visao-dados dt {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.visao-dados dd {
+  margin: 0;
+  font-weight: var(--peso-medio);
+}
+
+/* Esperado × realizado do período, lado a lado. */
+.visao-comparacao {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-3);
+}
+
+.visao-comparacao > div {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.visao-comparacao dt {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.visao-comparacao dd {
+  margin: 0;
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrito);
+}
+
+/* Avisos discretos: texto suave, sem cor de alerta (não são erro, são para conferir). */
+.visao-avisos {
+  display: grid;
+  gap: var(--espaco-2);
+}
+
+.visao-avisos__titulo {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+.visao-avisos__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.visao-avisos__lista > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--espaco-2);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.visao-avisos__lista strong {
+  color: var(--cor-texto);
+}
+
+.visao-avisos__icone {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.0625rem;
+  border-radius: 50%;
+  background: var(--cor-neutro-suave);
+  color: var(--cor-neutro);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-negrito);
+  line-height: 1;
+}
+
+.visao-curva__subtitulo {
+  margin-top: calc(-1 * var(--espaco-3));
+  margin-bottom: var(--espaco-3);
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}

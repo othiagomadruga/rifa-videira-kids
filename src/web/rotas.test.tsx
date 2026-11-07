@@ -16,7 +16,6 @@ import {
 // abrem com a sessão de teste (papel coordenacao) do renderizarRota.
 const TELAS = [
   ["/telao", "Telão", "RIFA-011"],
-  ["/coordenacao", "Visão geral", "RIFA-009"],
   // /entrar, /acesso e /coordenacao/acessos (RIFA-007), /coordenacao/campanha (RIFA-004),
   // /coordenacao/hierarquia (RIFA-005) e /coordenacao/adesao (RIFA-006) já são telas de verdade: ver
   // pages/entrar, pages/acesso, pages/acessos, pages/campanha, pages/hierarquia e pages/adesao.
