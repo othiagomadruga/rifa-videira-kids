@@ -24,8 +24,20 @@ function esperarCabecalhos(res: Response): void {
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Content-Security-Policy": "frame-ancestors 'none'",
+    "Content-Security-Policy":
+      "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   });
+}
+
+/** Diretivas da CSP: { "default-src": ["'self'"], ... }. */
+function diretivasCsp(politica: string): Record<string, string[]> {
+  return Object.fromEntries(
+    politica
+      .split(";")
+      .map((parte) => parte.trim().split(/\s+/))
+      .filter(([nome]) => nome !== "")
+      .map(([nome, ...fontes]) => [nome.toLowerCase(), fontes]),
+  );
 }
 
 /** Um app mínimo com o middleware primeiro, como no src/worker/index.ts. */
@@ -88,6 +100,52 @@ describe("middleware cabecalhosSeguranca", () => {
     for (const res of [semSessao, outraOrigem, login]) esperarCabecalhos(res);
     expect(cookieDaResposta(login)?.valor).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(login.headers.get("Cache-Control")).toBe("no-store");
+  });
+});
+
+describe("Content-Security-Policy (RIFA-013)", () => {
+  const csp = diretivasCsp(CABECALHOS_SEGURANCA["Content-Security-Policy"]);
+
+  it("script, estilo, fonte e fetch só da própria origem: sem inline, sem eval e sem outro host", () => {
+    // Sem script-src, style-src, font-src e connect-src próprios: valem as fontes do default-src.
+    expect(csp["default-src"]).toEqual(["'self'"]);
+    for (const diretiva of [
+      "script-src",
+      "script-src-elem",
+      "script-src-attr",
+      "style-src",
+      "style-src-elem",
+      "style-src-attr",
+      "font-src",
+      "connect-src",
+    ])
+      expect({ diretiva, fontes: csp[diretiva] }).toEqual({
+        diretiva,
+        fontes: undefined,
+      });
+    const todas = Object.values(csp).flat();
+    for (const proibida of [
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      "'unsafe-hashes'",
+      "'wasm-unsafe-eval'",
+      "*",
+      "http:",
+      "https:",
+      "blob:",
+    ])
+      expect(todas).not.toContain(proibida);
+  });
+
+  it("imagens só da origem e em data: (a seta do <select> é um SVG em data: no CSS)", () => {
+    expect(csp["img-src"]).toEqual(["'self'", "data:"]);
+  });
+
+  it("sem plugins, sem <base>, formulários só para a origem e nenhuma moldura (clickjacking)", () => {
+    expect(csp["object-src"]).toEqual(["'none'"]);
+    expect(csp["base-uri"]).toEqual(["'none'"]);
+    expect(csp["form-action"]).toEqual(["'self'"]);
+    expect(csp["frame-ancestors"]).toEqual(["'none'"]);
   });
 });
 

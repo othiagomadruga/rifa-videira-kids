@@ -1,8 +1,9 @@
 # Cabeçalhos de segurança do site (RIFA-007b). O Vite copia public/ para dist/client e o Workers Static
 # Assets aplica estas regras aos arquivos do site. As respostas da API (Worker) recebem os mesmos cabeçalhos
 # pelo middleware src/worker/middleware/cabecalhos-seguranca.ts; um teste confere que as listas são iguais.
+# CSP (RIFA-013): só a própria origem, sem script/estilo inline e sem eval (docs/acesso.md, seção 4).
 /*
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
