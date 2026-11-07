@@ -4,6 +4,9 @@
  * Esta camada só recebe e grava hashes (SHA-256 hex) do token do link e do id da sessão: quem gera e
  * confere os segredos são as rotas, com src/worker/lib/cripto.ts. Instantes em UTC ISO com milissegundos
  * ("2026-12-01T12:20:31.512Z"), então comparar o texto é comparar o tempo.
+ *
+ * As ações do admin sobre usuários e links levam, opcionalmente, quem fez (`Autoria`): o registro da
+ * trilha de auditoria (RIFA-013b) vai no mesmo db.batch da ação e só existe se ela aconteceu.
  */
 import type {
   LinkAcesso,
@@ -12,9 +15,26 @@ import type {
   Usuario,
   UsuarioSessao,
 } from "../../shared/contracts";
+import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 
 /** O `ultimo_uso_em` da sessão é regravado no máximo uma vez por minuto (a leitura não vira escrita). */
 const INTERVALO_TOQUE_SESSAO_MS = 60_000;
+
+/**
+ * Inatividade máxima de uma sessão (RIFA-013b): sem uso há MAIS de 7 dias, ela deixa de valer, mesmo
+ * dentro da validade (o link pessoal continua abrindo uma sessão nova). Com o toque de no máximo uma vez
+ * por minuto, o `ultimo_uso_em` pode atrasar até INTERVALO_TOQUE_SESSAO_MS em relação ao último uso.
+ */
+export const INATIVIDADE_MAXIMA_SESSAO_DIAS = 7;
+const INATIVIDADE_MAXIMA_SESSAO_MS =
+  INATIVIDADE_MAXIMA_SESSAO_DIAS * 24 * 60 * 60 * 1000;
+
+/** O `ultimo_uso_em` mais antigo que ainda vale em `agora` (exatamente 7 dias atrás ainda vale). */
+export function limiteDeInatividade(agora: string): string {
+  return new Date(
+    Date.parse(agora) - INATIVIDADE_MAXIMA_SESSAO_MS,
+  ).toISOString();
+}
 
 interface LinhaUsuario {
   id: number;
@@ -74,7 +94,7 @@ function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
 // Usuários
 // ---------------------------------------------------------------------------------------------------
 
-/** Usuários com os links (sem hash) e as sessões válidas. `id` null = todos. */
+/** Usuários com os links (sem hash) e as sessões válidas (no prazo e não paradas). `id` null = todos. */
 async function carregarUsuarios(
   db: D1Database,
   agora: string,
@@ -98,10 +118,10 @@ async function carregarUsuarios(
     db
       .prepare(
         `SELECT usuario_id, count(*) AS total FROM sessoes
-         WHERE (?1 IS NULL OR usuario_id = ?1) AND expira_em > ?2
+         WHERE (?1 IS NULL OR usuario_id = ?1) AND expira_em > ?2 AND ultimo_uso_em >= ?3
          GROUP BY usuario_id`,
       )
-      .bind(id, agora),
+      .bind(id, agora, limiteDeInatividade(agora)),
   ]);
 
   const linksPorUsuario = new Map<number, LinkAcesso[]>();
@@ -149,6 +169,7 @@ export async function criarUsuarioComLink(
   db: D1Database,
   dados: { nome: string; email: string | null; papel: Papel },
   link: NovoLink,
+  autoria?: Autoria,
 ): Promise<{ usuarioId: number; linkId: number }> {
   const [usuario, novoLink] = await db.batch<{ id: number }>([
     db
@@ -163,6 +184,22 @@ export async function criarUsuarioComLink(
          VALUES (last_insert_rowid(), ?1, ?2, ?3) RETURNING id`,
       )
       .bind(link.tokenHash, link.criadoEm, link.expiraEm),
+    // Auditoria: o usuário é o do link recém-criado (last_insert_rowid() agora é o link). Sem nome nem
+    // e-mail no resumo: só o papel.
+    ...(autoria
+      ? [
+          prepararRegistroAuditoria(db, {
+            ...autoria,
+            acao: "usuario.criar",
+            alvo: {
+              tipo: "usuario",
+              idSql:
+                "(SELECT usuario_id FROM links_acesso WHERE id = last_insert_rowid())",
+            },
+            resumo: `Acesso criado com o papel ${dados.papel} e um link`,
+          }),
+        ]
+      : []),
   ]);
   const usuarioId = usuario.results[0]?.id;
   const linkId = novoLink.results[0]?.id;
@@ -183,8 +220,27 @@ export async function definirAtivo(
   db: D1Database,
   usuarioId: number,
   ativo: boolean,
+  autoria?: Autoria,
 ): Promise<ResultadoDefinirAtivo> {
   const valor = ativo ? 1 : 0;
+  // Auditoria: só se a mudança aconteceu (recusada, o usuário continua como estava).
+  const registro =
+    autoria &&
+    prepararRegistroAuditoria(
+      db,
+      {
+        ...autoria,
+        acao: ativo ? "usuario.ativar" : "usuario.desativar",
+        alvo: `usuario:${usuarioId}`,
+        resumo: ativo
+          ? "Acesso reativado (os links no prazo voltam a valer)"
+          : "Acesso desativado (as sessões foram encerradas)",
+      },
+      {
+        sql: "EXISTS (SELECT 1 FROM usuarios WHERE id = ?6 AND ativo = ?7)",
+        valores: [usuarioId, valor],
+      },
+    );
   const [atualizacao, , existente] = await db.batch([
     db
       .prepare(
@@ -204,6 +260,7 @@ export async function definirAtivo(
     db
       .prepare("SELECT 1 AS existe FROM usuarios WHERE id = ?1")
       .bind(usuarioId),
+    ...(registro ? [registro] : []),
   ]);
   if (atualizacao.meta.changes > 0) return "ok";
   return existente.results.length > 0 ? "ultimo_admin" : "nao_encontrado";
@@ -213,21 +270,45 @@ export async function definirAtivo(
 // Links
 // ---------------------------------------------------------------------------------------------------
 
-/** Link novo para um usuário existente; null se o usuário não existe. */
+/**
+ * Link novo para um usuário existente; null se o usuário não existe. Com `autoria`, o registro da
+ * auditoria vai no mesmo lote, só se o link foi criado (o id dele é o last_insert_rowid() do lote).
+ */
 export async function criarLink(
   db: D1Database,
   usuarioId: number,
   link: NovoLink,
+  autoria?: Autoria,
 ): Promise<number | null> {
-  const linha = await db
+  const insercao = db
     .prepare(
       `INSERT INTO links_acesso (usuario_id, token_hash, criado_em, expira_em)
        SELECT id, ?2, ?3, ?4 FROM usuarios WHERE id = ?1
        RETURNING id`,
     )
-    .bind(usuarioId, link.tokenHash, link.criadoEm, link.expiraEm)
-    .first<{ id: number }>();
-  return linha?.id ?? null;
+    .bind(usuarioId, link.tokenHash, link.criadoEm, link.expiraEm);
+  if (!autoria) {
+    const linha = await insercao.first<{ id: number }>();
+    return linha?.id ?? null;
+  }
+  const [criacao] = await db.batch<{ id: number }>([
+    insercao,
+    prepararRegistroAuditoria(
+      db,
+      {
+        ...autoria,
+        acao: "link.criar",
+        alvo: { tipo: "link", idSql: "last_insert_rowid()" },
+        resumo: `Link novo para o usuário ${usuarioId}`,
+      },
+      {
+        // Sem o usuário, nada foi inserido e o last_insert_rowid() é de outra gravação.
+        sql: "EXISTS (SELECT 1 FROM links_acesso WHERE id = last_insert_rowid() AND usuario_id = ?6)",
+        valores: [usuarioId],
+      },
+    ),
+  ]);
+  return criacao.results[0]?.id ?? null;
 }
 
 /** O link do hash, se ainda abre sessão: não revogado, dentro da validade e de usuário ativo. */
@@ -265,7 +346,32 @@ export async function revogarLink(
   db: D1Database,
   linkId: number,
   agora: string,
+  autoria?: Autoria,
 ): Promise<ResultadoRevogarLink> {
+  // Auditoria: o dono do link entra no resumo (uma leitura pequena) e o registro só fica se o link ficou
+  // revogado (a revogação recusada não registra nada).
+  const dono =
+    autoria &&
+    (await db
+      .prepare("SELECT usuario_id FROM links_acesso WHERE id = ?1")
+      .bind(linkId)
+      .first<{ usuario_id: number }>());
+  const registro =
+    autoria &&
+    dono &&
+    prepararRegistroAuditoria(
+      db,
+      {
+        ...autoria,
+        acao: "link.revogar",
+        alvo: `link:${linkId}`,
+        resumo: `Link do usuário ${dono.usuario_id} revogado (as sessões abertas por ele foram encerradas)`,
+      },
+      {
+        sql: "EXISTS (SELECT 1 FROM links_acesso WHERE id = ?6 AND revogado_em IS NOT NULL)",
+        valores: [linkId],
+      },
+    );
   const [revogacao, , existente] = await db.batch([
     db
       .prepare(
@@ -289,6 +395,7 @@ export async function revogarLink(
     db
       .prepare("SELECT 1 AS existe FROM links_acesso WHERE id = ?1")
       .bind(linkId),
+    ...(registro ? [registro] : []),
   ]);
   if (revogacao.meta.changes > 0) return "ok";
   return existente.results.length > 0 ? "ultimo_link_admin" : "nao_encontrado";
@@ -301,8 +408,8 @@ export async function revogarLink(
 /**
  * Abre a sessão se o link ainda vale (a condição é conferida de novo dentro da transação), com validade até o
  * menor entre `expiraEm` e o fim do link: a sessão nunca dura mais que o link que a abriu. Marca o uso do
- * link e apaga as sessões vencidas e a sessão anterior deste navegador. Devolve a validade gravada, ou null
- * se o link deixou de valer.
+ * link e apaga as sessões vencidas, as paradas há mais de INATIVIDADE_MAXIMA_SESSAO_DIAS e a sessão anterior
+ * deste navegador. Devolve a validade gravada, ou null se o link deixou de valer.
  */
 export async function criarSessao(
   db: D1Database,
@@ -325,13 +432,22 @@ export async function criarSessao(
       )
       .bind(sessao.linkId, sessao.criadoEm, sessao.idHash),
     db
-      .prepare("DELETE FROM sessoes WHERE expira_em <= ?1 OR id_hash = ?2")
-      .bind(sessao.criadoEm, sessao.idHashAnterior),
+      .prepare(
+        "DELETE FROM sessoes WHERE expira_em <= ?1 OR ultimo_uso_em < ?3 OR id_hash = ?2",
+      )
+      .bind(
+        sessao.criadoEm,
+        sessao.idHashAnterior,
+        limiteDeInatividade(sessao.criadoEm),
+      ),
   ]);
   return criacao.results[0]?.expira_em ?? null;
 }
 
-/** Usuário da sessão, se ela vale: existe, não venceu e o usuário está ativo. */
+/**
+ * Usuário da sessão, se ela vale: existe, não venceu, foi usada nos últimos INATIVIDADE_MAXIMA_SESSAO_DIAS
+ * (RIFA-013b; exatamente 7 dias ainda vale) e o usuário está ativo.
+ */
 export async function buscarUsuarioDaSessao(
   db: D1Database,
   idHash: string,
@@ -341,9 +457,9 @@ export async function buscarUsuarioDaSessao(
     .prepare(
       `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em
        FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id
-       WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND u.ativo = 1`,
+       WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1`,
     )
-    .bind(idHash, agora)
+    .bind(idHash, agora, limiteDeInatividade(agora))
     .first<UsuarioSessao & { ultimo_uso_em: string }>();
   if (linha === null) return null;
   const limiteToque = new Date(

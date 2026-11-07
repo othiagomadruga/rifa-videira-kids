@@ -31,6 +31,8 @@ import {
 } from "./dominio";
 import { detalheResumidoSchema } from "./erros";
 import { payloadRifeiSchema } from "./rifei";
+// Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
+import type { Papel } from "./acesso";
 
 // ---------------------------------------------------------------------------------------------------
 // Autorização e utilitários
@@ -389,6 +391,130 @@ export const respostaAdesaoSchema = z.object({
   }),
   itens: z.array(adesaoCelulaSchema),
 });
+
+// ---------------------------------------------------------------------------------------------------
+// GET /api/admin/pedidos/suspeitos (RIFA-013b): pedidos aprovados que o webhook marcou como implausíveis.
+// A marcação NÃO tira o pedido das vendas: ele continua contando até a coordenação decidir (PO).
+// ---------------------------------------------------------------------------------------------------
+
+/** Teto de bilhetes num pedido só: acima dele, o pedido aprovado é marcado para revisão. */
+export const TETO_BILHETES_POR_PEDIDO = 200;
+
+/**
+ * Desconto aceito (cupom, promoção) sobre bilhetes × preço do bilhete da campanha, em pontos-base: com
+ * 5000, um total abaixo da metade do esperado marca o pedido. O exemplo oficial da Rifei tem 50% de
+ * promoção, que fica dentro.
+ */
+export const TOLERANCIA_DESCONTO_BP = 5000;
+
+/** Máximo de itens na resposta (os mais recentes); `total` diz quantos existem. */
+export const LIMITE_PEDIDOS_SUSPEITOS = 500;
+
+/**
+ * Por que o pedido foi marcado. O mesmo item vai para `webhook_eventos.avisos` do evento que aprovou o
+ * pedido (formato `DetalheResumido`, sem o valor recebido):
+ * - quantidade_acima_do_teto (`numbers_count`): mais de TETO_BILHETES_POR_PEDIDO bilhetes;
+ * - total_acima_do_esperado (`total`): total maior que bilhetes × preço do bilhete da campanha;
+ * - total_abaixo_do_esperado (`total`): total abaixo de bilhetes × preço, além de TOLERANCIA_DESCONTO_BP.
+ */
+export const MOTIVOS_PEDIDO_SUSPEITO = [
+  "quantidade_acima_do_teto",
+  "total_acima_do_esperado",
+  "total_abaixo_do_esperado",
+] as const;
+export type MotivoPedidoSuspeito = (typeof MOTIVOS_PEDIDO_SUSPEITO)[number];
+
+export const motivoPedidoSuspeitoSchema = detalheResumidoSchema.extend({
+  codigo: z.enum(MOTIVOS_PEDIDO_SUSPEITO),
+});
+
+/** Um pedido marcado. Sem nenhum dado do comprador (D1): só o pedido, os valores e o afiliado. */
+export const pedidoSuspeitoSchema = z.object({
+  pedido_id: z.string().min(1).max(128),
+  affiliate_id: affiliateIdSchema.nullable(),
+  /** Célula do afiliado agora (o pedido conta para ela); null = sem afiliado ou não vinculado. */
+  celula_id: idSchema.nullable(),
+  celula_nome: z.string().min(1).max(120).nullable(),
+  qtd_bilhetes: z.number().int().nonnegative(),
+  total_centavos: centavosSchema,
+  /** qtd_bilhetes × preço do bilhete da campanha quando o pedido foi marcado. */
+  esperado_centavos: centavosSchema,
+  motivos: z.array(motivoPedidoSuspeitoSchema).min(1),
+  aprovado_em: instanteSchema.nullable(),
+  marcado_em: instanteSchema,
+});
+export type PedidoSuspeito = z.infer<typeof pedidoSuspeitoSchema>;
+
+export const respostaPedidosSuspeitosSchema = z.object({
+  /** Da campanha ativa, o mais recente primeiro; no máximo LIMITE_PEDIDOS_SUSPEITOS. */
+  itens: z.array(pedidoSuspeitoSchema).max(LIMITE_PEDIDOS_SUSPEITOS),
+  /** Quantos pedidos da campanha ativa estão marcados (pode passar do tamanho de `itens`). */
+  total: z.number().int().nonnegative(),
+});
+export type RespostaPedidosSuspeitos = z.infer<
+  typeof respostaPedidosSuspeitosSchema
+>;
+
+// ---------------------------------------------------------------------------------------------------
+// GET /api/admin/auditoria (RIFA-013b, só admin): quem mudou o quê na campanha, nos vínculos, na
+// hierarquia (importação) e nos acessos. Paginação por cursor: do mais novo para o mais antigo.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Ações registradas (a lista cresce sem mudar o formato):
+ * - campanha.salvar: PUT /api/admin/campanha (criação ou troca da configuração, inclusive do slug);
+ * - afiliado.salvar: PUT /api/admin/afiliados/:affiliateId (vínculo, troca ou desvínculo de célula);
+ * - hierarquia.importar: POST /api/admin/hierarquia/importar quando aplica (não na simulação);
+ * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos.
+ */
+export const ACOES_AUDITORIA = [
+  "campanha.salvar",
+  "afiliado.salvar",
+  "hierarquia.importar",
+  "usuario.criar",
+  "usuario.ativar",
+  "usuario.desativar",
+  "link.criar",
+  "link.revogar",
+] as const;
+export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
+
+/** Itens por página: padrão e máximo. */
+export const PAGINA_AUDITORIA_PADRAO = 50;
+export const PAGINA_AUDITORIA_MAXIMA = 200;
+
+export const consultaAuditoriaSchema = z.object({
+  limite: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PAGINA_AUDITORIA_MAXIMA)
+    .default(PAGINA_AUDITORIA_PADRAO),
+  /** Cursor: só registros com id menor que este (o `proximo` da página anterior). */
+  antes_de: z.coerce.number().int().positive().optional(),
+});
+export type ConsultaAuditoria = z.output<typeof consultaAuditoriaSchema>;
+
+export const registroAuditoriaSchema = z.object({
+  id: idSchema,
+  em: instanteSchema,
+  /** Quem fez: o usuário da sessão. */
+  usuario_id: idSchema,
+  usuario_nome: z.string().min(1).max(120),
+  acao: z.enum(ACOES_AUDITORIA),
+  /** `<tipo>:<id>` ou só `<tipo>`: "campanha:1", "afiliado:1042", "hierarquia", "usuario:3", "link:12". */
+  alvo: z.string().min(1).max(64),
+  /** O que mudou, sem dados pessoais: nunca nome, e-mail ou telefone de ninguém (só ids e configuração). */
+  resumo: z.string().min(1).max(1000),
+});
+export type RegistroAuditoria = z.infer<typeof registroAuditoriaSchema>;
+
+export const respostaAuditoriaSchema = z.object({
+  itens: z.array(registroAuditoriaSchema),
+  /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
+  proximo: idSchema.nullable(),
+});
+export type RespostaAuditoria = z.infer<typeof respostaAuditoriaSchema>;
 
 // ---------------------------------------------------------------------------------------------------
 // Painel, rankings, visão pública e bumbo (RIFA-008). As respostas saem das funções `montar*` de
@@ -784,6 +910,11 @@ export interface DefinicaoRota {
     readonly status: 200 | 201 | 204;
     readonly corpo: z.ZodType | null;
   };
+  /**
+   * Papéis aceitos quando a rota é mais restrita que o grupo (ex.: `["admin"]` na auditoria). Ausente =
+   * os do grupo (`coordenacao`: admin e coordenacao). Mesmo campo de `ROTAS_ACESSO` (acesso.ts).
+   */
+  readonly papeis?: readonly Papel[] | null;
 }
 
 export const ROTAS = {
@@ -970,6 +1101,22 @@ export const ROTAS = {
     grupo: "coordenacao",
     situacao: "detalhada",
     sucesso: { status: 200, corpo: respostaAdesaoSchema },
+  },
+  pedidosSuspeitos: {
+    metodo: "GET",
+    caminho: "/api/admin/pedidos/suspeitos",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaPedidosSuspeitosSchema },
+  },
+  auditoria: {
+    metodo: "GET",
+    caminho: "/api/admin/auditoria",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    consulta: consultaAuditoriaSchema,
+    sucesso: { status: 200, corpo: respostaAuditoriaSchema },
   },
   painelResumo: {
     metodo: "GET",

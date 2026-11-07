@@ -10,7 +10,9 @@ import {
   type RespostaWebhookRifei,
   type StatusPedido,
 } from "../../shared/contracts";
+import { avaliarPlausibilidade, type Suspeita } from "../lib/plausibilidade";
 import { prepararRegistroAfiliadoOrfao } from "./afiliados";
+import { prepararMarcacaoSuspeito } from "./pedidos-suspeitos";
 import { prepararRegistroEventoSePedidoIgual } from "./webhook-eventos";
 
 /**
@@ -205,8 +207,30 @@ function registrarTrocaDeAfiliado(
   });
 }
 
+/**
+ * Pedido implausível também vai para o log, para aparecer no Workers Logs. Só ids e os códigos dos
+ * motivos, nenhum dado pessoal (D1).
+ */
+function registrarPedidoImplausivel(
+  payload: PayloadRifeiRedigido,
+  suspeita: Suspeita,
+  eventoId: number,
+): void {
+  console.warn({
+    aviso: "pedido_implausivel",
+    mensagem:
+      "webhook Rifei: pedido aprovado fora do esperado; continua contando e foi marcado para revisão",
+    evento_id: eventoId,
+    pedido_id: payload.id,
+    affiliate_id: payload.affiliate_id,
+    motivos: suspeita.motivos.map((motivo) => motivo.codigo),
+  });
+}
+
 interface EventoDoPedido {
   campanhaId: number;
+  /** Preço do bilhete da campanha ativa: a base da plausibilidade do pedido aprovado (RIFA-013b). */
+  precoBilheteCentavos: number;
   /** Payload já redigido (D1) e da campanha ativa (D5). */
   payload: PayloadRifeiRedigido;
   /** Diferenças do payload em relação à doc (analisarPayloadRifei). */
@@ -221,10 +245,20 @@ interface EventoDoPedido {
  * lido": status e afiliado), então o resultado gravado é sempre o da escrita que de fato aconteceu. Se
  * outra entrega do mesmo pedido gravou no meio do caminho, nada é gravado (o INSERT do evento não
  * devolve id) e a decisão é refeita: duas entregas simultâneas do mesmo evento dão processado + duplicado.
+ *
+ * Plausibilidade (RIFA-013b, lib/plausibilidade.ts): o evento que APROVA um pedido implausível leva os
+ * motivos nos avisos e, no mesmo lote, marca o pedido em pedidos_suspeitos. O pedido é gravado e conta
+ * nas vendas como qualquer outro (tirar das vendas é decisão do PO).
  */
 export async function processarEventoPedido(
   db: D1Database,
-  { campanhaId, payload, avisos, recebidoEm }: EventoDoPedido,
+  {
+    campanhaId,
+    precoBilheteCentavos,
+    payload,
+    avisos,
+    recebidoEm,
+  }: EventoDoPedido,
 ): Promise<RespostaWebhookRifei> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     const atual = await buscarPedidoAtual(db, payload.id);
@@ -240,6 +274,20 @@ export async function processarEventoPedido(
       payload.affiliate_id !== null &&
       payload.affiliate_id !== atual.affiliate_id &&
       (processado || atual.affiliate_id === null);
+    // Só o evento que aprova o pedido é avaliado (aprovado é terminal, D4: não há outra aprovação).
+    const suspeita =
+      processado && decisao.status_resultante === "approved"
+        ? avaliarPlausibilidade({
+            qtdBilhetes: payload.numbers_count,
+            totalCentavos: reaisParaCentavos(payload.total),
+            precoBilheteCentavos,
+          })
+        : null;
+    const avisosDoEvento: AvisoPayloadRifei[] = [
+      ...avisos,
+      ...(trocaAfiliado ? [AVISO_AFILIADO_ALTERADO] : []),
+      ...(suspeita?.motivos ?? []),
+    ];
 
     const comandos: D1PreparedStatement[] = [];
     if (payload.affiliate_id !== null) {
@@ -261,9 +309,7 @@ export async function processarEventoPedido(
             status_resultante: decisao.status_resultante,
             payload_redigido: payload,
             erro: null,
-            avisos: avisosParaGravar(
-              trocaAfiliado ? [...avisos, AVISO_AFILIADO_ALTERADO] : avisos,
-            ),
+            avisos: avisosParaGravar(avisosDoEvento),
           },
           atual?.affiliate_id ?? null,
         ),
@@ -278,6 +324,19 @@ export async function processarEventoPedido(
           recebidoEm,
         }),
       );
+      // Depois da gravação (a marcação aponta para o pedido) e só se ela aconteceu (mesmo lote).
+      if (suspeita) {
+        comandos.push(
+          prepararMarcacaoSuspeito(db, {
+            pedidoId: payload.id,
+            qtdBilhetes: payload.numbers_count,
+            totalCentavos: reaisParaCentavos(payload.total),
+            esperadoCentavos: suspeita.esperadoCentavos,
+            motivos: suspeita.motivos,
+            marcadoEm: recebidoEm,
+          }),
+        );
+      }
     } else if (trocaAfiliado) {
       comandos.push(
         prepararAfiliadoTardio(db, payload, atual.status, recebidoEm),
@@ -288,6 +347,7 @@ export async function processarEventoPedido(
     const eventoId = resultados[posicaoEvento]?.results[0]?.id;
     if (eventoId !== undefined) {
       if (trocaAfiliado) registrarTrocaDeAfiliado(atual, payload, eventoId);
+      if (suspeita) registrarPedidoImplausivel(payload, suspeita, eventoId);
       return { resultado: decisao.resultado, evento_id: eventoId };
     }
   }

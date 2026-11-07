@@ -38,8 +38,14 @@ import {
 import { arquivoGrandeDemais, arquivoVazio, type FalhaCsv } from "../lib/csv";
 import { mensagemDeCampo } from "../lib/mensagens-validacao";
 import { responderErro } from "../lib/respostas-erro";
+import {
+  LIMITE_CORPO_IMPORTACAO_HIERARQUIA_BYTES,
+  limitarCorpo,
+} from "../middleware/limite-corpo";
+import { autoriaDaSessao, type AmbienteSessao } from "../middleware/sessao";
 
-type Ambiente = { Bindings: Cloudflare.Env };
+// Montado atrás do login: `c.var.usuario` é quem importa (trilha de auditoria, RIFA-013b).
+type Ambiente = AmbienteSessao;
 
 /** Onde o index.ts monta este sub-app. */
 export const PREFIXO_HIERARQUIA = "/api/admin";
@@ -297,13 +303,29 @@ hierarquia.delete(
 // Importação da planilha
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * Teto próprio do corpo da importação (RIFA-013b), lido antes do JSON: acima dele, só um `csv` maior que
+ * o limite de caracteres caberia, então a resposta é a mesma do arquivo grande (400 `csv_invalido`).
+ */
+const limitarCorpoDaImportacao = limitarCorpo(
+  LIMITE_CORPO_IMPORTACAO_HIERARQUIA_BYTES,
+  (c) => {
+    const falha = arquivoGrandeDemais(LIMITE_CARACTERES_CSV_HIERARQUIA);
+    return responderErro(c, "csv_invalido", falha.mensagem, falha.detalhes);
+  },
+);
+
 hierarquia.post(
   local(ROTAS.importarHierarquia.caminho),
+  limitarCorpoDaImportacao,
   exigirJson,
   validar("json", ROTAS.importarHierarquia.corpo, problemaDoCsv),
   async (c) => {
     const { csv, simular } = c.req.valid("json");
-    return responder(c, await importarHierarquia(c.env.DB, csv, simular));
+    return responder(
+      c,
+      await importarHierarquia(c.env.DB, csv, simular, autoriaDaSessao(c)),
+    );
   },
 );
 

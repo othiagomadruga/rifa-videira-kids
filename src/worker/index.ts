@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { ROTAS, ROTAS_ACESSO } from "../shared/contracts";
+import { LIMITE_PUBLICO, limitarRequisicoes } from "./lib/limite-requisicoes";
 import { erroNaoTratado, rotaInexistente } from "./lib/respostas-erro";
 import { cabecalhosSeguranca } from "./middleware/cabecalhos-seguranca";
+import { limitarCorpoDaCoordenacao } from "./middleware/limite-corpo";
 import { exigirSessao } from "./middleware/sessao";
 import { sessao } from "./routes/acesso";
 import { adminUsuarios } from "./routes/admin-usuarios";
@@ -9,10 +11,15 @@ import {
   PREFIXO_AFILIADOS_ADESAO,
   afiliadosAdesao,
 } from "./routes/afiliados-adesao";
+import { PREFIXO_AUDITORIA, auditoria } from "./routes/auditoria";
 import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
+import {
+  PREFIXO_PEDIDOS_SUSPEITOS,
+  pedidosSuspeitos,
+} from "./routes/pedidos-suspeitos";
 import { PREFIXO_PUBLICO, publico } from "./routes/publico";
 import { webhookRifei } from "./routes/webhook-rifei";
 
@@ -29,7 +36,8 @@ const app = new Hono<{ Bindings: Cloudflare.Env }>();
 // 1. Cabeçalhos de segurança em toda resposta da API, inclusive 401, 403, 404 e 500.
 app.use("*", cabecalhosSeguranca);
 
-// 2. Aberta.
+// 2. Aberta. Cada chamada lê o D1: conta no limite por IP das rotas abertas (RIFA-013b).
+app.use(ROTAS.health.caminho, limitarRequisicoes(LIMITE_PUBLICO));
 app.route(ROTAS.health.caminho, health);
 
 // 3. Sessão da equipe (RIFA-007): POST abre a sessão com o link pessoal, GET diz quem está
@@ -40,9 +48,15 @@ app.route(ROTAS_ACESSO.entrar.caminho, sessao);
 // exista a rota ou não. Papéis escritos aqui de propósito: um papel novo não ganha acesso sozinho.
 app.use("/api/admin/*", exigirSessao(["admin", "coordenacao"]));
 app.use("/api/painel/*", exigirSessao(["admin", "coordenacao"]));
+// 4b. Teto do corpo das escritas da coordenação (RIFA-013b), DEPOIS do login: sem sessão, o corpo nem é
+// lido. As importações de CSV conferem o teto delas na própria rota (middleware/limite-corpo.ts).
+app.use("/api/admin/*", limitarCorpoDaCoordenacao);
+app.use("/api/painel/*", limitarCorpoDaCoordenacao);
 
 // 5. Usuários e links: só admin (o sub-app também exige, em /usuarios/* e /links/*).
 app.route("/api/admin", adminUsuarios);
+// Trilha de auditoria (RIFA-013b): só admin (o sub-app também exige).
+app.route(PREFIXO_AUDITORIA, auditoria);
 
 // 6. Demais rotas.
 // Webhook da Rifei: público, autenticado só pelo Bearer (D6), fora da sessão. Declara os próprios
@@ -52,6 +66,8 @@ app.route("/", webhookRifei);
 app.route(PREFIXO_HIERARQUIA, hierarquia);
 // Campanha (RIFA-004): GET/PUT da configuração sob /api/admin, protegidos pelo passo 4.
 app.route(PREFIXO_CAMPANHA, campanha);
+// Pedidos que o webhook marcou como implausíveis (RIFA-013b): sob /api/admin, protegidos pelo passo 4.
+app.route(PREFIXO_PEDIDOS_SUSPEITOS, pedidosSuspeitos);
 // Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
 // Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.

@@ -7,6 +7,10 @@
   "observability": {
     "enabled": true,
   },
+  // Sem as preview URLs (<versão>-rifa-videira-kids.<subdomínio>.workers.dev): cada versão antiga ficaria
+  // no ar com o D1 e os segredos de produção, inclusive com um defeito já corrigido. O site continua no
+  // workers.dev (workers_dev é o padrão sem rotas). Decisão D11 em docs/decisions.md.
+  "preview_urls": false,
   // Site React servido pelo mesmo Worker (Workers Static Assets). O diretório dos
   // assets (dist/client) é definido pelo @cloudflare/vite-plugin no build.
   "assets": {
@@ -24,6 +28,23 @@
       // Em desenvolvimento e nos testes o banco é local e este valor não é usado.
       "database_id": "256a7113-3b0d-4ae9-af73-45c2d279a9c7",
       "migrations_dir": "migrations",
+    },
+  ],
+  // Limite de requisições por IP (RIFA-013b; src/worker/lib/limite-requisicoes.ts, que tem as mesmas
+  // regras). Conta por data center da Cloudflare; o período só pode ser 10 ou 60 s. Os namespace_id são
+  // números escolhidos por nós, únicos na conta. Declarados também em src/worker/worker-env.d.ts.
+  "ratelimits": [
+    {
+      // Idas ao banco das rotas abertas (/api/publico/* e /api/health): respostas do cache não contam.
+      "name": "LIMITE_PUBLICO",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 },
+    },
+    {
+      // Tentativas de login (POST /api/sessao).
+      "name": "LIMITE_LOGIN",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 },
     },
   ],
 }

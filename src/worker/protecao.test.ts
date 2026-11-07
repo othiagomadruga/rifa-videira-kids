@@ -32,9 +32,11 @@ import {
   erroApiSchema,
   hojeNoFuso,
   respostaAdesaoSchema,
+  respostaAuditoriaSchema,
   respostaBumboSchema,
   respostaListaAfiliadosSchema,
   respostaPainelResumoSchema,
+  respostaPedidosSuspeitosSchema,
   respostaRankingPublicoSchema,
   respostaRankingSchema,
   respostaWebhookRifeiSchema,
@@ -85,14 +87,18 @@ interface RotaDaCoordenacao {
   papeis: readonly Papel[];
 }
 
-/** Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao) e ROTAS_ACESSO (papéis da própria rota). */
+/**
+ * Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao, ou os `papeis` da rota quando ela é mais
+ * restrita, como a auditoria) e ROTAS_ACESSO (papéis da própria rota).
+ */
 const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
   ...Object.values(ROTAS)
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
       metodo: rota.metodo,
       caminho: rota.caminho,
-      papeis: ["admin", "coordenacao"] as const,
+      papeis:
+        "papeis" in rota ? rota.papeis : (["admin", "coordenacao"] as const),
     })),
   ...Object.values(ROTAS_ACESSO)
     .filter((rota) => rota.grupo === "coordenacao")
@@ -901,6 +907,129 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
   });
 });
 
+describe("f) RIFA-013b: pedidos suspeitos e auditoria atrás do login, teto do corpo depois dele", () => {
+  it("as duas rotas novas estão no contrato e registradas no app (a auditoria, só para admin)", () => {
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    for (const rota of [ROTAS.pedidosSuspeitos, ROTAS.auditoria])
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    expect(ROTAS.auditoria.papeis).toEqual(["admin"]);
+    expect("papeis" in ROTAS.pedidosSuspeitos).toBe(false);
+  });
+
+  it("pedidos suspeitos: 401 sem cookie; com sessão, a lista sai sem nenhum dado do comprador", async () => {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE campanhas SET ativa = 0 WHERE ativa = 1"),
+      env.DB.prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
+           meta_unidade, meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha da protecao', 'protecao-suspeitos', 1, '2026-11-23', 2000, 'bilhetes',
+           'por_pessoa', 10, 'percentual_meta')`,
+      ),
+    ]);
+    // Implausível: 500 bilhetes (acima do teto) por R$ 10,00 (bem abaixo de 500 × R$ 20,00).
+    const pedido = {
+      ...paidOrderAfiliado,
+      id: "PROTECAO-SUSPEITO-1",
+      slug: "protecao-suspeitos",
+      numbers_count: 500,
+      numbers: null,
+      total: 10,
+    };
+    const entrega = await exports.default.fetch(
+      `${ORIGEM}/api/webhooks/rifei`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.RIFEI_WEBHOOK_TOKEN}`,
+        },
+        body: JSON.stringify(pedido),
+      },
+    );
+    expect(await entrega.json()).toMatchObject({ resultado: "processado" });
+
+    await esperarErro(
+      await requisitar("GET", ROTAS.pedidosSuspeitos.caminho),
+      401,
+      "nao_autenticado",
+    );
+    const res = await requisitar(
+      "GET",
+      ROTAS.pedidosSuspeitos.caminho,
+      coordenacao,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const texto = await res.text();
+    const corpo = respostaPedidosSuspeitosSchema.parse(JSON.parse(texto));
+    expect(corpo.itens.map((item) => item.pedido_id)).toEqual([pedido.id]);
+    const { buyer } = paidOrderAfiliado;
+    for (const valor of [buyer.name, buyer.email, buyer.document, "900000001"])
+      expect(texto).not.toContain(valor);
+    expect(
+      [...camposDe(JSON.parse(texto))].filter((campo) =>
+        /ddd|pais|utm|numer|buyer|comprador|email|telefone|phone/.test(campo),
+      ),
+    ).toEqual([]);
+  });
+
+  it("auditoria: 401 sem cookie, 403 para a coordenação; o admin vê quem fez a ação", async () => {
+    const vinculo = await requisitar(
+      "PUT",
+      "/api/admin/afiliados/737373",
+      coordenacao,
+      JSON.stringify({ celula_id: null }),
+    );
+    expect(vinculo.status).toBe(200);
+
+    await esperarErro(
+      await requisitar("GET", ROTAS.auditoria.caminho),
+      401,
+      "nao_autenticado",
+    );
+    await esperarErro(
+      await requisitar("GET", ROTAS.auditoria.caminho, coordenacao),
+      403,
+      "proibido",
+    );
+    const res = await requisitar("GET", ROTAS.auditoria.caminho, admin);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const { usuario } = (await (
+      await requisitar("GET", "/api/sessao", coordenacao)
+    ).json()) as { usuario: { id: number } };
+    expect(
+      respostaAuditoriaSchema.parse(await res.json()).itens,
+    ).toContainEqual(
+      expect.objectContaining({
+        usuario_id: usuario.id,
+        acao: "afiliado.salvar",
+        alvo: "afiliado:737373",
+      }),
+    );
+  });
+
+  it("teto do corpo da coordenação: sem sessão, 401 (o login vem antes); com sessão, 413", async () => {
+    const grande = JSON.stringify({
+      nome: "x".repeat(2 * 1024 * 1024),
+      divisao: "jovens",
+    });
+
+    await esperarErro(
+      await requisitar("POST", "/api/admin/redes", { Origin: ORIGEM }, grande),
+      401,
+      "nao_autenticado",
+    );
+    await esperarErro(
+      await requisitar("POST", "/api/admin/redes", admin, grande),
+      413,
+      "corpo_muito_grande",
+    );
+  });
+});
+
 describe("formato único de erro em todas as partes montadas", () => {
   it.each<
     [
@@ -946,6 +1075,24 @@ describe("formato único de erro em todas as partes montadas", () => {
       "/api/sessao",
       "{}",
       { Origin: ORIGEM },
+      400,
+      "requisicao_invalida",
+    ],
+    [
+      "sessão: corpo acima de 4 KiB (RIFA-013b)",
+      "POST",
+      "/api/sessao",
+      JSON.stringify({ token: "x".repeat(5000) }),
+      { Origin: ORIGEM },
+      413,
+      "corpo_muito_grande",
+    ],
+    [
+      "auditoria: consulta inválida (RIFA-013b)",
+      "GET",
+      "/api/admin/auditoria?limite=0",
+      undefined,
+      {},
       400,
       "requisicao_invalida",
     ],

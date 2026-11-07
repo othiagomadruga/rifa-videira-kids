@@ -149,6 +149,7 @@ async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
 
   const resposta = await processarEventoPedido(db, {
     campanhaId: campanha.id,
+    precoBilheteCentavos: campanha.preco_bilhete_centavos,
     payload,
     avisos: analise.avisos,
     recebidoEm,

@@ -77,6 +77,9 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/admin/afiliados",
         "PUT /api/admin/afiliados/:affiliateId",
         "GET /api/admin/adesao",
+        // Sprint 4 (RIFA-013b): pedidos marcados pelo webhook e trilha de auditoria.
+        "GET /api/admin/pedidos/suspeitos",
+        "GET /api/admin/auditoria",
         "GET /api/painel/resumo",
         "GET /api/painel/ranking",
         "GET /api/publico/ranking",

@@ -9,18 +9,22 @@
  *   Content-Type JSON) ou `requisicao_invalida` (fora do schema, com os problemas em `detalhes`);
  *   409 `nome_duplicado` (slug de outra campanha). O primeiro PUT cria a campanha já ativa; os
  *   seguintes substituem a configuração dela, numa transação. É a partir daí que o webhook passa a
- *   contar as vendas da Rifei com esse `slug_rifei` (D5).
+ *   contar as vendas da Rifei com esse `slug_rifei` (D5). Cada PUT gravado deixa na trilha de auditoria
+ *   quem salvou e o que mudou (RIFA-013b; inclusive o slug antes e depois), na mesma transação.
  */
 import { Hono } from "hono";
 import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
 import {
   buscarCampanhaAtiva,
   montarCampanha,
+  resumirMudancaDaCampanha,
   salvarCampanhaAtiva,
 } from "../db/campanha";
 import { responderErro } from "../lib/respostas-erro";
+import { autoriaDaSessao, type AmbienteSessao } from "../middleware/sessao";
 
-type Ambiente = { Bindings: Cloudflare.Env };
+// Montado atrás do login: `c.var.usuario` é quem salva (trilha de auditoria, RIFA-013b).
+type Ambiente = AmbienteSessao;
 
 /** Onde o index.ts monta este sub-app. */
 export const PREFIXO_CAMPANHA = "/api/admin";
@@ -73,7 +77,20 @@ campanha.put(CAMINHO, async (c) => {
       detalhesDeValidacao(validacao.error),
     );
   }
-  const resultado = await salvarCampanhaAtiva(c.env.DB, validacao.data);
+  // Auditoria (RIFA-013b): o antes vem da mesma leitura do GET; o registro vai no lote da gravação.
+  const autoria = autoriaDaSessao(c);
+  const auditoria = autoria && {
+    ...autoria,
+    resumo: resumirMudancaDaCampanha(
+      await buscarCampanhaAtiva(c.env.DB),
+      validacao.data,
+    ),
+  };
+  const resultado = await salvarCampanhaAtiva(
+    c.env.DB,
+    validacao.data,
+    auditoria,
+  );
   return resultado.ok
     ? c.json(resultado.campanha, 200)
     : responderErro(

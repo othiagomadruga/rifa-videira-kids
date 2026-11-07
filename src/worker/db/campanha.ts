@@ -12,6 +12,7 @@
 //   falha, nada muda.
 // - As datas dos períodos, a data final e a soma dos percentuais saem do contrato
 //   (src/shared/contracts/calendario.ts), o mesmo código que a tela usa.
+// - Auditoria (RIFA-013b): quem salvou e o que mudou vão no mesmo db.batch (resumirMudancaDaCampanha).
 import type { z } from "zod";
 import {
   calcularCalendario,
@@ -21,6 +22,7 @@ import {
   type DetalheValidacao,
   type corpoSalvarCampanhaSchema,
 } from "../../shared/contracts";
+import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 
 /** Corpo do PUT depois da validação (com os padrões de fuso_horario e publico já aplicados). */
 export type DadosCampanha = z.output<typeof corpoSalvarCampanhaSchema>;
@@ -126,10 +128,63 @@ export async function buscarCampanhaAtiva(
   );
 }
 
-/** Cria a campanha ativa ou substitui a configuração dela, numa transação só. */
+/**
+ * O que um PUT muda, para a trilha de auditoria (sem dados pessoais: a campanha é só configuração). O slug
+ * e o preço saem com o antes e o depois: o slug decide quais vendas contam (D5) e o preço é a base da
+ * plausibilidade do webhook; os demais campos saem só pelo nome.
+ */
+export function resumirMudancaDaCampanha(
+  antes: CampanhaAtiva | null,
+  depois: DadosCampanha,
+): string {
+  if (antes === null)
+    return `Campanha criada: slug_rifei ${JSON.stringify(depois.slug_rifei)}, preco_bilhete_centavos ${depois.preco_bilhete_centavos}`;
+  const alterados: string[] = [];
+  if (antes.nome !== depois.nome) alterados.push("nome");
+  if (antes.slug_rifei !== depois.slug_rifei)
+    alterados.push(
+      `slug_rifei (${JSON.stringify(antes.slug_rifei)} → ${JSON.stringify(depois.slug_rifei)})`,
+    );
+  if (antes.fuso_horario !== depois.fuso_horario)
+    alterados.push("fuso_horario");
+  if (antes.data_inicio !== depois.data_inicio) alterados.push("data_inicio");
+  if (antes.preco_bilhete_centavos !== depois.preco_bilhete_centavos)
+    alterados.push(
+      `preco_bilhete_centavos (${antes.preco_bilhete_centavos} → ${depois.preco_bilhete_centavos})`,
+    );
+  if (
+    antes.meta_unidade !== depois.meta.unidade ||
+    antes.meta_regra !== depois.meta.regra ||
+    antes.meta_valor !== depois.meta.valor
+  )
+    alterados.push("meta");
+  const periodos = (lista: readonly Omit<PeriodoGravado, "ordem">[]) =>
+    JSON.stringify(
+      lista.map(({ nome, dias, percentual_bp }) => [nome, dias, percentual_bp]),
+    );
+  if (periodos(antes.periodos) !== periodos(depois.periodos))
+    alterados.push("periodos");
+  if (antes.ranking_criterio !== depois.ranking.criterio)
+    alterados.push("ranking");
+  if (
+    (antes.publico_mostra_percentual_meta === 1) !==
+      depois.publico.mostra_percentual_meta ||
+    antes.publico_limite_ranking !== depois.publico.limite_ranking
+  )
+    alterados.push("publico");
+  return alterados.length === 0
+    ? "Configuração salva sem mudanças"
+    : `Alterado: ${alterados.join(", ")}`;
+}
+
+/**
+ * Cria a campanha ativa ou substitui a configuração dela, numa transação só. Com `auditoria`, o registro
+ * (quem e o resumo) vai no mesmo lote: se a gravação falha, ele também não fica.
+ */
 export async function salvarCampanhaAtiva(
   db: D1Database,
   dados: DadosCampanha,
+  auditoria?: Autoria & { resumo: string },
 ): Promise<ResultadoSalvarCampanha> {
   const gravacao = [
     db
@@ -159,6 +214,16 @@ export async function salvarCampanhaAtiva(
         .bind(indice + 1, periodo.nome, periodo.dias, periodo.percentual_bp),
     ),
   ];
+
+  if (auditoria)
+    gravacao.push(
+      prepararRegistroAuditoria(db, {
+        ...auditoria,
+        acao: "campanha.salvar",
+        // O id da campanha ativa já gravada (no primeiro PUT, ele nasce neste lote).
+        alvo: { tipo: "campanha", idSql: ID_DA_ATIVA },
+      }),
+    );
 
   let resultados: D1Result[];
   try {

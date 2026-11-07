@@ -15,6 +15,7 @@ import {
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { buscarUsuarioDaSessao } from "../db/acessos";
+import type { Autoria } from "../db/auditoria";
 import { FORMATO_SEGREDO, sha256Hex } from "../lib/cripto";
 import { responderErro } from "../lib/respostas-erro";
 
@@ -25,6 +26,21 @@ export const COOKIE_SESSAO = NOME_COOKIE_SESSAO;
 export interface AmbienteSessao {
   Bindings: Cloudflare.Env;
   Variables: { usuario: UsuarioSessao };
+}
+
+/**
+ * Quem faz a escrita, para a trilha de auditoria (RIFA-013b): o usuário que exigirSessao pôs em
+ * `c.var.usuario`, e o instante. undefined sem sessão, o que só acontece com o sub-app montado sem o login
+ * (testes de unidade de uma rota): no app real (index.ts), toda rota da coordenação passa pelo login antes.
+ */
+export function autoriaDaSessao(
+  c: Context,
+  agora: Date = new Date(),
+): Autoria | undefined {
+  const usuario = c.get("usuario") as UsuarioSessao | undefined;
+  return usuario === undefined
+    ? undefined
+    : { usuarioId: usuario.id, em: agora.toISOString() };
 }
 
 const OPCOES_COOKIE = {

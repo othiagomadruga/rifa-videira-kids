@@ -18,7 +18,7 @@ A coordenação (Fábio, Felipe, pastor, gestor do bumbo) entra pelo celular, a 
 
 | Papel | Acesso |
 |---|---|
-| `admin` | tudo de `coordenacao` e também usuários e links (`/api/admin/usuarios`, `/api/admin/links`) |
+| `admin` | tudo de `coordenacao` e também usuários e links (`/api/admin/usuarios`, `/api/admin/links`) e a trilha de auditoria (`GET /api/admin/auditoria`, RIFA-013b) |
 | `coordenacao` | `/api/admin/*` e `/api/painel/*` (campanha, hierarquia, vínculos, painel), menos usuários e links |
 
 ## 3. Rotas
@@ -27,7 +27,7 @@ Erros no formato único (`docs/api.md`, seção "Erros").
 
 | Rota | Quem | Sucesso | Erros |
 |---|---|---|---|
-| `POST /api/sessao` `{ token }` | aberto (mesma origem) | **200** `{ usuario: { id, nome, papel } }` + `Set-Cookie` | 401 `nao_autenticado` (link inexistente, fora do formato, expirado, revogado ou de usuário inativo); 400 `requisicao_invalida` (sem `token`); 400 `json_invalido`; 403 `proibido` (outra origem) |
+| `POST /api/sessao` `{ token }` | aberto (mesma origem) | **200** `{ usuario: { id, nome, papel } }` + `Set-Cookie` | 401 `nao_autenticado` (link inexistente, fora do formato, expirado, revogado ou de usuário inativo); 400 `requisicao_invalida` (sem `token`); 400 `json_invalido`; 403 `proibido` (outra origem); 413 `corpo_muito_grande` (corpo acima de 4 KiB, recusado antes de ler o JSON); 429 `muitas_requisicoes` (mais de 10 tentativas por minuto do mesmo IP, com `Retry-After`) |
 | `GET /api/sessao` | sessão de qualquer papel | **200** `{ usuario }` | 401 |
 | `POST /api/sessao/sair` | aberto (mesma origem) | **204**, apaga a sessão e expira o cookie (também sem sessão) | 403 (outra origem) |
 | `POST /api/admin/usuarios` `{ nome, email?, papel }` | admin | **201** `{ usuario, link }`: `link.url` só aparece aqui | 400, 401, 403 |
@@ -74,9 +74,11 @@ Usuário na administração (`usuarioSchema`):
   - No site, vêm do `public/_headers`: o Vite copia para `dist/client`, e o Workers Static Assets aplica nas páginas (inclusive no fallback de SPA, como `/acesso/<token>`) e não serve o arquivo. Conferido com `npm run preview`.
   - Na API, vêm do middleware `cabecalhosSeguranca`, porque o `_headers` não vale para respostas do Worker. Um teste confere que as duas listas são iguais.
   - `no-referrer` também impede que a URL `/acesso/<token>` vá para outro site no `Referer`.
-- **Sessão**: vale até o **menor** entre login + 45 dias e o `expira_em` do link que a abriu. Nenhuma sessão dura mais que o link: um link criado há 40 dias dá sessões de no máximo 5 dias. Não renova sozinha. Entrar de novo no mesmo navegador encerra a sessão anterior dele. A cada login, as sessões vencidas são apagadas. O `ultimo_uso_em` é regravado no máximo uma vez por minuto.
-- **Cookie inválido** (sessão inexistente, vencida ou de usuário desativado): 401, e a resposta expira o cookie.
-- **Sem limite de tentativas**: com 256 bits, adivinhar um token não é viável.
+- **Sessão**: vale até o **menor** entre login + 45 dias e o `expira_em` do link que a abriu. Nenhuma sessão dura mais que o link: um link criado há 40 dias dá sessões de no máximo 5 dias. Não renova sozinha. Entrar de novo no mesmo navegador encerra a sessão anterior dele. A cada login, as sessões vencidas e as paradas são apagadas. O `ultimo_uso_em` é regravado no máximo uma vez por minuto.
+- **Sessão parada** (RIFA-013b): sem uso há **mais de 7 dias** (`INATIVIDADE_MAXIMA_SESSAO_DIAS`, em `src/worker/db/acessos.ts`), a sessão deixa de valer, mesmo dentro dos 45 dias: um cookie esquecido num aparelho emprestado não vale semanas. Exatamente 7 dias ainda vale; como o `ultimo_uso_em` é regravado no máximo uma vez por minuto, o prazo real pode ser até um minuto menor. O link pessoal continua abrindo uma sessão nova, e a administração não conta a sessão parada em `sessoes_ativas`.
+- **Cookie inválido** (sessão inexistente, vencida, parada ou de usuário desativado): 401, e a resposta expira o cookie.
+- **Tentativas de login** (RIFA-013b): no máximo 10 por minuto por IP (binding de Rate Limiting do Workers; `src/worker/lib/limite-requisicoes.ts`), contadas depois da checagem de origem; acima, 429 `muitas_requisicoes`. Com 256 bits, adivinhar um token já não era viável: o limite barra o abuso (cada tentativa lê o D1). O corpo do `POST /api/sessao` passa de 4 KiB? 413, sem ler o resto.
+- **Trilha de auditoria** (RIFA-013b): criar pessoa, gerar link, desativar, reativar e revogar ficam registrados com quem fez (`GET /api/admin/auditoria`, só admin), no mesmo lote da ação e sem o nome nem o e-mail da pessoa no resumo.
 
 ### O que o site (front) deve fazer
 
@@ -124,8 +126,8 @@ O Hono roda middlewares e rotas na ordem em que foram registrados. Um middleware
 
 1. `cabecalhosSeguranca` em primeiro lugar, logo depois de `new Hono()`: vale para toda resposta, inclusive 401, 403, 404 e 500;
 2. as rotas de sessão, abertas;
-3. `exigirSessao` em `/api/admin/*` e `/api/painel/*`, **antes** de qualquer rota desses prefixos (hierarquia, campanha, painel...);
-4. as rotas de usuários e links.
+3. `exigirSessao` em `/api/admin/*` e `/api/painel/*`, **antes** de qualquer rota desses prefixos (hierarquia, campanha, painel...), e logo depois dele o teto do corpo das escritas (`limitarCorpoDaCoordenacao`, RIFA-013b): sem sessão, o corpo nem é lido;
+4. as rotas de usuários e links, e a trilha de auditoria (só admin; o sub-app também exige).
 
 ```ts
 import { cabecalhosSeguranca } from "./middleware/cabecalhos-seguranca";
@@ -171,3 +173,7 @@ Instantes em UTC no formato de `0001_init.sql`. Links e sessões caem junto se u
 | `src/worker/test/criar-acesso.test.ts` | o script cria um admin no D1 e o link impresso abre sessão; `--remote`; nomes perigosos recusados; flags com valor (`--remote=false`), opções desconhecidas e `--local` com `--remote` recusados |
 | `src/worker/lib/cripto.test.ts` | formato dos segredos, SHA-256 e equivalência com o script |
 | `src/shared/contracts/acesso.test.ts` | catálogo, papéis e ausência de segredos nas respostas |
+| `src/worker/routes/sessao-ociosa.test.ts` | RIFA-013b: sessão parada há exatamente 7 dias vale e há 7 dias e 1 ms não (401, cookie expirado); o link abre outra; uso a cada 6 dias mantém; a validade de 45 dias continua; a administração não conta a parada e o login a apaga |
+| `src/worker/middleware/limite-corpo.test.ts` | RIFA-013b: 4 KiB no login e 1 MiB na coordenação, antes de ler (pelo `Content-Length` e em partes, com a leitura cortada no limite); bordas exatas; sem sessão, o corpo nem é lido; as importações de CSV com o teto delas |
+| `src/worker/lib/limite-requisicoes.test.ts` e `src/worker/routes/limite-requisicoes.test.ts` | RIFA-013b: chave pelo IP (IPv6 pelo /64); a 11ª tentativa de login do mesmo IP dá 429; outra origem não conta; a 61ª ida ao banco das rotas abertas dá 429 sem ler o banco, e o cache não conta; a janela na memória quando o binding falta |
+| `src/worker/routes/auditoria.test.ts` | RIFA-013b: cada ação registrada com quem fez, alvo e resumo sem dados pessoais; ação recusada não registra; a listagem só para admin, com cursor |

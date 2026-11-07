@@ -7,7 +7,9 @@
  * - GET /api/sessao: quem está conectado (401 sem sessão válida).
  * - POST /api/sessao/sair: encerra a sessão deste navegador e expira o cookie (204, mesmo sem sessão).
  *
- * Os POSTs são abertos (não exigem sessão), mas só da mesma origem do site (CSRF).
+ * Os POSTs são abertos (não exigem sessão), mas só da mesma origem do site (CSRF). No login (RIFA-013b),
+ * depois da origem: o limite de tentativas por IP (429, lib/limite-requisicoes.ts) e o de tamanho do corpo,
+ * conferido ANTES de ler ou validar o JSON (413, middleware/limite-corpo.ts).
  */
 import { Hono, type Context } from "hono";
 import {
@@ -19,7 +21,12 @@ import {
 } from "../../shared/contracts";
 import { apagarSessao, buscarLinkValido, criarSessao } from "../db/acessos";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
+import { LIMITE_LOGIN, limitarRequisicoes } from "../lib/limite-requisicoes";
 import { responderErro } from "../lib/respostas-erro";
+import {
+  LIMITE_CORPO_SESSAO_BYTES,
+  limitarCorpo,
+} from "../middleware/limite-corpo";
 import {
   apagarCookieSessao,
   exigirMesmaOrigem,
@@ -45,6 +52,8 @@ function respostaLinkInvalido(c: Context) {
 sessao.post(
   "/",
   exigirMesmaOrigem,
+  limitarRequisicoes(LIMITE_LOGIN),
+  limitarCorpo(LIMITE_CORPO_SESSAO_BYTES),
   validarJson(corpoCriarSessaoSchema),
   async (c) => {
     c.header("Cache-Control", "no-store");

@@ -1,17 +1,21 @@
-// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql e 0003_vendas_por_dia.sql),
-// aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd.
+// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql e
+// 0005_auditoria.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd.
 import { env } from "cloudflare:workers";
 import { describe, expect, it, onTestFinished } from "vitest";
 
 const TABELAS = [
   "_meta",
   "afiliados",
+  // 0005 (RIFA-013b): trilha de auditoria.
+  "auditoria",
   "campanha_periodos",
   "campanhas",
   "celulas",
   "discipuladores",
   "links_acesso",
   "pedidos",
+  // 0005 (RIFA-013b): pedidos aprovados marcados como implausíveis.
+  "pedidos_suspeitos",
   "redes",
   "sessoes",
   "usuarios",
@@ -88,6 +92,9 @@ describe("migrações: schema do D1", () => {
         "sessoes_por_link",
         "sessoes_por_expiracao",
       ],
+      // 0005 (RIFA-013b).
+      auditoria: ["auditoria_por_usuario"],
+      pedidos_suspeitos: ["pedidos_suspeitos_por_marcacao"],
     };
     for (const [tabela, indices] of Object.entries(esperados)) {
       const { results } = await env.DB.prepare(

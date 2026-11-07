@@ -94,3 +94,43 @@ Registro curto das decisões técnicas (a mais nova no fim). Cada item diz o que
   compartilhado por data center. As rotas da coordenação nunca passam pelo cache (`no-store`).
 - Risco que continua: no fim da campanha a cota Free ainda pode ser atingida (e o Workers Free tem 100 mil
   requisições/dia). Saídas: plano Workers Paid, TTL público maior ou tabela agregada mantida pelo webhook.
+
+## D11. Reforços da auditoria de segurança (RIFA-013b, 2026-11-07)
+
+Itens da auditoria da RIFA-013 que não dependem do PO. Os que dependem (uso único do link, quem troca o slug,
+prazo de guarda dos dados, Workers Paid) continuam como perguntas.
+
+- **Sem preview URLs** (`"preview_urls": false` no `wrangler.jsonc`). Com elas, cada versão publicada fica no ar
+  em `<versão>-rifa-videira-kids.<subdomínio>.workers.dev` com o D1 e os segredos de produção, inclusive versões
+  com defeito já corrigido. O time não usa previews; o site continua no `workers.dev`.
+- **CI**: o `CLOUDFLARE_API_TOKEN` só existe no ambiente do passo "Publicar" (antes, no job `deploy` inteiro, à
+  vista do checkout, do setup-node e dos scripts de instalação do `npm ci`). O passo que confere se o segredo
+  existe recebe só `true`/`false`. As actions vão fixadas pelo SHA do commit, com a tag no comentário
+  (`actions/checkout` v7.0.1 e `actions/setup-node` v7.1.0): uma tag pode ser movida, o SHA não. Para atualizar,
+  troque os dois juntos (`git ls-remote --tags https://github.com/actions/<action>`).
+- **Limite do corpo antes de ler** (`src/worker/middleware/limite-corpo.ts`, com o leitor do webhook): 4 KiB no
+  `POST /api/sessao` e 1 MiB nos POST/PUT/PATCH da coordenação, depois do login (sem sessão, o corpo nem é lido);
+  acima, 413 `corpo_muito_grande`. As importações de CSV têm o teto delas na própria rota: a da hierarquia
+  (3 × o limite de caracteres + 1 MB, respondendo como arquivo grande) e a conferência da RIFA-012, sob
+  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela.
+- **Sessão parada há mais de 7 dias** deixa de valer, mesmo dentro dos 45 dias (`ultimo_uso_em`, já gravado no
+  máximo uma vez por minuto). O link pessoal continua abrindo uma sessão nova; a administração não conta a sessão
+  parada como ativa, e cada login a apaga.
+- **Limite de requisições por IP** com o binding de Rate Limiting do Workers (`ratelimits` no `wrangler.jsonc`;
+  funciona no workerd local e nos testes): 10 por minuto no `POST /api/sessao` (toda tentativa) e 60 por minuto
+  nas idas ao banco das rotas abertas (`/api/publico/*` e `/api/health`). A resposta que sai do cache de 30 s não conta: muita gente atrás do mesmo
+  IP (o Wi-Fi da igreja, a operadora do celular) abre o ranking sem esbarrar no limite. Chave: o
+  `CF-Connecting-IP` (IPv6 pelo /64); sem ele (só nos testes), sem limite. Acima: 429 `muitas_requisicoes` com
+  `Retry-After`. O binding conta por data center e é "permissivo": serve contra abuso, não como conta exata. Sem
+  o binding, cai para uma janela na memória do isolate (vale só dentro dele). O limite não protege a cota diária
+  de requisições do Workers (o 429 também é uma invocação): para isso, só o plano pago.
+- **Plausibilidade no webhook, sem perder venda**: o evento que aprova um pedido com mais de 200 bilhetes, ou com
+  total acima de bilhetes × preço do bilhete da campanha ou abaixo da metade disso, grava o pedido e ele CONTA,
+  mas os motivos vão para `webhook_eventos.avisos` (formato `DetalheResumido`) e o pedido entra em
+  `pedidos_suspeitos` (migração 0005), listado em `GET /api/admin/pedidos/suspeitos`. Tirar um pedido das
+  vendas é decisão do PO.
+- **Trilha de auditoria** (tabela `auditoria`, migração 0005): quem (o usuário da sessão), quando, a ação, o alvo
+  e um resumo sem dados pessoais, gravados no MESMO `db.batch` da ação (ação recusada não registra nada): PUT da
+  campanha (com o slug e o preço antes e depois), vínculos de afiliado, importação da hierarquia aplicada e as
+  ações do admin sobre usuários e links. O CRUD da hierarquia não entra. Leitura: `GET /api/admin/auditoria`, só
+  admin, com cursor. Quem pode fazer o quê não mudou.

@@ -6,6 +6,10 @@ declare namespace Cloudflare {
     // Segredo do webhook da Rifei (D6): .dev.vars no dev, `wrangler secret put` em
     // produção, binding de teste no vitest.config.ts. Ausente ou vazio: o webhook responde 503.
     RIFEI_WEBHOOK_TOKEN?: string;
+    // Rate Limiting do Workers (RIFA-013b, `ratelimits` no wrangler.jsonc; lib/limite-requisicoes.ts).
+    // Opcionais: sem o binding, o limite cai para a memória do isolate.
+    LIMITE_PUBLICO?: RateLimit;
+    LIMITE_LOGIN?: RateLimit;
   }
 
   // Tipa o `exports` de "cloudflare:workers" (usado nos testes do Worker).

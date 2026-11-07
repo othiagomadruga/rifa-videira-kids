@@ -39,6 +39,11 @@ import {
   chaveDoCache,
   type CacheDeRespostas,
 } from "../lib/cache-publico";
+import {
+  LIMITE_PUBLICO,
+  dentroDoLimite,
+  responderLimiteExcedido,
+} from "../lib/limite-requisicoes";
 import { responderErro } from "../lib/respostas-erro";
 import { validarConsulta } from "../middleware/validacao";
 
@@ -122,6 +127,9 @@ export function criarPublico({
    * A resposta da consulta já validada: a guardada, se estiver no prazo (sem ir ao banco); senão, a que
    * `montar` gerar agora, que fica guardada se for 200. Um só instante por requisição: o do cache é o
    * mesmo `agora` dos montadores.
+   *
+   * Limite por IP (RIFA-013b, LIMITE_PUBLICO): só a ida ao banco conta. A resposta guardada sai sem contar
+   * (muita gente no mesmo IP vê o ranking sem esbarrar no limite); acima dele, 429 sem ler o banco.
    */
   async function comCache(
     c: Context<Ambiente>,
@@ -132,6 +140,8 @@ export function criarPublico({
     const chave = chaveDoCache(c.req.url, consulta);
     const guardada = await cache.ler(chave, agora);
     if (guardada !== null) return guardada;
+    if (!(await dentroDoLimite(c.env, c.req.raw, LIMITE_PUBLICO)))
+      return responderLimiteExcedido(c, LIMITE_PUBLICO);
     const resposta = await montar(agora);
     await cache.gravar(chave, resposta, agora);
     return resposta;

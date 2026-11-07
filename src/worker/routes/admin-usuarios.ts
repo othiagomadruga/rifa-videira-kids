@@ -9,6 +9,9 @@
  * - POST /api/admin/usuarios/:id/links → 201 { link }: link novo (os anteriores continuam valendo);
  * - DELETE /api/admin/links/:id → 204: revoga o link e encerra as sessões abertas por ele; 409 `em_uso` se
  *   nenhum admin ativo ficaria com link válido (a equipe perderia o acesso de admin).
+ *
+ * As quatro escritas deixam na trilha de auditoria (RIFA-013b, GET /api/admin/auditoria) quem fez e o
+ * alvo, na mesma transação e só quando a ação acontece; o resumo nunca traz nome nem e-mail.
  */
 import { Hono, type Context } from "hono";
 import {
@@ -31,7 +34,11 @@ import {
 } from "../db/acessos";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import { responderErro } from "../lib/respostas-erro";
-import { exigirSessao, type AmbienteSessao } from "../middleware/sessao";
+import {
+  autoriaDaSessao,
+  exigirSessao,
+  type AmbienteSessao,
+} from "../middleware/sessao";
 import { validarJson, validarParametros } from "../middleware/validacao";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
@@ -90,11 +97,13 @@ adminUsuarios.post(
   validarJson(corpoCriarUsuarioSchema),
   async (c) => {
     const dados = c.req.valid("json");
-    const link = await gerarLink(new Date());
+    const agora = new Date();
+    const link = await gerarLink(agora);
     const { usuarioId, linkId } = await criarUsuarioComLink(
       c.env.DB,
       dados,
       link,
+      autoriaDaSessao(c, agora),
     );
     const { url, ...linkSemUrl } = linkCriado(c, linkId, link);
     const usuario: Usuario = {
@@ -130,7 +139,12 @@ adminUsuarios.patch(
         c,
         "Você não pode desativar o seu próprio acesso: peça a outro admin",
       );
-    const resultado = await definirAtivo(c.env.DB, id, ativo);
+    const resultado = await definirAtivo(
+      c.env.DB,
+      id,
+      ativo,
+      autoriaDaSessao(c),
+    );
     if (resultado === "nao_encontrado") return respostaUsuarioNaoEncontrado(c);
     if (resultado === "ultimo_admin")
       return respostaDesativacaoRecusada(
@@ -149,8 +163,14 @@ adminUsuarios.post(
   validarParametros(parametroIdSchema),
   async (c) => {
     const { id } = c.req.valid("param");
-    const link = await gerarLink(new Date());
-    const linkId = await criarLink(c.env.DB, id, link);
+    const agora = new Date();
+    const link = await gerarLink(agora);
+    const linkId = await criarLink(
+      c.env.DB,
+      id,
+      link,
+      autoriaDaSessao(c, agora),
+    );
     return linkId === null
       ? respostaUsuarioNaoEncontrado(c)
       : c.json({ link: linkCriado(c, linkId, link) }, 201);
@@ -162,7 +182,13 @@ adminUsuarios.delete(
   validarParametros(parametroIdSchema),
   async (c) => {
     const { id } = c.req.valid("param");
-    const resultado = await revogarLink(c.env.DB, id, new Date().toISOString());
+    const agora = new Date();
+    const resultado = await revogarLink(
+      c.env.DB,
+      id,
+      agora.toISOString(),
+      autoriaDaSessao(c, agora),
+    );
     if (resultado === "nao_encontrado")
       return responderErro(c, "nao_encontrado", "Link não encontrado");
     if (resultado === "ultimo_link_admin")

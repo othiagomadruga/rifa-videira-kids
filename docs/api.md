@@ -29,7 +29,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
   - inteiros positivos para as entidades nossas;
   - `affiliate_id` é o inteiro da Rifei;
   - o id do pedido é o texto da Rifei.
-- Listas vêm em `{ "itens": [...] }`. Não há paginação na v1: o volume é pequeno (36 células).
+- Listas vêm em `{ "itens": [...] }`. Não há paginação na v1: o volume é pequeno (36 células). A exceção é a trilha de auditoria (`GET /api/admin/auditoria`), que cresce a cada ação e vem por páginas, com cursor.
 - Parâmetros de caminho e de consulta chegam como texto e o schema converte. Ex.: `:id` = `"12"` vira `12`; `?vinculado=false` vira `false`.
 
 ## Autorização por grupo
@@ -46,7 +46,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 - Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403).
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403).
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -74,14 +74,36 @@ Toda resposta que não é 2xx tem este corpo:
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
 | `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin |
-| `corpo_muito_grande` | 413 | corpo do webhook acima de 1 MiB (`LIMITE_CORPO_WEBHOOK_BYTES`) |
+| `corpo_muito_grande` | 413 | corpo acima do limite (abaixo): do webhook (1 MiB, `LIMITE_CORPO_WEBHOOK_BYTES`), do `POST /api/sessao` (4 KiB) ou das escritas da coordenação (1 MiB) |
+| `muitas_requisicoes` | 429 | passou do limite de requisições por IP (abaixo), com `Retry-After` em segundos. Ainda fora de `CODIGOS_ERRO` (o catálogo é do SM) |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
 | `nao_configurado` | 503 | segredo do webhook ausente |
 | `banco_indisponivel` | 503 | health sem banco |
 
 O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use `criarErroApi()`; para converter um erro do zod em `detalhes`, use `detalhesDeValidacao()`.
 
-No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, campanha, afiliados e adesão, o 404 de rota inexistente (`nao_encontrado`) e o 500 do `onError` (`erro_interno`).
+No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo com o status de `STATUS_HTTP_DO_ERRO`. Todas as partes montadas respondem assim: health (503), webhook, sessão, usuários e links, hierarquia, campanha, afiliados e adesão, o 404 de rota inexistente (`nao_encontrado`) e o 500 do `onError` (`erro_interno`). O 429 sai de `responderMuitasRequisicoes()`, no mesmo formato, até `muitas_requisicoes` entrar no catálogo.
+
+### Limites de tamanho e de requisições (RIFA-013b; docs/decisions.md D11)
+
+**Tamanho do corpo**, conferido ANTES de ler ou validar o JSON (`src/worker/middleware/limite-corpo.ts`): `Content-Length` acima do limite é recusado sem ler nada; sem ele (envio em partes), a leitura para logo depois do limite.
+
+| Rota | Limite | Acima do limite |
+|---|---|---|
+| `POST /api/sessao` | 4 KiB | 413 `corpo_muito_grande` (depois da checagem de origem) |
+| POST, PUT e PATCH em `/api/admin/*` e `/api/painel/*` | 1 MiB | 413 `corpo_muito_grande`, só **depois** do login (sem sessão: 401, e o corpo nem é lido) |
+| `POST /api/admin/hierarquia/importar` | 3 × `LIMITE_CARACTERES_CSV_HIERARQUIA` + 1 MB | 400 `csv_invalido` com `motivo: "arquivo_grande"`, como o `csv` acima do limite de caracteres |
+| `/api/admin/reconciliacao/*` (RIFA-012) | o da própria rota | o da própria rota (o teto geral não lê o corpo dela) |
+| `POST /api/webhooks/rifei` | 1 MiB, depois do Bearer | 413, com o evento `erro_validacao` |
+
+**Requisições por IP** (`src/worker/lib/limite-requisicoes.ts`, binding de Rate Limiting do Workers no `wrangler.jsonc`), contadas pelo `CF-Connecting-IP` (IPv6 pelo prefixo /64), em janelas de 1 minuto:
+
+| Rota | Limite | O que conta |
+|---|---|---|
+| `POST /api/sessao` | 10 por minuto | toda tentativa que passa da checagem de origem |
+| `/api/publico/*` e `GET /api/health` | 60 por minuto, somados | só as que vão ao banco: no público, a resposta do cache de 30 s **não conta** (muita gente atrás do mesmo IP, como o Wi-Fi da igreja, não esbarra no limite); o health lê o banco toda vez |
+
+Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Control: no-store`, sem ler o banco. O contador é por data center da Cloudflare e aproximado ("permissivo"). Sem o binding, vale uma janela na memória de cada isolate.
 
 ---
 
@@ -101,6 +123,7 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 - Caminho com ou sem barra no fim (`CAMINHOS_WEBHOOK_RIFEI`).
 - **Limite de tamanho do corpo: 1 MiB** (`LIMITE_CORPO_WEBHOOK_BYTES`), conferido **depois** da autenticação. Acima disso, a resposta é **413** `corpo_muito_grande`, e o evento é gravado como `erro_validacao`, sem payload.
 - `problemas` (no 400 e no 413) e `avisos` (no evento aceito) vêm agrupados por caminho sem índice, cada item com `ocorrencias`, no máximo 50 itens mais um item final `itens_omitidos` (`detalheResumidoSchema`).
+- **Plausibilidade** (RIFA-013b): o evento que **aprova** um pedido com mais de `TETO_BILHETES_POR_PEDIDO` (200) bilhetes, ou com `total` acima de bilhetes × `preco_bilhete_centavos` da campanha ou abaixo disso além de `TOLERANCIA_DESCONTO_BP` (50% de desconto), **grava o pedido normalmente e ele conta nas vendas**. Os motivos (`MOTIVOS_PEDIDO_SUSPEITO`, um item por motivo, sem o valor recebido) vão para os `avisos` do evento e o pedido entra na lista de revisão `GET /api/admin/pedidos/suspeitos`. A resposta do webhook não muda (200 `processado`).
 
 | Status | Corpo | Gravado em `webhook_eventos`? |
 |---|---|---|
@@ -337,6 +360,68 @@ Painel de "quem falta": uma linha por célula.
 - `vinculada`: a célula tem ao menos um afiliado.
 - `primeira_venda_em`: o primeiro pedido aprovado de qualquer afiliado da célula.
 - `lider_telefone` serve para a coordenação cobrar quem falta.
+
+### `GET /api/admin/pedidos/suspeitos` (`coordenacao`; Sprint 4, RIFA-013b)
+
+Lista de revisão dos pedidos aprovados que o webhook marcou como implausíveis (ver "Plausibilidade" no webhook). **Eles continuam contando** nas vendas, no painel e nos rankings: a lista é para a coordenação conferir na Rifei (ou pela conferência por CSV). Tirar um pedido das vendas é decisão do PO.
+
+- **200** (`respostaPedidosSuspeitosSchema`): os da campanha ativa, o mais recente primeiro, no máximo `LIMITE_PEDIDOS_SUSPEITOS` (500); `total` conta todos.
+
+```json
+{
+  "itens": [
+    {
+      "pedido_id": "PEDTESTE0001", "affiliate_id": 1042, "celula_id": 7, "celula_nome": "Célula Ficticia 07",
+      "qtd_bilhetes": 300, "total_centavos": 6000, "esperado_centavos": 600000,
+      "motivos": [
+        { "caminho": ["numbers_count"], "codigo": "quantidade_acima_do_teto", "mensagem": "Mais de 200 bilhetes num pedido só: confira na Rifei (o pedido continua contando)", "ocorrencias": 1 },
+        { "caminho": ["total"], "codigo": "total_abaixo_do_esperado", "mensagem": "Total abaixo de bilhetes × preço do bilhete da campanha com mais de 50% de desconto: confira na Rifei (o pedido continua contando)", "ocorrencias": 1 }
+      ],
+      "aprovado_em": "2026-12-01T12:20:31.512Z", "marcado_em": "2026-12-01T12:20:32.004Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+- `esperado_centavos` = bilhetes × preço do bilhete **no momento da marcação**; `celula_id`/`celula_nome` são da célula do afiliado agora (D7: é para ela que o pedido conta), null sem afiliado ou sem vínculo.
+- `motivos[].codigo` ∈ `MOTIVOS_PEDIDO_SUSPEITO`: `quantidade_acima_do_teto` (mais de 200 bilhetes), `total_acima_do_esperado` (total maior que bilhetes × preço), `total_abaixo_do_esperado` (mais de 50% abaixo).
+- **Sem nenhum dado do comprador**: nada de nome, e-mail, documento, telefone, DDD, país, UTM ou números dos bilhetes.
+- Só o evento que aprova é avaliado (aprovado é final, D4): a reentrega (`duplicado`) não marca de novo. Guardado em `pedidos_suspeitos` (migração `0005_auditoria.sql`).
+
+### `GET /api/admin/auditoria` (**só admin**; Sprint 4, RIFA-013b)
+
+Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transação do D1) da ação: se a ação é recusada ou falha, não fica registro.
+
+| Ação (`acao`) | Rota | Alvo (`alvo`) | Resumo |
+|---|---|---|---|
+| `campanha.salvar` | `PUT /api/admin/campanha` | `campanha:<id>` | criada (com o slug e o preço) ou os campos alterados; `slug_rifei` e `preco_bilhete_centavos` com o antes e o depois |
+| `afiliado.salvar` | `PUT /api/admin/afiliados/:affiliateId` | `afiliado:<affiliate_id>` | célula antes → depois (pelos ids); o rótulo só como "alterado"/"apagado" |
+| `hierarquia.importar` | `POST /api/admin/hierarquia/importar` aplicada | `hierarquia` | linhas e contagens de criados e atualizados (a simulação não registra) |
+| `usuario.criar` | `POST /api/admin/usuarios` | `usuario:<id>` | o papel (sem nome nem e-mail) |
+| `usuario.ativar` / `usuario.desativar` | `PATCH /api/admin/usuarios/:id` | `usuario:<id>` | reativado / desativado |
+| `link.criar` | `POST /api/admin/usuarios/:id/links` | `link:<id>` | o usuário do link |
+| `link.revogar` | `DELETE /api/admin/links/:id` | `link:<id>` | o usuário do link |
+
+- **Consulta** (`consultaAuditoriaSchema`): `limite` (1 a 200, padrão 50) e `antes_de` (cursor: o `proximo` da página anterior).
+- **200** (`respostaAuditoriaSchema`): do mais novo para o mais antigo.
+
+```json
+{
+  "itens": [
+    {
+      "id": 42, "em": "2026-11-25T15:00:00.000Z", "usuario_id": 3, "usuario_nome": "Coordenadora Ficticia",
+      "acao": "campanha.salvar", "alvo": "campanha:1",
+      "resumo": "Alterado: slug_rifei (\"videira-kids\" → \"videira-kids-2\"), periodos"
+    }
+  ],
+  "proximo": 42
+}
+```
+
+- `proximo`: passe em `antes_de` para a página seguinte; `null` = não há mais.
+- O `resumo` **nunca tem dados pessoais**: só ids e configuração (nomes de pessoas, e-mails, telefones e o rótulo livre do afiliado ficam de fora). `usuario_nome` vem da tabela de usuários (o admin já vê os nomes na administração dos acessos).
+- **Erros**: 400 `requisicao_invalida` (consulta fora do schema), 401, 403 (`coordenacao`). O CRUD de redes, discipuladores e células não é registrado.
 
 ---
 

@@ -15,6 +15,7 @@ import type {
   respostaAdesaoSchema,
   respostaListaAfiliadosSchema,
 } from "../../shared/contracts";
+import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 
 export type RespostaListaAfiliados = z.infer<
   typeof respostaListaAfiliadosSchema
@@ -147,16 +148,50 @@ const GRAVAR_AFILIADO = `
     rotulo = CASE WHEN ?5 = 1 THEN excluded.rotulo ELSE afiliados.rotulo END,
     atualizado_em = excluded.atualizado_em`;
 
+/** O vínculo atual do afiliado (célula e rótulo), ou null se ele ainda não existe. */
+export async function buscarVinculoDoAfiliado(
+  db: D1Database,
+  affiliateId: number,
+): Promise<{ celula_id: number | null; rotulo: string | null } | null> {
+  return db
+    .prepare("SELECT celula_id, rotulo FROM afiliados WHERE affiliate_id = ?1")
+    .bind(affiliateId)
+    .first<{ celula_id: number | null; rotulo: string | null }>();
+}
+
+/**
+ * O que o PUT muda, para a trilha de auditoria (RIFA-013b): as células pelo id e o rótulo só como
+ * "alterado" ou "apagado" (é texto livre da coordenação e pode citar alguém).
+ */
+export function resumirMudancaDoAfiliado(
+  antes: { celula_id: number | null; rotulo: string | null } | null,
+  corpo: CorpoSalvarAfiliado,
+): string {
+  const celula = (id: number | null) => (id === null ? "nenhuma" : String(id));
+  const partes = [
+    antes === null
+      ? `Pré-cadastro: célula ${celula(corpo.celula_id)}`
+      : antes.celula_id === corpo.celula_id
+        ? `Célula ${celula(corpo.celula_id)} mantida`
+        : `Célula: ${celula(antes.celula_id)} → ${celula(corpo.celula_id)}${corpo.celula_id === null ? " (desvinculado)" : ""}`,
+  ];
+  if (corpo.rotulo !== undefined && corpo.rotulo !== (antes?.rotulo ?? null))
+    partes.push(corpo.rotulo === null ? "rótulo apagado" : "rótulo alterado");
+  return partes.join("; ");
+}
+
 /**
  * Vincula (`celula_id`), troca ou desvincula (`celula_id: null`) a célula do afiliado; se o afiliado
  * ainda não existe, cria (pré-cadastro). Devolve o afiliado com as vendas, já na célula nova: a gravação
- * e a leitura vão no mesmo batch (uma transação do D1).
+ * e a leitura vão no mesmo batch (uma transação do D1). Com `auditoria` (RIFA-013b), o registro vai no
+ * mesmo lote, com a mesma condição da gravação (célula inexistente: nada gravado, nada registrado).
  */
 export async function salvarAfiliado(
   db: D1Database,
   affiliateId: number,
   corpo: CorpoSalvarAfiliado,
   agora: string,
+  auditoria?: Autoria & { resumo: string },
 ): Promise<ResultadoSalvarAfiliado> {
   const informouRotulo = corpo.rotulo !== undefined;
   const [gravacao, leitura] = await db.batch<LinhaAfiliado>([
@@ -174,6 +209,23 @@ export async function salvarAfiliado(
         `${SELECT_AFILIADO} WHERE a.affiliate_id = ?1 GROUP BY a.affiliate_id`,
       )
       .bind(affiliateId),
+    ...(auditoria
+      ? [
+          prepararRegistroAuditoria(
+            db,
+            {
+              ...auditoria,
+              acao: "afiliado.salvar",
+              alvo: `afiliado:${affiliateId}`,
+            },
+            {
+              // A mesma condição do GRAVAR_AFILIADO.
+              sql: "?6 IS NULL OR EXISTS (SELECT 1 FROM celulas WHERE id = ?6)",
+              valores: [corpo.celula_id],
+            },
+          ),
+        ]
+      : []),
   ]);
   if (gravacao.meta.changes === 0) {
     return { ok: false, motivo: "celula_inexistente" };

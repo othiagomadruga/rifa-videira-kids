@@ -14,10 +14,18 @@ import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
 import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
-import { listarAfiliados, obterAdesao, salvarAfiliado } from "../db/adesao";
+import {
+  buscarVinculoDoAfiliado,
+  listarAfiliados,
+  obterAdesao,
+  resumirMudancaDoAfiliado,
+  salvarAfiliado,
+} from "../db/adesao";
 import { responderErro } from "../lib/respostas-erro";
+import { autoriaDaSessao, type AmbienteSessao } from "../middleware/sessao";
 
-type Ambiente = { Bindings: Cloudflare.Env };
+// Montado atrás do login: `c.var.usuario` é quem vincula (trilha de auditoria, RIFA-013b).
+type Ambiente = AmbienteSessao;
 
 /** Onde o index.ts monta este sub-app. */
 export const PREFIXO_AFILIADOS_ADESAO = "/api/admin";
@@ -87,11 +95,23 @@ afiliadosAdesao.put(
   validar("json", ROTAS.salvarAfiliado.corpo),
   async (c) => {
     const corpo = c.req.valid("json");
+    const { affiliateId } = c.req.valid("param");
+    const agora = new Date();
+    // Auditoria (RIFA-013b): o vínculo de antes dá o resumo; o registro vai no lote da gravação.
+    const autoria = autoriaDaSessao(c, agora);
+    const auditoria = autoria && {
+      ...autoria,
+      resumo: resumirMudancaDoAfiliado(
+        await buscarVinculoDoAfiliado(c.env.DB, affiliateId),
+        corpo,
+      ),
+    };
     const resultado = await salvarAfiliado(
       c.env.DB,
-      c.req.valid("param").affiliateId,
+      affiliateId,
       corpo,
-      new Date().toISOString(),
+      agora.toISOString(),
+      auditoria,
     );
     if (resultado.ok) return c.json(resultado.afiliado);
     // Como nos erros de validação, `detalhes` aponta o campo do corpo.

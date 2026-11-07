@@ -36,6 +36,7 @@ import {
 } from "../../shared/contracts";
 import { lerTabelaCsv, type ColunaIgnorada } from "../lib/csv";
 import { mensagemDeCelula } from "../lib/mensagens-validacao";
+import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 
 export type DadosRede = z.output<typeof redeEntradaSchema>;
 export type DadosDiscipulador = z.output<typeof discipuladorEntradaSchema>;
@@ -915,10 +916,27 @@ const ATUALIZAR_CELULAS = `UPDATE celulas SET discipulador_id = ${ID_DO_DISCIPUL
     atualizado_em = ${AGORA}
   FROM json_each(?1) AS j WHERE celulas.id = ${campo("id")}`;
 
-/** Grava o plano num único lote (transação do D1): se uma instrução falha, nada fica gravado. */
+/**
+ * O que a importação aplicada mudou, para a trilha de auditoria (RIFA-013b): só contagens, nunca nomes
+ * (de células e de líderes) nem contatos.
+ */
+function resumirImportacao(
+  plano: PlanoImportacao,
+  totalLinhas: number,
+): string {
+  const texto = ({ redes, discipuladores, celulas }: Contagem) =>
+    `${redes} redes, ${discipuladores} discipuladores e ${celulas} células`;
+  return `Importação aplicada (${totalLinhas} linhas): criados ${texto(contagem(plano, "novas"))}; atualizados ${texto(contagem(plano, "alteradas"))}`;
+}
+
+/**
+ * Grava o plano num único lote (transação do D1): se uma instrução falha, nada fica gravado. Com
+ * `registro`, a trilha de auditoria vai no mesmo lote (RIFA-013b), mesmo sem mudança nenhuma.
+ */
 async function gravarPlano(
   db: D1Database,
   plano: PlanoImportacao,
+  registro?: D1PreparedStatement,
 ): Promise<Resultado<null>> {
   const lotes: [string, unknown[]][] = [
     [INSERIR_REDES, plano.redes.novas],
@@ -938,6 +956,7 @@ async function gravarPlano(
       );
     return partes;
   });
+  if (registro) instrucoes.push(registro);
   if (instrucoes.length === 0) return { ok: true, valor: null };
   try {
     await db.batch(instrucoes);
@@ -1014,12 +1033,14 @@ function avisoDeColunaIgnorada(
  * POST /api/admin/hierarquia/importar. Valida cada linha (linhaCsvHierarquiaSchema), confere a coerência
  * do arquivo e compara com o banco pela chave de nome. Grava só se nenhuma linha tiver erro e `simular`
  * for false; caso contrário, devolve o mesmo relatório sem gravar nada. Colunas ignoradas e linhas
- * repetidas iguais saem em `avisos`.
+ * repetidas iguais saem em `avisos`. Com `autoria` (RIFA-013b), a importação APLICADA deixa na trilha de
+ * auditoria quem importou e as contagens, no mesmo lote da gravação; a simulação não registra nada.
  */
 export async function importarHierarquia(
   db: D1Database,
   csv: string,
   simular: boolean,
+  autoria?: Autoria,
 ): Promise<Resultado<RespostaImportarHierarquia>> {
   const tabela = lerTabelaCsv(csv, {
     colunas: COLUNAS_CSV_HIERARQUIA,
@@ -1046,7 +1067,15 @@ export async function importarHierarquia(
 
   const aplicado = erros.length === 0 && !simular;
   if (aplicado) {
-    const gravacao = await gravarPlano(db, plano);
+    const registro =
+      autoria &&
+      prepararRegistroAuditoria(db, {
+        ...autoria,
+        acao: "hierarquia.importar",
+        alvo: "hierarquia",
+        resumo: resumirImportacao(plano, tabela.linhas.length),
+      });
+    const gravacao = await gravarPlano(db, plano, registro);
     if (!gravacao.ok) return gravacao;
   }
   return {
