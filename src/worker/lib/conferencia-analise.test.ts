@@ -447,6 +447,41 @@ describe("regra do valor dos pedidos em várias linhas (B2 da revisão)", () => 
       valor_diferente: ["B"],
     });
   });
+
+  it("sem convenção, a faixa do preço tem as duas pontas: até o preço e até 50% abaixo dele (revisão do ciclo 2)", () => {
+    // Preço R$ 20,00 (CAMPANHA). Duas linhas com o mesmo valor, nenhum pedido do arquivo no sistema.
+    const duasLinhas = (codigo: string, valor: string) =>
+      ["1", "2"].map((numero) => [
+        codigo,
+        "Pago",
+        "1",
+        numero,
+        valor,
+        "101",
+        "28/11/2026",
+      ]);
+    const plano = planejar(
+      [
+        CABECALHO,
+        // Exatamente a metade do preço (o limite da tolerância de desconto): por bilhete.
+        ...duasLinhas("METADE", "10,00"),
+        // Um centavo abaixo da metade: ambíguo.
+        ...duasLinhas("ABAIXO", "9,99"),
+        // Acima do preço (mas abaixo do dobro): ambíguo.
+        ...duasLinhas("ACIMA", "30,00"),
+      ],
+      [],
+      ["METADE", "ABAIXO", "ACIMA"],
+    );
+    expect(plano.convencao).toBeNull();
+    expect(plano.gravar).toMatchObject([
+      { pedido_id: "METADE", qtd_bilhetes: 2, total_centavos: 2000 },
+    ]);
+    expect(plano.naoRecuperados).toEqual([
+      { pedido_id: "ABAIXO", motivo: "valor_ambiguo" },
+      { pedido_id: "ACIMA", motivo: "valor_ambiguo" },
+    ]);
+  });
 });
 
 describe("trava do código que não bate (B3 da revisão)", () => {
@@ -511,6 +546,55 @@ describe("trava do código que não bate (B3 da revisão)", () => {
     expect(
       grupo(resposta, "venda_perdida").itens.every((item) => item.recuperavel),
     ).toBe(true);
+  });
+
+  it("as bordas da trava, sem a exceção do webhook parado: 5 pagos já travam; metade encontrada não trava (revisão do ciclo 2)", () => {
+    // Nenhum pago do sistema no período do arquivo: a exceção não vale.
+    expect(
+      analisar(pagos(["T-1", "T-2", "T-3", "T-4", "T-5"]), []).codigo,
+    ).toEqual({ confere: false, pagos_no_arquivo: 5, encontrados: 0 });
+    // 3 de 6 encontrados (exatamente a metade) e só 3 pagos no sistema (menos que o mínimo da exceção).
+    const tres = ["R-1", "R-2", "R-3"].map((id) =>
+      gravado(id, { aprovado_ms: Date.parse("2026-11-27T15:00:00.000Z") }),
+    );
+    expect(
+      analisar(pagos(["R-1", "R-2", "R-3", "T-1", "T-2", "T-3"]), tres).codigo,
+    ).toEqual({ confere: true, pagos_no_arquivo: 6, encontrados: 3 });
+  });
+
+  it("a exceção do webhook parado conta só os pagos do sistema NO PERÍODO do arquivo (revisão do ciclo 2)", () => {
+    // No período do arquivo (27/11), o sistema tem 6 pagos e nenhum está no arquivo. Os 6 do arquivo que
+    // existem no sistema foram aprovados em outro dia: não confirmam a coluna.
+    const noPeriodoForaDoArquivo = [
+      "S-1",
+      "S-2",
+      "S-3",
+      "S-4",
+      "S-5",
+      "S-6",
+    ].map((id) =>
+      gravado(id, { aprovado_ms: Date.parse("2026-11-27T15:00:00.000Z") }),
+    );
+    const noArquivoForaDoPeriodo = [
+      "R-1",
+      "R-2",
+      "R-3",
+      "R-4",
+      "R-5",
+      "R-6",
+    ].map((id) =>
+      gravado(id, { aprovado_ms: Date.parse("2026-11-20T15:00:00.000Z") }),
+    );
+    const codigos = [
+      ...noArquivoForaDoPeriodo.map((pedido) => pedido.id),
+      ...Array.from({ length: 14 }, (_, i) => `PERDIDO-${i}`),
+    ];
+    expect(
+      analisar(pagos(codigos), [
+        ...noPeriodoForaDoArquivo,
+        ...noArquivoForaDoPeriodo,
+      ]).codigo,
+    ).toEqual({ confere: false, pagos_no_arquivo: 20, encontrados: 6 });
   });
 
   it("conferirCodigo direto: os que não estão pagos no arquivo não contam", () => {

@@ -158,6 +158,87 @@ describe("migrações: schema do D1", () => {
     expect(fantasmas).toEqual({ n: 0 });
   });
 
+  it("0004 (RIFA-012): origem e recuperacao_id andam juntos; recuperacoes confere o SHA-256, o mapeamento e as contagens", async () => {
+    const db = env.DB;
+    const campanha = await db
+      .prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
+           meta_unidade, meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha de teste (0004)', 'teste-migracao-0004', 0, '2026-11-23', 2000,
+           'bilhetes', 'por_pessoa', 10, 'percentual_meta')
+         RETURNING id`,
+      )
+      .first<{ id: number }>();
+    const usuario = await db
+      .prepare(
+        "INSERT INTO usuarios (nome, papel) VALUES ('Pessoa de teste (0004)', 'coordenacao') RETURNING id",
+      )
+      .first<{ id: number }>();
+    const recuperacao = (sha256: string, mapeamento: string, solicitados = 1) =>
+      db
+        .prepare(
+          `INSERT INTO recuperacoes (campanha_id, usuario_id, executado_em, pedidos_solicitados,
+             linhas_arquivo, arquivo_sha256, mapeamento)
+           VALUES (?1, ?2, '2026-12-01T12:00:00.000Z', ?3, 10, ?4, ?5)
+           RETURNING id`,
+        )
+        .bind(campanha!.id, usuario!.id, solicitados, sha256, mapeamento);
+    const pedido = (id: string, origem: string, recuperacaoId: number | null) =>
+      db
+        .prepare(
+          `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+             origem, recuperacao_id)
+           VALUES (?1, ?2, 'approved', 1, 2000, '2026-12-01T12:00:00.000Z', ?3, ?4)`,
+        )
+        .bind(id, campanha!.id, origem, recuperacaoId);
+    const sha = "a".repeat(64);
+    const criada = await recuperacao(sha, '{"pedido_id":"Pedido"}').first<{
+      id: number;
+    }>();
+    onTestFinished(async () => {
+      await db.batch([
+        db.prepare("DELETE FROM pedidos WHERE id LIKE 'TESTE-0004-%'"),
+        db.prepare("DELETE FROM recuperacoes WHERE id = ?").bind(criada!.id),
+        db.prepare("DELETE FROM usuarios WHERE id = ?").bind(usuario!.id),
+        db.prepare("DELETE FROM campanhas WHERE id = ?").bind(campanha!.id),
+      ]);
+    });
+
+    // recuperacoes: SHA-256 em hex minúsculo, mapeamento objeto JSON e pelo menos um pedido solicitado.
+    for (const [sha256, mapeamento, solicitados] of [
+      ["A".repeat(64), "{}", 1],
+      ["a".repeat(63), "{}", 1],
+      [sha, "[]", 1],
+      [sha, "nao json", 1],
+      [sha, "{}", 0],
+    ] as const)
+      await expect(
+        recuperacao(sha256, mapeamento, solicitados).run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+
+    // pedidos: 'conferencia' exige a recuperação, e só ele a tem; outra origem não existe.
+    for (const [origem, recuperacaoId] of [
+      ["conferencia", null],
+      ["webhook", criada!.id],
+      ["planilha", null],
+    ] as const)
+      await expect(
+        pedido("TESTE-0004-X", origem, recuperacaoId).run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+    await expect(
+      pedido("TESTE-0004-X", "conferencia", 999_999).run(),
+    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+    await pedido("TESTE-0004-1", "conferencia", criada!.id).run();
+    await pedido("TESTE-0004-2", "webhook", null).run();
+    // A recuperação com pedido não pode ser apagada (ON DELETE RESTRICT).
+    await expect(
+      db
+        .prepare("DELETE FROM recuperacoes WHERE id = ?")
+        .bind(criada!.id)
+        .run(),
+    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+  });
+
   it("webhook_eventos: avisos é lista JSON não vazia, só em evento aceito", async () => {
     const evento = await env.DB.prepare(
       `INSERT INTO webhook_eventos (evento, pedido_id, slug, resultado, status_resultante,
