@@ -1,0 +1,94 @@
+/* Bumbo (/coordenacao/bumbo), pensado para o celular: o seletor do dia, a mensagem do jeito que vai para o
+   WhatsApp (letra grande, quebras de linha preservadas) e as duas ações, que ocupam a largura no celular. */
+
+.bumbo__seletor {
+  max-width: 28rem;
+}
+
+.bumbo__cartao {
+  max-width: 44rem;
+}
+
+.bumbo__mensagem {
+  display: grid;
+  gap: var(--espaco-4);
+}
+
+/* A data da mensagem e, num selo, onde a campanha estava nela (quebra de linha inteira, se precisar). */
+.bumbo__referencia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+  color: var(--cor-texto-suave);
+}
+
+.bumbo__fase {
+  padding: var(--espaco-1) var(--espaco-3);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+  font-weight: var(--peso-negrito);
+}
+
+.bumbo__figura {
+  margin: 0;
+}
+
+/* A mensagem como sai da API: fonte do sistema, grande, sem rolagem lateral (palavras longas quebram). */
+.bumbo__texto {
+  margin: 0;
+  padding: var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-left: 4px solid var(--cor-primaria);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto);
+  font-family: var(--fonte-base);
+  font-size: var(--texto-lg);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bumbo__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3);
+}
+
+.bumbo__acao {
+  flex: 1 1 14rem;
+}
+
+.bumbo__copia {
+  --copia-cor: var(--cor-sucesso);
+  display: flex;
+  align-items: baseline;
+  gap: var(--espaco-2);
+  color: var(--copia-cor);
+  font-weight: var(--peso-forte);
+}
+
+.bumbo__copia[data-resultado="falhou"] {
+  --copia-cor: var(--cor-alerta);
+}
+
+.bumbo__copia-icone {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--copia-cor);
+  color: var(--cor-sobre-primaria);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-negrito);
+  line-height: 1;
+}
+
+.bumbo__dica {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}

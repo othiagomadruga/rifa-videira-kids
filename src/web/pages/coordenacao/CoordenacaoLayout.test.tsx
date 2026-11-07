@@ -119,7 +119,20 @@ describe("CA2: guarda das telas da coordenação", () => {
   });
 
   it("com sessão (GET /api/sessao 200): mostra a tela pedida, com o menu do papel", async () => {
-    const api = simularApi({ "GET /api/sessao": sessaoDe(ADMIN_DE_TESTE) });
+    const api = simularApi({
+      "GET /api/sessao": sessaoDe(ADMIN_DE_TESTE),
+      // A tela do bumbo (RIFA-011) pede a mensagem do dia à rota aberta: aqui, ainda sem campanha.
+      "GET /api/publico/bumbo": () =>
+        respostaJson(
+          {
+            erro: {
+              codigo: "nao_encontrado",
+              mensagem: "A campanha ainda não foi configurada",
+            },
+          },
+          404,
+        ),
+    });
     const { roteador } = renderizarRota("/coordenacao/bumbo", {
       usuario: null,
     });

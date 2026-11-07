@@ -698,8 +698,21 @@ export type RespostaRankingPublico = z.infer<
   typeof respostaRankingPublicoSchema
 >;
 
+/**
+ * Janela do `data` do bumbo: do 1º dia da campanha até este número de dias depois do último. No dia
+ * seguinte ao fim, a mensagem ainda traz a venda do último dia; dali em diante, o texto não muda mais.
+ */
+export const DIAS_DO_BUMBO_DEPOIS_DO_FIM = 1;
+
 export const consultaBumboSchema = z.object({
-  /** Dia da mensagem (local), no máximo hoje; padrão: hoje. A mensagem fala do dia anterior. */
+  /**
+   * Dia da mensagem (local); a mensagem fala do dia anterior. Sem `data`, é hoje, em qualquer fase
+   * (antes do início, a contagem regressiva; depois do fim, o resultado final). Com `data`, só na janela
+   * da campanha (do 1º dia ao dia seguinte ao último: DIAS_DO_BUMBO_DEPOIS_DO_FIM) e no máximo hoje;
+   * fora dela, 400 `requisicao_invalida` com o detalhe `fora_da_campanha` (depois de hoje, `data_futura`).
+   * A rota confere a janela com a campanha ativa antes de ler as vendas: datas arbitrárias não viram
+   * chaves do cache das rotas abertas.
+   */
   data: dataLocalSchema.optional(),
 });
 export type ConsultaBumbo = z.output<typeof consultaBumboSchema>;

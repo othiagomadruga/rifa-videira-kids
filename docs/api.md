@@ -357,7 +357,7 @@ Tipos nomeados para as telas (em `calculos.ts`): `MetaDoDia`, `PontoCurva`, `Rit
 
 1. Valida a consulta com o schema (`400 requisicao_invalida` fora dele).
 2. Lê a campanha ativa: sem campanha, `404 nao_encontrado`.
-3. Se veio `data` depois de hoje no fuso da campanha, `400 requisicao_invalida` com `detalhes` = `[{ "caminho": ["data"], "codigo": "data_futura", "mensagem": "A data não pode ser depois de hoje" }]`. "Hoje" é sempre `hojeNoFuso(campanha.fuso_horario, agora)`, a função única (`diaLocalDoInstante` delega para ela); compare com `diasEntre`.
+3. Se veio `data` depois de hoje no fuso da campanha, `400 requisicao_invalida` com `detalhes` = `[{ "caminho": ["data"], "codigo": "data_futura", "mensagem": "A data não pode ser depois de hoje" }]`. "Hoje" é sempre `hojeNoFuso(campanha.fuso_horario, agora)`, a função única (`diaLocalDoInstante` delega para ela); compare com `diasEntre`. No bumbo, antes disso, o `data` precisa estar na janela da campanha (`fora_da_campanha`, abaixo).
 4. Lê **todas** as células com a hierarquia e as vendas aprovadas agrupadas por célula e dia local (`EntradaCalculo`), de qualquer data.
 5. Chama a função com `agora = new Date()` e devolve o resultado como está.
 
@@ -524,7 +524,10 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 > Cache: respostas 200 desta rota ficam 30 s em cache no servidor e saem com `Cache-Control: public, max-age=30`
 > (erros saem com `no-store`). Ver docs/decisions.md D10.
 
-- **Consulta** (`consultaBumboSchema`): `data` (dia da mensagem, no máximo hoje); padrão hoje. A mensagem fala sempre do dia anterior, já fechado.
+- **Consulta** (`consultaBumboSchema`): `data` (dia da mensagem); padrão hoje. A mensagem fala sempre do dia anterior, já fechado.
+  - **Sem `data`**, é a mensagem de hoje, em qualquer fase: antes do início, a contagem regressiva; depois do fim, o resultado final.
+  - **Com `data`**, só na **janela da campanha**: do 1º dia ao dia seguinte ao último (`DIAS_DO_BUMBO_DEPOIS_DO_FIM` = 1; no dia seguinte ao fim, a mensagem ainda traz a venda do último dia, e dali em diante o texto não muda mais), e no máximo hoje. Fora da janela, `400 requisicao_invalida` com a mensagem da janela e `detalhes` = `[{ "caminho": ["data"], "codigo": "fora_da_campanha", "mensagem": "A data precisa estar entre 23/11/2026 e 17/12/2026 (do 1º dia da campanha ao dia seguinte ao último)" }]` (datas do exemplo). Na janela, mas depois de hoje: `data_futura`.
+  - A janela é conferida com a campanha ativa **antes** de ler as vendas (um comando pequeno a mais, só nas consultas com `data` que não estão no cache) e o 400 não entra no cache: só as datas com mensagem (algumas dezenas) viram chaves do cache, e uma data qualquer não lê os pedidos nem tira do cache as respostas guardadas.
 - **200** (`respostaBumboSchema`): `{ "data", "referencia", "texto", "gerado_em" }`, com `referencia` do dia da mensagem (o mesmo objeto das outras rotas). Para o exemplo, `texto` é:
 
 ```text
@@ -549,7 +552,7 @@ Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o link da sua célula com 
 - Cada divisão lista no máximo 5 células (`NOMES_POR_DIVISAO_NO_BUMBO`); as demais empatadas viram a linha "e mais N empatadas no Pº lugar".
 - **Nunca contém R$, centavos nem quantidade de bilhetes**, com qualquer configuração (R9). Os % (da meta, da curva e da projeção) aparecem; % por célula só se `publico.mostra_percentual_meta`. Um bumbo interno da coordenação, com bilhetes, é pendência ([regras-de-calculo.md, seção 6](regras-de-calculo.md#6-pendências)).
 - Sempre cabe em 4000 caracteres (o pior caso, com 72 células empatadas e nomes de 120 caracteres, dá 2436), com o *negrito* e o _itálico_ do WhatsApp.
-- **Erros**: 400 `requisicao_invalida` (inclusive `data` futura), 404 `nao_encontrado` (sem campanha ativa).
+- **Erros**: 400 `requisicao_invalida` (`data` fora do formato, fora da janela da campanha ou futura), 404 `nao_encontrado` (sem campanha ativa).
 
 ---
 

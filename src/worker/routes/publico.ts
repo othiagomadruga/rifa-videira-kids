@@ -3,7 +3,8 @@
  * em unidades (R$, centavos ou bilhetes), com qualquer configuração da campanha (R9):
  * - GET /api/publico/ranking: posição, nome e divisão de quem já vendeu na janela (e o % da meta, se a
  *   campanha permitir), sempre na data de hoje (um `data` na URL é ignorado pelo schema);
- * - GET /api/publico/bumbo: o texto do dia para o grupo dos líderes, sobre o dia anterior já fechado.
+ * - GET /api/publico/bumbo: o texto do dia para o grupo dos líderes, sobre o dia anterior já fechado;
+ *   um `data` informado só vale na janela da campanha (do 1º dia ao dia seguinte ao último).
  *
  * O index.ts monta este sub-app sob /api/publico, FORA dos prefixos do login (passo 6).
  * A regra é toda de calculos.ts. Como defesa a mais, a resposta passa pelo schema ESTRITO do contrato
@@ -12,14 +13,21 @@
  *
  * Cache (lib/cache-publico.ts): depois da validação, a resposta 200 de cada consulta fica guardada por
  * 30 s, com a chave na URL normalizada (sem cookies nem cabeçalhos do cliente); dentro do prazo, a
- * requisição não vai ao D1. Erros nunca são guardados.
+ * requisição não vai ao D1. Erros nunca são guardados. No bumbo, a janela do `data` limita as chaves às
+ * datas que têm mensagem (algumas dezenas): uma data qualquer não enche o cache nem lê as vendas.
  */
 import { Hono, type Context } from "hono";
 import {
+  DIAS_DO_BUMBO_DEPOIS_DO_FIM,
   ROTAS,
+  calcularCalendario,
+  diasEntre,
   montarBumbo,
   montarRankingPublico,
+  somarDias,
+  type DetalheValidacao,
 } from "../../shared/contracts";
+import { buscarCampanhaAtiva } from "../db/campanha";
 import {
   lerEntradaDoCalculo,
   relogioDoSistema,
@@ -53,6 +61,38 @@ function local<T extends `${typeof PREFIXO_PUBLICO}/${string}`>(
 
 /** Os montadores do contrato que as rotas abertas usam. */
 const MONTADORES = { montarRankingPublico, montarBumbo };
+
+/** Código do detalhe do 400 quando o `data` do bumbo sai da janela da campanha. */
+export const CODIGO_FORA_DA_CAMPANHA = "fora_da_campanha";
+
+/** "2026-11-23" → "23/11/2026" (data local, sem fuso). */
+const dataPorExtenso = (data: string) =>
+  `${data.slice(8, 10)}/${data.slice(5, 7)}/${data.slice(0, 4)}`;
+
+/**
+ * O `data` do bumbo fora da janela da campanha, do 1º dia ao dia seguinte ao último
+ * (DIAS_DO_BUMBO_DEPOIS_DO_FIM): o detalhe do 400, ou null quando a data está dentro. Lê só a campanha
+ * (um comando pequeno), ANTES das vendas: a data fora da janela não chega aos pedidos e, como é erro,
+ * não entra no cache. Sem campanha ativa também devolve null: o 404 é da leitura que vem em seguida.
+ */
+async function foraDaJanelaDoBumbo(
+  db: D1Database,
+  data: string,
+): Promise<DetalheValidacao | null> {
+  const ativa = await buscarCampanhaAtiva(db);
+  if (!ativa) return null;
+  const inicio = ativa.data_inicio;
+  const ate = somarDias(
+    calcularCalendario(inicio, ativa.periodos).data_fim,
+    DIAS_DO_BUMBO_DEPOIS_DO_FIM,
+  );
+  if (diasEntre(inicio, data) >= 0 && diasEntre(data, ate) >= 0) return null;
+  return {
+    caminho: ["data"],
+    codigo: CODIGO_FORA_DA_CAMPANHA,
+    mensagem: `A data precisa estar entre ${dataPorExtenso(inicio)} e ${dataPorExtenso(ate)} (do 1º dia da campanha ao dia seguinte ao último)`,
+  };
+}
 
 export interface OpcoesPublico {
   /** "Agora" (os testes fixam o instante); padrão: o relógio do sistema. */
@@ -122,6 +162,11 @@ export function criarPublico({
       const consulta = c.req.valid("query");
       const { data } = consulta;
       return comCache(c, consulta, async (agora) => {
+        // Sem `data` (hoje), vale em qualquer fase; com `data`, só na janela (uma ida a mais, pequena).
+        const fora =
+          data === undefined ? null : await foraDaJanelaDoBumbo(c.env.DB, data);
+        if (fora)
+          return responderErro(c, "requisicao_invalida", fora.mensagem, [fora]);
         const lido = await lerEntradaDoCalculo(c.env.DB, () => agora, {
           data,
         });
