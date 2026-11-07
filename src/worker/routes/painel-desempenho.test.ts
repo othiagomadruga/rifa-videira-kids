@@ -1,7 +1,9 @@
 // CA5: desempenho das quatro rotas no workerd com volume sintético (36 células × 24 dias). Mede, por rota,
 // o tempo total da requisição, o tempo esperando o D1 e a diferença (o trabalho do Worker: validação,
-// montador e JSON), além do montador sozinho. Os limites são folgados, para pegar regressão grosseira
-// (N+1, laço quadrático) sem depender da máquina; os números medidos saem no log do teste.
+// montador e JSON), além do montador sozinho, e as linhas lidas no D1 (o que o plano do D1 cobra). Os
+// limites são folgados, para pegar regressão grosseira (N+1, laço quadrático, consulta que volta a ler
+// várias linhas por pedido) sem depender da máquina; os números medidos saem no log do teste. As rotas
+// abertas vão sem o cache de 30 s (lib/cache-publico.ts): aqui se mede a resposta montada.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -16,6 +18,7 @@ import {
   type EscopoResolvido,
 } from "../../shared/contracts";
 import { lerEntradaDoCalculo } from "../db/painel";
+import { SEM_CACHE } from "../lib/cache-publico";
 import { erroNaoTratado, rotaInexistente } from "../lib/respostas-erro";
 import {
   bancoQueConta,
@@ -31,11 +34,17 @@ const TOTAL_CELULAS = 36;
 const AGORA = new Date("2026-12-12T15:00:00.000Z");
 /** Limite folgado do trabalho do Worker por requisição (o medido fica em poucos ms). */
 const LIMITE_WORKER_MS = 50;
+/**
+ * Linhas lidas no D1 por pedido aprovado, por requisição. Medido: ~1,3 com ~7 mil pedidos e ~1,0 com
+ * 259 mil (1 por pedido, pelo índice da migração 0003, e ~2 por grupo afiliado × dia). Pela view
+ * vendas_aprovadas eram ~6; sem o índice, ~2,3.
+ */
+const LIMITE_LINHAS_POR_PEDIDO = 1.5;
 
 const relogio = () => AGORA;
 const app = new Hono<{ Bindings: Cloudflare.Env }>();
 app.route(PREFIXO_PAINEL, criarPainel(relogio));
-app.route(PREFIXO_PUBLICO, criarPublico(relogio));
+app.route(PREFIXO_PUBLICO, criarPublico({ relogio, cache: SEM_CACHE }));
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);
 
@@ -244,8 +253,14 @@ async function medir(pedidos: number) {
       worker: true,
     });
     expect(montador).toBeLessThan(LIMITE_WORKER_MS);
+    const porPedido = linhasLidas / pedidos;
+    expect({
+      rota: rota.nome,
+      porPedido,
+      dentroDoLimite: porPedido <= LIMITE_LINHAS_POR_PEDIDO,
+    }).toEqual({ rota: rota.nome, porPedido, dentroDoLimite: true });
     linhas.push(
-      `${rota.nome.padEnd(36)} total ${ms(mediana(totais))} ms | D1 ${ms(mediana(banco))} ms | Worker ${ms(worker)} ms | montador ${ms(montador)} ms | linhas lidas no D1 ${linhasLidas.toLocaleString("pt-BR")}`,
+      `${rota.nome.padEnd(36)} total ${ms(mediana(totais))} ms | D1 ${ms(mediana(banco))} ms | Worker ${ms(worker)} ms | montador ${ms(montador)} ms | linhas lidas no D1 ${linhasLidas.toLocaleString("pt-BR")} (${porPedido.toFixed(2)} por pedido)`,
     );
   }
   console.log(

@@ -7,14 +7,12 @@
  * Caminhos e schemas vêm do contrato (`ROTAS`). Este sub-app NÃO autentica: o index.ts o monta sob
  * /api/painel, depois do login da coordenação (passo 4): `app.route(PREFIXO_PAINEL, painel)`.
  * A regra é toda de calculos.ts: a rota valida a consulta, lê o banco (db/painel.ts) e devolve o que o
- * montador entrega, como está. As respostas têm valores: saem com `Cache-Control: no-store`.
+ * montador entrega, como está. As respostas têm valores: saem com `Cache-Control: no-store` e nunca passam
+ * pelo cache das rotas abertas (lib/cache-publico.ts).
  */
-import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { z } from "zod";
 import {
   ROTAS,
-  detalhesDeValidacao,
   montarRankingPainel,
   montarResumoPainel,
 } from "../../shared/contracts";
@@ -23,8 +21,8 @@ import {
   relogioDoSistema,
   type Relogio,
 } from "../db/painel";
-import { mensagemDeCampo } from "../lib/mensagens-validacao";
 import { responderErro } from "../lib/respostas-erro";
+import { validarConsulta } from "../middleware/validacao";
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
@@ -39,23 +37,6 @@ function local<T extends `${typeof PREFIXO_PAINEL}/${string}`>(
   caminho: T,
 ): CaminhoLocal<T> {
   return caminho.slice(PREFIXO_PAINEL.length) as CaminhoLocal<T>;
-}
-
-/** Consulta pelo schema do contrato; fora dele, 400 `requisicao_invalida` com os problemas em português. */
-function validarConsulta<S extends z.ZodType>(schema: S) {
-  return zValidator("query", schema, async (resultado, c) => {
-    if (resultado.success) return;
-    const emPortugues = await schema.safeParseAsync(resultado.data, {
-      error: mensagemDeCampo,
-    });
-    const erro = emPortugues.success ? resultado.error : emPortugues.error;
-    return responderErro(
-      c,
-      "requisicao_invalida",
-      "Consulta inválida",
-      detalhesDeValidacao(erro),
-    );
-  });
 }
 
 /** O sub-app com o relógio dado (os testes fixam o instante; em produção, o do sistema). */

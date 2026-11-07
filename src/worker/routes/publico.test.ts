@@ -1,6 +1,7 @@
 // GET /api/publico/ranking e GET /api/publico/bumbo (docs/api.md, Sprint 3) com o D1 dos testes e o relógio
 // fixo. Cada 200 é conferido no schema estrito e comparado com o montador sobre os mesmos dados; as
-// respostas são varridas por campos de valor e por R$, centavos e bilhetes no texto.
+// respostas são varridas por campos de valor e por R$, centavos e bilhetes no texto. No fim, o cache das
+// respostas 200 (lib/cache-publico.ts): prazo, chave normalizada e erros fora do cache.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -16,6 +17,12 @@ import {
   type CodigoErro,
   type ConsultaRankingPublico,
 } from "../../shared/contracts";
+import {
+  SEM_CACHE,
+  TTL_CACHE_PUBLICO_MS,
+  criarCacheDeRespostas,
+  type CacheDeRespostas,
+} from "../lib/cache-publico";
 import { erroNaoTratado, rotaInexistente } from "../lib/respostas-erro";
 import {
   AGORA,
@@ -23,22 +30,31 @@ import {
   CAMPO_DE_VALOR,
   DADOS_CAMPANHA,
   TEXTO_DE_VALOR,
+  bancoQueConta,
   camposDe,
   entradaEsperada,
   limparBanco,
   semearCenario,
   textosDe,
 } from "../test/painel-apoio";
-import { CACHE_PUBLICO, PREFIXO_PUBLICO, criarPublico } from "./publico";
+import {
+  CACHE_PUBLICO,
+  PREFIXO_PUBLICO,
+  criarPublico,
+  type OpcoesPublico,
+} from "./publico";
 
 let agora = AGORA;
 
-/** O sub-app como o index.ts monta (aberto, fora do login), com o relógio dos testes. */
-function montarApp(montadores?: Parameters<typeof criarPublico>[1]) {
+/**
+ * O sub-app como o index.ts monta (aberto, fora do login), com o relógio dos testes. Sem cache por
+ * padrão: aqui o banco e o relógio mudam entre as chamadas (o cache tem testes próprios, no fim).
+ */
+function montarApp(opcoes: OpcoesPublico = {}) {
   const app = new Hono<{ Bindings: Cloudflare.Env }>();
   app.route(
     PREFIXO_PUBLICO,
-    criarPublico(() => agora, montadores),
+    criarPublico({ relogio: () => agora, cache: SEM_CACHE, ...opcoes }),
   );
   app.notFound(rotaInexistente);
   app.onError(erroNaoTratado);
@@ -117,6 +133,19 @@ const CONSULTAS: ConsultaRankingPublico[] = NIVEIS_RANKING.flatMap((nivel) =>
 
 const parametros = (consulta: ConsultaRankingPublico) =>
   `?${new URLSearchParams(consulta as Record<string, string>)}`;
+
+/** Montadores que "vazam": o mesmo resultado do contrato com um campo de valor (ou um texto) a mais. */
+const MONTADORES_COM_VAZAMENTO: OpcoesPublico["montadores"] = {
+  montarRankingPublico: (...argumentos) =>
+    ({
+      ...montarRankingPublico(...argumentos),
+      total_centavos: 123456,
+    }) as ReturnType<typeof montarRankingPublico>,
+  montarBumbo: (...argumentos) => ({
+    ...montarBumbo(...argumentos),
+    texto: "x".repeat(4001),
+  }),
+};
 
 afterEach(() => {
   agora = AGORA;
@@ -295,18 +324,7 @@ describe("defesa a mais: a resposta pública passa pelo schema estrito", () => {
     await semearCenario();
   });
 
-  // Um montador que "vaza": o mesmo resultado do contrato com um campo de valor a mais.
-  const comVazamento = montarApp({
-    montarRankingPublico: (...argumentos) =>
-      ({
-        ...montarRankingPublico(...argumentos),
-        total_centavos: 123456,
-      }) as ReturnType<typeof montarRankingPublico>,
-    montarBumbo: (...argumentos) => ({
-      ...montarBumbo(...argumentos),
-      texto: "x".repeat(4001),
-    }),
-  });
+  const comVazamento = montarApp({ montadores: MONTADORES_COM_VAZAMENTO });
 
   it("um campo a mais vindo do montador vira 500 erro_interno, e o valor não sai", async () => {
     const consoleError = vi
@@ -343,4 +361,181 @@ describe("sem campanha ativa", () => {
       expect(erro.mensagem).toBe("A campanha ainda não foi configurada");
     },
   );
+});
+
+describe("cache das respostas 200 por 30 s (lib/cache-publico.ts)", () => {
+  beforeAll(async () => {
+    await semearCenario();
+  });
+
+  /** O sub-app com o cache dado, num D1 que conta as idas ao banco. */
+  function comCache(cache: CacheDeRespostas, opcoes: OpcoesPublico = {}) {
+    const { db, contagem } = bancoQueConta();
+    const aplicacao = montarApp({ ...opcoes, cache });
+    async function pedir(caminho: string, cabecalhos: HeadersInit = {}) {
+      const res = await aplicacao.request(
+        caminho,
+        { headers: cabecalhos },
+        { ...env, DB: db },
+      );
+      return {
+        status: res.status,
+        texto: await res.text(),
+        cabecalhos: [...res.headers],
+      };
+    }
+    return { pedir, contagem };
+  }
+
+  /** Um cache nomeado novo da Cache API para cada teste: nada fica de um teste para o outro. */
+  async function cacheApiNova(): Promise<() => Cache> {
+    const aberto = await caches.open(`publico-teste-${crypto.randomUUID()}`);
+    return () => aberto;
+  }
+
+  const NIVEIS: [string, () => Promise<CacheDeRespostas>][] = [
+    [
+      "memória do isolate",
+      () =>
+        Promise.resolve(
+          criarCacheDeRespostas({ memoria: true, cacheApi: null }),
+        ),
+    ],
+    [
+      "Cache API",
+      async () =>
+        criarCacheDeRespostas({
+          memoria: false,
+          cacheApi: await cacheApiNova(),
+        }),
+    ],
+    [
+      "memória e Cache API (produção)",
+      async () =>
+        criarCacheDeRespostas({
+          memoria: true,
+          cacheApi: await cacheApiNova(),
+        }),
+    ],
+  ];
+
+  it.each(NIVEIS)(
+    "%s: dentro do prazo a 2ª chamada não vai ao D1 e a resposta é idêntica; no fim do prazo, vai de novo",
+    async (_nivel, criar) => {
+      const { pedir, contagem } = comCache(await criar());
+
+      for (const caminho of [
+        "/api/publico/ranking",
+        "/api/publico/ranking?nivel=rede&periodo=campanha&divisao=adultos",
+        "/api/publico/bumbo",
+        "/api/publico/bumbo?data=2026-11-30",
+      ]) {
+        agora = AGORA;
+        const antes = contagem.idas;
+        const primeira = await pedir(caminho);
+        expect({ caminho, status: primeira.status }).toEqual({
+          caminho,
+          status: 200,
+        });
+        // A campanha e o batch.
+        expect(contagem.idas).toBe(antes + 2);
+
+        agora = new Date(AGORA.getTime() + TTL_CACHE_PUBLICO_MS - 1);
+        expect(await pedir(caminho)).toEqual(primeira);
+        expect(contagem.idas).toBe(antes + 2);
+
+        agora = new Date(AGORA.getTime() + TTL_CACHE_PUBLICO_MS);
+        const depoisDoPrazo = await pedir(caminho);
+        expect(depoisDoPrazo.status).toBe(200);
+        expect(depoisDoPrazo.texto).not.toBe(primeira.texto); // novo instante
+        expect(contagem.idas).toBe(antes + 4);
+      }
+    },
+  );
+
+  it("a chave é a URL normalizada: cookies, cabeçalhos, ordem e parâmetros fora do schema não contam; outra consulta é outra chave", async () => {
+    const { pedir, contagem } = comCache(
+      criarCacheDeRespostas({ memoria: false, cacheApi: await cacheApiNova() }),
+    );
+    const primeira = await pedir("/api/publico/ranking");
+    expect(primeira.status).toBe(200);
+
+    for (const [caminho, cabecalhos] of [
+      ["/api/publico/ranking?periodo=atual&nivel=celula", {}],
+      ["/api/publico/ranking?nivel=celula&x=1&data=2026-11-25", {}],
+      [
+        "/api/publico/ranking",
+        {
+          Cookie: "__Host-sessao=qualquer",
+          Authorization: "Bearer qualquer",
+          "Accept-Language": "en-US",
+        },
+      ],
+    ] as const)
+      expect({ caminho, ...(await pedir(caminho, cabecalhos)) }).toEqual({
+        caminho,
+        ...primeira,
+      });
+    expect(contagem.idas).toBe(2);
+
+    // Outro nível, outra divisão ou outra data: outra chave, outra ida ao banco.
+    for (const caminho of [
+      "/api/publico/ranking?nivel=rede",
+      "/api/publico/ranking?divisao=jovens",
+      "/api/publico/bumbo",
+      "/api/publico/bumbo?data=2026-11-30",
+    ])
+      expect((await pedir(caminho)).status).toBe(200);
+    expect(contagem.idas).toBe(10);
+  });
+
+  it("erros não entram no cache: 400 nem chega ao banco, 404 e 500 vão ao banco toda vez", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const cache = criarCacheDeRespostas({
+      memoria: true,
+      cacheApi: await cacheApiNova(),
+    });
+
+    // 400: a validação vem antes do cache e do banco.
+    const invalida = comCache(cache);
+    for (let vez = 0; vez < 2; vez++)
+      expect(
+        (await invalida.pedir("/api/publico/ranking?nivel=igreja")).status,
+      ).toBe(400);
+    expect(invalida.contagem.idas).toBe(0);
+
+    // 500 (resposta fora do schema estrito): não fica guardado, e a próxima tenta de novo.
+    const vazando = comCache(cache, { montadores: MONTADORES_COM_VAZAMENTO });
+    for (let vez = 0; vez < 2; vez++)
+      expect((await vazando.pedir("/api/publico/ranking")).status).toBe(500);
+    expect(vazando.contagem.idas).toBe(4);
+
+    // 404 (sem campanha): também não; quando a campanha existe, a 200 sai na hora.
+    await limparBanco();
+    const semCampanha = comCache(cache);
+    for (let vez = 0; vez < 2; vez++)
+      expect((await semCampanha.pedir("/api/publico/bumbo")).status).toBe(404);
+    expect(semCampanha.contagem.idas).toBe(2);
+    await semearCenario();
+    expect((await semCampanha.pedir("/api/publico/bumbo")).status).toBe(200);
+  });
+
+  it("uma falha da Cache API não derruba a resposta: vai para o log e a requisição segue sem cache", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const quebrada = {
+      match: () => Promise.reject(new Error("Cache API fora do ar")),
+      put: () => Promise.reject(new Error("Cache API fora do ar")),
+    } as unknown as Cache;
+    const { pedir, contagem } = comCache(
+      criarCacheDeRespostas({ memoria: false, cacheApi: () => quebrada }),
+    );
+
+    expect((await pedir("/api/publico/ranking")).status).toBe(200);
+    expect((await pedir("/api/publico/ranking")).status).toBe(200);
+    expect(contagem.idas).toBe(4);
+    // Duas leituras e duas gravações que falharam.
+    expect(consoleError).toHaveBeenCalledTimes(4);
+  });
 });

@@ -21,7 +21,12 @@ import {
   ordenarVendas,
   semearCenario,
 } from "../test/painel-apoio";
-import { lerEntradaDoCalculo, type LeituraDoCalculo } from "./painel";
+import {
+  DESLOCAMENTO_DO_INDICE,
+  SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3,
+  lerEntradaDoCalculo,
+  type LeituraDoCalculo,
+} from "./painel";
 
 const relogio = () => AGORA;
 
@@ -149,6 +154,30 @@ describe("CA1: leitura agregada do cenário", () => {
 
     expect(relogioEspiao).toHaveBeenCalledOnce();
     expect(leitura.agora).toBe(AGORA);
+  });
+
+  it("em UTC−3 (Belém), as vendas saem do índice da migração 0003 já na ordem do GROUP BY, sem a view", async () => {
+    const { results } = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN ${SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3}`,
+    )
+      .bind(1)
+      .all<{ detail: string }>();
+    const plano = results.map((linha) => linha.detail);
+
+    expect(DESLOCAMENTO_DO_INDICE).toBe(-180);
+    // O índice de cobertura dá os pedidos agrupados por afiliado e dia: a única B-tree temporária é a
+    // do agrupamento final por célula, sobre as linhas já agrupadas. Nenhuma tabela da hierarquia.
+    expect(plano).toContainEqual(
+      expect.stringMatching(
+        /^SEARCH pedidos USING COVERING INDEX pedidos_aprovados_por_afiliado_dia \(campanha_id=\?\)$/,
+      ),
+    );
+    expect(plano.filter((passo) => passo.includes("TEMP B-TREE"))).toHaveLength(
+      1,
+    );
+    expect(
+      plano.filter((passo) => /\b(celulas|discipuladores|redes)\b/.test(passo)),
+    ).toEqual([]);
   });
 });
 

@@ -9,13 +9,14 @@
  * A regra é toda de calculos.ts. Como defesa a mais, a resposta passa pelo schema ESTRITO do contrato
  * antes de sair: um campo a mais (um valor que vazasse) vira 500 `erro_interno`, nunca chega ao público.
  * Respostas 200 saem com cache curto (`public, max-age=30`); erros, com `no-store`.
+ *
+ * Cache (lib/cache-publico.ts): depois da validação, a resposta 200 de cada consulta fica guardada por
+ * 30 s, com a chave na URL normalizada (sem cookies nem cabeçalhos do cliente); dentro do prazo, a
+ * requisição não vai ao D1. Erros nunca são guardados.
  */
-import { zValidator } from "@hono/zod-validator";
-import { Hono } from "hono";
-import type { z } from "zod";
+import { Hono, type Context } from "hono";
 import {
   ROTAS,
-  detalhesDeValidacao,
   montarBumbo,
   montarRankingPublico,
 } from "../../shared/contracts";
@@ -24,16 +25,21 @@ import {
   relogioDoSistema,
   type Relogio,
 } from "../db/painel";
-import { mensagemDeCampo } from "../lib/mensagens-validacao";
+import {
+  CACHE_PUBLICO,
+  cacheDeProducao,
+  chaveDoCache,
+  type CacheDeRespostas,
+} from "../lib/cache-publico";
 import { responderErro } from "../lib/respostas-erro";
+import { validarConsulta } from "../middleware/validacao";
+
+export { CACHE_PUBLICO };
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
 /** Onde o index.ts monta este sub-app. */
 export const PREFIXO_PUBLICO = "/api/publico";
-
-/** Cache das respostas 200: curto, porque o ranking muda a cada venda. */
-export const CACHE_PUBLICO = "public, max-age=30";
 
 type CaminhoLocal<T extends string> =
   T extends `${typeof PREFIXO_PUBLICO}${infer Resto}` ? Resto : never;
@@ -45,34 +51,23 @@ function local<T extends `${typeof PREFIXO_PUBLICO}/${string}`>(
   return caminho.slice(PREFIXO_PUBLICO.length) as CaminhoLocal<T>;
 }
 
-/** Consulta pelo schema do contrato; fora dele, 400 `requisicao_invalida` com os problemas em português. */
-function validarConsulta<S extends z.ZodType>(schema: S) {
-  return zValidator("query", schema, async (resultado, c) => {
-    if (resultado.success) return;
-    const emPortugues = await schema.safeParseAsync(resultado.data, {
-      error: mensagemDeCampo,
-    });
-    const erro = emPortugues.success ? resultado.error : emPortugues.error;
-    return responderErro(
-      c,
-      "requisicao_invalida",
-      "Consulta inválida",
-      detalhesDeValidacao(erro),
-    );
-  });
-}
-
 /** Os montadores do contrato que as rotas abertas usam. */
 const MONTADORES = { montarRankingPublico, montarBumbo };
 
-/**
- * O sub-app com o relógio dado (os testes fixam o instante; em produção, o do sistema). Os montadores
- * também são injetáveis, para o teste provar que uma resposta fora do schema estrito não sai.
- */
-export function criarPublico(
-  relogio: Relogio = relogioDoSistema,
-  montadores: typeof MONTADORES = MONTADORES,
-) {
+export interface OpcoesPublico {
+  /** "Agora" (os testes fixam o instante); padrão: o relógio do sistema. */
+  relogio?: Relogio;
+  /** Injetáveis para o teste provar que uma resposta fora do schema estrito não sai. */
+  montadores?: typeof MONTADORES;
+  /** Cache das respostas 200; padrão: o de produção (memória do isolate e `caches.default`). */
+  cache?: CacheDeRespostas;
+}
+
+export function criarPublico({
+  relogio = relogioDoSistema,
+  montadores = MONTADORES,
+  cache = cacheDeProducao(),
+}: OpcoesPublico = {}) {
   const publico = new Hono<Ambiente>();
 
   publico.use("*", async (c, next) => {
@@ -83,43 +78,66 @@ export function criarPublico(
     );
   });
 
+  /**
+   * A resposta da consulta já validada: a guardada, se estiver no prazo (sem ir ao banco); senão, a que
+   * `montar` gerar agora, que fica guardada se for 200. Um só instante por requisição: o do cache é o
+   * mesmo `agora` dos montadores.
+   */
+  async function comCache(
+    c: Context<Ambiente>,
+    consulta: Readonly<Record<string, string | undefined>>,
+    montar: (agora: Date) => Promise<Response>,
+  ): Promise<Response> {
+    const agora = relogio();
+    const chave = chaveDoCache(c.req.url, consulta);
+    const guardada = await cache.ler(chave, agora);
+    if (guardada !== null) return guardada;
+    const resposta = await montar(agora);
+    await cache.gravar(chave, resposta, agora);
+    return resposta;
+  }
+
   publico.get(
     local(ROTAS.rankingPublico.caminho),
     validarConsulta(ROTAS.rankingPublico.consulta),
-    async (c) => {
-      const lido = await lerEntradaDoCalculo(c.env.DB, relogio);
-      if (!lido.ok)
-        return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
-      return c.json(
-        ROTAS.rankingPublico.sucesso.corpo.parse(
-          montadores.montarRankingPublico(
-            lido.entrada,
-            c.req.valid("query"),
-            lido.agora,
+    (c) => {
+      const consulta = c.req.valid("query");
+      return comCache(c, consulta, async (agora) => {
+        const lido = await lerEntradaDoCalculo(c.env.DB, () => agora);
+        if (!lido.ok)
+          return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
+        return c.json(
+          ROTAS.rankingPublico.sucesso.corpo.parse(
+            montadores.montarRankingPublico(lido.entrada, consulta, lido.agora),
           ),
-        ),
-      );
+        );
+      });
     },
   );
 
   publico.get(
     local(ROTAS.bumbo.caminho),
     validarConsulta(ROTAS.bumbo.consulta),
-    async (c) => {
-      const { data } = c.req.valid("query");
-      const lido = await lerEntradaDoCalculo(c.env.DB, relogio, { data });
-      if (!lido.ok)
-        return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
-      return c.json(
-        ROTAS.bumbo.sucesso.corpo.parse(
-          montadores.montarBumbo(lido.entrada, { data }, lido.agora),
-        ),
-      );
+    (c) => {
+      const consulta = c.req.valid("query");
+      const { data } = consulta;
+      return comCache(c, consulta, async (agora) => {
+        const lido = await lerEntradaDoCalculo(c.env.DB, () => agora, {
+          data,
+        });
+        if (!lido.ok)
+          return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
+        return c.json(
+          ROTAS.bumbo.sucesso.corpo.parse(
+            montadores.montarBumbo(lido.entrada, { data }, lido.agora),
+          ),
+        );
+      });
     },
   );
 
   return publico;
 }
 
-/** O sub-app de produção (relógio do sistema). */
+/** O sub-app de produção (relógio do sistema e cache de produção). */
 export const publico = criarPublico();

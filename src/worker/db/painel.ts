@@ -8,12 +8,21 @@
  * 2. um `db.batch` com TODAS as células e a hierarquia (com `qtd_pessoas`; a meta proporcional reparte o
  *    total entre todas), as vendas aprovadas agrupadas por célula e dia local e, no resumo de rede,
  *    discipulador ou célula, o nome e a divisão do escopo.
- * As vendas vêm da view `vendas_aprovadas` (só `approved`, célula resolvida pelo afiliado na leitura, D7),
- * de QUALQUER data e com `celula_id` null para as sem célula: são no máximo (células + 1) × dias com venda
- * linhas, e os montadores separam a janela da campanha, as vendas sem célula e as de fora da janela.
- * Custo: cada requisição percorre os pedidos aprovados da campanha no banco (o D1 conta ~6 linhas lidas
- * por pedido, pelos LEFT JOIN da view); o Worker só recebe as linhas agregadas. O teste
- * src/worker/routes/painel-desempenho.test.ts mede com ~7 mil e com 259 mil pedidos.
+ * As vendas são os pedidos `approved` da campanha, de QUALQUER data, com a célula resolvida pelo afiliado
+ * na leitura (D7) e `celula_id` null para as sem célula (sem afiliado ou afiliado não vinculado): o mesmo
+ * conjunto da view `vendas_aprovadas`. São no máximo (células + 1) × dias com venda linhas, e os
+ * montadores separam a janela da campanha, as vendas sem célula e as de fora da janela.
+ *
+ * Custo (o D1 cobra por linha lida). Cada requisição percorre os pedidos aprovados da campanha; o Worker
+ * só recebe as linhas agregadas. A consulta NÃO usa a view: numa consulta agregada, o SQLite não elimina
+ * os LEFT JOIN da hierarquia (célula, discipulador, rede) e o D1 contava ~6 linhas lidas por pedido.
+ * Aqui os pedidos são agrupados por afiliado e dia direto da tabela, pelo índice da migração 0003, que
+ * já os entrega na ordem do GROUP BY (1 linha lida por pedido); só as linhas agrupadas (afiliado × dia)
+ * vão ao afiliado buscar a célula (~2 linhas lidas por grupo). O índice é do dia em UTC−3 (Belém); com
+ * outro deslocamento fixo, a mesma consulta leva o deslocamento como parâmetro e o GROUP BY passa por
+ * uma B-tree temporária (+1 linha lida por pedido). O teste src/worker/routes/painel-desempenho.test.ts
+ * mede com ~7 mil e com 259 mil pedidos; as rotas abertas ainda guardam a resposta por 30 s
+ * (lib/cache-publico.ts).
  *
  * Dia local no SQL. O dia de uma venda é o dia de `aprovado_em` no fuso da campanha (R6). Num fuso de
  * deslocamento fixo D (em minutos), é `date(aprovado_em, 'D minutes')`. Em America/Belem, D = −180: Belém
@@ -65,19 +74,45 @@ const SELECIONAR_CELULAS = `
   JOIN redes AS r ON r.id = d.rede_id
   ORDER BY c.id`;
 
-/** Vendas aprovadas da campanha por célula e dia local (?2 = deslocamento do fuso: '-180 minutes'). */
-const SELECIONAR_VENDAS_POR_DIA = `
-  SELECT celula_id, date(aprovado_em, ?2) AS dia, count(*) AS pedidos,
-    sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos
-  FROM vendas_aprovadas
-  WHERE campanha_id = ?1
-  GROUP BY celula_id, dia`;
+/**
+ * Vendas aprovadas da campanha por célula e dia local. Primeiro agrupa os pedidos por afiliado e dia
+ * (`diaLocal` é a expressão do dia), depois resolve a célula pelo afiliado (D7) nas linhas já agrupadas.
+ */
+const selecionarVendasPorDia = (diaLocal: string) => `
+  SELECT a.celula_id AS celula_id, v.dia AS dia, sum(v.pedidos) AS pedidos,
+    sum(v.bilhetes) AS bilhetes, sum(v.centavos) AS centavos
+  FROM (
+    SELECT affiliate_id, ${diaLocal} AS dia, count(*) AS pedidos,
+      sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos
+    FROM pedidos
+    WHERE campanha_id = ?1 AND status = 'approved'
+    GROUP BY affiliate_id, dia
+  ) AS v
+  LEFT JOIN afiliados AS a ON a.affiliate_id = v.affiliate_id
+  GROUP BY a.celula_id, v.dia`;
+
+/** O deslocamento do índice da migração 0003 (UTC−3, Belém), em minutos. */
+export const DESLOCAMENTO_DO_INDICE = -180;
+
+/**
+ * Em UTC−3, a expressão do dia é um literal IGUAL à do índice pedidos_aprovados_por_afiliado_dia: o
+ * SQLite só usa um índice de expressão com a mesma expressão (com parâmetro, não usa). Liga só o id (?1).
+ */
+export const SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3 = selecionarVendasPorDia(
+  "date(aprovado_em, '-180 minutes')",
+);
+
+/** Outro deslocamento fixo, como parâmetro (?2 = '+345 minutes'): o GROUP BY não usa o índice. */
+const SELECIONAR_VENDAS_POR_DIA = selecionarVendasPorDia(
+  "date(aprovado_em, ?2)",
+);
 
 /** As vendas uma a uma, para agrupar no Worker quando o fuso não tem deslocamento fixo. */
 const SELECIONAR_VENDAS = `
-  SELECT celula_id, aprovado_em, qtd_bilhetes, total_centavos
-  FROM vendas_aprovadas
-  WHERE campanha_id = ?1`;
+  SELECT a.celula_id AS celula_id, p.aprovado_em, p.qtd_bilhetes, p.total_centavos
+  FROM pedidos AS p
+  LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
+  WHERE p.campanha_id = ?1 AND p.status = 'approved'`;
 
 type EscopoComId = Extract<EscopoPainel, "rede" | "discipulador" | "celula">;
 
@@ -252,9 +287,11 @@ export async function lerEntradaDoCalculo(
     db.prepare(SELECIONAR_CELULAS),
     minutos === null
       ? db.prepare(SELECIONAR_VENDAS).bind(ativa.id)
-      : db
-          .prepare(SELECIONAR_VENDAS_POR_DIA)
-          .bind(ativa.id, modificador(minutos)),
+      : minutos === DESLOCAMENTO_DO_INDICE
+        ? db.prepare(SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3).bind(ativa.id)
+        : db
+            .prepare(SELECIONAR_VENDAS_POR_DIA)
+            .bind(ativa.id, modificador(minutos)),
   ];
   // O escopo vai no mesmo batch: um id inexistente (raro) custa a leitura, mas não uma ida a mais.
   if (comId) comandos.push(db.prepare(SELECIONAR_ESCOPO[tipo]).bind(id));

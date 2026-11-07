@@ -6,10 +6,20 @@
 // b) o middleware cobre os prefixos inteiros: caminho sem rota também dá 401, e não 404;
 // c) escrita de outra origem é recusada (CSRF), mesmo com sessão de admin, e nada é gravado;
 // d) os cabeçalhos de segurança saem em 200, 401, 403 e 404, e o webhook segue só com o Bearer;
-// e) o painel (RIFA-PAINEL) fica atrás do login e a visão pública fica aberta, sem nenhum valor;
+// e) o painel (RIFA-PAINEL) fica atrás do login e a visão pública fica aberta, sem nenhum valor, e só
+//    ela passa pelo cache de 30 s (relógio fixo: nada depende do dia em que o teste roda);
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import paidOrderAfiliado from "../../test/fixtures/rifei/paid_order.afiliado.json";
 import {
   JANELAS_RANKING,
@@ -33,6 +43,7 @@ import {
   type Papel,
 } from "../shared/contracts";
 import app from "./index";
+import { TTL_CACHE_PUBLICO_MS } from "./lib/cache-publico";
 import { CABECALHOS_SEGURANCA } from "./middleware/cabecalhos-seguranca";
 import { CACHE_PUBLICO } from "./routes/publico";
 import { ORIGEM, cabecalhosDeSessao } from "./test/acesso-teste";
@@ -653,9 +664,13 @@ describe("d) cabeçalhos de segurança e webhook da Rifei", () => {
 });
 
 describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-PAINEL)", () => {
-  // O app real usa o relógio do sistema: o cenário dos testes do painel vai para "hoje", que vira o
-  // dia 9 de 21 (2º dia da Semana 2), com as mesmas vendas deslocadas.
-  const hoje = hojeNoFuso(DADOS_CAMPANHA.fuso_horario, new Date());
+  // Relógio FIXO (vi.useFakeTimers só no Date, que o app real lê com new Date()): nada aqui depende do
+  // dia em que o teste roda nem da virada do dia em Belém (03:00Z). É 12:00 de Belém num dia que já
+  // passou, de propósito: as sessões do beforeAll do arquivo (relógio real, valem 24 h) continuam
+  // válidas nesse instante, e nenhuma sessão nova é criada com o relógio parado. O cenário dos testes
+  // do painel vai para esse dia, que vira o dia 9 de 21 (2º dia da Semana 2), com as vendas deslocadas.
+  const AGORA_FIXO = new Date("2026-11-04T15:00:00.000Z");
+  const hoje = hojeNoFuso(DADOS_CAMPANHA.fuso_horario, AGORA_FIXO);
   const inicio = somarDias(hoje, -8);
   const deslocamento = diasEntre(DADOS_CAMPANHA.data_inicio, inicio);
   const CONFIGURACOES_PUBLICAS = [
@@ -691,8 +706,26 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
     });
   }
 
+  // O cache das rotas abertas (30 s, no relógio da rota) guarda as respostas de um teste: cada teste
+  // começa 31 s depois do anterior (ainda no mesmo dia), para não receber a resposta guardada por outro.
+  let instante = AGORA_FIXO.getTime();
+  function andarDoRelogio() {
+    instante += TTL_CACHE_PUBLICO_MS + 1_000;
+    vi.setSystemTime(instante);
+  }
+
   beforeAll(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(instante);
     await semear();
+  });
+
+  beforeEach(() => {
+    andarDoRelogio();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
   });
 
   it("as rotas do painel e as públicas estão registradas no app real", () => {
@@ -737,7 +770,11 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
     expect(resumo.status).toBe(200);
     expect(resumo.headers.get("Cache-Control")).toBe("no-store");
     const corpoResumo = respostaPainelResumoSchema.parse(await resumo.json());
-    expect(corpoResumo.referencia).toMatchObject({ dia_campanha: 9 });
+    // O relógio fixo chega ao app real: o "hoje" da resposta é o dia do AGORA_FIXO.
+    expect(corpoResumo.referencia).toMatchObject({
+      data: hoje,
+      dia_campanha: 9,
+    });
     expect(corpoResumo.vendas.total_centavos).toBeGreaterThan(0);
 
     const ranking = await requisitar(
@@ -794,7 +831,7 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
     },
   );
 
-  it("com cookie de sessão, a visão pública é a mesma: a sessão não abre valor nenhum", async () => {
+  it("com cookie de sessão, a visão pública é a mesma: a sessão não abre valor nenhum nem muda a chave do cache", async () => {
     await semear();
     const semInstante = (corpo: unknown) => {
       const { atualizado_em, gerado_em, ...resto } = corpo as Record<
@@ -807,13 +844,59 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
 
     for (const caminho of ["/api/publico/ranking", "/api/publico/bumbo"]) {
       const anonimo = await requisitar("GET", caminho);
+      // Passa do prazo do cache: a resposta com sessão é montada de novo, não lida do cache.
+      andarDoRelogio();
       const comSessao = await requisitar("GET", caminho, admin);
 
       expect(comSessao.status).toBe(200);
-      expect(semInstante(await comSessao.json())).toEqual(
+      const corpoComSessao: unknown = await comSessao.json();
+      expect(semInstante(corpoComSessao)).toEqual(
         semInstante(await anonimo.json()),
       );
+      // Dentro do prazo, sem cookie, volta a MESMA resposta guardada: a sessão não entra na chave.
+      expect(await (await requisitar("GET", caminho)).json()).toEqual(
+        corpoComSessao,
+      );
     }
+  });
+
+  it("cache só na visão pública: 30 s sem ler o banco (com ou sem cookie); o painel lê o banco toda vez e nunca passa pela Cache API", async () => {
+    const batch = vi.spyOn(env.DB, "batch");
+    const match = vi.spyOn(Cache.prototype, "match");
+    const put = vi.spyOn(Cache.prototype, "put");
+
+    for (const caminho of ["/api/painel/resumo", "/api/painel/ranking"])
+      for (let vez = 0; vez < 2; vez++) {
+        const antes = batch.mock.calls.length;
+        const res = await requisitar("GET", caminho, coordenacao);
+
+        expect(res.status).toBe(200);
+        expect(res.headers.get("Cache-Control")).toBe("no-store");
+        expect(batch.mock.calls.length).toBe(antes + 1);
+      }
+    expect({
+      match: match.mock.calls.length,
+      put: put.mock.calls.length,
+    }).toEqual({ match: 0, put: 0 });
+
+    // Contraprova: a 1ª ida à visão pública lê o banco e grava a 200 na Cache API; as seguintes, na
+    // mesma URL normalizada e dentro dos 30 s, saem do cache, sem ler o banco.
+    const primeira = await requisitar("GET", "/api/publico/ranking");
+    const lidas = batch.mock.calls.length;
+    expect(primeira.status).toBe(200);
+    expect(put).toHaveBeenCalledOnce();
+    const texto = await primeira.text();
+    for (const cabecalhos of [{}, admin])
+      expect(
+        await (
+          await requisitar(
+            "GET",
+            "/api/publico/ranking?periodo=atual&nivel=celula",
+            cabecalhos,
+          )
+        ).text(),
+      ).toBe(texto);
+    expect(batch.mock.calls.length).toBe(lidas);
   });
 });
 

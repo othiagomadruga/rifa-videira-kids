@@ -11,6 +11,7 @@ import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
 import { detalhesDeValidacao } from "../../shared/contracts";
+import { mensagemDeCampo } from "../lib/mensagens-validacao";
 import { responderErro } from "../lib/respostas-erro";
 
 /** Corpo JSON validado: no handler, `c.req.valid("json")` já vem tipado e com os padrões do schema. */
@@ -56,4 +57,27 @@ export function validarParametros<T extends z.ZodType>(schema: T) {
           detalhesDeValidacao(resultado.error),
         ),
   );
+}
+
+/**
+ * Consulta (query string) pelo schema do contrato: no handler, `c.req.valid("query")` já vem com os
+ * padrões do schema. Fora dele, 400 `requisicao_invalida` ("Consulta inválida"), com os problemas em
+ * `detalhes` e as mensagens em português (lib/mensagens-validacao.ts).
+ */
+export function validarConsulta<S extends z.ZodType>(schema: S) {
+  return zValidator("query", schema, async (resultado, c) => {
+    if (resultado.success) return;
+    // Só no caminho de erro: repete a validação da consulta recebida com as mensagens em português.
+    // Os problemas são os mesmos; só o texto muda.
+    const emPortugues = await schema.safeParseAsync(resultado.data, {
+      error: mensagemDeCampo,
+    });
+    const erro = emPortugues.success ? resultado.error : emPortugues.error;
+    return responderErro(
+      c,
+      "requisicao_invalida",
+      "Consulta inválida",
+      detalhesDeValidacao(erro),
+    );
+  });
 }

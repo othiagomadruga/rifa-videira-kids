@@ -1,5 +1,5 @@
-// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql e 0002_acessos.sql), aplicado pelo setup
-// apply-migrations.ts no D1 local dos testes, dentro do workerd.
+// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql e 0003_vendas_por_dia.sql),
+// aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd.
 import { env } from "cloudflare:workers";
 import { describe, expect, it, onTestFinished } from "vitest";
 
@@ -72,7 +72,12 @@ describe("migrações: schema do D1", () => {
       discipuladores: ["discipuladores_por_rede"],
       celulas: ["celulas_por_discipulador"],
       afiliados: ["afiliados_por_celula"],
-      pedidos: ["pedidos_por_afiliado_status", "pedidos_por_status_aprovacao"],
+      pedidos: [
+        "pedidos_por_afiliado_status",
+        "pedidos_por_status_aprovacao",
+        // 0003: parcial (approved) e com o dia de UTC−3, para a leitura do painel (db/painel.ts).
+        "pedidos_aprovados_por_afiliado_dia",
+      ],
       webhook_eventos: [
         "webhook_eventos_por_pedido",
         "webhook_eventos_por_resultado",
