@@ -17,7 +17,7 @@ import {
   type ColunaTabela,
 } from "../../components/ui";
 import { formatarData, formatarDataHora } from "../../lib/formatadores";
-import { LIMITE_PEDIDOS_RECUPERAR } from "./conferencia-api";
+import { LIMITE_PEDIDOS_RECUPERAR } from "../../../shared/contracts/conferencia";
 import {
   comMaiuscula,
   textoDoAfiliado,
@@ -29,6 +29,8 @@ import { DIVERGENCIAS, OBSERVACOES, plural, tomDoAviso } from "./textos";
 
 type Props = {
   analise: RespostaAnaliseReconciliacao;
+  /** Os avisos da leitura do arquivo (na tela) e os da comparação (da API), juntos. */
+  avisos: readonly AvisoReconciliacao[];
   /** Vendas perdidas marcadas para recuperar. */
   selecionados: ReadonlySet<string>;
   aoSelecionar: (codigos: string[], marcado: boolean) => void;
@@ -44,6 +46,7 @@ type Props = {
 // totais, as tabelas por afiliado e por dia.
 export function Resultado({
   analise,
+  avisos,
   selecionados,
   aoSelecionar,
   aoRecuperar,
@@ -70,12 +73,13 @@ export function Resultado({
         {analise.modo === "por_pedido" ? (
           <PorPedido
             analise={analise}
+            avisos={avisos}
             selecionados={selecionados}
             aoSelecionar={aoSelecionar}
             aoRecuperar={aoRecuperar}
           />
         ) : (
-          <Agregado analise={analise} />
+          <Agregado analise={analise} avisos={avisos} />
         )}
       </div>
     </Card>
@@ -106,11 +110,13 @@ function Avisos({ avisos }: { avisos: readonly AvisoReconciliacao[] }) {
 
 function PorPedido({
   analise,
+  avisos,
   selecionados,
   aoSelecionar,
   aoRecuperar,
 }: {
   analise: RespostaAnalisePorPedido;
+  avisos: readonly AvisoReconciliacao[];
   selecionados: ReadonlySet<string>;
   aoSelecionar: Props["aoSelecionar"];
   aoRecuperar: () => void;
@@ -125,7 +131,27 @@ function PorPedido({
   );
 
   let manchete: ReactNode;
-  if (resumo.com_divergencia === 0 && resumo.pedidos_no_arquivo > 0) {
+  if (!analise.codigo.confere) {
+    manchete = (
+      <Aviso
+        tom="perigo"
+        anuncio="nenhum"
+        titulo="A coluna escolhida como código do pedido não parece ser o código da Rifei"
+      >
+        <p>
+          Só {analise.codigo.encontrados.toLocaleString("pt-BR")} de{" "}
+          {plural(
+            analise.codigo.pagos_no_arquivo,
+            "pedido pago",
+            "pedidos pagos",
+          )}{" "}
+          do arquivo existem no sistema. Por segurança, nada pode ser
+          recuperado: em “Colunas do arquivo”, troque o{" "}
+          <strong>Código do pedido</strong> pela coluna certa e confira de novo.
+        </p>
+      </Aviso>
+    );
+  } else if (resumo.com_divergencia === 0 && resumo.pedidos_no_arquivo > 0) {
     manchete = (
       <Aviso tom="sucesso" anuncio="nenhum" titulo="Tudo confere">
         <p>
@@ -179,11 +205,15 @@ function PorPedido({
           valor={plural(resumo.com_divergencia, "pedido", "pedidos")}
         />
       </div>
-      <Avisos avisos={analise.avisos} />
+      {/* A trava do código já está no aviso do topo. */}
+      <Avisos
+        avisos={avisos.filter((item) => item.codigo !== "codigo_nao_confere")}
+      />
       {comCasos.map((grupo) => (
         <Grupo
           key={grupo.tipo}
           grupo={grupo}
+          codigoConfere={analise.codigo.confere}
           selecionados={selecionados}
           aoSelecionar={aoSelecionar}
           aoRecuperar={aoRecuperar}
@@ -215,11 +245,13 @@ function totaisDoGrupo(grupo: GrupoDivergencia): string {
 
 function Grupo({
   grupo,
+  codigoConfere,
   selecionados,
   aoSelecionar,
   aoRecuperar,
 }: {
   grupo: GrupoDivergencia;
+  codigoConfere: boolean;
   selecionados: ReadonlySet<string>;
   aoSelecionar: Props["aoSelecionar"];
   aoRecuperar: () => void;
@@ -241,6 +273,7 @@ function Grupo({
       {grupo.tipo === "venda_perdida" ? (
         <VendasPerdidas
           itens={grupo.itens}
+          codigoConfere={codigoConfere}
           selecionados={selecionados}
           aoSelecionar={aoSelecionar}
           aoRecuperar={aoRecuperar}
@@ -296,11 +329,13 @@ const COLUNAS_DIVERGENCIA: ColunaTabela<Divergencia>[] = [
 
 function VendasPerdidas({
   itens,
+  codigoConfere,
   selecionados,
   aoSelecionar,
   aoRecuperar,
 }: {
   itens: readonly Divergencia[];
+  codigoConfere: boolean;
   selecionados: ReadonlySet<string>;
   aoSelecionar: Props["aoSelecionar"];
   aoRecuperar: () => void;
@@ -313,9 +348,12 @@ function VendasPerdidas({
   const demais = marcadas.length > LIMITE_PEDIDOS_RECUPERAR;
 
   let dica: string;
-  if (recuperaveis.length === 0)
+  if (!codigoConfere)
     dica =
-      "Nenhuma destas vendas pode ser recuperada: falta a quantidade, o valor ou a data é depois de agora.";
+      "Nada pode ser recuperado enquanto a coluna do código do pedido não conferir com o sistema.";
+  else if (recuperaveis.length === 0)
+    dica =
+      "Nenhuma destas vendas pode ser recuperada agora: veja o motivo em cada uma.";
   else if (marcadas.length === 0) dica = "Marque as vendas que quer recuperar.";
   else if (demais)
     dica = `Recupere até ${LIMITE_PEDIDOS_RECUPERAR.toLocaleString("pt-BR")} por vez.`;
@@ -468,7 +506,13 @@ const COLUNAS_DIA: ColunaTabela<LinhaDia>[] = [
   },
 ];
 
-function Agregado({ analise }: { analise: RespostaAnaliseAgregada }) {
+function Agregado({
+  analise,
+  avisos,
+}: {
+  analise: RespostaAnaliseAgregada;
+  avisos: readonly AvisoReconciliacao[];
+}) {
   const { total } = analise;
   return (
     <>
@@ -498,7 +542,7 @@ function Agregado({ analise }: { analise: RespostaAnaliseAgregada }) {
           {formatarData(analise.recorte.data_fim)}, os dias do arquivo.
         </p>
       )}
-      <Avisos avisos={analise.avisos} />
+      <Avisos avisos={avisos} />
       {analise.por_afiliado && (
         <section className="conferencia-grupo">
           <h3 className="conferencia-subtitulo">Por afiliado</h3>

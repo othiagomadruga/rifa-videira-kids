@@ -219,49 +219,64 @@ Os payloads reais capturados devem virar fixtures novas, com os dados pessoais t
 
 ## 10. Conferência pelo CSV (Exportar Pedidos, RIFA-012)
 
-Não há retry documentado, então o webhook não pode ser a única fonte. A conferência compara o CSV que a Rifei exporta com os pedidos gravados e recupera as vendas que se perderam, para o ranking nunca mentir. Rotas, schemas e exemplos: [api.md](api.md#conferência-pelo-csv-da-rifei-sprint-4-rifa-012). Tela: `/coordenacao/conferencia`.
+Não há retry documentado, então o webhook não pode ser a única fonte. A conferência compara o CSV que a Rifei exporta com os pedidos gravados e recupera as vendas que se perderam, para o ranking nunca mentir. Rotas, corpo compacto, schemas e exemplos: [api.md](api.md#conferência-pelo-csv-da-rifei-sprint-4-rifa-012). Tela: `/coordenacao/conferencia`.
 
 ### Como a coordenação usa
 
 1. Na Rifei: pedidos da campanha → ⋮ → **Exportar Pedidos**. Incluir o código do pedido, o status, a quantidade de bilhetes, o valor, o afiliado e a data do pagamento, e deixar "Um bilhete por linha" desmarcado (marcado também funciona, desde que venha o código).
-2. Na tela, escolher o arquivo como a Rifei baixou (sem abrir e salvar no Excel). O sistema detecta as colunas pelo nome e mostra o mapeamento: a coordenação troca o que estiver errado e confere de novo.
+2. Na tela, escolher o arquivo como a Rifei baixou (sem abrir e salvar no Excel). O **navegador** lê o arquivo, detecta as colunas pelo nome e mostra o mapeamento: a coordenação troca o que estiver errado e confere de novo.
 3. Ler o resumo e as diferenças por tipo, cada uma com a explicação. As **vendas perdidas** (pagas na Rifei e ausentes no sistema) recuperáveis vêm marcadas; "Recuperar" mostra a prévia do que vai entrar e só grava na confirmação. As recuperadas passam a contar no painel, nos rankings e no bumbo. "Recuperações feitas" mostra quem recuperou, quando e quantas.
+
+### Onde o arquivo é lido (ciclo 2)
+
+O CSV é lido **no navegador** (`src/shared/conferencia/`: o mesmo código roda nos testes do Worker). Ler o arquivo no Worker custava de 50 a 375 ms de CPU (95% em datas, com um `Intl.DateTimeFormat` por célula), e o plano Free dá 10 ms por requisição. Agora a tela manda à API um corpo compacto: uma lista por campo mapeado, já normalizada (códigos, status, quantidade, a contagem dos números, centavos, afiliado, dia e instante no fuso da campanha, que a tela pede em `GET /api/admin/campanha`), com as linhas iguais juntadas (`vezes`). O Worker confere o corpo com um laço simples, o banco devolve só os pedidos com os códigos do arquivo e os totais já somados, e a análise é um passeio pelos pedidos: ~7–8 ms com 7 mil pedidos no workerd (detalhes em api.md).
+
+O corpo vai até 1 MiB (uns 15 mil pedidos com códigos curtos; 7 mil dão ~430 KB). Acima disso, a tela pede um período menor. O navegador para de ler o arquivo logo depois de 50.000 linhas (não lê milhões de linhas só para recusar).
 
 ### Privacidade (D1)
 
-- O arquivo vai inteiro para a API e é lido só na memória da requisição: não é armazenado nem vai para o log. No navegador, fica só na memória da tela (nunca no `localStorage`).
-- As colunas de dado pessoal, reconhecidas pelo nome (nome, e-mail, telefone, celular, WhatsApp, contato, CPF, documento, nascimento, endereço, CEP, cidade, estado, observação, comprador, cliente, participante, pagador...; o telefone, o e-mail ou o CPF do afiliado; "Número" sozinho num arquivo com endereço), nunca são lidas e não podem ser mapeadas. O DDD não é derivado: a conferência não precisa dele, e o pedido recuperado fica com `ddd` e `pais` nulos.
-- As respostas só trazem códigos validados, status normalizados, quantidades, centavos, dias, ids de afiliado e nomes de coluna. Um texto que não se encaixa (afiliado que não é número nem rótulo cadastrado, status desconhecido) é só contado, nunca devolvido. Uma primeira linha com cara de dados (números, datas, valores, telefones, e-mails) é recusada como "sem cabeçalho", para não voltar como nome de coluna.
+- O texto do arquivo fica só na memória da tela (nunca no `localStorage`) e **não sai do navegador**: para a API vão só as colunas mapeadas que não são de dado pessoal.
+- As colunas de dado pessoal, reconhecidas pelo nome (nome, e-mail, telefone, celular, WhatsApp, contato, CPF, documento, nascimento, endereço, CEP, cidade, estado, observação, comprador, cliente, participante, pagador...; o telefone, o e-mail ou o CPF do afiliado; "Número" sozinho num arquivo com endereço), não podem ser mapeadas. A API confere de novo pelo nome e recusa um corpo com uma delas mapeada (400 `coluna_pessoal`). O DDD não é derivado.
+- Os números dos bilhetes também não saem do navegador (vai só a contagem): o pedido recuperado fica com `numeros` nulo.
+- As respostas só trazem códigos validados, status normalizados, quantidades, centavos, dias e ids de afiliado. O usuário do afiliado que não bate com um rótulo cadastrado é só contado, nunca devolvido.
 - O log de erro da rota leva só o nome do erro (e a mensagem, quando é do D1).
-- Do arquivo, a auditoria guarda o SHA-256 (identifica o arquivo sem guardar o conteúdo) e os nomes das colunas usadas.
-- Os testes varrem respostas, banco e log atrás dos dados pessoais fictícios dos CSVs de teste.
+- Do arquivo, a auditoria guarda o SHA-256 do texto (calculado no navegador) e os nomes das colunas usadas.
+- Os testes varrem os corpos enviados, as respostas, o banco e o log atrás dos dados pessoais fictícios dos CSVs de teste.
 
 ### Formatos aceitos
 
 - Arquivo: UTF-8 (com ou sem BOM) ou Windows-1252 (a tela relê), separador `,` ou `;`, aspas do RFC 4180, linhas em branco ignoradas. Até 5 MB, 50.000 linhas e 200 colunas.
-- Valores: "R$ 1.234,56", "1.234,56", "20,00", "20.00" e "20"; quantidades inteiras; números dos bilhetes separados por vírgula, ponto e vírgula, barra ou espaço; datas "23/11/2026", "23/11/26 às 14h05" e "2026-11-23 14:35" (hora de Belém) ou ISO com fuso.
+- Valores: "R$ 1.234,56", "1.234,56", "20,00", "20.00" e "20"; quantidades inteiras; números dos bilhetes separados por vírgula, ponto e vírgula, barra ou espaço; datas "23/11/2026", "23/11/26 às 14h05" e "2026-11-23 14:35" (hora local do fuso da campanha, inclusive com horário de verão) ou ISO com fuso.
 - Fórmula de planilha (=, +, @ ou - seguido de letra) nunca vira valor: a célula fica ilegível e o aviso `formula_ignorada` conta. O código do pedido só aceita letras, números e `. _ : / # -`, começando por letra ou número.
-- Sem o código: comparação pelos totais (por afiliado e por dia), sem recuperar. Sem o status: tudo conta como pago (com aviso). Sem quantidade, valor ou data: o campo não é comparado; quantidade e valor são obrigatórios para recuperar.
-- "Um bilhete por linha" com o código: as linhas de cada pedido se juntam (valor e quantidade iguais em todas as linhas contam uma vez; diferentes, somam). Sem o código, só os bilhetes podem ser comparados.
+- Sem o código: comparação pelos totais (por afiliado e por dia), sem recuperar; sem o código e sem a quantidade, a quantidade de pedidos não é comparada (uma linha pode ser um bilhete; aviso `sem_contagem_de_pedidos`). Sem o status: tudo conta como pago (com aviso). Sem quantidade, valor ou data: o campo não é comparado; quantidade e valor são obrigatórios para recuperar.
+
+### Um bilhete por linha: o valor de cada pedido
+
+Com o código, as linhas de cada pedido se juntam (quantidades iguais contam uma vez, com pelo menos uma por linha). O valor:
+
+- valores diferentes nas linhas: somam (são de cada linha);
+- só uma linha com o valor (as outras só com o bilhete): é o valor do pedido;
+- o **mesmo valor em todas as linhas**: pode ser o de um bilhete ou o do pedido inteiro repetido. Primeiro vale a **convenção do arquivo**, tirada dos pedidos dele que já estão pagos no sistema: se a maioria (e pelo menos 2) tem o total igual a valor × linhas, cada linha é um bilhete; se tem o total igual ao valor, cada linha repete o pedido (avisos `valor_por_bilhete` e `valor_do_pedido_repetido`). Sem convenção, um valor até o preço do bilhete e no máximo 50% abaixo dele (`TOLERANCIA_DESCONTO_BP`, a mesma folga da plausibilidade do webhook) é o de um bilhete: 3 linhas de R$ 20,00 dão R$ 60,00; a promoção R$ 18 × 2 dá R$ 36,00. Outro valor é **ambíguo**: o valor do pedido não é comparado e ele não pode ser recuperado (aviso `valor_ambiguo`; conferir na Rifei).
+
+### Trava do código que não bate
+
+Se a coluna escolhida como código do pedido não é o código da Rifei (por exemplo, o número do bilhete), todas as vendas pareceriam perdidas e o "Recuperar" gravaria lixo. Com pelo menos 5 pedidos pagos no arquivo e menos da metade deles no sistema, a análise responde `codigo.confere: false`, mostra o aviso "a coluna escolhida como código do pedido não parece ser o código da Rifei", não marca nada para recuperar e o "Recuperar" responde 400 até a coluna ser trocada. Exceção: se o sistema tem pelo menos 5 pagos no período do arquivo e a maioria deles aparece no arquivo, a coluna é a certa (foi o webhook que parou) e a recuperação segue.
 
 ### Recuperar
 
 - Só a venda perdida: um pedido que já existe nunca é mudado. O pendente que está pago na Rifei (`pagamento_nao_registrado`) aparece na conferência, mas corrigi-lo fica fora desta versão.
+- O "Recuperar" recebe o mesmo corpo da análise (não relê o arquivo) e aplica as mesmas regras com o banco de agora.
 - Atômico (um `db.batch`) e idempotente (`ON CONFLICT DO NOTHING`): repetir não grava de novo nem cria outra auditoria.
 - `pedidos.origem = 'conferencia'` e `pedidos.recuperacao_id` → `recuperacoes` (quem, quando, quantos, o SHA-256 e as colunas usadas). Um `paid_order` que chegue depois para o mesmo pedido dá `duplicado`.
 - Instante gravado em `aprovado_em`: o do arquivo; com só o dia, o meio-dia (ou agora, se for hoje); sem data, o instante da recuperação.
 
-### Desempenho (atenção ao plano Free)
-
-Ler o CSV é trabalho de CPU no Worker. Medido no Node com o mesmo leitor (`lerCsv`): de 15 a 75 ms para 5.000 pedidos (~0,7 MB) e de 110 a 270 ms para 25.000 linhas (~3,4 MB). No plano Workers Free (10 ms de CPU por requisição), um arquivo grande pode ser cortado pela Cloudflare (erro 1102); no Paid sobra folga. Exportar só as colunas necessárias (sem nome, e-mail e telefone) deixa o arquivo menor.
-
 ### O que ainda é suposição
 
-As colunas reais do export (seção 9, item 9). A detecção é por palavras do nome e a tela deixa a coordenação confirmar. Com um export real, conferir os nomes das colunas, o formato do valor e da data, o que "Um bilhete por linha" faz com o valor (repete o valor do pedido em cada linha ou traz o valor do bilhete?) e se o afiliado vem como número ou como usuário.
+As colunas reais do export (seção 9, item 9). A detecção é por palavras do nome e a tela deixa a coordenação confirmar. Com um export real, conferir os nomes das colunas, o formato do valor e da data, o que "Um bilhete por linha" faz com o valor (a convenção acima cobre os dois jeitos quando há pedidos do arquivo no sistema) e se o afiliado vem como número ou como usuário. "E-mail do afiliado" é dado pessoal e não pode ser mapeado: o afiliado precisa vir como número ou usuário.
 
 ### Como testar
 
-- Automático: `src/worker/lib/conferencia-arquivo.test.ts` (detecção das colunas, valores, limites e CSV malicioso), `src/worker/lib/conferencia-analise.test.ts` (um bilhete por linha, modo agregado e plano do "Recuperar"), `src/worker/routes/reconciliacao.test.ts` (as rotas com CSVs fictícios em várias formas, a varredura de privacidade e o painel depois de recuperar) e `src/web/pages/conferencia/` (a tela).
+- Automático: `src/shared/conferencia/*.test.ts` (detecção das colunas, valores, datas, limites, CSV malicioso e o corpo sem dado pessoal), `src/shared/contracts/conferencia.test.ts` (o validador do corpo), `src/worker/lib/conferencia-analise.test.ts` (um bilhete por linha, regra do valor, trava do código, modo agregado e plano do "Recuperar"), `src/worker/routes/reconciliacao.test.ts` (as rotas com corpos montados de CSVs fictícios em várias formas, a varredura de privacidade e o painel depois de recuperar), `src/worker/routes/reconciliacao-desempenho.test.ts` (CPU com 1, 3 e 7 mil pedidos) e `src/web/pages/conferencia/` (a tela, inclusive que o corpo enviado não tem dado pessoal).
 - À mão: `npm run build && npm run preview`, uma campanha ativa, um acesso local (`npm run acesso:criar -- --nome "..." --papel coordenacao`) e um CSV fictício em `/coordenacao/conferencia`.
 
 ## 11. Como testar localmente

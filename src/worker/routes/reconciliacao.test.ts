@@ -1,8 +1,9 @@
 // POST /api/admin/reconciliacao/analisar, POST /api/admin/reconciliacao/recuperar e
 // GET /api/admin/reconciliacao/recuperacoes (RIFA-012; docs/api.md), com o D1 dos testes e o relógio fixo.
 // O banco é do arquivo de teste: o beforeEach grava o cenário de novo (conferencia-apoio.ts). O login fica
-// de fora daqui (é do index.ts; protecao.test.ts confere no app real). Todo CSV e todo dado pessoal são
-// fictícios; as respostas, o banco e o log são varridos atrás deles.
+// de fora daqui (é do index.ts; protecao.test.ts confere no app real). Os corpos são os que o NAVEGADOR
+// manda (corpoDe: a mesma leitura do CSV da tela, src/shared/conferencia). Todo CSV e todo dado pessoal são
+// fictícios; os corpos enviados, as respostas, o banco e o log são varridos atrás deles.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import {
@@ -16,8 +17,7 @@ import {
 } from "vitest";
 import paidOrderAfiliado from "../../../test/fixtures/rifei/paid_order.afiliado.json";
 import {
-  LIMITE_CARACTERES_CSV_RECONCILIACAO,
-  LIMITE_LINHAS_CSV_RECONCILIACAO,
+  LIMITE_CORPO_CONFERENCIA_BYTES,
   LIMITE_PEDIDOS_RECUPERAR,
   TIPOS_DIVERGENCIA,
   erroApiSchema,
@@ -27,18 +27,25 @@ import {
   respostaRankingSchema,
   respostaRecuperarReconciliacaoSchema,
   type CodigoErro,
+  type ColunasDoCorpo,
+  type CorpoConferencia,
+  type MapeamentoReconciliacao,
+  type PedidoRecuperado,
   type RespostaAnaliseAgregada,
   type RespostaAnalisePorPedido,
   type UsuarioSessao,
 } from "../../shared/contracts";
+import { juntarAvisos } from "../../shared/conferencia/avisos";
 import { gravarRecuperacao } from "../db/reconciliacao";
 import { sha256Hex } from "../lib/cripto";
+import app from "../index";
+import { cabecalhosDeSessao } from "../test/acesso-teste";
 import {
   AGORA_CONFERENCIA,
-  CABECALHO_DO_CENARIO,
   DADOS_PESSOAIS,
   LINHAS_DO_CENARIO,
   MAPEAMENTO_DO_CENARIO,
+  corpoDe,
   criarAppDaConferencia,
   criarPessoaDaCoordenacao,
   csvDoCenario,
@@ -51,7 +58,6 @@ import {
   type RespostaDeTeste,
 } from "../test/conferencia-apoio";
 import { DADOS_CAMPANHA } from "../test/painel-apoio";
-import { LIMITE_CORPO_RECONCILIACAO_BYTES } from "./reconciliacao";
 import { webhookRifei } from "./webhook-rifei";
 
 const ANALISAR = "/api/admin/reconciliacao/analisar";
@@ -60,7 +66,7 @@ const RECUPERACOES = "/api/admin/reconciliacao/recuperacoes";
 const RECUPERAVEIS = ["R-0101", "R-0102", "R-0105"];
 
 let pessoa: UsuarioSessao;
-const app = criarAppDaConferencia(() => pessoa);
+const conferencia = criarAppDaConferencia(() => pessoa);
 
 beforeAll(async () => {
   pessoa = await criarPessoaDaCoordenacao();
@@ -74,8 +80,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function porPedido(corpo: object): Promise<RespostaAnalisePorPedido> {
-  const resposta = await postar(app, ANALISAR, corpo);
+const CSV = csvDoCenario();
+
+/** O corpo que o navegador mandaria para o CSV (com o mapeamento detectado ou o dado). */
+async function corpo(
+  csv = CSV,
+  mapeamento?: MapeamentoReconciliacao,
+): Promise<CorpoConferencia> {
+  return (await corpoDe(csv, mapeamento)).corpo;
+}
+
+async function porPedido(
+  corpoEnviado: object,
+): Promise<RespostaAnalisePorPedido> {
+  const resposta = await postar(conferencia, ANALISAR, corpoEnviado);
   expect({ status: resposta.status, corpo: resposta.corpo }).toMatchObject({
     status: 200,
   });
@@ -85,16 +103,18 @@ async function porPedido(corpo: object): Promise<RespostaAnalisePorPedido> {
   return analise;
 }
 
-async function agregado(corpo: object): Promise<RespostaAnaliseAgregada> {
-  const resposta = await postar(app, ANALISAR, corpo);
+async function agregado(
+  corpoEnviado: object,
+): Promise<RespostaAnaliseAgregada> {
+  const resposta = await postar(conferencia, ANALISAR, corpoEnviado);
   expect(resposta.status).toBe(200);
   const analise = respostaAnaliseReconciliacaoSchema.parse(resposta.corpo);
   if (analise.modo !== "agregado") throw new Error("esperava o modo agregado");
   return analise;
 }
 
-async function recuperar(corpo: object) {
-  const resposta = await postar(app, RECUPERAR, corpo);
+async function recuperar(corpoEnviado: object) {
+  const resposta = await postar(conferencia, RECUPERAR, corpoEnviado);
   expect({ status: resposta.status, corpo: resposta.corpo }).toMatchObject({
     status: 200,
   });
@@ -135,14 +155,22 @@ async function contar(tabela: string, onde = "1 = 1"): Promise<number> {
   return linha?.total ?? -1;
 }
 
-const CSV = csvDoCenario();
+const COLUNAS_VAZIAS: ColunasDoCorpo = {
+  pedido_id: null,
+  status: null,
+  qtd_bilhetes: null,
+  bilhetes: null,
+  valor: null,
+  afiliado: null,
+  data: null,
+};
 
 describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", () => {
-  it("detecta as colunas pelo nome e separa os sete tipos de divergência, com contagens e totais", async () => {
-    const analise = await porPedido({ csv: CSV });
+  it("separa os sete tipos de divergência, com contagens e totais (colunas detectadas pelo nome no navegador)", async () => {
+    const { corpo: enviado, avisos: daLeitura, arquivo } = await corpoDe(CSV);
+    expect(arquivo.mapeamentoDetectado).toEqual(MAPEAMENTO_DO_CENARIO);
+    const analise = await porPedido(enviado);
 
-    expect(analise.mapeamento).toEqual(MAPEAMENTO_DO_CENARIO);
-    expect(analise.mapeamento_detectado).toBe(true);
     expect(analise.divergencias.map((grupo) => grupo.tipo)).toEqual([
       ...TIPOS_DIVERGENCIA,
     ]);
@@ -190,16 +218,28 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
 
     const grupo = (tipo: string) =>
       analise.divergencias.find((item) => item.tipo === tipo)!;
-    expect(grupo("ausente_no_arquivo").sistema).toEqual({
-      bilhetes: 3,
-      total_centavos: 6000,
+    expect(grupo("ausente_no_arquivo")).toMatchObject({
+      quantidade: 2,
+      sistema: { bilhetes: 3, total_centavos: 6000 },
+      itens_omitidos: 0,
     });
     expect(
-      grupo("ausente_no_arquivo").itens.map((item) => item.observacoes),
-    ).toEqual([["fora_do_periodo_do_arquivo"], []]);
+      grupo("ausente_no_arquivo").itens.map((item) => [
+        item.pedido_id,
+        item.observacoes,
+        item.sistema?.aprovado_em,
+      ]),
+    ).toEqual([
+      ["R-0007", ["fora_do_periodo_do_arquivo"], "2026-11-20T15:00:00.000Z"],
+      ["R-0008", [], "2026-11-26T15:00:00.000Z"],
+    ]);
     expect(grupo("valor_diferente").itens[0]).toMatchObject({
       arquivo: { total_centavos: 5000 },
-      sistema: { total_centavos: 4000, origem: "webhook" },
+      sistema: {
+        total_centavos: 4000,
+        origem: "webhook",
+        aprovado_em: "2026-11-25T15:00:00.000Z",
+      },
     });
     expect(grupo("afiliado_diferente").itens[0]).toMatchObject({
       arquivo: { affiliate_id: 105, celula: { nome: "Célula Éfeso" } },
@@ -207,11 +247,17 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
     });
     expect(grupo("pagamento_nao_registrado").itens[0].sistema).toMatchObject({
       status: "in_process",
+      aprovado_em: null,
     });
     expect(grupo("nao_pago_na_rifei").itens[0].arquivo).toMatchObject({
       status: "cancelado",
     });
 
+    expect(analise.codigo).toEqual({
+      confere: true,
+      pagos_no_arquivo: 11,
+      encontrados: 6,
+    });
     expect(analise.resumo).toEqual({
       pedidos_no_arquivo: 15,
       aprovados_no_arquivo: {
@@ -234,8 +280,19 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
       data_inicio: "2026-11-24",
       data_fim: "2026-12-05",
     });
+    // A tela junta os avisos da leitura (navegador) com os da comparação (API).
     expect(
       analise.avisos.map((aviso) => [aviso.codigo, aviso.quantidade]),
+    ).toEqual([
+      ["status_desconhecido", 1],
+      ["afiliado_nao_reconhecido", 1],
+      ["pedido_de_outra_campanha", 1],
+    ]);
+    expect(
+      juntarAvisos(daLeitura, analise.avisos).map((aviso) => [
+        aviso.codigo,
+        aviso.quantidade,
+      ]),
     ).toEqual([
       ["colunas_pessoais_ignoradas", null],
       ["sem_id", 1],
@@ -249,12 +306,14 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
   });
 
   it("a coordenação ajusta o mapeamento: sem afiliado e sem data, esses campos não são comparados", async () => {
-    const analise = await porPedido({
-      csv: CSV,
-      mapeamento: { ...MAPEAMENTO_DO_CENARIO, afiliado: null, data: null },
-    });
+    const analise = await porPedido(
+      await corpo(CSV, {
+        ...MAPEAMENTO_DO_CENARIO,
+        afiliado: null,
+        data: null,
+      }),
+    );
 
-    expect(analise.mapeamento_detectado).toBe(false);
     const tipos = codigosPorTipo(analise);
     expect(tipos.afiliado_diferente).toEqual([]);
     expect(tipos.venda_perdida).toEqual([
@@ -284,67 +343,73 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
     expect(analise.arquivo.data_inicio).toBeNull();
   });
 
-  it("mapeamento que não serve: 400 requisicao_invalida apontando o campo (pessoal, inexistente, repetido)", async () => {
-    const erro = esperarErro(
-      await postar(app, ANALISAR, {
-        csv: CSV,
-        mapeamento: {
-          ...MAPEAMENTO_DO_CENARIO,
-          valor: 2,
-          afiliado: 150,
-          data: 0,
+  it("corpo fora do formato: 400 requisicao_invalida apontando campo e posição, sem ecoar valores", async () => {
+    const base = await corpo();
+    const casos: [object, (string | number)[]][] = [
+      [{ ...base, valor: base.valor?.slice(1) }, ["valor"]],
+      [
+        {
+          ...base,
+          pedido_id: [
+            "maria.ficticia@example.com",
+            ...base.pedido_id!.slice(1),
+          ],
         },
-      }),
-      400,
-      "requisicao_invalida",
-    );
-    expect(erro.detalhes).toEqual([
-      {
-        caminho: ["mapeamento", "valor"],
-        codigo: "coluna_pessoal",
-        mensagem: 'A coluna "E-mail" tem dados pessoais e não pode ser usada',
-      },
-      {
-        caminho: ["mapeamento", "afiliado"],
-        codigo: "coluna_inexistente",
-        mensagem: "O arquivo não tem a coluna 151",
-      },
-      {
-        caminho: ["mapeamento", "data"],
-        codigo: "coluna_repetida",
-        mensagem: expect.stringContaining('"Pedido"'),
-      },
-    ]);
-    // Fora do schema (índice negativo, campo a mais): 400 antes de ler o arquivo.
-    esperarErro(
-      await postar(app, ANALISAR, {
-        csv: CSV,
-        mapeamento: { ...MAPEAMENTO_DO_CENARIO, valor: -1 },
-      }),
-      400,
-      "requisicao_invalida",
-    );
-    esperarErro(
-      await postar(app, ANALISAR, {
-        csv: CSV,
-        mapeamento: { ...MAPEAMENTO_DO_CENARIO, nome: 1 },
-      }),
-      400,
-      "requisicao_invalida",
-    );
+        ["pedido_id", 0],
+      ],
+      [{ ...base, csv: CSV }, ["csv"]],
+      [{ ...base, linhas: base.linhas + 1 }, ["vezes"]],
+      [
+        { ...base, colunas: { ...base.colunas, nome: "Nome" } },
+        ["colunas", "nome"],
+      ],
+    ];
+    for (const [enviado, caminho] of casos) {
+      const resposta = await postar(conferencia, ANALISAR, enviado);
+      const erro = esperarErro(resposta, 400, "requisicao_invalida");
+      expect(erro.detalhes).toContainEqual(
+        expect.objectContaining({ caminho }),
+      );
+      expect(textosPessoaisEm(resposta.texto)).toEqual([]);
+    }
+  });
+
+  it("D1: coluna com nome de dado pessoal mapeada (sem passar pela tela): 400 coluna_pessoal", async () => {
+    const base = await corpo();
+    for (const [campo, nome] of [
+      ["afiliado", "Telefone do afiliado"],
+      ["pedido_id", "CPF"],
+      ["valor", "E-mail"],
+    ] as const) {
+      const erro = esperarErro(
+        await postar(conferencia, ANALISAR, {
+          ...base,
+          colunas: { ...base.colunas, [campo]: nome },
+        }),
+        400,
+        "requisicao_invalida",
+      );
+      expect(erro.detalhes).toEqual([
+        {
+          caminho: ["colunas", campo],
+          codigo: "coluna_pessoal",
+          mensagem: `A coluna "${nome}" tem dados pessoais e não pode ser usada`,
+        },
+      ]);
+    }
   });
 
   it("sem campanha ativa: 404 nao_encontrado", async () => {
     await env.DB.prepare("UPDATE campanhas SET ativa = 0").run();
+    const enviado = await corpo();
     esperarErro(
-      await postar(app, ANALISAR, { csv: CSV }),
+      await postar(conferencia, ANALISAR, enviado),
       404,
       "nao_encontrado",
     );
     esperarErro(
-      await postar(app, RECUPERAR, {
-        csv: CSV,
-        mapeamento: MAPEAMENTO_DO_CENARIO,
+      await postar(conferencia, RECUPERAR, {
+        ...enviado,
         pedidos: ["R-0101"],
       }),
       404,
@@ -381,13 +446,14 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
   );
 
   it("compara os totais pagos por afiliado e por dia, só nos dias do arquivo", async () => {
-    const analise = await agregado({ csv: semCodigo });
-
-    expect(analise.mapeamento).toMatchObject({
+    const { corpo: enviado, avisos: daLeitura } = await corpoDe(semCodigo);
+    expect(enviado.colunas).toMatchObject({
       pedido_id: null,
-      afiliado: 0,
-      data: 4,
+      afiliado: "Afiliado",
+      data: "Pago em",
     });
+    const analise = await agregado(enviado);
+
     expect(analise.recorte).toEqual({
       data_inicio: "2026-11-24",
       data_fim: "2026-12-05",
@@ -431,28 +497,49 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
       sistema: { pedidos_aprovados: 0 },
       confere: false,
     });
-    expect(analise.avisos.map((aviso) => aviso.codigo)).toEqual(
-      expect.arrayContaining([
-        "sem_coluna_pedido",
-        "colunas_pessoais_ignoradas",
-        "status_desconhecido",
-      ]),
-    );
+    expect(analise.avisos.map((aviso) => aviso.codigo)).toEqual([
+      "sem_coluna_pedido",
+      "status_desconhecido",
+      "afiliado_nao_reconhecido",
+    ]);
+    expect(daLeitura.map((aviso) => aviso.codigo)).toEqual([
+      "colunas_pessoais_ignoradas",
+    ]);
     expect(textosPessoaisEm(JSON.stringify(analise))).toEqual([]);
+  });
+
+  it("sem o código e sem a quantidade: a quantidade de pedidos não é comparada (aviso)", async () => {
+    const analise = await agregado(
+      await corpo(
+        montarCsv([
+          ["Status", "Valor", "Afiliado"],
+          ["Pago", "R$ 20,00", "101"],
+          ["Pago", "R$ 20,00", "101"],
+          ["Pago", "R$ 20,00", "101"],
+        ]),
+      ),
+    );
+    expect(analise.total.arquivo).toEqual({
+      pedidos_aprovados: null,
+      bilhetes: null,
+      total_centavos: 6000,
+    });
+    expect(analise.avisos.map((aviso) => aviso.codigo)).toContain(
+      "sem_contagem_de_pedidos",
+    );
   });
 
   it("no modo agregado não dá para recuperar: o Recuperar exige a coluna do código (400)", async () => {
     const erro = esperarErro(
-      await postar(app, RECUPERAR, {
-        csv: semCodigo,
-        mapeamento: { ...MAPEAMENTO_DO_CENARIO, pedido_id: null },
+      await postar(conferencia, RECUPERAR, {
+        ...(await corpo(semCodigo)),
         pedidos: ["R-0101"],
       }),
       400,
       "requisicao_invalida",
     );
     expect(erro.detalhes).toEqual([
-      expect.objectContaining({ caminho: ["mapeamento", "pedido_id"] }),
+      expect.objectContaining({ caminho: ["colunas", "pedido_id"] }),
     ]);
   });
 });
@@ -470,8 +557,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
   it("simular mostra o que seria gravado e não grava nada", async () => {
     const antes = await contar("pedidos");
     const previa = await recuperar({
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
+      ...(await corpo()),
       pedidos: [
         ...RECUPERAVEIS,
         "R-0103",
@@ -541,8 +627,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
 
   it("grava de uma vez, como aprovados com origem 'conferencia', e registra quem, quando e quantos", async () => {
     const resultado = await recuperar({
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
+      ...(await corpo()),
       pedidos: RECUPERAVEIS,
     });
 
@@ -558,7 +643,8 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       status: "approved",
       affiliate_id: 101,
       qtd_bilhetes: 3,
-      numeros: "[1001,1002,1003]",
+      // Os números dos bilhetes não saem do navegador (só a contagem).
+      numeros: null,
       total_centavos: 6000,
       aprovado_em: "2026-11-27T13:00:00.000Z",
       origem: "conferencia",
@@ -586,6 +672,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       bilhetes: 6,
       total_centavos: 12000,
       linhas_arquivo: 17,
+      // O SHA-256 que o navegador calculou do texto do arquivo.
       arquivo_sha256: await sha256Hex(CSV),
       mapeamento: JSON.stringify({
         pedido_id: "Pedido",
@@ -598,7 +685,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       }),
     });
 
-    const lista = await obter(app, RECUPERACOES);
+    const lista = await obter(conferencia, RECUPERACOES);
     expect(lista.status).toBe(200);
     expect(respostaListaRecuperacoesSchema.parse(lista.corpo).itens).toEqual([
       expect.objectContaining({
@@ -615,15 +702,11 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
   });
 
   it("aplicar duas vezes não duplica nada: a segunda vez não grava e não cria outra auditoria", async () => {
-    const corpo = {
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
-      pedidos: RECUPERAVEIS,
-    };
-    await recuperar(corpo);
+    const enviado = { ...(await corpo()), pedidos: RECUPERAVEIS };
+    await recuperar(enviado);
     const pedidos = await contar("pedidos");
 
-    const segunda = await recuperar(corpo);
+    const segunda = await recuperar(enviado);
 
     expect(segunda).toMatchObject({
       aplicado: false,
@@ -636,15 +719,14 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     expect(await contar("pedidos")).toBe(pedidos);
     expect(await contar("recuperacoes")).toBe(1);
     // A análise de novo: as três deixam de ser venda perdida.
-    const analise = await porPedido({ csv: CSV });
+    const analise = await porPedido(await corpo());
     expect(codigosPorTipo(analise).venda_perdida).toEqual(["R-0103", "R-0106"]);
   });
 
   it("nunca sobrescreve um pedido que já existe (nem o pendente que está pago na Rifei)", async () => {
     const antes = await Promise.all(["R-0001", "R-0005"].map(pedidoGravado));
     const resultado = await recuperar({
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
+      ...(await corpo()),
       pedidos: ["R-0001", "R-0005"],
     });
 
@@ -661,11 +743,14 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
   it("o pedido recuperado passa a contar no painel e no ranking", async () => {
     const resumo = async () =>
       respostaPainelResumoSchema.parse(
-        (await obter(app, "/api/painel/resumo")).corpo,
+        (await obter(conferencia, "/api/painel/resumo")).corpo,
       );
     const vendasDaCelula = async (id: number) =>
       respostaRankingSchema
-        .parse((await obter(app, "/api/painel/ranking?periodo=campanha")).corpo)
+        .parse(
+          (await obter(conferencia, "/api/painel/ranking?periodo=campanha"))
+            .corpo,
+        )
         .itens.find((item) => item.id === id)!.vendas;
 
     const antes = await resumo();
@@ -690,11 +775,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       total_centavos: 4000,
     });
 
-    await recuperar({
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
-      pedidos: RECUPERAVEIS,
-    });
+    await recuperar({ ...(await corpo()), pedidos: RECUPERAVEIS });
 
     const depois = await resumo();
     expect(depois.vendas).toEqual({
@@ -733,8 +814,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       },
     ];
     const resultado = await recuperar({
-      csv: csvDoCenario(linhas),
-      mapeamento: MAPEAMENTO_DO_CENARIO,
+      ...(await corpo(csvDoCenario(linhas))),
       pedidos: ["R-0200"],
     });
     expect(resultado.recuperados[0]).toMatchObject({
@@ -756,16 +836,15 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     const campanha = await env.DB.prepare(
       "SELECT id FROM campanhas WHERE ativa = 1",
     ).first<{ id: number }>();
-    const pedido = (id: string) => ({
+    const pedido = (id: string): PedidoRecuperado => ({
       pedido_id: id,
       qtd_bilhetes: 1,
       total_centavos: 2000,
-      afiliado: "reconhecido" as const,
+      afiliado: "reconhecido",
       affiliate_id: 101,
       celula: null,
       aprovado_em: "2026-11-30T12:00:00.000Z",
-      origem_data: "arquivo" as const,
-      numeros: null,
+      origem_data: "arquivo",
     });
 
     const resultado = await gravarRecuperacao(env.DB, {
@@ -775,7 +854,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       pedidosSolicitados: 2,
       linhasArquivo: 2,
       arquivoSha256: "0".repeat(64),
-      colunas: { pedido_id: "Pedido" },
+      colunas: { ...COLUNAS_VAZIAS, pedido_id: "Pedido" },
       pedidos: [pedido("R-CORRIDA"), pedido("R-NOVO")],
     });
 
@@ -804,7 +883,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       pedidosSolicitados: 1,
       linhasArquivo: 1,
       arquivoSha256: "0".repeat(64),
-      colunas: {},
+      colunas: COLUNAS_VAZIAS,
       pedidos: [pedido("R-CORRIDA")],
     });
     expect(nada).toEqual({ recuperacaoId: null, gravados: new Set() });
@@ -821,7 +900,6 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       afiliado: "reconhecido" as const,
       celula: null,
       origem_data: "arquivo" as const,
-      numeros: null,
     };
     await expect(
       gravarRecuperacao(env.DB, {
@@ -831,7 +909,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
         pedidosSolicitados: 2,
         linhasArquivo: 2,
         arquivoSha256: "0".repeat(64),
-        colunas: {},
+        colunas: COLUNAS_VAZIAS,
         pedidos: [
           {
             ...base,
@@ -855,11 +933,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
   });
 
   it("um paid_order do webhook depois da recuperação é duplicado e não muda o pedido recuperado", async () => {
-    await recuperar({
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
-      pedidos: ["R-0101"],
-    });
+    await recuperar({ ...(await corpo()), pedidos: ["R-0101"] });
     const antes = await pedidoGravado("R-0101");
     const webhook = new Hono<{ Bindings: Cloudflare.Env }>();
     webhook.route("/", webhookRifei);
@@ -886,7 +960,8 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     expect(await pedidoGravado("R-0101")).toEqual(antes);
   });
 
-  it("corpo fora do schema: lista vazia, mais de 500 pedidos ou código inválido (400)", async () => {
+  it("corpo fora do formato: lista vazia, mais de 500 pedidos ou código inválido (400)", async () => {
+    const enviado = await corpo();
     for (const pedidos of [
       [],
       Array.from({ length: LIMITE_PEDIDOS_RECUPERAR + 1 }, (_, i) => `R-${i}`),
@@ -894,11 +969,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       ["maria.ficticia@example.com"],
     ]) {
       const erro = esperarErro(
-        await postar(app, RECUPERAR, {
-          csv: CSV,
-          mapeamento: MAPEAMENTO_DO_CENARIO,
-          pedidos,
-        }),
+        await postar(conferencia, RECUPERAR, { ...enviado, pedidos }),
         400,
         "requisicao_invalida",
       );
@@ -908,73 +979,257 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
   });
 });
 
-describe("CA3: segurança, limites e CSV malicioso", () => {
-  it("csv acima de 5 MB ou corpo acima do teto em bytes: 400 csv_invalido (arquivo_grande), em português", async () => {
-    const grande = esperarErro(
-      await postar(app, ANALISAR, {
-        csv: "x".repeat(LIMITE_CARACTERES_CSV_RECONCILIACAO + 1),
+describe("CA2: regra do valor dos pedidos em várias linhas (um bilhete por linha)", () => {
+  const linha = (
+    pedido: string,
+    valor: string,
+    extra: Partial<LinhaRifei> = {},
+  ): LinhaRifei => ({
+    pedido,
+    status: "Pago",
+    quantidade: "1",
+    bilhetes: "",
+    valor,
+    afiliado: "101",
+    data: "29/11/2026 10:00",
+    ...extra,
+  });
+
+  it("3 linhas de R$ 20,00 viram um pedido de R$ 60,00 (o Recuperar grava 6000); R$ 18 × 2 vira R$ 36,00", async () => {
+    const csv = csvDoCenario([
+      linha("R-0300", "R$ 20,00"),
+      linha("R-0300", "R$ 20,00"),
+      linha("R-0300", "R$ 20,00"),
+      linha("R-0301", "R$ 18,00"),
+      linha("R-0301", "R$ 18,00"),
+    ]);
+    const enviado = await corpo(csv);
+    // As linhas iguais (só os dados pessoais mudam) vão numa posição só.
+    expect(enviado.vezes).toEqual([3, 2]);
+    const analise = await porPedido(enviado);
+    expect(
+      analise.divergencias[0].itens.map((item) => [
+        item.pedido_id,
+        item.arquivo?.qtd_bilhetes,
+        item.arquivo?.total_centavos,
+        item.recuperavel,
+      ]),
+    ).toEqual([
+      ["R-0300", 3, 6000, true],
+      ["R-0301", 2, 3600, true],
+    ]);
+    expect(analise.avisos.map((aviso) => aviso.codigo)).toEqual(
+      expect.arrayContaining(["um_bilhete_por_linha", "valor_por_bilhete"]),
+    );
+
+    const gravado = await recuperar({
+      ...enviado,
+      pedidos: ["R-0300", "R-0301"],
+    });
+    expect(
+      gravado.recuperados.map((pedido) => [
+        pedido.pedido_id,
+        pedido.qtd_bilhetes,
+        pedido.total_centavos,
+      ]),
+    ).toEqual([
+      ["R-0300", 3, 6000],
+      ["R-0301", 2, 3600],
+    ]);
+    expect(
+      await env.DB.prepare(
+        "SELECT total_centavos FROM pedidos WHERE id = 'R-0300'",
+      ).first(),
+    ).toEqual({ total_centavos: 6000 });
+  });
+
+  it("o mesmo valor em todas as linhas e longe do preço: ambíguo, explicado e fora do Recuperar", async () => {
+    const enviado = await corpo(
+      csvDoCenario([
+        linha("R-0302", "R$ 60,00", { quantidade: "3" }),
+        linha("R-0302", "R$ 60,00", { quantidade: "3" }),
+        linha("R-0302", "R$ 60,00", { quantidade: "3" }),
+      ]),
+    );
+    const analise = await porPedido(enviado);
+    expect(analise.divergencias[0].itens[0]).toMatchObject({
+      pedido_id: "R-0302",
+      arquivo: { qtd_bilhetes: 3, total_centavos: null },
+      recuperavel: false,
+      observacoes: ["valor_ambiguo"],
+    });
+    expect(analise.avisos).toContainEqual(
+      expect.objectContaining({ codigo: "valor_ambiguo", quantidade: 1 }),
+    );
+    const previa = await recuperar({
+      ...enviado,
+      pedidos: ["R-0302"],
+      simular: true,
+    });
+    expect(previa.nao_recuperados).toEqual([
+      { pedido_id: "R-0302", motivo: "valor_ambiguo" },
+    ]);
+  });
+});
+
+describe("CA2: trava do código que não bate (a coluna escolhida não é o código da Rifei)", () => {
+  // O "código" é o número do bilhete: nenhum dos 7 pagos existe no sistema.
+  const csv = montarCsv([
+    ["Número", "Status", "Quantidade", "Valor", "Data do pagamento"],
+    ...["7001", "7002", "7003", "7004", "7005", "7006", "7007"].map(
+      (numero) => [numero, "Pago", "1", "R$ 20,00", "26/11/2026 10:00"],
+    ),
+  ]);
+  const mapeamento: MapeamentoReconciliacao = {
+    pedido_id: 0,
+    status: 1,
+    qtd_bilhetes: 2,
+    bilhetes: null,
+    valor: 3,
+    afiliado: null,
+    data: 4,
+  };
+
+  it("7 de 7 que não batem: aviso claro, nada marcado para recuperar e o Recuperar recusa (400) sem gravar", async () => {
+    const enviado = await corpo(csv, mapeamento);
+    const analise = await porPedido(enviado);
+    expect(analise.codigo).toEqual({
+      confere: false,
+      pagos_no_arquivo: 7,
+      encontrados: 0,
+    });
+    expect(analise.avisos[0]).toMatchObject({
+      codigo: "codigo_nao_confere",
+      mensagem: expect.stringContaining(
+        "não parece ser o código da Rifei: só 0 de 7 pedidos pagos do arquivo existem no sistema",
+      ),
+    });
+    const perdidas = analise.divergencias[0];
+    expect(perdidas.quantidade).toBe(7);
+    expect(perdidas.itens.some((item) => item.recuperavel)).toBe(false);
+    expect(perdidas.itens[0].observacoes).toContain("codigo_nao_confere");
+
+    for (const simular of [true, false]) {
+      const erro = esperarErro(
+        await postar(conferencia, RECUPERAR, {
+          ...enviado,
+          pedidos: ["7001"],
+          simular,
+        }),
+        400,
+        "requisicao_invalida",
+      );
+      expect(erro.detalhes).toEqual([
+        expect.objectContaining({
+          caminho: ["colunas", "pedido_id"],
+          codigo: "codigo_nao_confere",
+        }),
+      ]);
+    }
+    expect(await contar("pedidos", "id LIKE '700%'")).toBe(0);
+    expect(await contar("recuperacoes")).toBe(0);
+  });
+
+  it("trocando para a coluna certa, a análise volta a conferir", async () => {
+    const analise = await porPedido(await corpo());
+    expect(analise.codigo.confere).toBe(true);
+  });
+});
+
+describe("CA3: segurança, limites e privacidade", () => {
+  it("corpo acima do teto (1 MiB): 413 sem ler o resto, com e sem Content-Length", async () => {
+    const enorme = `{"colunas":${"x".repeat(LIMITE_CORPO_CONFERENCIA_BYTES)}}`;
+    const comTamanho = await postar(conferencia, ANALISAR, enorme);
+    expect(esperarErro(comTamanho, 413, "corpo_muito_grande").mensagem).toBe(
+      "O corpo passa do limite de 1 MiB",
+    );
+    // Sem o Content-Length (envio em partes), a leitura para logo depois do limite.
+    const pedacos = { puxados: 0 };
+    const bytes = new TextEncoder().encode("x".repeat(64 * 1024));
+    const fluxo = new ReadableStream<Uint8Array>(
+      {
+        pull(controle) {
+          if (pedacos.puxados === 40) {
+            controle.close();
+            return;
+          }
+          pedacos.puxados++;
+          controle.enqueue(bytes);
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const res = await conferencia.request(
+      ANALISAR,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: fluxo,
+        duplex: "half",
+      } as RequestInit,
+      env,
+    );
+    expect(res.status).toBe(413);
+    expect(pedacos.puxados).toBeLessThan(40);
+  });
+
+  it("no app real: o teto geral deixa a conferência de fora e o dela vale (413 acima de 1 MiB; dentro, a rota responde)", async () => {
+    const cabecalhos = await cabecalhosDeSessao("coordenacao");
+    const enviar = (texto: string) =>
+      app.request(
+        ANALISAR,
+        {
+          method: "POST",
+          headers: {
+            ...cabecalhos,
+            "Content-Type": "application/json",
+            "Content-Length": String(new TextEncoder().encode(texto).length),
+          },
+          body: texto,
+        },
+        env,
+      );
+    expect(
+      (await enviar("x".repeat(LIMITE_CORPO_CONFERENCIA_BYTES + 1))).status,
+    ).toBe(413);
+    const certo = await enviar(JSON.stringify(await corpo()));
+    expect(certo.status).toBe(200);
+  });
+
+  it("corpo que não é JSON ou sem Content-Type JSON: 400 json_invalido com mensagem fixa", async () => {
+    const quebrado = await postar(
+      conferencia,
+      ANALISAR,
+      '{"colunas": {"pedido_id": "Pedido", Maria Ficticia Souza',
+    );
+    expect(esperarErro(quebrado, 400, "json_invalido").mensagem).toBe(
+      "O corpo não é um JSON válido",
+    );
+    expect(textosPessoaisEm(quebrado.texto)).toEqual([]);
+    esperarErro(
+      await postar(conferencia, ANALISAR, JSON.stringify(await corpo()), {
+        "Content-Type": "text/csv",
       }),
       400,
-      "csv_invalido",
+      "json_invalido",
     );
-    expect(grande).toEqual({
-      codigo: "csv_invalido",
-      mensagem: expect.stringMatching(/^O arquivo passa de 5 MB/),
-      detalhes: {
-        motivo: "arquivo_grande",
-        limite_caracteres: LIMITE_CARACTERES_CSV_RECONCILIACAO,
-      },
-    });
-    const enorme = `{"csv":"${"y".repeat(LIMITE_CORPO_RECONCILIACAO_BYTES)}"}`;
-    expect(
-      esperarErro(await postar(app, ANALISAR, enorme), 400, "csv_invalido")
-        .detalhes,
-    ).toEqual({
-      motivo: "arquivo_grande",
-      limite_caracteres: LIMITE_CARACTERES_CSV_RECONCILIACAO,
-    });
-    esperarErro(await postar(app, ANALISAR, { csv: "" }), 400, "csv_invalido");
   });
 
-  it("mais linhas que o limite: 400 csv_invalido (linhas_demais)", async () => {
-    const csv = `Pedido,Status\n${"P1,Pago\n".repeat(LIMITE_LINHAS_CSV_RECONCILIACAO + 1)}`;
+  it("o CSV não é mais aceito: um corpo com `csv` é recusado (o arquivo fica no navegador)", async () => {
     const erro = esperarErro(
-      await postar(app, ANALISAR, { csv }),
+      await postar(conferencia, ANALISAR, { csv: CSV }),
       400,
-      "csv_invalido",
+      "requisicao_invalida",
     );
-    expect(erro.detalhes).toEqual({
-      motivo: "linhas_demais",
-      limite: LIMITE_LINHAS_CSV_RECONCILIACAO,
-      total_linhas: LIMITE_LINHAS_CSV_RECONCILIACAO + 1,
-    });
-    expect(erro.mensagem).toContain("50.000");
+    expect(erro.detalhes).toContainEqual(
+      expect.objectContaining({
+        caminho: ["csv"],
+        codigo: "unrecognized_keys",
+      }),
+    );
   });
 
-  it("aspas abertas, fora de UTF-8 e primeira linha de dados: 400 csv_invalido sem citar o arquivo", async () => {
-    const casos = [
-      [
-        `${CABECALHO_DO_CENARIO.join(",")}\r\nR-1,"Maria Ficticia Souza,maria.ficticia@example.com\r\n`,
-        "aspas_abertas",
-      ],
-      [
-        `Pedido,Nome\r\nR-1,Jo${String.fromCharCode(0xfffd)}o Ficticio Lima\r\n`,
-        "codificacao_invalida",
-      ],
-      [
-        "R-1,Maria Ficticia Souza,maria.ficticia@example.com,+5591988880001\r\n",
-        "sem_cabecalho",
-      ],
-    ] as const;
-    for (const [csv, motivo] of casos) {
-      const resposta = await postar(app, ANALISAR, { csv });
-      const erro = esperarErro(resposta, 400, "csv_invalido");
-      expect(erro.detalhes).toMatchObject({ motivo });
-      expect(textosPessoaisEm(resposta.texto)).toEqual([]);
-    }
-  });
-
-  it("fórmulas e uma linha gigante: 200, valores tratados como ilegíveis e nada ecoado", async () => {
+  it("CSV malicioso (fórmulas e células gigantes): o corpo sai sem nada disso, e a análise responde 200", async () => {
     const linhas: LinhaRifei[] = [
       ...LINHAS_DO_CENARIO.slice(0, 2),
       {
@@ -1000,57 +1255,34 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
       "Maria Ficticia Souza",
       `Maria Ficticia Souza ${"x".repeat(1_000_000)}`,
     );
-    const resposta = await postar(app, ANALISAR, { csv });
-    expect(resposta.status).toBe(200);
-    const analise = respostaAnaliseReconciliacaoSchema.parse(resposta.corpo);
-    expect(analise.avisos).toEqual(
+    const { corpo: enviado, avisos } = await corpoDe(csv);
+    const json = JSON.stringify(enviado);
+    expect(json).not.toMatch(/HYPERLINK|cmd\||=1\+1|xxxxxxxxxx/);
+    expect(textosPessoaisEm(json)).toEqual([]);
+    expect(avisos).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ codigo: "formula_ignorada", quantidade: 6 }),
         expect.objectContaining({ codigo: "valor_invalido", quantidade: 1 }),
-        expect.objectContaining({
-          codigo: "status_desconhecido",
-          quantidade: 1,
-        }),
       ]),
     );
-    expect(resposta.texto).not.toMatch(/HYPERLINK|cmd\||=1\+1|xxxxxxxxxx/);
+    const resposta = await postar(conferencia, ANALISAR, enviado);
+    expect(resposta.status).toBe(200);
+    const analise = respostaAnaliseReconciliacaoSchema.parse(resposta.corpo);
+    expect(analise.avisos).toContainEqual(
+      expect.objectContaining({ codigo: "status_desconhecido", quantidade: 1 }),
+    );
     expect(textosPessoaisEm(resposta.texto)).toEqual([]);
   });
 
-  it("corpo que não é JSON ou sem Content-Type JSON: 400 json_invalido com mensagem fixa", async () => {
-    const quebrado = await postar(
-      app,
-      ANALISAR,
-      '{"csv": "Pedido\nR-1 Maria Ficticia Souza',
-    );
-    expect(esperarErro(quebrado, 400, "json_invalido").mensagem).toBe(
-      "O corpo não é um JSON válido",
-    );
-    expect(textosPessoaisEm(quebrado.texto)).toEqual([]);
-    esperarErro(
-      await postar(app, ANALISAR, JSON.stringify({ csv: CSV }), {
-        "Content-Type": "text/csv",
-      }),
-      400,
-      "json_invalido",
-    );
-  });
-
-  it("nada do arquivo vai para o log: nem nas chamadas normais, nem nos erros, nem na falha de banco", async () => {
+  it("nada vai para o log: nem nas chamadas normais, nem nos erros, nem na falha de banco", async () => {
     const espioes = (["log", "info", "warn", "error", "debug"] as const).map(
       (metodo) => vi.spyOn(console, metodo).mockImplementation(() => {}),
     );
+    const enviado = await corpo();
 
-    await porPedido({ csv: CSV });
-    await recuperar({
-      csv: CSV,
-      mapeamento: MAPEAMENTO_DO_CENARIO,
-      pedidos: RECUPERAVEIS,
-    });
-    await postar(app, ANALISAR, {
-      csv: `Pedido,Nome\r\nR-1,"Maria Ficticia Souza\r\n`,
-    });
-    await postar(app, ANALISAR, '{"csv": "Joao Ficticio Lima');
+    await porPedido(enviado);
+    await recuperar({ ...enviado, pedidos: RECUPERAVEIS });
+    await postar(conferencia, ANALISAR, '{"colunas": "Joao Ficticio Lima');
     // Falha inesperada com dado pessoal na mensagem: o log leva só o nome do erro.
     const dbQueFalha = new Proxy(env.DB, {
       get(alvo, nome) {
@@ -1063,12 +1295,12 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
         return typeof valor === "function" ? valor.bind(alvo) : valor;
       },
     });
-    const falha = await app.request(
+    const falha = await conferencia.request(
       ANALISAR,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: CSV }),
+        body: JSON.stringify(enviado),
       },
       { ...env, DB: dbQueFalha },
     );
@@ -1086,28 +1318,30 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
         0,
       ) + JSON.stringify(chamadas);
     expect(textosPessoaisEm(registrado)).toEqual([]);
-    expect(registrado).not.toContain("Pedido,Nome");
+    expect(registrado).not.toContain("R-0101");
   });
 
-  it("D1: varredura das respostas e do banco depois de analisar e recuperar: nenhum dado pessoal", async () => {
+  it("D1: varredura dos corpos enviados, das respostas e do banco depois de analisar e recuperar: nenhum dado pessoal", async () => {
+    const porCodigo = await corpo();
+    const semCodigo = await corpo(CSV, {
+      ...MAPEAMENTO_DO_CENARIO,
+      pedido_id: null,
+    });
+    const corpos = [
+      porCodigo,
+      semCodigo,
+      { ...porCodigo, pedidos: RECUPERAVEIS, simular: true },
+      { ...porCodigo, pedidos: RECUPERAVEIS },
+    ];
+    // O que sai do navegador: só as colunas mapeadas que não são pessoais.
+    for (const enviado of corpos)
+      expect(textosPessoaisEm(JSON.stringify(enviado))).toEqual([]);
     const respostas = [
-      await postar(app, ANALISAR, { csv: CSV }),
-      await postar(app, ANALISAR, {
-        csv: CSV,
-        mapeamento: { ...MAPEAMENTO_DO_CENARIO, pedido_id: null },
-      }),
-      await postar(app, RECUPERAR, {
-        csv: CSV,
-        mapeamento: MAPEAMENTO_DO_CENARIO,
-        pedidos: RECUPERAVEIS,
-        simular: true,
-      }),
-      await postar(app, RECUPERAR, {
-        csv: CSV,
-        mapeamento: MAPEAMENTO_DO_CENARIO,
-        pedidos: RECUPERAVEIS,
-      }),
-      await obter(app, RECUPERACOES),
+      await postar(conferencia, ANALISAR, corpos[0]),
+      await postar(conferencia, ANALISAR, corpos[1]),
+      await postar(conferencia, RECUPERAR, corpos[2]),
+      await postar(conferencia, RECUPERAR, corpos[3]),
+      await obter(conferencia, RECUPERACOES),
     ];
     for (const resposta of respostas) {
       expect(resposta.status).toBe(200);
@@ -1146,9 +1380,8 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
       [cpf, "R-0102", "Pago", "2", "R$ 40,00", cpf, "28/11/2026"],
     ]);
 
-    const analise = await porPedido({ csv });
-
-    expect(analise.mapeamento).toEqual({
+    const { corpo: enviado, arquivo } = await corpoDe(csv);
+    expect(arquivo.mapeamentoDetectado).toEqual({
       pedido_id: 1,
       status: 2,
       qtd_bilhetes: 3,
@@ -1158,13 +1391,14 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
       data: 6,
     });
     expect(
-      analise.colunas
+      arquivo.colunas
         .filter((coluna) => coluna.dado_pessoal)
         .map((coluna) => coluna.nome),
     ).toEqual(["Contato do pedido", "Telefone do afiliado"]);
-    const gravacao = await postar(app, RECUPERAR, {
-      csv,
-      mapeamento: analise.mapeamento,
+    expect(textosPessoaisEm(JSON.stringify(enviado))).toEqual([]);
+    const analise = await porPedido(enviado);
+    const gravacao = await postar(conferencia, RECUPERAR, {
+      ...enviado,
       pedidos: ["R-0101", "R-0102"],
     });
     expect(gravacao.status).toBe(200);
@@ -1182,26 +1416,26 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
 });
 
 describe("CA5: CSVs em várias formas pela API", () => {
-  /** O que importa da análise (sem o instante e com os avisos da forma do arquivo à parte). */
+  /** O que importa da análise (sem o instante e sem os avisos da forma do arquivo). */
   const essencia = (analise: RespostaAnalisePorPedido) => ({
     divergencias: analise.divergencias,
     resumo: analise.resumo,
-    mapeamento: analise.mapeamento,
+    codigo: analise.codigo,
   });
 
   it("vírgula, ponto e vírgula, com BOM e com LF: a mesma análise", async () => {
-    const base = essencia(await porPedido({ csv: CSV }));
+    const base = essencia(await porPedido(await corpo()));
     for (const opcoes of [
       { separador: ";" as const },
       { separador: ";" as const, bom: true },
       { bom: true, fimDeLinha: "\n" as const },
     ])
       expect(
-        essencia(await porPedido({ csv: csvDoCenario(undefined, opcoes) })),
+        essencia(await porPedido(await corpo(csvDoCenario(undefined, opcoes)))),
       ).toEqual(base);
   });
 
-  it("um bilhete por linha (com o código): o mesmo resultado do um pedido por linha", async () => {
+  it("um bilhete por linha (com o código, o valor do pedido em cada linha): o mesmo resultado, pela convenção dos que batem", async () => {
     const porBilhete = LINHAS_DO_CENARIO.flatMap((linha) => {
       const numeros = linha.bilhetes === "" ? [] : linha.bilhetes.split(", ");
       return numeros.length <= 1
@@ -1210,12 +1444,15 @@ describe("CA5: CSVs em várias formas pela API", () => {
     });
     expect(porBilhete.length).toBeGreaterThan(LINHAS_DO_CENARIO.length);
 
-    const analise = await porPedido({ csv: csvDoCenario(porBilhete) });
+    const analise = await porPedido(await corpo(csvDoCenario(porBilhete)));
 
-    expect(essencia(analise)).toEqual(essencia(await porPedido({ csv: CSV })));
+    expect(essencia(analise)).toEqual(essencia(await porPedido(await corpo())));
     expect(analise.arquivo.um_bilhete_por_linha).toBe(true);
-    expect(analise.avisos.map((aviso) => aviso.codigo)).toContain(
-      "um_bilhete_por_linha",
+    expect(analise.avisos.map((aviso) => aviso.codigo)).toEqual(
+      expect.arrayContaining([
+        "um_bilhete_por_linha",
+        "valor_do_pedido_repetido",
+      ]),
     );
   });
 
@@ -1247,9 +1484,8 @@ describe("CA5: CSVs em várias formas pela API", () => {
       ],
       { separador: ";" },
     );
-    const analise = await porPedido({ csv });
-
-    expect(analise.mapeamento).toEqual({
+    const { corpo: enviado, arquivo } = await corpoDe(csv);
+    expect(arquivo.mapeamentoDetectado).toEqual({
       pedido_id: 3,
       status: 0,
       qtd_bilhetes: 4,
@@ -1258,7 +1494,8 @@ describe("CA5: CSVs em várias formas pela API", () => {
       afiliado: 6,
       data: 7,
     });
-    const base = await porPedido({ csv: CSV });
+    const analise = await porPedido(enviado);
+    const base = await porPedido(await corpo());
     expect(analise.divergencias).toEqual(base.divergencias);
     expect(textosPessoaisEm(JSON.stringify(analise))).toEqual([]);
   });

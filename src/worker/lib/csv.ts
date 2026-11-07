@@ -1,6 +1,7 @@
 /**
- * Leitor de CSV próprio, sem dependências: RFC 4180 com as tolerâncias que arquivos de planilha
- * (Google Planilhas, Excel, LibreOffice) exigem.
+ * CSV com cabeçalho para a importação da hierarquia: colunas conhecidas, obrigatórias, sugestões e as
+ * falhas no formato de `detalhesCsvInvalidoSchema`. O leitor (lerCsv) está em src/shared/csv.ts, com as
+ * regras abaixo, e é reexportado daqui.
  *
  * - Separador "," ou ";", detectado na primeira linha com conteúdo (o cabeçalho): vence o que aparece
  *   mais vezes fora de aspas; no empate, ",". O Excel em português grava com ";".
@@ -10,113 +11,24 @@
  * - Linhas em branco (só espaços e separadores) são descartadas, mas contam na numeração: `linha` é a
  *   linha da planilha, a partir de 1. Uma quebra de linha dentro de aspas não abre linha nova.
  */
+import type { DetalhesCsvInvalido } from "../../shared/contracts";
 import {
-  normalizarEspacos,
-  type DetalhesCsvInvalido,
-} from "../../shared/contracts";
+  lerCsv,
+  normalizarNomeDeColuna,
+  resumirNomeDeColuna,
+} from "../../shared/csv";
 
-export type SeparadorCsv = "," | ";";
-
-export interface RegistroCsv {
-  /** Linha da planilha, a partir de 1. */
-  linha: number;
-  campos: string[];
-}
-
-export type LeituraCsv =
-  | { ok: true; separador: SeparadorCsv; registros: RegistroCsv[] }
-  | { ok: false; linha: number; mensagem: string };
-
-const BOM = "\uFEFF";
-const ASPAS = '"';
-/** O que o decodificador põe no lugar de bytes que não são UTF-8 (ex.: arquivo salvo em Windows-1252). */
-const CARACTERE_INVALIDO = "\uFFFD";
-
-/** Separador do arquivo: o mais frequente, fora de aspas, na primeira linha com conteúdo. */
-export function detectarSeparador(texto: string): SeparadorCsv {
-  const contagem = { ",": 0, ";": 0 };
-  let entreAspas = false;
-  let temConteudo = false;
-  for (const caractere of texto) {
-    if (caractere === ASPAS) {
-      entreAspas = !entreAspas;
-      temConteudo = true;
-    } else if (entreAspas) {
-      // separador entre aspas não conta
-    } else if (caractere === "\n" || caractere === "\r") {
-      if (temConteudo) break;
-    } else {
-      if (caractere === "," || caractere === ";") contagem[caractere]++;
-      if (caractere.trim() !== "") temConteudo = true;
-    }
-  }
-  return contagem[";"] > contagem[","] ? ";" : ",";
-}
-
-/** Lê o arquivo inteiro em registros (linhas não vazias, com o número da linha). */
-export function lerCsv(texto: string): LeituraCsv {
-  const conteudo = texto.startsWith(BOM) ? texto.slice(BOM.length) : texto;
-  const separador = detectarSeparador(conteudo);
-  const registros: RegistroCsv[] = [];
-  let campos: string[] = [];
-  let campo = "";
-  let linha = 1;
-  let citado = false;
-  let entreAspas = false;
-  let linhaDasAspas = 0;
-
-  const fecharCampo = () => {
-    campos.push(campo);
-    campo = "";
-    citado = false;
-  };
-  const fecharRegistro = () => {
-    fecharCampo();
-    if (campos.some((valor) => valor.trim() !== ""))
-      registros.push({ linha, campos });
-    campos = [];
-    linha++;
-  };
-
-  for (let i = 0; i < conteudo.length; i++) {
-    const caractere = conteudo[i];
-    const proximo = conteudo[i + 1];
-    if (entreAspas) {
-      if (caractere === ASPAS && proximo === ASPAS) {
-        campo += ASPAS;
-        i++;
-      } else if (caractere === ASPAS) {
-        entreAspas = false;
-      } else if (caractere === "\r") {
-        campo += "\n";
-        if (proximo === "\n") i++;
-      } else {
-        campo += caractere;
-      }
-    } else if (caractere === ASPAS && !citado && campo.trim() === "") {
-      entreAspas = true;
-      citado = true;
-      campo = "";
-      linhaDasAspas = linha;
-    } else if (caractere === separador) {
-      fecharCampo();
-    } else if (caractere === "\n" || caractere === "\r") {
-      if (caractere === "\r" && proximo === "\n") i++;
-      fecharRegistro();
-    } else {
-      campo += caractere;
-    }
-  }
-
-  if (entreAspas)
-    return {
-      ok: false,
-      linha: linhaDasAspas,
-      mensagem: `As aspas abertas na linha ${linhaDasAspas} não foram fechadas`,
-    };
-  if (campo !== "" || citado || campos.length > 0) fecharRegistro();
-  return { ok: true, separador, registros };
-}
+// O leitor mora em src/shared/csv.ts (vale também no navegador); quem importava daqui continua igual.
+export {
+  detectarSeparador,
+  lerCsv,
+  normalizarNomeDeColuna,
+  resumirNomeDeColuna,
+  type LeituraCsv,
+  type OpcoesLerCsv,
+  type RegistroCsv,
+  type SeparadorCsv,
+} from "../../shared/csv";
 
 // ---------------------------------------------------------------------------------------------------
 // Tabela com cabeçalho
@@ -162,6 +74,9 @@ export type TabelaCsv<C extends string> =
     }
   | FalhaCsv;
 
+/** O que o decodificador põe no lugar de bytes que não são UTF-8 (ex.: arquivo salvo em Windows-1252). */
+const CARACTERE_INVALIDO = "\uFFFD";
+
 export function arquivoVazio(): FalhaCsv {
   return {
     ok: false,
@@ -178,17 +93,6 @@ export function arquivoGrandeDemais(limiteCaracteres: number): FalhaCsv {
     mensagem: `O arquivo passa de ${megabytes} MB: divida a planilha em arquivos menores e importe um de cada vez.`,
     detalhes: { motivo: "arquivo_grande", limite_caracteres: limiteCaracteres },
   };
-}
-
-/** Nome de coluna para comparação: sem espaços nas pontas, sem acentos e em minúsculas. */
-export function normalizarNomeDeColuna(nome: string): string {
-  return nome.normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
-}
-
-/** Texto do cabeçalho para citar numa mensagem: espaços normalizados e no máximo 40 caracteres. */
-export function resumirNomeDeColuna(nome: string): string {
-  const limpo = normalizarEspacos(nome);
-  return limpo.length > 40 ? `${limpo.slice(0, 39)}…` : limpo;
 }
 
 const PALAVRAS_VAZIAS = new Set([

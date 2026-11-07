@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  AvisoReconciliacao,
   CampoReconciliacao,
+  CorpoConferencia,
   MapeamentoReconciliacao,
   RespostaAnaliseReconciliacao,
   RespostaRecuperarReconciliacao,
 } from "../../../shared/contracts";
+import { juntarAvisos } from "../../../shared/conferencia/avisos";
+import {
+  corpoGrandeDemais,
+  lerArquivoConferencia,
+  montarCorpo,
+  type ArquivoConferencia,
+} from "../../../shared/conferencia/leitura";
 import {
   Aviso,
   Card,
@@ -13,8 +22,8 @@ import {
   SeletorArquivo,
 } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
-import { lerArquivo, type LeituraArquivo } from "./arquivo";
-import { analisar } from "./conferencia-api";
+import { lerArquivo, sha256DoTexto } from "./arquivo";
+import { analisar, carregarFusoDaCampanha } from "./conferencia-api";
 import { DialogoRecuperar } from "./DialogoRecuperar";
 import { Historico } from "./Historico";
 import { Mapeamento } from "./Mapeamento";
@@ -26,7 +35,27 @@ const CAMPOS_EM_ORDEM = Object.keys(CAMPOS) as CampoReconciliacao[];
 
 type Falha = { titulo: string; mensagem: string; itens: string[] };
 
-/** As vendas perdidas que dá para recuperar (modo por pedido). */
+/** O arquivo lido na tela: as colunas e as linhas (só na memória), o SHA-256 e a codificação. */
+type Lido = {
+  arquivo: ArquivoConferencia;
+  sha256: string;
+  codificacao: "utf-8" | "windows-1252";
+};
+
+/** A última conferência: a resposta, o corpo enviado (o "Recuperar" usa o mesmo) e os avisos da leitura. */
+type Conferida = {
+  analise: RespostaAnaliseReconciliacao;
+  corpo: CorpoConferencia;
+  mapeamento: MapeamentoReconciliacao;
+  avisos: AvisoReconciliacao[];
+};
+
+const mesmoMapeamento = (
+  a: MapeamentoReconciliacao,
+  b: MapeamentoReconciliacao,
+) => CAMPOS_EM_ORDEM.every((campo) => a[campo] === b[campo]);
+
+/** As vendas perdidas que dá para recuperar (modo por pedido; com a trava do código, nenhuma). */
 function recuperaveisDe(analise: RespostaAnaliseReconciliacao): string[] {
   if (analise.modo !== "por_pedido") return [];
   const perdidas = analise.divergencias.find(
@@ -43,6 +72,8 @@ function anuncioDaAnalise(analise: RespostaAnaliseReconciliacao): string {
     return analise.total.confere
       ? "Conferência pronta: os totais conferem."
       : "Conferência pronta: os totais não batem.";
+  if (!analise.codigo.confere)
+    return "Conferência pronta: a coluna escolhida como código do pedido não parece ser o código da Rifei.";
   const perdidas =
     analise.divergencias.find((grupo) => grupo.tipo === "venda_perdida")
       ?.quantidade ?? 0;
@@ -51,14 +82,22 @@ function anuncioDaAnalise(analise: RespostaAnaliseReconciliacao): string {
   return `Conferência pronta: ${plural(analise.resumo.com_divergencia, "pedido", "pedidos")} com diferença, ${plural(perdidas, "venda perdida", "vendas perdidas")}.`;
 }
 
+const SEM_CAMPANHA: Falha = {
+  titulo: "Não dá para conferir ainda",
+  mensagem:
+    "A campanha ainda não foi configurada: configure-a antes de conferir.",
+  itens: [],
+};
+
+const PEDIDOS_DEMAIS: Falha = {
+  titulo: "O arquivo tem pedidos demais para conferir de uma vez",
+  mensagem:
+    "Exporte da Rifei um período menor (por exemplo, metade dos dias) e confira cada parte. Com a opção “Um bilhete por linha” desmarcada, cabem mais pedidos.",
+  itens: [],
+};
+
 function falhaDaConferencia(erro: unknown): Falha {
   if (erro instanceof ErroApi) {
-    if (erro.codigo === "csv_invalido")
-      return {
-        titulo: "Não foi possível ler o arquivo",
-        mensagem: erro.mensagem,
-        itens: [],
-      };
     if (erro.codigo === "requisicao_invalida" && Array.isArray(erro.detalhes))
       return {
         titulo: "Estas colunas não servem",
@@ -72,12 +111,8 @@ function falhaDaConferencia(erro: unknown): Falha {
             : [],
         ),
       };
-    if (erro.codigo === "nao_encontrado")
-      return {
-        titulo: "Não dá para conferir ainda",
-        mensagem: erro.mensagem,
-        itens: [],
-      };
+    if (erro.codigo === "nao_encontrado") return SEM_CAMPANHA;
+    if (erro.codigo === "corpo_muito_grande") return PEDIDOS_DEMAIS;
   }
   return {
     titulo: "Não foi possível conferir",
@@ -86,19 +121,18 @@ function falhaDaConferencia(erro: unknown): Falha {
   };
 }
 
-// Conferência pelo CSV da Rifei (RIFA-012): a coordenação sobe o arquivo "Exportar Pedidos", confere as
-// colunas que o sistema reconheceu, vê as diferenças entre a Rifei e o sistema e recupera as vendas que se
-// perderam. O texto do arquivo fica só na memória desta tela (sai ao escolher outro arquivo ou ao sair).
+// Conferência pelo CSV da Rifei (RIFA-012): a coordenação escolhe o arquivo "Exportar Pedidos", a tela o lê
+// AQUI (colunas, linhas, datas no fuso da campanha) e manda ao sistema só as colunas mapeadas que não são
+// de dado pessoal; a coordenação confere as colunas, vê as diferenças entre a Rifei e o sistema e recupera
+// as vendas que se perderam. O texto do arquivo fica só na memória desta tela.
 export function ConferenciaPage() {
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [leitura, setLeitura] = useState<LeituraArquivo | null>(null);
-  const [analise, setAnalise] = useState<RespostaAnaliseReconciliacao | null>(
-    null,
-  );
+  const [lido, setLido] = useState<Lido | null>(null);
   /** O mapeamento na tela (pode ter trocas ainda não conferidas). */
   const [mapeamento, setMapeamento] = useState<MapeamentoReconciliacao | null>(
     null,
   );
+  const [conferida, setConferida] = useState<Conferida | null>(null);
   const [ocupado, setOcupado] = useState<"lendo" | "conferindo" | null>(null);
   const [falha, setFalha] = useState<Falha | null>(null);
   const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(
@@ -112,6 +146,8 @@ export function ConferenciaPage() {
   // Cada arquivo escolhido e cada conferência é uma tentativa: respostas de uma antiga são ignoradas.
   const sequencia = useRef(0);
   const controle = useRef<AbortController | null>(null);
+  /** O fuso da campanha ativa (as datas do arquivo são lidas nele); null = sem campanha. */
+  const fuso = useRef<string | null | undefined>(undefined);
   const focarDepois = useRef<"resultado" | "falha" | null>(null);
   const refTitulo = useRef<HTMLSpanElement>(null);
   const refFalha = useRef<HTMLDivElement>(null);
@@ -123,35 +159,59 @@ export function ConferenciaPage() {
     if (!pedido) return;
     focarDepois.current = null;
     (pedido === "resultado" ? refTitulo : refFalha).current?.focus();
-  }, [analise, falha]);
+  }, [conferida, falha]);
 
-  const csv = leitura?.tipo === "ok" ? leitura.csv : null;
-
-  async function conferir(
-    texto: string,
-    comMapeamento: MapeamentoReconciliacao | null,
-    focar = true,
-  ) {
+  /** Monta o corpo na tela e confere com o sistema; o corpo enviado fica guardado para o "Recuperar". */
+  async function conferir(atual: Lido, comMapeamento: MapeamentoReconciliacao) {
     const minha = ++sequencia.current;
     controle.current?.abort();
     const meu = new AbortController();
     controle.current = meu;
     setOcupado("conferindo");
     setFalha(null);
+    setMapeamento(comMapeamento);
+    const falhar = (motivo: Falha) => {
+      focarDepois.current = "falha";
+      setFalha(motivo);
+    };
     try {
-      const resposta = await analisar(texto, comMapeamento, {
-        signal: meu.signal,
-      });
+      if (fuso.current === undefined)
+        fuso.current = await carregarFusoDaCampanha({ signal: meu.signal });
       if (minha !== sequencia.current) return;
-      if (focar) focarDepois.current = "resultado";
-      setAnalise(resposta);
-      setMapeamento(resposta.mapeamento);
+      if (fuso.current === null) {
+        falhar(SEM_CAMPANHA);
+        return;
+      }
+      const montagem = montarCorpo(atual.arquivo, comMapeamento, {
+        fuso: fuso.current,
+        arquivoSha256: atual.sha256,
+      });
+      if (!montagem.ok) {
+        falhar({
+          titulo: "Estas colunas não servem",
+          mensagem: "Troque as colunas apontadas e confira de novo.",
+          itens: montagem.problemas.map((problema) => problema.mensagem),
+        });
+        return;
+      }
+      if (corpoGrandeDemais(JSON.stringify(montagem.corpo))) {
+        falhar(PEDIDOS_DEMAIS);
+        return;
+      }
+      const resposta = await analisar(montagem.corpo, { signal: meu.signal });
+      if (minha !== sequencia.current) return;
+      focarDepois.current = "resultado";
+      setConferida({
+        analise: resposta,
+        corpo: montagem.corpo,
+        mapeamento: comMapeamento,
+        avisos: montagem.avisos,
+      });
       setSelecionados(new Set(recuperaveisDe(resposta)));
       setAnuncio(anuncioDaAnalise(resposta));
     } catch (erro) {
       if (meu.signal.aborted || minha !== sequencia.current) return;
-      focarDepois.current = "falha";
-      setFalha(falhaDaConferencia(erro));
+      falhar(falhaDaConferencia(erro));
     } finally {
       if (minha === sequencia.current) setOcupado(null);
     }
@@ -161,22 +221,53 @@ export function ConferenciaPage() {
     const minha = ++sequencia.current;
     controle.current?.abort();
     setArquivo(novo);
-    setLeitura(null);
-    setAnalise(null);
+    setLido(null);
+    setConferida(null);
     setMapeamento(null);
     setFalha(null);
     setRecuperacao(null);
     setSelecionados(new Set());
     setAnuncio("");
     setOcupado("lendo");
-    const lida = await lerArquivo(novo);
-    if (minha !== sequencia.current) return;
-    setLeitura(lida);
-    if (lida.tipo !== "ok") {
+    // Um problema do arquivo (vazio, grande, sem cabeçalho...) aparece no lugar da conferência, com o foco.
+    const problema = (titulo: string, mensagem: string) => {
+      focarDepois.current = "falha";
+      setFalha({ titulo, mensagem, itens: [] });
       setOcupado(null);
+    };
+    const decodificado = await lerArquivo(novo);
+    if (minha !== sequencia.current) return;
+    if (decodificado.tipo !== "ok") {
+      problema(decodificado.titulo, decodificado.mensagem);
       return;
     }
-    await conferir(lida.csv, null);
+    const leitura = lerArquivoConferencia(decodificado.texto);
+    if (!leitura.ok) {
+      problema(leitura.titulo, leitura.mensagem);
+      return;
+    }
+    const sha256 = await sha256DoTexto(decodificado.texto);
+    if (minha !== sequencia.current) return;
+    const atual: Lido = {
+      arquivo: leitura,
+      sha256,
+      codificacao: decodificado.codificacao,
+    };
+    setLido(atual);
+    await conferir(atual, leitura.mapeamentoDetectado);
+  }
+
+  /** Depois de recuperar: confere de novo com o mesmo corpo (as recuperadas saem das vendas perdidas). */
+  async function conferirDeNovo(anterior: Conferida) {
+    const minha = ++sequencia.current;
+    try {
+      const resposta = await analisar(anterior.corpo);
+      if (minha !== sequencia.current) return;
+      setConferida({ ...anterior, analise: resposta });
+      setSelecionados(new Set(recuperaveisDe(resposta)));
+    } catch (erro) {
+      if (minha === sequencia.current) setFalha(falhaDaConferencia(erro));
+    }
   }
 
   function selecionar(codigos: string[], marcado: boolean) {
@@ -191,8 +282,8 @@ export function ConferenciaPage() {
   }
 
   function abrirRecuperar() {
-    if (!analise) return;
-    const escolhidas = recuperaveisDe(analise).filter((codigo) =>
+    if (!conferida) return;
+    const escolhidas = recuperaveisDe(conferida.analise).filter((codigo) =>
       selecionados.has(codigo),
     );
     if (escolhidas.length > 0) setARecuperar(escolhidas);
@@ -207,16 +298,16 @@ export function ConferenciaPage() {
         ? `${plural(resposta.recuperados.length, "venda recuperada", "vendas recuperadas")}: já contam no painel e no ranking.`
         : "Nada foi gravado: as vendas escolhidas já estavam no sistema.",
     );
-    // Confere de novo com as mesmas colunas: as recuperadas saem das vendas perdidas.
-    if (csv && analise) void conferir(csv, analise.mapeamento, false);
+    if (conferida) void conferirDeNovo(conferida);
   }
 
   const alterado =
-    analise !== null &&
     mapeamento !== null &&
-    CAMPOS_EM_ORDEM.some(
-      (campo) => mapeamento[campo] !== analise.mapeamento[campo],
-    );
+    (conferida === null || !mesmoMapeamento(mapeamento, conferida.mapeamento));
+  const detectado =
+    lido !== null &&
+    conferida !== null &&
+    mesmoMapeamento(conferida.mapeamento, lido.arquivo.mapeamentoDetectado);
 
   const avisoDaRecuperacao =
     recuperacao &&
@@ -293,7 +384,7 @@ export function ConferenciaPage() {
               </li>
               <li>
                 Escolha aqui o arquivo baixado, sem abrir e salvar no Excel
-                antes. O sistema reconhece as colunas e compara com as vendas
+                antes. A tela reconhece as colunas e compara com as vendas
                 gravadas.
               </li>
               <li>
@@ -305,11 +396,12 @@ export function ConferenciaPage() {
             <Aviso
               tom="info"
               anuncio="nenhum"
-              titulo="Os dados dos compradores não ficam no sistema"
+              titulo="Os dados dos compradores não saem do seu computador"
             >
               <p>
-                Nome, e-mail e telefone são ignorados. O arquivo é lido,
-                comparado e descartado: nada dele fica guardado.
+                O arquivo é lido aqui, no navegador. Nome, e-mail e telefone são
+                ignorados: para o sistema vão só o código, o status, a
+                quantidade, o valor, o afiliado e a data de cada pedido.
               </p>
             </Aviso>
           </div>
@@ -329,30 +421,24 @@ export function ConferenciaPage() {
             {ocupado === "conferindo" && (
               <Loading texto="Conferindo com as vendas do sistema…" />
             )}
-            {leitura?.tipo === "problema" && (
-              <Aviso tom="alerta" titulo={leitura.titulo}>
-                <p>{leitura.mensagem}</p>
+            {lido?.codificacao === "windows-1252" && (
+              <Aviso tom="info" anuncio="nenhum">
+                <p>
+                  O arquivo não estava em UTF-8 e foi lido como no Excel
+                  (Windows-1252). Confira se os acentos aparecem certos nos
+                  nomes das colunas.
+                </p>
               </Aviso>
             )}
-            {leitura?.tipo === "ok" &&
-              leitura.codificacao === "windows-1252" && (
-                <Aviso tom="info" anuncio="nenhum">
-                  <p>
-                    O arquivo não estava em UTF-8 e foi lido como no Excel
-                    (Windows-1252). Confira se os acentos aparecem certos nos
-                    nomes das colunas.
-                  </p>
-                </Aviso>
-              )}
-            {!analise && avisoDaFalha}
+            {!conferida && avisoDaFalha}
           </div>
         </Card>
 
-        {analise && mapeamento && (
+        {lido && mapeamento && (
           <Mapeamento
-            colunas={analise.colunas}
+            colunas={lido.arquivo.colunas}
             mapeamento={mapeamento}
-            detectado={analise.mapeamento_detectado}
+            detectado={detectado}
             alterado={alterado}
             ocupado={ocupado !== null}
             aoMudar={(campo, indice) =>
@@ -360,17 +446,20 @@ export function ConferenciaPage() {
                 atual ? { ...atual, [campo]: indice } : atual,
               )
             }
-            aoConferir={() => {
-              if (csv) void conferir(csv, mapeamento);
-            }}
-            aoDesfazer={() => setMapeamento(analise.mapeamento)}
+            aoConferir={() => void conferir(lido, mapeamento)}
+            aoDesfazer={() =>
+              setMapeamento(
+                conferida?.mapeamento ?? lido.arquivo.mapeamentoDetectado,
+              )
+            }
           />
         )}
-        {analise && avisoDaFalha}
+        {conferida && avisoDaFalha}
 
-        {analise && (
+        {conferida && (
           <Resultado
-            analise={analise}
+            analise={conferida.analise}
+            avisos={juntarAvisos(conferida.avisos, conferida.analise.avisos)}
             selecionados={selecionados}
             aoSelecionar={selecionar}
             aoRecuperar={abrirRecuperar}
@@ -382,10 +471,9 @@ export function ConferenciaPage() {
         <Historico versao={versaoHistorico} />
       </div>
 
-      {aRecuperar && csv && analise && (
+      {aRecuperar && conferida && (
         <DialogoRecuperar
-          csv={csv}
-          mapeamento={analise.mapeamento}
+          corpo={conferida.corpo}
           pedidos={aRecuperar}
           aoFechar={() => setARecuperar(null)}
           aoGravar={aoGravar}

@@ -1,5 +1,6 @@
-// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql e
-// 0005_auditoria.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd.
+// Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
+// 0004_conferencia.sql e 0005_auditoria.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
+// testes, dentro do workerd.
 import { env } from "cloudflare:workers";
 import { describe, expect, it, onTestFinished } from "vitest";
 
@@ -16,6 +17,8 @@ const TABELAS = [
   "pedidos",
   // 0005 (RIFA-013b): pedidos aprovados marcados como implausíveis.
   "pedidos_suspeitos",
+  // 0004 (RIFA-012): auditoria do "Recuperar" da conferência pelo CSV.
+  "recuperacoes",
   "redes",
   "sessoes",
   "usuarios",
@@ -81,6 +84,8 @@ describe("migrações: schema do D1", () => {
         "pedidos_por_status_aprovacao",
         // 0003: parcial (approved) e com o dia de UTC−3, para a leitura do painel (db/painel.ts).
         "pedidos_aprovados_por_afiliado_dia",
+        // 0004 (RIFA-012): parcial (origem = 'conferencia'), para a lista das recuperações.
+        "pedidos_por_recuperacao",
       ],
       webhook_eventos: [
         "webhook_eventos_por_pedido",
@@ -95,6 +100,8 @@ describe("migrações: schema do D1", () => {
       // 0005 (RIFA-013b).
       auditoria: ["auditoria_por_usuario"],
       pedidos_suspeitos: ["pedidos_suspeitos_por_marcacao"],
+      // 0004 (RIFA-012).
+      recuperacoes: ["recuperacoes_por_campanha"],
     };
     for (const [tabela, indices] of Object.entries(esperados)) {
       const { results } = await env.DB.prepare(

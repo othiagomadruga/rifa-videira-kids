@@ -1,30 +1,28 @@
-// O arquivo escolhido, lido no navegador: o texto fica só na memória da tela (nunca no localStorage, no
-// endereço ou no log) e vai inteiro para a API, que o descarta depois de conferir. Aqui só se confere o
-// que dá para conferir sem a API: tamanho, vazio e a codificação.
+// O arquivo escolhido, lido NO NAVEGADOR: o texto fica só na memória da tela (nunca no localStorage, no
+// endereço, no log ou na API). A tela lê as colunas e as linhas aqui (src/shared/conferencia) e manda à API
+// só o corpo compacto, sem os dados pessoais; do texto, sai só o SHA-256 (para a auditoria).
 //
 // Codificação: o export da Rifei pode vir em UTF-8 ou, se passou pelo Excel, em Windows-1252. O texto é
 // lido como UTF-8 estrito; se não for UTF-8 válido, é lido de novo como Windows-1252, para os acentos
-// ("Situação", "Não pago") chegarem certos à API.
-import { LIMITE_CARACTERES_CSV, LIMITE_LINHAS_CSV } from "./conferencia-api";
+// ("Situação", "Não pago") saírem certos.
+import { LIMITE_CARACTERES_CSV_RECONCILIACAO } from "../../../shared/contracts/conferencia";
+import {
+  FALHA_ARQUIVO_GRANDE,
+  FALHA_ARQUIVO_VAZIO,
+} from "../../../shared/conferencia/leitura";
 
-export type LeituraArquivo =
-  | { tipo: "ok"; csv: string; codificacao: "utf-8" | "windows-1252" }
+export type ArquivoDecodificado =
+  | { tipo: "ok"; texto: string; codificacao: "utf-8" | "windows-1252" }
   | { tipo: "problema"; titulo: string; mensagem: string };
 
-const LIMITE_MB = LIMITE_CARACTERES_CSV / 1_000_000;
-
-const ARQUIVO_GRANDE: LeituraArquivo = {
+const problema = (falha: {
+  titulo: string;
+  mensagem: string;
+}): ArquivoDecodificado => ({
   tipo: "problema",
-  titulo: "O arquivo é grande demais",
-  mensagem: `O limite é de ${LIMITE_MB} MB e ${LIMITE_LINHAS_CSV.toLocaleString("pt-BR")} linhas. Exporte da Rifei só as colunas da conferência (sem nome, e-mail e telefone) ou um período menor.`,
-};
-
-const ARQUIVO_VAZIO: LeituraArquivo = {
-  tipo: "problema",
-  titulo: "O arquivo está vazio",
-  mensagem:
-    "Confira se escolheu o arquivo certo: o que a Rifei baixa em “Exportar Pedidos”.",
-};
+  titulo: falha.titulo,
+  mensagem: falha.mensagem,
+});
 
 const BOM = String.fromCharCode(0xfeff);
 
@@ -48,9 +46,10 @@ export function decodificar(bytes: ArrayBuffer): {
 }
 
 /** Lê o arquivo escolhido. Arquivo muito maior que o limite nem é lido. */
-export async function lerArquivo(arquivo: File): Promise<LeituraArquivo> {
+export async function lerArquivo(arquivo: File): Promise<ArquivoDecodificado> {
   // Em UTF-8 cada caractere ocupa até 4 bytes: acima disso, com certeza passa do limite.
-  if (arquivo.size > LIMITE_CARACTERES_CSV * 4) return ARQUIVO_GRANDE;
+  if (arquivo.size > LIMITE_CARACTERES_CSV_RECONCILIACAO * 4)
+    return problema(FALHA_ARQUIVO_GRANDE);
   let bytes: ArrayBuffer;
   try {
     bytes = await arquivo.arrayBuffer();
@@ -62,7 +61,19 @@ export async function lerArquivo(arquivo: File): Promise<LeituraArquivo> {
     };
   }
   const { texto, codificacao } = decodificar(bytes);
-  if (texto.trim() === "") return ARQUIVO_VAZIO;
-  if (texto.length > LIMITE_CARACTERES_CSV) return ARQUIVO_GRANDE;
-  return { tipo: "ok", csv: texto, codificacao };
+  if (texto.trim() === "") return problema(FALHA_ARQUIVO_VAZIO);
+  if (texto.length > LIMITE_CARACTERES_CSV_RECONCILIACAO)
+    return problema(FALHA_ARQUIVO_GRANDE);
+  return { tipo: "ok", texto, codificacao };
+}
+
+/** SHA-256 (hex minúsculo) do texto do arquivo: identifica o arquivo na auditoria, sem o conteúdo. */
+export async function sha256DoTexto(texto: string): Promise<string> {
+  const resumo = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(texto),
+  );
+  return Array.from(new Uint8Array(resumo), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }

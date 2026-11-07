@@ -1,6 +1,7 @@
 // Apoio dos testes da tela da conferência: respostas de exemplo da API (cada uma passa pelo schema ESTRITO
 // do contrato: um campo a mais ou errado quebra o teste já na montagem) e uma API falsa que responde por
-// rota e guarda as chamadas (método, caminho e corpo). Todos os dados são fictícios.
+// rota e guarda as chamadas (método, caminho e corpo enviado). A tela lê o CSV no navegador; a API recebe
+// só o corpo compacto. Todos os dados são fictícios.
 import { vi } from "vitest";
 import {
   respostaAnaliseAgregadaSchema,
@@ -8,13 +9,15 @@ import {
   respostaListaRecuperacoesSchema,
   respostaRecuperarReconciliacaoSchema,
   type Divergencia,
-  type MapeamentoReconciliacao,
   type Recuperacao,
   type RespostaAnaliseAgregada,
   type RespostaAnalisePorPedido,
   type RespostaRecuperarReconciliacao,
-  type TipoDivergencia,
 } from "../../../shared/contracts/api";
+import type {
+  MapeamentoReconciliacao,
+  TipoDivergencia,
+} from "../../../shared/contracts/conferencia";
 import { respostaJson } from "../../test/renderizar";
 
 /** O arquivo de exemplo: dados pessoais fictícios que nunca podem sair do arquivo. */
@@ -27,6 +30,23 @@ export const CSV_EXEMPLO = [
   "",
 ].join("\r\n");
 
+/** Os textos pessoais do CSV_EXEMPLO: nenhum pode ir no corpo de uma chamada à API. */
+export const TEXTOS_PESSOAIS_DO_EXEMPLO = [
+  NOME_FICTICIO,
+  EMAIL_FICTICIO,
+  "Joao Ficticio",
+  "joao@example.com",
+  "example.com",
+];
+
+/** O mesmo arquivo sem a coluna do código: a conferência é pelos totais. */
+export const CSV_SEM_CODIGO = [
+  "Nome;Status;Quantidade de bilhetes;Valor;Afiliado;Data do pagamento",
+  `${NOME_FICTICIO};Pago;3;R$ 60,00;101;27/11/2026 10:00`,
+  "Joao Ficticio;Pago;2;R$ 40,00;102;28/11/2026",
+  "",
+].join("\r\n");
+
 export const MAPEAMENTO: MapeamentoReconciliacao = {
   pedido_id: 0,
   status: 3,
@@ -36,17 +56,6 @@ export const MAPEAMENTO: MapeamentoReconciliacao = {
   afiliado: 6,
   data: 7,
 };
-
-const COLUNAS = [
-  ["Pedido", "pedido_id", false],
-  ["Nome", null, true],
-  ["E-mail", null, true],
-  ["Status", "status", false],
-  ["Quantidade de bilhetes", "qtd_bilhetes", false],
-  ["Valor", "valor", false],
-  ["Afiliado", "afiliado", false],
-  ["Data do pagamento", "data", false],
-] as const;
 
 const ATAPE = { id: 1, nome: "Célula Ágape" };
 const BETEL = { id: 2, nome: "Célula Betel" };
@@ -168,14 +177,6 @@ const ITENS_POR_TIPO: Partial<Record<TipoDivergencia, Divergencia[]>> = {
 };
 
 const COMUM = {
-  colunas: COLUNAS.map(([nome, campo, pessoal], indice) => ({
-    indice,
-    nome,
-    campo_detectado: campo,
-    dado_pessoal: pessoal,
-  })),
-  mapeamento: MAPEAMENTO,
-  mapeamento_detectado: true,
   arquivo: {
     linhas: 12,
     linhas_ignoradas: 1,
@@ -184,12 +185,6 @@ const COMUM = {
     data_fim: "2026-11-29",
   },
   avisos: [
-    {
-      codigo: "colunas_pessoais_ignoradas" as const,
-      mensagem:
-        "As colunas Nome e E-mail têm dados pessoais e foram ignoradas: o sistema não lê nem guarda nada delas.",
-      quantidade: null,
-    },
     {
       codigo: "afiliado_nao_reconhecido" as const,
       mensagem:
@@ -204,6 +199,7 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
   respostaAnalisePorPedidoSchema.parse({
     modo: "por_pedido",
     ...COMUM,
+    codigo: { confere: true, pagos_no_arquivo: 8, encontrados: 4 },
     resumo: {
       pedidos_no_arquivo: 10,
       aprovados_no_arquivo: {
@@ -226,7 +222,6 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
 export const ANALISE_DEPOIS: RespostaAnalisePorPedido =
   respostaAnalisePorPedidoSchema.parse({
     ...ANALISE_POR_PEDIDO,
-    mapeamento_detectado: false,
     resumo: { ...ANALISE_POR_PEDIDO.resumo, conferem: 4, com_divergencia: 4 },
     divergencias: TIPOS.map((tipo) =>
       grupo(
@@ -246,11 +241,58 @@ export const ANALISE_SEM_DIFERENCA: RespostaAnalisePorPedido =
     divergencias: TIPOS.map((tipo) => grupo(tipo, [])),
   });
 
+/** A coluna escolhida como código não confere (B3): nada pode ser recuperado. */
+export const ANALISE_TRAVADA: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_POR_PEDIDO,
+    codigo: { confere: false, pagos_no_arquivo: 7, encontrados: 0 },
+    avisos: [
+      {
+        codigo: "codigo_nao_confere",
+        mensagem:
+          "A coluna escolhida como código do pedido (Pedido) não parece ser o código da Rifei: só 0 de 7 pedidos pagos do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo.",
+        quantidade: null,
+      },
+    ],
+    divergencias: TIPOS.map((tipo) =>
+      grupo(
+        tipo,
+        tipo === "venda_perdida"
+          ? VENDAS_PERDIDAS.map((item) => ({
+              ...item,
+              recuperavel: false,
+              observacoes: [...item.observacoes, "codigo_nao_confere"],
+            }))
+          : [],
+      ),
+    ),
+  });
+
+/** Um pedido em várias linhas com o mesmo valor, que não é o preço do bilhete (B2): não recupera. */
+export const ANALISE_AMBIGUA: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_POR_PEDIDO,
+    divergencias: TIPOS.map((tipo) =>
+      grupo(
+        tipo,
+        tipo === "venda_perdida"
+          ? [
+              perdida(
+                "R-0101",
+                { qtd_bilhetes: 3, total_centavos: null },
+                false,
+                ["valor_ambiguo"],
+              ),
+            ]
+          : [],
+      ),
+    ),
+  });
+
 export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
   respostaAnaliseAgregadaSchema.parse({
     modo: "agregado",
     ...COMUM,
-    mapeamento: { ...MAPEAMENTO, pedido_id: null },
     avisos: [
       {
         codigo: "sem_coluna_pedido",
@@ -338,7 +380,7 @@ export const PREVIA: RespostaRecuperarReconciliacao =
     recuperados: [RECUPERADO_0101, RECUPERADO_0105],
     nao_recuperados: [{ pedido_id: "R-0102", motivo: "ja_existe" }],
     totais: { pedidos_aprovados: 2, bilhetes: 4, total_centavos: 8000 },
-    avisos: [COMUM.avisos[1]],
+    avisos: [COMUM.avisos[0]],
   });
 
 export const GRAVADA: RespostaRecuperarReconciliacao =
@@ -380,6 +422,8 @@ export const RECUPERACOES: Recuperacao[] =
 export type Chamada = { metodo: string; caminho: string; corpo: unknown };
 
 type Respostas = {
+  /** GET /api/admin/campanha (padrão: a campanha em Belém; null = 404, sem campanha). */
+  campanha?: object | null;
   /** Respostas de POST .../analisar, em ordem (a última se repete). */
   analises?: (object | Response)[];
   recuperar?: (corpo: { simular: boolean }) => object | Response;
@@ -400,6 +444,23 @@ export function criarApiFalsa(respostas: Respostas = {}) {
       chamadas.push({ metodo, caminho, corpo });
       const responder = (valor: object | Response) =>
         valor instanceof Response ? valor : respostaJson(valor);
+      if (caminho === "/api/admin/campanha") {
+        const campanha =
+          respostas.campanha === undefined
+            ? { fuso_horario: "America/Belem", preco_bilhete_centavos: 2000 }
+            : respostas.campanha;
+        return campanha === null
+          ? respostaJson(
+              {
+                erro: {
+                  codigo: "nao_encontrado",
+                  mensagem: "Campanha não configurada",
+                },
+              },
+              404,
+            )
+          : respostaJson(campanha);
+      }
       if (caminho === "/api/admin/reconciliacao/analisar") {
         const resposta = analises[Math.min(vezDaAnalise, analises.length - 1)];
         vezDaAnalise++;

@@ -412,22 +412,29 @@ describe("a) toda rota da coordenação exige sessão", () => {
     ];
     for (const rota of rotas)
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
-    // CSV fictício com dado pessoal: nem o 401 nem o 403 leem ou devolvem o arquivo.
-    const csv =
-      'Pedido,Nome,Status,Valor\r\nR-PROTECAO,Maria Ficticia da Protecao,Pago,"R$ 20,00"\r\n';
+    // O corpo compacto que o navegador manda (o CSV fica nele): nem o 401 nem o 403 o leem.
+    const analise = {
+      colunas: {
+        pedido_id: "Pedido",
+        status: "Status",
+        qtd_bilhetes: "Quantidade",
+        bilhetes: null,
+        valor: "Valor",
+        afiliado: null,
+        data: null,
+      },
+      linhas: 1,
+      arquivo_sha256: "0".repeat(64),
+      vezes: [1],
+      pedido_id: ["R-PROTECAO"],
+      status: ["aprovado"],
+      qtd_bilhetes: [1],
+      valor: [2000],
+    };
     const corpos: Record<string, string | undefined> = {
-      [ROTAS.analisarReconciliacao.caminho]: JSON.stringify({ csv }),
+      [ROTAS.analisarReconciliacao.caminho]: JSON.stringify(analise),
       [ROTAS.recuperarReconciliacao.caminho]: JSON.stringify({
-        csv,
-        mapeamento: {
-          pedido_id: 0,
-          status: 2,
-          qtd_bilhetes: null,
-          bilhetes: null,
-          valor: 3,
-          afiliado: null,
-          data: null,
-        },
+        ...analise,
         pedidos: ["R-PROTECAO"],
       }),
     };
@@ -451,7 +458,7 @@ describe("a) toda rota da coordenação exige sessão", () => {
         rota: rota.caminho,
         status: 401,
       });
-      expect(texto).not.toContain("Maria Ficticia");
+      expect(texto).not.toContain("R-PROTECAO");
       if (rota.metodo === "POST")
         await esperarErro(
           await requisitar(

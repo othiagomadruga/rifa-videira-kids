@@ -1,26 +1,28 @@
 /**
- * Análise da conferência (RIFA-012; docs/integracao-rifei.md, seção 10): junta as linhas lidas do arquivo
- * (lib/conferencia-arquivo.ts) em pedidos, compara com os pedidos gravados e monta a resposta de
+ * Análise da conferência (RIFA-012; docs/integracao-rifei.md, seção 10): junta as posições do corpo
+ * compacto (o navegador já leu o CSV) em pedidos, decide o valor dos pedidos em várias linhas, confere se
+ * a coluna do código é mesmo o código da Rifei, compara com o que o banco leu e monta a resposta de
  * POST /api/admin/reconciliacao/analisar (por pedido ou agregado) e o plano do "Recuperar".
  *
- * Módulo puro: recebe o que o banco leu e o instante "agora"; não lê o banco nem o relógio. As respostas
- * só levam códigos de pedido validados, status normalizados, números, centavos, dias e ids de afiliado:
- * nenhum texto livre do arquivo (D1).
+ * Módulo puro: recebe o corpo, o que o banco leu (db/reconciliacao.ts) e o instante "agora"; não lê o
+ * banco nem o relógio, e não usa o Intl por linha (a CPU do Worker é curta: 10 ms no plano Free). As
+ * respostas só levam códigos de pedido validados, status normalizados, números, centavos, dias e ids de
+ * afiliado: nenhum texto livre do arquivo (D1).
  */
 import {
-  CAMPOS_RECONCILIACAO,
-  LIMITE_COLUNAS_CSV_RECONCILIACAO,
   LIMITE_ITENS_POR_DIVERGENCIA,
+  MINIMO_CODIGOS_PARA_CONFERIR,
+  PROPORCAO_MINIMA_CODIGOS_ENCONTRADOS,
   TIPOS_DIVERGENCIA,
-  diaLocalDoInstante,
-  hojeNoFuso,
+  TOLERANCIA_DESCONTO_BP,
   intervaloUtcDoDia,
+  type AfiliadoDoCorpo,
   type AvisoReconciliacao,
-  type CodigoAvisoReconciliacao,
-  type ColunaArquivoReconciliacao,
+  type CorpoConferencia,
   type Divergencia,
   type GrupoDivergencia,
-  type MapeamentoReconciliacao,
+  type MotivoNaoRecuperado,
+  type ObservacaoDivergencia,
   type OrigemPedido,
   type PedidoNoArquivo,
   type PedidoNoSistema,
@@ -33,21 +35,9 @@ import {
   type TipoDivergencia,
   type TotaisArquivo,
   type TotaisVendas,
-  CODIGOS_AVISO_RECONCILIACAO,
-  MOTIVOS_NAO_RECUPERADO,
 } from "../../shared/contracts";
-import {
-  INVALIDO,
-  VAZIO,
-  chaveDoAfiliado,
-  type AfiliadoLido,
-  type DataLida,
-  type LeituraArquivo,
-  type LinhaLida,
-} from "./conferencia-arquivo";
-
-/** A leitura do arquivo que deu certo. */
-export type ArquivoLido = Extract<LeituraArquivo, { ok: true }>;
+import { Avisos } from "../../shared/conferencia/avisos";
+import { chaveDoAfiliado } from "../../shared/conferencia/valores";
 
 // ---------------------------------------------------------------------------------------------------
 // O que vem do banco
@@ -60,7 +50,8 @@ export interface PedidoGravado {
   qtd_bilhetes: number;
   total_centavos: number;
   affiliate_id: number | null;
-  aprovado_em: string | null;
+  /** `aprovado_em` em ms (o banco manda como número: a resposta do D1 fica menor). */
+  aprovado_ms: number | null;
   origem: OrigemPedido;
 }
 
@@ -71,18 +62,45 @@ export interface AfiliadoGravado {
   celula_nome: string | null;
 }
 
-export interface DadosDoSistema {
-  campanhaId: number;
+/** A campanha ativa, no que a conferência usa. */
+export interface CampanhaDaConferencia {
+  id: number;
   fuso: string;
-  /** Pedidos de todas as campanhas (a comparação usa os da ativa; os outros só contam como existentes). */
-  pedidos: readonly PedidoGravado[];
-  afiliados: readonly AfiliadoGravado[];
+  /** Preço do bilhete, em centavos: base da regra do valor dos pedidos em várias linhas. */
+  preco: number;
+}
+
+/** Período (dias locais) que a coluna da data cobre e o intervalo UTC dele, `[inicio, fim)`. */
+export interface PeriodoDoArquivo {
+  inicio: string;
+  fim: string;
+  utc: { inicio: string; fim: string };
+  /** O mesmo intervalo UTC, em ms. */
+  ms: { inicio: number; fim: number };
 }
 
 type Celula = { id: number; nome: string } | null;
 
+export interface AfiliadoResolvido {
+  readonly situacao: SituacaoAfiliadoArquivo;
+  readonly affiliateId: number | null;
+}
+
+const SEM_COLUNA: AfiliadoResolvido = {
+  situacao: "sem_coluna",
+  affiliateId: null,
+};
+const VAZIO_NO_ARQUIVO: AfiliadoResolvido = {
+  situacao: "vazio",
+  affiliateId: null,
+};
+const NAO_RECONHECIDO: AfiliadoResolvido = {
+  situacao: "nao_reconhecido",
+  affiliateId: null,
+};
+
 /** Afiliados do banco: célula de cada um e o rótulo (usuário da Rifei) para reconhecer texto do arquivo. */
-class Afiliados {
+export class Afiliados {
   private readonly porId = new Map<number, AfiliadoGravado>();
   /** Rótulo normalizado → affiliate_id; null quando dois afiliados têm o mesmo rótulo (ambíguo). */
   private readonly porRotulo = new Map<string, number | null>();
@@ -108,435 +126,654 @@ class Afiliados {
       : null;
   }
 
-  /** O afiliado do arquivo, resolvido: número, rótulo cadastrado, vazio ou não reconhecido. */
-  doArquivo(lido: AfiliadoLido | null): {
-    situacao: SituacaoAfiliadoArquivo;
-    affiliateId: number | null;
-  } {
-    if (lido === null) return { situacao: "sem_coluna", affiliateId: null };
-    switch (lido.tipo) {
-      case "vazio":
-        return { situacao: "vazio", affiliateId: null };
-      case "numero":
-        return { situacao: "reconhecido", affiliateId: lido.id };
-      case "texto": {
-        const id = this.porRotulo.get(lido.chave);
-        return id == null
-          ? { situacao: "nao_reconhecido", affiliateId: null }
-          : { situacao: "reconhecido", affiliateId: id };
-      }
-      default:
-        return { situacao: "nao_reconhecido", affiliateId: null };
+  /** O mesmo objeto para cada id reconhecido (milhares de pedidos têm poucas dezenas de afiliados). */
+  private readonly reconhecidos = new Map<number, AfiliadoResolvido>();
+
+  /** O afiliado do arquivo (undefined = sem a coluna): número, rótulo cadastrado, vazio ou não reconhecido. */
+  doArquivo(valor: AfiliadoDoCorpo | undefined): AfiliadoResolvido {
+    if (valor === undefined) return SEM_COLUNA;
+    if (valor === null) return VAZIO_NO_ARQUIVO;
+    let id: number | null | undefined = null;
+    if (typeof valor === "number") id = valor;
+    else if (typeof valor === "string") id = this.porRotulo.get(valor);
+    if (id == null) return NAO_RECONHECIDO;
+    let resolvido = this.reconhecidos.get(id);
+    if (resolvido === undefined) {
+      resolvido = { situacao: "reconhecido", affiliateId: id };
+      this.reconhecidos.set(id, resolvido);
     }
+    return resolvido;
   }
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Avisos
+// Posições → pedidos
 // ---------------------------------------------------------------------------------------------------
 
-const quantos = (n: number, singular: string, plural: string) =>
-  `${n.toLocaleString("pt-BR")} ${n === 1 ? singular : plural}`;
+/**
+ * O valor de um pedido no arquivo, antes da regra do valor:
+ * - `unico`: uma linha só, ou várias com valores diferentes, somados (`somado`);
+ * - `repetido`: várias linhas com o MESMO valor em todas (o de um bilhete ou o do pedido inteiro? a regra
+ *   decide, pelos pedidos que batem com o sistema ou pelo preço do bilhete);
+ * - null: sem a coluna, ilegível ou faltando em alguma das linhas.
+ */
+export type ValorDoArquivo =
+  | { tipo: "unico"; centavos: number; somado: boolean }
+  | { tipo: "repetido"; centavos: number }
+  | null;
 
-/** "Nome", "Nome e Email", "Nome, Email e Telefone". */
-function listaDeNomes(nomes: readonly string[]): string {
-  return nomes.length <= 1
-    ? (nomes[0] ?? "")
-    : `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
-}
-
-type Unidade = "linha" | "pedido";
-const UNIDADES: Record<Unidade, [string, string]> = {
-  linha: ["linha", "linhas"],
-  pedido: ["pedido", "pedidos"],
-};
-
-interface DadosDoAviso {
-  quantidade: number | null;
-  unidade: Unidade;
-  nomes: string[];
-}
-
-const MENSAGENS: Record<
-  CodigoAvisoReconciliacao,
-  (dados: DadosDoAviso) => string
-> = {
-  sem_coluna_pedido: () =>
-    "O arquivo não tem a coluna do código do pedido: a comparação é pelos totais (por afiliado e por dia) e não dá para recuperar vendas.",
-  sem_coluna_status: () =>
-    "O arquivo não tem a coluna do status: todos os pedidos foram tratados como pagos. Se ele tiver pedidos pendentes ou expirados, exporte só os pagos ou inclua a coluna do status.",
-  sem_coluna_quantidade: () =>
-    "O arquivo não tem a quantidade nem os números dos bilhetes: as quantidades não foram comparadas e não dá para recuperar vendas.",
-  sem_coluna_valor: () =>
-    "O arquivo não tem a coluna do valor: os valores não foram comparados e não dá para recuperar vendas.",
-  sem_coluna_afiliado: () =>
-    "O arquivo não tem a coluna do afiliado: os afiliados não foram comparados, e uma venda recuperada entra sem afiliado (fora das células).",
-  sem_coluna_data: () =>
-    "O arquivo não tem a coluna da data: uma venda recuperada entra com a data e a hora em que for recuperada.",
-  colunas_pessoais_ignoradas: ({ nomes }) =>
-    nomes.length === 1
-      ? `A coluna ${nomes[0]} tem dados pessoais e foi ignorada: o sistema não lê nem guarda nada dela.`
-      : `As colunas ${listaDeNomes(nomes)} têm dados pessoais e foram ignoradas: o sistema não lê nem guarda nada delas.`,
-  colunas_demais: ({ quantidade }) =>
-    `O arquivo tem mais de ${LIMITE_COLUNAS_CSV_RECONCILIACAO} colunas: ${quantos(quantidade ?? 0, "coluna ficou", "colunas ficaram")} de fora.`,
-  sem_id: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "linha", "linhas")} sem o código do pedido ${quantidade === 1 ? "ficou" : "ficaram"} fora da comparação.`,
-  id_invalido: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "linha", "linhas")} com o código do pedido inválido (com espaço, acento ou um sinal no começo, como numa fórmula) ${quantidade === 1 ? "ficou" : "ficaram"} fora da comparação.`,
-  status_desconhecido: ({ quantidade, unidade }) =>
-    `${quantos(quantidade ?? 0, ...UNIDADES[unidade])} com um status que o sistema não reconhece (nem pago, nem pendente, expirado ou cancelado): não ${quantidade === 1 ? "conta" : "contam"} como venda paga.`,
-  quantidade_invalida: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "linha", "linhas")} com a quantidade de bilhetes ilegível (use um número inteiro, como 3).`,
-  quantidade_diferente_dos_numeros: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "pedido", "pedidos")} com a quantidade de bilhetes diferente da lista de números: vale a quantidade.`,
-  valor_invalido: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "linha", "linhas")} com o valor ilegível (use, por exemplo, R$ 20,00).`,
-  data_invalida: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "linha", "linhas")} com a data ilegível (use, por exemplo, 23/11/2026 14:30).`,
-  afiliado_nao_reconhecido: ({ quantidade, unidade }) =>
-    `${quantos(quantidade ?? 0, ...UNIDADES[unidade])} com um afiliado que o sistema não reconhece: não é um número nem o rótulo de um afiliado cadastrado (tela Adesão).`,
-  formula_ignorada: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "valor", "valores")} começando com =, +, - ou @ (como uma fórmula de planilha): ${quantidade === 1 ? "foi tratado como ilegível" : "foram tratados como ilegíveis"}.`,
-  pedido_inconsistente: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "pedido", "pedidos")} em linhas que não batem entre si (status, afiliado ou dia diferentes): ${quantidade === 1 ? "ficou" : "ficaram"} fora da comparação.`,
-  um_bilhete_por_linha: () =>
-    "Os pedidos aparecem em várias linhas (opção “Um bilhete por linha”). O sistema juntou as linhas de cada pedido: um valor igual em todas as linhas conta uma vez; valores diferentes são somados.",
-  um_bilhete_por_linha_sem_id: () =>
-    "O arquivo tem um bilhete por linha e não tem o código do pedido: só os bilhetes podem ser comparados. Exporte sem a opção “Um bilhete por linha” ou inclua o código do pedido.",
-  pedido_de_outra_campanha: ({ quantidade }) =>
-    `${quantos(quantidade ?? 0, "pedido", "pedidos")} do arquivo ${quantidade === 1 ? "está" : "estão"} no sistema em outra campanha e ${quantidade === 1 ? "ficou" : "ficaram"} de fora: confira se exportou a campanha certa.`,
-  sem_aprovados: () => "O arquivo não tem nenhum pedido pago.",
-};
-
-/** Avisos da leitura e da comparação, na ordem de CODIGOS_AVISO_RECONCILIACAO. */
-export class Avisos {
-  private readonly itens = new Map<CodigoAvisoReconciliacao, DadosDoAviso>();
-
-  /** Aviso que vale para o arquivo inteiro (sem contagem). */
-  marcar(codigo: CodigoAvisoReconciliacao, nomes: string[] = []): void {
-    this.itens.set(codigo, { quantidade: null, unidade: "linha", nomes });
-  }
-
-  /** Soma `quantidade` ao aviso (nada acontece com zero). */
-  contar(
-    codigo: CodigoAvisoReconciliacao,
-    quantidade: number,
-    unidade: Unidade = "linha",
-  ): void {
-    if (quantidade <= 0) return;
-    const atual = this.itens.get(codigo)?.quantidade ?? 0;
-    this.itens.set(codigo, {
-      quantidade: atual + quantidade,
-      unidade,
-      nomes: [],
-    });
-  }
-
-  lista(): AvisoReconciliacao[] {
-    return CODIGOS_AVISO_RECONCILIACAO.flatMap((codigo) => {
-      const dados = this.itens.get(codigo);
-      return dados
-        ? [
-            {
-              codigo,
-              mensagem: MENSAGENS[codigo](dados),
-              quantidade: dados.quantidade,
-            },
-          ]
-        : [];
-    });
-  }
-}
-
-/** Avisos que só dependem das colunas e dos problemas de formato das células. */
-function avisosDaLeitura(arquivo: ArquivoLido): Avisos {
-  const avisos = new Avisos();
-  const { mapeamento, colunas, problemas } = arquivo;
-  if (mapeamento.pedido_id === null) avisos.marcar("sem_coluna_pedido");
-  if (mapeamento.status === null) avisos.marcar("sem_coluna_status");
-  if (mapeamento.qtd_bilhetes === null && mapeamento.bilhetes === null)
-    avisos.marcar("sem_coluna_quantidade");
-  if (mapeamento.valor === null) avisos.marcar("sem_coluna_valor");
-  if (mapeamento.afiliado === null) avisos.marcar("sem_coluna_afiliado");
-  if (mapeamento.data === null) avisos.marcar("sem_coluna_data");
-  const pessoais = colunas
-    .filter((coluna) => coluna.dado_pessoal)
-    .map((coluna) => coluna.nome);
-  if (pessoais.length > 0)
-    avisos.marcar("colunas_pessoais_ignoradas", pessoais);
-  avisos.contar("colunas_demais", arquivo.colunasDemais);
-  if (mapeamento.pedido_id !== null) {
-    avisos.contar("sem_id", problemas.semId);
-    avisos.contar("id_invalido", problemas.idInvalido);
-  }
-  avisos.contar(
-    "quantidade_invalida",
-    problemas.quantidadeInvalida + problemas.numerosInvalidos,
-  );
-  avisos.contar("valor_invalido", problemas.valorInvalido);
-  avisos.contar("data_invalida", problemas.dataInvalida);
-  avisos.contar("formula_ignorada", problemas.formulas);
-  return avisos;
-}
-
-// ---------------------------------------------------------------------------------------------------
-// Linhas → pedidos
-// ---------------------------------------------------------------------------------------------------
-
-/** Um pedido do arquivo: as linhas com o mesmo código, juntas. */
+/** Um pedido do arquivo: as posições com o mesmo código, juntas. */
 export interface PedidoDoArquivo {
   id: string;
   /** Linhas do arquivo com este código. */
   linhas: number;
   /** Linhas com status, afiliado ou dia diferentes: fica fora da comparação e não pode ser recuperado. */
   inconsistente: boolean;
-  /** `aprovado` quando o arquivo não tem a coluna de status. */
+  /** `aprovado` quando o arquivo não tem a coluna de status; `desconhecido` quando ela está vazia. */
   status: StatusArquivoReconciliacao;
+  /** A mesma quantidade em todas as linhas (null se faltar em alguma ou se elas diferirem). */
+  qtdIgual: number | null;
+  /** A quantidade juntada: a da coluna (ou, sem ela, a contagem dos números). */
   qtd: number | null;
-  /** Números dos bilhetes, sem repetição e em ordem. */
-  numeros: number[] | null;
-  centavos: number | null;
-  afiliado: AfiliadoLido | null;
-  data: DataLida | null;
   qtdDiferenteDosNumeros: boolean;
+  valor: ValorDoArquivo;
+  /** undefined = sem a coluna do afiliado. */
+  afiliado: AfiliadoDoCorpo | undefined;
+  dia: string | null;
+  instante: number | null;
 }
 
-/** O único valor (pela chave) de uma lista, ou o conflito. Lista vazia: `undefined`. */
-function unico<T>(
-  valores: readonly T[],
-  chave: (valor: T) => string,
-): { valor: T | undefined; conflito: boolean } {
-  const primeiro = valores[0];
-  if (primeiro === undefined) return { valor: undefined, conflito: false };
-  const referencia = chave(primeiro);
-  return {
-    valor: primeiro,
-    conflito: valores.some((valor) => chave(valor) !== referencia),
-  };
-}
-
-const soma = (valores: readonly number[]) =>
-  valores.reduce((total, valor) => total + valor, 0);
-
-/**
- * Valor numérico de um pedido em várias linhas: igual em todas conta uma vez (é do pedido, repetido em
- * cada linha); diferentes, somam (são de cada linha).
- */
-function juntarValores(valores: readonly number[]): number | null {
-  if (valores.length === 0) return null;
-  return valores.every((valor) => valor === valores[0])
-    ? valores[0]
-    : soma(valores);
-}
-
-/**
- * Quantidade de um pedido em várias linhas: como os valores, mas uma linha por bilhete com a mesma
- * quantidade em todas ("1" em cada uma, ou o total repetido) dá pelo menos uma por linha.
- */
-function juntarQuantidades(
-  valores: readonly number[],
-  linhas: number,
-): number | null {
-  const junta = juntarValores(valores);
-  if (junta === null) return null;
-  const iguais = valores.every((valor) => valor === valores[0]);
-  return iguais && valores.length === linhas && linhas > 1
-    ? Math.max(junta, linhas)
-    : junta;
-}
-
-const numeroOu = <T>(valor: T | number | null): number | null =>
-  typeof valor === "number" ? valor : null;
-
-const chaveDoAfiliadoLido = (afiliado: AfiliadoLido) =>
-  afiliado.tipo === "numero"
-    ? `n:${afiliado.id}`
-    : afiliado.tipo === "texto"
-      ? `t:${afiliado.chave}`
-      : afiliado.tipo;
-
-function juntarLinhas(
-  id: string,
-  linhas: readonly LinhaLida[],
-  mapeamento: MapeamentoReconciliacao,
-): PedidoDoArquivo {
-  let inconsistente = false;
-
-  let status: StatusArquivoReconciliacao = "aprovado";
-  if (mapeamento.status !== null) {
-    const valores = linhas.flatMap((linha) =>
-      linha.status === null || linha.status === VAZIO ? [] : [linha.status],
-    );
-    const { valor, conflito } = unico(valores, (item) => item);
-    inconsistente ||= conflito;
-    status = valor ?? "desconhecido";
-  }
-
-  const numeros = new Set<number>();
-  let temNumeros = false;
-  for (const linha of linhas) {
-    if (Array.isArray(linha.numeros)) {
-      temNumeros = true;
-      for (const numero of linha.numeros) numeros.add(numero);
-    }
-  }
-  const listaNumeros = temNumeros ? [...numeros].sort((a, b) => a - b) : null;
-  const qtdDaColuna = juntarQuantidades(
-    linhas.flatMap((linha) => {
-      const qtd = numeroOu(linha.qtd);
-      return qtd === null ? [] : [qtd];
-    }),
-    linhas.length,
-  );
-  const qtd = qtdDaColuna ?? listaNumeros?.length ?? null;
-
-  const centavos = juntarValores(
-    linhas.flatMap((linha) => {
-      const valor = numeroOu(linha.centavos);
-      return valor === null ? [] : [valor];
-    }),
-  );
-
-  let afiliado: AfiliadoLido | null = null;
-  if (mapeamento.afiliado !== null) {
-    const valores = linhas.flatMap((linha) =>
-      linha.afiliado === null || linha.afiliado.tipo === "vazio"
-        ? []
-        : [linha.afiliado],
-    );
-    const { valor, conflito } = unico(valores, chaveDoAfiliadoLido);
-    inconsistente ||= conflito;
-    afiliado = valor ?? { tipo: "vazio" };
-  }
-
-  let data: DataLida | null = null;
-  if (mapeamento.data !== null) {
-    const valores = linhas.flatMap((linha) =>
-      linha.data === null || linha.data === VAZIO || linha.data === INVALIDO
-        ? []
-        : [linha.data],
-    );
-    const { valor, conflito } = unico(valores, (item) => item.dia);
-    inconsistente ||= conflito;
-    data = valores.find((item) => item.instante !== null) ?? valor ?? null;
-  }
-
-  return {
-    id,
-    linhas: linhas.length,
-    inconsistente,
-    status,
-    qtd,
-    numeros: listaNumeros,
-    centavos,
-    afiliado,
-    data,
-    qtdDiferenteDosNumeros:
-      qtdDaColuna !== null &&
-      listaNumeros !== null &&
-      qtdDaColuna !== listaNumeros.length,
-  };
-}
-
-/** Os pedidos do arquivo pelo código, na ordem da primeira linha de cada um. */
-export function agruparPedidos(arquivo: ArquivoLido): {
+export interface Agrupamento {
+  /** Os pedidos pelo código, na ordem da primeira linha de cada um. */
   pedidos: Map<string, PedidoDoArquivo>;
   /** Algum código aparece em mais de uma linha. */
   repetidos: boolean;
+  /** Linhas sem código legível. */
   linhasSemCodigo: number;
-} {
-  const porId = new Map<string, LinhaLida[]>();
+}
+
+/** Estado de um pedido enquanto as posições dele são lidas. */
+interface Acumulo {
+  id: string;
+  linhas: number;
+  inconsistente: boolean;
+  status: StatusArquivoReconciliacao | null;
+  qtdPrimeira: number | null;
+  qtdIguais: boolean;
+  qtdLinhas: number;
+  qtdSoma: number;
+  numerosLinhas: number;
+  numerosSoma: number;
+  valorPrimeiro: number | null;
+  valorIguais: boolean;
+  valorLinhas: number;
+  valorSoma: number;
+  afiliado: AfiliadoDoCorpo;
+  dia: string | null;
+  instante: number | null;
+}
+
+const chaveDoAfiliadoDoCorpo = (valor: AfiliadoDoCorpo) =>
+  valor === false
+    ? "invalido"
+    : typeof valor === "number"
+      ? `n:${valor}`
+      : `t:${String(valor)}`;
+
+function novoAcumulo(id: string): Acumulo {
+  return {
+    id,
+    linhas: 0,
+    inconsistente: false,
+    status: null,
+    qtdPrimeira: null,
+    qtdIguais: true,
+    qtdLinhas: 0,
+    qtdSoma: 0,
+    numerosLinhas: 0,
+    numerosSoma: 0,
+    valorPrimeiro: null,
+    valorIguais: true,
+    valorLinhas: 0,
+    valorSoma: 0,
+    afiliado: null,
+    dia: null,
+    instante: null,
+  };
+}
+
+function pedidoDoAcumulo(
+  a: Acumulo,
+  temStatus: boolean,
+  temAfiliado: boolean,
+): PedidoDoArquivo {
+  const qtdIgual =
+    a.qtdPrimeira !== null && a.qtdIguais && a.qtdLinhas === a.linhas
+      ? a.qtdPrimeira
+      : null;
+  let qtdDaColuna: number | null = null;
+  if (a.qtdPrimeira !== null)
+    qtdDaColuna = !a.qtdIguais
+      ? a.qtdSoma
+      : // "1" em cada linha, ou o total repetido: pelo menos uma por linha.
+        a.qtdLinhas === a.linhas && a.linhas > 1
+        ? Math.max(a.qtdPrimeira, a.linhas)
+        : a.qtdPrimeira;
+  const contados = a.numerosLinhas > 0 ? a.numerosSoma : null;
+  let valor: ValorDoArquivo = null;
+  if (a.valorPrimeiro !== null) {
+    if (a.valorLinhas === a.linhas)
+      valor = a.valorIguais
+        ? { tipo: "repetido", centavos: a.valorPrimeiro }
+        : { tipo: "unico", centavos: a.valorSoma, somado: true };
+    // Só uma linha com o valor (as outras só com o bilhete): é o valor do pedido. Faltando em mais de
+    // uma, o total fica sem valor (não dá para saber o das linhas vazias).
+    else if (a.valorLinhas === 1)
+      valor = { tipo: "unico", centavos: a.valorPrimeiro, somado: false };
+  }
+  return {
+    id: a.id,
+    linhas: a.linhas,
+    inconsistente: a.inconsistente,
+    status: temStatus ? (a.status ?? "desconhecido") : "aprovado",
+    qtdIgual,
+    qtd: qtdDaColuna ?? contados,
+    qtdDiferenteDosNumeros:
+      qtdDaColuna !== null && contados !== null && qtdDaColuna !== contados,
+    valor,
+    afiliado: temAfiliado ? a.afiliado : undefined,
+    dia: a.dia,
+    instante: a.instante,
+  };
+}
+
+/** Um código numa posição só (que pode valer por várias linhas iguais): sem acumular. */
+function pedidoDeUmaPosicao(
+  corpo: CorpoConferencia,
+  i: number,
+  id: string,
+): PedidoDoArquivo {
+  const n = corpo.vezes[i];
+  const q = corpo.qtd_bilhetes?.[i] ?? null;
+  const contados = corpo.numeros?.[i] ?? null;
+  const v = corpo.valor?.[i] ?? null;
+  // "1" em cada linha, ou o total repetido: pelo menos uma por linha.
+  const qtdDaColuna = q === null ? null : n > 1 ? Math.max(q, n) : q;
+  const numeros = contados === null ? null : contados * n;
+  return {
+    id,
+    linhas: n,
+    inconsistente: false,
+    status: corpo.status ? (corpo.status[i] ?? "desconhecido") : "aprovado",
+    qtdIgual: q,
+    qtd: qtdDaColuna ?? numeros,
+    qtdDiferenteDosNumeros:
+      qtdDaColuna !== null && numeros !== null && qtdDaColuna !== numeros,
+    valor:
+      v === null
+        ? null
+        : n === 1
+          ? { tipo: "unico", centavos: v, somado: false }
+          : { tipo: "repetido", centavos: v },
+    afiliado: corpo.afiliado ? corpo.afiliado[i] : undefined,
+    dia: corpo.dia?.[i] ?? null,
+    instante: corpo.instante?.[i] ?? null,
+  };
+}
+
+/** Marca, em agruparPedidos, o lugar de um código que ainda está sendo acumulado. */
+const LUGAR_GUARDADO = {} as PedidoDoArquivo;
+
+/** Soma a posição `i` ao acúmulo do código (que aparece em mais de uma posição). */
+function acumular1(a: Acumulo, corpo: CorpoConferencia, i: number): void {
+  const n = corpo.vezes[i];
+  a.linhas += n;
+  const st = corpo.status?.[i] ?? null;
+  if (st !== null) {
+    if (a.status === null) a.status = st;
+    else if (a.status !== st) a.inconsistente = true;
+  }
+  const q = corpo.qtd_bilhetes?.[i] ?? null;
+  if (q !== null) {
+    if (a.qtdPrimeira === null) a.qtdPrimeira = q;
+    else if (a.qtdPrimeira !== q) a.qtdIguais = false;
+    a.qtdLinhas += n;
+    a.qtdSoma += q * n;
+  }
+  const contados = corpo.numeros?.[i] ?? null;
+  if (contados !== null) {
+    a.numerosLinhas += n;
+    a.numerosSoma += contados * n;
+  }
+  const v = corpo.valor?.[i] ?? null;
+  if (v !== null) {
+    if (a.valorPrimeiro === null) a.valorPrimeiro = v;
+    else if (a.valorPrimeiro !== v) a.valorIguais = false;
+    a.valorLinhas += n;
+    a.valorSoma += v * n;
+  }
+  const af = corpo.afiliado?.[i] ?? null;
+  if (af !== null) {
+    if (a.afiliado === null) a.afiliado = af;
+    else if (chaveDoAfiliadoDoCorpo(a.afiliado) !== chaveDoAfiliadoDoCorpo(af))
+      a.inconsistente = true;
+  }
+  const d = corpo.dia?.[i] ?? null;
+  if (d !== null) {
+    if (a.dia === null) a.dia = d;
+    else if (a.dia !== d) a.inconsistente = true;
+  }
+  const t = corpo.instante?.[i] ?? null;
+  if (t !== null && a.instante === null) a.instante = t;
+}
+
+/**
+ * Junta as posições de cada código: status, afiliado e dia precisam bater (senão o pedido é
+ * inconsistente); quantidades iguais em todas as linhas contam uma vez (no "Um bilhete por linha", pelo
+ * menos uma por linha) e diferentes somam; o valor fica para a regra do valor (ValorDoArquivo). O código
+ * numa posição só (o caso comum, inclusive com linhas iguais juntadas pelo navegador) não acumula nada.
+ */
+export function agruparPedidos(corpo: CorpoConferencia): Agrupamento {
+  const codigos = corpo.pedido_id ?? [];
+  const posicoes = corpo.vezes.length;
+  // 1ª volta: quais códigos aparecem em mais de uma posição.
+  const vistos = new Set<string>();
+  const varios = new Set<string>();
+  for (let i = 0; i < posicoes; i++) {
+    const id = codigos[i];
+    if (id === null || id === undefined) continue;
+    if (vistos.has(id)) varios.add(id);
+    else vistos.add(id);
+  }
+
+  const pedidos = new Map<string, PedidoDoArquivo>();
+  const acumulos = new Map<string, Acumulo>();
   let linhasSemCodigo = 0;
-  for (const linha of arquivo.linhas) {
-    if (
-      typeof linha.id !== "string" ||
-      linha.id === VAZIO ||
-      linha.id === INVALIDO
-    ) {
-      linhasSemCodigo++;
+  let repetidos = false;
+  for (let i = 0; i < posicoes; i++) {
+    const id = codigos[i];
+    if (id === null || id === undefined) {
+      linhasSemCodigo += corpo.vezes[i];
       continue;
     }
-    const lista = porId.get(linha.id);
-    if (lista) lista.push(linha);
-    else porId.set(linha.id, [linha]);
+    if (!varios.has(id)) {
+      const pedido = pedidoDeUmaPosicao(corpo, i, id);
+      repetidos ||= pedido.linhas > 1;
+      pedidos.set(id, pedido);
+      continue;
+    }
+    let a = acumulos.get(id);
+    if (a === undefined) {
+      a = novoAcumulo(id);
+      acumulos.set(id, a);
+      // Guarda o lugar do código (a ordem é a da primeira linha); o pedido entra no fim.
+      pedidos.set(id, LUGAR_GUARDADO);
+    }
+    acumular1(a, corpo, i);
   }
-  const pedidos = new Map<string, PedidoDoArquivo>();
-  let repetidos = false;
-  for (const [id, linhas] of porId) {
-    repetidos ||= linhas.length > 1;
-    pedidos.set(id, juntarLinhas(id, linhas, arquivo.mapeamento));
+
+  const temStatus = corpo.status !== undefined;
+  const temAfiliado = corpo.afiliado !== undefined;
+  for (const a of acumulos.values()) {
+    repetidos = true;
+    pedidos.set(a.id, pedidoDoAcumulo(a, temStatus, temAfiliado));
   }
   return { pedidos, repetidos, linhasSemCodigo };
 }
 
 /** Primeiro e último dia (no fuso da campanha) que a coluna da data cobre. */
-function periodoDoArquivo(
-  linhas: readonly LinhaLida[],
+export function diasDoArquivo(
+  corpo: CorpoConferencia,
 ): { inicio: string; fim: string } | null {
   let inicio: string | null = null;
   let fim: string | null = null;
-  for (const linha of linhas) {
-    const data = linha.data;
-    if (data === null || data === VAZIO || data === INVALIDO) continue;
-    if (inicio === null || data.dia < inicio) inicio = data.dia;
-    if (fim === null || data.dia > fim) fim = data.dia;
+  for (const dia of corpo.dia ?? []) {
+    if (dia === null) continue;
+    if (inicio === null || dia < inicio) inicio = dia;
+    if (fim === null || dia > fim) fim = dia;
   }
   return inicio === null || fim === null ? null : { inicio, fim };
+}
+
+/** O período do arquivo com o intervalo UTC (duas contas no Intl por requisição, não por linha). */
+export function periodoDoArquivo(
+  corpo: CorpoConferencia,
+  fuso: string,
+): PeriodoDoArquivo | null {
+  const dias = diasDoArquivo(corpo);
+  if (dias === null) return null;
+  const utc = {
+    inicio: intervaloUtcDoDia(dias.inicio, fuso).inicio,
+    fim: intervaloUtcDoDia(dias.fim, fuso).fim,
+  };
+  return {
+    ...dias,
+    utc,
+    ms: { inicio: Date.parse(utc.inicio), fim: Date.parse(utc.fim) },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Regra do valor dos pedidos em várias linhas
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Como o arquivo escreve o valor de um pedido em várias linhas com o mesmo valor em todas:
+ * - por_bilhete: cada linha traz o valor de um bilhete (total = valor × linhas);
+ * - repetido: cada linha repete o valor do pedido inteiro (total = valor).
+ */
+export type ConvencaoDoValor = "por_bilhete" | "repetido";
+
+/** Pedidos que batem com o sistema precisos para firmar a convenção (e a maioria dos comparados). */
+export const MINIMO_PEDIDOS_DA_CONVENCAO = 2;
+
+/**
+ * A convenção do arquivo, pelos pedidos em várias linhas com valor repetido que JÁ estão pagos no sistema
+ * (na campanha): se a maioria bate com uma das duas contas (e pelo menos MINIMO_PEDIDOS_DA_CONVENCAO),
+ * vale para todos os pedidos do arquivo. Sem maioria, null (a regra do preço decide pedido a pedido).
+ */
+export function convencaoDoArquivo(
+  pedidos: Iterable<PedidoDoArquivo>,
+  noSistema: (id: string) => PedidoGravado | undefined,
+  campanhaId: number,
+): ConvencaoDoValor | null {
+  let porBilhete = 0;
+  let repetido = 0;
+  let comparados = 0;
+  for (const pedido of pedidos) {
+    if (pedido.inconsistente || pedido.valor?.tipo !== "repetido") continue;
+    const gravado = noSistema(pedido.id);
+    if (
+      !gravado ||
+      gravado.campanha_id !== campanhaId ||
+      gravado.status !== "approved"
+    )
+      continue;
+    comparados++;
+    const v = pedido.valor.centavos;
+    if (gravado.total_centavos === v * pedido.linhas) porBilhete++;
+    else if (gravado.total_centavos === v) repetido++;
+  }
+  if (porBilhete >= MINIMO_PEDIDOS_DA_CONVENCAO && porBilhete * 2 > comparados)
+    return "por_bilhete";
+  if (repetido >= MINIMO_PEDIDOS_DA_CONVENCAO && repetido * 2 > comparados)
+    return "repetido";
+  return null;
+}
+
+/** O valor `v` é o de um bilhete: até o preço, com no máximo TOLERANCIA_DESCONTO_BP de desconto. */
+export function ehValorDeUmBilhete(v: number, preco: number): boolean {
+  return v <= preco && v * 10_000 >= preco * (10_000 - TOLERANCIA_DESCONTO_BP);
+}
+
+export interface ValorDecidido {
+  /** null: sem valor, ou ambíguo. */
+  centavos: number | null;
+  ambiguo: boolean;
+  /** A regra que decidiu um valor repetido (null nos outros casos). */
+  regra: "convencao_por_bilhete" | "convencao_repetido" | "preco" | null;
+}
+
+/**
+ * O total de um pedido: o da linha (ou a soma de valores diferentes); com o mesmo valor `v` em várias
+ * linhas, a convenção do arquivo decide, e sem ela `v` perto do preço do bilhete é por bilhete
+ * (v × linhas); outro `v` é ambíguo (sem total, e o pedido não pode ser recuperado).
+ */
+export function decidirValor(
+  pedido: PedidoDoArquivo,
+  convencao: ConvencaoDoValor | null,
+  preco: number,
+): ValorDecidido {
+  const valor = pedido.valor;
+  if (valor === null) return { centavos: null, ambiguo: false, regra: null };
+  if (valor.tipo === "unico")
+    return { centavos: valor.centavos, ambiguo: false, regra: null };
+  const v = valor.centavos;
+  if (convencao === "por_bilhete")
+    return {
+      centavos: v * pedido.linhas,
+      ambiguo: false,
+      regra: "convencao_por_bilhete",
+    };
+  if (convencao === "repetido")
+    return { centavos: v, ambiguo: false, regra: "convencao_repetido" };
+  if (ehValorDeUmBilhete(v, preco))
+    return { centavos: v * pedido.linhas, ambiguo: false, regra: "preco" };
+  return { centavos: null, ambiguo: true, regra: null };
+}
+
+/** A quantidade do pedido; quando as linhas repetem o pedido inteiro, a quantidade de uma linha. */
+export function quantidadeDecidida(
+  pedido: PedidoDoArquivo,
+  convencao: ConvencaoDoValor | null,
+): number | null {
+  return convencao === "repetido" && pedido.qtdIgual !== null
+    ? pedido.qtdIgual
+    : pedido.qtd;
+}
+
+/** Quantos pedidos cada regra do valor decidiu: os avisos saem no fim, uma vez cada. */
+class ContagemDaRegra {
+  private ambiguos = 0;
+  private repetidos = 0;
+  private porBilhete = 0;
+  private pelaConvencao = false;
+
+  contar(decidido: ValorDecidido): void {
+    if (decidido.ambiguo) this.ambiguos++;
+    else if (decidido.regra === "convencao_repetido") this.repetidos++;
+    else if (decidido.regra !== null) {
+      this.porBilhete++;
+      if (decidido.regra === "convencao_por_bilhete") this.pelaConvencao = true;
+    }
+  }
+
+  avisar(avisos: Avisos, preco: number): void {
+    avisos.contar("valor_ambiguo", this.ambiguos, "pedido", { preco });
+    avisos.contar("valor_do_pedido_repetido", this.repetidos, "pedido");
+    avisos.contar("valor_por_bilhete", this.porBilhete, "pedido", {
+      preco,
+      pelaConvencao: this.pelaConvencao,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// A coluna do código confere?
+// ---------------------------------------------------------------------------------------------------
+
+export interface ConferenciaDoCodigo {
+  confere: boolean;
+  pagos_no_arquivo: number;
+  encontrados: number;
+}
+
+/**
+ * Trava do código: com pelo menos MINIMO_CODIGOS_PARA_CONFERIR pagos no arquivo e menos de
+ * PROPORCAO_MINIMA_CODIGOS_ENCONTRADOS deles no sistema (em qualquer campanha), a coluna escolhida
+ * provavelmente não é o código da Rifei. Exceção: se o sistema tem pelo menos o mesmo mínimo de pagos no
+ * período do arquivo e a maioria deles aparece no arquivo, a coluna é a certa (o webhook é que falhou).
+ */
+export function conferirCodigo(
+  pedidos: Iterable<PedidoDoArquivo>,
+  noSistema: (id: string) => PedidoGravado | undefined,
+  sistema: { pagosNoPeriodo: number; pagosNoPeriodoNoArquivo: number },
+): ConferenciaDoCodigo {
+  let pagos = 0;
+  let encontrados = 0;
+  for (const pedido of pedidos) {
+    if (pedido.inconsistente || pedido.status !== "aprovado") continue;
+    pagos++;
+    if (noSistema(pedido.id)) encontrados++;
+  }
+  const poucos =
+    pagos >= MINIMO_CODIGOS_PARA_CONFERIR &&
+    encontrados < pagos * PROPORCAO_MINIMA_CODIGOS_ENCONTRADOS;
+  const confirmadoPeloSistema =
+    sistema.pagosNoPeriodo >= MINIMO_CODIGOS_PARA_CONFERIR &&
+    sistema.pagosNoPeriodoNoArquivo >=
+      sistema.pagosNoPeriodo * PROPORCAO_MINIMA_CODIGOS_ENCONTRADOS;
+  return {
+    confere: !poucos || confirmadoPeloSistema,
+    pagos_no_arquivo: pagos,
+    encontrados,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Datas da venda
+// ---------------------------------------------------------------------------------------------------
+
+const MS_POR_HORA = 3_600_000;
+
+const formatadoresDoDia = new Map<string, Intl.DateTimeFormat>();
+
+/** O dia ("YYYY-MM-DD") de um instante no fuso, com o formatador guardado (criar um custa caro). */
+export function diaNoFuso(fuso: string, instante: Date): string {
+  let formatador = formatadoresDoDia.get(fuso);
+  if (!formatador) {
+    formatador = new Intl.DateTimeFormat("en-US", {
+      timeZone: fuso,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    formatadoresDoDia.set(fuso, formatador);
+  }
+  const partes = formatador.formatToParts(instante);
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) =>
+    partes.find((item) => item.type === tipo)?.value ?? "";
+  return `${parte("year")}-${parte("month")}-${parte("day")}`;
+}
+
+/** O "agora", o dia de hoje e o meio-dia de cada dia no fuso: o Intl só roda uma vez por dia distinto. */
+export class Calendario {
+  private readonly meioDia = new Map<string, number>();
+  private readonly fuso: string;
+  readonly agora: Date;
+  private hojeGuardado: string | null = null;
+
+  constructor(fuso: string, agora: Date) {
+    this.fuso = fuso;
+    this.agora = agora;
+  }
+
+  /** "YYYY-MM-DD" de hoje no fuso (calculado na primeira vez que precisa). */
+  get hoje(): string {
+    this.hojeGuardado ??= diaNoFuso(this.fuso, this.agora);
+    return this.hojeGuardado;
+  }
+
+  /** Meio-dia local do dia, em ms (UTC). */
+  meioDiaDe(dia: string): number {
+    let valor = this.meioDia.get(dia);
+    if (valor === undefined) {
+      valor =
+        Date.parse(intervaloUtcDoDia(dia, this.fuso).inicio) + 12 * MS_POR_HORA;
+      this.meioDia.set(dia, valor);
+    }
+    return valor;
+  }
+}
+
+/** A data do arquivo é no futuro (depois de agora, ou um dia depois de hoje)? */
+function dataNoFuturo(
+  pedido: PedidoDoArquivo,
+  calendario: Calendario,
+): boolean {
+  if (pedido.instante !== null)
+    return pedido.instante > calendario.agora.getTime();
+  return pedido.dia !== null && pedido.dia > calendario.hoje;
+}
+
+/** Instante a gravar num pedido recuperado (e de onde ele veio). null: a data do arquivo é no futuro. */
+function instanteDaVenda(
+  pedido: PedidoDoArquivo,
+  calendario: Calendario,
+): { instante: number; origem: PedidoRecuperado["origem_data"] } | null {
+  const agoraMs = calendario.agora.getTime();
+  if (dataNoFuturo(pedido, calendario)) return null;
+  if (pedido.instante !== null)
+    return { instante: pedido.instante, origem: "arquivo" };
+  if (pedido.dia === null) return { instante: agoraMs, origem: "recuperacao" };
+  return {
+    instante: Math.min(calendario.meioDiaDe(pedido.dia), agoraMs),
+    origem: "dia_do_arquivo",
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Decisões comuns à análise e ao "Recuperar"
+// ---------------------------------------------------------------------------------------------------
+
+/** O que o banco leu para o modo por pedido (db/reconciliacao.ts). */
+export interface SistemaPorPedido {
+  campanha: CampanhaDaConferencia;
+  afiliados: readonly AfiliadoGravado[];
+  /** Os pedidos do banco (de qualquer campanha) com os códigos do arquivo. */
+  encontrados: ReadonlyMap<string, PedidoGravado>;
+  /** Pagos da campanha ativa no período do arquivo (todos, se o arquivo não tem datas). */
+  pagosNoPeriodo: number;
+}
+
+/** O que a análise e o "Recuperar" decidem do mesmo jeito: a convenção do valor e a trava do código. */
+export interface Decisoes {
+  convencao: ConvencaoDoValor | null;
+  codigo: ConferenciaDoCodigo;
+}
+
+export function decidir(
+  agrupamento: Agrupamento,
+  sistema: SistemaPorPedido,
+  periodo: PeriodoDoArquivo | null,
+): Decisoes {
+  const noSistema = (id: string) => sistema.encontrados.get(id);
+  const { campanha } = sistema;
+  let pagosNoPeriodoNoArquivo = 0;
+  for (const gravado of sistema.encontrados.values()) {
+    if (gravado.campanha_id !== campanha.id || gravado.status !== "approved")
+      continue;
+    if (
+      periodo !== null &&
+      (gravado.aprovado_ms === null ||
+        gravado.aprovado_ms < periodo.ms.inicio ||
+        gravado.aprovado_ms >= periodo.ms.fim)
+    )
+      continue;
+    pagosNoPeriodoNoArquivo++;
+  }
+  return {
+    convencao: convencaoDoArquivo(
+      agrupamento.pedidos.values(),
+      noSistema,
+      campanha.id,
+    ),
+    codigo: conferirCodigo(agrupamento.pedidos.values(), noSistema, {
+      pagosNoPeriodo: sistema.pagosNoPeriodo,
+      pagosNoPeriodoNoArquivo,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------
 // Modo por pedido
 // ---------------------------------------------------------------------------------------------------
 
-const MS_POR_HORA = 3_600_000;
-
-/** Instante a gravar num pedido recuperado (e de onde ele veio). null: a data do arquivo é no futuro. */
-function instanteDaVenda(
-  data: DataLida | null,
-  fuso: string,
-  agora: Date,
-): { instante: number; origem: PedidoRecuperado["origem_data"] } | null {
-  const agoraMs = agora.getTime();
-  if (data === null) return { instante: agoraMs, origem: "recuperacao" };
-  if (data.instante !== null)
-    return data.instante > agoraMs
-      ? null
-      : { instante: data.instante, origem: "arquivo" };
-  const hoje = hojeNoFuso(fuso, agora);
-  if (data.dia > hoje) return null;
-  const meioDia =
-    Date.parse(intervaloUtcDoDia(data.dia, fuso).inicio) + 12 * MS_POR_HORA;
-  return { instante: Math.min(meioDia, agoraMs), origem: "dia_do_arquivo" };
-}
-
 /** O que impede a recuperação de uma venda perdida (lista vazia = recuperável). */
 function impedimentos(
   pedido: PedidoDoArquivo,
-  fuso: string,
-  agora: Date,
-): ("sem_quantidade" | "sem_valor" | "data_no_futuro")[] {
-  const lista: ("sem_quantidade" | "sem_valor" | "data_no_futuro")[] = [];
-  if (pedido.qtd === null || pedido.qtd < 1) lista.push("sem_quantidade");
-  if (pedido.centavos === null) lista.push("sem_valor");
-  if (instanteDaVenda(pedido.data, fuso, agora) === null)
-    lista.push("data_no_futuro");
+  qtd: number | null,
+  decidido: ValorDecidido,
+  calendario: Calendario,
+  codigoConfere: boolean,
+): ObservacaoDivergencia[] {
+  const lista: ObservacaoDivergencia[] = [];
+  if (qtd === null || qtd < 1) lista.push("sem_quantidade");
+  if (decidido.ambiguo) lista.push("valor_ambiguo");
+  else if (decidido.centavos === null) lista.push("sem_valor");
+  if (dataNoFuturo(pedido, calendario)) lista.push("data_no_futuro");
+  if (!codigoConfere) lista.push("codigo_nao_confere");
   return lista;
-}
-
-function ladoDoArquivo(
-  pedido: PedidoDoArquivo,
-  afiliados: Afiliados,
-): PedidoNoArquivo {
-  const { situacao, affiliateId } = afiliados.doArquivo(pedido.afiliado);
-  return {
-    status: pedido.status,
-    qtd_bilhetes: pedido.qtd,
-    total_centavos: pedido.centavos,
-    afiliado: situacao,
-    affiliate_id: affiliateId,
-    celula: afiliados.celula(affiliateId),
-    data: pedido.data?.dia ?? null,
-  };
 }
 
 function ladoDoSistema(
@@ -549,33 +786,46 @@ function ladoDoSistema(
     total_centavos: pedido.total_centavos,
     affiliate_id: pedido.affiliate_id,
     celula: afiliados.celula(pedido.affiliate_id),
-    aprovado_em: pedido.aprovado_em,
+    aprovado_em:
+      pedido.aprovado_ms === null
+        ? null
+        : new Date(pedido.aprovado_ms).toISOString(),
     origem: pedido.origem,
   };
 }
 
-const porCodigo = (a: Divergencia, b: Divergencia) =>
+const porCodigo = (a: { pedido_id: string }, b: { pedido_id: string }) =>
   a.pedido_id < b.pedido_id ? -1 : a.pedido_id > b.pedido_id ? 1 : 0;
+
+type Soma = { bilhetes: number; total_centavos: number };
+
+function somar(
+  itens: readonly Divergencia[],
+  lado: (item: Divergencia) => {
+    qtd_bilhetes: number | null;
+    total_centavos: number | null;
+  } | null,
+): Soma {
+  let bilhetes = 0;
+  let total = 0;
+  for (const item of itens) {
+    const valores = lado(item);
+    bilhetes += valores?.qtd_bilhetes ?? 0;
+    total += valores?.total_centavos ?? 0;
+  }
+  return { bilhetes, total_centavos: total };
+}
 
 function montarGrupo(
   tipo: TipoDivergencia,
   itens: Divergencia[],
 ): GrupoDivergencia {
   itens.sort(porCodigo);
-  const somar = (
-    lado: (item: Divergencia) => {
-      qtd_bilhetes: number | null;
-      total_centavos: number | null;
-    } | null,
-  ) => ({
-    bilhetes: soma(itens.map((item) => lado(item)?.qtd_bilhetes ?? 0)),
-    total_centavos: soma(itens.map((item) => lado(item)?.total_centavos ?? 0)),
-  });
   return {
     tipo,
     quantidade: itens.length,
-    arquivo: somar((item) => item.arquivo),
-    sistema: somar((item) => item.sistema),
+    arquivo: somar(itens, (item) => item.arquivo),
+    sistema: somar(itens, (item) => item.sistema),
     itens: itens.slice(0, LIMITE_ITENS_POR_DIVERGENCIA),
     itens_omitidos: Math.max(0, itens.length - LIMITE_ITENS_POR_DIVERGENCIA),
   };
@@ -584,65 +834,71 @@ function montarGrupo(
 const ehPendenteOuNegado = (status: StatusArquivoReconciliacao) =>
   status === "pendente" || status === "expirado" || status === "cancelado";
 
-function comum(
-  arquivo: ArquivoLido,
-  avisos: Avisos,
-  extra: {
-    linhasIgnoradas: number;
-    umBilhetePorLinha: boolean;
-    periodo: { inicio: string; fim: string } | null;
-  },
-  agora: Date,
-) {
-  return {
-    colunas: arquivo.colunas satisfies ColunaArquivoReconciliacao[],
-    mapeamento: arquivo.mapeamento,
-    mapeamento_detectado: arquivo.detectado,
-    arquivo: {
-      linhas: arquivo.linhas.length,
-      linhas_ignoradas: extra.linhasIgnoradas,
-      um_bilhete_por_linha: extra.umBilhetePorLinha,
-      data_inicio: extra.periodo?.inicio ?? null,
-      data_fim: extra.periodo?.fim ?? null,
-    },
-    avisos: avisos.lista(),
-    conferido_em: agora.toISOString(),
-  };
+/** Os avisos que só dependem das colunas usadas (os da leitura das células, a tela monta). */
+function avisosDasColunas(corpo: CorpoConferencia): Avisos {
+  const avisos = new Avisos();
+  const { colunas } = corpo;
+  if (colunas.pedido_id === null) avisos.marcar("sem_coluna_pedido");
+  if (colunas.status === null) avisos.marcar("sem_coluna_status");
+  if (colunas.qtd_bilhetes === null && colunas.bilhetes === null)
+    avisos.marcar("sem_coluna_quantidade");
+  if (colunas.valor === null) avisos.marcar("sem_coluna_valor");
+  if (colunas.afiliado === null) avisos.marcar("sem_coluna_afiliado");
+  if (colunas.data === null) avisos.marcar("sem_coluna_data");
+  return avisos;
 }
 
-function totaisDoSistema(pedidos: readonly PedidoGravado[]): TotaisVendas {
-  return {
-    pedidos_aprovados: pedidos.length,
-    bilhetes: soma(pedidos.map((pedido) => pedido.qtd_bilhetes)),
-    total_centavos: soma(pedidos.map((pedido) => pedido.total_centavos)),
+/** Marca o aviso da trava do código (com o nome da coluna e as contagens). */
+function avisarCodigo(
+  avisos: Avisos,
+  corpo: CorpoConferencia,
+  codigo: ConferenciaDoCodigo,
+): void {
+  if (!codigo.confere)
+    avisos.marcar("codigo_nao_confere", {
+      nomes: corpo.colunas.pedido_id ? [corpo.colunas.pedido_id] : [],
+      pagos: codigo.pagos_no_arquivo,
+      encontrados: codigo.encontrados,
+    });
+}
+
+/** Os pagos da campanha ativa que o arquivo não tem (o banco já os separou, contou e somou). */
+export interface AusentesDoArquivo {
+  quantidade: number;
+  bilhetes: number;
+  total_centavos: number;
+  /** Os primeiros LIMITE_ITENS_POR_DIVERGENCIA, em ordem de código. */
+  itens: (PedidoGravado & { fora_do_periodo: boolean })[];
+}
+
+export interface EntradaPorPedido {
+  corpo: CorpoConferencia;
+  agrupamento: Agrupamento;
+  sistema: SistemaPorPedido & {
+    /** Todos os pagos da campanha ativa no sistema. */
+    aprovados: TotaisVendas;
+    ausentes: AusentesDoArquivo;
   };
+  periodo: PeriodoDoArquivo | null;
+  calendario: Calendario;
 }
 
 /** Comparação pedido a pedido (o arquivo tem a coluna do código). */
 export function analisarPorPedido(
-  arquivo: ArquivoLido,
-  dados: DadosDoSistema,
-  agora: Date,
+  entrada: EntradaPorPedido,
 ): RespostaAnalisePorPedido {
-  const avisos = avisosDaLeitura(arquivo);
-  const afiliados = new Afiliados(dados.afiliados);
-  const { pedidos, repetidos, linhasSemCodigo } = agruparPedidos(arquivo);
+  const { corpo, agrupamento, sistema, periodo, calendario } = entrada;
+  const { campanha } = sistema;
+  const avisos = avisosDasColunas(corpo);
+  const afiliados = new Afiliados(sistema.afiliados);
+  const { pedidos, repetidos, linhasSemCodigo } = agrupamento;
   if (repetidos) avisos.marcar("um_bilhete_por_linha");
-  const periodo = periodoDoArquivo(arquivo.linhas);
-
-  const daCampanha = new Map<string, PedidoGravado>();
-  const deOutraCampanha = new Set<string>();
-  for (const pedido of dados.pedidos) {
-    if (pedido.campanha_id === dados.campanhaId)
-      daCampanha.set(pedido.id, pedido);
-    else deOutraCampanha.add(pedido.id);
-  }
+  const { convencao, codigo } = decidir(agrupamento, sistema, periodo);
+  avisarCodigo(avisos, corpo, codigo);
 
   const grupos = new Map<TipoDivergencia, Divergencia[]>(
     TIPOS_DIVERGENCIA.map((tipo) => [tipo, []]),
   );
-  const incluir = (tipo: TipoDivergencia, item: Divergencia) =>
-    grupos.get(tipo)!.push(item);
   const comDivergencia = new Set<string>();
   let conferem = 0;
   let inconsistentes = 0;
@@ -650,141 +906,152 @@ export function analisarPorPedido(
   let afiliadosNaoReconhecidos = 0;
   let deOutra = 0;
   let qtdDiferentes = 0;
-  const aprovadosNoArquivo: PedidoDoArquivo[] = [];
+  let aprovados = 0;
+  let bilhetesAprovados = 0;
+  let centavosAprovados = 0;
 
+  const regra = new ContagemDaRegra();
   for (const pedido of pedidos.values()) {
     if (pedido.inconsistente) {
       inconsistentes++;
       continue;
     }
-    if (pedido.qtdDiferenteDosNumeros) qtdDiferentes++;
-    if (pedido.status === "desconhecido") desconhecidos++;
-    const doArquivo = ladoDoArquivo(pedido, afiliados);
-    if (doArquivo.afiliado === "nao_reconhecido") afiliadosNaoReconhecidos++;
-    const gravado = daCampanha.get(pedido.id);
-    if (!gravado && deOutraCampanha.has(pedido.id)) {
+    const gravado = sistema.encontrados.get(pedido.id);
+    if (gravado && gravado.campanha_id !== campanha.id) {
       deOutra++;
       continue;
     }
-    if (pedido.status === "aprovado") aprovadosNoArquivo.push(pedido);
-    const item = (tipo: TipoDivergencia, extra: Partial<Divergencia> = {}) => {
-      comDivergencia.add(pedido.id);
-      incluir(tipo, {
-        pedido_id: pedido.id,
-        arquivo: doArquivo,
-        sistema: gravado ? ladoDoSistema(gravado, afiliados) : null,
-        recuperavel: false,
-        observacoes: [],
-        ...extra,
-      });
-    };
+    if (pedido.qtdDiferenteDosNumeros) qtdDiferentes++;
+    if (pedido.status === "desconhecido") desconhecidos++;
+    const decidido = decidirValor(pedido, convencao, campanha.preco);
+    const qtd = quantidadeDecidida(pedido, convencao);
+    regra.contar(decidido);
+    const afiliado = afiliados.doArquivo(pedido.afiliado);
+    if (afiliado.situacao === "nao_reconhecido") afiliadosNaoReconhecidos++;
 
+    // Os tipos de divergência do pedido (null = nenhum): a lista só existe quando há o que mostrar.
+    let tipos: TipoDivergencia[] | null = null;
+    let observacoes: ObservacaoDivergencia[] = [];
     if (pedido.status === "aprovado") {
+      aprovados++;
+      bilhetesAprovados += qtd ?? 0;
+      centavosAprovados += decidido.centavos ?? 0;
       if (!gravado) {
-        const observacoes = impedimentos(pedido, dados.fuso, agora);
-        item("venda_perdida", {
-          recuperavel: observacoes.length === 0,
-          observacoes,
-        });
-        continue;
+        tipos = ["venda_perdida"];
+        observacoes = impedimentos(
+          pedido,
+          qtd,
+          decidido,
+          calendario,
+          codigo.confere,
+        );
+      } else if (gravado.status !== "approved") {
+        tipos = ["pagamento_nao_registrado"];
+      } else {
+        if (
+          decidido.centavos !== null &&
+          decidido.centavos !== gravado.total_centavos
+        )
+          (tipos ??= []).push("valor_diferente");
+        if (qtd !== null && qtd !== gravado.qtd_bilhetes)
+          (tipos ??= []).push("quantidade_diferente");
+        if (
+          afiliado.situacao !== "sem_coluna" &&
+          afiliado.situacao !== "nao_reconhecido" &&
+          afiliado.affiliateId !== gravado.affiliate_id
+        )
+          (tipos ??= []).push("afiliado_diferente");
+        if (tipos === null) conferem++;
       }
-      if (gravado.status !== "approved") {
-        item("pagamento_nao_registrado");
-        continue;
-      }
-      let diferente = false;
-      if (
-        pedido.centavos !== null &&
-        pedido.centavos !== gravado.total_centavos
-      ) {
-        item("valor_diferente");
-        diferente = true;
-      }
-      if (pedido.qtd !== null && pedido.qtd !== gravado.qtd_bilhetes) {
-        item("quantidade_diferente");
-        diferente = true;
-      }
-      if (
-        doArquivo.afiliado !== "sem_coluna" &&
-        doArquivo.afiliado !== "nao_reconhecido" &&
-        doArquivo.affiliate_id !== gravado.affiliate_id
-      ) {
-        item("afiliado_diferente");
-        diferente = true;
-      }
-      if (!diferente) conferem++;
     } else if (
       gravado?.status === "approved" &&
       ehPendenteOuNegado(pedido.status)
     ) {
-      item("nao_pago_na_rifei");
+      tipos = ["nao_pago_na_rifei"];
     }
-  }
+    if (tipos === null) continue;
 
-  // Pagos no sistema que o arquivo não tem (nem com código inconsistente, nem não pago).
-  const aprovadosNoSistema = [...daCampanha.values()].filter(
-    (pedido) => pedido.status === "approved",
-  );
-  for (const gravado of aprovadosNoSistema) {
-    if (pedidos.has(gravado.id)) continue;
-    const dia =
-      gravado.aprovado_em === null
-        ? null
-        : diaLocalDoInstante(gravado.aprovado_em, dados.fuso);
-    const fora =
-      periodo !== null &&
-      dia !== null &&
-      (dia < periodo.inicio || dia > periodo.fim);
-    comDivergencia.add(gravado.id);
-    incluir("ausente_no_arquivo", {
-      pedido_id: gravado.id,
-      arquivo: null,
-      sistema: ladoDoSistema(gravado, afiliados),
-      recuperavel: false,
-      observacoes: fora ? ["fora_do_periodo_do_arquivo"] : [],
-    });
+    comDivergencia.add(pedido.id);
+    const doArquivo: PedidoNoArquivo = {
+      status: pedido.status,
+      qtd_bilhetes: qtd,
+      total_centavos: decidido.centavos,
+      afiliado: afiliado.situacao,
+      affiliate_id: afiliado.affiliateId,
+      celula: afiliados.celula(afiliado.affiliateId),
+      data: pedido.dia,
+    };
+    const doSistema = gravado ? ladoDoSistema(gravado, afiliados) : null;
+    for (const tipo of tipos)
+      grupos.get(tipo)!.push({
+        pedido_id: pedido.id,
+        arquivo: doArquivo,
+        sistema: doSistema,
+        recuperavel: tipo === "venda_perdida" && observacoes.length === 0,
+        observacoes,
+      });
   }
+  regra.avisar(avisos, campanha.preco);
+
+  // Pagos no sistema que o arquivo não tem: o banco já tirou os do arquivo, contou e somou.
+  const { ausentes } = sistema;
+  const itensAusentes: Divergencia[] = ausentes.itens.map((gravado) => ({
+    pedido_id: gravado.id,
+    arquivo: null,
+    sistema: ladoDoSistema(gravado, afiliados),
+    recuperavel: false,
+    observacoes: gravado.fora_do_periodo
+      ? (["fora_do_periodo_do_arquivo"] as ObservacaoDivergencia[])
+      : [],
+  }));
+  const grupoAusentes: GrupoDivergencia = {
+    tipo: "ausente_no_arquivo",
+    quantidade: ausentes.quantidade,
+    arquivo: { bilhetes: 0, total_centavos: 0 },
+    sistema: {
+      bilhetes: ausentes.bilhetes,
+      total_centavos: ausentes.total_centavos,
+    },
+    itens: itensAusentes.sort(porCodigo),
+    itens_omitidos: Math.max(0, ausentes.quantidade - itensAusentes.length),
+  };
 
   avisos.contar("status_desconhecido", desconhecidos, "pedido");
   avisos.contar("quantidade_diferente_dos_numeros", qtdDiferentes, "pedido");
   avisos.contar("afiliado_nao_reconhecido", afiliadosNaoReconhecidos, "pedido");
   avisos.contar("pedido_inconsistente", inconsistentes, "pedido");
   avisos.contar("pedido_de_outra_campanha", deOutra, "pedido");
-  if (aprovadosNoArquivo.length === 0) avisos.marcar("sem_aprovados");
+  if (aprovados === 0) avisos.marcar("sem_aprovados");
 
   const temQuantidade =
-    arquivo.mapeamento.qtd_bilhetes !== null ||
-    arquivo.mapeamento.bilhetes !== null;
+    corpo.colunas.qtd_bilhetes !== null || corpo.colunas.bilhetes !== null;
   return {
     modo: "por_pedido",
-    ...comum(
-      arquivo,
-      avisos,
-      {
-        linhasIgnoradas: linhasSemCodigo,
-        umBilhetePorLinha: repetidos,
-        periodo,
-      },
-      agora,
-    ),
+    arquivo: {
+      linhas: corpo.linhas,
+      linhas_ignoradas: linhasSemCodigo,
+      um_bilhete_por_linha: repetidos,
+      data_inicio: periodo?.inicio ?? null,
+      data_fim: periodo?.fim ?? null,
+    },
+    avisos: avisos.lista(),
+    conferido_em: calendario.agora.toISOString(),
+    codigo,
     resumo: {
       pedidos_no_arquivo: pedidos.size,
       aprovados_no_arquivo: {
-        pedidos_aprovados: aprovadosNoArquivo.length,
-        bilhetes: temQuantidade
-          ? soma(aprovadosNoArquivo.map((pedido) => pedido.qtd ?? 0))
-          : null,
-        total_centavos:
-          arquivo.mapeamento.valor === null
-            ? null
-            : soma(aprovadosNoArquivo.map((pedido) => pedido.centavos ?? 0)),
+        pedidos_aprovados: aprovados,
+        bilhetes: temQuantidade ? bilhetesAprovados : null,
+        total_centavos: corpo.colunas.valor === null ? null : centavosAprovados,
       },
-      aprovados_no_sistema: totaisDoSistema(aprovadosNoSistema),
+      aprovados_no_sistema: sistema.aprovados,
       conferem,
-      com_divergencia: comDivergencia.size,
+      com_divergencia: comDivergencia.size + ausentes.quantidade,
     },
     divergencias: TIPOS_DIVERGENCIA.map((tipo) =>
-      montarGrupo(tipo, grupos.get(tipo)!),
+      tipo === "ausente_no_arquivo"
+        ? grupoAusentes
+        : montarGrupo(tipo, grupos.get(tipo)!),
     ),
   };
 }
@@ -793,7 +1060,7 @@ export function analisarPorPedido(
 // Modo agregado (sem o código do pedido)
 // ---------------------------------------------------------------------------------------------------
 
-interface Acumulado {
+export interface Acumulado {
   pedidos: number;
   bilhetes: number;
   centavos: number;
@@ -849,132 +1116,130 @@ function acumular(
   bilhetes: number,
   centavos: number,
 ): void {
-  const atual = mapa.get(chave) ?? vazioAcumulado();
+  let atual = mapa.get(chave);
+  if (atual === undefined) {
+    atual = vazioAcumulado();
+    mapa.set(chave, atual);
+  }
   atual.pedidos += pedidos;
   atual.bilhetes += bilhetes;
   atual.centavos += centavos;
-  mapa.set(chave, atual);
 }
 
 const CHAVE_SEM_AFILIADO = "sem";
 const CHAVE_NAO_RECONHECIDO = "nr";
 const chaveDoId = (id: number) => `id:${id}`;
 
+/** Os pagos da campanha ativa (no período do arquivo, quando ele tem datas), somados pelo banco. */
+export interface SistemaAgregado {
+  afiliados: readonly AfiliadoGravado[];
+  total: Acumulado;
+  porAfiliado: { affiliate_id: number | null; soma: Acumulado }[];
+  /** Por dia local; null quando o arquivo não tem a coluna da data. */
+  porDia: { dia: string; soma: Acumulado }[] | null;
+}
+
+export interface EntradaAgregada {
+  corpo: CorpoConferencia;
+  sistema: SistemaAgregado;
+  periodo: PeriodoDoArquivo | null;
+  agora: Date;
+}
+
+/**
+ * Uma linha por bilhete sem o código: alguma linha paga com um número só e a quantidade do pedido
+ * (maior que 1) repetida.
+ */
+function temUmBilhetePorLinha(corpo: CorpoConferencia): boolean {
+  const { numeros, qtd_bilhetes: qtds, status } = corpo;
+  if (!numeros || !qtds) return false;
+  for (let i = 0; i < corpo.vezes.length; i++) {
+    const aprovada = !status || status[i] === "aprovado";
+    const q = qtds[i];
+    if (aprovada && numeros[i] === 1 && q !== null && q > 1) return true;
+  }
+  return false;
+}
+
 /** Comparação dos totais pagos: geral, por afiliado e por dia. */
 export function analisarAgregado(
-  arquivo: ArquivoLido,
-  dados: DadosDoSistema,
-  agora: Date,
+  entrada: EntradaAgregada,
 ): RespostaAnaliseAgregada {
-  const avisos = avisosDaLeitura(arquivo);
-  const afiliados = new Afiliados(dados.afiliados);
-  const { mapeamento } = arquivo;
-  const periodo = periodoDoArquivo(arquivo.linhas);
+  const { corpo, sistema, periodo, agora } = entrada;
+  const { colunas, vezes } = corpo;
+  const avisos = avisosDasColunas(corpo);
+  const afiliados = new Afiliados(sistema.afiliados);
 
-  const aprovadas = arquivo.linhas.filter((linha) => {
-    if (mapeamento.status === null) return true;
-    return linha.status === "aprovado";
-  });
-  const desconhecidas = arquivo.linhas.filter(
-    (linha) => linha.status === "desconhecido" || linha.status === VAZIO,
-  ).length;
-  avisos.contar("status_desconhecido", desconhecidas, "linha");
-
-  // Uma linha por bilhete sem o código: um número por linha e a quantidade do pedido repetida.
-  const umBilhetePorLinha =
-    mapeamento.bilhetes !== null &&
-    mapeamento.qtd_bilhetes !== null &&
-    aprovadas.some(
-      (linha) =>
-        Array.isArray(linha.numeros) &&
-        linha.numeros.length === 1 &&
-        typeof linha.qtd === "number" &&
-        linha.qtd > 1,
-    );
+  const umBilhetePorLinha = temUmBilhetePorLinha(corpo);
   if (umBilhetePorLinha) avisos.marcar("um_bilhete_por_linha_sem_id");
+  const temQuantidade =
+    colunas.qtd_bilhetes !== null || colunas.bilhetes !== null;
+  // Sem o código e sem a quantidade, uma linha pode ser um pedido ou um bilhete: não dá para contar
+  // pedidos (no "Um bilhete por linha", contaria cada bilhete como um pedido).
+  if (!temQuantidade) avisos.marcar("sem_contagem_de_pedidos");
   const contaveis: Contaveis = {
-    pedidos: !umBilhetePorLinha,
-    bilhetes: mapeamento.qtd_bilhetes !== null || mapeamento.bilhetes !== null,
-    valor: mapeamento.valor !== null && !umBilhetePorLinha,
-  };
-  const bilhetesDaLinha = (linha: LinhaLida) => {
-    if (umBilhetePorLinha) return 1;
-    const qtd = numeroOu(linha.qtd);
-    if (qtd !== null) return qtd;
-    return Array.isArray(linha.numeros) ? linha.numeros.length : 0;
+    pedidos: temQuantidade && !umBilhetePorLinha,
+    bilhetes: temQuantidade,
+    valor: colunas.valor !== null && !umBilhetePorLinha,
   };
 
   const totalArquivo = vazioAcumulado();
   const porAfiliadoArquivo = new Map<string, Acumulado>();
   const porDiaArquivo = new Map<string, Acumulado>();
+  let desconhecidas = 0;
   let naoReconhecidos = 0;
-  for (const linha of aprovadas) {
-    const bilhetes = bilhetesDaLinha(linha);
-    const centavos = numeroOu(linha.centavos) ?? 0;
-    totalArquivo.pedidos += 1;
-    totalArquivo.bilhetes += bilhetes;
-    totalArquivo.centavos += centavos;
-    if (mapeamento.afiliado !== null) {
-      const { situacao, affiliateId } = afiliados.doArquivo(linha.afiliado);
-      if (situacao === "nao_reconhecido") naoReconhecidos++;
+  let aprovadas = 0;
+  for (let i = 0; i < vezes.length; i++) {
+    const n = vezes[i];
+    if (corpo.status) {
+      const status = corpo.status[i];
+      if (status !== "aprovado") {
+        if (status === null || status === "desconhecido") desconhecidas += n;
+        continue;
+      }
+    }
+    aprovadas += n;
+    const bilhetes = umBilhetePorLinha
+      ? 1
+      : (corpo.qtd_bilhetes?.[i] ?? corpo.numeros?.[i] ?? 0);
+    const centavos = corpo.valor?.[i] ?? 0;
+    totalArquivo.pedidos += n;
+    totalArquivo.bilhetes += bilhetes * n;
+    totalArquivo.centavos += centavos * n;
+    if (corpo.afiliado) {
+      const { situacao, affiliateId } = afiliados.doArquivo(corpo.afiliado[i]);
+      if (situacao === "nao_reconhecido") naoReconhecidos += n;
       const chave =
         affiliateId !== null
           ? chaveDoId(affiliateId)
           : situacao === "nao_reconhecido"
             ? CHAVE_NAO_RECONHECIDO
             : CHAVE_SEM_AFILIADO;
-      acumular(porAfiliadoArquivo, chave, 1, bilhetes, centavos);
+      acumular(porAfiliadoArquivo, chave, n, bilhetes * n, centavos * n);
     }
-    const data = linha.data;
-    if (data !== null && data !== VAZIO && data !== INVALIDO)
-      acumular(porDiaArquivo, data.dia, 1, bilhetes, centavos);
-  }
-  avisos.contar("afiliado_nao_reconhecido", naoReconhecidos, "linha");
-  if (aprovadas.length === 0) avisos.marcar("sem_aprovados");
-
-  // O sistema: pagos da campanha ativa, só nos dias do arquivo quando ele tem datas.
-  const totalSistema = vazioAcumulado();
-  const porAfiliadoSistema = new Map<string, Acumulado>();
-  const porDiaSistema = new Map<string, Acumulado>();
-  for (const pedido of dados.pedidos) {
-    if (pedido.campanha_id !== dados.campanhaId || pedido.status !== "approved")
-      continue;
-    const dia =
-      pedido.aprovado_em === null
-        ? null
-        : diaLocalDoInstante(pedido.aprovado_em, dados.fuso);
-    if (
-      periodo !== null &&
-      (dia === null || dia < periodo.inicio || dia > periodo.fim)
-    )
-      continue;
-    totalSistema.pedidos += 1;
-    totalSistema.bilhetes += pedido.qtd_bilhetes;
-    totalSistema.centavos += pedido.total_centavos;
-    acumular(
-      porAfiliadoSistema,
-      pedido.affiliate_id === null
-        ? CHAVE_SEM_AFILIADO
-        : chaveDoId(pedido.affiliate_id),
-      1,
-      pedido.qtd_bilhetes,
-      pedido.total_centavos,
-    );
+    const dia = corpo.dia?.[i] ?? null;
     if (dia !== null)
-      acumular(
-        porDiaSistema,
-        dia,
-        1,
-        pedido.qtd_bilhetes,
-        pedido.total_centavos,
-      );
+      acumular(porDiaArquivo, dia, n, bilhetes * n, centavos * n);
   }
+  avisos.contar("status_desconhecido", desconhecidas, "linha");
+  avisos.contar("afiliado_nao_reconhecido", naoReconhecidos, "linha");
+  if (aprovadas === 0) avisos.marcar("sem_aprovados");
+
+  const porAfiliadoSistema = new Map<string, Acumulado>(
+    sistema.porAfiliado.map(({ affiliate_id, soma }) => [
+      affiliate_id === null ? CHAVE_SEM_AFILIADO : chaveDoId(affiliate_id),
+      soma,
+    ]),
+  );
+  const porDiaSistema = new Map<string, Acumulado>(
+    (sistema.porDia ?? []).map(({ dia, soma }) => [dia, soma]),
+  );
 
   type LinhaAfiliado = NonNullable<
     RespostaAnaliseAgregada["por_afiliado"]
   >[number];
   let porAfiliado: LinhaAfiliado[] | null = null;
-  if (mapeamento.afiliado !== null) {
+  if (colunas.afiliado !== null) {
     const chaves = new Set([
       ...porAfiliadoArquivo.keys(),
       ...porAfiliadoSistema.keys(),
@@ -1007,7 +1272,7 @@ export function analisarAgregado(
   }
 
   let porDia: RespostaAnaliseAgregada["por_dia"] = null;
-  if (mapeamento.data !== null) {
+  if (colunas.data !== null) {
     const dias = [
       ...new Set([...porDiaArquivo.keys(), ...porDiaSistema.keys()]),
     ].sort();
@@ -1019,17 +1284,20 @@ export function analisarAgregado(
 
   return {
     modo: "agregado",
-    ...comum(
-      arquivo,
-      avisos,
-      { linhasIgnoradas: 0, umBilhetePorLinha, periodo },
-      agora,
-    ),
+    arquivo: {
+      linhas: corpo.linhas,
+      linhas_ignoradas: 0,
+      um_bilhete_por_linha: umBilhetePorLinha,
+      data_inicio: periodo?.inicio ?? null,
+      data_fim: periodo?.fim ?? null,
+    },
+    avisos: avisos.lista(),
+    conferido_em: agora.toISOString(),
     recorte:
       periodo === null
         ? null
         : { data_inicio: periodo.inicio, data_fim: periodo.fim },
-    total: comparar(totalArquivo, totalSistema, contaveis),
+    total: comparar(totalArquivo, sistema.total, contaveis),
     por_afiliado: porAfiliado,
     por_dia: porDia,
   };
@@ -1039,52 +1307,43 @@ export function analisarAgregado(
 // "Recuperar"
 // ---------------------------------------------------------------------------------------------------
 
-export type MotivoNaoRecuperado = (typeof MOTIVOS_NAO_RECUPERADO)[number];
-
-/** Um pedido a gravar: o que a resposta mostra e os números dos bilhetes (só para o banco). */
-export interface PedidoAGravar extends PedidoRecuperado {
-  numeros: number[] | null;
-}
-
 export interface PlanoRecuperacao {
-  gravar: PedidoAGravar[];
+  gravar: PedidoRecuperado[];
   naoRecuperados: { pedido_id: string; motivo: MotivoNaoRecuperado }[];
   avisos: AvisoReconciliacao[];
 }
 
-/** Máximo de números de bilhete guardados por pedido (o webhook guarda até o mesmo limite). */
-const MAXIMO_NUMEROS_GUARDADOS = 10_000;
-
 /**
  * Decide, para cada código escolhido (sem repetição, na ordem pedida), se ele pode ser gravado como venda
- * aprovada e com quais dados. `existentes` são os códigos que já estão no banco (em qualquer campanha):
- * esses nunca são sobrescritos.
+ * aprovada e com quais dados, com as mesmas regras da análise (a convenção do valor; a trava do código é
+ * conferida antes, na rota). Um código que já está no banco (em qualquer campanha) nunca é sobrescrito.
  */
 export function planejarRecuperacao(
-  arquivo: ArquivoLido,
-  dados: {
-    fuso: string;
-    afiliados: readonly AfiliadoGravado[];
-    existentes: ReadonlySet<string>;
+  entrada: {
+    corpo: CorpoConferencia;
+    agrupamento: Agrupamento;
+    sistema: SistemaPorPedido;
+    convencao: ConvencaoDoValor | null;
+    calendario: Calendario;
   },
   codigos: readonly string[],
-  agora: Date,
 ): PlanoRecuperacao {
+  const { corpo, agrupamento, sistema, convencao, calendario } = entrada;
   const avisos = new Avisos();
-  const { mapeamento } = arquivo;
-  if (mapeamento.status === null) avisos.marcar("sem_coluna_status");
-  if (mapeamento.afiliado === null) avisos.marcar("sem_coluna_afiliado");
-  if (mapeamento.data === null) avisos.marcar("sem_coluna_data");
-  const afiliados = new Afiliados(dados.afiliados);
-  const { pedidos } = agruparPedidos(arquivo);
+  if (corpo.colunas.status === null) avisos.marcar("sem_coluna_status");
+  if (corpo.colunas.afiliado === null) avisos.marcar("sem_coluna_afiliado");
+  if (corpo.colunas.data === null) avisos.marcar("sem_coluna_data");
+  const afiliados = new Afiliados(sistema.afiliados);
+  const preco = sistema.campanha.preco;
 
-  const gravar: PedidoAGravar[] = [];
+  const gravar: PedidoRecuperado[] = [];
   const naoRecuperados: PlanoRecuperacao["naoRecuperados"] = [];
+  const regra = new ContagemDaRegra();
   let naoReconhecidos = 0;
   for (const codigo of new Set(codigos)) {
     const nao = (motivo: MotivoNaoRecuperado) =>
       naoRecuperados.push({ pedido_id: codigo, motivo });
-    const pedido = pedidos.get(codigo);
+    const pedido = agrupamento.pedidos.get(codigo);
     if (!pedido) {
       nao("nao_esta_no_arquivo");
       continue;
@@ -1097,60 +1356,40 @@ export function planejarRecuperacao(
       nao("nao_aprovado_no_arquivo");
       continue;
     }
-    if (dados.existentes.has(codigo)) {
+    if (sistema.encontrados.has(codigo)) {
       nao("ja_existe");
       continue;
     }
-    if (pedido.qtd === null || pedido.qtd < 1) {
+    const qtd = quantidadeDecidida(pedido, convencao);
+    if (qtd === null || qtd < 1) {
       nao("sem_quantidade");
       continue;
     }
-    if (pedido.centavos === null) {
-      nao("sem_valor");
+    const decidido = decidirValor(pedido, convencao, preco);
+    if (decidido.centavos === null) {
+      nao(decidido.ambiguo ? "valor_ambiguo" : "sem_valor");
       continue;
     }
-    const venda = instanteDaVenda(pedido.data, dados.fuso, agora);
+    const venda = instanteDaVenda(pedido, calendario);
     if (venda === null) {
       nao("data_no_futuro");
       continue;
     }
+    regra.contar(decidido);
     const { situacao, affiliateId } = afiliados.doArquivo(pedido.afiliado);
     if (situacao === "nao_reconhecido") naoReconhecidos++;
     gravar.push({
       pedido_id: codigo,
-      qtd_bilhetes: pedido.qtd,
-      total_centavos: pedido.centavos,
+      qtd_bilhetes: qtd,
+      total_centavos: decidido.centavos,
       afiliado: situacao,
       affiliate_id: affiliateId,
       celula: afiliados.celula(affiliateId),
       aprovado_em: new Date(venda.instante).toISOString(),
       origem_data: venda.origem,
-      numeros:
-        pedido.numeros !== null &&
-        pedido.numeros.length <= MAXIMO_NUMEROS_GUARDADOS
-          ? pedido.numeros
-          : null,
     });
   }
+  regra.avisar(avisos, preco);
   avisos.contar("afiliado_nao_reconhecido", naoReconhecidos, "pedido");
   return { gravar, naoRecuperados, avisos: avisos.lista() };
-}
-
-/** Os campos do pedido na resposta (sem os números dos bilhetes). */
-export function paraResposta(pedido: PedidoAGravar): PedidoRecuperado {
-  const { numeros: _numeros, ...resto } = pedido;
-  void _numeros;
-  return resto;
-}
-
-/** Nome de coluna usado em cada campo (para a auditoria). */
-export function colunasDoMapeamento(
-  arquivo: ArquivoLido,
-): Record<(typeof CAMPOS_RECONCILIACAO)[number], string | null> {
-  return Object.fromEntries(
-    CAMPOS_RECONCILIACAO.map((campo) => {
-      const indice = arquivo.mapeamento[campo];
-      return [campo, indice === null ? null : arquivo.colunas[indice].nome];
-    }),
-  ) as Record<(typeof CAMPOS_RECONCILIACAO)[number], string | null>;
 }

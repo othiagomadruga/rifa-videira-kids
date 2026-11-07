@@ -1,6 +1,6 @@
 // Textos da tela da conferência, para quem não é técnico: o que é cada campo do arquivo, o que cada tipo de
-// diferença quer dizer e o que fazer. As chaves são cópias das listas do contrato (CAMPOS_RECONCILIACAO,
-// TIPOS_DIVERGENCIA...), conferidas por conferencia-contrato.test.ts.
+// diferença quer dizer e o que fazer. As chaves seguem as listas do contrato (CAMPOS_RECONCILIACAO,
+// TIPOS_DIVERGENCIA...), e conferencia-contrato.test.ts confere que nenhuma falta.
 import type {
   CampoReconciliacao,
   CodigoAvisoReconciliacao,
@@ -119,7 +119,11 @@ export const OBSERVACOES: Record<string, string> = {
   sem_quantidade:
     "Sem a quantidade de bilhetes no arquivo: não dá para recuperar.",
   sem_valor: "Sem o valor no arquivo: não dá para recuperar.",
+  valor_ambiguo:
+    "As linhas do pedido repetem um valor que não é o preço do bilhete: não dá para saber se é o de um bilhete ou o do pedido inteiro. Confira na Rifei.",
   data_no_futuro: "A data do arquivo é depois de agora: confira o arquivo.",
+  codigo_nao_confere:
+    "A coluna do código não confere com o sistema: troque a coluna para recuperar.",
   fora_do_periodo_do_arquivo: "De um dia que o arquivo não cobre.",
 };
 
@@ -131,6 +135,8 @@ export const MOTIVOS: Record<string, string> = {
   inconsistente_no_arquivo: "As linhas dele no arquivo não batem entre si",
   sem_quantidade: "Sem a quantidade de bilhetes",
   sem_valor: "Sem o valor",
+  valor_ambiguo:
+    "Valor ambíguo (o mesmo em todas as linhas, e não é o preço do bilhete)",
   data_no_futuro: "Data depois de agora",
 };
 
@@ -141,14 +147,17 @@ export const ORIGEM_DA_DATA: Record<string, string> = {
   recuperacao: "sem data no arquivo: entra agora",
 };
 
-/** Avisos informativos (os demais pedem atenção). */
+/** Avisos informativos (os demais pedem atenção; a trava do código é um perigo). */
 const AVISOS_INFORMATIVOS: readonly CodigoAvisoReconciliacao[] = [
   "colunas_pessoais_ignoradas",
   "um_bilhete_por_linha",
+  "valor_por_bilhete",
+  "valor_do_pedido_repetido",
   "sem_coluna_pedido",
 ];
 
 export function tomDoAviso(codigo: string): TomAviso {
+  if (codigo === "codigo_nao_confere") return "perigo";
   return (AVISOS_INFORMATIVOS as readonly string[]).includes(codigo)
     ? "info"
     : "alerta";

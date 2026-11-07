@@ -1,64 +1,76 @@
-// Chamadas à API da conferência pelo CSV da Rifei (docs/api.md, RIFA-012): analisar o arquivo, recuperar
-// as vendas perdidas (com a prévia em `simular`) e listar as recuperações feitas.
+// Chamadas à API da conferência pelo CSV da Rifei (docs/api.md, RIFA-012): a campanha (o fuso das datas do
+// arquivo), analisar o corpo compacto, recuperar as vendas perdidas (com a prévia em `simular`) e listar
+// as recuperações feitas. O arquivo NÃO vai para a API: a tela o lê (src/shared/conferencia) e manda só as
+// colunas mapeadas que não são de dado pessoal.
 //
-// Do contrato vêm só os TIPOS: importar ROTAS ou os schemas poria o zod no pacote do site (veja
-// lib/api.ts). Os caminhos e os limites abaixo são cópias: o tipo confere os caminhos com ROTAS, e o
-// conferencia-contrato.test.ts confere os limites e as listas.
+// Do contrato da API vêm só os TIPOS: importar ROTAS ou os schemas poria o zod no pacote do site (veja
+// lib/api.ts). Os caminhos são cópias, e o tipo os confere com ROTAS.
 import type {
-  MapeamentoReconciliacao,
+  Campanha,
+  CorpoConferencia,
   ROTAS,
   Recuperacao,
   RespostaAnaliseReconciliacao,
   RespostaRecuperarReconciliacao,
 } from "../../../shared/contracts";
-import { api } from "../../lib/api";
+import { ErroApi, api } from "../../lib/api";
 
 export const CAMINHOS: {
+  campanha: (typeof ROTAS)["obterCampanha"]["caminho"];
   analisar: (typeof ROTAS)["analisarReconciliacao"]["caminho"];
   recuperar: (typeof ROTAS)["recuperarReconciliacao"]["caminho"];
   recuperacoes: (typeof ROTAS)["listarRecuperacoes"]["caminho"];
 } = {
+  campanha: "/api/admin/campanha",
   analisar: "/api/admin/reconciliacao/analisar",
   recuperar: "/api/admin/reconciliacao/recuperar",
   recuperacoes: "/api/admin/reconciliacao/recuperacoes",
 };
 
-/** LIMITE_CARACTERES_CSV_RECONCILIACAO: caracteres do arquivo (cerca de 5 MB). */
-export const LIMITE_CARACTERES_CSV = 5_000_000;
-/** LIMITE_LINHAS_CSV_RECONCILIACAO: linhas de dados por arquivo. */
-export const LIMITE_LINHAS_CSV = 50_000;
-/** LIMITE_PEDIDOS_RECUPERAR: pedidos por "Recuperar". */
-export const LIMITE_PEDIDOS_RECUPERAR = 500;
-
-/** O arquivo pode ser grande e a rede do celular, lenta: mais tempo que o padrão do cliente. */
+/** O corpo pode ter umas centenas de KB e a rede do celular é lenta: mais tempo que o padrão do cliente. */
 const TEMPO_LIMITE_MS = 60_000;
 
 type Opcoes = { signal?: AbortSignal };
 
-/** Compara o arquivo com o sistema. Sem `mapeamento`, a API detecta as colunas pelo cabeçalho. */
+/** O que a conferência usa da campanha ativa: o fuso das datas do arquivo. null sem campanha (404). */
+export async function carregarFusoDaCampanha(
+  opcoes: Opcoes = {},
+): Promise<string | null> {
+  try {
+    const campanha = await api.get<Campanha>(CAMINHOS.campanha, opcoes);
+    return campanha.fuso_horario;
+  } catch (erro) {
+    if (
+      erro instanceof ErroApi &&
+      erro.status === 404 &&
+      erro.codigo === "nao_encontrado"
+    )
+      return null;
+    throw erro;
+  }
+}
+
+/** Compara o corpo (montado na tela) com o sistema. */
 export function analisar(
-  csv: string,
-  mapeamento: MapeamentoReconciliacao | null,
+  corpo: CorpoConferencia,
   opcoes: Opcoes = {},
 ): Promise<RespostaAnaliseReconciliacao> {
-  return api.post<RespostaAnaliseReconciliacao>(
-    CAMINHOS.analisar,
-    mapeamento ? { csv, mapeamento } : { csv },
-    { tempoLimiteMs: TEMPO_LIMITE_MS, ...opcoes },
-  );
+  return api.post<RespostaAnaliseReconciliacao>(CAMINHOS.analisar, corpo, {
+    tempoLimiteMs: TEMPO_LIMITE_MS,
+    ...opcoes,
+  });
 }
 
 /** `simular: true` é a prévia (nada é gravado); `false` grava (tudo ou nada, sem duplicar). */
 export function recuperar(
-  csv: string,
-  mapeamento: MapeamentoReconciliacao,
+  corpo: CorpoConferencia,
   pedidos: readonly string[],
   simular: boolean,
   opcoes: Opcoes = {},
 ): Promise<RespostaRecuperarReconciliacao> {
   return api.post<RespostaRecuperarReconciliacao>(
     CAMINHOS.recuperar,
-    { csv, mapeamento, pedidos, simular },
+    { ...corpo, pedidos, simular },
     { tempoLimiteMs: TEMPO_LIMITE_MS, ...opcoes },
   );
 }

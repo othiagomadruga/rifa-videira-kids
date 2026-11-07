@@ -31,6 +31,23 @@ import {
   resultadoEventoWebhookSchema,
   statusPedidoSchema,
 } from "./dominio";
+import {
+  AFILIADOS_AGREGADO,
+  CODIGOS_AVISO_RECONCILIACAO,
+  FORMATO_ID_PEDIDO_RECONCILIACAO,
+  LIMITE_ITENS_POR_DIVERGENCIA,
+  MOTIVOS_NAO_RECUPERADO,
+  OBSERVACOES_DIVERGENCIA,
+  ORIGENS_DATA_RECUPERADA,
+  ORIGENS_PEDIDO,
+  SITUACOES_AFILIADO_ARQUIVO,
+  STATUS_ARQUIVO_RECONCILIACAO,
+  TIPOS_DIVERGENCIA,
+  validarCorpoConferencia,
+  validarCorpoRecuperacao,
+  type CorpoConferencia,
+  type CorpoRecuperacao,
+} from "./conferencia";
 import { detalheResumidoSchema } from "./erros";
 import { payloadRifeiSchema } from "./rifei";
 // Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
@@ -180,7 +197,7 @@ export const LIMITE_LINHAS_CSV_HIERARQUIA = 2000;
 export const LIMITE_CARACTERES_CSV_HIERARQUIA = 1_000_000;
 
 /**
- * `detalhes` do erro 400 `csv_invalido` (importação da hierarquia e, depois, a reconciliação): o
+ * `detalhes` do erro 400 `csv_invalido` (importação da hierarquia; a conferência lê o CSV no navegador): o
  * arquivo não pôde nem ser lido linha a linha. A tela mostra a `mensagem`; `motivo` é para quem
  * precisa tratar cada caso. `linha` conta o cabeçalho como linha 1.
  */
@@ -1206,138 +1223,34 @@ export type RespostaVisaoIndividual = z.infer<
 // Conferência pelo CSV "Exportar Pedidos" da Rifei (RIFA-012): POST /api/admin/reconciliacao/analisar,
 // POST /api/admin/reconciliacao/recuperar e GET /api/admin/reconciliacao/recuperacoes.
 //
-// O CSV traz nome, e-mail e telefone dos compradores (D1): é lido só na memória da requisição e
-// descartado. As colunas de dado pessoal (pelo nome do cabeçalho) nunca são lidas nem podem entrar no
-// mapeamento; as respostas só trazem códigos de pedido, status, quantidades, valores, afiliados, datas e
-// os NOMES das colunas do cabeçalho. Nada do arquivo vai para o banco (além do pedido recuperado) nem
-// para o log. Documentação: docs/api.md e docs/integracao-rifei.md (seção 10).
+// O navegador lê o CSV, reconhece e mapeia as colunas (src/shared/conferencia) e manda à API só as colunas
+// mapeadas que não são de dado pessoal, já normalizadas: o corpo compacto de ./conferencia, conferido pelo
+// validador leve de lá (sem zod item a item: a CPU do Worker é curta). As listas e os limites também estão
+// em ./conferencia, sem zod, para o site usar. Documentação: docs/api.md e docs/integracao-rifei.md (10).
 // ---------------------------------------------------------------------------------------------------
 
-/** Máximo de caracteres do arquivo (o campo `csv`): cerca de 5 MB. */
-export const LIMITE_CARACTERES_CSV_RECONCILIACAO = 5_000_000;
-/** Máximo de linhas de dados (sem o cabeçalho e as linhas em branco). */
-export const LIMITE_LINHAS_CSV_RECONCILIACAO = 50_000;
-/** Colunas lidas do cabeçalho; as que passarem disso são ignoradas (aviso `colunas_demais`). */
-export const LIMITE_COLUNAS_CSV_RECONCILIACAO = 200;
-/** Pedidos por chamada de "Recuperar". */
-export const LIMITE_PEDIDOS_RECUPERAR = 500;
-/** Itens listados por tipo de divergência; a contagem e as somas do tipo contam todos. */
-export const LIMITE_ITENS_POR_DIVERGENCIA = 500;
+/** Corpo compacto da análise; o validador de ./conferencia confere cada posição e diz o problema. */
+export const corpoAnalisarReconciliacaoSchema = z.custom<CorpoConferencia>(
+  (valor) => validarCorpoConferencia(valor).ok,
+  { message: "Corpo da conferência inválido" },
+);
 
 /**
- * Campos que a conferência lê do arquivo (todos opcionais):
- * - pedido_id: código do pedido na Rifei (o `id` do webhook). Com ele, a comparação é pedido a pedido;
- *   sem ele, por totais (por afiliado e por dia).
- * - status: situação do pedido ("Pago", "Pendente", "Expirado"...). Sem a coluna, todos os pedidos do
- *   arquivo são tratados como pagos (aviso `sem_coluna_status`).
- * - qtd_bilhetes: quantidade de bilhetes do pedido; bilhetes: os números dos bilhetes (a quantidade
- *   sai da contagem quando não há a coluna da quantidade).
- * - valor: valor pago ("R$ 20,00", "20,00", "20.00").
- * - afiliado: o `affiliate_id` (número) ou o usuário do afiliado na Rifei, comparado com o rótulo do
- *   afiliado cadastrado na tela Adesão.
- * - data: data do pagamento (ou do pedido), com ou sem hora, no fuso da campanha.
+ * "Recuperar": o corpo da análise (com a coluna do código) mais `pedidos` (1 a 500 códigos) e `simular`
+ * (true = prévia, nada é gravado). Grava como aprovados (origem `conferencia`) os pedidos escolhidos, com
+ * os dados do arquivo; pedido que já existe nunca é sobrescrito; atômico e idempotente.
  */
-export const CAMPOS_RECONCILIACAO = [
-  "pedido_id",
-  "status",
-  "qtd_bilhetes",
-  "bilhetes",
-  "valor",
-  "afiliado",
-  "data",
-] as const;
-export type CampoReconciliacao = (typeof CAMPOS_RECONCILIACAO)[number];
+export const corpoRecuperarReconciliacaoSchema = z.custom<CorpoRecuperacao>(
+  (valor) => validarCorpoRecuperacao(valor).ok,
+  { message: "Corpo do Recuperar inválido" },
+);
 
-/** Posição da coluna no cabeçalho (0 = primeira). */
-const indiceColunaSchema = z
-  .number()
-  .int()
-  .min(0)
-  .max(LIMITE_COLUNAS_CSV_RECONCILIACAO - 1);
-
-/**
- * Coluna de cada campo (posição no cabeçalho; null = o arquivo não tem). Uma coluna serve a um campo só
- * e nunca pode ser uma coluna de dado pessoal (a API confere com o cabeçalho e responde 400).
- */
-export const mapeamentoReconciliacaoSchema = z.strictObject({
-  pedido_id: indiceColunaSchema.nullable(),
-  status: indiceColunaSchema.nullable(),
-  qtd_bilhetes: indiceColunaSchema.nullable(),
-  bilhetes: indiceColunaSchema.nullable(),
-  valor: indiceColunaSchema.nullable(),
-  afiliado: indiceColunaSchema.nullable(),
-  data: indiceColunaSchema.nullable(),
-});
-export type MapeamentoReconciliacao = z.infer<
-  typeof mapeamentoReconciliacaoSchema
->;
-
-/**
- * Código do pedido como o arquivo traz: começa com letra ou número e só tem letras, números e . _ : / # -.
- * Assim nunca é uma fórmula de planilha (=, +, - ou @ no início), um e-mail ou um telefone com +. Linha
- * com código fora disso fica de fora (aviso `id_invalido`).
- */
-export const FORMATO_ID_PEDIDO_RECONCILIACAO =
-  /^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,127}$/;
+/** Um código de pedido do arquivo (FORMATO_ID_PEDIDO_RECONCILIACAO). */
 export const idPedidoReconciliacaoSchema = z
   .string()
   .regex(FORMATO_ID_PEDIDO_RECONCILIACAO, {
     message: "Código de pedido inválido",
   });
-
-const csvReconciliacaoSchema = z
-  .string()
-  .min(1)
-  .max(LIMITE_CARACTERES_CSV_RECONCILIACAO);
-
-export const corpoAnalisarReconciliacaoSchema = z.object({
-  /** Conteúdo do arquivo (UTF-8, separador "," ou ";", aspas como no RFC 4180, BOM aceito). */
-  csv: csvReconciliacaoSchema,
-  /** Ausente: o sistema detecta as colunas pelos nomes do cabeçalho (`mapeamento_detectado: true`). */
-  mapeamento: mapeamentoReconciliacaoSchema.optional(),
-});
-
-/** Uma coluna do cabeçalho do arquivo. Só o NOME da coluna sai na resposta, nunca o conteúdo. */
-export const colunaArquivoReconciliacaoSchema = z.strictObject({
-  indice: z.number().int().nonnegative(),
-  /** Nome do cabeçalho com os espaços normalizados, até 40 caracteres; "Coluna N" quando vazio. */
-  nome: z.string().min(1).max(40),
-  /** Campo que o nome indica (null = nenhum). Pode haver mais de uma coluna com o mesmo campo. */
-  campo_detectado: z.enum(CAMPOS_RECONCILIACAO).nullable(),
-  /** Nome, e-mail, telefone, CPF, endereço...: nunca é lida e não pode entrar no mapeamento. */
-  dado_pessoal: z.boolean(),
-});
-export type ColunaArquivoReconciliacao = z.infer<
-  typeof colunaArquivoReconciliacaoSchema
->;
-
-/** Status do pedido no arquivo, normalizado ("Pago" e "approved" são `aprovado`). */
-export const STATUS_ARQUIVO_RECONCILIACAO = [
-  "aprovado",
-  "pendente",
-  "expirado",
-  "cancelado",
-  "desconhecido",
-] as const;
-export type StatusArquivoReconciliacao =
-  (typeof STATUS_ARQUIVO_RECONCILIACAO)[number];
-
-/**
- * Afiliado do pedido no arquivo: sem a coluna; vazio (venda sem afiliado); reconhecido (número, ou
- * usuário igual ao rótulo de um afiliado cadastrado); ou não reconhecido (o valor não sai na resposta).
- */
-export const SITUACOES_AFILIADO_ARQUIVO = [
-  "sem_coluna",
-  "vazio",
-  "reconhecido",
-  "nao_reconhecido",
-] as const;
-export type SituacaoAfiliadoArquivo =
-  (typeof SITUACOES_AFILIADO_ARQUIVO)[number];
-
-/** Como o pedido entrou no sistema: pelo webhook ou recuperado na conferência (migração 0004). */
-export const ORIGENS_PEDIDO = ["webhook", "conferencia"] as const;
-export type OrigemPedido = (typeof ORIGENS_PEDIDO)[number];
 
 /** A célula do afiliado (null = sem afiliado, afiliado não vinculado ou não reconhecido). */
 const celulaReconciliacaoSchema = z
@@ -1350,6 +1263,7 @@ export const pedidoNoArquivoSchema = z.strictObject({
   status: z.enum(STATUS_ARQUIVO_RECONCILIACAO),
   /** null: sem a coluna ou ilegível. */
   qtd_bilhetes: z.number().int().nonnegative().nullable(),
+  /** null: sem a coluna, ilegível ou ambíguo (pedido em várias linhas: observação `valor_ambiguo`). */
   total_centavos: centavosSchema.nullable(),
   afiliado: z.enum(SITUACOES_AFILIADO_ARQUIVO),
   /** Só com `afiliado` = reconhecido. */
@@ -1371,38 +1285,6 @@ export const pedidoNoSistemaSchema = z.strictObject({
   origem: z.enum(ORIGENS_PEDIDO),
 });
 export type PedidoNoSistema = z.infer<typeof pedidoNoSistemaSchema>;
-
-/**
- * Tipos de divergência do modo por pedido, na ordem em que a resposta os traz:
- * - venda_perdida: pago na Rifei e ausente no sistema (não conta no painel nem no ranking): "Recuperar";
- * - pagamento_nao_registrado: pago na Rifei, e no sistema pendente ou expirado (o aviso de pagamento
- *   não chegou);
- * - nao_pago_na_rifei: pago no sistema, e na Rifei pendente, expirado ou cancelado (ex.: estorno);
- * - ausente_no_arquivo: pago no sistema e ausente no arquivo (arquivo parcial ou compra de teste);
- * - valor_diferente, quantidade_diferente e afiliado_diferente: pago nos dois lados, com o valor, a
- *   quantidade de bilhetes ou o afiliado diferentes (um pedido pode estar em mais de um desses).
- */
-export const TIPOS_DIVERGENCIA = [
-  "venda_perdida",
-  "pagamento_nao_registrado",
-  "nao_pago_na_rifei",
-  "ausente_no_arquivo",
-  "valor_diferente",
-  "quantidade_diferente",
-  "afiliado_diferente",
-] as const;
-export type TipoDivergencia = (typeof TIPOS_DIVERGENCIA)[number];
-
-/**
- * Observações de um item: na venda perdida, o que impede a recuperação (sem quantidade, sem valor ou
- * data depois de agora); na ausente no arquivo, o pedido é de um dia que o arquivo não cobre.
- */
-export const OBSERVACOES_DIVERGENCIA = [
-  "sem_quantidade",
-  "sem_valor",
-  "data_no_futuro",
-  "fora_do_periodo_do_arquivo",
-] as const;
 
 export const divergenciaSchema = z.strictObject({
   pedido_id: z.string().min(1).max(128),
@@ -1434,56 +1316,27 @@ export const grupoDivergenciaSchema = z.strictObject({
 });
 export type GrupoDivergencia = z.infer<typeof grupoDivergenciaSchema>;
 
-/** Avisos da leitura do arquivo (mensagens sem nenhum valor do arquivo: só números e nomes de coluna). */
-export const CODIGOS_AVISO_RECONCILIACAO = [
-  "sem_coluna_pedido",
-  "sem_coluna_status",
-  "sem_coluna_quantidade",
-  "sem_coluna_valor",
-  "sem_coluna_afiliado",
-  "sem_coluna_data",
-  "colunas_pessoais_ignoradas",
-  "colunas_demais",
-  "sem_id",
-  "id_invalido",
-  "status_desconhecido",
-  "quantidade_invalida",
-  "quantidade_diferente_dos_numeros",
-  "valor_invalido",
-  "data_invalida",
-  "afiliado_nao_reconhecido",
-  "formula_ignorada",
-  "pedido_inconsistente",
-  "um_bilhete_por_linha",
-  "um_bilhete_por_linha_sem_id",
-  "pedido_de_outra_campanha",
-  "sem_aprovados",
-] as const;
-export type CodigoAvisoReconciliacao =
-  (typeof CODIGOS_AVISO_RECONCILIACAO)[number];
-
+/** Um aviso (tipo AvisoReconciliacao, de ./conferencia). */
 export const avisoReconciliacaoSchema = z.strictObject({
   codigo: z.enum(CODIGOS_AVISO_RECONCILIACAO),
   mensagem: z.string().min(1),
-  /** Quantas linhas, pedidos ou colunas o aviso cobre; null quando vale para o arquivo inteiro. */
   quantidade: z.number().int().positive().nullable(),
 });
-export type AvisoReconciliacao = z.infer<typeof avisoReconciliacaoSchema>;
 
-/** O que foi lido do arquivo. */
+/** O que a API viu no corpo. */
 export const arquivoLidoSchema = z.strictObject({
-  /** Linhas de dados (sem o cabeçalho e as linhas em branco). */
+  /** Linhas de dados do arquivo. */
   linhas: z.number().int().nonnegative(),
-  /** Linhas deixadas de fora: sem código ou com código inválido (modo por pedido). */
+  /** Linhas sem código (vazio ou ilegível) no modo por pedido: ficam de fora. */
   linhas_ignoradas: z.number().int().nonnegative(),
-  /** O mesmo pedido em várias linhas, ou uma linha por bilhete (opção "Um bilhete por linha"). */
+  /** O mesmo código em várias linhas, ou uma linha por bilhete (opção "Um bilhete por linha"). */
   um_bilhete_por_linha: z.boolean(),
-  /** Dias (no fuso da campanha) que a coluna da data cobre; null sem datas legíveis. */
+  /** Dias (no fuso da campanha) que a coluna da data cobre; null sem datas. */
   data_inicio: dataLocalSchema.nullable(),
   data_fim: dataLocalSchema.nullable(),
 });
 
-/** Totais pagos de um lado no arquivo: null quando o arquivo não permite contar (sem a coluna). */
+/** Totais pagos de um lado no arquivo: null quando o arquivo não permite contar. */
 export const totaisArquivoSchema = z.strictObject({
   pedidos_aprovados: z.number().int().nonnegative().nullable(),
   bilhetes: z.number().int().nonnegative().nullable(),
@@ -1492,20 +1345,30 @@ export const totaisArquivoSchema = z.strictObject({
 export type TotaisArquivo = z.infer<typeof totaisArquivoSchema>;
 
 const comumAnaliseReconciliacao = {
-  colunas: z.array(colunaArquivoReconciliacaoSchema),
-  /** O mapeamento usado (o enviado ou o detectado). */
-  mapeamento: mapeamentoReconciliacaoSchema,
-  /** true: o corpo não trouxe mapeamento e o sistema detectou pelo cabeçalho. */
-  mapeamento_detectado: z.boolean(),
   arquivo: arquivoLidoSchema,
+  /** Avisos da comparação (os do arquivo, como colunas ou células ilegíveis, a tela monta sozinha). */
   avisos: z.array(avisoReconciliacaoSchema),
   conferido_em: instanteSchema,
 };
 
-/** Modo por pedido: a coluna do código do pedido está no mapeamento. */
+/**
+ * A coluna escolhida como código confere com o sistema? `confere: false` quando, com pelo menos
+ * MINIMO_CODIGOS_PARA_CONFERIR (5) pagos no arquivo, menos da metade existe no sistema (em qualquer
+ * campanha), a não ser que os pagos do sistema no período do arquivo (também pelo menos 5) estejam na
+ * maioria no arquivo: provavelmente é outra coluna. Aí nada pode ser recuperado (aviso
+ * `codigo_nao_confere`; o "Recuperar" responde 400) até a coordenação trocar a coluna.
+ */
+export const codigoDoPedidoSchema = z.strictObject({
+  confere: z.boolean(),
+  pagos_no_arquivo: z.number().int().nonnegative(),
+  encontrados: z.number().int().nonnegative(),
+});
+
+/** Modo por pedido: o corpo traz a coluna do código. */
 export const respostaAnalisePorPedidoSchema = z.strictObject({
   modo: z.literal("por_pedido"),
   ...comumAnaliseReconciliacao,
+  codigo: codigoDoPedidoSchema,
   resumo: z.strictObject({
     /** Códigos distintos e válidos no arquivo. */
     pedidos_no_arquivo: z.number().int().nonnegative(),
@@ -1531,12 +1394,6 @@ const comparacaoTotaisSchema = {
   /** Os totais que o arquivo permite contar são iguais aos do sistema. */
   confere: z.boolean(),
 };
-
-export const AFILIADOS_AGREGADO = [
-  "afiliado",
-  "sem_afiliado",
-  "nao_reconhecido",
-] as const;
 
 /** Modo agregado: sem a coluna do código, compara os totais pagos (por afiliado e por dia). */
 export const respostaAnaliseAgregadaSchema = z.strictObject({
@@ -1574,49 +1431,6 @@ export const respostaAnaliseReconciliacaoSchema = z.discriminatedUnion("modo", [
 export type RespostaAnaliseReconciliacao = z.infer<
   typeof respostaAnaliseReconciliacaoSchema
 >;
-
-/**
- * "Recuperar": grava como aprovados (origem `conferencia`) os pedidos escolhidos, com os dados do
- * arquivo. Só vendas perdidas: pedido que já existe nunca é sobrescrito. `simular: true` é a
- * pré-visualização (nada é gravado). Atômico (um lote só) e idempotente: repetir não duplica.
- */
-export const corpoRecuperarReconciliacaoSchema = z.object({
-  csv: csvReconciliacaoSchema,
-  /** O mapeamento conferido na análise; precisa da coluna do código do pedido. */
-  mapeamento: mapeamentoReconciliacaoSchema.refine(
-    (mapeamento) => mapeamento.pedido_id !== null,
-    {
-      message:
-        "Para recuperar, o arquivo precisa da coluna do código do pedido",
-      path: ["pedido_id"],
-    },
-  ),
-  pedidos: z
-    .array(idPedidoReconciliacaoSchema)
-    .min(1)
-    .max(LIMITE_PEDIDOS_RECUPERAR),
-  simular: z.boolean().default(false),
-});
-
-/** De onde veio o instante gravado em `aprovado_em`. */
-export const ORIGENS_DATA_RECUPERADA = [
-  /** data e hora do arquivo */
-  "arquivo",
-  /** só o dia no arquivo: meio-dia (ou agora, se for hoje) */
-  "dia_do_arquivo",
-  /** sem data no arquivo: o instante da recuperação */
-  "recuperacao",
-] as const;
-
-export const MOTIVOS_NAO_RECUPERADO = [
-  "ja_existe",
-  "nao_esta_no_arquivo",
-  "nao_aprovado_no_arquivo",
-  "inconsistente_no_arquivo",
-  "sem_quantidade",
-  "sem_valor",
-  "data_no_futuro",
-] as const;
 
 export const pedidoRecuperadoSchema = z.strictObject({
   pedido_id: z.string().min(1).max(128),
@@ -1663,7 +1477,7 @@ export const recuperacaoSchema = z.strictObject({
   bilhetes: z.number().int().nonnegative(),
   total_centavos: centavosSchema,
   linhas_arquivo: z.number().int().nonnegative(),
-  /** SHA-256 do texto do arquivo: identifica o arquivo sem guardar o conteúdo. */
+  /** SHA-256 do texto do arquivo (calculado no navegador): identifica o arquivo sem o conteúdo. */
   arquivo_sha256: z.string().regex(/^[0-9a-f]{64}$/),
   /** Nome da coluna do arquivo usada em cada campo (null = sem a coluna). */
   colunas: z.strictObject({

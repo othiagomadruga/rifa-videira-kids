@@ -112,7 +112,7 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   `POST /api/sessao` e 1 MiB nos POST/PUT/PATCH da coordenação, depois do login (sem sessão, o corpo nem é lido);
   acima, 413 `corpo_muito_grande`. As importações de CSV têm o teto delas na própria rota: a da hierarquia
   (3 × o limite de caracteres + 1 MB, respondendo como arquivo grande) e a conferência da RIFA-012, sob
-  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela.
+  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela (1 MiB, o corpo compacto: D13).
 - **Sessão parada há mais de 7 dias** deixa de valer, mesmo dentro dos 45 dias (`ultimo_uso_em`, já gravado no
   máximo uma vez por minuto). O link pessoal continua abrindo uma sessão nova; a administração não conta a sessão
   parada como ativa, e cada login a apaga.
@@ -174,3 +174,19 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
 - **Limite de login por IP sobe de 10 para 60 por minuto**: na reunião dos líderes, dezenas de pessoas abrem o link
   ao mesmo tempo atrás do mesmo IP. O token tem 256 bits, então o limite nunca foi o que impede adivinhar link:
   ele só protege CPU e banco.
+
+## D13. Conferência pelo CSV: o arquivo é lido no navegador (RIFA-012, ciclo 2, 2026-11-07)
+
+- Ler o CSV no Worker gastava de 50 a 375 ms de CPU por requisição (1 a 7 mil pedidos; 95% em datas, com um
+  `Intl.DateTimeFormat` por célula), e o plano Workers Free dá 10 ms (erro 1102). Decisão do SM: o navegador lê
+  o arquivo, detecta e mapeia as colunas (`src/shared/conferencia/`, sem zod) e manda à API só as colunas
+  mapeadas que não são de dado pessoal, já normalizadas, numa lista por campo, com as linhas iguais juntadas
+  (`vezes`): o corpo compacto de `src/shared/contracts/conferencia.ts`, conferido por um validador leve (laços
+  simples, sem zod item a item). Ganho extra: nome, e-mail e telefone nem saem do navegador.
+- O Worker não usa o Intl por linha; o banco devolve só os pedidos com os códigos do arquivo (um texto JSON por
+  lote, tuplas curtas) e os ausentes e totais já somados. Medido no workerd com 7 mil pedidos: ~7–8 ms em
+  `/analisar` e ~6–8 ms em `/recuperar` (`src/worker/routes/reconciliacao-desempenho.test.ts`).
+- O corpo vai até 1 MiB (`LIMITE_CORPO_CONFERENCIA_BYTES`, ~15 mil pedidos); a rota lê o corpo uma vez só, de
+  uma vez quando há `Content-Length` (o teto geral leria em pedaços de 4 KB: ~2,5 ms a mais para 420 KB), por
+  isso continua fora do teto geral, com o mesmo número.
+- Regra do valor de um pedido em várias linhas e trava do código que não bate: integracao-rifei.md, seção 10.

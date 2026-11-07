@@ -129,7 +129,7 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `origem` | TEXT, padrão `webhook` | `webhook` ou `conferencia` (migração 0004). Os pedidos anteriores à 0004 ficaram com `webhook` |
 | `recuperacao_id` | INTEGER FK → recuperacoes, NULL | a recuperação que gravou o pedido; preenchido **se e somente se** `origem = 'conferencia'` (CHECK) |
 
-Pedido recuperado na conferência (`POST /api/admin/reconciliacao/recuperar`, RIFA-012): entra `approved`, com `qtd_bilhetes`, `numeros`, `total_centavos`, `affiliate_id` e `aprovado_em` vindos do CSV da Rifei; `ddd`, `pais`, `criado_em` e os campos informativos ficam NULL (o telefone do arquivo não é lido). Conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um evento do webhook que chegue depois segue a máquina da seção 5 (um `paid_order` dá `duplicado`).
+Pedido recuperado na conferência (`POST /api/admin/reconciliacao/recuperar`, RIFA-012): entra `approved`, com `qtd_bilhetes`, `total_centavos`, `affiliate_id` e `aprovado_em` vindos do CSV da Rifei (lido no navegador); `numeros`, `ddd`, `pais`, `criado_em` e os campos informativos ficam NULL (os números dos bilhetes e o telefone não saem do navegador). Conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um evento do webhook que chegue depois segue a máquina da seção 5 (um `paid_order` dá `duplicado`).
 
 ### `webhook_eventos` (D3)
 
@@ -236,4 +236,4 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 
 - Do comprador: nome, e-mail, documento (CPF), data de nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. Ficam só `ddd` e `pais`.
 - O payload bruto do webhook nunca é gravado, só o redigido.
-- O CSV da conferência (RIFA-012), que traz dados pessoais, é processado em memória e descartado. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, números, valor, afiliado e instante).
+- O CSV da conferência (RIFA-012), que traz dados pessoais, é lido no navegador e não vai para a API: ela recebe só as colunas mapeadas que não são pessoais. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, valor, afiliado e instante).

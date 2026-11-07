@@ -22,7 +22,7 @@ type Props = {
 const CAMPOS_EM_ORDEM = Object.keys(CAMPOS) as CampoReconciliacao[];
 
 // As colunas que a conferência usa: um campo por linha, cada um com a coluna do arquivo escolhida (ou "Não
-// tem"). As colunas de dados pessoais não aparecem nas opções: a API nunca as lê.
+// tem"). As colunas de dados pessoais não aparecem nas opções: a tela nunca as manda ao sistema.
 export function Mapeamento({
   colunas,
   mapeamento,
@@ -73,7 +73,7 @@ export function Mapeamento({
         </div>
         {pessoais.length > 0 && (
           <p className="conferencia-suave">
-            Ignoradas por terem dados pessoais (nunca são lidas nem guardadas):{" "}
+            Ignoradas por terem dados pessoais (não saem do seu computador):{" "}
             {pessoais.map((coluna) => coluna.nome).join(", ")}.
           </p>
         )}

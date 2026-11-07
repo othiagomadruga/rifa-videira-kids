@@ -2,8 +2,13 @@
  * Conferência pelo CSV da Rifei (RIFA-012; docs/api.md e docs/integracao-rifei.md, seção 10): o que a
  * análise lê do banco, a gravação do "Recuperar" e a lista das recuperações feitas (auditoria).
  *
- * Nada do arquivo chega aqui além do pedido recuperado (código, quantidade, números dos bilhetes, valor,
- * afiliado e instante) e, na auditoria, o SHA-256 do arquivo e os nomes das colunas usadas (D1).
+ * CPU (o Worker do plano Free tem 10 ms por requisição): o banco faz o trabalho pesado. Os códigos do
+ * arquivo vão num parâmetro JSON (json_each) e voltam só os pedidos com esses códigos, cada lote num texto
+ * JSON único (json_group_array: uma linha, em vez de milhares de objetos para o Worker montar); os pagos
+ * que o arquivo não tem, os totais e o modo sem código chegam já contados e somados (GROUP BY).
+ *
+ * Nada do arquivo chega aqui além dos códigos e, no "Recuperar", do pedido recuperado (código, quantidade,
+ * valor, afiliado e instante) e, na auditoria, do SHA-256 do arquivo e dos nomes das colunas usadas (D1).
  *
  * Gravação (um único db.batch, que o D1 roda numa transação: tudo ou nada):
  * 1. a linha da auditoria em `recuperacoes`;
@@ -17,55 +22,284 @@
  * O id da auditoria é o maior de `recuperacoes` dentro do lote: o D1 serializa as escritas, então nenhuma
  * outra gravação entra no meio da transação.
  */
-import type { Recuperacao } from "../../shared/contracts";
+import {
+  LIMITE_ITENS_POR_DIVERGENCIA,
+  type CampoReconciliacao,
+  type ColunasDoCorpo,
+  type PedidoRecuperado,
+  type Recuperacao,
+  type TotaisVendas,
+} from "../../shared/contracts";
 import type {
+  Acumulado,
   AfiliadoGravado,
-  PedidoAGravar,
+  AusentesDoArquivo,
   PedidoGravado,
 } from "../lib/conferencia-analise";
-
-const SELECIONAR_PEDIDOS = `
-  SELECT id, campanha_id, status, qtd_bilhetes, total_centavos, affiliate_id, aprovado_em, origem
-  FROM pedidos`;
 
 const SELECIONAR_AFILIADOS = `
   SELECT a.affiliate_id, a.rotulo, a.celula_id, c.nome AS celula_nome
   FROM afiliados AS a
   LEFT JOIN celulas AS c ON c.id = a.celula_id`;
 
-/** Tudo o que a análise compara: os pedidos (de todas as campanhas) e os afiliados com a célula. */
-export async function lerDadosDaConferencia(db: D1Database): Promise<{
-  pedidos: PedidoGravado[];
+/**
+ * Códigos por comando: a resposta de cada um é um texto JSON só (a tupla curta tem ~50 bytes; com o
+ * código de 128 caracteres, ~180), bem abaixo do limite de 2 MB por valor do D1.
+ */
+const CODIGOS_POR_COMANDO = 8_000;
+
+/**
+ * O pedido como tupla curta, na ordem de `tupla()`: status e origem como números (STATUS_DA_TUPLA e
+ * ORIGENS_DA_TUPLA) e `aprovado_em` em ms (segundos do strftime mais os milissegundos do texto). Com 7 mil
+ * pedidos, a resposta do D1 cai de ~520 KB para ~330 KB: menos JSON para o Worker ler.
+ */
+const COLUNAS_DO_PEDIDO = `json_array(p.id, p.campanha_id,
+  CASE p.status WHEN 'approved' THEN 1 WHEN 'expired' THEN 2 ELSE 0 END,
+  p.qtd_bilhetes, p.total_centavos, p.affiliate_id,
+  CAST(strftime('%s', p.aprovado_em) AS INTEGER) * 1000 + CAST(substr(p.aprovado_em, 21, 3) AS INTEGER),
+  CASE p.origem WHEN 'conferencia' THEN 1 ELSE 0 END)`;
+
+const STATUS_DA_TUPLA: readonly PedidoGravado["status"][] = [
+  "in_process",
+  "approved",
+  "expired",
+];
+const ORIGENS_DA_TUPLA: readonly PedidoGravado["origem"][] = [
+  "webhook",
+  "conferencia",
+];
+
+type TuplaDoPedido = [
+  string,
+  number,
+  number,
+  number,
+  number,
+  number | null,
+  number | null,
+  number,
+];
+
+const tupla = (linha: TuplaDoPedido): PedidoGravado => ({
+  id: linha[0],
+  campanha_id: linha[1],
+  status: STATUS_DA_TUPLA[linha[2]],
+  qtd_bilhetes: linha[3],
+  total_centavos: linha[4],
+  affiliate_id: linha[5],
+  aprovado_ms: linha[6],
+  origem: ORIGENS_DA_TUPLA[linha[7]],
+});
+
+/** Os pedidos (de qualquer campanha) com os códigos do lote, como um texto JSON de tuplas. */
+const SELECIONAR_ENCONTRADOS = `
+  SELECT json_group_array(${COLUNAS_DO_PEDIDO}) AS linhas
+  FROM json_each(?1) AS j
+  JOIN pedidos AS p ON p.id = j.value`;
+
+const PAGOS_DA_CAMPANHA = "p.campanha_id = ?1 AND p.status = 'approved'";
+/** Com o período do arquivo em ?2 e ?3 (UTC, `[inicio, fim)`); null nos dois = sem recorte. */
+const NO_PERIODO =
+  "(?2 IS NULL OR (p.aprovado_em >= ?2 AND p.aprovado_em < ?3))";
+const SOMAS = `count(*) AS pedidos, coalesce(sum(p.qtd_bilhetes), 0) AS bilhetes,
+  coalesce(sum(p.total_centavos), 0) AS centavos`;
+
+const CONTAR_PAGOS_NO_PERIODO = `
+  SELECT count(*) AS pedidos FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO}`;
+
+const SOMAR_PAGOS = `SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA}`;
+
+/** Pagos da campanha que o arquivo não tem (?2: TODOS os códigos do arquivo, em JSON). */
+const FORA_DO_ARQUIVO = "p.id NOT IN (SELECT value FROM json_each(?2))";
+
+const SOMAR_AUSENTES = `
+  SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${FORA_DO_ARQUIVO}`;
+
+/** Os primeiros ausentes (?5), com `fora`: aprovado fora do período do arquivo (?3 e ?4). */
+const LISTAR_AUSENTES = `
+  SELECT json_group_array(json_array(json(t.pedido), t.fora)) AS linhas
+  FROM (
+    SELECT ${COLUNAS_DO_PEDIDO} AS pedido,
+      CASE WHEN ?3 IS NOT NULL AND p.aprovado_em IS NOT NULL
+        AND (p.aprovado_em < ?3 OR p.aprovado_em >= ?4) THEN 1 ELSE 0 END AS fora
+    FROM pedidos AS p
+    WHERE ${PAGOS_DA_CAMPANHA} AND ${FORA_DO_ARQUIVO}
+    ORDER BY p.id
+    LIMIT ?5
+  ) AS t`;
+
+type Somas = { pedidos: number; bilhetes: number; centavos: number };
+
+const totais = (linha: Somas | undefined): TotaisVendas => ({
+  pedidos_aprovados: linha?.pedidos ?? 0,
+  bilhetes: linha?.bilhetes ?? 0,
+  total_centavos: linha?.centavos ?? 0,
+});
+
+/** Os códigos em lotes de JSON (cada um vira um comando de SELECIONAR_ENCONTRADOS); `todos` = um lote só. */
+function lotesDeCodigos(codigos: readonly string[], todos: string): string[] {
+  if (codigos.length <= CODIGOS_POR_COMANDO) return [todos];
+  const lotes: string[] = [];
+  for (let i = 0; i < codigos.length; i += CODIGOS_POR_COMANDO)
+    lotes.push(JSON.stringify(codigos.slice(i, i + CODIGOS_POR_COMANDO)));
+  return lotes;
+}
+
+/** O texto JSON de um json_group_array (a primeira coluna `linhas` da primeira linha). */
+function linhasDoTexto<T>(resultado: D1Result | undefined): T[] {
+  const texto = (resultado?.results[0] as { linhas?: string } | undefined)
+    ?.linhas;
+  return typeof texto === "string" ? (JSON.parse(texto) as T[]) : [];
+}
+
+export interface LeituraPorPedido {
   afiliados: AfiliadoGravado[];
-}> {
-  const [pedidos, afiliados] = await db.batch([
-    db.prepare(SELECIONAR_PEDIDOS),
+  encontrados: Map<string, PedidoGravado>;
+  pagosNoPeriodo: number;
+  /** Só com `comAusentes` (análise); zerados no "Recuperar", que não precisa. */
+  aprovados: TotaisVendas;
+  ausentes: AusentesDoArquivo;
+}
+
+/**
+ * Tudo o que o modo por pedido lê, num db.batch só: os afiliados, os pedidos com os códigos do arquivo,
+ * quantos pagos da campanha há no período do arquivo e, na análise (`comAusentes`), os totais pagos e os
+ * pagos que o arquivo não tem (contados e somados, mais os primeiros em ordem de código).
+ */
+export async function lerParaPorPedido(
+  db: D1Database,
+  consulta: {
+    campanhaId: number;
+    codigos: readonly string[];
+    periodoUtc: { inicio: string; fim: string } | null;
+    comAusentes: boolean;
+  },
+): Promise<LeituraPorPedido> {
+  const { campanhaId, codigos, periodoUtc, comAusentes } = consulta;
+  const todos = JSON.stringify(codigos);
+  const lotes = lotesDeCodigos(codigos, todos);
+  const inicio = periodoUtc?.inicio ?? null;
+  const fim = periodoUtc?.fim ?? null;
+  const comandos: D1PreparedStatement[] = [
     db.prepare(SELECIONAR_AFILIADOS),
-  ]);
+    db.prepare(CONTAR_PAGOS_NO_PERIODO).bind(campanhaId, inicio, fim),
+    ...lotes.map((lote) => db.prepare(SELECIONAR_ENCONTRADOS).bind(lote)),
+  ];
+  if (comAusentes) {
+    comandos.push(
+      db.prepare(SOMAR_PAGOS).bind(campanhaId),
+      db.prepare(SOMAR_AUSENTES).bind(campanhaId, todos),
+      db
+        .prepare(LISTAR_AUSENTES)
+        .bind(campanhaId, todos, inicio, fim, LIMITE_ITENS_POR_DIVERGENCIA),
+    );
+  }
+  const [afiliados, pagos, ...resto] = await db.batch(comandos);
+
+  const encontrados = new Map<string, PedidoGravado>();
+  for (const resultado of resto.slice(0, lotes.length))
+    for (const linha of linhasDoTexto<TuplaDoPedido>(resultado)) {
+      const pedido = tupla(linha);
+      encontrados.set(pedido.id, pedido);
+    }
+
+  let aprovados = totais(undefined);
+  let ausentes: AusentesDoArquivo = {
+    quantidade: 0,
+    bilhetes: 0,
+    total_centavos: 0,
+    itens: [],
+  };
+  if (comAusentes) {
+    const [somaPagos, somaAusentes, listaAusentes] = resto.slice(lotes.length);
+    aprovados = totais(somaPagos.results[0] as Somas | undefined);
+    const somados = totais(somaAusentes.results[0] as Somas | undefined);
+    ausentes = {
+      quantidade: somados.pedidos_aprovados,
+      bilhetes: somados.bilhetes,
+      total_centavos: somados.total_centavos,
+      itens: linhasDoTexto<[TuplaDoPedido, number]>(listaAusentes).map(
+        ([pedido, fora]) => ({ ...tupla(pedido), fora_do_periodo: fora === 1 }),
+      ),
+    };
+  }
+
   return {
-    pedidos: pedidos.results as unknown as PedidoGravado[],
     afiliados: afiliados.results as unknown as AfiliadoGravado[],
+    encontrados,
+    pagosNoPeriodo:
+      (pagos.results[0] as { pedidos: number } | undefined)?.pedidos ?? 0,
+    aprovados,
+    ausentes,
   };
 }
 
-/** Para o "Recuperar": quais dos códigos já existem (em qualquer campanha) e os afiliados. */
-export async function lerParaRecuperar(
+const SOMAR_PAGOS_NO_PERIODO = `
+  SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO}`;
+
+const SOMAR_POR_AFILIADO = `
+  SELECT p.affiliate_id, ${SOMAS} FROM pedidos AS p
+  WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO}
+  GROUP BY p.affiliate_id`;
+
+/** Por dia local: ?4 é o deslocamento do fuso para o date() do SQLite ("-180 minutes"). */
+const SOMAR_POR_DIA = `
+  SELECT date(p.aprovado_em, ?4) AS dia, ${SOMAS} FROM pedidos AS p
+  WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO} AND p.aprovado_em IS NOT NULL
+  GROUP BY dia`;
+
+const acumulado = (linha: Somas | undefined): Acumulado => ({
+  pedidos: linha?.pedidos ?? 0,
+  bilhetes: linha?.bilhetes ?? 0,
+  centavos: linha?.centavos ?? 0,
+});
+
+/**
+ * O modo sem código: os afiliados e os pagos da campanha (no período do arquivo, se ele tem datas), no
+ * total, por afiliado e, com `deslocamento` (o modificador do date() do SQLite), por dia local.
+ */
+export async function lerParaAgregado(
   db: D1Database,
-  codigos: readonly string[],
-): Promise<{ existentes: Set<string>; afiliados: AfiliadoGravado[] }> {
-  const [existentes, afiliados] = await db.batch([
-    db
-      .prepare(
-        "SELECT id FROM pedidos WHERE id IN (SELECT value FROM json_each(?1))",
-      )
-      .bind(JSON.stringify(codigos)),
+  consulta: {
+    campanhaId: number;
+    periodoUtc: { inicio: string; fim: string } | null;
+    deslocamento: string | null;
+  },
+): Promise<{
+  afiliados: AfiliadoGravado[];
+  total: Acumulado;
+  porAfiliado: { affiliate_id: number | null; soma: Acumulado }[];
+  porDia: { dia: string; soma: Acumulado }[] | null;
+}> {
+  const { campanhaId, periodoUtc, deslocamento } = consulta;
+  const inicio = periodoUtc?.inicio ?? null;
+  const fim = periodoUtc?.fim ?? null;
+  const comandos = [
     db.prepare(SELECIONAR_AFILIADOS),
-  ]);
+    db.prepare(SOMAR_PAGOS_NO_PERIODO).bind(campanhaId, inicio, fim),
+    db.prepare(SOMAR_POR_AFILIADO).bind(campanhaId, inicio, fim),
+  ];
+  if (deslocamento !== null)
+    comandos.push(
+      db.prepare(SOMAR_POR_DIA).bind(campanhaId, inicio, fim, deslocamento),
+    );
+  const [afiliados, total, porAfiliado, porDia] = await db.batch(comandos);
   return {
-    existentes: new Set(
-      (existentes.results as { id: string }[]).map((linha) => linha.id),
-    ),
     afiliados: afiliados.results as unknown as AfiliadoGravado[],
+    total: acumulado(total.results[0] as Somas | undefined),
+    porAfiliado: (
+      porAfiliado.results as (Somas & { affiliate_id: number | null })[]
+    ).map((linha) => ({
+      affiliate_id: linha.affiliate_id,
+      soma: acumulado(linha),
+    })),
+    porDia:
+      porDia === undefined
+        ? null
+        : (porDia.results as (Somas & { dia: string })[]).map((linha) => ({
+            dia: linha.dia,
+            soma: acumulado(linha),
+          })),
   };
 }
 
@@ -77,15 +311,15 @@ export interface GravacaoRecuperacao {
   linhasArquivo: number;
   arquivoSha256: string;
   /** Nome da coluna usada em cada campo. */
-  colunas: Record<string, string | null>;
-  pedidos: readonly PedidoAGravar[];
+  colunas: ColunasDoCorpo;
+  pedidos: readonly PedidoRecuperado[];
 }
 
 /** Tamanho máximo (em caracteres) do JSON de pedidos num comando: o D1 limita o tamanho de um valor. */
 const LIMITE_JSON_POR_COMANDO = 400_000;
 
 /** Os pedidos em pedaços de JSON pequenos o bastante para um parâmetro do D1. */
-function pedacosDePedidos(pedidos: readonly PedidoAGravar[]): string[] {
+function pedacosDePedidos(pedidos: readonly PedidoRecuperado[]): string[] {
   const pedacos: string[] = [];
   let atual: string[] = [];
   let tamanho = 0;
@@ -94,7 +328,6 @@ function pedacosDePedidos(pedidos: readonly PedidoAGravar[]): string[] {
       id: pedido.pedido_id,
       afiliado: pedido.affiliate_id,
       bilhetes: pedido.qtd_bilhetes,
-      numeros: pedido.numeros,
       centavos: pedido.total_centavos,
       aprovado_em: pedido.aprovado_em,
     });
@@ -114,7 +347,8 @@ const ID_DA_RECUPERACAO = "(SELECT max(id) FROM recuperacoes)";
 
 /**
  * Grava a recuperação num lote só (veja o topo do arquivo). Devolve o id da auditoria (null se nada
- * entrou) e os códigos que de fato foram gravados.
+ * entrou) e os códigos que de fato foram gravados. Os números dos bilhetes não saem do navegador: o pedido
+ * recuperado fica com `numeros` nulo.
  */
 export async function gravarRecuperacao(
   db: D1Database,
@@ -153,12 +387,11 @@ export async function gravarRecuperacao(
     ...pedacosDePedidos(gravacao.pedidos).map((pedaco) =>
       db
         .prepare(
-          `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, numeros,
-             total_centavos, aprovado_em, registrado_em, atualizado_em, origem, recuperacao_id)
+          `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
+             aprovado_em, registrado_em, atualizado_em, origem, recuperacao_id)
            SELECT json_extract(j.value, '$.id'), ?1, json_extract(j.value, '$.afiliado'), 'approved',
-             json_extract(j.value, '$.bilhetes'), json_extract(j.value, '$.numeros'),
-             json_extract(j.value, '$.centavos'), json_extract(j.value, '$.aprovado_em'), ?2, ?2,
-             'conferencia', ${ID_DA_RECUPERACAO}
+             json_extract(j.value, '$.bilhetes'), json_extract(j.value, '$.centavos'),
+             json_extract(j.value, '$.aprovado_em'), ?2, ?2, 'conferencia', ${ID_DA_RECUPERACAO}
            FROM json_each(?3) AS j WHERE true
            ON CONFLICT (id) DO NOTHING`,
         )
@@ -213,7 +446,7 @@ interface LinhaRecuperacao {
   pedidos: string;
 }
 
-const CAMPOS_DAS_COLUNAS = [
+const CAMPOS_DAS_COLUNAS: readonly CampoReconciliacao[] = [
   "pedido_id",
   "status",
   "qtd_bilhetes",
@@ -221,7 +454,7 @@ const CAMPOS_DAS_COLUNAS = [
   "valor",
   "afiliado",
   "data",
-] as const;
+];
 
 /** As recuperações feitas, da mais recente para a mais antiga, com quem fez e os pedidos gravados. */
 export async function listarRecuperacoes(

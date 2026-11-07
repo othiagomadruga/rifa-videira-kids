@@ -1,20 +1,24 @@
 // CA4 (RIFA-012): a tela /coordenacao/conferencia renderizada pela rota de verdade, com a API falsa
-// (teste-apoio.ts): subir o arquivo, ver e ajustar o mapeamento detectado, conferir, ler o resumo e as
-// diferenças por tipo (com a explicação), marcar e recuperar com confirmação, e as recuperações feitas.
+// (teste-apoio.ts): escolher o arquivo (lido NO NAVEGADOR), ver e ajustar o mapeamento detectado, conferir,
+// ler o resumo e as diferenças por tipo (com a explicação), marcar e recuperar com confirmação, e as
+// recuperações feitas. Os corpos enviados à API são varridos atrás dos dados pessoais do arquivo.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderizarRota } from "../../test/renderizar";
 import {
   ANALISE_AGREGADA,
+  ANALISE_AMBIGUA,
   ANALISE_DEPOIS,
   ANALISE_POR_PEDIDO,
   ANALISE_SEM_DIFERENCA,
+  ANALISE_TRAVADA,
   CSV_EXEMPLO,
+  CSV_SEM_CODIGO,
   EMAIL_FICTICIO,
-  MAPEAMENTO,
   NOME_FICTICIO,
   PREVIA,
   RECUPERACOES,
+  TEXTOS_PESSOAIS_DO_EXEMPLO,
   criarApiFalsa,
   respostaErro,
   type ApiFalsa,
@@ -55,6 +59,36 @@ function grupo(titulo: string) {
   return screen.getByRole("region", { name: titulo });
 }
 
+/** Nada dos dados pessoais do arquivo foi para a API (em nenhuma chamada). */
+function esperarCorposSemDadoPessoal(api: ApiFalsa) {
+  const enviados = JSON.stringify(api.chamadas.map((chamada) => chamada.corpo));
+  for (const texto of TEXTOS_PESSOAIS_DO_EXEMPLO)
+    expect(enviados).not.toContain(texto);
+}
+
+/** O corpo compacto que a tela manda para o CSV_EXEMPLO (com o SHA-256 que ela calculou). */
+const CORPO_EXEMPLO = {
+  colunas: {
+    pedido_id: "Pedido",
+    status: "Status",
+    qtd_bilhetes: "Quantidade de bilhetes",
+    bilhetes: null,
+    valor: "Valor",
+    afiliado: "Afiliado",
+    data: "Data do pagamento",
+  },
+  linhas: 2,
+  arquivo_sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+  vezes: [1, 1],
+  pedido_id: ["R-0101", "R-0102"],
+  status: ["aprovado", "aprovado"],
+  qtd_bilhetes: [3, 2],
+  valor: [6000, 4000],
+  afiliado: [101, 102],
+  dia: ["2026-11-27", "2026-11-28"],
+  instante: [Date.parse("2026-11-27T13:00:00.000Z"), null],
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -67,7 +101,7 @@ describe("CA4: a tela da conferência", () => {
 
     expect(screen.getByText("Exportar Pedidos")).toBeInTheDocument();
     expect(
-      screen.getByText("Os dados dos compradores não ficam no sistema"),
+      screen.getByText("Os dados dos compradores não saem do seu computador"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(ROTULO_ARQUIVO)).toHaveAttribute(
       "accept",
@@ -94,14 +128,17 @@ describe("CA4: a tela da conferência", () => {
     const api = await abrir();
     await escolher();
 
-    // O arquivo vai inteiro, sem mapeamento: a API detecta as colunas.
+    // A tela leu o arquivo e pediu o fuso da campanha: para a API vai só o corpo compacto, sem nome nem
+    // e-mail (D1), com as datas já no fuso.
+    expect(api.de("/campanha")).toHaveLength(1);
     expect(api.de("/analisar")).toEqual([
       {
         metodo: "POST",
         caminho: "/api/admin/reconciliacao/analisar",
-        corpo: { csv: CSV_EXEMPLO },
+        corpo: CORPO_EXEMPLO,
       },
     ]);
+    esperarCorposSemDadoPessoal(api);
 
     // Mapeamento detectado, ajustável; as colunas pessoais não são opção.
     const codigo = screen.getByLabelText("Código do pedido");
@@ -115,7 +152,7 @@ describe("CA4: a tela da conferência", () => {
     expect(screen.getByLabelText("Números dos bilhetes")).toHaveValue("");
     expect(
       screen.getByText(
-        "Ignoradas por terem dados pessoais (nunca são lidas nem guardadas): Nome, E-mail.",
+        "Ignoradas por terem dados pessoais (não saem do seu computador): Nome, E-mail.",
       ),
     ).toBeInTheDocument();
     expect(botao("Conferir com estas colunas")).toBeDisabled();
@@ -197,18 +234,9 @@ describe("CA4: a tela da conferência", () => {
     expect(botao("Recuperar 3 vendas")).toBeEnabled();
   });
 
-  it("trocar uma coluna e conferir de novo manda o mapeamento escolhido; desfazer volta ao detectado", async () => {
+  it("trocar uma coluna e conferir de novo manda só as colunas escolhidas; desfazer volta ao detectado", async () => {
     const api = await abrir(
-      criarApiFalsa({
-        analises: [
-          ANALISE_POR_PEDIDO,
-          {
-            ...ANALISE_POR_PEDIDO,
-            mapeamento: { ...MAPEAMENTO, afiliado: null },
-            mapeamento_detectado: false,
-          },
-        ],
-      }),
+      criarApiFalsa({ analises: [ANALISE_POR_PEDIDO, ANALISE_POR_PEDIDO] }),
     );
     await escolher();
 
@@ -228,37 +256,22 @@ describe("CA4: a tela da conferência", () => {
     fireEvent.click(botao("Conferir com estas colunas"));
 
     await waitFor(() => expect(api.de("/analisar")).toHaveLength(2));
+    const { afiliado: _afiliado, ...semAfiliado } = CORPO_EXEMPLO;
+    void _afiliado;
     expect(api.de("/analisar")[1].corpo).toEqual({
-      csv: CSV_EXEMPLO,
-      mapeamento: { ...MAPEAMENTO, afiliado: null },
+      ...semAfiliado,
+      colunas: { ...CORPO_EXEMPLO.colunas, afiliado: null },
     });
     await waitFor(() =>
       expect(screen.getByLabelText("Afiliado")).toHaveValue(""),
     );
     expect(botao("Conferir com estas colunas")).toBeDisabled();
+    // O fuso da campanha foi pedido uma vez só.
+    expect(api.de("/campanha")).toHaveLength(1);
   });
 
-  it("colunas que não servem: mostra o que a API apontou, sem perder o resultado anterior", async () => {
-    await abrir(
-      criarApiFalsa({
-        analises: [
-          ANALISE_POR_PEDIDO,
-          respostaErro(
-            "requisicao_invalida",
-            "O mapeamento não serve para as colunas do arquivo",
-            400,
-            [
-              {
-                caminho: ["mapeamento", "data"],
-                codigo: "coluna_repetida",
-                mensagem:
-                  'A coluna "Pedido" já foi escolhida para outro campo (pedido_id)',
-              },
-            ],
-          ),
-        ],
-      }),
-    );
+  it("colunas que não servem (a mesma coluna em dois campos): a tela explica sem chamar a API e sem perder o resultado", async () => {
+    const api = await abrir();
     await escolher();
 
     fireEvent.change(screen.getByLabelText("Data do pagamento"), {
@@ -271,7 +284,41 @@ describe("CA4: a tela da conferência", () => {
     expect(alerta).toHaveTextContent(
       'A coluna "Pedido" já foi escolhida para outro campo (pedido_id)',
     );
+    expect(api.de("/analisar")).toHaveLength(1);
     expect(screen.getByText("Resultado da conferência")).toBeInTheDocument();
+  });
+
+  it("a API recusa as colunas (400 com detalhes): mostra o que ela apontou", async () => {
+    await abrir(
+      criarApiFalsa({
+        analises: [
+          ANALISE_POR_PEDIDO,
+          respostaErro(
+            "requisicao_invalida",
+            "Uma coluna com dados pessoais não pode ser usada na conferência",
+            400,
+            [
+              {
+                caminho: ["colunas", "afiliado"],
+                codigo: "coluna_pessoal",
+                mensagem:
+                  'A coluna "Afiliado" tem dados pessoais e não pode ser usada',
+              },
+            ],
+          ),
+        ],
+      }),
+    );
+    await escolher();
+    fireEvent.change(screen.getByLabelText("Afiliado"), {
+      target: { value: "" },
+    });
+    fireEvent.click(botao("Conferir com estas colunas"));
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent("Estas colunas não servem");
+    expect(alerta).toHaveTextContent(
+      'A coluna "Afiliado" tem dados pessoais e não pode ser usada',
+    );
   });
 
   it("Recuperar: mostra a prévia da API, só grava ao confirmar e confere de novo", async () => {
@@ -295,13 +342,13 @@ describe("CA4: a tela da conferência", () => {
     const dialogo = await screen.findByRole("alertdialog", {
       name: "Recuperar 2 vendas?",
     });
+    // O mesmo corpo da conferência (sem os dados pessoais), mais os escolhidos.
     expect(api.de("/recuperar")).toEqual([
       {
         metodo: "POST",
         caminho: "/api/admin/reconciliacao/recuperar",
         corpo: {
-          csv: CSV_EXEMPLO,
-          mapeamento: MAPEAMENTO,
+          ...CORPO_EXEMPLO,
           pedidos: ["R-0101", "R-0105"],
           simular: true,
         },
@@ -339,20 +386,17 @@ describe("CA4: a tela da conferência", () => {
     expect(await screen.findByText("2 vendas recuperadas")).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(api.de("/recuperar")[1].corpo).toEqual({
-      csv: CSV_EXEMPLO,
-      mapeamento: MAPEAMENTO,
+      ...CORPO_EXEMPLO,
       pedidos: ["R-0101", "R-0105"],
       simular: false,
     });
     expect(
       screen.getByText(/4 bilhetes já contam no painel e no ranking/),
     ).toBeInTheDocument();
-    // Confere de novo com as mesmas colunas e recarrega as recuperações.
+    // Confere de novo com o mesmo corpo e recarrega as recuperações.
     await waitFor(() => expect(api.de("/analisar")).toHaveLength(2));
-    expect(api.de("/analisar")[1].corpo).toEqual({
-      csv: CSV_EXEMPLO,
-      mapeamento: MAPEAMENTO,
-    });
+    expect(api.de("/analisar")[1].corpo).toEqual(CORPO_EXEMPLO);
+    esperarCorposSemDadoPessoal(api);
     await waitFor(() =>
       expect(
         within(grupo("Vendas perdidas")).queryByRole("checkbox", {
@@ -411,8 +455,15 @@ describe("CA4: a tela da conferência", () => {
   });
 
   it("modo por totais (sem o código): tabelas por afiliado e por dia, e nada para recuperar", async () => {
-    await abrir(criarApiFalsa({ analises: [ANALISE_AGREGADA] }));
-    await escolher();
+    const api = await abrir(criarApiFalsa({ analises: [ANALISE_AGREGADA] }));
+    await escolher(arquivoCsv(CSV_SEM_CODIGO, "sem-codigo.csv"));
+
+    expect(api.de("/analisar")[0].corpo).toMatchObject({
+      colunas: { pedido_id: null },
+      linhas: 2,
+    });
+    expect(api.de("/analisar")[0].corpo).not.toHaveProperty("pedido_id");
+    esperarCorposSemDadoPessoal(api);
 
     expect(screen.getByLabelText("Código do pedido")).toHaveValue("");
     expect(
@@ -458,6 +509,52 @@ describe("CA4: a tela da conferência", () => {
   });
 });
 
+describe("CA4: as travas da revisão (código que não bate e valor ambíguo)", () => {
+  it("a coluna do código não confere: aviso claro no topo, nada marcado e o Recuperar travado", async () => {
+    await abrir(criarApiFalsa({ analises: [ANALISE_TRAVADA] }));
+    await escolher();
+
+    expect(
+      screen.getByText(
+        "A coluna escolhida como código do pedido não parece ser o código da Rifei",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Só 0 de 7 pedidos pagos do arquivo existem no sistema/),
+    ).toBeInTheDocument();
+    const perdidas = grupo("Vendas perdidas");
+    for (const caixa of within(perdidas).getAllByRole("checkbox")) {
+      expect(caixa).not.toBeChecked();
+      expect(caixa).toBeDisabled();
+    }
+    expect(
+      within(perdidas).getByText(
+        "Nada pode ser recuperado enquanto a coluna do código do pedido não conferir com o sistema.",
+      ),
+    ).toBeInTheDocument();
+    expect(botao("Recuperar")).toBeDisabled();
+    expect(
+      screen.getAllByRole("status").map((item) => item.textContent),
+    ).toContain(
+      "Conferência pronta: a coluna escolhida como código do pedido não parece ser o código da Rifei.",
+    );
+  });
+
+  it("valor ambíguo (o mesmo em todas as linhas, e não é o preço): explica e não deixa marcar", async () => {
+    await abrir(criarApiFalsa({ analises: [ANALISE_AMBIGUA] }));
+    await escolher();
+    const perdidas = grupo("Vendas perdidas");
+    expect(
+      within(perdidas).getByRole("checkbox", { name: /Pedido R-0101/ }),
+    ).toBeDisabled();
+    expect(
+      within(perdidas).getByText(
+        /repetem um valor que não é o preço do bilhete/,
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("CA4: problemas do arquivo", () => {
   it("arquivo vazio ou grande demais: avisa sem chamar a API", async () => {
     const api = await abrir();
@@ -471,43 +568,54 @@ describe("CA4: problemas do arquivo", () => {
     expect(api.de("/analisar")).toEqual([]);
   });
 
-  it("csv_invalido da API (ex.: primeira linha de dados): mostra a mensagem em português e recebe o foco", async () => {
-    const mensagem =
-      "A primeira linha do arquivo não parece um cabeçalho: ela tem números, datas, valores ou e-mails. Exporte de novo pela Rifei: a primeira linha precisa ter os nomes das colunas.";
-    await abrir(
-      criarApiFalsa({
-        analises: [
-          respostaErro("csv_invalido", mensagem, 400, {
-            motivo: "sem_cabecalho",
-          }),
-        ],
-      }),
+  it("primeira linha de dados (sem cabeçalho): a tela explica em português, recebe o foco e nada vai para a API", async () => {
+    const api = await abrir();
+    await escolher(
+      arquivoCsv(
+        `R-0101;${NOME_FICTICIO};${EMAIL_FICTICIO};Pago\r\n`,
+        "sem-cabecalho.csv",
+      ),
     );
-    await escolher();
 
     const alerta = await screen.findByRole("alert");
-    expect(alerta).toHaveTextContent("Não foi possível ler o arquivo");
-    expect(alerta).toHaveTextContent(mensagem);
+    expect(alerta).toHaveTextContent("O arquivo não tem cabeçalho");
+    expect(alerta).toHaveTextContent(
+      "A primeira linha do arquivo não parece um cabeçalho",
+    );
     await waitFor(() => expect(alerta.parentElement).toHaveFocus());
     expect(screen.queryByText("Resultado da conferência")).toBeNull();
+    expect(api.chamadas.filter((chamada) => chamada.metodo === "POST")).toEqual(
+      [],
+    );
   });
 
-  it("sem campanha ativa (404): explica que ainda não dá para conferir", async () => {
-    await abrir(
-      criarApiFalsa({
-        analises: [
-          respostaErro(
-            "nao_encontrado",
-            "A campanha ainda não foi configurada: configure-a antes de conferir",
-            404,
-          ),
-        ],
-      }),
-    );
+  it("corpo grande demais para uma conferência: pede um período menor, sem chamar a análise", async () => {
+    const linhas = [
+      "Pedido;Status;Quantidade;Valor;Afiliado;Data do pagamento",
+      ...Array.from(
+        { length: 13_000 },
+        (_, i) =>
+          `PEDIDO-${String(i).padStart(6, "0")}-${"X".repeat(48)};Pago;1;R$ 20,00;101;27/11/2026 10:00`,
+      ),
+      "",
+    ];
+    const api = await abrir();
+    await escolher(arquivoCsv(linhas.join("\r\n"), "enorme.csv"));
+    expect(
+      await screen.findByText(
+        "O arquivo tem pedidos demais para conferir de uma vez",
+      ),
+    ).toBeInTheDocument();
+    expect(api.de("/analisar")).toEqual([]);
+  });
+
+  it("sem campanha ativa (404): explica que ainda não dá para conferir, sem mandar o arquivo", async () => {
+    const api = await abrir(criarApiFalsa({ campanha: null }));
     await escolher();
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Não dá para conferir ainda",
     );
+    expect(api.de("/analisar")).toEqual([]);
   });
 
   it("arquivo em Windows-1252 (salvo no Excel): os acentos chegam certos à API e a tela avisa", async () => {
@@ -518,7 +626,11 @@ describe("CA4: problemas do arquivo", () => {
     const api = await abrir();
     await escolher(arquivoCsv(latin1, "excel.csv"));
 
-    expect(api.de("/analisar")[0].corpo).toEqual({ csv: texto });
+    expect(api.de("/analisar")[0].corpo).toMatchObject({
+      colunas: { pedido_id: "Pedido", status: "Situação", valor: "Valor" },
+      status: ["pendente"],
+      valor: [2000],
+    });
     expect(
       screen.getByText(/foi lido como no Excel \(Windows-1252\)/),
     ).toBeInTheDocument();
@@ -528,11 +640,12 @@ describe("CA4: problemas do arquivo", () => {
     const api = await abrir();
     const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
     await escolher(arquivoCsv(new Blob([bom, CSV_EXEMPLO]), "bom.csv"));
-    expect(api.de("/analisar")[0].corpo).toEqual({ csv: CSV_EXEMPLO });
+    // Sem o BOM, a primeira coluna é "Pedido" e o SHA-256 é o do mesmo texto sem BOM.
+    expect(api.de("/analisar")[0].corpo).toEqual(CORPO_EXEMPLO);
   });
 
-  it("D1 no navegador: nenhum dado do comprador aparece na tela nem fica guardado no aparelho", async () => {
-    await abrir();
+  it("D1 no navegador: nenhum dado do comprador aparece na tela, fica guardado no aparelho ou vai para a API", async () => {
+    const api = await abrir();
     localStorage.clear();
     sessionStorage.clear();
     await escolher();
@@ -544,5 +657,6 @@ describe("CA4: problemas do arquivo", () => {
     const guardado = JSON.stringify({ ...localStorage, ...sessionStorage });
     expect(guardado).not.toContain(NOME_FICTICIO);
     expect(guardado).not.toContain("R-0101");
+    esperarCorposSemDadoPessoal(api);
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
-  MapeamentoReconciliacao,
+  CorpoConferencia,
   RespostaRecuperarReconciliacao,
 } from "../../../shared/contracts";
 import { Aviso, Button, Dialogo, Loading } from "../../components/ui";
@@ -11,8 +11,8 @@ import { textoDoAfiliado, textoDosTotais } from "./formatos";
 import { MOTIVOS, ORIGEM_DA_DATA, plural, tomDoAviso } from "./textos";
 
 type Props = {
-  csv: string;
-  mapeamento: MapeamentoReconciliacao;
+  /** O mesmo corpo da conferência (as colunas mapeadas, sem os dados pessoais). */
+  corpo: CorpoConferencia;
   pedidos: readonly string[];
   aoFechar: () => void;
   /** Gravou (ou tentou e nada entrou): a tela mostra o resultado e confere de novo. */
@@ -28,8 +28,7 @@ type Estado =
 // agora (um pedido que chegou pelo webhook depois da conferência aparece como "já está no sistema"). Só o
 // botão "Gravar" grava, num lote só e sem sobrescrever nada.
 export function DialogoRecuperar({
-  csv,
-  mapeamento,
+  corpo,
   pedidos,
   aoFechar,
   aoGravar,
@@ -40,7 +39,7 @@ export function DialogoRecuperar({
 
   useEffect(() => {
     const controle = new AbortController();
-    recuperar(csv, mapeamento, pedidos, true, { signal: controle.signal }).then(
+    recuperar(corpo, pedidos, true, { signal: controle.signal }).then(
       (previa) => setEstado({ tipo: "previa", previa }),
       (erro: unknown) => {
         if (!controle.signal.aborted)
@@ -48,7 +47,7 @@ export function DialogoRecuperar({
       },
     );
     return () => controle.abort();
-  }, [csv, mapeamento, pedidos]);
+  }, [corpo, pedidos]);
 
   async function gravar() {
     if (estado.tipo !== "previa" || gravando) return;
@@ -57,8 +56,7 @@ export function DialogoRecuperar({
     try {
       aoGravar(
         await recuperar(
-          csv,
-          mapeamento,
+          corpo,
           estado.previa.recuperados.map((pedido) => pedido.pedido_id),
           false,
         ),

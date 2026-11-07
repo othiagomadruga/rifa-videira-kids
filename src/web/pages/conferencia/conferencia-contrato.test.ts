@@ -1,12 +1,10 @@
-// A tela usa cópias de valores do contrato (importar os valores poria o zod no pacote do site; veja
-// conferencia-api.ts). Este teste garante que as cópias continuam iguais ao contrato e que o código da
-// tela só importa TIPOS do contrato.
+// A tela da conferência e o leitor do CSV dela (src/shared/conferencia) rodam no navegador: do contrato
+// da API (com zod) vêm só TIPOS; valores, só dos módulos sem zod (contracts/conferencia, o leitor de CSV e
+// o calendário). Este teste confere os caminhos com ROTAS, os textos com as listas do contrato e as
+// importações do código da tela e do leitor.
 import { describe, expect, it } from "vitest";
 import {
   CAMPOS_RECONCILIACAO,
-  LIMITE_CARACTERES_CSV_RECONCILIACAO,
-  LIMITE_LINHAS_CSV_RECONCILIACAO,
-  LIMITE_PEDIDOS_RECUPERAR as LIMITE_PEDIDOS_DO_CONTRATO,
   MOTIVOS_NAO_RECUPERADO,
   OBSERVACOES_DIVERGENCIA,
   ORIGENS_DATA_RECUPERADA,
@@ -15,12 +13,7 @@ import {
   STATUS_PEDIDO,
   TIPOS_DIVERGENCIA,
 } from "../../../shared/contracts";
-import {
-  CAMINHOS,
-  LIMITE_CARACTERES_CSV,
-  LIMITE_LINHAS_CSV,
-  LIMITE_PEDIDOS_RECUPERAR,
-} from "./conferencia-api";
+import { CAMINHOS } from "./conferencia-api";
 import {
   CAMPOS,
   DIVERGENCIAS,
@@ -31,25 +24,34 @@ import {
   STATUS_DO_SISTEMA,
 } from "./textos";
 
-/** O código da tela (sem os testes e sem o apoio deles). */
-const FONTES = import.meta.glob<string>(
-  ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
-  { query: "?raw", import: "default", eager: true },
-);
+/** O código da tela e o do leitor (sem os testes e sem o apoio deles). */
+const FONTES = {
+  ...import.meta.glob<string>(
+    ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+    { query: "?raw", import: "default", eager: true },
+  ),
+  ...import.meta.glob<string>(
+    [
+      "../../../shared/conferencia/*.ts",
+      "!../../../shared/conferencia/*.test.ts",
+      "!../../../shared/conferencia/teste-csv.ts",
+    ],
+    { query: "?raw", import: "default", eager: true },
+  ),
+};
 
-describe("cópias do contrato na tela da conferência", () => {
+/** Módulos do contrato sem zod (o site pode importar valores deles). */
+const SEM_ZOD =
+  /shared\/contracts\/(conferencia|calendario)$|\.\.\/contracts\/(conferencia|calendario)$|\.\.\/csv$|shared\/csv$/;
+
+describe("a tela da conferência e o contrato", () => {
   it("caminhos da API", () => {
     expect(CAMINHOS).toEqual({
+      campanha: ROTAS.obterCampanha.caminho,
       analisar: ROTAS.analisarReconciliacao.caminho,
       recuperar: ROTAS.recuperarReconciliacao.caminho,
       recuperacoes: ROTAS.listarRecuperacoes.caminho,
     });
-  });
-
-  it("limites do arquivo e do Recuperar", () => {
-    expect(LIMITE_CARACTERES_CSV).toBe(LIMITE_CARACTERES_CSV_RECONCILIACAO);
-    expect(LIMITE_LINHAS_CSV).toBe(LIMITE_LINHAS_CSV_RECONCILIACAO);
-    expect(LIMITE_PEDIDOS_RECUPERAR).toBe(LIMITE_PEDIDOS_DO_CONTRATO);
   });
 
   it("textos de cada campo, tipo, status, observação, motivo e origem da data, na ordem do contrato", () => {
@@ -66,20 +68,23 @@ describe("cópias do contrato na tela da conferência", () => {
     expect(Object.keys(ORIGEM_DA_DATA)).toEqual([...ORIGENS_DATA_RECUPERADA]);
   });
 
-  it("o código da tela só importa TIPOS do contrato (os valores trariam o zod para o pacote do site)", () => {
+  it("do contrato com zod, só TIPOS; valores, só dos módulos sem zod; nada no armazenamento do navegador", () => {
     expect(Object.keys(FONTES)).toEqual(
       expect.arrayContaining([
         "./ConferenciaPage.tsx",
         "./conferencia-api.ts",
         "./textos.ts",
+        "../../../shared/conferencia/leitura.ts",
+        "../../../shared/conferencia/colunas.ts",
       ]),
     );
     for (const [arquivo, fonte] of Object.entries(FONTES)) {
       for (const achado of fonte.matchAll(
-        /^\s*(import|export)\b([^;]*?)\bfrom\s*["']([^"']*shared\/contracts[^"']*)["']/gm,
+        /^\s*(import|export)\b([^;]*?)\bfrom\s*["']([^"']*(?:contracts|csv)[^"']*)["']/gm,
       )) {
+        const tipoSo = /^\s*(import|export)\s+type\b/.test(achado[0]);
         expect(
-          /^\s*(import|export)\s+type\b/.test(achado[0]),
+          tipoSo || SEM_ZOD.test(achado[3]),
           `${arquivo}: ${achado[0].trim()}`,
         ).toBe(true);
       }
