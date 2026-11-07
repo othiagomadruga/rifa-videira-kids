@@ -178,7 +178,9 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
 
     fireEvent.click(criar);
     expect(within(dialogo).getByText("Informe o nome.")).toBeInTheDocument();
-    expect(within(dialogo).getByLabelText("Nome")).toHaveFocus();
+    await waitFor(() =>
+      expect(within(dialogo).getByLabelText("Nome")).toHaveFocus(),
+    );
     expect(within(dialogo).getByLabelText("Nome")).toHaveAttribute(
       "aria-invalid",
       "true",
@@ -190,7 +192,9 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
     expect(
       within(dialogo).getByText("E-mail inválido. Confira ou deixe em branco."),
     ).toBeInTheDocument();
-    expect(within(dialogo).getByLabelText("E-mail (opcional)")).toHaveFocus();
+    await waitFor(() =>
+      expect(within(dialogo).getByLabelText("E-mail (opcional)")).toHaveFocus(),
+    );
 
     expect(api.chamadasA("POST", "/api/admin/usuarios")).toEqual([]);
   });
@@ -273,7 +277,9 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
     expect(document.body.innerHTML).not.toContain(url.split("/acesso/")[1]);
     expect(api.chamadasA("GET", "/api/admin/usuarios")).toHaveLength(2);
     expect(anuncio()).toHaveTextContent("Cadastro de Fábio Fictício criado.");
-    expect(screen.getByRole("button", { name: "Nova pessoa" })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Nova pessoa" })).toHaveFocus(),
+    );
   });
 
   it("sem a área de transferência, o link fica selecionado no campo e a tela explica", async () => {
@@ -302,7 +308,9 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
     expect(within(comLink).getByRole("status")).toHaveTextContent(
       "o link ficou selecionado no campo acima",
     );
-    expect(within(comLink).getByLabelText("Link de acesso")).toHaveFocus();
+    await waitFor(() =>
+      expect(within(comLink).getByLabelText("Link de acesso")).toHaveFocus(),
+    );
   });
 
   it("e-mail recusado pela API (400 com detalhes): marca o campo e explica", async () => {
@@ -327,7 +335,9 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
     expect(
       within(dialogo).getByText("Confira o e-mail (ou deixe em branco)."),
     ).toBeInTheDocument();
-    expect(within(dialogo).getByLabelText("E-mail (opcional)")).toHaveFocus();
+    await waitFor(() =>
+      expect(within(dialogo).getByLabelText("E-mail (opcional)")).toHaveFocus(),
+    );
     expect(api.urlsEmitidas).toEqual([]);
   });
 });
@@ -355,7 +365,7 @@ describe("CA5: gerar link novo e revogar link", () => {
     await waitFor(() =>
       expect(dado("Felipe Coordenador", "Links válidos")).toBe("2"),
     );
-    expect(gerar).toHaveFocus();
+    await waitFor(() => expect(gerar).toHaveFocus());
     expect(document.body.innerHTML).not.toContain(api.urlsEmitidas[0]);
     expect(anuncio()).toHaveTextContent(
       "Link novo de Felipe Coordenador criado.",
@@ -455,7 +465,7 @@ describe("CA5: desativar e reativar", () => {
     ]);
     // O mesmo botão, agora "Reativar", com o foco de volta.
     expect(botao).toHaveAccessibleName("Reativar acesso de Felipe Coordenador");
-    expect(botao).toHaveFocus();
+    await waitFor(() => expect(botao).toHaveFocus());
     expect(anuncio()).toHaveTextContent(
       "Acesso de Felipe Coordenador desativado.",
     );
