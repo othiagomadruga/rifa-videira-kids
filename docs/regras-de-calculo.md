@@ -345,6 +345,10 @@ Perguntas que continuam abertas no requisito e afetam estes números: P3 (meta, 
 
 ## 5. Como o Worker alimenta as funções
 
+> Atualização (RIFA-PAINEL-api): a consulta real não usa mais a view `vendas_aprovadas`; agrega `pedidos` por
+> afiliado × dia local com o índice da migração 0003 e resolve a célula depois (src/worker/db/painel.ts, docs/decisions.md D10).
+> O resultado é o mesmo descrito abaixo.
+
 1. Campanha ativa (`buscarCampanhaAtiva`): sem ela, as quatro rotas respondem 404 `nao_encontrado`.
 2. **Todas** as células com a hierarquia (id, nome, `qtd_pessoas`, discipulador, rede, divisão). Um `Celula` do contrato serve. Mesmo num escopo menor, passe todas: a regra `total_proporcional` reparte o total entre todas.
 3. Vendas aprovadas agrupadas por célula e dia local (`VendasDoDia`: `celula_id`, `dia`, `pedidos`, `bilhetes`, `centavos`), de qualquer data: as funções separam o que está fora da janela.

@@ -486,6 +486,9 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 
 ### `GET /api/publico/ranking` (aberto, **sem nenhum valor em R$**)
 
+> Cache: respostas 200 desta rota ficam 30 s em cache no servidor e saem com `Cache-Control: public, max-age=30`
+> (erros saem com `no-store`). Ver docs/decisions.md D10.
+
 - **Consulta** (`consultaRankingPublicoSchema`): `nivel`, `divisao` e `periodo`, como no painel, **sem** `data` (é sempre hoje; um `data` na URL é ignorado).
 - **200** (`respostaRankingPublicoSchema`):
 
@@ -517,6 +520,9 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 - **Erros**: 400 `requisicao_invalida`, 404 `nao_encontrado` (sem campanha ativa).
 
 ### `GET /api/publico/bumbo` (aberto)
+
+> Cache: respostas 200 desta rota ficam 30 s em cache no servidor e saem com `Cache-Control: public, max-age=30`
+> (erros saem com `no-store`). Ver docs/decisions.md D10.
 
 - **Consulta** (`consultaBumboSchema`): `data` (dia da mensagem, no máximo hoje); padrão hoje. A mensagem fala sempre do dia anterior, já fechado.
 - **200** (`respostaBumboSchema`): `{ "data", "referencia", "texto", "gerado_em" }`, com `referencia` do dia da mensagem (o mesmo objeto das outras rotas). Para o exemplo, `texto` é:
