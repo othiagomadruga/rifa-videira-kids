@@ -688,11 +688,12 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
     ),
     "/api/publico/ranking",
     "/api/publico/bumbo",
+    // O `data` do bumbo só vale na janela da campanha (RIFA-011): a contagem regressiva de antes do
+    // início sai sem `data` e é varrida em routes/publico.test.ts.
     ...[1, 2, 8].map(
       (diaDaMensagem) =>
         `/api/publico/bumbo?data=${somarDias(inicio, diaDaMensagem - 1)}`,
     ),
-    `/api/publico/bumbo?data=${somarDias(inicio, -1)}`,
   ];
 
   async function semear(publico = CONFIGURACOES_PUBLICAS[0]) {

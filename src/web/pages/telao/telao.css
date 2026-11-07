@@ -1,50 +1,267 @@
 /*
- * Telão: ocupa exatamente a janela (sem rolagem em 1920×1080). Tamanhos em em,
- * a partir de --telao-texto-base, que acompanha a largura e a altura da tela.
+ * Telão (/telao): ocupa exatamente a janela, sem rolagem em 1920×1080 e em 1280×720. Tamanhos em em a
+ * partir de --telao-texto-base (tokens.css: ~46 px em 1920×1080, acompanha a largura e a altura). O
+ * font-size fica só nos textos (os blocos herdam o do .telao), então cada em vale o texto-base: nenhum
+ * texto abaixo de 0,9em (≥ 40 px em 1920×1080) e as posições com 1,5em (~69 px). telao-css.test.ts confere.
  */
 .telao {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 3vh;
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 4vh 4vw;
+  gap: 0.4em;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  padding: 0.6em 1.6em;
   background: var(--cor-fundo);
   color: var(--cor-texto);
   font-size: var(--telao-texto-base);
-  line-height: 1.25;
+  line-height: 1.2;
+}
+
+/* Com o mouse parado, o cursor some (useCursorEscondidoParado). */
+.telao[data-cursor="escondido"],
+.telao[data-cursor="escondido"] * {
+  cursor: none;
+}
+
+/* Topo: marca | onde a campanha está | relógio. */
+.telao__topo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid var(--cor-borda);
+}
+
+.telao__marca {
+  min-width: 0;
 }
 
 .telao .ui-marca {
-  gap: 0.5em;
+  gap: 0.4em;
 }
 
 .telao .ui-marca__simbolo {
-  font-size: 0.6em;
+  font-size: 0.9em;
 }
 
 .telao .ui-marca__nome {
-  font-size: 0.8em;
+  font-size: 1em;
+}
+
+.telao__fase {
+  text-align: center;
+}
+
+.telao__fase-destaque {
+  font-size: 1.5em;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--cor-primaria);
+}
+
+.telao__fase-detalhe {
+  font-size: 0.9em;
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+.telao__hora {
+  justify-self: end;
+  text-align: right;
+}
+
+.telao__relogio {
+  font-size: 1.3em;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.telao__atualizado {
+  font-size: 0.9em;
+  color: var(--cor-texto-suave);
+}
+
+.telao__atualizado[data-falhou] {
+  color: var(--cor-alerta);
+  font-weight: var(--peso-forte);
 }
 
 .telao__conteudo {
   display: grid;
+  min-height: 0;
+}
+
+/* Carregando, falha, sem campanha e antes da primeira venda: uma mensagem no meio da tela. */
+.telao__mensagem {
+  display: grid;
   place-content: center;
   justify-items: center;
-  gap: 0.75em;
-  min-height: 0;
+  gap: 0.4em;
   text-align: center;
 }
 
-.telao__titulo {
-  font-size: 3.5em;
+.telao__mensagem-titulo {
+  font-size: 1.4em;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1;
+  line-height: 1.15;
 }
 
-.telao__aviso {
+.telao__mensagem-detalhe {
   font-size: 1em;
-  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+/* A disputa: o período e as duas divisões lado a lado, no meio da altura que sobra (no topo, se não couber). */
+.telao__disputa {
+  display: grid;
+  align-content: safe center;
+  gap: 0.3em;
+  min-height: 0;
+}
+
+.telao__janela {
+  font-size: 1em;
+  font-weight: var(--peso-negrito);
+  text-align: center;
+}
+
+.telao__divisoes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1em;
+  min-height: 0;
+}
+
+.telao__divisao {
+  display: grid;
+  align-content: start;
+  gap: 0.3em;
+  min-width: 0;
+  min-height: 0;
+}
+
+.telao__divisao-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5em;
+  padding-bottom: 0.1em;
+  border-bottom: 3px solid var(--cor-primaria);
+}
+
+.telao__divisao-titulo {
+  font-size: 1.1em;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   color: var(--cor-primaria);
+}
+
+.telao__legenda {
+  font-size: 0.9em;
+  color: var(--cor-texto-suave);
+}
+
+.telao__lista {
+  display: grid;
+  gap: 0.25em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.telao__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15em 0.5em 0.15em 0.15em;
+  border: 2px solid var(--cor-borda);
+  border-radius: 0.4em;
+  background: var(--cor-superficie);
+}
+
+/* Pódio (até o 3º lugar, empatados inclusive): borda e selo da cor da marca. */
+.telao__item[data-destaque] {
+  border-color: var(--cor-primaria);
+}
+
+.telao__posicao {
+  min-width: 2.1em;
+  padding: 0.05em 0.2em;
+  border-radius: var(--raio-pilula);
+  background: var(--cor-superficie-2);
+  font-size: 1.5em;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.telao__item[data-destaque] .telao__posicao {
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+}
+
+/* Nome longo quebra em até duas linhas (o resto vira reticências): a lista cabe sempre. */
+.telao__nome {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 1.1em;
+  font-weight: var(--peso-negrito);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.telao__percentual {
+  font-size: 1.1em;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.telao__resto {
+  padding-left: 0.4em;
+  font-size: 0.9em;
+  color: var(--cor-texto-suave);
+}
+
+.telao__sem-vendas {
+  padding: 0.4em;
+  border: 2px dashed var(--cor-borda-forte);
+  border-radius: 0.4em;
+  font-size: 0.9em;
+  color: var(--cor-texto-suave);
+}
+
+/*
+ * Fora de um telão deitado (ex.: celular em pé), as divisões empilham, o topo quebra em duas linhas e a
+ * página pode rolar.
+ */
+@media (max-aspect-ratio: 1/1) {
+  .telao {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .telao__topo {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .telao__fase {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .telao__divisoes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

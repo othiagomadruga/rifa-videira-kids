@@ -1,11 +1,13 @@
 // GET /api/publico/ranking e GET /api/publico/bumbo (docs/api.md, Sprint 3) com o D1 dos testes e o relógio
 // fixo. Cada 200 é conferido no schema estrito e comparado com o montador sobre os mesmos dados; as
-// respostas são varridas por campos de valor e por R$, centavos e bilhetes no texto. No fim, o cache das
-// respostas 200 (lib/cache-publico.ts): prazo, chave normalizada e erros fora do cache.
+// respostas são varridas por campos de valor e por R$, centavos e bilhetes no texto. O `data` do bumbo fica
+// na janela da campanha (RIFA-011). No fim, o cache das respostas 200 (lib/cache-publico.ts): prazo, chave
+// normalizada e erros fora do cache.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  DIAS_DO_BUMBO_DEPOIS_DO_FIM,
   JANELAS_RANKING,
   NIVEIS_RANKING,
   campanhaEntradaSchema,
@@ -39,6 +41,7 @@ import {
 } from "../test/painel-apoio";
 import {
   CACHE_PUBLICO,
+  CODIGO_FORA_DA_CAMPANHA,
   PREFIXO_PUBLICO,
   criarPublico,
   type OpcoesPublico,
@@ -261,7 +264,7 @@ describe("GET /api/publico/bumbo", () => {
     ["hoje (dia 9, sobre o dia 8)", ""],
     ["data passada (dia 8, sobre o dia 7)", "?data=2026-11-30"],
     ["o dia da largada", "?data=2026-11-23"],
-    ["antes do início", "?data=2026-11-20"],
+    ["hoje dito na URL", "?data=2026-12-01"],
   ])(
     "%s: o mesmo que montarBumbo, sem R$, centavos nem bilhetes",
     async (_caso, consulta) => {
@@ -285,13 +288,24 @@ describe("GET /api/publico/bumbo", () => {
   });
 
   it.each([
+    ["antes do início", "2026-11-20T15:00:00.000Z"],
     ["último dia", "2026-12-13T18:00:00.000Z"],
     ["dia seguinte ao fim", "2026-12-14T18:00:00.000Z"],
     ["campanha encerrada há dias", "2026-12-20T18:00:00.000Z"],
-  ])("%s: o mesmo que montarBumbo", async (_caso, instante) => {
+  ])("sem data, %s: o mesmo que montarBumbo", async (_caso, instante) => {
     agora = new Date(instante);
 
     expect(await bumbo()).toEqual(montarBumbo(entradaEsperada(), {}, agora));
+  });
+
+  it("sem data, hoje vale em qualquer fase: antes do início, é a contagem regressiva", async () => {
+    agora = new Date("2026-11-20T15:00:00.000Z");
+
+    const { data, referencia, texto } = await bumbo();
+
+    expect(data).toBe("2026-11-20");
+    expect(referencia).toMatchObject({ fase: "antes", dias_para_inicio: 3 });
+    expect(texto).toContain("Faltam 3 dias para começar");
   });
 
   it("data depois de hoje: 400 data_futura; data inválida: 400", async () => {
@@ -316,6 +330,125 @@ describe("GET /api/publico/bumbo", () => {
     expect(invalida.detalhes).toEqual([
       expect.objectContaining({ caminho: ["data"] }),
     ]);
+  });
+});
+
+describe("GET /api/publico/bumbo: a data fica na janela da campanha (do 1º dia ao dia seguinte ao último)", () => {
+  // Campanha do cenário: 23/11/2026 a 13/12/2026 (21 dias); a janela do `data` vai até 14/12/2026.
+  const MENSAGEM_DA_JANELA =
+    "A data precisa estar entre 23/11/2026 e 14/12/2026 (do 1º dia da campanha ao dia seguinte ao último)";
+
+  beforeAll(async () => {
+    await semearCenario();
+  });
+
+  it("a janela vem do contrato: um dia depois do último", () => {
+    expect(DIAS_DO_BUMBO_DEPOIS_DO_FIM).toBe(1);
+    expect(CODIGO_FORA_DA_CAMPANHA).toBe("fora_da_campanha");
+  });
+
+  it.each([
+    ["o 1º dia", "2026-11-23"],
+    ["o último dia", "2026-12-13"],
+    ["o dia seguinte ao último", "2026-12-14"],
+  ])(
+    "campanha encerrada há dias, %s: 200, o mesmo que montarBumbo",
+    async (_caso, data) => {
+      agora = new Date("2026-12-20T18:00:00.000Z");
+
+      expect(await bumbo(`?data=${data}`)).toEqual(
+        montarBumbo(entradaEsperada(), { data }, agora),
+      );
+    },
+  );
+
+  it.each([
+    ["a véspera do 1º dia", "2026-11-22"],
+    ["dois dias depois do último", "2026-12-15"],
+    ["uma data antiga qualquer", "1900-01-01"],
+    [
+      "uma data distante no futuro (a janela vem antes do data_futura)",
+      "2999-12-31",
+    ],
+  ])(
+    "%s: 400 requisicao_invalida com o detalhe fora_da_campanha e a mensagem da janela",
+    async (_caso, data) => {
+      agora = new Date("2026-12-20T18:00:00.000Z");
+
+      const erro = esperarErro(
+        await chamar(`/api/publico/bumbo?data=${data}`),
+        400,
+        "requisicao_invalida",
+      );
+
+      expect(erro).toEqual({
+        codigo: "requisicao_invalida",
+        mensagem: MENSAGEM_DA_JANELA,
+        detalhes: [
+          {
+            caminho: ["data"],
+            codigo: "fora_da_campanha",
+            mensagem: MENSAGEM_DA_JANELA,
+          },
+        ],
+      });
+    },
+  );
+
+  it("antes do início, só sem data: hoje com data é fora da janela, e o 1º dia ainda é futuro", async () => {
+    agora = new Date("2026-11-20T15:00:00.000Z");
+
+    expect(
+      esperarErro(
+        await chamar("/api/publico/bumbo?data=2026-11-20"),
+        400,
+        "requisicao_invalida",
+      ).detalhes,
+    ).toEqual([expect.objectContaining({ codigo: "fora_da_campanha" })]);
+    expect(
+      esperarErro(
+        await chamar("/api/publico/bumbo?data=2026-11-23"),
+        400,
+        "requisicao_invalida",
+      ).detalhes,
+    ).toEqual([expect.objectContaining({ codigo: "data_futura" })]);
+    expect((await bumbo()).referencia.fase).toBe("antes");
+  });
+
+  it("durante a campanha, um dia da janela depois de hoje continua data_futura", async () => {
+    // AGORA é o dia 9 (01/12): 14/12 está na janela, mas ainda não chegou.
+    expect(
+      esperarErro(
+        await chamar("/api/publico/bumbo?data=2026-12-14"),
+        400,
+        "requisicao_invalida",
+      ).detalhes,
+    ).toEqual([expect.objectContaining({ codigo: "data_futura" })]);
+  });
+
+  it("fora da janela, o 400 lê só a campanha (nunca as vendas) e não entra no cache", async () => {
+    const cache = criarCacheDeRespostas({ memoria: true, cacheApi: null });
+    const { db, contagem } = bancoQueConta();
+    const aplicacao = montarApp({ cache });
+    const pedir = async (caminho: string) =>
+      (await aplicacao.request(caminho, {}, { ...env, DB: db })).status;
+
+    for (let vez = 1; vez <= 3; vez++) {
+      expect(await pedir("/api/publico/bumbo?data=2020-01-01")).toBe(400);
+      // Um comando por vez (a campanha) e nenhum batch: o erro não fica guardado e não lê os pedidos.
+      expect(contagem).toMatchObject({
+        idas: vez,
+        comandos: vez,
+        linhasLidas: 0,
+      });
+    }
+
+    // Na janela: a campanha (janela), a campanha e o batch; dentro do prazo, vem do cache.
+    expect(await pedir("/api/publico/bumbo?data=2026-11-30")).toBe(200);
+    expect(contagem.idas).toBe(3 + 3);
+    expect(contagem.linhasLidas).toBeGreaterThan(0);
+    expect(await pedir("/api/publico/bumbo?data=2026-11-30")).toBe(200);
+    expect(contagem.idas).toBe(3 + 3);
   });
 });
 
@@ -353,14 +486,15 @@ describe("sem campanha ativa", () => {
     await limparBanco();
   });
 
-  it.each(["/api/publico/ranking", "/api/publico/bumbo"])(
-    "%s: 404 nao_encontrado, com no-store",
-    async (caminho) => {
-      const erro = esperarErro(await chamar(caminho), 404, "nao_encontrado");
+  it.each([
+    "/api/publico/ranking",
+    "/api/publico/bumbo",
+    "/api/publico/bumbo?data=2026-11-30",
+  ])("%s: 404 nao_encontrado, com no-store", async (caminho) => {
+    const erro = esperarErro(await chamar(caminho), 404, "nao_encontrado");
 
-      expect(erro.mensagem).toBe("A campanha ainda não foi configurada");
-    },
-  );
+    expect(erro.mensagem).toBe("A campanha ainda não foi configurada");
+  });
 });
 
 describe("cache das respostas 200 por 30 s (lib/cache-publico.ts)", () => {
@@ -432,23 +566,24 @@ describe("cache das respostas 200 por 30 s (lib/cache-publico.ts)", () => {
       ]) {
         agora = AGORA;
         const antes = contagem.idas;
+        // A campanha e o batch; com `data` no bumbo, antes deles a campanha da janela do `data`.
+        const idas = caminho.includes("data=") ? 3 : 2;
         const primeira = await pedir(caminho);
         expect({ caminho, status: primeira.status }).toEqual({
           caminho,
           status: 200,
         });
-        // A campanha e o batch.
-        expect(contagem.idas).toBe(antes + 2);
+        expect(contagem.idas).toBe(antes + idas);
 
         agora = new Date(AGORA.getTime() + TTL_CACHE_PUBLICO_MS - 1);
         expect(await pedir(caminho)).toEqual(primeira);
-        expect(contagem.idas).toBe(antes + 2);
+        expect(contagem.idas).toBe(antes + idas);
 
         agora = new Date(AGORA.getTime() + TTL_CACHE_PUBLICO_MS);
         const depoisDoPrazo = await pedir(caminho);
         expect(depoisDoPrazo.status).toBe(200);
         expect(depoisDoPrazo.texto).not.toBe(primeira.texto); // novo instante
-        expect(contagem.idas).toBe(antes + 4);
+        expect(contagem.idas).toBe(antes + 2 * idas);
       }
     },
   );
@@ -486,7 +621,8 @@ describe("cache das respostas 200 por 30 s (lib/cache-publico.ts)", () => {
       "/api/publico/bumbo?data=2026-11-30",
     ])
       expect((await pedir(caminho)).status).toBe(200);
-    expect(contagem.idas).toBe(10);
+    // 2 + 2 + 2 + 2 + 3 (com `data`, o bumbo lê também a campanha da janela).
+    expect(contagem.idas).toBe(11);
   });
 
   it("erros não entram no cache: 400 nem chega ao banco, 404 e 500 vão ao banco toda vez", async () => {
