@@ -12,6 +12,8 @@ import {
 import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
+import { PREFIXO_PAINEL, painel } from "./routes/painel";
+import { PREFIXO_PUBLICO, publico } from "./routes/publico";
 import { webhookRifei } from "./routes/webhook-rifei";
 
 // API do sistema. O Worker só recebe /api e /api/* (assets.run_worker_first no
@@ -52,6 +54,11 @@ app.route(PREFIXO_HIERARQUIA, hierarquia);
 app.route(PREFIXO_CAMPANHA, campanha);
 // Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
+// Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.
+app.route(PREFIXO_PAINEL, painel);
+// Visão pública (RIFA-PAINEL): ranking e bumbo sob /api/publico, ABERTOS (fora dos prefixos do
+// passo 4) e nunca com valores em R$ ou bilhetes (o sub-app confere a resposta no schema estrito).
+app.route(PREFIXO_PUBLICO, publico);
 
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);

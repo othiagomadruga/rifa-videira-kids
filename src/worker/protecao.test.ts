@@ -6,24 +6,47 @@
 // b) o middleware cobre os prefixos inteiros: caminho sem rota também dá 401, e não 404;
 // c) escrita de outra origem é recusada (CSRF), mesmo com sessão de admin, e nada é gravado;
 // d) os cabeçalhos de segurança saem em 200, 401, 403 e 404, e o webhook segue só com o Bearer;
+// e) o painel (RIFA-PAINEL) fica atrás do login e a visão pública fica aberta, sem nenhum valor;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import paidOrderAfiliado from "../../test/fixtures/rifei/paid_order.afiliado.json";
 import {
+  JANELAS_RANKING,
+  NIVEIS_RANKING,
   ROTAS,
   ROTAS_ACESSO,
   afiliadoResumoSchema,
+  campanhaEntradaSchema,
+  diasEntre,
   erroApiSchema,
+  hojeNoFuso,
   respostaAdesaoSchema,
+  respostaBumboSchema,
   respostaListaAfiliadosSchema,
+  respostaPainelResumoSchema,
+  respostaRankingPublicoSchema,
+  respostaRankingSchema,
   respostaWebhookRifeiSchema,
+  somarDias,
   type CodigoErro,
   type Papel,
 } from "../shared/contracts";
 import app from "./index";
 import { CABECALHOS_SEGURANCA } from "./middleware/cabecalhos-seguranca";
+import { CACHE_PUBLICO } from "./routes/publico";
 import { ORIGEM, cabecalhosDeSessao } from "./test/acesso-teste";
+import {
+  CAMPOS_PUBLICOS,
+  CAMPO_DE_VALOR,
+  DADOS_CAMPANHA,
+  PEDIDOS,
+  TEXTO_DE_VALOR,
+  camposDe,
+  deslocarPedidos,
+  semearCenario,
+  textosDe,
+} from "./test/painel-apoio";
 
 const ESCRITAS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 type Metodo = "GET" | (typeof ESCRITAS)[number];
@@ -625,6 +648,171 @@ describe("d) cabeçalhos de segurança e webhook da Rifei", () => {
       expect(res.headers.get("WWW-Authenticate")).toBe("Bearer");
       esperarCabecalhosDeSeguranca(res);
       await esperarErro(res, 401, "nao_autenticado");
+    }
+  });
+});
+
+describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-PAINEL)", () => {
+  // O app real usa o relógio do sistema: o cenário dos testes do painel vai para "hoje", que vira o
+  // dia 9 de 21 (2º dia da Semana 2), com as mesmas vendas deslocadas.
+  const hoje = hojeNoFuso(DADOS_CAMPANHA.fuso_horario, new Date());
+  const inicio = somarDias(hoje, -8);
+  const deslocamento = diasEntre(DADOS_CAMPANHA.data_inicio, inicio);
+  const CONFIGURACOES_PUBLICAS = [
+    { mostra_percentual_meta: false, limite_ranking: 3 },
+    { mostra_percentual_meta: true, limite_ranking: null },
+  ];
+  const CAMINHOS_PUBLICOS = [
+    ...NIVEIS_RANKING.flatMap((nivel) =>
+      JANELAS_RANKING.flatMap((periodo) =>
+        ["", "&divisao=jovens", "&divisao=adultos"].map(
+          (divisao) =>
+            `/api/publico/ranking?nivel=${nivel}&periodo=${periodo}${divisao}`,
+        ),
+      ),
+    ),
+    "/api/publico/ranking",
+    "/api/publico/bumbo",
+    ...[1, 2, 8].map(
+      (diaDaMensagem) =>
+        `/api/publico/bumbo?data=${somarDias(inicio, diaDaMensagem - 1)}`,
+    ),
+    `/api/publico/bumbo?data=${somarDias(inicio, -1)}`,
+  ];
+
+  async function semear(publico = CONFIGURACOES_PUBLICAS[0]) {
+    await semearCenario({
+      campanha: campanhaEntradaSchema.parse({
+        ...DADOS_CAMPANHA,
+        data_inicio: inicio,
+        publico,
+      }),
+      pedidos: deslocarPedidos(PEDIDOS, deslocamento),
+    });
+  }
+
+  beforeAll(async () => {
+    await semear();
+  });
+
+  it("as rotas do painel e as públicas estão registradas no app real", () => {
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+
+    for (const rota of [
+      ROTAS.painelResumo,
+      ROTAS.painelRanking,
+      ROTAS.rankingPublico,
+      ROTAS.bumbo,
+    ])
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+  });
+
+  it.each([
+    "/api/painel/resumo",
+    "/api/painel/resumo?escopo=rede&id=1",
+    "/api/painel/resumo?escopo=celula&id=999",
+    "/api/painel/ranking",
+    "/api/painel/ranking?nivel=rede&periodo=campanha&divisao=adultos",
+    // O login vem antes da validação: consulta inválida ou data futura sem cookie também é 401.
+    "/api/painel/resumo?escopo=igreja",
+    "/api/painel/ranking?data=2999-01-01",
+  ])("painel sem cookie: GET %s → 401, sem nenhum valor", async (caminho) => {
+    const res = await requisitar("GET", caminho);
+    const texto = await res.text();
+
+    expect({ status: res.status, corpo: JSON.parse(texto) }).toEqual({
+      status: 401,
+      corpo: {
+        erro: { codigo: "nao_autenticado", mensagem: expect.any(String) },
+      },
+    });
+    expect(texto).not.toContain("centavos");
+    esperarCabecalhosDeSeguranca(res);
+  });
+
+  it("painel com sessão de coordenacao: 200 com os valores (contraprova), no-store", async () => {
+    const resumo = await requisitar("GET", "/api/painel/resumo", coordenacao);
+    expect(resumo.status).toBe(200);
+    expect(resumo.headers.get("Cache-Control")).toBe("no-store");
+    const corpoResumo = respostaPainelResumoSchema.parse(await resumo.json());
+    expect(corpoResumo.referencia).toMatchObject({ dia_campanha: 9 });
+    expect(corpoResumo.vendas.total_centavos).toBeGreaterThan(0);
+
+    const ranking = await requisitar(
+      "GET",
+      "/api/painel/ranking?nivel=celula",
+      coordenacao,
+    );
+    expect(ranking.status).toBe(200);
+    expect(ranking.headers.get("Cache-Control")).toBe("no-store");
+    expect(
+      respostaRankingSchema.parse(await ranking.json()).itens,
+    ).toHaveLength(5);
+  });
+
+  it.each(CONFIGURACOES_PUBLICAS)(
+    "visão pública sem cookie (público %o): 200, cache curto e nenhum valor em R$ ou bilhetes (varredura recursiva por nomes e textos)",
+    async (publico) => {
+      await semear(publico);
+      let itensVistos = 0;
+
+      for (const caminho of CAMINHOS_PUBLICOS) {
+        const res = await requisitar("GET", caminho);
+        const texto = await res.text();
+        const corpo: unknown = JSON.parse(texto);
+
+        expect({ caminho, status: res.status }).toEqual({
+          caminho,
+          status: 200,
+        });
+        expect(res.headers.get("Cache-Control")).toBe(CACHE_PUBLICO);
+        expect(res.headers.get("Set-Cookie")).toBeNull();
+        esperarCabecalhosDeSeguranca(res);
+        const campos = [...camposDe(corpo)];
+        expect({
+          caminho,
+          deValor: campos.filter((campo) => CAMPO_DE_VALOR.test(campo)),
+          foraDaLista: campos.filter((campo) => !CAMPOS_PUBLICOS.has(campo)),
+          textosComValor: textosDe(corpo).filter((item) =>
+            TEXTO_DE_VALOR.test(item),
+          ),
+        }).toEqual({
+          caminho,
+          deValor: [],
+          foraDaLista: [],
+          textosComValor: [],
+        });
+        expect(texto).not.toContain("R$");
+        if (caminho.startsWith("/api/publico/ranking"))
+          itensVistos += respostaRankingPublicoSchema.parse(corpo).itens.length;
+        else respostaBumboSchema.parse(corpo);
+      }
+      // A varredura olhou rankings com gente dentro, não só listas vazias.
+      expect(itensVistos).toBeGreaterThan(20);
+    },
+  );
+
+  it("com cookie de sessão, a visão pública é a mesma: a sessão não abre valor nenhum", async () => {
+    await semear();
+    const semInstante = (corpo: unknown) => {
+      const { atualizado_em, gerado_em, ...resto } = corpo as Record<
+        string,
+        unknown
+      >;
+      expect([atualizado_em, gerado_em].some(Boolean)).toBe(true);
+      return resto;
+    };
+
+    for (const caminho of ["/api/publico/ranking", "/api/publico/bumbo"]) {
+      const anonimo = await requisitar("GET", caminho);
+      const comSessao = await requisitar("GET", caminho, admin);
+
+      expect(comSessao.status).toBe(200);
+      expect(semInstante(await comSessao.json())).toEqual(
+        semInstante(await anonimo.json()),
+      );
     }
   });
 });
