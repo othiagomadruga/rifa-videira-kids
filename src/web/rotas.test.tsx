@@ -17,10 +17,10 @@ import {
 const TELAS = [
   // /entrar, /acesso e /coordenacao/acessos (RIFA-007), /coordenacao/campanha (RIFA-004),
   // /coordenacao/hierarquia (RIFA-005), /coordenacao/adesao (RIFA-006), /telao e /coordenacao/bumbo
-  // (RIFA-011) já são telas de verdade: ver pages/entrar, pages/acesso, pages/acessos, pages/campanha,
-  // pages/hierarquia, pages/adesao, pages/telao e pages/bumbo.
+  // (RIFA-011) e /coordenacao/conferencia (RIFA-012) já são telas de verdade: ver pages/entrar,
+  // pages/acesso, pages/acessos, pages/campanha, pages/hierarquia, pages/adesao, pages/telao,
+  // pages/bumbo e pages/conferencia.
   ["/coordenacao/pedidos", "Pedidos", "RIFA-003"],
-  ["/coordenacao/conferencia", "Conferência", "RIFA-012"],
 ] as const;
 
 // Menu da coordenação (papel coordenacao): texto do link e para onde leva (o título da tela é o mesmo texto).

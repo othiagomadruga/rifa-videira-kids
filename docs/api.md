@@ -14,8 +14,8 @@ O contrato executável está em `src/shared/contracts/`:
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
-- **Detalhadas** (Sprints 1–3): fechadas. Front e back implementam em paralelo.
-- **RASCUNHO** (Sprint 4): forma provável, que pode mudar quando forem implementadas.
+- **Detalhadas** (Sprints 1–4): fechadas. Front e back implementam em paralelo.
+- **RASCUNHO**: forma provável, que pode mudar quando for implementada. Hoje não há nenhuma: a conferência (Sprint 4) foi detalhada na RIFA-012.
 
 ## Convenções
 
@@ -66,9 +66,9 @@ Toda resposta que não é 2xx tem este corpo:
 | Código | HTTP | Quando |
 |---|---|---|
 | `requisicao_invalida` | 400 | corpo, consulta ou parâmetros fora do schema (`detalhes` = problemas) |
-| `json_invalido` | 400 | corpo não é JSON (em `PUT /api/admin/campanha` e `PUT /api/admin/afiliados/:affiliateId`, também sem `Content-Type` JSON) |
+| `json_invalido` | 400 | corpo não é JSON (em `PUT /api/admin/campanha`, `PUT /api/admin/afiliados/:affiliateId` e na conferência, também sem `Content-Type` JSON) |
 | `payload_invalido` | 400 | webhook sem o essencial: `event`, `id`, `slug`, `numbers_count` ou `total` (ausente, inválido ou acima do limite) |
-| `csv_invalido` | 400 | arquivo da importação que não dá para ler: vazio ou sem cabeçalho, sem coluna obrigatória, com coluna repetida, aspas abertas, fora de UTF-8, ou acima do limite de linhas ou de tamanho (`detalhes`: `detalhesCsvInvalidoSchema`, com o `motivo`) |
+| `csv_invalido` | 400 | arquivo da importação ou da conferência que não dá para ler: vazio ou sem cabeçalho, sem coluna obrigatória, com coluna repetida, aspas abertas, fora de UTF-8, ou acima do limite de linhas ou de tamanho (`detalhes`: `detalhesCsvInvalidoSchema`, com o `motivo`) |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
 | `nao_autenticado` | 401 | sem credencial ou credencial inválida |
 | `proibido` | 403 | autenticado, sem permissão; ou escrita de outra origem (CSRF) |
@@ -675,18 +675,106 @@ sessões deles no mesmo lote. Tudo ou nada: 404 `nao_encontrado` se algum id nã
 algum alvo tem usuário desativado (`detalhes`: `detalhesIdsRecusadosSchema`, `{ "ids": [...] }`). Uma linha na
 trilha de auditoria por chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes).
 
-## Rotas RASCUNHO (Sprint 4)
+---
 
-Forma provável, que pode mudar quando for implementada. O schema já está em `api.ts`, marcado como `situacao: 'rascunho'`.
+## Conferência pelo CSV da Rifei (Sprint 4, RIFA-012)
 
-### RASCUNHO `POST /api/admin/reconciliacao` (`coordenacao`)
+Rede de segurança para venda perdida: a Rifei não tem API de leitura nem reenvio documentado do webhook. A coordenação exporta os pedidos na Rifei ("Exportar Pedidos", CSV), sobe o arquivo em `/coordenacao/conferencia`, vê as diferenças e recupera as vendas que faltarem. Passo a passo, formato e o que ainda falta confirmar: [integracao-rifei.md, seção 10](integracao-rifei.md#10-conferência-pelo-csv-exportar-pedidos-rifa-012). Leitura do arquivo em `src/worker/lib/conferencia-arquivo.ts`; comparação e plano do "Recuperar" em `src/worker/lib/conferencia-analise.ts`.
 
-- **Corpo**: `{ "csv": "<Exportar Pedidos da Rifei>" }`.
-- **200** (`respostaReconciliacaoSchema`): `{ linhas_lidas, pedidos_no_csv, pedidos_no_sistema, divergencias: [{ tipo, pedido_id, sistema, csv }] }`.
-  - `tipo` ∈ `ausente_no_sistema`, `ausente_no_csv`, `status_divergente`, `valor_divergente` ou `afiliado_divergente`.
-  - Cada lado traz `status`, `total_centavos`, `qtd_bilhetes` e `affiliate_id`.
-- O CSV tem dados pessoais: é lido só em memória e nada dele é gravado ou devolvido além disso (D1).
-- O formato das colunas depende de um export real (pendência em [integracao-rifei.md](integracao-rifei.md#9-o-que-confirmar-com-uma-campanha-de-teste)).
+**Privacidade (D1).** O CSV traz nome, e-mail e telefone dos compradores. Ele é lido só na memória da requisição e descartado. As colunas de dado pessoal (reconhecidas pelo nome: nome, e-mail, telefone, CPF, documento, nascimento, endereço, observação, comprador, cliente...) nunca são lidas e não podem entrar no mapeamento (400). As respostas só trazem códigos de pedido validados, status normalizados, quantidades, centavos, dias, ids de afiliado e os **nomes** das colunas do cabeçalho; nada do arquivo vai para o banco (além do pedido recuperado) nem para o log. Do arquivo, a auditoria guarda só o SHA-256.
+
+**Arquivo** (o campo `csv` dos corpos): UTF-8 (BOM aceito; a tela relê como Windows-1252 o que não for UTF-8), separador `,` ou `;`, aspas como no RFC 4180, primeira linha = cabeçalho. No máximo 5.000.000 de caracteres (`LIMITE_CARACTERES_CSV_RECONCILIACAO`), 50.000 linhas de dados (`LIMITE_LINHAS_CSV_RECONCILIACAO`) e 200 colunas lidas (`LIMITE_COLUNAS_CSV_RECONCILIACAO`; as outras são ignoradas, com aviso). O corpo é lido com teto em bytes antes do JSON.
+
+**Mapeamento** (`mapeamentoReconciliacaoSchema`): para cada campo, a posição da coluna no cabeçalho (0 = primeira) ou `null`. Uma coluna serve a um campo só.
+
+| Campo | Conteúdo | Sem a coluna |
+|---|---|---|
+| `pedido_id` | código do pedido (o `id` do webhook): começa com letra ou número e só tem letras, números e `. _ : / # -` (`FORMATO_ID_PEDIDO_RECONCILIACAO`; nunca fórmula, e-mail ou telefone com `+`) | modo agregado, sem "Recuperar" |
+| `status` | "Pago", "Aprovado", "approved" = pago; "Pendente", "Não pago", "in_process" = pendente; "Expirado"; "Cancelado", "Estornado" = cancelado; o resto, desconhecido (não conta como pago) | todos contam como pagos (aviso `sem_coluna_status`) |
+| `qtd_bilhetes` | quantidade de bilhetes do pedido | conta pelos números; sem os dois, não compara nem recupera |
+| `bilhetes` | números dos bilhetes ("001, 002, 003") | — |
+| `valor` | valor pago: "R$ 1.234,56", "20,00", "20.00", "20" (centavos exatos, sem float) | não compara valores nem recupera |
+| `afiliado` | `affiliate_id` ("1042", "#1042") ou o usuário do afiliado na Rifei, igual ao `rotulo` do afiliado (sem acento, maiúsculas e `@`) | não compara afiliados; a venda recuperada entra sem afiliado |
+| `data` | data do pagamento: "23/11/2026", "23/11/2026 14:35", "2026-11-23 14:35" (hora local da campanha) ou ISO com fuso | a venda recuperada entra com o instante da recuperação |
+
+Sem `mapeamento` no corpo, a API detecta pelo nome das colunas, com as variações em português e inglês e sem diferenciar acentos e maiúsculas ("ID do pedido", "Nº do pedido", "Situação", "Qtd.", "Total de bilhetes", "Valor pago", "Pago em", "affiliate_id"...), e responde `mapeamento_detectado: true`. Entre duas colunas do mesmo campo, vence a mais forte: data do pagamento sobre data do pedido, id do afiliado sobre o nome dele, total sobre subtotal.
+
+### `POST /api/admin/reconciliacao/analisar` (`coordenacao`)
+
+- **Corpo** (`corpoAnalisarReconciliacaoSchema`): `{ "csv": "...", "mapeamento"?: { ... } }`.
+- **200** (`respostaAnaliseReconciliacaoSchema`, estrito): `modo` = `por_pedido` (com `pedido_id` no mapeamento) ou `agregado`. Os dois trazem `colunas` (`[{ indice, nome, campo_detectado, dado_pessoal }]`), o `mapeamento` usado, `mapeamento_detectado`, `arquivo` (`linhas`, `linhas_ignoradas`, `um_bilhete_por_linha`, `data_inicio`, `data_fim`), `avisos` (`[{ codigo, mensagem, quantidade }]`, sem valores do arquivo) e `conferido_em`.
+- **Por pedido.** As linhas com o mesmo código são o mesmo pedido (export com "Um bilhete por linha"): valor ou quantidade iguais em todas as linhas contam uma vez, diferentes somam; status, afiliado ou dia diferentes deixam o pedido fora da comparação (aviso `pedido_inconsistente`). A comparação é com os pedidos da campanha ativa:
+
+| `tipo` | Quando | Lados |
+|---|---|---|
+| `venda_perdida` | pago no arquivo e ausente no sistema: não conta no painel nem no ranking | arquivo; `recuperavel` e `observacoes` (`sem_quantidade`, `sem_valor`, `data_no_futuro`) |
+| `pagamento_nao_registrado` | pago no arquivo; no sistema `in_process` ou `expired` (o `paid_order` não chegou) | os dois |
+| `nao_pago_na_rifei` | pago no sistema; no arquivo pendente, expirado ou cancelado | os dois |
+| `ausente_no_arquivo` | pago no sistema e ausente no arquivo (arquivo parcial, compra de teste) | sistema; `fora_do_periodo_do_arquivo` quando é de um dia que o arquivo não cobre |
+| `valor_diferente`, `quantidade_diferente`, `afiliado_diferente` | pago nos dois lados, com valor, quantidade ou afiliado diferentes (um pedido pode estar em mais de um) | os dois |
+
+  `divergencias` traz os sete tipos, sempre nessa ordem, cada um com `quantidade`, as somas de cada lado (`bilhetes`, `total_centavos`) e até 500 `itens` (`LIMITE_ITENS_POR_DIVERGENCIA`; `itens_omitidos` conta o resto). O lado do arquivo traz status, quantidade, centavos, a situação do afiliado, o `affiliate_id` e a célula; o do sistema, também `aprovado_em` e `origem` (`webhook` ou `conferencia`). `resumo`: `pedidos_no_arquivo`, `aprovados_no_arquivo` e `aprovados_no_sistema` (pedidos, bilhetes e centavos), `conferem` e `com_divergencia`. Um código que existe no sistema em outra campanha fica de fora (aviso `pedido_de_outra_campanha`).
+- **Agregado.** Compara os totais pagos (pedidos, bilhetes e centavos) no `total`, `por_afiliado` (os diferentes primeiro: `afiliado`, `sem_afiliado` ou `nao_reconhecido`, com a célula) e `por_dia`. Com datas no arquivo, o sistema conta só os pagos desses dias (`recorte`). O que o arquivo não permite contar sai `null` e fica fora do `confere` (ex.: um bilhete por linha sem o código: só os bilhetes).
+- **Erros**: 400 `json_invalido` (não é JSON ou veio sem `Content-Type` JSON; mensagem fixa); 400 `csv_invalido` (`detalhesCsvInvalidoSchema`: `sem_cabecalho`, inclusive quando a primeira linha tem números, datas, valores, telefones ou e-mails; `aspas_abertas`; `codificacao_invalida`; `linhas_demais`; `arquivo_grande`, também para o corpo acima do teto), com a mensagem em português; 400 `requisicao_invalida` (fora do schema, ou mapeamento que não serve: `detalhes` = `[{ "caminho": ["mapeamento", "valor"], "codigo": "coluna_pessoal", "mensagem": "A coluna \"E-mail\" tem dados pessoais e não pode ser usada" }]`, com `coluna_pessoal`, `coluna_inexistente` ou `coluna_repetida`); 401; 403; 404 `nao_encontrado` (sem campanha ativa).
+
+Exemplo resumido (por pedido; `divergencias` traz os sete tipos, aqui só um):
+
+```json
+{
+  "modo": "por_pedido",
+  "colunas": [
+    { "indice": 0, "nome": "Pedido", "campo_detectado": "pedido_id", "dado_pessoal": false },
+    { "indice": 1, "nome": "Nome", "campo_detectado": null, "dado_pessoal": true }
+  ],
+  "mapeamento": { "pedido_id": 0, "status": 5, "qtd_bilhetes": 6, "bilhetes": 7, "valor": 8, "afiliado": 9, "data": 10 },
+  "mapeamento_detectado": true,
+  "arquivo": { "linhas": 17, "linhas_ignoradas": 2, "um_bilhete_por_linha": false, "data_inicio": "2026-11-24", "data_fim": "2026-12-05" },
+  "avisos": [
+    { "codigo": "colunas_pessoais_ignoradas", "mensagem": "As colunas Nome, E-mail, Telefone, CPF e Observação interna têm dados pessoais e foram ignoradas: o sistema não lê nem guarda nada delas.", "quantidade": null }
+  ],
+  "conferido_em": "2026-12-01T15:00:00.000Z",
+  "resumo": {
+    "pedidos_no_arquivo": 15,
+    "aprovados_no_arquivo": { "pedidos_aprovados": 10, "bilhetes": 22, "total_centavos": 41000 },
+    "aprovados_no_sistema": { "pedidos_aprovados": 7, "bilhetes": 15, "total_centavos": 30000 },
+    "conferem": 1,
+    "com_divergencia": 12
+  },
+  "divergencias": [
+    {
+      "tipo": "venda_perdida", "quantidade": 5,
+      "arquivo": { "bilhetes": 9, "total_centavos": 16000 }, "sistema": { "bilhetes": 0, "total_centavos": 0 },
+      "itens": [
+        {
+          "pedido_id": "R-0101",
+          "arquivo": {
+            "status": "aprovado", "qtd_bilhetes": 3, "total_centavos": 6000, "afiliado": "reconhecido",
+            "affiliate_id": 101, "celula": { "id": 1, "nome": "Célula Ágape" }, "data": "2026-11-27"
+          },
+          "sistema": null, "recuperavel": true, "observacoes": []
+        }
+      ],
+      "itens_omitidos": 0
+    }
+  ]
+}
+```
+
+### `POST /api/admin/reconciliacao/recuperar` (`coordenacao`)
+
+Grava como **aprovadas** as vendas perdidas escolhidas, com os dados do arquivo.
+
+- **Corpo** (`corpoRecuperarReconciliacaoSchema`): `{ "csv", "mapeamento", "pedidos": ["R-0101"], "simular": false }`. O mapeamento é o conferido na análise e precisa de `pedido_id` (400 sem ele); de 1 a 500 códigos (`LIMITE_PEDIDOS_RECUPERAR`). `simular: true` é a prévia: nada é gravado.
+- Para cada código (sem repetir, na ordem pedida), a API relê o arquivo e o banco de agora. Entra só o pedido que está no arquivo, pago, sem linhas inconsistentes, com quantidade (pelo menos 1) e valor, sem data no futuro, e que **não existe** no sistema (em nenhuma campanha). O resto vai para `nao_recuperados`, com o `motivo`: `ja_existe`, `nao_esta_no_arquivo`, `nao_aprovado_no_arquivo`, `inconsistente_no_arquivo`, `sem_quantidade`, `sem_valor` ou `data_no_futuro`.
+- O pedido entra com `status = 'approved'`, `origem = 'conferencia'`, o `recuperacao_id` da auditoria, a quantidade, os números dos bilhetes (até 10.000), os centavos, o afiliado e `aprovado_em`: o instante do arquivo (`origem_data: "arquivo"`); o meio-dia do dia quando o arquivo só tem o dia, ou agora, se for hoje (`dia_do_arquivo`); ou o instante da recuperação, sem data (`recuperacao`). DDD, país e `criado_em` ficam nulos: o telefone não é lido. Um `affiliate_id` desconhecido entra na fila de órfãos (origem `webhook`, como os do webhook); um afiliado não reconhecido grava a venda sem afiliado ("sem afiliado").
+- O pedido recuperado conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um `paid_order` que chegue depois dá `duplicado` e não muda nada.
+- **Atômico e idempotente**: um único `db.batch` (auditoria, afiliados novos, pedidos com `INSERT ... ON CONFLICT (id) DO NOTHING` e as contagens tiradas do que entrou). Um pedido que já existe, inclusive um que o webhook gravou depois da prévia, nunca é sobrescrito; repetir não duplica nada nem cria outra auditoria.
+- **200** (`respostaRecuperarReconciliacaoSchema`): `{ simulado, aplicado, recuperacao_id, recuperados: [{ pedido_id, qtd_bilhetes, total_centavos, afiliado, affiliate_id, celula, aprovado_em, origem_data }], nao_recuperados: [{ pedido_id, motivo }], totais: { pedidos_aprovados, bilhetes, total_centavos }, avisos }`. `aplicado` = gravou pelo menos um pedido; `recuperacao_id` = a linha da auditoria (null na simulação ou se nada entrou).
+- **Erros**: os mesmos da análise.
+
+### `GET /api/admin/reconciliacao/recuperacoes` (`coordenacao`)
+
+Auditoria, da mais recente para a mais antiga (`respostaListaRecuperacoesSchema`): `{ "itens": [{ id, executado_em, usuario: { id, nome }, pedidos_solicitados, pedidos_recuperados, bilhetes, total_centavos, linhas_arquivo, arquivo_sha256, colunas: { "pedido_id": "Pedido", ... }, pedidos: ["R-0101"] }] }`. Só existe linha quando a recuperação gravou algo. Dados: tabela `recuperacoes` e as colunas `pedidos.origem` e `pedidos.recuperacao_id` (migração `0004_conferencia.sql`, aditiva).
 
 ---
 

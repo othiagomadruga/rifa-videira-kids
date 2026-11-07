@@ -35,7 +35,7 @@ O webhook é da **conta**, não da campanha. Por isso ele recebe pedidos de toda
 4. No sistema, configurar a campanha (`PUT /api/admin/campanha`) com `slug_rifei` igual ao slug da campanha na Rifei, que é o identificador que aparece no link da campanha.
 5. Conferir com um pedido de teste: a entrega aparece em `webhook_eventos` com `resultado = 'processado'`.
 
-Para trocar o token, faça a mudança nos dois lados em sequência: primeiro o segredo do Worker, depois a Rifei. Entre um passo e outro, as entregas recebem 401 e não são gravadas; a reconciliação por CSV recupera o que se perder.
+Para trocar o token, faça a mudança nos dois lados em sequência: primeiro o segredo do Worker, depois a Rifei. Entre um passo e outro, as entregas recebem 401 e não são gravadas; a conferência pelo CSV (seção 10) recupera o que se perder.
 
 ## 2. Autenticação (D6)
 
@@ -126,7 +126,7 @@ A ordem importa:
    - **Afiliado tardio**: se o pedido está sem afiliado e **qualquer** evento dele traz `affiliate_id` válido, o afiliado é preenchido. Isso vale inclusive para os eventos `duplicado` e `ignorado_transicao`; o resto do pedido não muda.
    - Pedido `approved` com `approved_at` nulo: `aprovado_em` recebe o instante do recebimento.
 10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido e `avisosParaGravar(avisos)`) e responde **200** `{ "resultado", "evento_id" }`.
-11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a reconciliação por CSV recupera.
+11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a conferência pelo CSV (seção 10) recupera.
 
 **Concorrência.** Os passos 8 a 10 vão num único `db.batch` (uma transação no D1). A transição é gravada com um UPSERT condicional, por exemplo para `paid_order`: `ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN ('in_process', 'expired')`. Com duas entregas simultâneas do mesmo pedido, o status lido no passo 7 pode estar velho. Por isso o **resultado gravado no evento vem do `meta.changes` do UPSERT**, e não da leitura:
 
@@ -197,7 +197,7 @@ Os valores de `status_detail` em `new_order` (`"pending"`) e em `expired_order` 
 | Retry, reenvio, ordem de entrega e assinatura HMAC | NÃO DOCUMENTADO; o sistema assume duplicatas, ordem trocada e perda |
 | `new_order` já com `status: approved` (venda lançada pelo admin) | NÃO DOCUMENTADO; hoje o estado vem só do `event` |
 | Marcar pago à mão no painel dispara `paid_order` | SUPOSIÇÃO (o exemplo oficial tem `status_detail: changed_by_admin`) |
-| Colunas do CSV "Exportar Pedidos" | PARCIAL: só "Bilhetes" e "Nome" confirmados; separador vírgula |
+| Colunas do CSV "Exportar Pedidos" | PARCIAL: só "Bilhetes", "Quantidade de bilhetes", "Nome", "Email" e "Telefone" vistos no print; separador vírgula. A conferência detecta pelo nome e a coordenação confirma (seção 10) |
 
 ## 9. O que confirmar com uma campanha de teste
 
@@ -211,17 +211,58 @@ Antes do primeiro dia de vendas, com uma campanha de teste, uma segunda conta co
 6. Se o pedido pode ser pago depois de expirar com o gateway escolhido (Efí), gerando `paid_order` depois de `expired_order`.
 7. Formato real de `buyer.phone` (sempre E.164?) e de `utm` sem parâmetros (null? ausente? strings vazias?).
 8. Retry: se a Rifei reenvia depois de um 500 ou de um timeout, quantas vezes e em que ordem. Dá para testar respondendo 500 de propósito num ambiente de teste.
-9. **CSV "Exportar Pedidos"**: quais colunas existem (id do pedido? afiliado? status? valor? data de pagamento?), o formato dos valores (`R$ 20,00`?), o encoding e o separador, e o efeito da opção "Um bilhete por linha". Isso fecha o formato da reconciliação (`POST /api/admin/reconciliacao`, ainda rascunho).
+9. **CSV "Exportar Pedidos"**: quais colunas existem (id do pedido? afiliado? status? valor? data de pagamento?), o formato dos valores (`R$ 20,00`?), o encoding e o separador, e o efeito da opção "Um bilhete por linha". A conferência (seção 10) já detecta as colunas pelo nome e a coordenação confirma o mapeamento; o export real fecha os nomes e os formatos e deve virar um CSV de teste, com os dados pessoais trocados por fictícios.
 10. Se o slug muda quando a campanha é renomeada (o filtro D5 depende dele).
 11. O tempo de reserva até expirar (`expires_at − created_at`), que define o volume de `expired_order`.
 
 Os payloads reais capturados devem virar fixtures novas, com os dados pessoais trocados por fictícios antes do commit.
 
-## 10. Reconciliação por CSV (rascunho, Sprints 3–4)
+## 10. Conferência pelo CSV (Exportar Pedidos, RIFA-012)
 
-Não há retry documentado, então o webhook não pode ser a única fonte. A coordenação exporta o CSV na Rifei (página de pedidos da campanha → ⋮ → **Exportar Pedidos**) e envia em `POST /api/admin/reconciliacao`. O sistema compara com `pedidos` e devolve as divergências: ausente no sistema, ausente no CSV, status, valor e afiliado.
+Não há retry documentado, então o webhook não pode ser a única fonte. A conferência compara o CSV que a Rifei exporta com os pedidos gravados e recupera as vendas que se perderam, para o ranking nunca mentir. Rotas, schemas e exemplos: [api.md](api.md#conferência-pelo-csv-da-rifei-sprint-4-rifa-012). Tela: `/coordenacao/conferencia`.
 
-O CSV traz nome, e-mail e telefone dos compradores. Ele é lido **só em memória**: nada dele é gravado, e a resposta não devolve nenhum dado pessoal (D1). O formato final depende do item 9 acima.
+### Como a coordenação usa
+
+1. Na Rifei: pedidos da campanha → ⋮ → **Exportar Pedidos**. Incluir o código do pedido, o status, a quantidade de bilhetes, o valor, o afiliado e a data do pagamento, e deixar "Um bilhete por linha" desmarcado (marcado também funciona, desde que venha o código).
+2. Na tela, escolher o arquivo como a Rifei baixou (sem abrir e salvar no Excel). O sistema detecta as colunas pelo nome e mostra o mapeamento: a coordenação troca o que estiver errado e confere de novo.
+3. Ler o resumo e as diferenças por tipo, cada uma com a explicação. As **vendas perdidas** (pagas na Rifei e ausentes no sistema) recuperáveis vêm marcadas; "Recuperar" mostra a prévia do que vai entrar e só grava na confirmação. As recuperadas passam a contar no painel, nos rankings e no bumbo. "Recuperações feitas" mostra quem recuperou, quando e quantas.
+
+### Privacidade (D1)
+
+- O arquivo vai inteiro para a API e é lido só na memória da requisição: não é armazenado nem vai para o log. No navegador, fica só na memória da tela (nunca no `localStorage`).
+- As colunas de dado pessoal, reconhecidas pelo nome (nome, e-mail, telefone, celular, WhatsApp, CPF, documento, nascimento, endereço, CEP, cidade, estado, observação, comprador, cliente...; "Número" sozinho num arquivo com endereço), nunca são lidas e não podem ser mapeadas. O DDD não é derivado: a conferência não precisa dele, e o pedido recuperado fica com `ddd` e `pais` nulos.
+- As respostas só trazem códigos validados, status normalizados, quantidades, centavos, dias, ids de afiliado e nomes de coluna. Um texto que não se encaixa (afiliado que não é número nem rótulo cadastrado, status desconhecido) é só contado, nunca devolvido. Uma primeira linha com cara de dados (números, datas, valores, telefones, e-mails) é recusada como "sem cabeçalho", para não voltar como nome de coluna.
+- O log de erro da rota leva só o nome do erro (e a mensagem, quando é do D1).
+- Do arquivo, a auditoria guarda o SHA-256 (identifica o arquivo sem guardar o conteúdo) e os nomes das colunas usadas.
+- Os testes varrem respostas, banco e log atrás dos dados pessoais fictícios dos CSVs de teste.
+
+### Formatos aceitos
+
+- Arquivo: UTF-8 (com ou sem BOM) ou Windows-1252 (a tela relê), separador `,` ou `;`, aspas do RFC 4180, linhas em branco ignoradas. Até 5 MB, 50.000 linhas e 200 colunas.
+- Valores: "R$ 1.234,56", "1.234,56", "20,00", "20.00" e "20"; quantidades inteiras; números dos bilhetes separados por vírgula, ponto e vírgula, barra ou espaço; datas "23/11/2026", "23/11/26 às 14h05" e "2026-11-23 14:35" (hora de Belém) ou ISO com fuso.
+- Fórmula de planilha (=, +, @ ou - seguido de letra) nunca vira valor: a célula fica ilegível e o aviso `formula_ignorada` conta. O código do pedido só aceita letras, números e `. _ : / # -`, começando por letra ou número.
+- Sem o código: comparação pelos totais (por afiliado e por dia), sem recuperar. Sem o status: tudo conta como pago (com aviso). Sem quantidade, valor ou data: o campo não é comparado; quantidade e valor são obrigatórios para recuperar.
+- "Um bilhete por linha" com o código: as linhas de cada pedido se juntam (valor e quantidade iguais em todas as linhas contam uma vez; diferentes, somam). Sem o código, só os bilhetes podem ser comparados.
+
+### Recuperar
+
+- Só a venda perdida: um pedido que já existe nunca é mudado. O pendente que está pago na Rifei (`pagamento_nao_registrado`) aparece na conferência, mas corrigi-lo fica fora desta versão.
+- Atômico (um `db.batch`) e idempotente (`ON CONFLICT DO NOTHING`): repetir não grava de novo nem cria outra auditoria.
+- `pedidos.origem = 'conferencia'` e `pedidos.recuperacao_id` → `recuperacoes` (quem, quando, quantos, o SHA-256 e as colunas usadas). Um `paid_order` que chegue depois para o mesmo pedido dá `duplicado`.
+- Instante gravado em `aprovado_em`: o do arquivo; com só o dia, o meio-dia (ou agora, se for hoje); sem data, o instante da recuperação.
+
+### Desempenho (atenção ao plano Free)
+
+Ler o CSV é trabalho de CPU no Worker. Medido no Node com o mesmo leitor (`lerCsv`): de 15 a 75 ms para 5.000 pedidos (~0,7 MB) e de 110 a 270 ms para 25.000 linhas (~3,4 MB). No plano Workers Free (10 ms de CPU por requisição), um arquivo grande pode ser cortado pela Cloudflare (erro 1102); no Paid sobra folga. Exportar só as colunas necessárias (sem nome, e-mail e telefone) deixa o arquivo menor.
+
+### O que ainda é suposição
+
+As colunas reais do export (seção 9, item 9). A detecção é por palavras do nome e a tela deixa a coordenação confirmar. Com um export real, conferir os nomes das colunas, o formato do valor e da data, o que "Um bilhete por linha" faz com o valor (repete o valor do pedido em cada linha ou traz o valor do bilhete?) e se o afiliado vem como número ou como usuário.
+
+### Como testar
+
+- Automático: `src/worker/lib/conferencia-arquivo.test.ts` (detecção das colunas, valores, limites e CSV malicioso), `src/worker/lib/conferencia-analise.test.ts` (um bilhete por linha, modo agregado e plano do "Recuperar"), `src/worker/routes/reconciliacao.test.ts` (as rotas com CSVs fictícios em várias formas, a varredura de privacidade e o painel depois de recuperar) e `src/web/pages/conferencia/` (a tela).
+- À mão: `npm run build && npm run preview`, uma campanha ativa, um acesso local (`npm run acesso:criar -- --nome "..." --papel coordenacao`) e um CSV fictício em `/coordenacao/conferencia`.
 
 ## 11. Como testar localmente
 

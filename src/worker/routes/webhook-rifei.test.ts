@@ -164,26 +164,34 @@ type LinhaPedido = Record<string, unknown> & {
   rifinha: number | null;
 };
 
-/** O pedido como está no banco; também confere que ele se converte no `Pedido` do contrato. */
+/**
+ * O pedido como está no banco; também confere que ele se converte no `Pedido` do contrato. As colunas da
+ * conferência (migração 0004, RIFA-012) são conferidas aqui e saem do objeto devolvido: todo pedido
+ * gravado pelo webhook tem origem 'webhook' e nenhuma recuperação.
+ */
 async function lerPedido(id: string): Promise<LinhaPedido | null> {
-  const linha = await db
+  const completa = await db
     .prepare("SELECT * FROM pedidos WHERE id = ?1")
     .bind(id)
     .first<LinhaPedido>();
-  if (linha !== null) {
-    pedidoSchema.parse({
-      ...linha,
-      numeros: linha.numeros === null ? null : JSON.parse(linha.numeros),
-      rifinha: linha.rifinha === null ? null : linha.rifinha === 1,
-      utm: {
-        source: linha.utm_source,
-        campaign: linha.utm_campaign,
-        medium: linha.utm_medium,
-        content: linha.utm_content,
-        term: linha.utm_term,
-      },
-    });
-  }
+  if (completa === null) return null;
+  const { origem, recuperacao_id, ...linha } = completa;
+  expect({ origem, recuperacao_id }).toEqual({
+    origem: "webhook",
+    recuperacao_id: null,
+  });
+  pedidoSchema.parse({
+    ...linha,
+    numeros: linha.numeros === null ? null : JSON.parse(linha.numeros),
+    rifinha: linha.rifinha === null ? null : linha.rifinha === 1,
+    utm: {
+      source: linha.utm_source,
+      campaign: linha.utm_campaign,
+      medium: linha.utm_medium,
+      content: linha.utm_content,
+      term: linha.utm_term,
+    },
+  });
   return linha;
 }
 
