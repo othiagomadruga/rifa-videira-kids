@@ -1,6 +1,7 @@
 # Modelo de dados (Cloudflare D1)
 
 - Migration: [`migrations/0001_init.sql`](../migrations/0001_init.sql), aplicada depois de `0000_setup.sql` (tabela `_meta`, RIFA-001).
+- Migrações seguintes, todas aditivas: `0002_acessos.sql` (usuários, links e sessões: [acesso.md](acesso.md)), `0003_vendas_por_dia.sql` (índice do painel, seção 4) e [`0004_conferencia.sql`](../migrations/0004_conferencia.sql) (conferência pelo CSV da Rifei, RIFA-012: tabela `recuperacoes` e as colunas `pedidos.origem` e `pedidos.recuperacao_id`).
 - Tipos e schemas espelho: `src/shared/contracts/dominio.ts`.
 - Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
@@ -16,6 +17,8 @@ erDiagram
   celulas |o--o{ afiliados : "vinculados (celula_id nulo = órfão)"
   afiliados |o--o{ pedidos : "vendeu (affiliate_id nulo = sem afiliado)"
   webhook_eventos }o..o| pedidos : "pedido_id (sem FK)"
+  campanhas ||--o{ recuperacoes : "conferência (0004)"
+  recuperacoes |o--o{ pedidos : "recuperou (recuperacao_id nulo = veio do webhook)"
 ```
 
 - **Hierarquia da igreja**: rede (divisão `jovens` ou `adultos`) → discipulador → célula (com `qtd_pessoas` e os dados do líder).
@@ -123,6 +126,10 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `aprovado_em` | TEXT (UTC) NULL | `approved_at`; obrigatório quando `approved` (CHECK). Se a Rifei mandar null, vale o instante do recebimento |
 | `expirado_em` | TEXT (UTC) NULL | `expired_at` |
 | `registrado_em`, `atualizado_em` | TEXT (UTC) | nossos: primeira gravação e última alteração |
+| `origem` | TEXT, padrão `webhook` | `webhook` ou `conferencia` (migração 0004). Os pedidos anteriores à 0004 ficaram com `webhook` |
+| `recuperacao_id` | INTEGER FK → recuperacoes, NULL | a recuperação que gravou o pedido; preenchido **se e somente se** `origem = 'conferencia'` (CHECK) |
+
+Pedido recuperado na conferência (`POST /api/admin/reconciliacao/recuperar`, RIFA-012): entra `approved`, com `qtd_bilhetes`, `numeros`, `total_centavos`, `affiliate_id` e `aprovado_em` vindos do CSV da Rifei; `ddd`, `pais`, `criado_em` e os campos informativos ficam NULL (o telefone do arquivo não é lido). Conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um evento do webhook que chegue depois segue a máquina da seção 5 (um `paid_order` dá `duplicado`).
 
 ### `webhook_eventos` (D3)
 
@@ -142,6 +149,22 @@ Uma linha por entrega **autenticada**, inclusive duplicadas e inválidas. Entreg
 
 `pedido_id` não tem FK, porque eventos ignorados ou inválidos não geram pedido. Como o payload redigido fica guardado, dá para **reprocessar** eventos depois (por exemplo, os `ignorado_outra_campanha` recebidos antes de a campanha ser configurada).
 
+### `recuperacoes` (migração 0004, RIFA-012)
+
+Auditoria de cada "Recuperar" da conferência pelo CSV que gravou pelo menos um pedido (a gravação, num único `db.batch`, apaga a linha no mesmo lote se nada entrou). Código: `src/worker/db/reconciliacao.ts`; rotas em [api.md](api.md#conferência-pelo-csv-da-rifei-sprint-4-rifa-012).
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `id` | INTEGER PK | os pedidos gravados apontam para ele em `pedidos.recuperacao_id` |
+| `campanha_id` | INTEGER FK → campanhas | campanha ativa no momento |
+| `usuario_id` | INTEGER FK → usuarios | quem recuperou (usuários não são apagados, só desativados) |
+| `executado_em` | TEXT (UTC) | |
+| `pedidos_solicitados` | INTEGER ≥ 1 | códigos distintos pedidos pela coordenação |
+| `pedidos_recuperados`, `bilhetes`, `total_centavos` | INTEGER ≥ 0 | contados dos pedidos que de fato entraram (os que já existiam ficam de fora) |
+| `linhas_arquivo` | INTEGER ≥ 0 | linhas de dados do CSV |
+| `arquivo_sha256` | TEXT (64 hex) | SHA-256 do texto do arquivo: identifica o arquivo usado sem guardar o conteúdo |
+| `mapeamento` | TEXT (JSON objeto) | o **nome** da coluna do arquivo usada em cada campo (`{"pedido_id": "Pedido", "valor": null, ...}`); colunas de dado pessoal nunca podem ser usadas |
+
 ### View `vendas_aprovadas`
 
 Pedidos `approved` com a hierarquia resolvida por `LEFT JOIN`: afiliado → célula → discipulador → rede. As colunas são `pedido_id`, `campanha_id`, `affiliate_id`, `qtd_bilhetes`, `total_centavos`, `aprovado_em`, `ddd`, `pais`, `celula_id`, `discipulador_id`, `rede_id` e `divisao`.
@@ -158,6 +181,7 @@ Pedidos `approved` com a hierarquia resolvida por `LEFT JOIN`: afiliado → cél
 | `pedidos_aprovados_por_afiliado_dia (campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos) WHERE status = 'approved'` (migração 0003) | painel, rankings, ranking público e bumbo (`src/worker/db/painel.ts`): vendas por afiliado e dia local de UTC−3 já na ordem do `GROUP BY`, sem a view, com 1 linha lida no D1 por pedido (pela view eram ~6). A consulta precisa usar a mesma expressão do dia, literal (`db/painel.test.ts` confere o plano) |
 | `afiliados_por_celula`, `celulas_por_discipulador`, `discipuladores_por_rede` | subir e descer a hierarquia, e as FKs |
 | `webhook_eventos_por_pedido`, `webhook_eventos_por_resultado (resultado, recebido_em)` | auditoria de um pedido; listar erros e ignorados recentes |
+| `recuperacoes_por_campanha (campanha_id, executado_em)` e `pedidos_por_recuperacao (recuperacao_id) WHERE recuperacao_id IS NOT NULL` (migração 0004) | auditoria da conferência: as recuperações e os pedidos que cada uma gravou; a FK de `pedidos.recuperacao_id` |
 | `campanhas_uma_ativa` (parcial, único) | garantir uma única campanha ativa |
 
 Exemplo, ranking de células da campanha `?1` no período, com `[início, fim)` já convertido para UTC (`?2`, `?3`):
@@ -212,4 +236,4 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 
 - Do comprador: nome, e-mail, documento (CPF), data de nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. Ficam só `ddd` e `pais`.
 - O payload bruto do webhook nunca é gravado, só o redigido.
-- O CSV da reconciliação, que traz dados pessoais, é processado em memória e descartado.
+- O CSV da conferência (RIFA-012), que traz dados pessoais, é processado em memória e descartado. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, números, valor, afiliado e instante).

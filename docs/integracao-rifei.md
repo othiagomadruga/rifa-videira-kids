@@ -230,7 +230,7 @@ Não há retry documentado, então o webhook não pode ser a única fonte. A con
 ### Privacidade (D1)
 
 - O arquivo vai inteiro para a API e é lido só na memória da requisição: não é armazenado nem vai para o log. No navegador, fica só na memória da tela (nunca no `localStorage`).
-- As colunas de dado pessoal, reconhecidas pelo nome (nome, e-mail, telefone, celular, WhatsApp, CPF, documento, nascimento, endereço, CEP, cidade, estado, observação, comprador, cliente...; "Número" sozinho num arquivo com endereço), nunca são lidas e não podem ser mapeadas. O DDD não é derivado: a conferência não precisa dele, e o pedido recuperado fica com `ddd` e `pais` nulos.
+- As colunas de dado pessoal, reconhecidas pelo nome (nome, e-mail, telefone, celular, WhatsApp, contato, CPF, documento, nascimento, endereço, CEP, cidade, estado, observação, comprador, cliente, participante, pagador...; o telefone, o e-mail ou o CPF do afiliado; "Número" sozinho num arquivo com endereço), nunca são lidas e não podem ser mapeadas. O DDD não é derivado: a conferência não precisa dele, e o pedido recuperado fica com `ddd` e `pais` nulos.
 - As respostas só trazem códigos validados, status normalizados, quantidades, centavos, dias, ids de afiliado e nomes de coluna. Um texto que não se encaixa (afiliado que não é número nem rótulo cadastrado, status desconhecido) é só contado, nunca devolvido. Uma primeira linha com cara de dados (números, datas, valores, telefones, e-mails) é recusada como "sem cabeçalho", para não voltar como nome de coluna.
 - O log de erro da rota leva só o nome do erro (e a mensagem, quando é do D1).
 - Do arquivo, a auditoria guarda o SHA-256 (identifica o arquivo sem guardar o conteúdo) e os nomes das colunas usadas.

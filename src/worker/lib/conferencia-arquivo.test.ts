@@ -124,6 +124,20 @@ describe("CA1: detecção das colunas pelo nome (variações, acentos e inglês)
     ["Estado", "pessoal"],
     ["Observação", "pessoal"],
     ["buyer_name", "pessoal"],
+    // Contato do comprador ou do afiliado (revisão): nunca vira código nem afiliado
+    ["Contato", "pessoal"],
+    ["Whats", "pessoal"],
+    ["Participante", "pessoal"],
+    ["Pagador", "pessoal"],
+    ["Contato do pedido", "pessoal"],
+    ["Telefone do afiliado", "pessoal"],
+    ["E-mail do vendedor", "pessoal"],
+    ["Cliente indicado", "pessoal"],
+    // O código do pedido só num nome que é só o código
+    ["Número do pedido na Rifei", "pedido_id"],
+    ["Order number", "pedido_id"],
+    ["Responsável pelo pedido", null],
+    ["Link do pedido", null],
     // Sem campo
     ["Forma de pagamento", null],
     ["Cupom", null],

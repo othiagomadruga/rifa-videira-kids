@@ -36,6 +36,7 @@ import { sha256Hex } from "../lib/cripto";
 import {
   AGORA_CONFERENCIA,
   CABECALHO_DO_CENARIO,
+  DADOS_PESSOAIS,
   LINHAS_DO_CENARIO,
   MAPEAMENTO_DO_CENARIO,
   criarAppDaConferencia,
@@ -1118,6 +1119,59 @@ describe("CA3: segurança, limites e CSV malicioso", () => {
       "afiliados",
       "webhook_eventos",
     ]) {
+      const { results } = await env.DB.prepare(`SELECT * FROM ${tabela}`).all();
+      expect({
+        tabela,
+        pessoais: textosPessoaisEm(JSON.stringify(results)),
+      }).toEqual({ tabela, pessoais: [] });
+    }
+  });
+
+  it("D1: coluna de contato com nome que confunde a detecção (“Contato do pedido”, “Telefone do afiliado”) não vira código nem afiliado", async () => {
+    // Telefone só com dígitos e CPF passam pelo formato do código e do affiliate_id: a detecção não pode
+    // escolher essas colunas, nem a primeira de duas com "pedido" no nome (revisão da RIFA-012).
+    const telefone = DADOS_PESSOAIS.telefones[0].slice(3);
+    const cpf = DADOS_PESSOAIS.cpfs[0];
+    const csv = montarCsv([
+      [
+        "Contato do pedido",
+        "Pedido",
+        "Status",
+        "Quantidade",
+        "Valor",
+        "Telefone do afiliado",
+        "Data do pagamento",
+      ],
+      [telefone, "R-0101", "Pago", "3", "R$ 60,00", telefone, "27/11/2026"],
+      [cpf, "R-0102", "Pago", "2", "R$ 40,00", cpf, "28/11/2026"],
+    ]);
+
+    const analise = await porPedido({ csv });
+
+    expect(analise.mapeamento).toEqual({
+      pedido_id: 1,
+      status: 2,
+      qtd_bilhetes: 3,
+      bilhetes: null,
+      valor: 4,
+      afiliado: null,
+      data: 6,
+    });
+    expect(
+      analise.colunas
+        .filter((coluna) => coluna.dado_pessoal)
+        .map((coluna) => coluna.nome),
+    ).toEqual(["Contato do pedido", "Telefone do afiliado"]);
+    const gravacao = await postar(app, RECUPERAR, {
+      csv,
+      mapeamento: analise.mapeamento,
+      pedidos: ["R-0101", "R-0102"],
+    });
+    expect(gravacao.status).toBe(200);
+    expect(textosPessoaisEm(JSON.stringify(analise) + gravacao.texto)).toEqual(
+      [],
+    );
+    for (const tabela of ["pedidos", "recuperacoes", "afiliados"]) {
       const { results } = await env.DB.prepare(`SELECT * FROM ${tabela}`).all();
       expect({
         tabela,

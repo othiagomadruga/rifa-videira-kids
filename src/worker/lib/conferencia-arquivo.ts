@@ -91,7 +91,7 @@ const DE_IDENTIFICADOR = conjunto(
 const DE_CONTEXTO_DO_STATUS = conjunto("pedido pagamento compra order payment");
 /** Dado pessoal do comprador (ou da compra dele): a coluna nunca é lida. */
 const DE_DADO_PESSOAL = conjunto(
-  "nome name email mail telefone fone tel celular whatsapp zap phone mobile cpf cnpj documento document rg nascimento birth birthday aniversario idade endereco address logradouro rua bairro cidade city municipio cep zipcode zip uf estado state pais country complemento comprador compradora cliente buyer customer sobrenome genero sexo instagram facebook observacao observacoes obs observation ip",
+  "nome name email mail telefone fone tel celular whatsapp whats wpp zap zapzap phone mobile contato contatos cpf cnpj documento document rg identidade nascimento birth birthday aniversario idade endereco address logradouro rua bairro cidade city municipio cep zipcode zip uf estado state pais country complemento comprador compradora cliente buyer customer participante pagador titular sobrenome genero sexo instagram facebook observacao observacoes obs observation mensagem comentario comentarios ip",
 );
 /** Com uma destas colunas no arquivo, "Número" sozinho é o número do endereço (dado pessoal). */
 const DO_ENDERECO = conjunto(
@@ -132,6 +132,10 @@ const DE_VALOR_IGNORADO = conjunto(
   "desconto descontos discount taxa taxas tarifa fee frete cupom coupon comissao juros",
 );
 const DO_PEDIDO = conjunto("pedido pedidos order compra venda");
+/** Palavras de um nome que é só o código do pedido ("ID do pedido", "Nº da compra", "order_id"). */
+const SO_CODIGO_DO_PEDIDO = conjunto(
+  "pedido pedidos order compra venda id codigo cod code numero num nro n no nr number identificador identificacao ref referencia rifei do da de o a na em of",
+);
 const DA_TRANSACAO = conjunto("transacao transaction txid gateway");
 const SO_IDENTIFICADOR = conjunto(
   "id codigo cod code identificador referencia ref",
@@ -165,15 +169,18 @@ function classificarNome(palavras: ReadonlySet<string>): Classificacao {
     palavras.size > 0 && [...palavras].every((palavra) => alvo.has(palavra));
 
   if (tem(DO_AFILIADO)) {
+    // Telefone, e-mail ou CPF do afiliado (ou "Cliente indicado") é dado pessoal: um telefone só com
+    // dígitos passaria por affiliate_id e iria para a resposta e o banco. "Nome do afiliado" é o afiliado.
     const contato = [...palavras].some(
       (palavra) =>
         DE_DADO_PESSOAL.has(palavra) &&
         palavra !== "nome" &&
         palavra !== "name",
     );
+    if (contato) return { campo: null, pontos: 0, pessoal: true };
     return {
       campo: "afiliado",
-      pontos: contato ? 1 : tem(DE_IDENTIFICADOR) ? 3 : 2,
+      pontos: tem(DE_IDENTIFICADOR) ? 3 : 2,
       pessoal: false,
     };
   }
@@ -218,7 +225,11 @@ function classificarNome(palavras: ReadonlySet<string>): Classificacao {
       pessoal: false,
     };
   }
-  if (tem(DO_PEDIDO)) return { campo: "pedido_id", pontos: 3, pessoal: false };
+  // Só um nome que é só o código ("Contato do pedido" e "Link do pedido" não são): fica sem campo.
+  if (tem(DO_PEDIDO))
+    return so(SO_CODIGO_DO_PEDIDO)
+      ? { campo: "pedido_id", pontos: 3, pessoal: false }
+      : SEM_CAMPO;
   if (tem(DA_TRANSACAO) && tem(DE_IDENTIFICADOR))
     return { campo: "pedido_id", pontos: 1, pessoal: false };
   if (so(SO_IDENTIFICADOR))

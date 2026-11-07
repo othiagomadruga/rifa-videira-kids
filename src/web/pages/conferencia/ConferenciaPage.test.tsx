@@ -384,7 +384,7 @@ describe("CA4: a tela da conferência", () => {
         .de("/recuperar")
         .map((chamada) => (chamada.corpo as { simular: boolean }).simular),
     ).toEqual([true]);
-    expect(botao("Recuperar 3 vendas")).toHaveFocus();
+    await waitFor(() => expect(botao("Recuperar 3 vendas")).toHaveFocus());
   });
 
   it("falha ao gravar: o diálogo continua aberto e diz que nada foi gravado", async () => {
