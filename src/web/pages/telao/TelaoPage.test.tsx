@@ -540,12 +540,14 @@ describe("CA2: o telão se atualiza sozinho (timers falsos)", () => {
     esperarSemNavegacao();
 
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    // Espera a volta de verdade ("Atualizado às 15:30" fica na tela também durante a falha).
     await vi.waitFor(() =>
-      expect(screen.getByText(/^Atualizado às 15:30$/)).toBeInTheDocument(),
+      expect(document.querySelector(".telao__atualizado")).not.toHaveAttribute(
+        "data-falhou",
+      ),
     );
-    expect(document.querySelector(".telao__atualizado")).not.toHaveAttribute(
-      "data-falhou",
-    );
+    expect(aviso).toHaveTextContent("");
+    expect(screen.getByText(/^Atualizado às 15:30$/)).toBeInTheDocument();
   });
 
   it("a primeira carga falha: a mensagem, sem botão, e o telão tenta de novo sozinho em 1 minuto", async () => {
