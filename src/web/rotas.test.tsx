@@ -15,14 +15,12 @@ import {
 // Rotas planejadas: caminho, título (h1) e a tarefa que vai construir a tela. As telas da coordenação
 // abrem com a sessão de teste (papel coordenacao) do renderizarRota.
 const TELAS = [
-  ["/", "Ranking da campanha", "RIFA-010/011"],
   ["/telao", "Telão", "RIFA-011"],
   ["/coordenacao", "Visão geral", "RIFA-009"],
   // /entrar, /acesso e /coordenacao/acessos (RIFA-007), /coordenacao/campanha (RIFA-004),
   // /coordenacao/hierarquia (RIFA-005) e /coordenacao/adesao (RIFA-006) já são telas de verdade: ver
   // pages/entrar, pages/acesso, pages/acessos, pages/campanha, pages/hierarquia e pages/adesao.
   ["/coordenacao/pedidos", "Pedidos", "RIFA-003"],
-  ["/coordenacao/rankings", "Rankings", "RIFA-010"],
   ["/coordenacao/bumbo", "Bumbo", "RIFA-011"],
   ["/coordenacao/conferencia", "Conferência", "RIFA-012"],
 ] as const;

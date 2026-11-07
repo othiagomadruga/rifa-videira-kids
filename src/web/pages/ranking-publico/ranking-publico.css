@@ -1,0 +1,142 @@
+/* Ranking público ("/"), pensado para o celular (o link vai para o grupo de WhatsApp): letras grandes,
+   uma célula por linha; a partir de 48rem, jovens e adultos lado a lado. */
+
+.ranking-publico__fase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-1) var(--espaco-4);
+  padding: var(--espaco-4) var(--espaco-5);
+  border-radius: var(--raio-3);
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+}
+
+.ranking-publico__fase-destaque {
+  font-size: var(--texto-2xl);
+  font-weight: var(--peso-negrito);
+  line-height: var(--altura-linha-titulo);
+}
+
+.ranking-publico__fase-detalhe {
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+}
+
+.ranking-publico__disputa {
+  display: grid;
+  gap: var(--espaco-4);
+}
+
+.ranking-publico__janela {
+  font-size: var(--texto-xl);
+}
+
+.ranking-publico__legenda {
+  color: var(--cor-texto-suave);
+}
+
+.ranking-publico__divisoes {
+  display: grid;
+  gap: var(--espaco-5);
+}
+
+.ranking-publico__divisao {
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.ranking-publico__divisao-titulo {
+  font-size: var(--texto-lg);
+  color: var(--cor-primaria-forte);
+}
+
+.ranking-publico__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ranking-publico__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+/* Pódio (até o 3º lugar, empatados inclusive): selo cheio e faixa da cor da marca. */
+.ranking-publico__item[data-destaque] {
+  border-color: var(--cor-primaria);
+  box-shadow:
+    inset 4px 0 0 var(--cor-primaria),
+    var(--sombra-1);
+}
+
+.ranking-publico__posicao {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--alvo-toque);
+  height: var(--alvo-toque);
+  padding: 0 var(--espaco-1);
+  border: 2px solid var(--cor-borda-forte);
+  border-radius: var(--raio-pilula);
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-negrito);
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking-publico__item[data-destaque] .ranking-publico__posicao {
+  border-color: var(--cor-primaria);
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+}
+
+.ranking-publico__nome {
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+  line-height: var(--altura-linha-titulo);
+  overflow-wrap: anywhere;
+}
+
+.ranking-publico__percentual {
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-negrito);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ranking-publico__sem-vendas {
+  padding: var(--espaco-4);
+  border: 1px dashed var(--cor-borda-forte);
+  border-radius: var(--raio-3);
+  background: var(--cor-superficie);
+  color: var(--cor-texto-suave);
+}
+
+.ranking-publico__rodape {
+  display: grid;
+  gap: var(--espaco-1);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.ranking-publico__falha {
+  color: var(--cor-alerta);
+  font-weight: var(--peso-forte);
+}
+
+@media (min-width: 48rem) {
+  .ranking-publico__divisoes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

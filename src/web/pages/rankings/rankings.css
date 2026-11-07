@@ -1,0 +1,278 @@
+/* Rankings da coordenação. Celular primeiro: cada linha do ranking é um cartão compacto; a partir de
+   48rem, tabela de verdade (o mesmo HTML). */
+
+.rankings-painel {
+  --pilha-espaco: var(--espaco-4);
+}
+
+.rankings-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--espaco-3);
+}
+
+.rankings-resumo {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.rankings-resumo__janela {
+  font-size: var(--texto-lg);
+}
+
+.rankings-resumo__detalhes {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* Posição: um selo redondo; no pódio (até o 3º lugar, empatados inclusive), cheio com a cor da marca. */
+.rankings-posicao {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--alvo-toque);
+  height: var(--alvo-toque);
+  padding: 0 var(--espaco-1);
+  border: 2px solid var(--cor-borda-forte);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-superficie);
+  font-weight: var(--peso-negrito);
+  font-variant-numeric: tabular-nums;
+}
+
+.rankings-linha[data-destaque] .rankings-posicao {
+  border-color: var(--cor-primaria);
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+}
+
+.rankings-tabela__tabela,
+.rankings-tabela__tabela tbody {
+  display: block;
+  width: 100%;
+}
+
+.rankings-tabela__tabela {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+/* No celular os cabeçalhos ficam fora da tela, mas continuam no HTML para os leitores de tela. */
+.rankings-tabela__cabecalho {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Cartão: posição à esquerda; o nome (com o vínculo) na largura toda; embaixo, a barra do % da meta e,
+   na última linha, realizado/meta à esquerda e a situação à direita. */
+.rankings-linha {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "posicao nome nome"
+    "posicao percentual percentual"
+    "posicao valores situacao";
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+  padding: var(--espaco-3);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+.rankings-linha + .rankings-linha {
+  margin-top: var(--espaco-2);
+}
+
+/* Pódio: além do selo cheio, uma faixa da cor da marca à esquerda (o destaque não depende só da cor). */
+.rankings-linha[data-destaque] {
+  border-color: var(--cor-primaria);
+  box-shadow:
+    inset 4px 0 0 var(--cor-primaria),
+    var(--sombra-1);
+}
+
+.rankings-linha > * {
+  display: block;
+  padding: 0;
+  min-width: 0;
+}
+
+.rankings-linha__posicao {
+  grid-area: posicao;
+  align-self: start;
+}
+
+.rankings-linha__nome {
+  grid-area: nome;
+  font-weight: var(--peso-normal);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.rankings-linha__titulo {
+  display: block;
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+  line-height: var(--altura-linha-titulo);
+}
+
+.rankings-linha__vinculo {
+  display: block;
+  margin-top: var(--espaco-1);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.rankings-linha__percentual {
+  grid-area: percentual;
+}
+
+.rankings-linha__sem-meta {
+  color: var(--cor-texto-suave);
+}
+
+.rankings-linha__valores {
+  grid-area: valores;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* Selo e, embaixo dele, quanto falta (se estiver abaixo), alinhados à direita. */
+.rankings-linha__situacao {
+  grid-area: situacao;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--espaco-1);
+  text-align: right;
+}
+
+.rankings-linha__falta {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-xs);
+  white-space: nowrap;
+}
+
+/* Computador: tabela, com rolagem horizontal só dentro dela se precisar. */
+@media (min-width: 48rem) {
+  .rankings-filtros {
+    grid-template-columns: repeat(2, minmax(0, 14rem));
+  }
+
+  .rankings-tabela {
+    overflow-x: auto;
+    background: var(--cor-superficie);
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio-3);
+    box-shadow: var(--sombra-1);
+  }
+
+  .rankings-tabela__tabela {
+    display: table;
+  }
+
+  .rankings-tabela__tabela tbody {
+    display: table-row-group;
+  }
+
+  .rankings-tabela__cabecalho {
+    position: static;
+    display: table-header-group;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .rankings-tabela__cabecalho th {
+    padding: var(--espaco-3) var(--espaco-4);
+    background: var(--cor-superficie-2);
+    color: var(--cor-texto-suave);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-forte);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .rankings-tabela__cabecalho th[data-alinhamento="fim"] {
+    text-align: right;
+  }
+
+  .rankings-linha,
+  .rankings-linha[data-destaque] {
+    display: table-row;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .rankings-linha + .rankings-linha {
+    margin-top: 0;
+  }
+
+  .rankings-linha > * {
+    display: table-cell;
+    padding: var(--espaco-3) var(--espaco-4);
+    border-bottom: 1px solid var(--cor-borda);
+    vertical-align: middle;
+  }
+
+  .rankings-linha:last-child > * {
+    border-bottom: 0;
+  }
+
+  .rankings-linha[data-destaque] > * {
+    background: var(--cor-primaria-suave);
+  }
+
+  .rankings-linha[data-destaque] > :first-child {
+    box-shadow: inset 4px 0 0 var(--cor-primaria);
+  }
+
+  .rankings-linha__posicao {
+    width: 1%;
+  }
+
+  .rankings-linha__titulo {
+    font-size: var(--texto-md);
+  }
+
+  .rankings-linha__percentual {
+    width: 24%;
+    min-width: 10rem;
+  }
+
+  /* Na tabela, o cabeçalho da coluna já diz "% da meta": o rótulo da barra fica só para o leitor de tela. */
+  .rankings-linha__percentual .ui-progress__rotulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .rankings-linha__valores {
+    color: var(--cor-texto);
+    font-size: var(--texto-md);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .rankings-linha__situacao {
+    text-align: left;
+  }
+
+  .rankings-linha__falta {
+    display: block;
+    margin-top: var(--espaco-1);
+  }
+}
