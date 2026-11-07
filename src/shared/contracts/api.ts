@@ -14,6 +14,7 @@ import {
   UNIDADES_META,
   affiliateIdSchema,
   afiliadoSchema,
+  alvoSchema,
   campanhaEntradaSchema,
   campanhaSchema,
   celulaEntradaSchema,
@@ -41,12 +42,15 @@ import type { Papel } from "./acesso";
 /**
  * - aberto: sem autenticação (/api/health e /api/publico/*; o público nunca recebe valores financeiros);
  * - rifei_bearer: `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>` (/api/webhooks/*);
- * - coordenacao: equipe da campanha (/api/admin/* e /api/painel/*); o mecanismo sai na RIFA-007.
+ * - coordenacao: equipe da campanha (/api/admin/* e /api/painel/*), com a sessão do link pessoal (RIFA-007);
+ * - hierarquia: líder, discipulador e rede (/api/minha/*), com a mesma sessão (RIFA-014, D12). O alvo vem só
+ *   da sessão: nenhuma rota deste grupo aceita id de célula, discipulador ou rede na URL, na consulta ou no corpo.
  */
 export const GRUPOS_AUTORIZACAO = [
   "aberto",
   "rifei_bearer",
   "coordenacao",
+  "hierarquia",
 ] as const;
 export type GrupoAutorizacao = (typeof GRUPOS_AUTORIZACAO)[number];
 
@@ -465,7 +469,10 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - campanha.salvar: PUT /api/admin/campanha (criação ou troca da configuração, inclusive do slug);
  * - afiliado.salvar: PUT /api/admin/afiliados/:affiliateId (vínculo, troca ou desvínculo de célula);
  * - hierarquia.importar: POST /api/admin/hierarquia/importar quando aplica (não na simulação);
- * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos.
+ * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos;
+ * - acessos_hierarquia.gerar_links: POST /api/admin/acessos-hierarquia/links (RIFA-014, D12), uma linha por
+ *   lote, alvo `papel:<papel>`, resumo sem nomes (quantos alvos, quantos usuários criados e se revogou os
+ *   anteriores; os ids só se couberem no resumo).
  */
 export const ACOES_AUDITORIA = [
   "campanha.salvar",
@@ -476,6 +483,7 @@ export const ACOES_AUDITORIA = [
   "usuario.desativar",
   "link.criar",
   "link.revogar",
+  "acessos_hierarquia.gerar_links",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -853,6 +861,281 @@ export const respostaBumboSchema = z.strictObject({
 export type RespostaBumbo = z.infer<typeof respostaBumboSchema>;
 
 // ---------------------------------------------------------------------------------------------------
+// GET /api/minha/visao (líder, discipulador e rede: a visão individual, RIFA-014, RF08, D12)
+//
+// - O alvo vem SÓ da sessão (usuarios.celula_id, discipulador_id ou rede_id): a rota não aceita id.
+// - NENHUM valor financeiro sai daqui, com qualquer configuração da campanha: nada de centavos, R$ ou
+//   arrecadação. Com meta em centavos, as quantidades na unidade da meta saem null e ficam só os percentuais;
+//   o schema recusa quantidade preenchida nesse caso.
+// - Números (meta, realizado, falta, bilhetes) só do próprio alvo e da equipe dele (quem está abaixo dele na
+//   hierarquia). Dos pares (o mesmo nível), só nome e posição.
+// - Percentuais sobre a meta EXATA (a fração, sem arredondar) e truncados, com a mesma conta de
+//   percentual_meta_bp e percentual_esperado_bp do painel.
+// - Sem cache compartilhado da resposta (é por pessoa). Os dados de base podem vir de um cache de até 30 s por
+//   isolate, como as rotas abertas (D10).
+// ---------------------------------------------------------------------------------------------------
+
+export const consultaVisaoIndividualSchema = z.object({
+  /** Janela do ranking: o período atual (padrão; o "ranking da semana") ou a campanha inteira. */
+  periodo: z.enum(JANELAS_RANKING).default("atual"),
+});
+export type ConsultaVisaoIndividual = z.output<
+  typeof consultaVisaoIndividualSchema
+>;
+
+/** Ritmo numa janela, sem dinheiro. Quantidades na unidade da meta só quando ela é `bilhetes` (senão null). */
+export const ritmoIndividualSchema = z.strictObject({
+  meta: quantidadeSchema.nullable(),
+  /** Esperado pela curva até o fim de ontem, dentro da janela. */
+  esperado: quantidadeSchema.nullable(),
+  /** Vendido na janela até agora (inclui hoje). */
+  realizado: quantidadeSchema.nullable(),
+  /** realizado − esperado (negativo = abaixo da curva). */
+  diferenca: z.number().int().nullable(),
+  situacao: z.enum(SITUACOES_RITMO),
+  /** realizado ÷ meta; null sem meta. */
+  percentual_meta_bp: percentualBpSchema.nullable(),
+  /** Onde a curva manda estar: esperado ÷ meta; null sem meta. */
+  percentual_esperado_bp: percentualBpSchema.max(10_000).nullable(),
+});
+export type RitmoIndividual = z.infer<typeof ritmoIndividualSchema>;
+
+/** Meta do dia, sem dinheiro (mesma regra R3 do painel). Quantidades só com meta em bilhetes. */
+export const metaDoDiaIndividualSchema = z.strictObject({
+  data: dataLocalSchema,
+  /** Esperado até o fim de hoje − realizado até ontem, nunca negativa: o que faltou entra aqui. */
+  meta: quantidadeSchema.nullable(),
+  realizado: quantidadeSchema.nullable(),
+  /** max(0, meta − realizado). */
+  falta: quantidadeSchema.nullable(),
+  /** realizado ÷ meta; null quando a meta do dia é zero. */
+  percentual_meta_bp: percentualBpSchema.nullable(),
+  batida: z.boolean(),
+});
+export type MetaDoDiaIndividual = z.infer<typeof metaDoDiaIndividualSchema>;
+
+/** Bilhetes vendidos (pedidos aprovados que contam): quantidade, nunca dinheiro. Sai com qualquer unidade de meta. */
+export const bilhetesIndividualSchema = z.strictObject({
+  /** Na janela da campanha, até agora. */
+  campanha: quantidadeSchema,
+  /** Hoje (data local da campanha); null fora da campanha, junto com `hoje` do desempenho. */
+  hoje: quantidadeSchema.nullable(),
+});
+
+/** Números de um alvo (o próprio ou um da equipe dele). */
+export const desempenhoIndividualSchema = z.strictObject({
+  /** Só durante a campanha. */
+  hoje: metaDoDiaIndividualSchema.nullable(),
+  /** Período atual; só durante a campanha. */
+  periodo: ritmoIndividualSchema.nullable(),
+  campanha: ritmoIndividualSchema.extend({
+    /** Projeção do fim no ritmo dos dias fechados, em % da meta. Null antes do início e no 1º dia. */
+    projecao_percentual_meta_bp: percentualBpSchema.nullable(),
+  }),
+  bilhetes: bilhetesIndividualSchema,
+});
+export type DesempenhoIndividual = z.infer<typeof desempenhoIndividualSchema>;
+
+/**
+ * Um dia do gráfico, em pontos-base da meta exata da campanha do alvo (serve para meta em bilhetes ou em
+ * centavos). Um ponto por dia da campanha; a lista sai vazia quando o alvo não tem meta (não há percentual).
+ */
+export const pontoCurvaIndividualSchema = z.strictObject({
+  dia: z.number().int().min(1),
+  data: dataLocalSchema,
+  /** Esperado acumulado até o fim do dia ÷ meta da campanha. */
+  esperado_bp: percentualBpSchema.max(10_000),
+  /**
+   * Realizado acumulado até o fim do dia ÷ meta da campanha (sem teto: passa de 10000 acima da meta). Hoje: até
+   * agora, igual a `desempenho.campanha.percentual_meta_bp`. null nos dias depois de hoje.
+   */
+  realizado_bp: percentualBpSchema.nullable(),
+});
+
+/** Quem está logo acima ou logo abaixo do alvo no ranking (empatados não são vizinhos). */
+export const vizinhoIndividualSchema = z.strictObject({
+  nome: z.string().min(1),
+  posicao: z.number().int().min(1),
+  /**
+   * Distância até o vizinho no critério do ranking. **Sai sempre null enquanto o PO não decidir** (D12): somada ao
+   * próprio número, ela revela o número do vizinho. Se for liberada: pontos-base (percentual_meta) ou bilhetes
+   * (bilhetes). No critério arrecadação, nunca (o schema recusa).
+   */
+  diferenca: z.number().int().nonnegative().nullable(),
+});
+
+/**
+ * Posição do alvo entre os pares: todos do nível que têm pelo menos uma célula (R8), inclusive quem ainda não
+ * vendeu; empates dividem a posição (1, 1, 3).
+ */
+export const posicaoIndividualSchema = z.strictObject({
+  posicao: z.number().int().min(1),
+  /** Quantos estão neste ranking. */
+  participantes: z.number().int().min(1),
+  acima: vizinhoIndividualSchema.nullable(),
+  abaixo: vizinhoIndividualSchema.nullable(),
+});
+
+export const rankingIndividualSchema = z.strictObject({
+  /** O nível do alvo: célula (líder), discipulador ou rede. */
+  nivel: z.enum(NIVEIS_RANKING),
+  janela: janelaRankingSchema,
+  criterio: z.enum(CRITERIOS_RANKING),
+  /** Entre todos do nível (jovens e adultos juntos). null: o alvo não tem células e não entra no ranking (R8). */
+  geral: posicaoIndividualSchema.nullable(),
+  /** Entre os do nível na divisão do alvo (a premiação separa as divisões). null: como em `geral`. */
+  divisao: posicaoIndividualSchema.nullable(),
+  /**
+   * Os primeiros da divisão, pela regra do ranking público: só quem já vendeu na janela, posição até
+   * `publico.limite_ranking` (padrão 3; null = todos), empates na última posição entram todos. Só nome e
+   * posição; `eu` marca o próprio alvo (pelo id, não pelo nome).
+   */
+  primeiros: z.array(
+    z.strictObject({
+      posicao: z.number().int().min(1),
+      nome: z.string().min(1),
+      eu: z.boolean(),
+    }),
+  ),
+});
+
+/**
+ * Um alvo da equipe do usuário (quem está abaixo dele): as células do discipulador; os discipuladores e as
+ * células da rede. Com números (o usuário responde por eles) e sem dinheiro.
+ */
+export const itemEquipeSchema = z.strictObject({
+  tipo: z.enum(["discipulador", "celula"]),
+  id: idSchema,
+  nome: z.string().min(1),
+  /** Nas células: o discipulador delas (a visão da rede agrupa por ele). null nos discipuladores. */
+  discipulador_id: idSchema.nullable(),
+  /** Nas células: o líder, como está na hierarquia. null nos discipuladores. */
+  lider_nome: z.string().min(1).nullable(),
+  /** Nas células: quantos afiliados da Rifei estão vinculados a ela (0 = o líder ainda não aderiu). null nos discipuladores. */
+  afiliados_vinculados: quantidadeSchema.nullable(),
+  desempenho: desempenhoIndividualSchema,
+  /**
+   * Posição no ranking do nível dele, na divisão, na janela pedida. null quando ele não entra no ranking
+   * (discipulador sem células, R8).
+   */
+  posicao_divisao: z.number().int().min(1).nullable(),
+});
+export type ItemEquipe = z.infer<typeof itemEquipeSchema>;
+
+/** Campos de cada janela do desempenho que estão na unidade da meta (com meta em centavos, seriam dinheiro). */
+const QUANTIDADES_NA_UNIDADE_DA_META = {
+  hoje: ["meta", "realizado", "falta"],
+  periodo: ["meta", "esperado", "realizado", "diferenca"],
+  campanha: ["meta", "esperado", "realizado", "diferenca"],
+} as const;
+
+export const respostaVisaoIndividualSchema = z
+  .strictObject({
+    alvo: alvoSchema,
+    /** Nome do usuário conectado (quem recebeu o link). */
+    pessoa: z.string().min(1).max(120),
+    referencia: referenciaCampanhaSchema,
+    unidade: z.enum(UNIDADES_META),
+    desempenho: desempenhoIndividualSchema,
+    /** Só no líder: quantos afiliados estão vinculados à célula (0 = falta a adesão). null nos outros papéis. */
+    afiliados_vinculados: quantidadeSchema.nullable(),
+    curva: z.array(pontoCurvaIndividualSchema),
+    ranking: rankingIndividualSchema,
+    /**
+     * Líder: vazia. Discipulador: as células dele. Rede: os discipuladores dela e as células de cada um.
+     * Ordem: discipuladores por nome; células pela ordem do discipulador delas e por nome.
+     */
+    equipe: z.array(itemEquipeSchema),
+    atualizado_em: instanteSchema,
+  })
+  .superRefine((visao, ctx) => {
+    const problema = (path: PropertyKey[], message: string) =>
+      ctx.addIssue({ code: "custom", path, message });
+    const desempenhos = [
+      { caminho: ["desempenho"], desempenho: visao.desempenho },
+      ...visao.equipe.map((item, indice) => ({
+        caminho: ["equipe", indice, "desempenho"],
+        desempenho: item.desempenho,
+      })),
+    ];
+    for (const { caminho, desempenho } of desempenhos) {
+      if ((desempenho.hoje === null) !== (desempenho.bilhetes.hoje === null))
+        problema(
+          [...caminho, "bilhetes", "hoje"],
+          "Os bilhetes de hoje existem só quando existe a meta de hoje",
+        );
+      if (visao.unidade !== "centavos") continue;
+      for (const janela of ["hoje", "periodo", "campanha"] as const) {
+        const valores: Record<string, unknown> | null = desempenho[janela];
+        for (const campo of QUANTIDADES_NA_UNIDADE_DA_META[janela])
+          if (valores !== null && valores[campo] !== null)
+            problema(
+              [...caminho, janela, campo],
+              "Meta em centavos: esta quantidade seria dinheiro (null)",
+            );
+      }
+    }
+    if (visao.ranking.criterio === "arrecadacao")
+      for (const escopo of ["geral", "divisao"] as const)
+        for (const lado of ["acima", "abaixo"] as const)
+          if (visao.ranking[escopo]?.[lado]?.diferenca != null)
+            problema(
+              ["ranking", escopo, lado, "diferenca"],
+              "Critério arrecadação: a distância seria dinheiro (null)",
+            );
+    if (visao.ranking.nivel !== visao.alvo.tipo)
+      problema(["ranking", "nivel"], "O nível do ranking é o do alvo");
+    if (visao.ranking.primeiros.filter((item) => item.eu).length > 1)
+      problema(["ranking", "primeiros"], "Só um item pode ser o próprio alvo");
+    if (
+      (visao.alvo.tipo === "celula") !==
+      (visao.afiliados_vinculados !== null)
+    )
+      problema(
+        ["afiliados_vinculados"],
+        "Os afiliados vinculados vêm só na visão do líder",
+      );
+    const discipuladoresDaEquipe = new Set(
+      visao.equipe
+        .filter((item) => item.tipo === "discipulador")
+        .map((item) => item.id),
+    );
+    visao.equipe.forEach((item, indice) => {
+      const ehCelula = item.tipo === "celula";
+      if (
+        ehCelula !==
+          (item.discipulador_id !== null &&
+            item.lider_nome !== null &&
+            item.afiliados_vinculados !== null) ||
+        (!ehCelula &&
+          (item.discipulador_id !== null ||
+            item.lider_nome !== null ||
+            item.afiliados_vinculados !== null))
+      )
+        problema(
+          ["equipe", indice],
+          "Discipulador da equipe sem os campos de célula; célula com discipulador, líder e afiliados",
+        );
+      const dentroDoAlvo =
+        visao.alvo.tipo === "discipulador"
+          ? ehCelula && item.discipulador_id === visao.alvo.id
+          : visao.alvo.tipo === "rede"
+            ? !ehCelula ||
+              (item.discipulador_id !== null &&
+                discipuladoresDaEquipe.has(item.discipulador_id))
+            : false;
+      if (!dentroDoAlvo)
+        problema(
+          ["equipe", indice],
+          "A equipe tem só quem está abaixo do alvo: o líder não tem equipe; o discipulador, as células dele; a rede, os discipuladores dela e as células deles",
+        );
+    });
+  });
+export type RespostaVisaoIndividual = z.infer<
+  typeof respostaVisaoIndividualSchema
+>;
+
+// ---------------------------------------------------------------------------------------------------
 // RASCUNHO: POST /api/admin/reconciliacao (CSV "Exportar Pedidos" da Rifei → divergências)
 // O CSV traz dados pessoais: é lido só em memória e nada dele é gravado nem devolvido além do abaixo.
 // ---------------------------------------------------------------------------------------------------
@@ -1149,6 +1432,16 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaBumboSchema,
     sucesso: { status: 200, corpo: respostaBumboSchema },
+  },
+  /** Sem sessão: 401. Sessão da coordenação: 403 (`proibido`). Sem campanha ativa: como o painel. */
+  visaoIndividual: {
+    metodo: "GET",
+    caminho: "/api/minha/visao",
+    grupo: "hierarquia",
+    papeis: ["lider", "discipulador", "rede"],
+    situacao: "detalhada",
+    consulta: consultaVisaoIndividualSchema,
+    sucesso: { status: 200, corpo: respostaVisaoIndividualSchema },
   },
   reconciliacao: {
     metodo: "POST",

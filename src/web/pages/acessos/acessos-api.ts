@@ -4,7 +4,7 @@
 // acessos-contrato.test.ts.
 import type {
   LinkAcessoCriado,
-  Papel,
+  PapelCoordenacao,
   Usuario,
 } from "../../../shared/contracts";
 import { api } from "../../lib/api";
@@ -16,13 +16,23 @@ export const CAMINHOS = {
   links: "/api/admin/links",
 } as const;
 
-/** PAPEIS do contrato, na ordem do formulário (coordenação primeiro: é o caso comum). */
-export const PAPEIS_DO_FORMULARIO: readonly Papel[] = ["coordenacao", "admin"];
+/**
+ * PAPEIS_COORDENACAO do contrato, na ordem do formulário (coordenação primeiro: é o caso comum). Os papéis da
+ * hierarquia não entram aqui: os acessos deles nascem pelos links em lote (RIFA-014).
+ */
+export const PAPEIS_DO_FORMULARIO: readonly PapelCoordenacao[] = [
+  "coordenacao",
+  "admin",
+];
 
 /** usuarioSchema / corpoCriarUsuarioSchema: nome até 120 e e-mail até 254 caracteres. */
 export const LIMITES = { nome: 120, email: 254 } as const;
 
-export type NovaPessoa = { nome: string; email: string | null; papel: Papel };
+export type NovaPessoa = {
+  nome: string;
+  email: string | null;
+  papel: PapelCoordenacao;
+};
 
 type Opcoes = { signal?: AbortSignal };
 

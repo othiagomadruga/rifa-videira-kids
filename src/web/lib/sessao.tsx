@@ -31,6 +31,9 @@ export const CAMINHOS_SESSAO = {
 export const ROTULO_PAPEL: Record<Papel, string> = {
   admin: "Admin",
   coordenacao: "Coordenação",
+  lider: "Líder",
+  discipulador: "Discipulador",
+  rede: "Rede",
 };
 
 /**

@@ -17,19 +17,48 @@ import {
   type DefinicaoRota,
   type MetodoHttp,
 } from "./api";
-import { idSchema, instanteSchema } from "./dominio";
+import {
+  alvoSchema,
+  idSchema,
+  instanteSchema,
+  type Alvo,
+  type TipoAlvo,
+} from "./dominio";
 
 // ---------------------------------------------------------------------------------------------------
 // Papéis e parâmetros do acesso
 // ---------------------------------------------------------------------------------------------------
 
 /**
+ * Coordenação (RIFA-007):
  * - admin: tudo da coordenação e, além disso, cria usuários, gera e revoga links;
  * - coordenacao: equipe da campanha (`/api/admin/*` e `/api/painel/*`, exceto usuários e links).
+ *
+ * Hierarquia (RIFA-014, D12): cada usuário destes papéis é preso a UM alvo da hierarquia (TIPO_ALVO_DO_PAPEL)
+ * e só vê a visão individual dele (`/api/minha/*`). Nunca entram em `/api/admin/*` nem em `/api/painel/*` (403).
+ * - lider: a célula;
+ * - discipulador: o discipulador (e as células dele);
+ * - rede: a rede (e os discipuladores e células dela).
  */
-export const PAPEIS = ["admin", "coordenacao"] as const;
+export const PAPEIS_COORDENACAO = ["admin", "coordenacao"] as const;
+export const PAPEIS_HIERARQUIA = ["lider", "discipulador", "rede"] as const;
+export const PAPEIS = [...PAPEIS_COORDENACAO, ...PAPEIS_HIERARQUIA] as const;
 export const papelSchema = z.enum(PAPEIS);
 export type Papel = z.infer<typeof papelSchema>;
+export const papelCoordenacaoSchema = z.enum(PAPEIS_COORDENACAO);
+export type PapelCoordenacao = z.infer<typeof papelCoordenacaoSchema>;
+export const papelHierarquiaSchema = z.enum(PAPEIS_HIERARQUIA);
+export type PapelHierarquia = z.infer<typeof papelHierarquiaSchema>;
+
+/**
+ * Tipo do alvo de cada papel da hierarquia. O banco garante que o usuário tem exatamente o alvo do papel
+ * (e nenhum alvo nos papéis da coordenação), e no máximo um usuário por alvo (D12).
+ */
+export const TIPO_ALVO_DO_PAPEL = {
+  lider: "celula",
+  discipulador: "discipulador",
+  rede: "rede",
+} as const satisfies Record<PapelHierarquia, TipoAlvo>;
 
 /**
  * Validade de um link novo e de uma sessão nova, em dias. 45 dias cobrem a campanha (vendas de 23/11 a meados de
@@ -56,12 +85,37 @@ export const FORMATO_TOKEN_ACESSO = /^[A-Za-z0-9_-]{43}$/;
 // POST /api/sessao, GET /api/sessao e POST /api/sessao/sair
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * O alvo combina com o papel: papel da hierarquia com o alvo do tipo dele; papel da coordenação sem alvo (ausente
+ * ou null). Vale para a sessão e para o usuário da administração.
+ */
+function conferirAlvoDoPapel(
+  usuario: { papel: Papel; alvo?: Alvo | null },
+  ctx: z.RefinementCtx,
+) {
+  const tipos: Partial<Record<Papel, TipoAlvo>> = TIPO_ALVO_DO_PAPEL;
+  const tipo = tipos[usuario.papel];
+  if (tipo === undefined ? usuario.alvo != null : usuario.alvo?.tipo !== tipo)
+    ctx.addIssue({
+      code: "custom",
+      path: ["alvo"],
+      message: "O alvo não combina com o papel",
+    });
+}
+
 /** Quem está conectado. */
-export const usuarioSessaoSchema = z.object({
-  id: idSchema,
-  nome: z.string().min(1).max(120),
-  papel: papelSchema,
-});
+export const usuarioSessaoSchema = z
+  .object({
+    id: idSchema,
+    nome: z.string().min(1).max(120),
+    papel: papelSchema,
+    /**
+     * Papéis da hierarquia: o alvo da visão individual (sempre presente, lido da hierarquia na hora).
+     * Papéis da coordenação: ausente ou null.
+     */
+    alvo: alvoSchema.nullable().optional(),
+  })
+  .superRefine(conferirAlvoDoPapel);
 export type UsuarioSessao = z.infer<typeof usuarioSessaoSchema>;
 
 export const corpoCriarSessaoSchema = z.object({
@@ -102,26 +156,35 @@ export const linkAcessoCriadoSchema = linkAcessoSchema.extend({
 });
 export type LinkAcessoCriado = z.infer<typeof linkAcessoCriadoSchema>;
 
-export const usuarioSchema = z.object({
-  id: idSchema,
-  nome: z.string().min(1).max(120),
-  email: z.email().max(254).nullable(),
-  papel: papelSchema,
-  /** false = os links não abrem sessão e as sessões foram encerradas. */
-  ativo: z.boolean(),
-  criado_em: instanteSchema,
-  /** Sessões dentro da validade (aparelhos conectados). */
-  sessoes_ativas: z.number().int().nonnegative(),
-  /** Do mais novo para o mais antigo, inclusive expirados e revogados. */
-  links: z.array(linkAcessoSchema),
-});
+export const usuarioSchema = z
+  .object({
+    id: idSchema,
+    nome: z.string().min(1).max(120),
+    email: z.email().max(254).nullable(),
+    papel: papelSchema,
+    /** Papéis da hierarquia: o alvo (como em usuarioSessaoSchema). Papéis da coordenação: ausente ou null. */
+    alvo: alvoSchema.nullable().optional(),
+    /** false = os links não abrem sessão e as sessões foram encerradas. */
+    ativo: z.boolean(),
+    criado_em: instanteSchema,
+    /** Sessões dentro da validade (aparelhos conectados). */
+    sessoes_ativas: z.number().int().nonnegative(),
+    /** Do mais novo para o mais antigo, inclusive expirados e revogados. */
+    links: z.array(linkAcessoSchema),
+  })
+  .superRefine(conferirAlvoDoPapel);
 export type Usuario = z.infer<typeof usuarioSchema>;
 
+/**
+ * Cria uma pessoa da COORDENAÇÃO. Os usuários da hierarquia (líder, discipulador, rede) nascem só pelos links em
+ * lote (ROTAS_ACESSO_HIERARQUIA.gerarLinksHierarquia), que prendem cada um ao seu alvo: papel da hierarquia aqui
+ * dá 400.
+ */
 export const corpoCriarUsuarioSchema = z.object({
   nome: z.string().trim().min(1).max(120),
   /** Opcional: ausente ou null. Texto vazio não é e-mail (400). */
   email: z.email().max(254).nullable().default(null),
-  papel: papelSchema,
+  papel: papelCoordenacaoSchema,
 });
 export type CorpoCriarUsuario = z.input<typeof corpoCriarUsuarioSchema>;
 
@@ -131,6 +194,7 @@ export const respostaCriarUsuarioSchema = z.object({
   link: linkAcessoCriadoSchema,
 });
 
+/** GET /api/admin/usuarios: só as pessoas da coordenação (admin e coordenacao). A hierarquia tem a lista própria. */
 export const respostaListaUsuariosSchema = lista(usuarioSchema);
 
 /** 201 de POST /api/admin/usuarios/:id/links. Os links anteriores continuam valendo até expirar ou ser revogados. */
@@ -236,3 +300,126 @@ export const ROTAS_ACESSO = {
 } as const satisfies Record<string, DefinicaoRotaAcesso>;
 
 export type NomeRotaAcesso = keyof typeof ROTAS_ACESSO;
+
+// ---------------------------------------------------------------------------------------------------
+// Acessos da hierarquia (RIFA-014, D12; papel admin): /api/admin/acessos-hierarquia
+// ---------------------------------------------------------------------------------------------------
+
+export const consultaAcessosHierarquiaSchema = z.object({
+  papel: papelHierarquiaSchema,
+});
+export type ConsultaAcessosHierarquia = z.output<
+  typeof consultaAcessosHierarquiaSchema
+>;
+
+/** O usuário de um alvo, como a lista mostra: sem token e sem hash. */
+export const usuarioDoAlvoSchema = z.strictObject({
+  id: idSchema,
+  /** Para quem o último lote gerou o link (pode ser diferente de `pessoa_nome` se a hierarquia mudou depois). */
+  nome: z.string().min(1).max(120),
+  ativo: z.boolean(),
+  /** Sessões dentro da validade (aparelhos conectados). */
+  sessoes_ativas: z.number().int().nonnegative(),
+  /** Do mais novo para o mais antigo, inclusive expirados e revogados. */
+  links: z.array(linkAcessoSchema),
+});
+
+/** Um alvo do papel pedido. A lista traz TODOS os alvos do papel na hierarquia, com ou sem acesso. */
+export const itemAcessoHierarquiaSchema = z.strictObject({
+  alvo: alvoSchema,
+  /**
+   * Quem deve receber o link, lido da hierarquia na hora: o lider_nome da célula, o nome do discipulador ou o
+   * responsavel_nome da rede (null quando a rede não tem responsável).
+   */
+  pessoa_nome: z.string().min(1).max(120).nullable(),
+  /** Só no papel lider: o lider_telefone da célula, para abrir o WhatsApp. Nos outros papéis, null. */
+  telefone: z.string().min(1).max(40).nullable(),
+  /** null = o alvo ainda não tem usuário (nenhum link foi gerado para ele). */
+  usuario: usuarioDoAlvoSchema.nullable(),
+});
+export type ItemAcessoHierarquia = z.infer<typeof itemAcessoHierarquiaSchema>;
+
+/**
+ * Itens pelo caminho na hierarquia: nome da rede, depois do discipulador, depois da célula (só os níveis que o
+ * papel tem; empate de nome, pelo id).
+ */
+export const respostaAcessosHierarquiaSchema = lista(
+  itemAcessoHierarquiaSchema,
+);
+
+/** Quantos alvos um lote aceita (a campanha tem 36 células, uns 12 discipuladores e poucas redes). */
+export const LIMITE_ALVOS_POR_LOTE = 200;
+
+/**
+ * POST /api/admin/acessos-hierarquia/links: um link NOVO para cada alvo de `ids`.
+ * - Alvo sem usuário: cria o usuário (papel do corpo, preso ao alvo). Alvo com usuário: o nome do usuário passa a
+ *   ser o `pessoa_nome` atual (o líder pode ter mudado). Sem `pessoa_nome`, o nome do usuário é o nome do alvo.
+ * - `revogar_anteriores: true` revoga, no mesmo lote, os links ainda válidos de cada alvo e encerra as sessões
+ *   abertas por eles (ex.: o líder da célula mudou). Sem ela, os links anteriores continuam valendo, como em
+ *   criarLink.
+ * - Tudo ou nada (um lote só no D1), e uma linha na trilha de auditoria por chamada:
+ *   - 404 `nao_encontrado` se algum id não é um alvo do papel (detalhes: { ids: number[] });
+ *   - 409 `em_uso` se algum alvo tem usuário desativado (detalhes: { ids: number[] }): reative antes com o PATCH.
+ */
+/** `detalhes` dos 404 e 409 de POST /api/admin/acessos-hierarquia/links: os ids recusados, em ordem crescente. */
+export const detalhesIdsRecusadosSchema = z.strictObject({
+  ids: z.array(idSchema).min(1),
+});
+
+export const corpoGerarLinksHierarquiaSchema = z.strictObject({
+  papel: papelHierarquiaSchema,
+  /** ids de células (lider), discipuladores (discipulador) ou redes (rede), sem repetição. */
+  ids: z
+    .array(idSchema)
+    .min(1)
+    .max(LIMITE_ALVOS_POR_LOTE)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "ids repetidos",
+    }),
+  revogar_anteriores: z.boolean().default(false),
+});
+export type CorpoGerarLinksHierarquia = z.input<
+  typeof corpoGerarLinksHierarquiaSchema
+>;
+
+export const linkGeradoHierarquiaSchema = z.strictObject({
+  alvo: alvoSchema,
+  pessoa_nome: z.string().min(1).max(120).nullable(),
+  telefone: z.string().min(1).max(40).nullable(),
+  usuario_id: idSchema,
+  /** A única vez em que esta URL aparece. Quem tem a URL entra como o usuário do alvo. */
+  link: linkAcessoCriadoSchema,
+});
+export type LinkGeradoHierarquia = z.infer<typeof linkGeradoHierarquiaSchema>;
+
+/** 201: um item por id, na ordem de `ids`. */
+export const respostaGerarLinksHierarquiaSchema = z.strictObject({
+  itens: z.array(linkGeradoHierarquiaSchema),
+});
+
+/**
+ * Rotas dos acessos da hierarquia: catálogo à parte de ROTAS_ACESSO (os testes de proteção e de admin passam a
+ * percorrer os dois quando a API montar estas rotas). Desativar, gerar um link avulso e revogar usam as rotas
+ * que já existem (PATCH /api/admin/usuarios/:id, POST /api/admin/usuarios/:id/links e DELETE
+ * /api/admin/links/:id), que aceitam usuários de qualquer papel.
+ */
+export const ROTAS_ACESSO_HIERARQUIA = {
+  listarAcessosHierarquia: {
+    metodo: "GET",
+    caminho: "/api/admin/acessos-hierarquia",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    consulta: consultaAcessosHierarquiaSchema,
+    sucesso: { status: 200, corpo: respostaAcessosHierarquiaSchema },
+  },
+  gerarLinksHierarquia: {
+    metodo: "POST",
+    caminho: "/api/admin/acessos-hierarquia/links",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoGerarLinksHierarquiaSchema,
+    sucesso: { status: 201, corpo: respostaGerarLinksHierarquiaSchema },
+  },
+} as const satisfies Record<string, DefinicaoRotaAcesso>;

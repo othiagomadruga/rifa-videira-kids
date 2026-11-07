@@ -160,7 +160,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 8 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 9 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -170,7 +170,15 @@ describe("GET /api/admin/auditoria", () => {
       "usuario.desativar",
       "link.criar",
       "link.revogar",
+      // RIFA-014 (D12): lote de links da hierarquia.
+      "acessos_hierarquia.gerar_links",
     ]);
+    // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
+    for (const acao of ACOES_AUDITORIA)
+      expect({ acao, ok: /^[a-z_.]{3,64}$/.test(acao) }).toEqual({
+        acao,
+        ok: true,
+      });
     const registro = {
       id: 3,
       em: "2026-11-25T15:00:00.000Z",

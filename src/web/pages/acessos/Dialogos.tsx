@@ -8,7 +8,7 @@ import {
 import type {
   LinkAcesso,
   LinkAcessoCriado,
-  Papel,
+  PapelCoordenacao,
   Usuario,
 } from "../../../shared/contracts";
 import {
@@ -128,7 +128,7 @@ export function DialogoNovaPessoa({
       const criada = await criarPessoa({
         nome: valores.nome.trim(),
         email: valores.email.trim() === "" ? null : valores.email.trim(),
-        papel: valores.papel as Papel,
+        papel: valores.papel as PapelCoordenacao,
       });
       aoCriar(criada);
     } catch (erro) {

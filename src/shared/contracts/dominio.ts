@@ -269,6 +269,21 @@ export const celulaSchema = z.object({
 });
 export type Celula = z.infer<typeof celulaSchema>;
 
+/**
+ * Alvo de um acesso da hierarquia (RIFA-014, D12): a célula do líder, o discipulador ou a rede. `nome` e
+ * `divisao` são lidos da hierarquia na hora (mudam junto quando a hierarquia muda).
+ */
+export const TIPOS_ALVO = ["celula", "discipulador", "rede"] as const;
+export type TipoAlvo = (typeof TIPOS_ALVO)[number];
+
+export const alvoSchema = z.strictObject({
+  tipo: z.enum(TIPOS_ALVO),
+  id: idSchema,
+  nome: z.string().min(1).max(120),
+  divisao: divisaoSchema,
+});
+export type Alvo = z.infer<typeof alvoSchema>;
+
 // ---------------------------------------------------------------------------------------------------
 // Afiliado (D7): affiliate_id da Rifei → célula; celula_id null = não vinculado (fila de órfãos)
 // ---------------------------------------------------------------------------------------------------

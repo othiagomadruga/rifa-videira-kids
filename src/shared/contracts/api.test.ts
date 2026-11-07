@@ -26,7 +26,10 @@ import {
   avisoImportacaoSchema,
   normalizarEspacos,
   respostaImportarHierarquiaSchema,
+  consultaVisaoIndividualSchema,
+  respostaVisaoIndividualSchema,
 } from "./api";
+import { PAPEIS_HIERARQUIA } from "./acesso";
 import {
   CODIGOS_ERRO,
   STATUS_HTTP_DO_ERRO,
@@ -84,6 +87,8 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/painel/ranking",
         "GET /api/publico/ranking",
         "GET /api/publico/bumbo",
+        // Sprint 5 (RIFA-014): visão individual do líder, do discipulador e da rede.
+        "GET /api/minha/visao",
       ].sort(),
     );
   });
@@ -102,7 +107,9 @@ describe("CA3: catálogo de rotas", () => {
         : rota.caminho.startsWith("/api/admin/") ||
             rota.caminho.startsWith("/api/painel/")
           ? "coordenacao"
-          : "aberto";
+          : rota.caminho.startsWith("/api/minha/")
+            ? "hierarquia"
+            : "aberto";
       expect({ nome, grupo: rota.grupo }).toEqual({ nome, grupo: esperado });
     }
     const abertas = rotas
@@ -649,6 +656,377 @@ describe("CA3: parâmetros, consultas e corpos", () => {
       { tipo: "coluna_ignorada", linha: 1, mensagem: "" },
     ]) {
       expect(avisoImportacaoSchema.safeParse(aviso).success).toBe(false);
+    }
+  });
+});
+
+describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da sessão", () => {
+  const referencia = {
+    data: "2026-11-25",
+    fase: "durante",
+    data_inicio: "2026-11-23",
+    data_fim: "2026-12-16",
+    duracao_dias: 24,
+    dia_campanha: 3,
+    dias_restantes: 22,
+    dias_para_inicio: null,
+    periodo: {
+      ordem: 1,
+      nome: "Semana 1",
+      data_inicio: "2026-11-23",
+      data_fim: "2026-12-02",
+      dias: 10,
+      dia_no_periodo: 3,
+      dias_restantes: 8,
+    },
+  };
+  const ritmo = {
+    meta: 40,
+    esperado: 8,
+    realizado: 9,
+    diferenca: 1,
+    situacao: "em_dia",
+    percentual_meta_bp: 2250,
+    percentual_esperado_bp: 2000,
+  };
+  const desempenho = {
+    hoje: {
+      data: "2026-11-25",
+      meta: 4,
+      realizado: 1,
+      falta: 3,
+      percentual_meta_bp: 2500,
+      batida: false,
+    },
+    periodo: ritmo,
+    campanha: {
+      ...ritmo,
+      meta: 120,
+      percentual_meta_bp: 750,
+      percentual_esperado_bp: 666,
+      projecao_percentual_meta_bp: 9000,
+    },
+    bilhetes: { campanha: 9, hoje: 1 },
+  };
+  const semQuantidade = {
+    meta: null,
+    esperado: null,
+    realizado: null,
+    diferenca: null,
+  };
+  /** O mesmo desempenho com meta em centavos: só os percentuais. */
+  const desempenhoEmCentavos = {
+    ...desempenho,
+    hoje: { ...desempenho.hoje, meta: null, realizado: null, falta: null },
+    periodo: { ...ritmo, ...semQuantidade },
+    campanha: { ...desempenho.campanha, ...semQuantidade },
+  };
+  const celulaDaEquipe = {
+    tipo: "celula",
+    id: 101,
+    nome: "Célula Esperança",
+    discipulador_id: 11,
+    lider_nome: "Lucas Líder",
+    afiliados_vinculados: 1,
+    desempenho,
+    posicao_divisao: 3,
+  };
+  const ranking = {
+    nivel: "discipulador",
+    janela: {
+      tipo: "atual",
+      ordem: 1,
+      nome: "Semana 1",
+      data_inicio: "2026-11-23",
+      data_fim: "2026-12-02",
+    },
+    criterio: "percentual_meta",
+    geral: {
+      posicao: 2,
+      participantes: 12,
+      acima: { nome: "Bruno Discipulador", posicao: 1, diferenca: null },
+      abaixo: { nome: "Carla Discipuladora", posicao: 3, diferenca: null },
+    },
+    divisao: { posicao: 1, participantes: 6, acima: null, abaixo: null },
+    primeiros: [{ posicao: 1, nome: "Ana Discipuladora", eu: true }],
+  };
+  /** Visão do discipulador 11, com a célula 101 na equipe. */
+  const visao = {
+    alvo: {
+      tipo: "discipulador",
+      id: 11,
+      nome: "Ana Discipuladora",
+      divisao: "jovens",
+    },
+    pessoa: "Ana Discipuladora",
+    referencia,
+    unidade: "bilhetes",
+    desempenho,
+    afiliados_vinculados: null,
+    curva: [
+      { dia: 1, data: "2026-11-23", esperado_bp: 300, realizado_bp: 250 },
+      { dia: 2, data: "2026-11-24", esperado_bp: 600, realizado_bp: 700 },
+      { dia: 3, data: "2026-11-25", esperado_bp: 900, realizado_bp: 750 },
+      { dia: 4, data: "2026-11-26", esperado_bp: 1200, realizado_bp: null },
+    ],
+    ranking,
+    equipe: [celulaDaEquipe],
+    atualizado_em: "2026-11-25T15:00:00.000Z",
+  };
+  const visaoDoLider = {
+    ...visao,
+    alvo: {
+      tipo: "celula",
+      id: 101,
+      nome: "Célula Esperança",
+      divisao: "jovens",
+    },
+    pessoa: "Lucas Líder",
+    afiliados_vinculados: 1,
+    ranking: { ...ranking, nivel: "celula" },
+    equipe: [],
+  };
+  const visaoDaRede = {
+    ...visao,
+    alvo: { tipo: "rede", id: 1, nome: "Rede Jovem Norte", divisao: "jovens" },
+    pessoa: "Pastor Fictício",
+    ranking: { ...ranking, nivel: "rede" },
+    equipe: [
+      {
+        ...celulaDaEquipe,
+        tipo: "discipulador",
+        id: 11,
+        nome: "Ana Discipuladora",
+        discipulador_id: null,
+        lider_nome: null,
+        afiliados_vinculados: null,
+        posicao_divisao: 1,
+      },
+      celulaDaEquipe,
+    ],
+  };
+  const valida = (resposta: unknown) =>
+    respostaVisaoIndividualSchema.safeParse(resposta).success;
+
+  it("nenhum campo da resposta fala de dinheiro, e os campos são os de uma lista fechada", () => {
+    const DINHEIRO = /centavos|reais|preco|arrecad|valor|total|vendas/i;
+    const campos = nomesDeCampos(respostaVisaoIndividualSchema);
+    expect(campos.filter((campo) => DINHEIRO.test(campo))).toEqual([]);
+    expect([...new Set(campos)].sort()).toEqual(
+      [
+        "abaixo",
+        "acima",
+        "afiliados_vinculados",
+        "alvo",
+        "atualizado_em",
+        "batida",
+        "bilhetes",
+        "campanha",
+        "criterio",
+        "curva",
+        "data",
+        "data_fim",
+        "data_inicio",
+        "desempenho",
+        "dia",
+        "dia_campanha",
+        "dia_no_periodo",
+        "dias",
+        "dias_para_inicio",
+        "dias_restantes",
+        "diferenca",
+        "discipulador_id",
+        "divisao",
+        "duracao_dias",
+        "equipe",
+        "esperado",
+        "esperado_bp",
+        "eu",
+        "falta",
+        "fase",
+        "geral",
+        "hoje",
+        "id",
+        "janela",
+        "lider_nome",
+        "meta",
+        "nivel",
+        "nome",
+        "ordem",
+        "participantes",
+        "percentual_esperado_bp",
+        "percentual_meta_bp",
+        "periodo",
+        "pessoa",
+        "posicao",
+        "posicao_divisao",
+        "primeiros",
+        "projecao_percentual_meta_bp",
+        "ranking",
+        "realizado",
+        "realizado_bp",
+        "referencia",
+        "situacao",
+        "tipo",
+        "unidade",
+      ].sort(),
+    );
+  });
+
+  it("a rota não recebe id: sem parâmetros nem corpo, e a consulta só tem o período (o resto é descartado)", () => {
+    const rota = ROTAS.visaoIndividual;
+    expect(rota.grupo).toBe("hierarquia");
+    expect(rota.papeis).toEqual([...PAPEIS_HIERARQUIA]);
+    expect("parametros" in rota).toBe(false);
+    expect("corpo" in rota).toBe(false);
+    expect(Object.keys(consultaVisaoIndividualSchema.shape)).toEqual([
+      "periodo",
+    ]);
+    expect(
+      consultaVisaoIndividualSchema.parse({ id: "7", celula_id: "3" }),
+    ).toEqual({ periodo: "atual" });
+    expect(
+      consultaVisaoIndividualSchema.safeParse({ periodo: "semana" }).success,
+    ).toBe(false);
+  });
+
+  it("aceita as visões do líder, do discipulador e da rede, com meta em bilhetes ou em centavos", () => {
+    expect(valida(visaoDoLider)).toBe(true);
+    expect(valida(visao)).toBe(true);
+    expect(valida(visaoDaRede)).toBe(true);
+    expect(
+      valida({
+        ...visao,
+        unidade: "centavos",
+        desempenho: desempenhoEmCentavos,
+        ranking: { ...ranking, criterio: "arrecadacao" },
+        equipe: [{ ...celulaDaEquipe, desempenho: desempenhoEmCentavos }],
+      }),
+    ).toBe(true);
+  });
+
+  it("discipulador sem células: fora do ranking (posições null, R8) e sem equipe", () => {
+    expect(
+      valida({
+        ...visao,
+        ranking: { ...ranking, geral: null, divisao: null, primeiros: [] },
+        equipe: [],
+      }),
+    ).toBe(true);
+    expect(
+      valida({
+        ...visaoDaRede,
+        equipe: [{ ...visaoDaRede.equipe[0], posicao_divisao: null }],
+      }),
+    ).toBe(true);
+  });
+
+  it("meta em centavos ou critério arrecadação: recusa qualquer quantidade que seria dinheiro", () => {
+    const emCentavos = { ...visao, unidade: "centavos" };
+    expect(
+      valida({
+        ...emCentavos,
+        equipe: [{ ...celulaDaEquipe, desempenho: desempenhoEmCentavos }],
+      }),
+    ).toBe(false);
+    expect(valida({ ...emCentavos, desempenho: desempenhoEmCentavos })).toBe(
+      false,
+    );
+    for (const janela of ["hoje", "periodo", "campanha"] as const)
+      expect(
+        valida({
+          ...emCentavos,
+          desempenho: {
+            ...desempenhoEmCentavos,
+            [janela]: { ...desempenhoEmCentavos[janela], meta: 240000 },
+          },
+          equipe: [{ ...celulaDaEquipe, desempenho: desempenhoEmCentavos }],
+        }),
+      ).toBe(false);
+    expect(
+      valida({
+        ...visao,
+        ranking: {
+          ...ranking,
+          criterio: "arrecadacao",
+          geral: {
+            ...ranking.geral,
+            acima: { ...ranking.geral.acima, diferenca: 35000 },
+          },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it("a equipe é só de quem está abaixo do alvo, e o resto da visão combina com o alvo", () => {
+    const invalidas: unknown[] = [
+      { ...visaoDoLider, equipe: [celulaDaEquipe] },
+      { ...visaoDoLider, afiliados_vinculados: null },
+      { ...visao, afiliados_vinculados: 2 },
+      { ...visao, equipe: [{ ...celulaDaEquipe, discipulador_id: 12 }] },
+      { ...visao, equipe: [visaoDaRede.equipe[0]] },
+      {
+        ...visaoDaRede,
+        equipe: [
+          visaoDaRede.equipe[0],
+          { ...celulaDaEquipe, discipulador_id: 12 },
+        ],
+      },
+      { ...visao, equipe: [{ ...celulaDaEquipe, lider_nome: null }] },
+      {
+        ...visaoDaRede,
+        equipe: [{ ...visaoDaRede.equipe[0], afiliados_vinculados: 0 }],
+      },
+      { ...visao, ranking: { ...ranking, nivel: "celula" } },
+      {
+        ...visao,
+        ranking: {
+          ...ranking,
+          primeiros: [
+            { posicao: 1, nome: "Ana Discipuladora", eu: true },
+            { posicao: 1, nome: "Outra", eu: true },
+          ],
+        },
+      },
+      {
+        ...visao,
+        desempenho: { ...desempenho, hoje: null },
+      },
+      {
+        ...visao,
+        curva: [
+          { dia: 1, data: "2026-11-23", esperado_bp: 10_001, realizado_bp: 1 },
+        ],
+      },
+    ];
+    for (const resposta of invalidas)
+      expect({ resposta, ok: valida(resposta) }).toEqual({
+        resposta,
+        ok: false,
+      });
+  });
+
+  it("recusa campo a mais em TODO objeto da resposta (schemas estritos em todos os níveis)", () => {
+    const caminhos: (string | number)[][] = [];
+    const visitar = (no: unknown, caminho: (string | number)[]) => {
+      if (Array.isArray(no)) {
+        no.forEach((item, indice) => visitar(item, [...caminho, indice]));
+        return;
+      }
+      if (typeof no !== "object" || no === null) return;
+      caminhos.push(caminho);
+      for (const [chave, valor] of Object.entries(no))
+        visitar(valor, [...caminho, chave]);
+    };
+    visitar(visaoDaRede, []);
+    expect(caminhos.length).toBeGreaterThan(30);
+    for (const caminho of caminhos) {
+      const copia: unknown = structuredClone(visaoDaRede);
+      let alvo = copia as Record<string | number, unknown>;
+      for (const parte of caminho)
+        alvo = alvo[parte] as Record<string | number, unknown>;
+      alvo.total_centavos = 1;
+      expect({ caminho, ok: valida(copia) }).toEqual({ caminho, ok: false });
     }
   });
 });

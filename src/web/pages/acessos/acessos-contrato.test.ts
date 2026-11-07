@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   FORMATO_TOKEN_ACESSO,
   PAPEIS,
+  PAPEIS_COORDENACAO,
   PREFIXO_LINK_ACESSO,
   ROTAS_ACESSO,
   corpoCriarUsuarioSchema,
@@ -38,7 +39,9 @@ describe("cópias do contrato do acesso no site", () => {
   });
 
   it("papéis e limites do formulário", () => {
-    expect([...PAPEIS_DO_FORMULARIO].sort()).toEqual([...PAPEIS].sort());
+    expect([...PAPEIS_DO_FORMULARIO].sort()).toEqual(
+      [...PAPEIS_COORDENACAO].sort(),
+    );
     expect(Object.keys(ROTULO_PAPEL).sort()).toEqual([...PAPEIS].sort());
     expect(LIMITES.nome).toBe(corpoCriarUsuarioSchema.shape.nome.maxLength);
     expect(LIMITES.nome).toBe(usuarioSchema.shape.nome.maxLength);

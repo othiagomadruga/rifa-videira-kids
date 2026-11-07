@@ -38,6 +38,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 |---|---|---|---|
 | `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>`, comparado em tempo constante (D6). Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; segredo não configurado: `503 nao_configurado` |
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
+| `hierarquia` | `/api/minha/*` (RIFA-014, D12) | a mesma sessão, aberta pelo link pessoal de um `lider`, `discipulador` ou `rede`; o alvo (célula, discipulador ou rede) vem **só da sessão** | `401 nao_autenticado`: sem sessão; `403 proibido`: sessão da coordenação. **Nunca devolve dinheiro** |
 | `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** |
 
 Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada.
@@ -640,6 +641,39 @@ Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o link da sua célula com 
 - **Erros**: 400 `requisicao_invalida` (`data` fora do formato, fora da janela da campanha ou futura), 404 `nao_encontrado` (sem campanha ativa).
 
 ---
+
+## Visão individual e acessos da hierarquia (Sprint 5, RIFA-014; docs/decisions.md D12)
+
+Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`; papéis, `alvo` da sessão e
+`ROTAS_ACESSO_HIERARQUIA` em `acesso.ts`.
+
+### `GET /api/minha/visao?periodo=atual|campanha` (`hierarquia`)
+
+- Papéis `lider`, `discipulador` e `rede`. Sem sessão: 401. Sessão da coordenação: 403. Não aceita id de nada:
+  o alvo é o da sessão (`usuarios.celula_id`, `discipulador_id` ou `rede_id`).
+- Devolve o alvo, quem entrou, a referência da campanha, os números do alvo (hoje, período e campanha, mais os
+  bilhetes vendidos), a curva em pontos-base da meta, a posição no ranking do nível (geral e na divisão, com o
+  nome e a posição do vizinho de cima e do de baixo), os primeiros da divisão (como o ranking público) e, para
+  discipulador e rede, os números da `equipe` (quem está abaixo). O líder recebe `afiliados_vinculados` da célula.
+- **Sem dinheiro em nenhum nível** (schemas estritos e regras cruzadas): com meta em centavos, as quantidades da
+  meta saem null; no critério arrecadação, nenhuma distância. A distância até os vizinhos (`diferenca`) sai null
+  até o PO decidir (D12).
+- Alvo sem células (R8): `ranking.geral` e `ranking.divisao` null; na equipe, `posicao_divisao` null.
+- `periodo` escolhe a janela do ranking (padrão: o período atual). Sem cache compartilhado da resposta.
+
+### `GET /api/admin/acessos-hierarquia?papel=lider|discipulador|rede` (**só admin**)
+
+Todos os alvos do papel, com ou sem acesso: o alvo, quem deve receber o link (`pessoa_nome`, da hierarquia), o
+telefone do líder (só células) e o usuário do alvo (nome, ativo, sessões e links, sem token), ou null.
+
+### `POST /api/admin/acessos-hierarquia/links` (**só admin**)
+
+`{ "papel", "ids": [...], "revogar_anteriores"?: false }` → **201** `{ "itens": [...] }`, um link NOVO por alvo,
+na ordem de `ids`, com a URL (a única vez em que ela aparece). Cria o usuário do alvo quando falta e atualiza o
+nome dele para o `pessoa_nome` atual. `revogar_anteriores: true` revoga os links válidos anteriores e encerra as
+sessões deles no mesmo lote. Tudo ou nada: 404 `nao_encontrado` se algum id não é alvo do papel, 409 `em_uso` se
+algum alvo tem usuário desativado (`detalhes`: `detalhesIdsRecusadosSchema`, `{ "ids": [...] }`). Uma linha na
+trilha de auditoria por chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes).
 
 ## Rotas RASCUNHO (Sprint 4)
 

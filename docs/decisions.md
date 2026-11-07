@@ -134,3 +134,42 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   campanha (com o slug e o preço antes e depois), vínculos de afiliado, importação da hierarquia aplicada e as
   ações do admin sobre usuários e links. O CRUD da hierarquia não entra. Leitura: `GET /api/admin/auditoria`, só
   admin, com cursor. Quem pode fazer o quê não mudou.
+
+## D12. Visão individual por hierarquia: papéis presos a um alvo, sem dinheiro (RIFA-014, 2026-11-07)
+
+A reunião pediu (RF08) que o líder, o discipulador e quem responde pela rede vejam o próprio desempenho, a posição
+e o ranking da semana; "o líder não vê a rede"; o discipulador se compara aos outros discipuladores e vê o que está
+abaixo dele. Em SA o login era só pelo e-mail, sem senha.
+
+- **Entrada pelo mesmo link pessoal da D8**, não por e-mail: o sistema não envia e-mail, o link vai pelo WhatsApp e
+  já tem expiração, revogação, sessão ociosa, limite por IP e trilha de auditoria. Continua sem senha.
+- **Papéis novos `lider`, `discipulador` e `rede`**, cada usuário preso a UM alvo (a célula, o discipulador ou a
+  rede) por colunas próprias em `usuarios`. O banco garante o alvo certo para o papel, nenhum alvo nos papéis da
+  coordenação e no máximo um usuário por alvo. Apagar o alvo apaga o usuário dele (e, em cascata, links e
+  sessões). Esses papéis só entram em `/api/minha/*` (grupo `hierarquia`); em `/api/admin/*` e `/api/painel/*`
+  levam 403. **O alvo vem só da sessão**: nenhuma rota de `/api/minha` aceita id, então um líder não tem como pedir
+  a célula de outro.
+- **Sem dinheiro, nunca**: nenhuma resposta de `/api/minha` traz centavos, R$ ou arrecadação, com qualquer
+  configuração; o schema (estrito, com regras cruzadas) recusa quantidade na unidade da meta quando ela é em
+  centavos e distância no critério arrecadação. Números (meta, realizado, falta, bilhetes) só do próprio alvo e da
+  equipe dele (quem está abaixo); dos pares, só nome e posição. A distância até o vizinho de cima e o de baixo
+  (`diferenca`) sai null até o PO decidir: somada ao próprio número, ela revela o número do vizinho. Alvo sem
+  células (ex.: discipulador recém-criado) fica fora do ranking (R8): posições null.
+- **Links em lote pela administração** (`/api/admin/acessos-hierarquia`, só admin): lista todos os alvos de um
+  papel, com ou sem acesso, e gera um link novo por alvo de uma vez, com o nome e o telefone do líder para o
+  WhatsApp. Cada URL aparece só nessa resposta. `revogar_anteriores` troca o acesso quando o líder muda.
+- **Migração sem recriar `usuarios`** (provada no D1 local na revisão do contrato): recriar a tabela (o jeito de
+  mudar o CHECK do papel) faria o DROP apagar em cascata os links e as sessões, e esbarraria no RESTRICT da
+  `auditoria` (`PRAGMA defer_foreign_keys` não segura ações de cascata). Ordem: primeiro as colunas de alvo
+  (`celula_id`, `discipulador_id`, `rede_id`, ADD COLUMN com REFERENCES ... ON DELETE CASCADE, sem CHECK); depois
+  uma coluna de papel nova cujo CHECK tem os 5 papéis E a coerência papel ↔ alvo; UPDATE copiando; DROP COLUMN do
+  papel antigo; RENAME COLUMN; gatilhos que recusam papel NULL; índices únicos parciais por alvo. Com a coerência
+  no CHECK do próprio papel, uma troca futura de papel repete a técnica (o DROP COLUMN só é barrado quando OUTRA
+  coluna cita a que sai). Antes da primeira publicação com a 0006, anotar o bookmark do Time Travel do D1.
+- **Cuidado com ids**: `usuarios.id` não é AUTOINCREMENT, então o id de um usuário apagado em cascata (com o alvo)
+  pode voltar num usuário novo, e a trilha `usuario:<id>` passaria a apontar para outra pessoa. A exclusão em
+  cascata também não aparece na trilha: a RIFA-018 (auditoria do CRUD da hierarquia) registra a remoção do alvo
+  junto com o acesso dele.
+- **Limite de login por IP sobe de 10 para 60 por minuto**: na reunião dos líderes, dezenas de pessoas abrem o link
+  ao mesmo tempo atrás do mesmo IP. O token tem 256 bits, então o limite nunca foi o que impede adivinhar link:
+  ele só protege CPU e banco.
