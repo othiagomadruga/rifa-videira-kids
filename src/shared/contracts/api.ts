@@ -1075,14 +1075,49 @@ export const respostaVisaoIndividualSchema = z
             );
       }
     }
-    if (visao.ranking.criterio === "arrecadacao")
-      for (const escopo of ["geral", "divisao"] as const)
-        for (const lado of ["acima", "abaixo"] as const)
-          if (visao.ranking[escopo]?.[lado]?.diferenca != null)
-            problema(
-              ["ranking", escopo, lado, "diferenca"],
-              "Critério arrecadação: a distância seria dinheiro (null)",
-            );
+    // D12: a distância até os vizinhos sai null até o PO decidir. Se ele liberar, a regra continua valendo só
+    // para o critério arrecadação (lá a distância seria dinheiro).
+    for (const escopo of ["geral", "divisao"] as const)
+      for (const lado of ["acima", "abaixo"] as const)
+        if (visao.ranking[escopo]?.[lado]?.diferenca != null)
+          problema(
+            ["ranking", escopo, lado, "diferenca"],
+            visao.ranking.criterio === "arrecadacao"
+              ? "Critério arrecadação: a distância seria dinheiro (null)"
+              : "A distância até o vizinho sai null até o PO decidir (D12)",
+          );
+    if ((visao.ranking.geral === null) !== (visao.ranking.divisao === null))
+      problema(
+        ["ranking", "divisao"],
+        "Fora do ranking (alvo sem células): geral e divisão null juntos",
+      );
+    const { fase, dia_campanha, duracao_dias } = visao.referencia;
+    if (visao.desempenho.campanha.percentual_meta_bp === null) {
+      if (visao.curva.length > 0)
+        problema(["curva"], "Sem meta não há curva em percentual (vazia)");
+    } else if (visao.curva.length !== duracao_dias)
+      problema(["curva"], "Um ponto por dia da campanha");
+    visao.curva.forEach((ponto, indice) => {
+      const depoisDeHoje =
+        fase === "antes" ||
+        (fase === "durante" &&
+          dia_campanha !== null &&
+          ponto.dia > dia_campanha);
+      if (depoisDeHoje !== (ponto.realizado_bp === null))
+        problema(
+          ["curva", indice, "realizado_bp"],
+          "Realizado até hoje; null só nos dias depois de hoje",
+        );
+      if (
+        fase === "durante" &&
+        ponto.dia === dia_campanha &&
+        ponto.realizado_bp !== visao.desempenho.campanha.percentual_meta_bp
+      )
+        problema(
+          ["curva", indice, "realizado_bp"],
+          "O ponto de hoje é o percentual da meta da campanha",
+        );
+    });
     if (visao.ranking.nivel !== visao.alvo.tipo)
       problema(["ranking", "nivel"], "O nível do ranking é o do alvo");
     if (visao.ranking.primeiros.filter((item) => item.eu).length > 1)
@@ -1124,6 +1159,11 @@ export const respostaVisaoIndividualSchema = z
               (item.discipulador_id !== null &&
                 discipuladoresDaEquipe.has(item.discipulador_id))
             : false;
+      if (ehCelula && item.posicao_divisao === null)
+        problema(
+          ["equipe", indice, "posicao_divisao"],
+          "Célula sempre entra no ranking",
+        );
       if (!dentroDoAlvo)
         problema(
           ["equipe", indice],

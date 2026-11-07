@@ -27,7 +27,11 @@ import {
   normalizarEspacos,
   respostaImportarHierarquiaSchema,
   consultaVisaoIndividualSchema,
+  desempenhoIndividualSchema,
+  pontoCurvaIndividualSchema,
+  rankingIndividualSchema,
   respostaVisaoIndividualSchema,
+  vizinhoIndividualSchema,
 } from "./api";
 import { PAPEIS_HIERARQUIA } from "./acesso";
 import {
@@ -750,6 +754,13 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
     divisao: { posicao: 1, participantes: 6, acima: null, abaixo: null },
     primeiros: [{ posicao: 1, nome: "Ana Discipuladora", eu: true }],
   };
+  /** Um ponto por dia (24); hoje é o dia 3, e o ponto de hoje é o % da meta da campanha (750). */
+  const curva = Array.from({ length: 24 }, (_, indice) => ({
+    dia: indice + 1,
+    data: new Date(Date.UTC(2026, 10, 23 + indice)).toISOString().slice(0, 10),
+    esperado_bp: (indice + 1) * 300,
+    realizado_bp: [250, 700, 750][indice] ?? null,
+  }));
   /** Visão do discipulador 11, com a célula 101 na equipe. */
   const visao = {
     alvo: {
@@ -763,12 +774,7 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
     unidade: "bilhetes",
     desempenho,
     afiliados_vinculados: null,
-    curva: [
-      { dia: 1, data: "2026-11-23", esperado_bp: 300, realizado_bp: 250 },
-      { dia: 2, data: "2026-11-24", esperado_bp: 600, realizado_bp: 700 },
-      { dia: 3, data: "2026-11-25", esperado_bp: 900, realizado_bp: 750 },
-      { dia: 4, data: "2026-11-26", esperado_bp: 1200, realizado_bp: null },
-    ],
+    curva,
     ranking,
     equipe: [celulaDaEquipe],
     atualizado_em: "2026-11-25T15:00:00.000Z",
@@ -994,9 +1000,9 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
       },
       {
         ...visao,
-        curva: [
-          { dia: 1, data: "2026-11-23", esperado_bp: 10_001, realizado_bp: 1 },
-        ],
+        curva: curva.map((ponto) =>
+          ponto.dia === 24 ? { ...ponto, esperado_bp: 10_001 } : ponto,
+        ),
       },
     ];
     for (const resposta of invalidas)
@@ -1028,5 +1034,201 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
       alvo.total_centavos = 1;
       expect({ caminho, ok: valida(copia) }).toEqual({ caminho, ok: false });
     }
+  });
+
+  it("meta em centavos: cada quantidade de cada janela, no alvo e na equipe, é recusada (e a lista acompanha o schema)", () => {
+    const QUANTIDADES = {
+      hoje: ["falta", "meta", "realizado"],
+      periodo: ["diferenca", "esperado", "meta", "realizado"],
+      campanha: ["diferenca", "esperado", "meta", "realizado"],
+    } as const;
+    const naUnidadeDaMeta = (schema: z.ZodObject) =>
+      Object.keys(schema.shape)
+        .filter((campo) => !/_bp$|^(situacao|batida|data)$/.test(campo))
+        .sort();
+    const janelas = desempenhoIndividualSchema.shape;
+    expect(naUnidadeDaMeta(janelas.hoje.unwrap())).toEqual(QUANTIDADES.hoje);
+    expect(naUnidadeDaMeta(janelas.periodo.unwrap())).toEqual(
+      QUANTIDADES.periodo,
+    );
+    expect(naUnidadeDaMeta(janelas.campanha)).toEqual(QUANTIDADES.campanha);
+    const base = {
+      ...visao,
+      unidade: "centavos",
+      desempenho: desempenhoEmCentavos,
+      equipe: [{ ...celulaDaEquipe, desempenho: desempenhoEmCentavos }],
+    };
+    expect(valida(base)).toBe(true);
+    for (const janela of ["hoje", "periodo", "campanha"] as const)
+      for (const campo of QUANTIDADES[janela]) {
+        const comValor = {
+          ...desempenhoEmCentavos,
+          [janela]: { ...desempenhoEmCentavos[janela], [campo]: 6000 },
+        };
+        expect({
+          janela,
+          campo,
+          ok: valida({ ...base, desempenho: comValor }),
+        }).toEqual({
+          janela,
+          campo,
+          ok: false,
+        });
+        expect({
+          janela,
+          campo,
+          naEquipe: true,
+          ok: valida({
+            ...base,
+            equipe: [{ ...celulaDaEquipe, desempenho: comValor }],
+          }),
+        }).toEqual({ janela, campo, naEquipe: true, ok: false });
+      }
+  });
+
+  it("distância até os vizinhos: null nos dois rankings e nos dois vizinhos, em qualquer critério (D12; na arrecadação, sempre)", () => {
+    const posicao = {
+      posicao: 2,
+      participantes: 12,
+      acima: { nome: "Vizinho de cima", posicao: 1, diferenca: null },
+      abaixo: { nome: "Vizinho de baixo", posicao: 3, diferenca: null },
+    };
+    for (const criterio of ["arrecadacao", "bilhetes", "percentual_meta"])
+      for (const escopo of ["geral", "divisao"] as const)
+        for (const lado of ["acima", "abaixo"] as const) {
+          const ok = (diferenca: number | null) =>
+            valida({
+              ...visao,
+              ranking: {
+                ...ranking,
+                criterio,
+                [escopo]: {
+                  ...posicao,
+                  [lado]: { ...posicao[lado], diferenca },
+                },
+              },
+            });
+          expect({ criterio, escopo, lado, ok: ok(null) }).toEqual({
+            criterio,
+            escopo,
+            lado,
+            ok: true,
+          });
+          expect({ criterio, escopo, lado, ok: ok(35000) }).toEqual({
+            criterio,
+            escopo,
+            lado,
+            ok: false,
+          });
+        }
+  });
+
+  it("dos pares, só nome e posição (e a distância); a curva, só pontos-base", () => {
+    expect(Object.keys(vizinhoIndividualSchema.shape).sort()).toEqual([
+      "diferenca",
+      "nome",
+      "posicao",
+    ]);
+    expect(
+      Object.keys(rankingIndividualSchema.shape.primeiros.element.shape).sort(),
+    ).toEqual(["eu", "nome", "posicao"]);
+    expect(Object.keys(pontoCurvaIndividualSchema.shape).sort()).toEqual([
+      "data",
+      "dia",
+      "esperado_bp",
+      "realizado_bp",
+    ]);
+  });
+
+  it("aceita a visão antes do início e depois do fim (sem hoje, sem período e sem bilhetes de hoje)", () => {
+    const foraDaCampanha = {
+      ...desempenho,
+      hoje: null,
+      periodo: null,
+      bilhetes: { campanha: 0, hoje: null },
+      campanha: {
+        ...desempenho.campanha,
+        esperado: 0,
+        realizado: 0,
+        diferenca: 0,
+        percentual_meta_bp: 0,
+        percentual_esperado_bp: 0,
+        projecao_percentual_meta_bp: null,
+      },
+    };
+    const antes = {
+      ...visao,
+      referencia: {
+        ...referencia,
+        data: "2026-11-15",
+        fase: "antes",
+        dia_campanha: null,
+        dias_restantes: 24,
+        dias_para_inicio: 8,
+        periodo: null,
+      },
+      desempenho: foraDaCampanha,
+      curva: visao.curva.map((ponto) => ({ ...ponto, realizado_bp: null })),
+      ranking: { ...ranking, primeiros: [] },
+      equipe: [{ ...celulaDaEquipe, desempenho: foraDaCampanha }],
+    };
+    expect(valida(antes)).toBe(true);
+    expect(
+      valida({
+        ...antes,
+        referencia: {
+          ...antes.referencia,
+          data: "2026-12-20",
+          fase: "encerrada",
+          dias_restantes: 0,
+          dias_para_inicio: null,
+        },
+        curva: visao.curva.map((ponto) => ({ ...ponto, realizado_bp: 0 })),
+      }),
+    ).toBe(true);
+  });
+
+  it("ranking e curva coerentes: fora do ranking nos dois juntos, célula sempre no ranking, curva até hoje e o ponto de hoje igual ao % da campanha", () => {
+    const semMeta = {
+      ...desempenho,
+      campanha: {
+        ...desempenho.campanha,
+        meta: 0,
+        situacao: "sem_meta",
+        percentual_meta_bp: null,
+        percentual_esperado_bp: null,
+      },
+    };
+    expect(valida({ ...visao, desempenho: semMeta, curva: [] })).toBe(true);
+    const invalidas: unknown[] = [
+      { ...visao, ranking: { ...ranking, geral: null } },
+      { ...visao, ranking: { ...ranking, divisao: null } },
+      { ...visao, equipe: [{ ...celulaDaEquipe, posicao_divisao: null }] },
+      { ...visao, desempenho: semMeta },
+      { ...visao, curva: curva.slice(0, 23) },
+      {
+        ...visao,
+        curva: curva.map((ponto) =>
+          ponto.dia === 4 ? { ...ponto, realizado_bp: 800 } : ponto,
+        ),
+      },
+      {
+        ...visao,
+        curva: curva.map((ponto) =>
+          ponto.dia === 2 ? { ...ponto, realizado_bp: null } : ponto,
+        ),
+      },
+      {
+        ...visao,
+        curva: curva.map((ponto) =>
+          ponto.dia === 3 ? { ...ponto, realizado_bp: 749 } : ponto,
+        ),
+      },
+    ];
+    for (const resposta of invalidas)
+      expect({ resposta, ok: valida(resposta) }).toEqual({
+        resposta,
+        ok: false,
+      });
   });
 });
