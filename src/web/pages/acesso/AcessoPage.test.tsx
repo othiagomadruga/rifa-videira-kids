@@ -141,7 +141,7 @@ describe("CA1: o link no navegador (barra de endereço e histórico)", () => {
   });
 
   it("tocar em Entrar faz POST /api/sessao com o token guardado na memória e leva à coordenação", async () => {
-    const { chamadas } = simularApi();
+    const { chamadas, fetchMock } = simularApi();
     abrirNoNavegador();
     await waitFor(() => expect(window.location.pathname).toBe("/acesso"));
 
@@ -154,6 +154,11 @@ describe("CA1: o link no navegador (barra de endereço e histórico)", () => {
     expect(daSessao(chamadas)).toEqual([
       { metodo: "POST", caminho: "/api/sessao", corpo: { token: TOKEN } },
     ]);
+    // O token vai só nesse POST: as chamadas que a Visão geral faz ao abrir não o levam (nem nos cabeçalhos).
+    const outras = () =>
+      fetchMock.mock.calls.filter(([caminho]) => caminho !== "/api/sessao");
+    await waitFor(() => expect(outras().length).toBeGreaterThan(0));
+    expect(JSON.stringify(outras())).not.toContain(TOKEN);
     expect(screen.getByText("Coordenadora Fictícia")).toBeInTheDocument();
     esperarQueNadaGuardouOToken();
   });

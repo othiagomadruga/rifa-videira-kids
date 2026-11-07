@@ -95,6 +95,7 @@ describe("CA1: cabeçalho com a fase e o recorte", () => {
     expect(
       screen.getByText("Atualizado às 15:30. Atualiza sozinho a cada 60 s."),
     ).toBeInTheDocument();
+    expect(document.title).toBe("Visão geral · Rifa Videira Kids");
   });
 
   it("último dia: o período e a campanha no último dia", async () => {

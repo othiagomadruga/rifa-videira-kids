@@ -258,6 +258,10 @@ describe("avisos, vendas, vazio e a descrição do gráfico", () => {
     expect(descricaoDaCurva(resumoDoCenario(CENARIOS.abaixo))).toMatch(
       /: abaixo do esperado\.$/,
     );
+    // 1º dia: sem situação (neutro, como no cartão).
+    expect(descricaoDaCurva(resumoDoCenario(CENARIOS.primeiroDia))).toMatch(
+      / Hoje é o 1º dia \(23\/11\/2026\): o realizado é 3 bilhetes; a comparação com a curva começa amanhã\.$/,
+    );
     expect(descricaoDaCurva(resumoDoCenario(CENARIOS.antes))).toMatch(
       /As vendas ainda não começaram\.$/,
     );

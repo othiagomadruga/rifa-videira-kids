@@ -347,6 +347,9 @@ export function descricaoDaCurva(resumo: RespostaPainelResumo): string {
     case "antes":
       return `${base} As vendas ainda não começaram.`;
     case "durante":
+      // No 1º dia ainda não há dia fechado: nem "em dia" nem "abaixo", como no cartão da campanha.
+      if (referencia.dia_campanha === 1)
+        return `${base} Hoje é o 1º dia (${formatarData(referencia.data)}): o realizado é ${quantidade(campanha.realizado, unidade)}; a comparação com a curva começa amanhã.`;
       return `${base} Até hoje, dia ${formatarNumero(referencia.dia_campanha ?? 0)} (${formatarData(referencia.data)}), o realizado é ${quantidade(campanha.realizado, unidade)}; o esperado até ontem era ${quantidade(campanha.esperado, unidade)}: ${SITUACAO_NA_FRASE[campanha.situacao]}.`;
     case "encerrada":
       return `${base} Resultado final: ${quantidade(campanha.realizado, unidade)}.`;
