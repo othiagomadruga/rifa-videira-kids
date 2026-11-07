@@ -190,3 +190,6 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
   uma vez quando há `Content-Length` (o teto geral leria em pedaços de 4 KB: ~2,5 ms a mais para 420 KB), por
   isso continua fora do teto geral, com o mesmo número.
 - Regra do valor de um pedido em várias linhas e trava do código que não bate: integracao-rifei.md, seção 10.
+- O "Recuperar" muda os números da campanha, então entra na trilha de auditoria da D11 (decisão do SM): ação
+  `conferencia.recuperar`, alvo `campanha:<id>`, no mesmo `db.batch` da gravação e só quando algum pedido entra;
+  o resumo traz o id da recuperação e quantos pedidos e bilhetes entraram (nada do arquivo).

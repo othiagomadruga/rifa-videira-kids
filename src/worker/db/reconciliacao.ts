@@ -17,13 +17,16 @@
  *    webhook gravou depois da pré-visualização) nunca é sobrescrito, e repetir a mesma recuperação não
  *    duplica nada (idempotente). Cada pedido leva `origem = 'conferencia'` e o id da auditoria;
  * 4. as contagens da auditoria, tiradas dos pedidos que de fato entraram;
- * 5. a lista desses pedidos;
- * 6. se nada entrou, a auditoria é apagada (não houve mudança a registrar).
+ * 5. a linha da trilha de auditoria da coordenação (`auditoria`, ação `conferencia.recuperar`, alvo
+ *    `campanha:<id>`), só se algum pedido entrou;
+ * 6. a lista desses pedidos;
+ * 7. se nada entrou, a auditoria da recuperação é apagada (não houve mudança a registrar).
  * O id da auditoria é o maior de `recuperacoes` dentro do lote: o D1 serializa as escritas, então nenhuma
  * outra gravação entra no meio da transação.
  */
 import {
   LIMITE_ITENS_POR_DIVERGENCIA,
+  type AcaoAuditoria,
   type CampoReconciliacao,
   type ColunasDoCorpo,
   type PedidoRecuperado,
@@ -407,6 +410,25 @@ export async function gravarRecuperacao(
        WHERE id = ${ID_DA_RECUPERACAO}
        RETURNING id, pedidos_recuperados`,
     ),
+    // A trilha de auditoria (RIFA-013b) no mesmo lote, só quando algum pedido entrou: o id da recuperação
+    // e as contagens saem da linha dela, já com o que de fato foi gravado (nada do arquivo, nenhum código).
+    db
+      .prepare(
+        `INSERT INTO auditoria (usuario_id, em, acao, alvo, resumo)
+         SELECT ?1, ?2, ?3, ?4,
+           'Recuperação ' || r.id || ' (conferência pelo CSV): ' || r.pedidos_recuperados
+             || CASE r.pedidos_recuperados WHEN 1 THEN ' pedido' ELSE ' pedidos' END || ' e '
+             || r.bilhetes || CASE r.bilhetes WHEN 1 THEN ' bilhete' ELSE ' bilhetes' END
+             || ' gravados como vendas aprovadas'
+         FROM recuperacoes AS r
+         WHERE r.id = ${ID_DA_RECUPERACAO} AND r.pedidos_recuperados > 0`,
+      )
+      .bind(
+        gravacao.usuarioId,
+        gravacao.executadoEm,
+        "conferencia.recuperar" satisfies AcaoAuditoria,
+        `campanha:${gravacao.campanhaId}`,
+      ),
     db.prepare(
       `SELECT id FROM pedidos WHERE recuperacao_id = ${ID_DA_RECUPERACAO} ORDER BY id`,
     ),
@@ -415,7 +437,7 @@ export async function gravarRecuperacao(
     ),
   ];
   const resultados = await db.batch(comandos);
-  const contagem = resultados[resultados.length - 3].results[0] as
+  const contagem = resultados[resultados.length - 4].results[0] as
     { id: number; pedidos_recuperados: number } | undefined;
   const gravados = new Set(
     (resultados[resultados.length - 2].results as { id: string }[]).map(

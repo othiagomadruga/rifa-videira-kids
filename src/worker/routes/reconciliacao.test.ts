@@ -623,6 +623,8 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     ]);
     expect(await contar("pedidos")).toBe(antes);
     expect(await contar("recuperacoes")).toBe(0);
+    // A prévia não muda nada: não entra na trilha de auditoria.
+    expect(await contar("auditoria")).toBe(0);
   });
 
   it("grava de uma vez, como aprovados com origem 'conferencia', e registra quem, quando e quantos", async () => {
@@ -685,6 +687,27 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       }),
     });
 
+    // Na trilha de auditoria da coordenação (RIFA-013b), no mesmo lote: quem, quando, a campanha, o id da
+    // recuperação e as contagens, sem nada do arquivo.
+    const campanha = await env.DB.prepare(
+      "SELECT id FROM campanhas WHERE ativa = 1",
+    ).first<{ id: number }>();
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT usuario_id, em, acao, alvo, resumo FROM auditoria",
+        ).all()
+      ).results,
+    ).toEqual([
+      {
+        usuario_id: pessoa.id,
+        em: AGORA_CONFERENCIA.toISOString(),
+        acao: "conferencia.recuperar",
+        alvo: `campanha:${campanha!.id}`,
+        resumo: `Recuperação ${resultado.recuperacao_id} (conferência pelo CSV): 3 pedidos e 6 bilhetes gravados como vendas aprovadas`,
+      },
+    ]);
+
     const lista = await obter(conferencia, RECUPERACOES);
     expect(lista.status).toBe(200);
     expect(respostaListaRecuperacoesSchema.parse(lista.corpo).itens).toEqual([
@@ -718,6 +741,8 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     );
     expect(await contar("pedidos")).toBe(pedidos);
     expect(await contar("recuperacoes")).toBe(1);
+    // A segunda vez não gravou nada: não entra outra linha na trilha.
+    expect(await contar("auditoria", "acao = 'conferencia.recuperar'")).toBe(1);
     // A análise de novo: as três deixam de ser venda perdida.
     const analise = await porPedido(await corpo());
     expect(codigosPorTipo(analise).venda_perdida).toEqual(["R-0103", "R-0106"]);
@@ -888,6 +913,14 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     });
     expect(nada).toEqual({ recuperacaoId: null, gravados: new Set() });
     expect(await contar("recuperacoes")).toBe(1);
+    // Na trilha, só a primeira (a que gravou), com a contagem do que de fato entrou.
+    expect(
+      (await env.DB.prepare("SELECT resumo FROM auditoria").all()).results,
+    ).toEqual([
+      {
+        resumo: `Recuperação ${resultado.recuperacaoId} (conferência pelo CSV): 1 pedido e 1 bilhete gravados como vendas aprovadas`,
+      },
+    ]);
   });
 
   it("atômico: se um comando do lote falha, nada fica gravado (nem a auditoria, nem o afiliado novo)", async () => {
@@ -930,6 +963,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     expect(await contar("recuperacoes")).toBe(0);
     expect(await contar("pedidos", "id IN ('R-OK', 'R-RUIM')")).toBe(0);
     expect(await contar("afiliados", "affiliate_id = 8888")).toBe(0);
+    expect(await contar("auditoria")).toBe(0);
   });
 
   it("um paid_order do webhook depois da recuperação é duplicado e não muda o pedido recuperado", async () => {
@@ -1128,6 +1162,8 @@ describe("CA2: trava do código que não bate (a coluna escolhida não é o cód
     }
     expect(await contar("pedidos", "id LIKE '700%'")).toBe(0);
     expect(await contar("recuperacoes")).toBe(0);
+    // Recusado: nada na trilha de auditoria.
+    expect(await contar("auditoria")).toBe(0);
   });
 
   it("trocando para a coluna certa, a análise volta a conferir", async () => {
@@ -1352,6 +1388,7 @@ describe("CA3: segurança, limites e privacidade", () => {
       "recuperacoes",
       "afiliados",
       "webhook_eventos",
+      "auditoria",
     ]) {
       const { results } = await env.DB.prepare(`SELECT * FROM ${tabela}`).all();
       expect({

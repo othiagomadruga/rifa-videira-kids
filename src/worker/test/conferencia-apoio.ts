@@ -179,11 +179,13 @@ export async function semearConferencia(
   pedidos: readonly PedidoTeste[] = PEDIDOS_DO_CENARIO,
 ): Promise<{ campanhaId: number }> {
   const db = env.DB;
-  // pedidos referenciam recuperacoes, e recuperacoes, a campanha: apaga nessa ordem antes do cenário.
+  // pedidos referenciam recuperacoes, e recuperacoes, a campanha: apaga nessa ordem antes do cenário (e a
+  // trilha de auditoria, para cada teste contar só as linhas dele).
   await db.batch([
     db.prepare("DELETE FROM webhook_eventos"),
     db.prepare("DELETE FROM pedidos"),
     db.prepare("DELETE FROM recuperacoes"),
+    db.prepare("DELETE FROM auditoria"),
   ]);
   const cenario = await semearCenario({ pedidos });
   await db

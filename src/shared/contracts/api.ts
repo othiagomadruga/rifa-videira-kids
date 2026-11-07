@@ -490,7 +490,10 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos;
  * - acessos_hierarquia.gerar_links: POST /api/admin/acessos-hierarquia/links (RIFA-014, D12), uma linha por
  *   lote, alvo `papel:<papel>`, resumo sem nomes (quantos alvos, quantos usuários criados e se revogou os
- *   anteriores; os ids só se couberem no resumo).
+ *   anteriores; os ids só se couberem no resumo);
+ * - conferencia.recuperar: POST /api/admin/reconciliacao/recuperar quando grava algum pedido (RIFA-012, D13;
+ *   não na prévia nem quando nada entrou), alvo `campanha:<id>`, resumo sem dados pessoais (o id da
+ *   recuperação, quantos pedidos e bilhetes entraram; os códigos estão em GET .../recuperacoes).
  */
 export const ACOES_AUDITORIA = [
   "campanha.salvar",
@@ -502,6 +505,7 @@ export const ACOES_AUDITORIA = [
   "link.criar",
   "link.revogar",
   "acessos_hierarquia.gerar_links",
+  "conferencia.recuperar",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
