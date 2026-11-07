@@ -164,8 +164,9 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
   (`celula_id`, `discipulador_id`, `rede_id`, ADD COLUMN com REFERENCES ... ON DELETE CASCADE, sem CHECK); depois
   uma coluna de papel nova cujo CHECK tem os 5 papéis E a coerência papel ↔ alvo; UPDATE copiando; DROP COLUMN do
   papel antigo; RENAME COLUMN; gatilhos que recusam papel NULL; índices únicos parciais por alvo. Com a coerência
-  no CHECK do próprio papel, uma troca futura de papel repete a técnica (o DROP COLUMN só é barrado quando OUTRA
-  coluna cita a que sai). Antes da primeira publicação com a 0006, anotar o bookmark do Time Travel do D1.
+  no CHECK do próprio papel, uma troca futura de papel repete a técnica: o DROP COLUMN é barrado quando outra
+  coluna ou um gatilho cita a que sai, então os dois gatilhos do papel saem antes do DROP e voltam depois (provado
+  no D1 local). Antes da primeira publicação com a 0006, anotar o bookmark do Time Travel do D1.
 - **Cuidado com ids**: `usuarios.id` não é AUTOINCREMENT, então o id de um usuário apagado em cascata (com o alvo)
   pode voltar num usuário novo, e a trilha `usuario:<id>` passaria a apontar para outra pessoa. A exclusão em
   cascata também não aparece na trilha: a RIFA-018 (auditoria do CRUD da hierarquia) registra a remoção do alvo

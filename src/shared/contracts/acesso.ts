@@ -350,6 +350,11 @@ export const respostaAcessosHierarquiaSchema = lista(
 /** Quantos alvos um lote aceita (a campanha tem 36 células, uns 12 discipuladores e poucas redes). */
 export const LIMITE_ALVOS_POR_LOTE = 200;
 
+/** `detalhes` dos 404 e 409 de POST /api/admin/acessos-hierarquia/links: os ids recusados, em ordem crescente. */
+export const detalhesIdsRecusadosSchema = z.strictObject({
+  ids: z.array(idSchema).min(1),
+});
+
 /**
  * POST /api/admin/acessos-hierarquia/links: um link NOVO para cada alvo de `ids`.
  * - Alvo sem usuário: cria o usuário (papel do corpo, preso ao alvo). Alvo com usuário: o nome do usuário passa a
@@ -358,14 +363,10 @@ export const LIMITE_ALVOS_POR_LOTE = 200;
  *   abertas por eles (ex.: o líder da célula mudou). Sem ela, os links anteriores continuam valendo, como em
  *   criarLink.
  * - Tudo ou nada (um lote só no D1), e uma linha na trilha de auditoria por chamada:
- *   - 404 `nao_encontrado` se algum id não é um alvo do papel (detalhes: { ids: number[] });
- *   - 409 `em_uso` se algum alvo tem usuário desativado (detalhes: { ids: number[] }): reative antes com o PATCH.
+ *   - 404 `nao_encontrado` se algum id não é um alvo do papel (detalhes: detalhesIdsRecusadosSchema);
+ *   - 409 `em_uso` se algum alvo tem usuário desativado (detalhes: detalhesIdsRecusadosSchema): reative antes com o
+ *     PATCH.
  */
-/** `detalhes` dos 404 e 409 de POST /api/admin/acessos-hierarquia/links: os ids recusados, em ordem crescente. */
-export const detalhesIdsRecusadosSchema = z.strictObject({
-  ids: z.array(idSchema).min(1),
-});
-
 export const corpoGerarLinksHierarquiaSchema = z.strictObject({
   papel: papelHierarquiaSchema,
   /** ids de células (lider), discipuladores (discipulador) ou redes (rede), sem repetição. */
