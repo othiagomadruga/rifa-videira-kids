@@ -226,9 +226,12 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
     );
     expect(comLink).toHaveTextContent("Este link só aparece agora.");
     expect(within(comLink).getByLabelText("Link de acesso")).toHaveValue(url);
-    expect(
-      within(comLink).getByRole("button", { name: "Copiar link" }),
-    ).toHaveFocus();
+    // O foco chega pelo efeito do diálogo, que pode rodar depois de ele entrar no DOM.
+    await waitFor(() =>
+      expect(
+        within(comLink).getByRole("button", { name: "Copiar link" }),
+      ).toHaveFocus(),
+    );
 
     const whatsapp = within(comLink).getByRole("link", {
       name: "Enviar pelo WhatsApp",

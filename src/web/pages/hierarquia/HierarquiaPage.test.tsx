@@ -416,7 +416,9 @@ describe("CA2: editar e excluir", () => {
         },
       },
     ]);
-    expect(botao).toHaveFocus();
+    // Foco e `inert` voltam na limpeza do efeito do diálogo (primeiro o `inert`, depois o foco), que
+    // pode rodar numa tarefa depois de o diálogo sair do DOM: esperar o foco evita teste instável.
+    await waitFor(() => expect(botao).toHaveFocus());
     expect(screen.getByRole("main").closest("[inert]")).toBeNull();
     expect(
       screen.getByText("Célula “Célula Esperança” salva.", {
@@ -566,7 +568,10 @@ describe("CA2: editar e excluir", () => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
     expect(api.chamadasA("DELETE", "/api/admin/celulas/102")).toHaveLength(1);
-    expect(screen.getByRole("tab", { name: "Células" })).toHaveFocus();
+    // Como na edição: o foco chega na limpeza do efeito do diálogo.
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Células" })).toHaveFocus(),
+    );
     expect(
       screen.getByText("Célula “Célula Fé” excluída.", {
         selector: "[role=status]",
