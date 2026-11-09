@@ -37,6 +37,8 @@ async function abrir(api: ApiFalsa = criarApiFalsa()) {
   expect(
     await screen.findByRole("heading", { level: 1, name: "Conferência" }),
   ).toBeInTheDocument();
+  // O conteúdo vem num pacote à parte (lazy): espera ele chegar.
+  expect(await screen.findByLabelText(ROTULO_ARQUIVO)).toBeInTheDocument();
   return api;
 }
 
