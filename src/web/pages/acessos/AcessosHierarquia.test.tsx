@@ -175,7 +175,7 @@ describe("CA4: a lista dos alvos", () => {
     expect(document.body.innerHTML).not.toContain("/acesso/");
   });
 
-  it("a pessoa mudou: com 'Trocar acesso' na linha, 'troque o acesso'; sem ele (sem link válido ou desativado), 'gere um link novo'", async () => {
+  it("a pessoa mudou: o aviso pede o que a linha oferece ('Trocar acesso', 'Novo link' ou 'Reativar acesso')", async () => {
     const alvos = alvosExemplo();
     for (const indice of [2, 3]) {
       const usuario = alvos.lider[indice].usuario;
@@ -183,21 +183,26 @@ describe("CA4: a lista dos alvos", () => {
     }
     await abrirAba(criarApiFalsa(undefined, undefined, alvos));
 
+    // Link válido: a linha tem "Trocar acesso".
     expect(coluna("Célula Éfeso", "Pessoa")).toBe(
       "Rute Fictícia O último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
     );
     expect(acoes("Célula Éfeso")).toContain("Trocar acesso de Célula Éfeso");
-    for (const [alvo, pessoa] of [
-      ["Célula Canaã", "Ana Fictícia"],
-      ["Célula Dorcas", "Pedro Fictício"],
-    ]) {
-      expect(coluna(alvo, "Pessoa")).toBe(
-        `${pessoa} O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.`,
-      );
-      expect(acoes(alvo).some((acao) => acao?.startsWith("Trocar"))).toBe(
-        false,
-      );
-    }
+    // Só links revogados ou vencidos: a linha tem "Novo link", sem "Trocar acesso".
+    expect(coluna("Célula Canaã", "Pessoa")).toBe(
+      "Ana Fictícia O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.",
+    );
+    expect(acoes("Célula Canaã")).toEqual([
+      "Novo link para Célula Canaã",
+      "Desativar acesso de Célula Canaã",
+    ]);
+    // Desativada: a linha só tem "Reativar acesso"; o link novo vem depois de reativar.
+    expect(coluna("Célula Dorcas", "Pessoa")).toBe(
+      "Pedro Fictício O último link foi para Antiga Fictícia: se a pessoa mudou, reative e gere um link novo.",
+    );
+    expect(acoes("Célula Dorcas")).toEqual([
+      "Reativar acesso de Célula Dorcas",
+    ]);
   });
 
   it("a escolha do papel troca a lista (discipuladores e redes, sem a coluna de telefone)", async () => {
