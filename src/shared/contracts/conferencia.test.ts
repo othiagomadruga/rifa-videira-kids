@@ -143,6 +143,34 @@ describe("validarCorpoConferencia", () => {
     ).toEqual([]);
   });
 
+  it("o dia repetido em milhares de posições é conferido uma vez, e o que não existe nunca passa (nem depois de mais de mil dias)", () => {
+    // Mais de mil dias distintos e válidos (a memória dos dias conferidos recomeça no meio do caminho).
+    const dias = Array.from({ length: 1_500 }, (_, i) =>
+      new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10),
+    );
+    const muitos = dias.length + 3;
+    const corpoGrande = corpo({
+      linhas: muitos,
+      vezes: Array.from({ length: muitos }, () => 1),
+      pedido_id: Array.from({ length: muitos }, (_, i) => `R-${i}`),
+      status: Array.from({ length: muitos }, () => "aprovado" as const),
+      qtd_bilhetes: Array.from({ length: muitos }, () => 1),
+      valor: Array.from({ length: muitos }, () => 2000),
+      afiliado: Array.from({ length: muitos }, () => null),
+      dia: [...dias, "2026-02-28", "2026-02-31", "2026-02-28"],
+      instante: Array.from({ length: muitos }, () => null),
+    });
+    expect(problemas(corpoGrande)).toEqual([
+      {
+        caminho: ["dia", dias.length + 1],
+        codigo: "invalid_value",
+        mensagem: "Use uma data que existe, no formato AAAA-MM-DD",
+      },
+    ]);
+    // De novo, com tudo já conferido uma vez: o mesmo resultado.
+    expect(problemas(corpoGrande)).toHaveLength(1);
+  });
+
   it("instante sem o dia não passa", () => {
     expect(
       problemas(

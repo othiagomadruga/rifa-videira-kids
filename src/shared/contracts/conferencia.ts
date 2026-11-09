@@ -289,6 +289,22 @@ export type ValidacaoDoCorpo<T> =
 
 const STATUS_DO_ARQUIVO = new Set<string>(STATUS_ARQUIVO_RECONCILIACAO);
 const FORMATO_DIA = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+/**
+ * Dias que já passaram por diaDoCalendario. O mesmo dia se repete em milhares de posições, e cada chamada
+ * cria um Date: 7 mil chamadas custavam de 3 a 8 ms de CPU no Worker. Só entram dias que existem, até
+ * LIMITE_DIAS_CONFERIDOS (aí recomeça), então a memória fica pequena.
+ */
+const DIAS_QUE_EXISTEM = new Set<string>();
+const LIMITE_DIAS_CONFERIDOS = 1000;
+
+/** O dia ("AAAA-MM-DD", já no formato) existe no calendário? */
+function diaExiste(dia: string): boolean {
+  if (DIAS_QUE_EXISTEM.has(dia)) return true;
+  if (diaDoCalendario(dia) === null) return false;
+  if (DIAS_QUE_EXISTEM.size >= LIMITE_DIAS_CONFERIDOS) DIAS_QUE_EXISTEM.clear();
+  DIAS_QUE_EXISTEM.add(dia);
+  return true;
+}
 const FORMATO_SHA256 = /^[0-9a-f]{64}$/;
 /** De 2000-01-01 a 2100-01-01 (UTC), em ms. */
 const INSTANTE_MINIMO = 946_684_800_000;
@@ -364,9 +380,7 @@ const LISTAS: Record<
     campo: "data",
     // O formato e o dia de verdade ("2026-02-31" não existe: sem isto, a conta do dia no fuso dava 500).
     vale: (item) =>
-      typeof item === "string" &&
-      FORMATO_DIA.test(item) &&
-      diaDoCalendario(item) !== null,
+      typeof item === "string" && FORMATO_DIA.test(item) && diaExiste(item),
     mensagem: "Use uma data que existe, no formato AAAA-MM-DD",
   },
   instante: {
