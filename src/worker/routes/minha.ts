@@ -22,7 +22,11 @@ import {
 } from "../db/visao-individual";
 import { relogioDoSistema, type Relogio } from "../db/painel";
 import { responderErro } from "../lib/respostas-erro";
-import { montarVisaoIndividual } from "../lib/visao-individual";
+import {
+  MONTADORES_DA_VISAO,
+  montarVisaoIndividual,
+  type MontadoresDaVisao,
+} from "../lib/visao-individual";
 import { exigirSessao, type AmbienteSessao } from "../middleware/sessao";
 import { validarConsulta } from "../middleware/validacao";
 
@@ -36,11 +40,14 @@ export interface OpcoesMinha {
   relogio?: Relogio;
   /** Cache dos dados de base; padrão: 30 s na memória do isolate. */
   cache?: CacheDaBase;
+  /** Os montadores do contrato; o teste de desempenho passa uns que contam o trabalho de cada visão. */
+  montadores?: MontadoresDaVisao;
 }
 
 export function criarMinha({
   relogio = relogioDoSistema,
   cache = criarCacheDaBase(),
+  montadores = MONTADORES_DA_VISAO,
 }: OpcoesMinha = {}) {
   const minha = new Hono<AmbienteSessao>();
 
@@ -73,6 +80,7 @@ export function criarMinha({
         { pessoa: usuario.nome, alvo: usuario.alvo },
         c.req.valid("query"),
         agora,
+        montadores,
       );
       return c.json(ROTA.sucesso.corpo.parse(visao), 200);
     },
