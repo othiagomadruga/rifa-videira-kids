@@ -31,6 +31,7 @@ import { DialogoLinksGerados, DialogoTrocarAcesso } from "./DialogosHierarquia";
 import {
   ALVO_DO_PAPEL,
   PAPEL_NO_PLURAL,
+  avisoDeOutraPessoa,
   mensagemAoGerarLinks,
   precisaDeLink,
   situacaoDoAcesso,
@@ -403,21 +404,18 @@ export function AcessosHierarquia() {
 // O conteúdo de cada célula da tabela vai num só bloco (.acessos-celula): no celular, a célula vira uma
 // linha "rótulo: valor" e o valor precisa ser um item só, senão as partes ficam espremidas lado a lado.
 
-/** A pessoa que deve receber o link; se o último link foi para outra pessoa, avisa (troque o acesso). */
+/** A pessoa que deve receber o link; se o último link foi para outra pessoa, avisa o que fazer. */
 function Pessoa({ item }: { item: ItemAcessoHierarquia }) {
-  const atual = item.pessoa_nome ?? item.alvo.nome;
+  const aviso = avisoDeOutraPessoa(item);
   return (
     <div className="acessos-celula">
       {item.pessoa_nome ?? (
         <span className="acessos-suave">Sem responsável na hierarquia</span>
       )}
-      {item.usuario && item.usuario.nome !== atual && (
+      {aviso && (
         <>
           {" "}
-          <span className="acessos-suave acessos-nota-linha">
-            O último link foi para {item.usuario.nome}: se a pessoa mudou,
-            troque o acesso.
-          </span>
+          <span className="acessos-suave acessos-nota-linha">{aviso}</span>
         </>
       )}
     </div>

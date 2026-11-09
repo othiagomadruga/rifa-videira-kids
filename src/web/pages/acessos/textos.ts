@@ -191,6 +191,20 @@ export function textoDosAparelhos(sessoes: number): string {
 }
 
 /**
+ * O último link do alvo foi para outra pessoa (a hierarquia mudou depois): o que fazer, conforme a linha. Com
+ * link válido, a linha tem "Trocar acesso"; sem link válido ou desativado, não tem, e o caminho é gerar um
+ * link novo. null quando o link é da pessoa da hierarquia (ou ainda não há usuário).
+ */
+export function avisoDeOutraPessoa(item: ItemAcessoHierarquia): string | null {
+  const { usuario } = item;
+  if (!usuario || usuario.nome === (item.pessoa_nome ?? item.alvo.nome)) {
+    return null;
+  }
+  const comTroca = situacaoDoAcesso(usuario).tipo === "valido";
+  return `O último link foi para ${usuario.nome}: se a pessoa mudou, ${comTroca ? "troque o acesso" : "gere um link novo"}.`;
+}
+
+/**
  * Quem entra no lote "para quem ainda não tem": todo alvo sem link válido, menos os desativados (a API
  * recusaria o lote inteiro com 409: reative antes).
  */

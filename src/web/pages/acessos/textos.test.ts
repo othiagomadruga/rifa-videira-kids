@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ErroApi } from "../../lib/api";
 import { alvosExemplo, link } from "./teste-apoio";
 import {
+  avisoDeOutraPessoa,
   linkWhatsAppDoNumero,
   mensagemAoGerarLinks,
   mensagemHierarquia,
@@ -154,6 +155,40 @@ describe("situação do acesso de cada alvo", () => {
         ],
       }),
     ).toEqual({ tipo: "valido", ultimoUso: "2026-11-13T09:00:00.000Z" });
+  });
+
+  it("o último link foi para outra pessoa: 'troque o acesso' com link válido; sem ele ou desativado, 'gere um link novo'", () => {
+    // Éfeso: o último link foi para Lia, a hierarquia diz Rute, e o link é válido (a linha tem "Trocar acesso").
+    expect(avisoDeOutraPessoa(efeso)).toBe(
+      "O último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
+    );
+    const outraPessoa = (item: typeof canaa) => {
+      if (!item.usuario) throw new Error("o exemplo tem usuário");
+      return { ...item, usuario: { ...item.usuario, nome: "Antiga Fictícia" } };
+    };
+    // Canaã (só revogados ou vencidos) e Dorcas (desativada): sem "Trocar acesso" na linha.
+    for (const item of [outraPessoa(canaa), outraPessoa(dorcas)]) {
+      expect(avisoDeOutraPessoa(item)).toBe(
+        "O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.",
+      );
+    }
+    // O link é da pessoa da hierarquia, ou ainda não há usuário: nada a avisar.
+    expect(avisoDeOutraPessoa(betel)).toBeNull();
+    expect(avisoDeOutraPessoa(agape)).toBeNull();
+    // Rede sem responsável: o nome do usuário é o do alvo (a API faz assim).
+    expect(
+      avisoDeOutraPessoa({
+        ...agape,
+        pessoa_nome: null,
+        usuario: {
+          id: 1,
+          nome: agape.alvo.nome,
+          ativo: true,
+          sessoes_ativas: 0,
+          links: [link(9)],
+        },
+      }),
+    ).toBeNull();
   });
 
   it("os aparelhos conectados, no singular e no plural", () => {

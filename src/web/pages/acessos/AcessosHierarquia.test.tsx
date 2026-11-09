@@ -175,6 +175,31 @@ describe("CA4: a lista dos alvos", () => {
     expect(document.body.innerHTML).not.toContain("/acesso/");
   });
 
+  it("a pessoa mudou: com 'Trocar acesso' na linha, 'troque o acesso'; sem ele (sem link válido ou desativado), 'gere um link novo'", async () => {
+    const alvos = alvosExemplo();
+    for (const indice of [2, 3]) {
+      const usuario = alvos.lider[indice].usuario;
+      if (usuario) usuario.nome = "Antiga Fictícia";
+    }
+    await abrirAba(criarApiFalsa(undefined, undefined, alvos));
+
+    expect(coluna("Célula Éfeso", "Pessoa")).toBe(
+      "Rute Fictícia O último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
+    );
+    expect(acoes("Célula Éfeso")).toContain("Trocar acesso de Célula Éfeso");
+    for (const [alvo, pessoa] of [
+      ["Célula Canaã", "Ana Fictícia"],
+      ["Célula Dorcas", "Pedro Fictício"],
+    ]) {
+      expect(coluna(alvo, "Pessoa")).toBe(
+        `${pessoa} O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.`,
+      );
+      expect(acoes(alvo).some((acao) => acao?.startsWith("Trocar"))).toBe(
+        false,
+      );
+    }
+  });
+
   it("a escolha do papel troca a lista (discipuladores e redes, sem a coluna de telefone)", async () => {
     const { api } = await abrirAba();
 
