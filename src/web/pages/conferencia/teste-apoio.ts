@@ -163,9 +163,13 @@ function grupo(tipo: TipoDivergencia, itens: Divergencia[]) {
   return {
     tipo,
     quantidade: itens.length,
-    // O valor desconhecido não entra no total do arquivo: conta em `sem_valor`.
+    // Quantidade e valor desconhecidos não entram nos totais do arquivo: contam em `sem_quantidade` e
+    // `sem_valor`.
     arquivo: {
       ...soma("arquivo"),
+      sem_quantidade: itens.filter(
+        (item) => item.arquivo !== null && item.arquivo.qtd_bilhetes === null,
+      ).length,
       sem_valor: itens.filter(
         (item) => item.arquivo !== null && item.arquivo.total_centavos === null,
       ).length,
@@ -212,6 +216,7 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
       aprovados_no_arquivo: {
         pedidos_aprovados: 8,
         bilhetes: 16,
+        sem_quantidade: 0,
         total_centavos: 31000,
         sem_valor: 1,
       },
@@ -278,7 +283,10 @@ export const ANALISE_TRAVADA: RespostaAnalisePorPedido =
     ),
   });
 
-/** Um pedido em várias linhas com o mesmo valor, que não é o preço do bilhete (B2): não recupera. */
+/**
+ * Um pedido em várias linhas com o mesmo valor, que não é o preço do bilhete (B2), e um sem a quantidade:
+ * nenhum dos dois recupera, e a soma das perdidas diz o que ficou de fora.
+ */
 export const ANALISE_AMBIGUA: RespostaAnalisePorPedido =
   respostaAnalisePorPedidoSchema.parse({
     ...ANALISE_POR_PEDIDO,
@@ -293,6 +301,9 @@ export const ANALISE_AMBIGUA: RespostaAnalisePorPedido =
                 false,
                 ["valor_ambiguo"],
               ),
+              perdida("R-0108", { qtd_bilhetes: null }, false, [
+                "sem_quantidade",
+              ]),
             ]
           : [],
       ),
@@ -313,10 +324,12 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
     ],
     recorte: { data_inicio: "2026-11-24", data_fim: "2026-11-29" },
     total: {
-      // Uma linha paga sem valor (28/11): o total do arquivo é desconhecido e o valor não confere.
+      // Uma linha paga sem valor (28/11) e uma sem quantidade (a do afiliado não reconhecido): o total do
+      // arquivo é desconhecido, e os bilhetes e o valor não conferem.
       arquivo: {
         pedidos_aprovados: 8,
-        bilhetes: 16,
+        bilhetes: 15,
+        sem_quantidade: 1,
         total_centavos: 31000,
         sem_valor: 1,
       },
@@ -331,6 +344,7 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         arquivo: {
           pedidos_aprovados: 3,
           bilhetes: 8,
+          sem_quantidade: 0,
           total_centavos: 16000,
           sem_valor: 0,
         },
@@ -343,7 +357,8 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         celula: null,
         arquivo: {
           pedidos_aprovados: 1,
-          bilhetes: 1,
+          bilhetes: 0,
+          sem_quantidade: 1,
           total_centavos: 2000,
           sem_valor: 0,
         },
@@ -357,6 +372,7 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         arquivo: {
           pedidos_aprovados: 1,
           bilhetes: 2,
+          sem_quantidade: 0,
           total_centavos: 4000,
           sem_valor: 0,
         },
@@ -370,6 +386,7 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         arquivo: {
           pedidos_aprovados: 1,
           bilhetes: 3,
+          sem_quantidade: 0,
           total_centavos: 6000,
           sem_valor: 0,
         },
@@ -381,6 +398,7 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         arquivo: {
           pedidos_aprovados: 2,
           bilhetes: 3,
+          sem_quantidade: 0,
           total_centavos: 4000,
           sem_valor: 1,
         },

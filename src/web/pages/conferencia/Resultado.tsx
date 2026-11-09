@@ -241,7 +241,7 @@ function PorPedido({
 }
 
 function totaisDoGrupo(grupo: GrupoDivergencia): string {
-  // O lado do arquivo traz `sem_valor`: "R$ 120,00 (+1 sem valor)".
+  // O lado do arquivo traz `sem_quantidade` e `sem_valor`: "R$ 120,00 (+1 sem valor)".
   const lado = (
     soma: GrupoDivergencia["arquivo"] | GrupoDivergencia["sistema"],
   ) => textoDosTotais({ pedidos_aprovados: null, ...soma });

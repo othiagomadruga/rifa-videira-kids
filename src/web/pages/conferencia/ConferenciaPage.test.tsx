@@ -543,14 +543,22 @@ describe("CA4: a tela da conferência", () => {
     expect(within(linhas[2]).getByText("Confere")).toBeInTheDocument();
     const porDia = screen.getByRole("table", { name: "Totais por dia" });
     expect(within(porDia).getByText("28/11/2026")).toBeInTheDocument();
-    // A linha paga sem valor não vira R$ 0: o total diz quantas ficaram de fora.
+    // A linha paga sem valor não vira R$ 0, nem a sem quantidade 0 bilhete: os totais dizem quantas
+    // ficaram de fora.
     expect(
       within(porDia).getByText(
         "2 pedidos · 3 bilhetes · R$ 40,00 (+1 sem valor)",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("8 pedidos · 16 bilhetes · R$ 310,00 (+1 sem valor)"),
+      within(linhas[1]).getByText(
+        "1 pedido · 0 bilhetes (+1 sem quantidade) · R$ 20,00",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "8 pedidos · 15 bilhetes (+1 sem quantidade) · R$ 310,00 (+1 sem valor)",
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Recuperar/ })).toBeNull();
   });
@@ -606,7 +614,7 @@ describe("CA4: as travas da revisão (código que não bate e valor ambíguo)", 
     );
   });
 
-  it("valor ambíguo (o mesmo em todas as linhas, e não é o preço): explica e não deixa marcar", async () => {
+  it("valor ambíguo (o mesmo em todas as linhas, e não é o preço) e quantidade ilegível: explica, não deixa marcar e a soma não conta 0", async () => {
     await abrir(criarApiFalsa({ analises: [ANALISE_AMBIGUA] }));
     await escolher();
     const perdidas = grupo("Vendas perdidas");
@@ -616,6 +624,20 @@ describe("CA4: as travas da revisão (código que não bate e valor ambíguo)", 
     expect(
       within(perdidas).getByText(
         /repetem um valor que não é o preço do bilhete/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(perdidas).getByRole("checkbox", { name: /Pedido R-0108/ }),
+    ).toBeDisabled();
+    expect(
+      within(perdidas).getByText(
+        "Sem a quantidade de bilhetes no arquivo: não dá para recuperar.",
+      ),
+    ).toBeInTheDocument();
+    // Nem o valor ambíguo vira R$ 0, nem a quantidade ilegível 0 bilhete: a soma diz o que ficou de fora.
+    expect(
+      within(perdidas).getByText(
+        "Na Rifei: 3 bilhetes (+1 sem quantidade) · R$ 20,00 (+1 sem valor).",
       ),
     ).toBeInTheDocument();
   });

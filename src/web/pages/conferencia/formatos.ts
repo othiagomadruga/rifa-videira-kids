@@ -72,19 +72,20 @@ interface Totais {
   pedidos_aprovados: number | null;
   bilhetes: number | null;
   total_centavos: number | null;
-  /** Só no arquivo: pedidos pagos sem valor, que o total não inclui. */
+  /** Só no arquivo: pedidos pagos sem quantidade e sem valor, que os totais não incluem. */
+  sem_quantidade?: number;
   sem_valor?: number;
 }
 
-/** "R$ 410,00"; com pedidos sem valor, "R$ 410,00 (+2 sem valor)": o valor desconhecido não vira R$ 0. */
-function valorDosTotais(centavos: number, semValor: number): string {
-  const total = formatarMoeda(centavos);
-  return semValor > 0
-    ? `${total} (+${semValor.toLocaleString("pt-BR")} sem valor)`
-    : total;
+/** O que ficou de fora da soma: " (+2 sem valor)"; nada quando não falta nada. */
+function semOQue(quantos: number | undefined, oQue: string): string {
+  return quantos ? ` (+${quantos.toLocaleString("pt-BR")} ${oQue})` : "";
 }
 
-/** "10 pedidos · 22 bilhetes · R$ 410,00" (o que o arquivo não permite contar fica de fora). */
+/**
+ * "10 pedidos · 22 bilhetes · R$ 410,00" (o que o arquivo não permite contar fica de fora). Quantidade e
+ * valor desconhecidos não viram 0: "21 bilhetes (+1 sem quantidade) · R$ 390,00 (+1 sem valor)".
+ */
 export function textoDosTotais(totais: Totais): string {
   const partes = [
     totais.pedidos_aprovados === null
@@ -92,10 +93,10 @@ export function textoDosTotais(totais: Totais): string {
       : plural(totais.pedidos_aprovados, "pedido", "pedidos"),
     totais.bilhetes === null
       ? null
-      : plural(totais.bilhetes, "bilhete", "bilhetes"),
+      : `${plural(totais.bilhetes, "bilhete", "bilhetes")}${semOQue(totais.sem_quantidade, "sem quantidade")}`,
     totais.total_centavos === null
       ? null
-      : valorDosTotais(totais.total_centavos, totais.sem_valor ?? 0),
+      : `${formatarMoeda(totais.total_centavos)}${semOQue(totais.sem_valor, "sem valor")}`,
   ].filter((parte) => parte !== null);
   return partes.length === 0 ? "sem totais" : partes.join(" · ");
 }

@@ -815,22 +815,28 @@ interface Somaveis {
   valor: boolean;
 }
 
-/** Soma do lado do arquivo: o valor desconhecido (ilegível ou ambíguo) conta em `sem_valor`. */
+/**
+ * Soma do lado do arquivo: a quantidade desconhecida conta em `sem_quantidade` e o valor desconhecido
+ * (ilegível ou ambíguo), em `sem_valor`; nenhum dos dois vira 0.
+ */
 function somarArquivo(
   itens: readonly Divergencia[],
   somaveis: Somaveis,
 ): GrupoDivergencia["arquivo"] {
   let bilhetes = 0;
+  let semQuantidade = 0;
   let total = 0;
   let semValor = 0;
   for (const { arquivo } of itens) {
     if (arquivo === null) continue;
-    bilhetes += arquivo.qtd_bilhetes ?? 0;
+    if (arquivo.qtd_bilhetes === null) semQuantidade++;
+    else bilhetes += arquivo.qtd_bilhetes;
     if (arquivo.total_centavos === null) semValor++;
     else total += arquivo.total_centavos;
   }
   return {
     bilhetes: somaveis.quantidade ? bilhetes : null,
+    sem_quantidade: somaveis.quantidade ? semQuantidade : 0,
     total_centavos: somaveis.valor ? total : null,
     sem_valor: somaveis.valor ? semValor : 0,
   };
@@ -945,6 +951,7 @@ export function analisarPorPedido(
   let aprovados = 0;
   let bilhetesAprovados = 0;
   let centavosAprovados = 0;
+  let aprovadosSemQuantidade = 0;
   let aprovadosSemValor = 0;
 
   const regra = new ContagemDaRegra();
@@ -971,7 +978,8 @@ export function analisarPorPedido(
     let observacoes: ObservacaoDivergencia[] = [];
     if (pedido.status === "aprovado") {
       aprovados++;
-      bilhetesAprovados += qtd ?? 0;
+      if (qtd === null) aprovadosSemQuantidade++;
+      else bilhetesAprovados += qtd;
       if (decidido.centavos === null) aprovadosSemValor++;
       else centavosAprovados += decidido.centavos;
       if (!gravado) {
@@ -1082,8 +1090,10 @@ export function analisarPorPedido(
       pedidos_no_arquivo: pedidos.size,
       aprovados_no_arquivo: {
         pedidos_aprovados: aprovados,
+        // Quantidade e valor desconhecidos não viram 0: os totais somam os legíveis e `sem_quantidade` e
+        // `sem_valor` contam os outros.
         bilhetes: somaveis.quantidade ? bilhetesAprovados : null,
-        // O valor desconhecido não vira R$ 0: o total soma os legíveis e `sem_valor` conta os outros.
+        sem_quantidade: somaveis.quantidade ? aprovadosSemQuantidade : 0,
         total_centavos: somaveis.valor ? centavosAprovados : null,
         sem_valor: somaveis.valor ? aprovadosSemValor : 0,
       },
@@ -1118,13 +1128,18 @@ const vazioAcumulado = (): Acumulado => ({
   centavos: 0,
 });
 
-/** O lado do arquivo: `centavos` soma os valores legíveis e `semValor` conta as linhas pagas sem valor. */
+/**
+ * O lado do arquivo: `bilhetes` e `centavos` somam o que é legível; `semQuantidade` e `semValor` contam as
+ * linhas pagas sem quantidade e sem valor.
+ */
 interface AcumuladoDoArquivo extends Acumulado {
+  semQuantidade: number;
   semValor: number;
 }
 
 const vazioDoArquivo = (): AcumuladoDoArquivo => ({
   ...vazioAcumulado(),
+  semQuantidade: 0,
   semValor: 0,
 });
 
@@ -1149,6 +1164,7 @@ function comparar(
   const arquivo: TotaisArquivo = {
     pedidos_aprovados: contaveis.pedidos ? a.pedidos : null,
     bilhetes: contaveis.bilhetes ? a.bilhetes : null,
+    sem_quantidade: contaveis.bilhetes ? a.semQuantidade : 0,
     total_centavos: contaveis.valor ? a.centavos : null,
     sem_valor: contaveis.valor ? a.semValor : 0,
   };
@@ -1161,22 +1177,28 @@ function comparar(
     },
     confere:
       (arquivo.pedidos_aprovados === null || a.pedidos === s.pedidos) &&
-      (arquivo.bilhetes === null || a.bilhetes === s.bilhetes) &&
-      // Com linha paga sem valor, o total do arquivo é desconhecido: não dá para dizer que bate.
+      // Com linha paga sem quantidade ou sem valor, o total do arquivo é desconhecido: não dá para dizer
+      // que bate.
+      (arquivo.bilhetes === null ||
+        (arquivo.sem_quantidade === 0 && a.bilhetes === s.bilhetes)) &&
       (arquivo.total_centavos === null ||
         (arquivo.sem_valor === 0 && a.centavos === s.centavos)),
   };
 }
 
-/** Soma `n` linhas pagas iguais; o valor null (célula vazia ou ilegível) conta em `semValor`, não como 0. */
+/**
+ * Soma `n` linhas pagas iguais; a quantidade e o valor null (célula vazia ou ilegível) contam em
+ * `semQuantidade` e `semValor`, não como 0.
+ */
 function somarLinhas(
   alvo: AcumuladoDoArquivo,
   n: number,
-  bilhetes: number,
+  bilhetes: number | null,
   centavos: number | null,
 ): void {
   alvo.pedidos += n;
-  alvo.bilhetes += bilhetes * n;
+  if (bilhetes === null) alvo.semQuantidade += n;
+  else alvo.bilhetes += bilhetes * n;
   if (centavos === null) alvo.semValor += n;
   else alvo.centavos += centavos * n;
 }
@@ -1185,7 +1207,7 @@ function acumular(
   mapa: Map<string, AcumuladoDoArquivo>,
   chave: string,
   n: number,
-  bilhetes: number,
+  bilhetes: number | null,
   centavos: number | null,
 ): void {
   let atual = mapa.get(chave);
@@ -1269,9 +1291,10 @@ export function analisarAgregado(
       }
     }
     aprovadas += n;
+    // Sem a quantidade, a contagem dos números; sem os dois, desconhecida (null, não 0).
     const bilhetes = umBilhetePorLinha
       ? 1
-      : (corpo.qtd_bilhetes?.[i] ?? corpo.numeros?.[i] ?? 0);
+      : (corpo.qtd_bilhetes?.[i] ?? corpo.numeros?.[i] ?? null);
     const centavos = corpo.valor?.[i] ?? null;
     somarLinhas(totalArquivo, n, bilhetes, centavos);
     if (corpo.afiliado) {

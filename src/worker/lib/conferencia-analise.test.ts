@@ -353,6 +353,7 @@ describe("regra do valor dos pedidos em várias linhas (B2 da revisão)", () => 
     expect(resposta.resumo.aprovados_no_arquivo).toEqual({
       pedidos_aprovados: 4,
       bilhetes: 6,
+      sem_quantidade: 0,
       total_centavos: 6000,
       sem_valor: 2,
     });
@@ -363,6 +364,7 @@ describe("regra do valor dos pedidos em várias linhas (B2 da revisão)", () => 
     });
     expect(grupo(resposta, "ausente_no_arquivo").arquivo).toEqual({
       bilhetes: 0,
+      sem_quantidade: 0,
       total_centavos: 0,
       sem_valor: 0,
     });
@@ -378,14 +380,60 @@ describe("regra do valor dos pedidos em várias linhas (B2 da revisão)", () => 
     expect(semColunas.resumo.aprovados_no_arquivo).toEqual({
       pedidos_aprovados: 1,
       bilhetes: null,
+      sem_quantidade: 0,
       total_centavos: null,
       sem_valor: 0,
     });
     expect(grupo(semColunas, "venda_perdida").arquivo).toEqual({
       bilhetes: null,
+      sem_quantidade: 0,
       total_centavos: null,
       sem_valor: 0,
     });
+  });
+
+  it("quantidade vazia ou ilegível não vira 0 bilhete: conta em sem_quantidade e não é comparada", () => {
+    const linhas = [
+      CABECALHO,
+      ["Q-OK", "Pago", "2", "1, 2", "R$ 40,00", "101", "28/11/2026"],
+      ["Q-VAZIA", "Pago", "", "", "R$ 20,00", "101", "28/11/2026"],
+      ["Q-ILEGIVEL", "Pago", "dois", "", "R$ 20,00", "101", "28/11/2026"],
+      ["NO-SISTEMA", "Pago", "", "", "R$ 40,00", "101", "28/11/2026"],
+    ];
+    const resposta = analisar(linhas, [
+      gravado("NO-SISTEMA", { qtd_bilhetes: 2, total_centavos: 4000 }),
+    ]);
+    expect(resposta.resumo.aprovados_no_arquivo).toEqual({
+      pedidos_aprovados: 4,
+      bilhetes: 2,
+      sem_quantidade: 3,
+      total_centavos: 12000,
+      sem_valor: 0,
+    });
+    expect(grupo(resposta, "venda_perdida")).toMatchObject({
+      quantidade: 3,
+      arquivo: {
+        bilhetes: 2,
+        sem_quantidade: 2,
+        total_centavos: 8000,
+        sem_valor: 0,
+      },
+    });
+    expect(
+      grupo(resposta, "venda_perdida").itens.map((item) => [
+        item.pedido_id,
+        item.arquivo?.qtd_bilhetes,
+        item.recuperavel,
+        item.observacoes,
+      ]),
+    ).toEqual([
+      ["Q-ILEGIVEL", null, false, ["sem_quantidade"]],
+      ["Q-OK", 2, true, []],
+      ["Q-VAZIA", null, false, ["sem_quantidade"]],
+    ]);
+    // Sem a quantidade no arquivo, a do sistema não é comparada: o pedido confere.
+    expect(grupo(resposta, "quantidade_diferente").quantidade).toBe(0);
+    expect(resposta.resumo.conferem).toBe(1);
   });
 
   it("a convenção pelos pedidos que batem com o sistema: cada linha repete o valor do pedido (avisa e usa)", () => {
@@ -898,6 +946,7 @@ describe("modo agregado (sem o código do pedido)", () => {
       arquivo: {
         pedidos_aprovados: 3,
         bilhetes: 5,
+        sem_quantidade: 0,
         total_centavos: 10000,
         sem_valor: 0,
       },
@@ -943,6 +992,7 @@ describe("modo agregado (sem o código do pedido)", () => {
       arquivo: {
         pedidos_aprovados: null,
         bilhetes: null,
+        sem_quantidade: 0,
         total_centavos: 6000,
         sem_valor: 0,
       },
@@ -969,6 +1019,7 @@ describe("modo agregado (sem o código do pedido)", () => {
       arquivo: {
         pedidos_aprovados: null,
         bilhetes: 3,
+        sem_quantidade: 0,
         total_centavos: null,
         sem_valor: 0,
       },
@@ -996,6 +1047,7 @@ describe("modo agregado (sem o código do pedido)", () => {
     expect(resposta.total.arquivo).toEqual({
       pedidos_aprovados: 2,
       bilhetes: 2,
+      sem_quantidade: 0,
       total_centavos: 5000,
       sem_valor: 0,
     });
@@ -1027,6 +1079,7 @@ describe("modo agregado (sem o código do pedido)", () => {
       arquivo: {
         pedidos_aprovados: null,
         bilhetes: null,
+        sem_quantidade: 0,
         total_centavos: 5000,
         sem_valor: 1,
       },
@@ -1048,6 +1101,63 @@ describe("modo agregado (sem o código do pedido)", () => {
       resposta.por_afiliado?.map((linha) => [
         linha.affiliate_id,
         linha.arquivo.sem_valor,
+        linha.confere,
+      ]),
+    ).toEqual([
+      [101, 1, false],
+      [102, 0, true],
+    ]);
+  });
+
+  it("linha paga sem quantidade não vira 0 bilhete: conta em sem_quantidade e os bilhetes não conferem", () => {
+    // Antes, 3 + "vazio" = 3 bilhetes "conferiam" com os 2 + 1 do sistema (pedidos e valor iguais).
+    const resposta = agregar(
+      [
+        ["Status", "Quantidade", "Valor", "Afiliado", "Data"],
+        ["Pago", "3", "60,00", "101", "24/11/2026"],
+        ["Pago", "", "20,00", "101", "24/11/2026"],
+        ["Pago", "1", "30,00", "102", "25/11/2026"],
+      ],
+      [
+        gravado("A", {
+          qtd_bilhetes: 2,
+          total_centavos: 6000,
+          aprovado_ms: Date.parse("2026-11-24T15:00:00.000Z"),
+        }),
+        gravado("B", { aprovado_ms: Date.parse("2026-11-24T16:00:00.000Z") }),
+        gravado("C", {
+          affiliate_id: 102,
+          total_centavos: 3000,
+          aprovado_ms: Date.parse("2026-11-25T15:00:00.000Z"),
+        }),
+      ],
+    );
+    expect(resposta.total).toEqual({
+      arquivo: {
+        pedidos_aprovados: 3,
+        bilhetes: 4,
+        sem_quantidade: 1,
+        total_centavos: 11000,
+        sem_valor: 0,
+      },
+      sistema: { pedidos_aprovados: 3, bilhetes: 4, total_centavos: 11000 },
+      confere: false,
+    });
+    expect(
+      resposta.por_dia?.map((dia) => [
+        dia.data,
+        dia.arquivo.bilhetes,
+        dia.arquivo.sem_quantidade,
+        dia.confere,
+      ]),
+    ).toEqual([
+      ["2026-11-24", 3, 1, false],
+      ["2026-11-25", 1, 0, true],
+    ]);
+    expect(
+      resposta.por_afiliado?.map((linha) => [
+        linha.affiliate_id,
+        linha.arquivo.sem_quantidade,
         linha.confere,
       ]),
     ).toEqual([

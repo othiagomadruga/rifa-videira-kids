@@ -1303,12 +1303,14 @@ export const divergenciaSchema = z.strictObject({
 export type Divergencia = z.infer<typeof divergenciaSchema>;
 
 /**
- * Soma do lado do arquivo, só com o que é legível: valor desconhecido não vira R$ 0. Sem a coluna, a soma
- * é null; `sem_valor` conta os pedidos sem valor (ilegível ou ambíguo), que `total_centavos` não inclui
- * (0 sem a coluna do valor).
+ * Soma do lado do arquivo, só com o que é legível: quantidade desconhecida não vira 0 bilhete, nem valor
+ * desconhecido R$ 0. Sem a coluna, a soma é null; `sem_quantidade` e `sem_valor` contam os pedidos sem
+ * quantidade (ilegível ou vazia) e sem valor (ilegível, vazio ou ambíguo), que `bilhetes` e
+ * `total_centavos` não incluem (0 sem a coluna).
  */
 const somaArquivoSchema = z.strictObject({
   bilhetes: z.number().int().nonnegative().nullable(),
+  sem_quantidade: z.number().int().nonnegative(),
   total_centavos: centavosSchema.nullable(),
   sem_valor: z.number().int().nonnegative(),
 });
@@ -1354,7 +1356,14 @@ export const arquivoLidoSchema = z.strictObject({
 /** Totais pagos no arquivo: null quando o arquivo não permite contar. */
 export const totaisArquivoSchema = z.strictObject({
   pedidos_aprovados: z.number().int().nonnegative().nullable(),
+  /** Soma das quantidades legíveis; null sem a coluna da quantidade (e sem a dos números). */
   bilhetes: z.number().int().nonnegative().nullable(),
+  /**
+   * Pedidos pagos (no modo agregado, linhas pagas) sem quantidade legível, que `bilhetes` não inclui:
+   * quantidade desconhecida não vira 0 bilhete (a tela mostra "N bilhetes (+M sem quantidade)"). 0 sem a
+   * coluna.
+   */
+  sem_quantidade: z.number().int().nonnegative(),
   /** Soma dos valores legíveis; null sem a coluna do valor. */
   total_centavos: centavosSchema.nullable(),
   /**
@@ -1419,8 +1428,9 @@ const comparacaoTotaisSchema = {
   arquivo: totaisArquivoSchema,
   sistema: totaisVendasSchema,
   /**
-   * Os totais que o arquivo permite contar são iguais aos do sistema. Com pedido pago sem valor
-   * (`arquivo.sem_valor` > 0), o valor não confere: o total do arquivo é desconhecido.
+   * Os totais que o arquivo permite contar são iguais aos do sistema. Com pedido pago sem quantidade ou
+   * sem valor (`arquivo.sem_quantidade` ou `arquivo.sem_valor` > 0), os bilhetes ou o valor não conferem:
+   * o total do arquivo é desconhecido.
    */
   confere: z.boolean(),
 };

@@ -264,6 +264,7 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
       aprovados_no_arquivo: {
         pedidos_aprovados: 10,
         bilhetes: 22,
+        sem_quantidade: 0,
         total_centavos: 41000,
         sem_valor: 1,
       },
@@ -345,6 +346,59 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
       expect.arrayContaining(["sem_coluna_afiliado", "sem_coluna_data"]),
     );
     expect(analise.arquivo.data_inicio).toBeNull();
+  });
+
+  it("quantidade vazia ou ilegível não vira 0 bilhete: conta em sem_quantidade (totais e perdidas) e não é comparada", async () => {
+    const analise = await porPedido(
+      await corpo(
+        montarCsv([
+          [
+            "Pedido",
+            "Status",
+            "Quantidade de bilhetes",
+            "Valor",
+            "Afiliado",
+            "Data do pagamento",
+          ],
+          // R-0001 está no sistema com 3 bilhetes e R$ 60: sem a quantidade aqui, ela não é comparada.
+          ["R-0001", "Pago", "", "R$ 60,00", "101", "24/11/2026 10:00"],
+          ["R-0201", "Pago", "dois", "R$ 40,00", "101", "28/11/2026 10:00"],
+          ["R-0202", "Pago", "1", "R$ 20,00", "101", "28/11/2026 11:00"],
+        ]),
+      ),
+    );
+    expect(analise.resumo).toMatchObject({
+      aprovados_no_arquivo: {
+        pedidos_aprovados: 3,
+        bilhetes: 1,
+        sem_quantidade: 2,
+        total_centavos: 12000,
+        sem_valor: 0,
+      },
+      conferem: 1,
+    });
+    const perdidas = analise.divergencias[0];
+    expect(perdidas).toMatchObject({
+      tipo: "venda_perdida",
+      quantidade: 2,
+      arquivo: {
+        bilhetes: 1,
+        sem_quantidade: 1,
+        total_centavos: 6000,
+        sem_valor: 0,
+      },
+    });
+    expect(
+      perdidas.itens.map((item) => [
+        item.pedido_id,
+        item.recuperavel,
+        item.observacoes,
+      ]),
+    ).toEqual([
+      ["R-0201", false, ["sem_quantidade"]],
+      ["R-0202", true, []],
+    ]);
+    expect(codigosPorTipo(analise).quantidade_diferente).toEqual([]);
   });
 
   it("corpo fora do formato: 400 requisicao_invalida apontando campo e posição, sem ecoar valores", async () => {
@@ -490,6 +544,7 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
       arquivo: {
         pedidos_aprovados: 10,
         bilhetes: 22,
+        sem_quantidade: 0,
         total_centavos: 41000,
         sem_valor: 1,
       },
@@ -508,6 +563,7 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
       arquivo: {
         pedidos_aprovados: 3,
         bilhetes: 8,
+        sem_quantidade: 0,
         total_centavos: 16000,
         sem_valor: 0,
       },
@@ -560,12 +616,42 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
     expect(analise.total.arquivo).toEqual({
       pedidos_aprovados: null,
       bilhetes: null,
+      sem_quantidade: 0,
       total_centavos: 6000,
       sem_valor: 0,
     });
     expect(analise.avisos.map((aviso) => aviso.codigo)).toContain(
       "sem_contagem_de_pedidos",
     );
+  });
+
+  it("linha paga sem quantidade não vira 0 bilhete: conta em sem_quantidade e os bilhetes não conferem", async () => {
+    const analise = await agregado(
+      await corpo(
+        montarCsv([
+          [
+            "Status",
+            "Quantidade de bilhetes",
+            "Valor",
+            "Afiliado",
+            "Data do pagamento",
+          ],
+          // No sistema, 24/11 tem só a R-0001 (afiliado 101, 3 bilhetes, R$ 60).
+          ["Pago", "", "R$ 60,00", "101", "24/11/2026 10:00"],
+        ]),
+      ),
+    );
+    expect(analise.total).toEqual({
+      arquivo: {
+        pedidos_aprovados: 1,
+        bilhetes: 0,
+        sem_quantidade: 1,
+        total_centavos: 6000,
+        sem_valor: 0,
+      },
+      sistema: { pedidos_aprovados: 1, bilhetes: 3, total_centavos: 6000 },
+      confere: false,
+    });
   });
 
   it("no modo agregado não dá para recuperar: o Recuperar exige a coluna do código (400)", async () => {
