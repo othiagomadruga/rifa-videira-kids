@@ -19,6 +19,7 @@
 .ui-progress__rotulo {
   min-width: 0;
   font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
 }
 
 .ui-progress__valor {

@@ -2,6 +2,7 @@
   display: grid;
   gap: var(--espaco-1);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ui-campo__rotulo {

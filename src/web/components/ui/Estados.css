@@ -6,6 +6,7 @@
   padding: var(--espaco-6) var(--espaco-4);
   border-radius: var(--raio-3);
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .ui-estado--vazio {

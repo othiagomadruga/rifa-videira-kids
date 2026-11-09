@@ -8,6 +8,7 @@
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio-3);
   box-shadow: var(--sombra-1);
+  overflow-wrap: anywhere;
 }
 
 .ui-stat__rotulo {

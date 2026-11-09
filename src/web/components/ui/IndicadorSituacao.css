@@ -46,6 +46,7 @@
 .ui-situacao__textos {
   display: grid;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ui-situacao__titulo {
