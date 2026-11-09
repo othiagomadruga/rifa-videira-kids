@@ -879,6 +879,8 @@ export interface AusentesDoArquivo {
   quantidade: number;
   bilhetes: number;
   total_centavos: number;
+  /** Quantos deles são de dias que o arquivo não cobre (não contam em `com_divergencia`). */
+  fora_do_periodo: number;
   /** Os primeiros LIMITE_ITENS_POR_DIVERGENCIA, em ordem de código. */
   itens: (PedidoGravado & { fora_do_periodo: boolean })[];
 }
@@ -1058,7 +1060,10 @@ export function analisarPorPedido(
       },
       aprovados_no_sistema: sistema.aprovados,
       conferem,
-      com_divergencia: comDivergencia.size + ausentes.quantidade,
+      // Os ausentes de dias que o arquivo não cobre ficam à parte: não são diferença deste arquivo.
+      com_divergencia:
+        comDivergencia.size + ausentes.quantidade - ausentes.fora_do_periodo,
+      ausentes_fora_do_periodo: ausentes.fora_do_periodo,
     },
     divergencias: TIPOS_DIVERGENCIA.map((tipo) =>
       tipo === "ausente_no_arquivo"

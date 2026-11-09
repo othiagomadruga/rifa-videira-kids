@@ -115,16 +115,21 @@ const SOMAR_PAGOS = `SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA
 /** Pagos da campanha que o arquivo não tem (?2: TODOS os códigos do arquivo, em JSON). */
 const FORA_DO_ARQUIVO = "p.id NOT IN (SELECT value FROM json_each(?2))";
 
+/** Aprovado fora do período do arquivo (?3 e ?4; sem período, nenhum). */
+const FORA_DO_PERIODO = `?3 IS NOT NULL AND p.aprovado_em IS NOT NULL
+  AND (p.aprovado_em < ?3 OR p.aprovado_em >= ?4)`;
+
+/** Os ausentes somados e quantos deles são de dias que o arquivo não cobre. */
 const SOMAR_AUSENTES = `
-  SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${FORA_DO_ARQUIVO}`;
+  SELECT ${SOMAS}, coalesce(sum(CASE WHEN ${FORA_DO_PERIODO} THEN 1 ELSE 0 END), 0) AS fora
+  FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${FORA_DO_ARQUIVO}`;
 
 /** Os primeiros ausentes (?5), com `fora`: aprovado fora do período do arquivo (?3 e ?4). */
 const LISTAR_AUSENTES = `
   SELECT json_group_array(json_array(json(t.pedido), t.fora)) AS linhas
   FROM (
     SELECT ${COLUNAS_DO_PEDIDO} AS pedido,
-      CASE WHEN ?3 IS NOT NULL AND p.aprovado_em IS NOT NULL
-        AND (p.aprovado_em < ?3 OR p.aprovado_em >= ?4) THEN 1 ELSE 0 END AS fora
+      CASE WHEN ${FORA_DO_PERIODO} THEN 1 ELSE 0 END AS fora
     FROM pedidos AS p
     WHERE ${PAGOS_DA_CAMPANHA} AND ${FORA_DO_ARQUIVO}
     ORDER BY p.id
@@ -191,7 +196,7 @@ export async function lerParaPorPedido(
   if (comAusentes) {
     comandos.push(
       db.prepare(SOMAR_PAGOS).bind(campanhaId),
-      db.prepare(SOMAR_AUSENTES).bind(campanhaId, todos),
+      db.prepare(SOMAR_AUSENTES).bind(campanhaId, todos, inicio, fim),
       db
         .prepare(LISTAR_AUSENTES)
         .bind(campanhaId, todos, inicio, fim, LIMITE_ITENS_POR_DIVERGENCIA),
@@ -211,16 +216,20 @@ export async function lerParaPorPedido(
     quantidade: 0,
     bilhetes: 0,
     total_centavos: 0,
+    fora_do_periodo: 0,
     itens: [],
   };
   if (comAusentes) {
     const [somaPagos, somaAusentes, listaAusentes] = resto.slice(lotes.length);
     aprovados = totais(somaPagos.results[0] as Somas | undefined);
-    const somados = totais(somaAusentes.results[0] as Somas | undefined);
+    const linha = somaAusentes.results[0] as
+      (Somas & { fora: number }) | undefined;
+    const somados = totais(linha);
     ausentes = {
       quantidade: somados.pedidos_aprovados,
       bilhetes: somados.bilhetes,
       total_centavos: somados.total_centavos,
+      fora_do_periodo: linha?.fora ?? 0,
       itens: linhasDoTexto<[TuplaDoPedido, number]>(listaAusentes).map(
         ([pedido, fora]) => ({ ...tupla(pedido), fora_do_periodo: fora === 1 }),
       ),

@@ -720,7 +720,7 @@ Teto: o corpo vai até **1 MiB** (`LIMITE_CORPO_CONFERENCIA_BYTES`), uns 15 mil 
 | `ausente_no_arquivo` | pago no sistema e ausente no arquivo (arquivo parcial, compra de teste) | sistema; `fora_do_periodo_do_arquivo` quando é de um dia que o arquivo não cobre |
 | `valor_diferente`, `quantidade_diferente`, `afiliado_diferente` | pago nos dois lados, com valor, quantidade ou afiliado diferentes (um pedido pode estar em mais de um) | os dois |
 
-  `divergencias` traz os sete tipos, sempre nessa ordem, cada um com `quantidade`, as somas de cada lado (`bilhetes`, `total_centavos`) e até 500 `itens` (`LIMITE_ITENS_POR_DIVERGENCIA`; `itens_omitidos` conta o resto). O lado do arquivo traz status, quantidade, centavos, a situação do afiliado, o `affiliate_id`, a célula e o dia; o do sistema, também `aprovado_em` e `origem` (`webhook` ou `conferencia`). `resumo`: `pedidos_no_arquivo`, `aprovados_no_arquivo` e `aprovados_no_sistema` (pedidos, bilhetes e centavos), `conferem` e `com_divergencia`. Um código que existe no sistema em outra campanha fica de fora (aviso `pedido_de_outra_campanha`).
+  `divergencias` traz os sete tipos, sempre nessa ordem, cada um com `quantidade`, as somas de cada lado (`bilhetes`, `total_centavos`) e até 500 `itens` (`LIMITE_ITENS_POR_DIVERGENCIA`; `itens_omitidos` conta o resto). O lado do arquivo traz status, quantidade, centavos, a situação do afiliado, o `affiliate_id`, a célula e o dia; o do sistema, também `aprovado_em` e `origem` (`webhook` ou `conferencia`). `resumo`: `pedidos_no_arquivo`, `aprovados_no_arquivo` e `aprovados_no_sistema` (pedidos, bilhetes e centavos), `conferem`, `com_divergencia` e `ausentes_fora_do_periodo` (os pagos do sistema de dias que o arquivo não cobre: listados em `ausente_no_arquivo`, mas à parte, sem somar em `com_divergencia`). Um código que existe no sistema em outra campanha fica de fora (aviso `pedido_de_outra_campanha`).
 - **Agregado** (sem a coluna do código). Compara os totais pagos (pedidos, bilhetes e centavos) no `total`, `por_afiliado` (os diferentes primeiro: `afiliado`, `sem_afiliado` ou `nao_reconhecido`, com a célula) e `por_dia`. Com datas no arquivo, o sistema conta só os pagos desses dias (`recorte`). O que o arquivo não permite contar sai `null` e fica fora do `confere`: sem a quantidade, a quantidade de pedidos (uma linha pode ser um bilhete; aviso `sem_contagem_de_pedidos`); um bilhete por linha sem o código, os pedidos e o valor. O banco soma (GROUP BY); o dia do sistema é o do deslocamento do fuso no fim do período (exato nos fusos do Brasil).
 - **Erros**: 400 `json_invalido` (não é JSON ou veio sem `Content-Type` JSON; mensagem fixa); 400 `requisicao_invalida` (fora do formato: `detalhes` = `[{ "caminho": ["valor", 3], "codigo": "invalid_value", "mensagem": "Use centavos inteiros, até R$ 10.000.000,00" }]`, até 20 e um item final com o resto; coluna de nome pessoal: `[{ "caminho": ["colunas", "afiliado"], "codigo": "coluna_pessoal", "mensagem": "A coluna \"Telefone do afiliado\" tem dados pessoais e não pode ser usada" }]`); 401; 403; 404 `nao_encontrado` (sem campanha ativa); 413 `corpo_muito_grande`.
 
@@ -759,7 +759,8 @@ Exemplo resumido de resposta (por pedido; `divergencias` traz os sete tipos, aqu
     "aprovados_no_arquivo": { "pedidos_aprovados": 10, "bilhetes": 22, "total_centavos": 41000 },
     "aprovados_no_sistema": { "pedidos_aprovados": 7, "bilhetes": 15, "total_centavos": 30000 },
     "conferem": 1,
-    "com_divergencia": 12
+    "com_divergencia": 11,
+    "ausentes_fora_do_periodo": 1
   },
   "divergencias": [
     {

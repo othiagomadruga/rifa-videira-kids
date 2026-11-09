@@ -209,6 +209,13 @@ function PorPedido({
           valor={plural(resumo.com_divergencia, "pedido", "pedidos")}
         />
       </div>
+      {resumo.ausentes_fora_do_periodo > 0 && (
+        <p className="conferencia-suave">
+          {resumo.ausentes_fora_do_periodo === 1
+            ? "1 pedido pago no sistema é de um dia que o arquivo não cobre: ele aparece em “Só no sistema”, mas não conta como diferença."
+            : `${plural(resumo.ausentes_fora_do_periodo, "pedido pago", "pedidos pagos")} no sistema são de dias que o arquivo não cobre: eles aparecem em “Só no sistema”, mas não contam como diferença.`}
+        </p>
+      )}
       {/* A trava do código já está no aviso do topo. */}
       <Avisos
         avisos={avisos.filter((item) => item.codigo !== "codigo_nao_confere")}

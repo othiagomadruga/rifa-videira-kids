@@ -108,6 +108,12 @@ function sistemaDe(
       pedido.aprovado_ms >= periodo.ms.inicio &&
       pedido.aprovado_ms < periodo.ms.fim);
   const ausentes = pagos.filter((pedido) => !codigos.has(pedido.id));
+  // Como o SQL: aprovado fora do período do arquivo (sem período ou sem aprovado_em, não).
+  const foraDoPeriodo = (pedido: PedidoGravado) =>
+    periodo !== null &&
+    pedido.aprovado_ms !== null &&
+    (pedido.aprovado_ms < periodo.ms.inicio ||
+      pedido.aprovado_ms >= periodo.ms.fim);
   const somaPagos = somarPedidos(pagos);
   const somaAusentes = somarPedidos(ausentes);
   return {
@@ -128,9 +134,10 @@ function sistemaDe(
       quantidade: somaAusentes.pedidos,
       bilhetes: somaAusentes.bilhetes,
       total_centavos: somaAusentes.centavos,
+      fora_do_periodo: ausentes.filter(foraDoPeriodo).length,
       itens: ausentes.map((pedido) => ({
         ...pedido,
-        fora_do_periodo: !noPeriodo(pedido),
+        fora_do_periodo: foraDoPeriodo(pedido),
       })),
     },
   };
@@ -694,6 +701,42 @@ describe("trava do código que não bate (B3 da revisão)", () => {
     expect(resposta.avisos.map((aviso) => aviso.codigo)).toEqual(
       expect.arrayContaining(["codigo_nao_confere", "pedido_inconsistente"]),
     );
+  });
+});
+
+describe("pagos no sistema que o arquivo não tem", () => {
+  it("os de dias que o arquivo não cobre aparecem na lista, mas ficam à parte em com_divergencia", () => {
+    const resposta = analisar(
+      [
+        ["Pedido", "Status", "Quantidade", "Valor", "Afiliado", "Data"],
+        ["A", "Pago", "1", "20,00", "101", "27/11/2026 10:00"],
+      ],
+      [
+        gravado("A", { aprovado_ms: Date.parse("2026-11-27T13:00:00.000Z") }),
+        // No dia do arquivo: diferença deste arquivo.
+        gravado("NO-DIA", {
+          aprovado_ms: Date.parse("2026-11-27T20:00:00.000Z"),
+        }),
+        // Dias antes do arquivo: só informação.
+        gravado("ANTES", {
+          aprovado_ms: Date.parse("2026-11-20T15:00:00.000Z"),
+        }),
+      ],
+    );
+    expect(
+      grupo(resposta, "ausente_no_arquivo").itens.map((item) => [
+        item.pedido_id,
+        item.observacoes,
+      ]),
+    ).toEqual([
+      ["ANTES", ["fora_do_periodo_do_arquivo"]],
+      ["NO-DIA", []],
+    ]);
+    expect(resposta.resumo).toMatchObject({
+      conferem: 1,
+      com_divergencia: 1,
+      ausentes_fora_do_periodo: 1,
+    });
   });
 });
 

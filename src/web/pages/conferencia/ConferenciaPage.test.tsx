@@ -213,6 +213,12 @@ describe("CA4: a tela da conferência", () => {
         "Sem nenhum caso: Pagamento não registrado, Não pagas na Rifei, Quantidade de bilhetes diferente, Afiliado diferente.",
       ),
     ).toBeInTheDocument();
+    // O ausente de um dia que o arquivo não cobre fica à parte, sem somar nas diferenças.
+    expect(
+      screen.getByText(
+        "1 pedido pago no sistema é de um dia que o arquivo não cobre: ele aparece em “Só no sistema”, mas não conta como diferença.",
+      ),
+    ).toBeInTheDocument();
 
     // As recuperáveis já vêm marcadas; a sem valor não pode ser marcada e diz por quê.
     const caixa = (codigo: string) =>

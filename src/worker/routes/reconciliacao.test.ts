@@ -271,7 +271,9 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
         total_centavos: 30000,
       },
       conferem: 1,
-      com_divergencia: 12,
+      // R-0007 (ausente, de 20/11) é de antes do arquivo: fica à parte e não soma.
+      com_divergencia: 11,
+      ausentes_fora_do_periodo: 1,
     });
     expect(analise.arquivo).toEqual({
       linhas: 17,

@@ -214,6 +214,8 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
       },
       conferem: 2,
       com_divergencia: 6,
+      // A R-0007 (ausente) é de um dia que o arquivo não cobre: fica à parte.
+      ausentes_fora_do_periodo: 1,
     },
     divergencias: TIPOS.map((tipo) => grupo(tipo, ITENS_POR_TIPO[tipo] ?? [])),
   });

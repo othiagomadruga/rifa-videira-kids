@@ -1381,8 +1381,13 @@ export const respostaAnalisePorPedidoSchema = z.strictObject({
     aprovados_no_sistema: totaisVendasSchema,
     /** Pagos nos dois lados, sem nenhuma diferença. */
     conferem: z.number().int().nonnegative(),
-    /** Pedidos com alguma divergência (cada um conta uma vez). */
+    /**
+     * Pedidos com alguma divergência (cada um conta uma vez), sem os pagos do sistema de dias que o
+     * arquivo não cobre: esses ficam à parte, em `ausentes_fora_do_periodo`.
+     */
     com_divergencia: z.number().int().nonnegative(),
+    /** Pagos no sistema e ausentes no arquivo de dias que ele não cobre (listados em ausente_no_arquivo). */
+    ausentes_fora_do_periodo: z.number().int().nonnegative(),
   }),
   /** Os sete tipos, sempre nesta ordem (TIPOS_DIVERGENCIA), mesmo os sem pedido. */
   divergencias: z.array(grupoDivergenciaSchema),
