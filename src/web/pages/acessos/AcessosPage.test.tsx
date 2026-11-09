@@ -437,6 +437,44 @@ describe("CA5: gerar link novo e revogar link", () => {
 });
 
 describe("CA5: desativar e reativar", () => {
+  it("com o link novo da pessoa sendo gerado, 'Desativar acesso' fica indisponível e não abre a confirmação (RIFA-014)", async () => {
+    const { api } = await abrirTela();
+    let responder: ((resposta: Response) => void) | null = null;
+    api.proxima(
+      "POST",
+      "/api/admin/usuarios/902/links",
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+
+    acionar(
+      within(cartao("Felipe Coordenador")).getByRole("button", {
+        name: "Gerar link novo para Felipe Coordenador",
+      }),
+    );
+    await waitFor(() => expect(responder).not.toBeNull());
+    const desativar = within(cartao("Felipe Coordenador")).getByRole("button", {
+      name: "Desativar acesso de Felipe Coordenador",
+    });
+    expect(desativar).toHaveAttribute("aria-disabled", "true");
+
+    acionar(desativar);
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(api.chamadasA("PATCH", "/api/admin/usuarios/902")).toEqual([]);
+
+    // Terminada a geração, o botão volta a abrir a confirmação.
+    await act(async () =>
+      responder?.(respostaErro(500, "erro_interno", "Falha simulada")),
+    );
+    await waitFor(() => expect(desativar).not.toHaveAttribute("aria-disabled"));
+    acionar(desativar);
+    expect(
+      screen.getByRole("alertdialog", {
+        name: "Desativar o acesso de Felipe Coordenador?",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("Desativar: confirma e PATCH { ativo: false }; vira 'Desativado'; Reativar faz PATCH { ativo: true }", async () => {
     const { api } = await abrirTela();
     const botao = within(cartao("Felipe Coordenador")).getByRole("button", {

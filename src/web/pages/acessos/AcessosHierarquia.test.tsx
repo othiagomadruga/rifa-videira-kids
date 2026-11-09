@@ -744,6 +744,62 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
 });
 
 describe("CA4: desativar, reativar e revogar com as rotas que a tela já tem", () => {
+  it("com uma ação em andamento, as ações das linhas ficam indisponíveis e não abrem confirmação nem chamam a API", async () => {
+    const { api } = await abrirAba();
+    let responder: ((resposta: Response) => void) | null = null;
+    api.proxima(
+      "POST",
+      ROTA_LINKS,
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+
+    acionar(
+      within(linha("Célula Ágape")).getByRole("button", {
+        name: "Novo link para Célula Ágape",
+      }),
+    );
+    await waitFor(() => expect(responder).not.toBeNull());
+    expect(
+      within(linha("Célula Ágape")).getByRole("button", {
+        name: "Gerando… para Célula Ágape",
+      }),
+    ).toBeInTheDocument();
+
+    const betel = within(linha("Célula Betel"));
+    for (const nome of [
+      "Desativar acesso de Célula Betel",
+      "Trocar acesso de Célula Betel",
+      /^Revogar link de Célula Betel/,
+      "Novo link para Célula Betel",
+    ]) {
+      const botao = betel.getByRole("button", { name: nome });
+      expect(botao).toHaveAttribute("aria-disabled", "true");
+      acionar(botao);
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    }
+    expect(api.chamadasA("POST", ROTA_LINKS)).toHaveLength(1);
+    expect(
+      api.chamadas.filter((chamada) =>
+        ["PATCH", "DELETE"].includes(chamada.metodo),
+      ),
+    ).toEqual([]);
+
+    // Terminada a ação, "Desativar acesso" volta a abrir a confirmação.
+    await act(async () =>
+      responder?.(respostaErro(500, "erro_interno", "Falha simulada")),
+    );
+    const desativar = within(linha("Célula Betel")).getByRole("button", {
+      name: "Desativar acesso de Célula Betel",
+    });
+    await waitFor(() => expect(desativar).not.toHaveAttribute("aria-disabled"));
+    acionar(desativar);
+    expect(
+      screen.getByRole("alertdialog", {
+        name: "Desativar o acesso de João Fictício?",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("Desativar (confirmação) e Reativar: PATCH /api/admin/usuarios/:id; o foco fica no botão da linha", async () => {
     const { api } = await abrirAba();
     const botao = within(linha("Célula Betel")).getByRole("button", {

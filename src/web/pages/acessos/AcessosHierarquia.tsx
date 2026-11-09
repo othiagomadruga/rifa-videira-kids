@@ -474,14 +474,19 @@ function AcoesDoAlvo({
     situacao.tipo === "valido" && usuario
       ? usuario.links.filter((link) => link.situacao === "valido")
       : [];
+  // Enquanto uma ação está em andamento, as da linha ficam indisponíveis (aria-disabled, continuam focáveis)
+  // e o toque não faz nada: nem chama a API nem abre confirmação.
   const ocupada = ocupado !== null || undefined;
+  const seDisponivel = (acao: () => void) => (): void => {
+    if (ocupado === null) acao();
+  };
   return (
     <div className="acessos-acoes-linha">
       {situacao.tipo !== "desativado" && (
         <Button
           id={idBotaoNovoLink(alvo.id)}
           variante="secundario"
-          onClick={aoNovoLink}
+          onClick={seDisponivel(aoNovoLink)}
           aria-disabled={ocupada}
         >
           {acaoAqui === "gerando" ? "Gerando…" : "Novo link"}{" "}
@@ -489,7 +494,11 @@ function AcoesDoAlvo({
         </Button>
       )}
       {situacao.tipo === "valido" && (
-        <Button variante="secundario" onClick={aoTrocar}>
+        <Button
+          variante="secundario"
+          onClick={seDisponivel(aoTrocar)}
+          aria-disabled={ocupada}
+        >
           Trocar acesso{" "}
           <span className="visualmente-oculto">de {alvo.nome}</span>
         </Button>
@@ -498,7 +507,8 @@ function AcoesDoAlvo({
         <Button
           key={link.id}
           variante="secundario"
-          onClick={() => aoRevogar(link)}
+          onClick={seDisponivel(() => aoRevogar(link))}
+          aria-disabled={ocupada}
         >
           Revogar link{" "}
           <span className="visualmente-oculto">
@@ -510,7 +520,7 @@ function AcoesDoAlvo({
         <Button
           id={idBotaoAtivoDoAlvo(alvo.id)}
           variante="secundario"
-          onClick={usuario.ativo ? aoDesativar : aoReativar}
+          onClick={seDisponivel(usuario.ativo ? aoDesativar : aoReativar)}
           aria-disabled={ocupada}
         >
           {usuario.ativo
