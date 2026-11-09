@@ -185,9 +185,10 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
     });
 
     const perdidas = analise.divergencias[0];
+    // A R-0103 não tem valor: fica fora do total (não vira R$ 0) e conta em sem_valor.
     expect(perdidas).toMatchObject({
       quantidade: 5,
-      arquivo: { bilhetes: 9, total_centavos: 16000 },
+      arquivo: { bilhetes: 9, total_centavos: 16000, sem_valor: 1 },
       sistema: { bilhetes: 0, total_centavos: 0 },
       itens_omitidos: 0,
     });
@@ -264,6 +265,7 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
         pedidos_aprovados: 10,
         bilhetes: 22,
         total_centavos: 41000,
+        sem_valor: 1,
       },
       aprovados_no_sistema: {
         pedidos_aprovados: 7,
@@ -484,7 +486,13 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
       data_fim: "2026-12-05",
     });
     expect(analise.total).toEqual({
-      arquivo: { pedidos_aprovados: 10, bilhetes: 22, total_centavos: 41000 },
+      // A linha paga sem valor (a da R-0103, de 28/11) fica fora do total, em sem_valor.
+      arquivo: {
+        pedidos_aprovados: 10,
+        bilhetes: 22,
+        total_centavos: 41000,
+        sem_valor: 1,
+      },
       // A compra de teste de 20/11 (antes do arquivo) fica fora do recorte.
       sistema: { pedidos_aprovados: 6, bilhetes: 14, total_centavos: 28000 },
       confere: false,
@@ -497,7 +505,12 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
       afiliado: "afiliado",
       affiliate_id: 101,
       celula: { id: 1, nome: "Célula Ágape" },
-      arquivo: { pedidos_aprovados: 3, bilhetes: 8, total_centavos: 16000 },
+      arquivo: {
+        pedidos_aprovados: 3,
+        bilhetes: 8,
+        total_centavos: 16000,
+        sem_valor: 0,
+      },
       sistema: { pedidos_aprovados: 2, bilhetes: 5, total_centavos: 10000 },
       confere: false,
     });
@@ -518,7 +531,7 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
     expect(
       analise.por_dia!.find((dia) => dia.data === "2026-11-28"),
     ).toMatchObject({
-      arquivo: { pedidos_aprovados: 2 },
+      arquivo: { pedidos_aprovados: 2, total_centavos: 4000, sem_valor: 1 },
       sistema: { pedidos_aprovados: 0 },
       confere: false,
     });
@@ -548,6 +561,7 @@ describe("CA1: modo agregado (o arquivo não tem o código do pedido)", () => {
       pedidos_aprovados: null,
       bilhetes: null,
       total_centavos: 6000,
+      sem_valor: 0,
     });
     expect(analise.avisos.map((aviso) => aviso.codigo)).toContain(
       "sem_contagem_de_pedidos",

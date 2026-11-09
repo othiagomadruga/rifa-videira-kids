@@ -4,8 +4,6 @@ import type {
   PedidoNoArquivo,
   PedidoNoSistema,
   SituacaoAfiliadoArquivo,
-  TotaisArquivo,
-  TotaisVendas,
 } from "../../../shared/contracts";
 import {
   formatarData,
@@ -69,8 +67,25 @@ export function textoDoSistema(lado: PedidoNoSistema): string {
     .join(" · ");
 }
 
+/** Totais de um lado: os do arquivo (TotaisArquivo, a soma de um grupo) ou os do sistema (TotaisVendas). */
+interface Totais {
+  pedidos_aprovados: number | null;
+  bilhetes: number | null;
+  total_centavos: number | null;
+  /** Só no arquivo: pedidos pagos sem valor, que o total não inclui. */
+  sem_valor?: number;
+}
+
+/** "R$ 410,00"; com pedidos sem valor, "R$ 410,00 (+2 sem valor)": o valor desconhecido não vira R$ 0. */
+function valorDosTotais(centavos: number, semValor: number): string {
+  const total = formatarMoeda(centavos);
+  return semValor > 0
+    ? `${total} (+${semValor.toLocaleString("pt-BR")} sem valor)`
+    : total;
+}
+
 /** "10 pedidos · 22 bilhetes · R$ 410,00" (o que o arquivo não permite contar fica de fora). */
-export function textoDosTotais(totais: TotaisArquivo | TotaisVendas): string {
+export function textoDosTotais(totais: Totais): string {
   const partes = [
     totais.pedidos_aprovados === null
       ? null
@@ -80,7 +95,7 @@ export function textoDosTotais(totais: TotaisArquivo | TotaisVendas): string {
       : plural(totais.bilhetes, "bilhete", "bilhetes"),
     totais.total_centavos === null
       ? null
-      : formatarMoeda(totais.total_centavos),
+      : valorDosTotais(totais.total_centavos, totais.sem_valor ?? 0),
   ].filter((parte) => parte !== null);
   return partes.length === 0 ? "sem totais" : partes.join(" · ");
 }

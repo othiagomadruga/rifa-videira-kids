@@ -241,12 +241,10 @@ function PorPedido({
 }
 
 function totaisDoGrupo(grupo: GrupoDivergencia): string {
-  const lado = (soma: GrupoDivergencia["arquivo"]) =>
-    textoDosTotais({
-      pedidos_aprovados: null,
-      bilhetes: soma.bilhetes,
-      total_centavos: soma.total_centavos,
-    });
+  // O lado do arquivo traz `sem_valor`: "R$ 120,00 (+1 sem valor)".
+  const lado = (
+    soma: GrupoDivergencia["arquivo"] | GrupoDivergencia["sistema"],
+  ) => textoDosTotais({ pedidos_aprovados: null, ...soma });
   if (grupo.tipo === "venda_perdida")
     return `Na Rifei: ${lado(grupo.arquivo)}.`;
   if (grupo.tipo === "ausente_no_arquivo")

@@ -163,7 +163,13 @@ function grupo(tipo: TipoDivergencia, itens: Divergencia[]) {
   return {
     tipo,
     quantidade: itens.length,
-    arquivo: soma("arquivo"),
+    // O valor desconhecido não entra no total do arquivo: conta em `sem_valor`.
+    arquivo: {
+      ...soma("arquivo"),
+      sem_valor: itens.filter(
+        (item) => item.arquivo !== null && item.arquivo.total_centavos === null,
+      ).length,
+    },
     sistema: soma("sistema"),
     itens,
     itens_omitidos: 0,
@@ -202,10 +208,12 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
     codigo: { confere: true, pagos_no_arquivo: 8, encontrados: 4 },
     resumo: {
       pedidos_no_arquivo: 10,
+      // A R-0103 não tem valor no arquivo: fica fora do total, em `sem_valor`.
       aprovados_no_arquivo: {
         pedidos_aprovados: 8,
         bilhetes: 16,
         total_centavos: 31000,
+        sem_valor: 1,
       },
       aprovados_no_sistema: {
         pedidos_aprovados: 5,
@@ -305,7 +313,13 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
     ],
     recorte: { data_inicio: "2026-11-24", data_fim: "2026-11-29" },
     total: {
-      arquivo: { pedidos_aprovados: 8, bilhetes: 16, total_centavos: 31000 },
+      // Uma linha paga sem valor (28/11): o total do arquivo é desconhecido e o valor não confere.
+      arquivo: {
+        pedidos_aprovados: 8,
+        bilhetes: 16,
+        total_centavos: 31000,
+        sem_valor: 1,
+      },
       sistema: { pedidos_aprovados: 5, bilhetes: 9, total_centavos: 18000 },
       confere: false,
     },
@@ -314,7 +328,12 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         afiliado: "afiliado",
         affiliate_id: 101,
         celula: ATAPE,
-        arquivo: { pedidos_aprovados: 3, bilhetes: 8, total_centavos: 16000 },
+        arquivo: {
+          pedidos_aprovados: 3,
+          bilhetes: 8,
+          total_centavos: 16000,
+          sem_valor: 0,
+        },
         sistema: { pedidos_aprovados: 2, bilhetes: 5, total_centavos: 10000 },
         confere: false,
       },
@@ -322,7 +341,12 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         afiliado: "nao_reconhecido",
         affiliate_id: null,
         celula: null,
-        arquivo: { pedidos_aprovados: 1, bilhetes: 1, total_centavos: 2000 },
+        arquivo: {
+          pedidos_aprovados: 1,
+          bilhetes: 1,
+          total_centavos: 2000,
+          sem_valor: 0,
+        },
         sistema: { pedidos_aprovados: 0, bilhetes: 0, total_centavos: 0 },
         confere: false,
       },
@@ -330,7 +354,12 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
         afiliado: "afiliado",
         affiliate_id: 102,
         celula: BETEL,
-        arquivo: { pedidos_aprovados: 1, bilhetes: 2, total_centavos: 4000 },
+        arquivo: {
+          pedidos_aprovados: 1,
+          bilhetes: 2,
+          total_centavos: 4000,
+          sem_valor: 0,
+        },
         sistema: { pedidos_aprovados: 1, bilhetes: 2, total_centavos: 4000 },
         confere: true,
       },
@@ -338,13 +367,23 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
     por_dia: [
       {
         data: "2026-11-24",
-        arquivo: { pedidos_aprovados: 1, bilhetes: 3, total_centavos: 6000 },
+        arquivo: {
+          pedidos_aprovados: 1,
+          bilhetes: 3,
+          total_centavos: 6000,
+          sem_valor: 0,
+        },
         sistema: { pedidos_aprovados: 1, bilhetes: 3, total_centavos: 6000 },
         confere: true,
       },
       {
         data: "2026-11-28",
-        arquivo: { pedidos_aprovados: 2, bilhetes: 3, total_centavos: 4000 },
+        arquivo: {
+          pedidos_aprovados: 2,
+          bilhetes: 3,
+          total_centavos: 4000,
+          sem_valor: 1,
+        },
         sistema: { pedidos_aprovados: 0, bilhetes: 0, total_centavos: 0 },
         confere: false,
       },

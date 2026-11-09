@@ -809,21 +809,42 @@ function ladoDoSistema(
 const porCodigo = (a: { pedido_id: string }, b: { pedido_id: string }) =>
   a.pedido_id < b.pedido_id ? -1 : a.pedido_id > b.pedido_id ? 1 : 0;
 
-type Soma = { bilhetes: number; total_centavos: number };
+/** As colunas que o arquivo tem para somar: sem a coluna, a soma é null (desconhecido não vira 0). */
+interface Somaveis {
+  quantidade: boolean;
+  valor: boolean;
+}
 
-function somar(
+/** Soma do lado do arquivo: o valor desconhecido (ilegível ou ambíguo) conta em `sem_valor`. */
+function somarArquivo(
   itens: readonly Divergencia[],
-  lado: (item: Divergencia) => {
-    qtd_bilhetes: number | null;
-    total_centavos: number | null;
-  } | null,
-): Soma {
+  somaveis: Somaveis,
+): GrupoDivergencia["arquivo"] {
   let bilhetes = 0;
   let total = 0;
-  for (const item of itens) {
-    const valores = lado(item);
-    bilhetes += valores?.qtd_bilhetes ?? 0;
-    total += valores?.total_centavos ?? 0;
+  let semValor = 0;
+  for (const { arquivo } of itens) {
+    if (arquivo === null) continue;
+    bilhetes += arquivo.qtd_bilhetes ?? 0;
+    if (arquivo.total_centavos === null) semValor++;
+    else total += arquivo.total_centavos;
+  }
+  return {
+    bilhetes: somaveis.quantidade ? bilhetes : null,
+    total_centavos: somaveis.valor ? total : null,
+    sem_valor: somaveis.valor ? semValor : 0,
+  };
+}
+
+function somarSistema(
+  itens: readonly Divergencia[],
+): GrupoDivergencia["sistema"] {
+  let bilhetes = 0;
+  let total = 0;
+  for (const { sistema } of itens) {
+    if (sistema === null) continue;
+    bilhetes += sistema.qtd_bilhetes;
+    total += sistema.total_centavos;
   }
   return { bilhetes, total_centavos: total };
 }
@@ -831,13 +852,14 @@ function somar(
 function montarGrupo(
   tipo: TipoDivergencia,
   itens: Divergencia[],
+  somaveis: Somaveis,
 ): GrupoDivergencia {
   itens.sort(porCodigo);
   return {
     tipo,
     quantidade: itens.length,
-    arquivo: somar(itens, (item) => item.arquivo),
-    sistema: somar(itens, (item) => item.sistema),
+    arquivo: somarArquivo(itens, somaveis),
+    sistema: somarSistema(itens),
     itens: itens.slice(0, LIMITE_ITENS_POR_DIVERGENCIA),
     itens_omitidos: Math.max(0, itens.length - LIMITE_ITENS_POR_DIVERGENCIA),
   };
@@ -923,6 +945,7 @@ export function analisarPorPedido(
   let aprovados = 0;
   let bilhetesAprovados = 0;
   let centavosAprovados = 0;
+  let aprovadosSemValor = 0;
 
   const regra = new ContagemDaRegra();
   for (const pedido of pedidos.values()) {
@@ -949,7 +972,8 @@ export function analisarPorPedido(
     if (pedido.status === "aprovado") {
       aprovados++;
       bilhetesAprovados += qtd ?? 0;
-      centavosAprovados += decidido.centavos ?? 0;
+      if (decidido.centavos === null) aprovadosSemValor++;
+      else centavosAprovados += decidido.centavos;
       if (!gravado) {
         tipos = ["venda_perdida"];
         observacoes = impedimentos(
@@ -1018,10 +1042,15 @@ export function analisarPorPedido(
       ? (["fora_do_periodo_do_arquivo"] as ObservacaoDivergencia[])
       : [],
   }));
+  const somaveis: Somaveis = {
+    quantidade:
+      corpo.colunas.qtd_bilhetes !== null || corpo.colunas.bilhetes !== null,
+    valor: corpo.colunas.valor !== null,
+  };
   const grupoAusentes: GrupoDivergencia = {
     tipo: "ausente_no_arquivo",
     quantidade: ausentes.quantidade,
-    arquivo: { bilhetes: 0, total_centavos: 0 },
+    arquivo: somarArquivo([], somaveis),
     sistema: {
       bilhetes: ausentes.bilhetes,
       total_centavos: ausentes.total_centavos,
@@ -1037,8 +1066,6 @@ export function analisarPorPedido(
   avisos.contar("pedido_de_outra_campanha", deOutra, "pedido");
   if (aprovados === 0) avisos.marcar("sem_aprovados");
 
-  const temQuantidade =
-    corpo.colunas.qtd_bilhetes !== null || corpo.colunas.bilhetes !== null;
   return {
     modo: "por_pedido",
     arquivo: {
@@ -1055,8 +1082,10 @@ export function analisarPorPedido(
       pedidos_no_arquivo: pedidos.size,
       aprovados_no_arquivo: {
         pedidos_aprovados: aprovados,
-        bilhetes: temQuantidade ? bilhetesAprovados : null,
-        total_centavos: corpo.colunas.valor === null ? null : centavosAprovados,
+        bilhetes: somaveis.quantidade ? bilhetesAprovados : null,
+        // O valor desconhecido não vira R$ 0: o total soma os legíveis e `sem_valor` conta os outros.
+        total_centavos: somaveis.valor ? centavosAprovados : null,
+        sem_valor: somaveis.valor ? aprovadosSemValor : 0,
       },
       aprovados_no_sistema: sistema.aprovados,
       conferem,
@@ -1068,7 +1097,7 @@ export function analisarPorPedido(
     divergencias: TIPOS_DIVERGENCIA.map((tipo) =>
       tipo === "ausente_no_arquivo"
         ? grupoAusentes
-        : montarGrupo(tipo, grupos.get(tipo)!),
+        : montarGrupo(tipo, grupos.get(tipo)!, somaveis),
     ),
   };
 }
@@ -1089,6 +1118,16 @@ const vazioAcumulado = (): Acumulado => ({
   centavos: 0,
 });
 
+/** O lado do arquivo: `centavos` soma os valores legíveis e `semValor` conta as linhas pagas sem valor. */
+interface AcumuladoDoArquivo extends Acumulado {
+  semValor: number;
+}
+
+const vazioDoArquivo = (): AcumuladoDoArquivo => ({
+  ...vazioAcumulado(),
+  semValor: 0,
+});
+
 /** O que o arquivo permite contar no modo agregado. */
 interface Contaveis {
   pedidos: boolean;
@@ -1097,7 +1136,7 @@ interface Contaveis {
 }
 
 function comparar(
-  doArquivo: Acumulado | undefined,
+  doArquivo: AcumuladoDoArquivo | undefined,
   doSistema: Acumulado | undefined,
   contaveis: Contaveis,
 ): {
@@ -1105,12 +1144,13 @@ function comparar(
   sistema: TotaisVendas;
   confere: boolean;
 } {
-  const a = doArquivo ?? vazioAcumulado();
+  const a = doArquivo ?? vazioDoArquivo();
   const s = doSistema ?? vazioAcumulado();
   const arquivo: TotaisArquivo = {
     pedidos_aprovados: contaveis.pedidos ? a.pedidos : null,
     bilhetes: contaveis.bilhetes ? a.bilhetes : null,
     total_centavos: contaveis.valor ? a.centavos : null,
+    sem_valor: contaveis.valor ? a.semValor : 0,
   };
   return {
     arquivo,
@@ -1122,25 +1162,38 @@ function comparar(
     confere:
       (arquivo.pedidos_aprovados === null || a.pedidos === s.pedidos) &&
       (arquivo.bilhetes === null || a.bilhetes === s.bilhetes) &&
-      (arquivo.total_centavos === null || a.centavos === s.centavos),
+      // Com linha paga sem valor, o total do arquivo é desconhecido: não dá para dizer que bate.
+      (arquivo.total_centavos === null ||
+        (arquivo.sem_valor === 0 && a.centavos === s.centavos)),
   };
 }
 
-function acumular(
-  mapa: Map<string, Acumulado>,
-  chave: string,
-  pedidos: number,
+/** Soma `n` linhas pagas iguais; o valor null (célula vazia ou ilegível) conta em `semValor`, não como 0. */
+function somarLinhas(
+  alvo: AcumuladoDoArquivo,
+  n: number,
   bilhetes: number,
-  centavos: number,
+  centavos: number | null,
+): void {
+  alvo.pedidos += n;
+  alvo.bilhetes += bilhetes * n;
+  if (centavos === null) alvo.semValor += n;
+  else alvo.centavos += centavos * n;
+}
+
+function acumular(
+  mapa: Map<string, AcumuladoDoArquivo>,
+  chave: string,
+  n: number,
+  bilhetes: number,
+  centavos: number | null,
 ): void {
   let atual = mapa.get(chave);
   if (atual === undefined) {
-    atual = vazioAcumulado();
+    atual = vazioDoArquivo();
     mapa.set(chave, atual);
   }
-  atual.pedidos += pedidos;
-  atual.bilhetes += bilhetes;
-  atual.centavos += centavos;
+  somarLinhas(atual, n, bilhetes, centavos);
 }
 
 const CHAVE_SEM_AFILIADO = "sem";
@@ -1200,9 +1253,9 @@ export function analisarAgregado(
     valor: colunas.valor !== null && !umBilhetePorLinha,
   };
 
-  const totalArquivo = vazioAcumulado();
-  const porAfiliadoArquivo = new Map<string, Acumulado>();
-  const porDiaArquivo = new Map<string, Acumulado>();
+  const totalArquivo = vazioDoArquivo();
+  const porAfiliadoArquivo = new Map<string, AcumuladoDoArquivo>();
+  const porDiaArquivo = new Map<string, AcumuladoDoArquivo>();
   let desconhecidas = 0;
   let naoReconhecidos = 0;
   let aprovadas = 0;
@@ -1219,10 +1272,8 @@ export function analisarAgregado(
     const bilhetes = umBilhetePorLinha
       ? 1
       : (corpo.qtd_bilhetes?.[i] ?? corpo.numeros?.[i] ?? 0);
-    const centavos = corpo.valor?.[i] ?? 0;
-    totalArquivo.pedidos += n;
-    totalArquivo.bilhetes += bilhetes * n;
-    totalArquivo.centavos += centavos * n;
+    const centavos = corpo.valor?.[i] ?? null;
+    somarLinhas(totalArquivo, n, bilhetes, centavos);
     if (corpo.afiliado) {
       const { situacao, affiliateId } = afiliados.doArquivo(corpo.afiliado[i]);
       if (situacao === "nao_reconhecido") naoReconhecidos += n;
@@ -1232,11 +1283,10 @@ export function analisarAgregado(
           : situacao === "nao_reconhecido"
             ? CHAVE_NAO_RECONHECIDO
             : CHAVE_SEM_AFILIADO;
-      acumular(porAfiliadoArquivo, chave, n, bilhetes * n, centavos * n);
+      acumular(porAfiliadoArquivo, chave, n, bilhetes, centavos);
     }
     const dia = corpo.dia?.[i] ?? null;
-    if (dia !== null)
-      acumular(porDiaArquivo, dia, n, bilhetes * n, centavos * n);
+    if (dia !== null) acumular(porDiaArquivo, dia, n, bilhetes, centavos);
   }
   avisos.contar("status_desconhecido", desconhecidas, "linha");
   avisos.contar("afiliado_nao_reconhecido", naoReconhecidos, "linha");

@@ -1302,8 +1302,19 @@ export const divergenciaSchema = z.strictObject({
 });
 export type Divergencia = z.infer<typeof divergenciaSchema>;
 
-/** Soma de um lado (só os valores legíveis). */
-const somaLadoSchema = z.strictObject({
+/**
+ * Soma do lado do arquivo, só com o que é legível: valor desconhecido não vira R$ 0. Sem a coluna, a soma
+ * é null; `sem_valor` conta os pedidos sem valor (ilegível ou ambíguo), que `total_centavos` não inclui
+ * (0 sem a coluna do valor).
+ */
+const somaArquivoSchema = z.strictObject({
+  bilhetes: z.number().int().nonnegative().nullable(),
+  total_centavos: centavosSchema.nullable(),
+  sem_valor: z.number().int().nonnegative(),
+});
+
+/** Soma do lado do sistema (o gravado sempre tem quantidade e valor). */
+const somaSistemaSchema = z.strictObject({
   bilhetes: z.number().int().nonnegative(),
   total_centavos: centavosSchema,
 });
@@ -1312,8 +1323,8 @@ export const grupoDivergenciaSchema = z.strictObject({
   tipo: z.enum(TIPOS_DIVERGENCIA),
   /** Pedidos deste tipo (todos, mesmo os que passam do limite da lista). */
   quantidade: z.number().int().nonnegative(),
-  arquivo: somaLadoSchema,
-  sistema: somaLadoSchema,
+  arquivo: somaArquivoSchema,
+  sistema: somaSistemaSchema,
   /** Os primeiros LIMITE_ITENS_POR_DIVERGENCIA, em ordem de código. */
   itens: z.array(divergenciaSchema).max(LIMITE_ITENS_POR_DIVERGENCIA),
   itens_omitidos: z.number().int().nonnegative(),
@@ -1340,11 +1351,18 @@ export const arquivoLidoSchema = z.strictObject({
   data_fim: dataLocalSchema.nullable(),
 });
 
-/** Totais pagos de um lado no arquivo: null quando o arquivo não permite contar. */
+/** Totais pagos no arquivo: null quando o arquivo não permite contar. */
 export const totaisArquivoSchema = z.strictObject({
   pedidos_aprovados: z.number().int().nonnegative().nullable(),
   bilhetes: z.number().int().nonnegative().nullable(),
+  /** Soma dos valores legíveis; null sem a coluna do valor. */
   total_centavos: centavosSchema.nullable(),
+  /**
+   * Pedidos pagos (no modo agregado, linhas pagas) sem valor legível ou com valor ambíguo, que
+   * `total_centavos` não inclui: valor desconhecido não vira R$ 0 (a tela mostra "R$ X (+N sem valor)").
+   * 0 sem a coluna do valor.
+   */
+  sem_valor: z.number().int().nonnegative(),
 });
 export type TotaisArquivo = z.infer<typeof totaisArquivoSchema>;
 
@@ -1400,7 +1418,10 @@ export type RespostaAnalisePorPedido = z.infer<
 const comparacaoTotaisSchema = {
   arquivo: totaisArquivoSchema,
   sistema: totaisVendasSchema,
-  /** Os totais que o arquivo permite contar são iguais aos do sistema. */
+  /**
+   * Os totais que o arquivo permite contar são iguais aos do sistema. Com pedido pago sem valor
+   * (`arquivo.sem_valor` > 0), o valor não confere: o total do arquivo é desconhecido.
+   */
   confere: z.boolean(),
 };
 

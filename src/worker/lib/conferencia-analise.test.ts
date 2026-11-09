@@ -338,6 +338,56 @@ describe("regra do valor dos pedidos em várias linhas (B2 da revisão)", () => 
     ]);
   });
 
+  it("valor desconhecido (vazio ou ambíguo) não vira R$ 0 nos totais: conta em sem_valor", () => {
+    const linhas = [
+      CABECALHO,
+      ["V-OK", "Pago", "1", "1", "R$ 20,00", "101", "28/11/2026"],
+      ["V-VAZIO", "Pago", "1", "2", "", "101", "28/11/2026"],
+      ["V-AMB", "Pago", "2", "3", "R$ 50,00", "101", "28/11/2026"],
+      ["V-AMB", "Pago", "2", "4", "R$ 50,00", "101", "28/11/2026"],
+      ["NO-SISTEMA", "Pago", "2", "5, 6", "R$ 40,00", "101", "28/11/2026"],
+    ];
+    const resposta = analisar(linhas, [
+      gravado("NO-SISTEMA", { qtd_bilhetes: 2, total_centavos: 4000 }),
+    ]);
+    expect(resposta.resumo.aprovados_no_arquivo).toEqual({
+      pedidos_aprovados: 4,
+      bilhetes: 6,
+      total_centavos: 6000,
+      sem_valor: 2,
+    });
+    expect(grupo(resposta, "venda_perdida")).toMatchObject({
+      quantidade: 3,
+      arquivo: { bilhetes: 4, total_centavos: 2000, sem_valor: 2 },
+      sistema: { bilhetes: 0, total_centavos: 0 },
+    });
+    expect(grupo(resposta, "ausente_no_arquivo").arquivo).toEqual({
+      bilhetes: 0,
+      total_centavos: 0,
+      sem_valor: 0,
+    });
+
+    // Sem as colunas, o total do arquivo é null (desconhecido), e não 0.
+    const semColunas = analisar(
+      [
+        ["Pedido", "Status"],
+        ["S-1", "Pago"],
+      ],
+      [],
+    );
+    expect(semColunas.resumo.aprovados_no_arquivo).toEqual({
+      pedidos_aprovados: 1,
+      bilhetes: null,
+      total_centavos: null,
+      sem_valor: 0,
+    });
+    expect(grupo(semColunas, "venda_perdida").arquivo).toEqual({
+      bilhetes: null,
+      total_centavos: null,
+      sem_valor: 0,
+    });
+  });
+
   it("a convenção pelos pedidos que batem com o sistema: cada linha repete o valor do pedido (avisa e usa)", () => {
     const linhas = [
       CABECALHO,
@@ -845,7 +895,12 @@ describe("modo agregado (sem o código do pedido)", () => {
       data_fim: "2026-11-24",
     });
     expect(resposta.total).toEqual({
-      arquivo: { pedidos_aprovados: 3, bilhetes: 5, total_centavos: 10000 },
+      arquivo: {
+        pedidos_aprovados: 3,
+        bilhetes: 5,
+        total_centavos: 10000,
+        sem_valor: 0,
+      },
       sistema: { pedidos_aprovados: 2, bilhetes: 3, total_centavos: 6000 },
       confere: false,
     });
@@ -889,6 +944,7 @@ describe("modo agregado (sem o código do pedido)", () => {
         pedidos_aprovados: null,
         bilhetes: null,
         total_centavos: 6000,
+        sem_valor: 0,
       },
       sistema: { pedidos_aprovados: 1, bilhetes: 3, total_centavos: 6000 },
       confere: true,
@@ -910,7 +966,12 @@ describe("modo agregado (sem o código do pedido)", () => {
     );
     expect(resposta.arquivo.um_bilhete_por_linha).toBe(true);
     expect(resposta.total).toEqual({
-      arquivo: { pedidos_aprovados: null, bilhetes: 3, total_centavos: null },
+      arquivo: {
+        pedidos_aprovados: null,
+        bilhetes: 3,
+        total_centavos: null,
+        sem_valor: 0,
+      },
       sistema: { pedidos_aprovados: 2, bilhetes: 3, total_centavos: 6000 },
       confere: true,
     });
@@ -936,11 +997,63 @@ describe("modo agregado (sem o código do pedido)", () => {
       pedidos_aprovados: 2,
       bilhetes: 2,
       total_centavos: 5000,
+      sem_valor: 0,
     });
     expect(resposta.total.confere).toBe(true);
     expect(resposta.avisos.map((aviso) => aviso.codigo)).toContain(
       "sem_coluna_status",
     );
+  });
+
+  it("linha paga com o valor vazio não vira R$ 0: conta em sem_valor e o valor não confere", () => {
+    // Sem a quantidade, só o valor é comparado: antes, R$ 20 + "vazio" = R$ 20 "conferia" com o sistema.
+    const resposta = agregar(
+      [
+        ["Status", "Valor", "Afiliado", "Data"],
+        ["Pago", "20,00", "101", "24/11/2026"],
+        ["Pago", "", "101", "24/11/2026"],
+        ["Pago", "30,00", "102", "25/11/2026"],
+      ],
+      [
+        gravado("A", { aprovado_ms: Date.parse("2026-11-24T15:00:00.000Z") }),
+        gravado("B", {
+          affiliate_id: 102,
+          total_centavos: 3000,
+          aprovado_ms: Date.parse("2026-11-25T15:00:00.000Z"),
+        }),
+      ],
+    );
+    expect(resposta.total).toEqual({
+      arquivo: {
+        pedidos_aprovados: null,
+        bilhetes: null,
+        total_centavos: 5000,
+        sem_valor: 1,
+      },
+      sistema: { pedidos_aprovados: 2, bilhetes: 2, total_centavos: 5000 },
+      confere: false,
+    });
+    expect(
+      resposta.por_dia?.map((dia) => [
+        dia.data,
+        dia.arquivo.total_centavos,
+        dia.arquivo.sem_valor,
+        dia.confere,
+      ]),
+    ).toEqual([
+      ["2026-11-24", 2000, 1, false],
+      ["2026-11-25", 3000, 0, true],
+    ]);
+    expect(
+      resposta.por_afiliado?.map((linha) => [
+        linha.affiliate_id,
+        linha.arquivo.sem_valor,
+        linha.confere,
+      ]),
+    ).toEqual([
+      [101, 1, false],
+      [102, 0, true],
+    ]);
   });
 });
 

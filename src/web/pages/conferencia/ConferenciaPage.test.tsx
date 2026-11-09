@@ -166,12 +166,13 @@ describe("CA4: a tela da conferência", () => {
       "Conferência pronta: 6 pedidos com diferença, 4 vendas perdidas.",
     );
 
-    // O que se lê em 5 segundos: o aviso e os totais dos dois lados.
+    // O que se lê em 5 segundos: o aviso e os totais dos dois lados. O pedido pago sem valor (R-0103)
+    // não vira R$ 0: aparece à parte, ao lado do total.
     expect(
       screen.getByText("4 vendas pagas na Rifei não estão no sistema"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("8 pedidos · 16 bilhetes · R$ 310,00"),
+      screen.getByText("8 pedidos · 16 bilhetes · R$ 310,00 (+1 sem valor)"),
     ).toBeInTheDocument();
     expect(
       screen.getByText("5 pedidos · 9 bilhetes · R$ 180,00"),
@@ -186,7 +187,9 @@ describe("CA4: a tela da conferência", () => {
       within(perdidas).getByText(/não contam no painel nem no ranking/),
     ).toBeInTheDocument();
     expect(
-      within(perdidas).getByText("Na Rifei: 7 bilhetes · R$ 120,00."),
+      within(perdidas).getByText(
+        "Na Rifei: 7 bilhetes · R$ 120,00 (+1 sem valor).",
+      ),
     ).toBeInTheDocument();
     const ausentes = grupo("Só no sistema");
     expect(
@@ -498,6 +501,15 @@ describe("CA4: a tela da conferência", () => {
     expect(within(linhas[2]).getByText("Confere")).toBeInTheDocument();
     const porDia = screen.getByRole("table", { name: "Totais por dia" });
     expect(within(porDia).getByText("28/11/2026")).toBeInTheDocument();
+    // A linha paga sem valor não vira R$ 0: o total diz quantas ficaram de fora.
+    expect(
+      within(porDia).getByText(
+        "2 pedidos · 3 bilhetes · R$ 40,00 (+1 sem valor)",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("8 pedidos · 16 bilhetes · R$ 310,00 (+1 sem valor)"),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Recuperar/ })).toBeNull();
   });
 
