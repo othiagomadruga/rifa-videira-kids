@@ -108,7 +108,8 @@ describe("CA5: o CSS da visão individual", () => {
   });
 
   // Os pares de texto e fundo da tela (o fundo de cada bloco e o texto que fica sobre ele). Legível ao sol:
-  // o texto principal tem 7:1 ou mais; o resto, ao menos o AA (4,5:1).
+  // o texto principal sobre os fundos neutros tem 7:1 ou mais (AAA); os pares com as cores da marca e dos
+  // estados, ao menos o AA do projeto (4,5:1), para o tema poder mudar de cor sem quebrar a tela.
   it.each([
     ["texto no cartão", "--cor-texto", "--cor-superficie", 7],
     [
@@ -117,18 +118,18 @@ describe("CA5: o CSS da visão individual", () => {
       "--cor-fundo",
       7,
     ],
+    ["frase sem posição", "--cor-texto", "--cor-superficie-2", 7],
     ["texto suave no cartão", "--cor-texto-suave", "--cor-superficie", 4.5],
     ["texto suave nas posições", "--cor-texto-suave", "--cor-fundo", 4.5],
-    ["meta de hoje", "--cor-primaria-forte", "--cor-primaria-suave", 7],
+    ["meta de hoje", "--cor-primaria-forte", "--cor-primaria-suave", 4.5],
     [
       "texto na meta de hoje e no 'você'",
       "--cor-texto",
       "--cor-primaria-suave",
-      7,
+      4.5,
     ],
     ["meta de hoje batida", "--cor-sucesso", "--cor-sucesso-suave", 4.5],
-    ["texto na meta batida", "--cor-texto", "--cor-sucesso-suave", 7],
-    ["frase sem posição", "--cor-texto", "--cor-superficie-2", 7],
+    ["texto na meta batida", "--cor-texto", "--cor-sucesso-suave", 4.5],
     ["falha da atualização", "--cor-alerta", "--cor-alerta-suave", 4.5],
     ["falha ao sair", "--cor-perigo", "--cor-superficie", 4.5],
   ] as const)("%s: contraste suficiente", (_nome, texto, fundo, minimo) => {

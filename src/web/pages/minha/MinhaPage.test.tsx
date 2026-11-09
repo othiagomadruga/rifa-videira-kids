@@ -48,7 +48,10 @@ const abrirCenario = (cenario: Cenario) => abrir(visaoDe(cenario));
 /** A seção (ou o cartão) com este título. */
 function regiao(nome: string, nivel = 2): HTMLElement {
   const titulo = screen.getByRole("heading", { level: nivel, name: nome });
-  const elemento = titulo.closest<HTMLElement>("section, .ui-card");
+  // As seções da tela e os cartões dela (pelas classes da própria tela, não pelas dos componentes base).
+  const elemento = titulo.closest<HTMLElement>(
+    "section, .minha-periodo, .minha-curva, .minha-ranking",
+  );
   if (!elemento) throw new Error(`sem região para ${nome}`);
   return elemento;
 }

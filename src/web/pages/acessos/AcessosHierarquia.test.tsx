@@ -49,9 +49,13 @@ function linha(alvo: string): HTMLElement {
   return linhaDoAlvo;
 }
 
-/** O texto de uma coluna da linha (pelo título da coluna, o data-rotulo da célula). */
+/** O texto de uma coluna da linha (pela posição do cabeçalho com este título). */
 function coluna(alvo: string, titulo: string) {
-  return linha(alvo).querySelector(`[data-rotulo="${titulo}"]`)?.textContent;
+  const indice = within(tabela())
+    .getAllByRole("columnheader")
+    .findIndex((cabecalho) => cabecalho.textContent === titulo);
+  if (indice < 0) throw new Error(`sem a coluna ${titulo}`);
+  return within(linha(alvo)).getAllByRole("cell")[indice]?.textContent;
 }
 
 /** Os botões de ação da linha, pelo nome acessível. */

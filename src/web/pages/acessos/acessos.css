@@ -23,7 +23,7 @@
   gap: var(--espaco-3) var(--espaco-5);
 }
 
-.acessos-hierarquia__controles > .ui-campo {
+.acessos-hierarquia__papel {
   flex: 0 1 16rem;
 }
 
@@ -35,7 +35,7 @@
 }
 
 /* Botão ocupado ou sem nada a fazer: continua focável (aria-disabled), mas parece desabilitado. */
-.acessos-hierarquia .ui-button[aria-disabled="true"] {
+.acessos-hierarquia button[aria-disabled="true"] {
   opacity: 0.55;
   cursor: not-allowed;
 }

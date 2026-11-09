@@ -270,20 +270,22 @@ export function AcessosHierarquia() {
         para a pessoa da hierarquia e só aparece na hora em que é gerado.
       </p>
       <div className="acessos-hierarquia__controles">
-        <Select
-          rotulo="Papel"
-          value={papel}
-          onChange={(evento) => {
-            setPapel(evento.currentTarget.value as PapelHierarquia);
-            setResultado(null);
-          }}
-        >
-          {PAPEIS_DO_SELETOR.map((opcao) => (
-            <option key={opcao} value={opcao}>
-              {PAPEL_NO_PLURAL[opcao]}
-            </option>
-          ))}
-        </Select>
+        <div className="acessos-hierarquia__papel">
+          <Select
+            rotulo="Papel"
+            value={papel}
+            onChange={(evento) => {
+              setPapel(evento.currentTarget.value as PapelHierarquia);
+              setResultado(null);
+            }}
+          >
+            {PAPEIS_DO_SELETOR.map((opcao) => (
+              <option key={opcao} value={opcao}>
+                {PAPEL_NO_PLURAL[opcao]}
+              </option>
+            ))}
+          </Select>
+        </div>
         <div className="acessos-hierarquia__lote">
           <Button
             onClick={() =>
