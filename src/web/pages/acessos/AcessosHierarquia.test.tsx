@@ -663,6 +663,52 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
     expect(anuncio()).toContain("Link novo de Célula Betel gerado.");
   });
 
+  it("'Abrir no WhatsApp' com o botão do meio conta como mandado; com o direito (só o menu do navegador), não", async () => {
+    await abrirAba();
+    acionar(
+      within(linha("Célula Betel")).getByRole("button", {
+        name: "Novo link para Célula Betel",
+      }),
+    );
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Link de acesso: Célula Betel",
+    });
+    const whatsapp = within(dialogo).getByRole("link", {
+      name: "Abrir no WhatsApp de João Fictício",
+    });
+    const cliqueAuxiliar = (botao: number) =>
+      fireEvent(
+        whatsapp,
+        new MouseEvent("auxclick", {
+          bubbles: true,
+          cancelable: true,
+          button: botao,
+        }),
+      );
+    const pronto = within(dialogo).getByRole("button", { name: "Pronto" });
+
+    // Botão direito: abre o menu do navegador e não manda nada; fechar ainda pede confirmação.
+    cliqueAuxiliar(2);
+    acionar(pronto);
+    const confirmacao = screen.getByRole("alertdialog", {
+      name: "Fechar sem mandar todos os links?",
+    });
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Voltar aos links" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+
+    // Botão do meio: abre o link numa aba nova e conta como mandado; "Pronto" fecha sem perguntar.
+    cliqueAuxiliar(1);
+    acionar(pronto);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
   it("Trocar acesso: pede confirmação (o aparelho antigo sai), revoga os anteriores e mostra o link novo uma vez", async () => {
     const { api } = await abrirAba();
     const trocar = within(linha("Célula Éfeso")).getByRole("button", {

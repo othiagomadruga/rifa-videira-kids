@@ -326,7 +326,10 @@ function LinkGerado({
             target="_blank"
             rel="noopener noreferrer"
             onClick={aoAbrirWhatsApp}
-            onAuxClick={aoAbrirWhatsApp}
+            onAuxClick={(evento) => {
+              // Só o botão do meio abre o link (numa aba nova); o direito só abre o menu do navegador.
+              if (evento.button === 1) aoAbrirWhatsApp();
+            }}
           >
             Abrir no WhatsApp{" "}
             <span className="visualmente-oculto">de {destinatario}</span>
