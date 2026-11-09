@@ -153,7 +153,8 @@ export function DialogoLinksGerados({
             {primeiro && ` Vale até ${formatarData(primeiro.link.expira_em)}.`}
           </p>
         </Aviso>
-        <ul className="acessos-gerados" aria-label="Links gerados">
+        {/* role="list": com list-style none, o Safari deixaria de anunciar a lista. */}
+        <ul className="acessos-gerados" role="list" aria-label="Links gerados">
           {itens.map((item) => (
             <LinkGerado
               key={item.link.id}

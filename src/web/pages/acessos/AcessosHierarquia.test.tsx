@@ -11,7 +11,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_DE_TESTE, renderizarRota } from "../../test/renderizar";
-import { criarApiFalsa, respostaErro, type ApiFalsa } from "./teste-apoio";
+import {
+  alvosExemplo,
+  criarApiFalsa,
+  respostaErro,
+  type ApiFalsa,
+} from "./teste-apoio";
 import { mensagemHierarquia } from "./textos";
 
 const ROTA_ALVOS = "/api/admin/acessos-hierarquia";
@@ -71,6 +76,16 @@ const anuncio = () =>
     .filter((elemento) => elemento.classList.contains("visualmente-oculto"))
     .map((elemento) => elemento.textContent)
     .join(" | ");
+
+/** Tudo o que um armazenamento do navegador guarda (chaves e valores), num texto só. */
+function conteudoDe(armazenamento: Storage): string {
+  const partes: string[] = [];
+  for (let indice = 0; indice < armazenamento.length; indice += 1) {
+    const chave = armazenamento.key(indice);
+    if (chave !== null) partes.push(chave, armazenamento.getItem(chave) ?? "");
+  }
+  return partes.join("\n");
+}
 
 function simularAreaDeTransferencia(
   writeText: (texto: string) => Promise<void>,
@@ -336,6 +351,94 @@ describe("CA4: gerar em lote, copiar e abrir o WhatsApp; o link aparece uma vez 
     );
   });
 
+  it("os links não vão para o endereço, o título, o armazenamento do navegador nem o console", async () => {
+    const espioes = (["log", "info", "warn", "error", "debug"] as const).map(
+      (metodo) => vi.spyOn(console, metodo),
+    );
+    try {
+      const { api, roteador } = await abrirAba();
+      acionar(
+        screen.getByRole("button", {
+          name: "Gerar links para quem ainda não tem (2)",
+        }),
+      );
+      const dialogo = await screen.findByRole("dialog", {
+        name: "2 links de acesso gerados",
+      });
+      const tokens = api.urlsEmitidas.map((url) => url.split("/acesso/")[1]);
+      expect(tokens).toHaveLength(2);
+      // Com o diálogo aberto, o link existe só nele (a prova de que a busca abaixo procura o que existe).
+      expect(dialogo.innerHTML).toContain(tokens[0]);
+
+      const esperarQueNadaGuardouOToken = () => {
+        const lugares = [
+          document.title,
+          JSON.stringify(roteador.state.location),
+          window.location.href,
+          JSON.stringify(window.history.state),
+          conteudoDe(localStorage),
+          conteudoDe(sessionStorage),
+          ...espioes.map((espiao) => JSON.stringify(espiao.mock.calls)),
+        ];
+        for (const token of tokens)
+          for (const lugar of lugares) expect(lugar).not.toContain(token);
+      };
+      esperarQueNadaGuardouOToken();
+
+      fireEvent.click(within(dialogo).getByRole("button", { name: "Pronto" }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      esperarQueNadaGuardouOToken();
+      for (const token of tokens)
+        expect(document.body.innerHTML).not.toContain(token);
+    } finally {
+      for (const espiao of espioes) espiao.mockRestore();
+    }
+  });
+
+  it("mais de 200 sem link: o lote leva os primeiros 200 (o limite da API) e avisa que há outros", async () => {
+    const alvos = alvosExemplo();
+    alvos.lider = Array.from({ length: 203 }, (_, indice) => ({
+      alvo: {
+        tipo: "celula" as const,
+        id: indice + 1,
+        nome: `Célula ${indice + 1}`,
+        divisao: "jovens" as const,
+      },
+      pessoa_nome: `Pessoa ${indice + 1}`,
+      telefone: null,
+      usuario: null,
+    }));
+    const api = criarApiFalsa(undefined, undefined, alvos);
+    await abrirAba(api);
+    // Só a chamada importa aqui: a resposta é uma falha, para não montar 200 links no diálogo.
+    api.proxima(
+      "POST",
+      ROTA_LINKS,
+      respostaErro(500, "erro_interno", "Falha simulada"),
+    );
+
+    expect(
+      screen.getByText("Vão os primeiros 200; toque de novo para os outros."),
+    ).toBeInTheDocument();
+    acionar(
+      screen.getByRole("button", {
+        name: "Gerar links para quem ainda não tem (200)",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(api.chamadasA("POST", ROTA_LINKS)).toHaveLength(1),
+    );
+    expect(api.chamadasA("POST", ROTA_LINKS)[0]?.corpo).toEqual({
+      papel: "lider",
+      ids: Array.from({ length: 200 }, (_, indice) => indice + 1),
+      revogar_anteriores: false,
+    });
+  });
+
   it("409 no lote (um alvo foi desativado em outra aba): explica em português e recarrega a lista", async () => {
     const { api } = await abrirAba();
     api.proxima(
@@ -467,6 +570,39 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
     expect(anuncio()).toContain(
       "Acesso de Célula Éfeso trocado: os links anteriores pararam de funcionar.",
     );
+  });
+
+  it("Trocar acesso com a lista velha (404): explica em português no diálogo, recarrega a lista e não mostra link", async () => {
+    const { api } = await abrirAba();
+    api.proxima(
+      "POST",
+      ROTA_LINKS,
+      respostaErro(404, "nao_encontrado", "Algum id não é alvo do papel", {
+        ids: [5],
+      }),
+    );
+    acionar(
+      within(linha("Célula Éfeso")).getByRole("button", {
+        name: "Trocar acesso de Célula Éfeso",
+      }),
+    );
+    const confirmacao = screen.getByRole("alertdialog");
+
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Trocar acesso" }),
+    );
+
+    expect(
+      await within(confirmacao).findByText(
+        "A hierarquia mudou desde que a lista foi carregada. A lista foi atualizada: confira e tente de novo.",
+      ),
+    ).toBeInTheDocument();
+    expect(confirmacao).toHaveTextContent("Não foi possível trocar o acesso");
+    await waitFor(() =>
+      expect(api.chamadasA("GET", ROTA_ALVOS)).toHaveLength(2),
+    );
+    expect(api.urlsEmitidas).toEqual([]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
 
