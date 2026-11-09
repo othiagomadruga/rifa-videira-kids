@@ -1052,6 +1052,96 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
   });
 });
 
+describe("CA2: histórico das recuperações (GET .../recuperacoes)", () => {
+  /** Grava `quantas` recuperações direto no banco (sem pedidos ligados) e devolve os ids. */
+  async function gravarRecuperacoes(
+    campanhaId: number,
+    quantas: number,
+  ): Promise<number[]> {
+    const db = env.DB;
+    const resultados = await db.batch(
+      Array.from({ length: quantas }, (_, i) =>
+        db
+          .prepare(
+            `INSERT INTO recuperacoes (campanha_id, usuario_id, executado_em, pedidos_solicitados,
+               pedidos_recuperados, bilhetes, total_centavos, linhas_arquivo, arquivo_sha256, mapeamento)
+             VALUES (?1, ?2, ?3, 1, 1, 1, 2000, 10, ?4, '{"pedido_id":"Pedido"}')
+             RETURNING id`,
+          )
+          .bind(
+            campanhaId,
+            pessoa.id,
+            new Date(Date.UTC(2026, 10, 1, 12, i)).toISOString(),
+            "a".repeat(64),
+          ),
+      ),
+    );
+    return resultados.map(
+      (resultado) => (resultado.results[0] as { id: number }).id,
+    );
+  }
+
+  async function pagina(consulta = "") {
+    const resposta = await obter(conferencia, `${RECUPERACOES}${consulta}`);
+    expect(resposta.status).toBe(200);
+    return respostaListaRecuperacoesSchema.parse(resposta.corpo);
+  }
+
+  it("só da campanha ativa, a mais recente primeiro, em páginas de 50 com cursor (como a auditoria)", async () => {
+    const ativa = (await env.DB.prepare(
+      "SELECT id FROM campanhas WHERE ativa = 1",
+    ).first<{ id: number }>())!.id;
+    const outra = (await env.DB.prepare(
+      "SELECT id FROM campanhas WHERE ativa = 0",
+    ).first<{ id: number }>())!.id;
+    const daAtiva = await gravarRecuperacoes(ativa, 52);
+    const daOutra = await gravarRecuperacoes(outra, 1);
+    const esperados = [...daAtiva].sort((a, b) => b - a);
+
+    const primeira = await pagina();
+    expect(primeira.itens.map((item) => item.id)).toEqual(
+      esperados.slice(0, 50),
+    );
+    expect(primeira.proximo).toBe(esperados[49]);
+
+    const segunda = await pagina(`?antes_de=${primeira.proximo}`);
+    expect(segunda.itens.map((item) => item.id)).toEqual(esperados.slice(50));
+    expect(segunda.proximo).toBeNull();
+
+    const curta = await pagina("?limite=2");
+    expect(curta.itens.map((item) => item.id)).toEqual(esperados.slice(0, 2));
+    expect(curta.proximo).toBe(esperados[1]);
+
+    // A recuperação da outra campanha nunca aparece.
+    const todas = [...primeira.itens, ...segunda.itens].map((item) => item.id);
+    expect(todas).not.toContain(daOutra[0]);
+    expect(segunda.itens.at(-1)).toMatchObject({
+      usuario: { id: pessoa.id, nome: pessoa.nome },
+      pedidos_recuperados: 1,
+      colunas: { pedido_id: "Pedido", valor: null },
+      pedidos: [],
+    });
+  });
+
+  it("sem campanha ativa, a lista é vazia; consulta fora do formato: 400", async () => {
+    const ativa = (await env.DB.prepare(
+      "SELECT id FROM campanhas WHERE ativa = 1",
+    ).first<{ id: number }>())!.id;
+    await gravarRecuperacoes(ativa, 1);
+    expect((await pagina()).itens).toHaveLength(1);
+
+    for (const consulta of ["?limite=0", "?limite=201", "?antes_de=abc"])
+      esperarErro(
+        await obter(conferencia, `${RECUPERACOES}${consulta}`),
+        400,
+        "requisicao_invalida",
+      );
+
+    await env.DB.prepare("UPDATE campanhas SET ativa = 0").run();
+    expect(await pagina()).toEqual({ itens: [], proximo: null });
+  });
+});
+
 describe("CA2: regra do valor dos pedidos em várias linhas (um bilhete por linha)", () => {
   const linha = (
     pedido: string,

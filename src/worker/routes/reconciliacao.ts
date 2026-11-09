@@ -4,7 +4,7 @@
  * - POST /api/admin/reconciliacao/analisar: compara o corpo compacto (o navegador já leu o CSV e mandou
  *   só as colunas mapeadas, normalizadas) com o banco, pedido a pedido (com o código) ou pelos totais;
  * - POST /api/admin/reconciliacao/recuperar: grava as vendas perdidas escolhidas (simular = prévia);
- * - GET /api/admin/reconciliacao/recuperacoes: as recuperações feitas (auditoria).
+ * - GET /api/admin/reconciliacao/recuperacoes: as recuperações da campanha ativa (auditoria), em páginas.
  *
  * Este sub-app NÃO autentica: o index.ts o monta sob /api/admin, depois do login da coordenação
  * (`app.route(PREFIXO_RECONCILIACAO, reconciliacao)`), que põe quem está conectado em `c.var.usuario`. O
@@ -54,6 +54,7 @@ import { lerCorpoComLimite } from "../lib/corpo-limitado";
 import { MENSAGEM_JSON_INVALIDO, responderErro } from "../lib/respostas-erro";
 import { respostaCorpoMuitoGrande } from "../middleware/limite-corpo";
 import type { AmbienteSessao } from "../middleware/sessao";
+import { validarConsulta } from "../middleware/validacao";
 
 /** Onde o index.ts monta este sub-app. */
 export const PREFIXO_RECONCILIACAO = "/api/admin/reconciliacao";
@@ -382,8 +383,12 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
     return c.json(resposta);
   });
 
-  reconciliacao.get(local(ROTAS.listarRecuperacoes.caminho), async (c) =>
-    c.json({ itens: await listarRecuperacoes(c.env.DB) }),
+  // Só a campanha ativa, em páginas como a auditoria (`?limite=50&antes_de=<id>`).
+  reconciliacao.get(
+    local(ROTAS.listarRecuperacoes.caminho),
+    validarConsulta(ROTAS.listarRecuperacoes.consulta),
+    async (c) =>
+      c.json(await listarRecuperacoes(c.env.DB, c.req.valid("query"))),
   );
 
   // Vale só para as rotas deste sub-app. O log nunca leva o corpo, nem uma mensagem que possa citá-lo.

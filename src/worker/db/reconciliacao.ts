@@ -29,8 +29,10 @@ import {
   type AcaoAuditoria,
   type CampoReconciliacao,
   type ColunasDoCorpo,
+  type ConsultaListaRecuperacoes,
   type PedidoRecuperado,
   type Recuperacao,
+  type RespostaListaRecuperacoes,
   type TotaisVendas,
 } from "../../shared/contracts";
 import type {
@@ -487,10 +489,14 @@ const CAMPOS_DAS_COLUNAS: readonly CampoReconciliacao[] = [
   "data",
 ];
 
-/** As recuperações feitas, da mais recente para a mais antiga, com quem fez e os pedidos gravados. */
+/**
+ * As recuperações da campanha ativa (nenhuma sem campanha ativa), da mais recente para a mais antiga, com
+ * quem fez e os pedidos gravados, em páginas como a auditoria (cursor `antes_de` = o `proximo` anterior).
+ */
 export async function listarRecuperacoes(
   db: D1Database,
-): Promise<Recuperacao[]> {
+  { limite, antes_de }: ConsultaListaRecuperacoes,
+): Promise<RespostaListaRecuperacoes> {
   const { results } = await db
     .prepare(
       `SELECT r.id, r.executado_em, r.usuario_id, u.nome AS usuario, r.pedidos_solicitados,
@@ -499,29 +505,39 @@ export async function listarRecuperacoes(
          (SELECT json_group_array(p.id) FROM pedidos AS p WHERE p.recuperacao_id = r.id) AS pedidos
        FROM recuperacoes AS r
        JOIN usuarios AS u ON u.id = r.usuario_id
-       ORDER BY r.id DESC`,
+       WHERE r.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1) AND r.id < ?1
+       ORDER BY r.id DESC
+       LIMIT ?2`,
     )
+    // Sem cursor, a primeira página: todos os ids são menores que o maior inteiro seguro.
+    .bind(antes_de ?? Number.MAX_SAFE_INTEGER, limite + 1)
     .all<LinhaRecuperacao>();
-  return results.map((linha) => {
-    const mapeamento = JSON.parse(linha.mapeamento) as Record<string, unknown>;
-    const colunas = Object.fromEntries(
-      CAMPOS_DAS_COLUNAS.map((campo) => {
-        const nome = mapeamento[campo];
-        return [campo, typeof nome === "string" && nome !== "" ? nome : null];
-      }),
-    ) as Recuperacao["colunas"];
-    return {
-      id: linha.id,
-      executado_em: linha.executado_em,
-      usuario: { id: linha.usuario_id, nome: linha.usuario },
-      pedidos_solicitados: linha.pedidos_solicitados,
-      pedidos_recuperados: linha.pedidos_recuperados,
-      bilhetes: linha.bilhetes,
-      total_centavos: linha.total_centavos,
-      linhas_arquivo: linha.linhas_arquivo,
-      arquivo_sha256: linha.arquivo_sha256,
-      colunas,
-      pedidos: (JSON.parse(linha.pedidos) as string[]).sort(),
-    };
-  });
+  const pagina = results.slice(0, limite);
+  return {
+    itens: pagina.map(recuperacaoDaLinha),
+    proximo: results.length > limite ? (pagina.at(-1)?.id ?? null) : null,
+  };
+}
+
+function recuperacaoDaLinha(linha: LinhaRecuperacao): Recuperacao {
+  const mapeamento = JSON.parse(linha.mapeamento) as Record<string, unknown>;
+  const colunas = Object.fromEntries(
+    CAMPOS_DAS_COLUNAS.map((campo) => {
+      const nome = mapeamento[campo];
+      return [campo, typeof nome === "string" && nome !== "" ? nome : null];
+    }),
+  ) as Recuperacao["colunas"];
+  return {
+    id: linha.id,
+    executado_em: linha.executado_em,
+    usuario: { id: linha.usuario_id, nome: linha.usuario },
+    pedidos_solicitados: linha.pedidos_solicitados,
+    pedidos_recuperados: linha.pedidos_recuperados,
+    bilhetes: linha.bilhetes,
+    total_centavos: linha.total_centavos,
+    linhas_arquivo: linha.linhas_arquivo,
+    arquivo_sha256: linha.arquivo_sha256,
+    colunas,
+    pedidos: (JSON.parse(linha.pedidos) as string[]).sort(),
+  };
 }

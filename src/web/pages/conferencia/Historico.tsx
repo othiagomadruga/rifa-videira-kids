@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Recuperacao } from "../../../shared/contracts";
 import {
+  Button,
   Card,
   DataTable,
   EmptyState,
@@ -19,7 +20,8 @@ import { plural } from "./textos";
 
 type Estado =
   | { tipo: "carregando" }
-  | { tipo: "ok"; itens: Recuperacao[] }
+  /** `proximo`: o cursor da página seguinte (null = não há mais). */
+  | { tipo: "ok"; itens: Recuperacao[]; proximo: number | null }
   | { tipo: "erro"; mensagem: string };
 
 const COLUNAS: ColunaTabela<Recuperacao>[] = [
@@ -57,16 +59,34 @@ const COLUNAS: ColunaTabela<Recuperacao>[] = [
   },
 ];
 
-// Auditoria das recuperações: quem, quando e quantas vendas cada "Recuperar" gravou (a mais recente
-// primeiro). `versao` muda depois de cada gravação, para a lista carregar de novo.
+/** O que a lista mostra: quantas (todas ou só as mais recentes) e onde as vendas recuperadas aparecem. */
+function textoDoHistorico(quantas: number, temMais: boolean): string {
+  if (quantas === 0)
+    return "Toda venda recuperada fica registrada aqui, com quem recuperou e quando.";
+  const lista = !temMais
+    ? `${plural(quantas, "recuperação", "recuperações")}, a mais recente primeiro.`
+    : quantas === 1
+      ? "A recuperação mais recente; as anteriores em “Carregar mais”."
+      : `As ${quantas.toLocaleString("pt-BR")} recuperações mais recentes; as anteriores em “Carregar mais”.`;
+  return `${lista} As vendas recuperadas aparecem no sistema como “recuperado na conferência”.`;
+}
+
+// Auditoria das recuperações da campanha ativa: quem, quando e quantas vendas cada "Recuperar" gravou (a
+// mais recente primeiro), de 50 em 50 ("Carregar mais"). `versao` muda depois de cada gravação, para a
+// lista carregar de novo desde o começo.
 export function Historico({ versao }: { versao: number }) {
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
   const [tentativa, setTentativa] = useState(0);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+  const [erroDoMais, setErroDoMais] = useState<string | null>(null);
 
   useEffect(() => {
     const controle = new AbortController();
-    listarRecuperacoes({ signal: controle.signal }).then(
-      (itens) => setEstado({ tipo: "ok", itens }),
+    listarRecuperacoes(null, { signal: controle.signal }).then(
+      ({ itens, proximo }) => {
+        setEstado({ tipo: "ok", itens, proximo });
+        setErroDoMais(null);
+      },
       (erro: unknown) => {
         if (!controle.signal.aborted)
           setEstado({ tipo: "erro", mensagem: mensagemDoErro(erro) });
@@ -75,6 +95,29 @@ export function Historico({ versao }: { versao: number }) {
     return () => controle.abort();
   }, [versao, tentativa]);
 
+  async function carregarMais(antesDe: number) {
+    setCarregandoMais(true);
+    setErroDoMais(null);
+    try {
+      const pagina = await listarRecuperacoes(antesDe);
+      // Só junta se a lista ainda espera esta página (ela pode ter recarregado no meio do caminho).
+      setEstado((atual) =>
+        atual.tipo === "ok" && atual.proximo === antesDe
+          ? {
+              tipo: "ok",
+              itens: [...atual.itens, ...pagina.itens],
+              proximo: pagina.proximo,
+            }
+          : atual,
+      );
+    } catch (erro) {
+      setErroDoMais(mensagemDoErro(erro));
+    } finally {
+      setCarregandoMais(false);
+    }
+  }
+
+  const proximo = estado.tipo === "ok" ? estado.proximo : null;
   return (
     <Card titulo="Recuperações feitas">
       {estado.tipo === "carregando" && <Loading texto="Carregando…" />}
@@ -91,9 +134,7 @@ export function Historico({ versao }: { versao: number }) {
       {estado.tipo === "ok" && (
         <div className="conferencia-bloco">
           <p className="conferencia-suave">
-            {estado.itens.length === 0
-              ? "Toda venda recuperada fica registrada aqui, com quem recuperou e quando."
-              : `${plural(estado.itens.length, "recuperação", "recuperações")}, a mais recente primeiro. As vendas recuperadas aparecem no sistema como “recuperado na conferência”.`}
+            {textoDoHistorico(estado.itens.length, proximo !== null)}
           </p>
           <DataTable
             colunas={COLUNAS}
@@ -102,6 +143,20 @@ export function Historico({ versao }: { versao: number }) {
             legenda="Recuperações feitas"
             vazio={<EmptyState titulo="Nenhuma venda recuperada ainda." />}
           />
+          {proximo !== null && (
+            <div className="conferencia-acoes">
+              <Button
+                variante="secundario"
+                disabled={carregandoMais}
+                onClick={() => void carregarMais(proximo)}
+              >
+                {carregandoMais ? "Carregando…" : "Carregar mais"}
+              </Button>
+              {erroDoMais !== null && (
+                <p role="alert">Não foi possível carregar mais: {erroDoMais}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Card>

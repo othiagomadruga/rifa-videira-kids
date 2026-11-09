@@ -798,7 +798,12 @@ Grava como **aprovadas** as vendas perdidas escolhidas, com os dados do arquivo.
 
 ### `GET /api/admin/reconciliacao/recuperacoes` (`coordenacao`)
 
-Auditoria, da mais recente para a mais antiga (`respostaListaRecuperacoesSchema`): `{ "itens": [{ id, executado_em, usuario: { id, nome }, pedidos_solicitados, pedidos_recuperados, bilhetes, total_centavos, linhas_arquivo, arquivo_sha256, colunas: { "pedido_id": "Pedido", ... }, pedidos: ["R-0101"] }] }`. Só existe linha quando a recuperação gravou algo. Dados: tabela `recuperacoes` e as colunas `pedidos.origem` e `pedidos.recuperacao_id` (migração `0004_conferencia.sql`, aditiva).
+Auditoria das recuperações da **campanha ativa** (sem campanha ativa, a lista vem vazia), da mais recente para a mais antiga, em páginas como a auditoria.
+
+- **Consulta** (`consultaListaRecuperacoesSchema`): `limite` (1 a 200, padrão 50) e `antes_de` (cursor: o `proximo` da página anterior); fora disso, 400 `requisicao_invalida`.
+- **200** (`respostaListaRecuperacoesSchema`): `{ "itens": [{ id, executado_em, usuario: { id, nome }, pedidos_solicitados, pedidos_recuperados, bilhetes, total_centavos, linhas_arquivo, arquivo_sha256, colunas: { "pedido_id": "Pedido", ... }, pedidos: ["R-0101"] }], "proximo": 12 }` (`proximo` null = não há mais). A tela mostra 50 e o botão "Carregar mais".
+
+Só existe linha quando a recuperação gravou algo. Dados: tabela `recuperacoes` e as colunas `pedidos.origem` e `pedidos.recuperacao_id` (migração `0004_conferencia.sql`, aditiva).
 
 **CPU no Worker** (medido no workerd, `src/worker/routes/reconciliacao-desempenho.test.ts`: tempo da requisição menos o tempo esperando o D1): com 7 mil pedidos, ~7–8 ms em `/analisar` e ~6–8 ms em `/recuperar` (eram 295–375 ms com o CSV lido no Worker). O banco devolve os pedidos com os códigos do arquivo num texto JSON único por lote (tuplas curtas) e os ausentes e totais já somados.
 

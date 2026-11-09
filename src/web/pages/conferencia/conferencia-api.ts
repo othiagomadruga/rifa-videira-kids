@@ -9,8 +9,8 @@ import type {
   Campanha,
   CorpoConferencia,
   ROTAS,
-  Recuperacao,
   RespostaAnaliseReconciliacao,
+  RespostaListaRecuperacoes,
   RespostaRecuperarReconciliacao,
 } from "../../../shared/contracts";
 import { ErroApi, api } from "../../lib/api";
@@ -75,12 +75,17 @@ export function recuperar(
   );
 }
 
-export async function listarRecuperacoes(
+/**
+ * Uma página das recuperações da campanha ativa (50, a mais recente primeiro). `antesDe` é o `proximo`
+ * da página anterior; null, a primeira página.
+ */
+export function listarRecuperacoes(
+  antesDe: number | null = null,
   opcoes: Opcoes = {},
-): Promise<Recuperacao[]> {
-  const resposta = await api.get<{ itens: Recuperacao[] }>(
-    CAMINHOS.recuperacoes,
+): Promise<RespostaListaRecuperacoes> {
+  const consulta = antesDe === null ? "" : `?antes_de=${antesDe}`;
+  return api.get<RespostaListaRecuperacoes>(
+    `${CAMINHOS.recuperacoes}${consulta}`,
     opcoes,
   );
-  return resposta.itens;
 }

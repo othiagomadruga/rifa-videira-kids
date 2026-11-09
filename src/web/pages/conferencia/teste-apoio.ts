@@ -458,6 +458,7 @@ export const RECUPERACOES: Recuperacao[] =
         pedidos: ["R-0101", "R-0105"],
       },
     ],
+    proximo: null,
   }).itens;
 
 export type Chamada = { metodo: string; caminho: string; corpo: unknown };
@@ -468,7 +469,13 @@ type Respostas = {
   /** Respostas de POST .../analisar, em ordem (a última se repete). */
   analises?: (object | Response)[];
   recuperar?: (corpo: { simular: boolean }) => object | Response;
-  recuperacoes?: () => Recuperacao[];
+  /**
+   * GET .../recuperacoes: recebe o `antes_de` pedido (null na primeira página) e devolve os itens (sem
+   * página seguinte) ou a página inteira.
+   */
+  recuperacoes?: (
+    antesDe: string | null,
+  ) => Recuperacao[] | { itens: Recuperacao[]; proximo: number | null };
 };
 
 /** API falsa da tela: responde por rota e guarda as chamadas. */
@@ -478,7 +485,8 @@ export function criarApiFalsa(respostas: Respostas = {}) {
   let vezDaAnalise = 0;
   const fetch = vi.fn(
     async (entrada: RequestInfo | URL, init?: RequestInit) => {
-      const caminho = new URL(String(entrada), "http://localhost").pathname;
+      const url = new URL(String(entrada), "http://localhost");
+      const caminho = url.pathname;
       const metodo = init?.method ?? "GET";
       const corpo: unknown =
         typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
@@ -513,8 +521,13 @@ export function criarApiFalsa(respostas: Respostas = {}) {
           respostas.recuperar?.(pedido) ?? (pedido.simular ? PREVIA : GRAVADA),
         );
       }
-      if (caminho === "/api/admin/reconciliacao/recuperacoes")
-        return respostaJson({ itens: respostas.recuperacoes?.() ?? [] });
+      if (caminho === "/api/admin/reconciliacao/recuperacoes") {
+        const pagina =
+          respostas.recuperacoes?.(url.searchParams.get("antes_de")) ?? [];
+        return respostaJson(
+          Array.isArray(pagina) ? { itens: pagina, proximo: null } : pagina,
+        );
+      }
       return respostaJson(
         { erro: { codigo: "nao_encontrado", mensagem: "Rota não encontrada" } },
         404,

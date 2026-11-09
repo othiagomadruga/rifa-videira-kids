@@ -124,6 +124,46 @@ describe("CA4: a tela da conferência", () => {
     ).toBeInTheDocument();
   });
 
+  it("o histórico vem de 50 em 50: “Carregar mais” pede a página seguinte pelo cursor e junta", async () => {
+    const recuperacao = (id: number, pedido: string) => ({
+      ...RECUPERACOES[0],
+      id,
+      pedidos: [pedido],
+    });
+    const pedidas: (string | null)[] = [];
+    await abrir(
+      criarApiFalsa({
+        recuperacoes: (antesDe) => {
+          pedidas.push(antesDe);
+          return antesDe === null
+            ? {
+                itens: [recuperacao(9, "R-0901"), recuperacao(8, "R-0801")],
+                proximo: 8,
+              }
+            : { itens: [recuperacao(4, "R-0401")], proximo: null };
+        },
+      }),
+    );
+    const historico = await screen.findByRole("table", {
+      name: "Recuperações feitas",
+    });
+    expect(within(historico).getByText("R-0901")).toBeInTheDocument();
+    expect(
+      screen.getByText(/^As 2 recuperações mais recentes; as anteriores/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(botao("Carregar mais"));
+
+    expect(await within(historico).findByText("R-0401")).toBeInTheDocument();
+    expect(within(historico).getByText("R-0901")).toBeInTheDocument();
+    expect(pedidas).toEqual([null, "8"]);
+    // Sem página seguinte, o botão some e o texto conta todas.
+    expect(screen.queryByRole("button", { name: "Carregar mais" })).toBeNull();
+    expect(
+      screen.getByText(/^3 recuperações, a mais recente primeiro\./),
+    ).toBeInTheDocument();
+  });
+
   it("escolher o arquivo confere com as colunas detectadas e mostra o resumo e as diferenças por tipo", async () => {
     const api = await abrir();
     await escolher();

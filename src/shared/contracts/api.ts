@@ -1524,8 +1524,33 @@ export const recuperacaoSchema = z.strictObject({
 });
 export type Recuperacao = z.infer<typeof recuperacaoSchema>;
 
-/** A mais recente primeiro. */
-export const respostaListaRecuperacoesSchema = lista(recuperacaoSchema);
+/**
+ * Página do histórico, como a auditoria (`?limite=50&antes_de=<id>`): `limite` de 1 a
+ * PAGINA_AUDITORIA_MAXIMA (padrão PAGINA_AUDITORIA_PADRAO, 50).
+ */
+export const consultaListaRecuperacoesSchema = z.object({
+  limite: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PAGINA_AUDITORIA_MAXIMA)
+    .default(PAGINA_AUDITORIA_PADRAO),
+  /** Cursor: só recuperações com id menor que este (o `proximo` da página anterior). */
+  antes_de: z.coerce.number().int().positive().optional(),
+});
+export type ConsultaListaRecuperacoes = z.output<
+  typeof consultaListaRecuperacoesSchema
+>;
+
+/** As recuperações da campanha ativa (nenhuma sem campanha ativa), a mais recente primeiro. */
+export const respostaListaRecuperacoesSchema = z.object({
+  itens: z.array(recuperacaoSchema),
+  /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
+  proximo: idSchema.nullable(),
+});
+export type RespostaListaRecuperacoes = z.infer<
+  typeof respostaListaRecuperacoesSchema
+>;
 
 // ---------------------------------------------------------------------------------------------------
 // Catálogo de rotas
@@ -1818,6 +1843,7 @@ export const ROTAS = {
     caminho: "/api/admin/reconciliacao/recuperacoes",
     grupo: "coordenacao",
     situacao: "detalhada",
+    consulta: consultaListaRecuperacoesSchema,
     sucesso: { status: 200, corpo: respostaListaRecuperacoesSchema },
   },
 } as const satisfies Record<string, DefinicaoRota>;
