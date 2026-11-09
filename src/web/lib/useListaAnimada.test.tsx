@@ -133,12 +133,12 @@ describe("useListaAnimada com movimento", () => {
     rerender(<Lista nomes={["Betel", "Ágape", "Canaã"]} />);
     const feitas = chamadas(animate);
     expect(feitas.map(({ item, quadros }) => [item, quadros])).toEqual([
-      // Betel estava na linha 2 (50 px) e foi para a 1: começa 50 px abaixo e sobe.
+      // Betel estava na linha 2 (50 px) e foi para a 1: começa 50 px abaixo e sobe, por cima de quem desce.
       [
         "Betel",
         [
-          { transform: `translate(0px, ${ALTURA_DA_LINHA}px)` },
-          { transform: "none" },
+          { transform: `translate(0px, ${ALTURA_DA_LINHA}px)`, zIndex: "1" },
+          { transform: "none", zIndex: "1" },
         ],
       ],
       [

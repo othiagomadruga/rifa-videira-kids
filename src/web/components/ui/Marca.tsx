@@ -23,6 +23,7 @@ export function Marca({ complemento }: Props) {
             width={logo.largura}
             height={logo.altura}
             decoding="async"
+            fetchPriority="high"
           />
         </picture>
       </span>

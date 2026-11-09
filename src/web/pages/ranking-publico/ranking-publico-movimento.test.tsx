@@ -246,7 +246,10 @@ describe("CA4: ranking público com movimento", () => {
     expect(
       animacoes(animate).map(({ item, quadros: passos }) => [item, passos[0]]),
     ).toEqual([
-      ["Célula Betel", { transform: `translate(0px, ${ALTURA_DA_LINHA}px)` }],
+      [
+        "Célula Betel",
+        { transform: `translate(0px, ${ALTURA_DA_LINHA}px)`, zIndex: "1" },
+      ],
       ["Célula Ágape", { transform: `translate(0px, ${-ALTURA_DA_LINHA}px)` }],
     ]);
     // Os % que mudaram contam do valor antigo até o novo; o de Canaã (igual) fica parado.

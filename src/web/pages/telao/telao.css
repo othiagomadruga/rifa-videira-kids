@@ -133,7 +133,9 @@
   border-radius: 0.3em;
 }
 
+/* A largura de "Atualizado às 15:30" (~8,3em) fica reservada desde o carregando: o selo do Kids não anda. */
 .telao__hora-textos {
+  min-width: 9em;
   text-align: right;
 }
 

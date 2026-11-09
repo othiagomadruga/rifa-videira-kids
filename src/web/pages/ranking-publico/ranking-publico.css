@@ -9,8 +9,14 @@
   gap: var(--espaco-5);
 }
 
-/* O carregando ocupa a tela: o rodapé começa abaixo da dobra e não é empurrado quando o ranking chega. */
-.ranking-publico__carregando {
+/*
+ * O conteúdo desta tela tem pelo menos a altura da janela, carregando ou não: o rodapé (o selo do Kids) começa
+ * abaixo da dobra e fica lá quando o ranking chega, em vez de ser empurrado para dentro ou para fora da tela.
+ */
+.ui-public-shell__conteudo:has(
+  .ranking-publico__carregando,
+  .ranking-publico__fase
+) {
   min-height: 100vh;
   min-height: 100dvh;
 }

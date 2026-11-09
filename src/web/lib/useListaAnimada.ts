@@ -125,9 +125,14 @@ export function useListaAnimada<T extends HTMLElement>(assinatura: string) {
         const dy = de.y - para.y;
         if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
         animacoes.get(item)?.cancel();
+        // Quem sobe passa por cima de quem desce: agora ele vem antes no DOM e seria pintado por baixo deles.
+        const camada = dy > 0 ? { zIndex: "1" } : {};
         animacao = animar(
           item,
-          [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+          [
+            { transform: `translate(${dx}px, ${dy}px)`, ...camada },
+            { transform: "none", ...camada },
+          ],
           { duration: DURACAO_REORDENAR_MS, easing: CURVA_SAIDA },
         );
       }
