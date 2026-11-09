@@ -351,6 +351,43 @@ describe("CA4: gerar em lote, copiar e abrir o WhatsApp; o link aparece uma vez 
     );
   });
 
+  it("telefone com '+': só o +55 abre o WhatsApp; outro código de país fica só em 'Copiar mensagem', com o número para conferir", async () => {
+    const alvos = alvosExemplo();
+    alvos.lider[0].telefone = "+1 (555) 123-4567";
+    alvos.lider[2].telefone = "+55 (91) 98888-6666";
+    await abrirAba(criarApiFalsa(undefined, undefined, alvos));
+    expect(coluna("Célula Ágape", "Telefone")).toBe("+1 (555) 123-4567");
+
+    acionar(
+      screen.getByRole("button", {
+        name: "Gerar links para quem ainda não tem (2)",
+      }),
+    );
+    const dialogo = await screen.findByRole("dialog", {
+      name: "2 links de acesso gerados",
+    });
+    const [agape, canaa] = within(dialogo).getAllByRole("listitem");
+
+    expect(within(agape).queryByRole("link")).not.toBeInTheDocument();
+    expect(
+      within(agape).getByRole("button", {
+        name: "Copiar mensagem para Maria Fictícia",
+      }),
+    ).toBeInTheDocument();
+    expect(agape).toHaveTextContent(
+      "O telefone +1 (555) 123-4567 não é do Brasil (+55): confira o número, copie a mensagem e mande por fora.",
+    );
+    expect(dialogo.innerHTML).not.toContain("wa.me/1555");
+    expect(
+      within(canaa).getByRole("link", {
+        name: "Abrir no WhatsApp de Ana Fictícia",
+      }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^https:\/\/wa\.me\/5591988886666\?text=/),
+    );
+  });
+
   it("fechar com link ainda não mandado (Pronto, Esc ou ×) pede confirmação; voltar mantém os links; fechar mesmo assim os esquece", async () => {
     const { api } = await abrirAba();
     simularAreaDeTransferencia(async () => {});
@@ -637,10 +674,10 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
     expect(
       api.chamadasA("POST", ROTA_LINKS).map((chamada) => chamada.corpo),
     ).toEqual([{ papel: "lider", ids: [5], revogar_anteriores: true }]);
-    // O telefone da Éfeso não tem DDD: só copiar.
+    // O telefone da Éfeso não tem DDD: só copiar, com o número para conferir.
     expect(within(dialogo).queryByRole("link")).not.toBeInTheDocument();
     expect(dialogo).toHaveTextContent(
-      "O telefone não está num formato que o WhatsApp abre: copie a mensagem e mande por fora.",
+      "O telefone 98888-1234 não está num formato que o WhatsApp abre: confira o número, copie a mensagem e mande por fora.",
     );
     expect(dialogo).toHaveTextContent("Para Rute Fictícia");
     // Copiada a mensagem, "Pronto" fecha sem pedir confirmação.

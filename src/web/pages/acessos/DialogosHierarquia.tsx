@@ -20,6 +20,7 @@ import {
   linkWhatsAppDoNumero,
   mensagemAoGerarLinks,
   mensagemHierarquia,
+  motivoSemWhatsApp,
   telefoneParaWhatsApp,
 } from "./textos";
 
@@ -310,11 +311,7 @@ function LinkGerado({
         {item.telefone && ` · ${item.telefone}`}
       </p>
       {numero === null && (
-        <p className="acessos-suave">
-          {item.telefone
-            ? "O telefone não está num formato que o WhatsApp abre: copie a mensagem e mande por fora."
-            : "Sem telefone na hierarquia: copie a mensagem e mande por fora."}
-        </p>
+        <p className="acessos-suave">{motivoSemWhatsApp(item.telefone)}</p>
       )}
       <div className="acessos-link-acoes">
         <Button onClick={() => void copiar()}>

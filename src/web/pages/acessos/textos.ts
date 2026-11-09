@@ -74,29 +74,48 @@ export function mensagemHierarquia({
   return `${saudacao} Este é o seu link pessoal para ${PARA_QUE_SERVE[alvo.tipo](alvo.nome)} na campanha da rifa do Videira Kids: as vendas, a meta e a posição no ranking.\nO link é só seu: não repasse para ninguém, porque quem tiver o link entra como você.\n${url}`;
 }
 
+/** Número do Brasil com o código do país: 55, o DDD (2 dígitos) e o telefone (8 ou 9 dígitos). */
+const ehNumeroDoBrasil = (digitos: string) =>
+  (digitos.length === 12 || digitos.length === 13) && digitos.startsWith("55");
+
+/** O telefone começa com "+" e um código de país que não é o do Brasil (+55). */
+function ehDeOutroPais(telefone: string): boolean {
+  return (
+    telefone.trim().startsWith("+") &&
+    !telefone.replace(/\D/g, "").startsWith("55")
+  );
+}
+
 /**
- * O telefone do líder como o wa.me pede: só dígitos, com o código do país. Aceita os jeitos comuns de
+ * O telefone do líder como o wa.me pede: só dígitos, com o código do Brasil. Aceita os jeitos comuns de
  * escrever um número do Brasil com DDD ("(91) 98888-7777", "91 3222-1111", "091 98888-7777", "55 91
- * 98888-7777") e um número internacional com "+". Sem DDD, curto ou longo demais: null (só "Copiar
- * mensagem").
+ * 98888-7777", "+55 91 98888-7777"). Com "+", só o +55: outro código de país, sem DDD, curto ou longo
+ * demais dão null (só "Copiar mensagem", e a tela mostra o número para o admin conferir).
  */
 export function telefoneParaWhatsApp(telefone: string | null): string | null {
   if (telefone === null) return null;
   const digitos = telefone.replace(/\D/g, "");
   if (telefone.trim().startsWith("+")) {
-    return digitos.length >= 10 && digitos.length <= 15 ? digitos : null;
+    return ehNumeroDoBrasil(digitos) ? digitos : null;
   }
   const semPrefixo = digitos.replace(/^0+/, "");
   if (semPrefixo.length === 10 || semPrefixo.length === 11) {
     return `55${semPrefixo}`;
   }
-  if (
-    (semPrefixo.length === 12 || semPrefixo.length === 13) &&
-    semPrefixo.startsWith("55")
-  ) {
-    return semPrefixo;
+  return ehNumeroDoBrasil(semPrefixo) ? semPrefixo : null;
+}
+
+/**
+ * Por que o link não vai pelo WhatsApp (sem número que o wa.me abra): sem telefone, com outro código de país
+ * ou fora do formato. Com telefone, mostra o número para o admin conferir.
+ */
+export function motivoSemWhatsApp(telefone: string | null): string {
+  if (telefone === null) {
+    return "Sem telefone na hierarquia: copie a mensagem e mande por fora.";
   }
-  return null;
+  return ehDeOutroPais(telefone)
+    ? `O telefone ${telefone} não é do Brasil (+55): confira o número, copie a mensagem e mande por fora.`
+    : `O telefone ${telefone} não está num formato que o WhatsApp abre: confira o número, copie a mensagem e mande por fora.`;
 }
 
 /** wa.me com o número (a conversa já abre com a pessoa) e a mensagem pronta. */

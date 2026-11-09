@@ -7,6 +7,7 @@ import {
   linkWhatsAppDoNumero,
   mensagemAoGerarLinks,
   mensagemHierarquia,
+  motivoSemWhatsApp,
   precisaDeLink,
   situacaoDoAcesso,
   telefoneParaWhatsApp,
@@ -63,9 +64,10 @@ describe("telefoneParaWhatsApp e o wa.me", () => {
     ["091 98888-7777", "5591988887777"],
     ["55 (91) 9 8888-7777", "5591988887777"],
     ["+55 91 99999-0000", "5591999990000"],
+    ["+55 (91) 3222-1111", "559132221111"],
+    ["+5591988887777", "5591988887777"],
     // DDD 55 (RS) sem o código do país: 11 dígitos, ganha o 55.
     ["(55) 99999-8888", "5555999998888"],
-    ["+1 (555) 123-4567", "15551234567"],
   ])("%s → %s", (telefone, numero) => {
     expect(telefoneParaWhatsApp(telefone)).toBe(numero);
   });
@@ -77,10 +79,32 @@ describe("telefoneParaWhatsApp e o wa.me", () => {
     "sem telefone",
     "",
     "+55",
+    // Com "+", só o +55: outro código de país não monta o wa.me.
+    "+1 (555) 123-4567",
+    "+44 20 7946 0958",
+    "+351 912 345 678",
+    // +55 sem DDD.
+    "+55 98888-7777",
     "1234567890123456",
     "44 1234 5678 9012",
   ])("%j não vira número do WhatsApp (só copiar)", (telefone) => {
     expect(telefoneParaWhatsApp(telefone)).toBeNull();
+  });
+
+  it("sem WhatsApp, a tela explica por quê e mostra o número para conferir", () => {
+    expect(motivoSemWhatsApp(null)).toBe(
+      "Sem telefone na hierarquia: copie a mensagem e mande por fora.",
+    );
+    expect(motivoSemWhatsApp("+1 (555) 123-4567")).toBe(
+      "O telefone +1 (555) 123-4567 não é do Brasil (+55): confira o número, copie a mensagem e mande por fora.",
+    );
+    expect(motivoSemWhatsApp("98888-1234")).toBe(
+      "O telefone 98888-1234 não está num formato que o WhatsApp abre: confira o número, copie a mensagem e mande por fora.",
+    );
+    // +55 sem DDD: é do Brasil, mas está fora do formato.
+    expect(motivoSemWhatsApp("+55 98888-7777")).toMatch(
+      /^O telefone \+55 98888-7777 não está num formato/,
+    );
   });
 
   it("o link abre a conversa do número com a mensagem codificada", () => {
