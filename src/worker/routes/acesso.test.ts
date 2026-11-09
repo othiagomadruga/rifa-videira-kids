@@ -10,12 +10,14 @@ import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import {
   chamar,
   cookieDaResposta,
+  criarAcessoDaHierarquiaNoBanco,
   criarAcessoNoBanco,
   criarAppDeTeste,
   entrar,
   erro,
   type AppDeTeste,
 } from "../test/acesso-teste";
+import { limparBanco, semearHierarquia } from "../test/painel-apoio";
 
 let app: AppDeTeste;
 beforeAll(() => {
@@ -348,6 +350,99 @@ describe("CA2: links que não abrem sessão e reuso do link válido", () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual(erro("proibido"));
     expect(cookieDaResposta(res)).toBeNull();
+  });
+});
+
+describe("RIFA-014: papéis da hierarquia na sessão", () => {
+  beforeAll(async () => {
+    await limparBanco();
+    await semearHierarquia();
+  });
+
+  it("POST e GET /api/sessao devolvem o alvo do líder, do discipulador e da rede, lido da hierarquia na hora", async () => {
+    for (const [papel, id, alvo] of [
+      [
+        "lider",
+        2,
+        { tipo: "celula", id: 2, nome: "Célula Betel", divisao: "jovens" },
+      ],
+      [
+        "discipulador",
+        30,
+        {
+          tipo: "discipulador",
+          id: 30,
+          nome: "Discipulador Caleb",
+          divisao: "adultos",
+        },
+      ],
+      [
+        "rede",
+        1,
+        {
+          tipo: "rede",
+          id: 1,
+          nome: "Rede Jovem Ficticia",
+          divisao: "jovens",
+        },
+      ],
+    ] as const) {
+      const acesso = await criarAcessoDaHierarquiaNoBanco(papel, id);
+      const login = await chamar(app, "POST", "/api/sessao", {
+        corpo: { token: acesso.token },
+      });
+      expect(login.status).toBe(200);
+      const entrou = respostaSessaoSchema.parse(await login.json());
+      expect(entrou.usuario).toMatchObject({
+        id: acesso.usuarioId,
+        papel,
+        alvo,
+      });
+      const sessao = cookieDaResposta(login)!.valor;
+      const quem = await chamar(app, "GET", "/api/sessao", { sessao });
+      expect(respostaSessaoSchema.parse(await quem.json())).toEqual(entrou);
+    }
+
+    // A célula 2 muda de nome e de discipulador (vai para a rede adulta): a sessão já aberta vê o alvo novo.
+    const acesso = await criarAcessoDaHierarquiaNoBanco("lider", 2);
+    const sessao = await entrar(app, acesso.token);
+    await env.DB.prepare(
+      "UPDATE celulas SET nome = 'Célula Betel Nova', discipulador_id = 30 WHERE id = 2",
+    ).run();
+    const depois = await chamar(app, "GET", "/api/sessao", { sessao });
+    expect(
+      respostaSessaoSchema.parse(await depois.json()).usuario.alvo,
+    ).toEqual({
+      tipo: "celula",
+      id: 2,
+      nome: "Célula Betel Nova",
+      divisao: "adultos",
+    });
+  });
+
+  it("na coordenação, a sessão continua sem o campo alvo", async () => {
+    for (const papel of ["admin", "coordenacao"] as const) {
+      const acesso = await criarAcessoNoBanco(papel);
+      const login = await chamar(app, "POST", "/api/sessao", {
+        corpo: { token: acesso.token },
+      });
+      expect(await login.json()).toEqual({
+        usuario: { id: acesso.usuarioId, nome: acesso.nome, papel },
+      });
+    }
+  });
+
+  it("apagar o alvo apaga o acesso: o link para de entrar e a sessão aberta cai (401)", async () => {
+    const acesso = await criarAcessoDaHierarquiaNoBanco("discipulador", 40);
+    const sessao = await entrar(app, acesso.token);
+    await env.DB.prepare("DELETE FROM discipuladores WHERE id = 40").run();
+    expect((await chamar(app, "GET", "/api/sessao", { sessao })).status).toBe(
+      401,
+    );
+    const login = await chamar(app, "POST", "/api/sessao", {
+      corpo: { token: acesso.token },
+    });
+    expect(login.status).toBe(401);
   });
 });
 

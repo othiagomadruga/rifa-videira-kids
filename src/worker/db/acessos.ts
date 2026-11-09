@@ -1,5 +1,6 @@
 /**
- * Acesso da equipe (RIFA-007) no D1: usuários, links pessoais e sessões (migrations/0002_acessos.sql).
+ * Acesso da equipe (RIFA-007) no D1: usuários, links pessoais e sessões (migrations/0002_acessos.sql e, para os
+ * papéis da hierarquia presos a um alvo, 0006_acesso_hierarquia.sql; RIFA-014, D12).
  *
  * Esta camada só recebe e grava hashes (SHA-256 hex) do token do link e do id da sessão: quem gera e
  * confere os segredos são as rotas, com src/worker/lib/cripto.ts. Instantes em UTC ISO com milissegundos
@@ -8,12 +9,18 @@
  * As ações do admin sobre usuários e links levam, opcionalmente, quem fez (`Autoria`): o registro da
  * trilha de auditoria (RIFA-013b) vai no mesmo db.batch da ação e só existe se ela aconteceu.
  */
-import type {
-  LinkAcesso,
-  Papel,
-  SituacaoLink,
-  Usuario,
-  UsuarioSessao,
+import {
+  PAPEIS_COORDENACAO,
+  TIPO_ALVO_DO_PAPEL,
+  type Alvo,
+  type Divisao,
+  type LinkAcesso,
+  type Papel,
+  type PapelCoordenacao,
+  type SituacaoLink,
+  type TipoAlvo,
+  type Usuario,
+  type UsuarioSessao,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 
@@ -36,7 +43,77 @@ export function limiteDeInatividade(agora: string): string {
   ).toISOString();
 }
 
-interface LinhaUsuario {
+// ---------------------------------------------------------------------------------------------------
+// Alvo dos papéis da hierarquia (D12): a célula, o discipulador ou a rede, lidos na hora
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Colunas do alvo do usuário `u`: o id (a coluna do papel), o nome e a divisão (a da rede), lidos da hierarquia
+ * na hora. Nulas nos papéis da coordenação, que não têm alvo (o CHECK do papel garante, migração 0006).
+ * Vai com JUNTAR_ALVO, que liga as três colunas de alvo às tabelas da hierarquia.
+ */
+const COLUNAS_ALVO = `coalesce(u.celula_id, u.discipulador_id, u.rede_id) AS alvo_id,
+  coalesce(alvo_c.nome, alvo_d.nome, alvo_r.nome) AS alvo_nome,
+  coalesce(alvo_rc.divisao, alvo_rd.divisao, alvo_r.divisao) AS alvo_divisao`;
+
+const JUNTAR_ALVO = `
+  LEFT JOIN celulas AS alvo_c ON alvo_c.id = u.celula_id
+  LEFT JOIN discipuladores AS alvo_dc ON alvo_dc.id = alvo_c.discipulador_id
+  LEFT JOIN redes AS alvo_rc ON alvo_rc.id = alvo_dc.rede_id
+  LEFT JOIN discipuladores AS alvo_d ON alvo_d.id = u.discipulador_id
+  LEFT JOIN redes AS alvo_rd ON alvo_rd.id = alvo_d.rede_id
+  LEFT JOIN redes AS alvo_r ON alvo_r.id = u.rede_id`;
+
+interface ColunasAlvo {
+  alvo_id: number | null;
+  alvo_nome: string | null;
+  alvo_divisao: Divisao | null;
+}
+
+const TIPOS_DOS_PAPEIS: Partial<Record<Papel, TipoAlvo>> = TIPO_ALVO_DO_PAPEL;
+
+/**
+ * O alvo do papel: undefined nos papéis da coordenação; null se um papel da hierarquia ficou sem alvo (o banco
+ * não deixa: o CHECK do papel exige a coluna, e a FK em cascata apaga o usuário junto com o alvo).
+ */
+function alvoDaLinha(
+  papel: Papel,
+  linha: ColunasAlvo,
+): Alvo | null | undefined {
+  const tipo = TIPOS_DOS_PAPEIS[papel];
+  if (tipo === undefined) return undefined;
+  if (
+    linha.alvo_id === null ||
+    linha.alvo_nome === null ||
+    linha.alvo_divisao === null
+  )
+    return null;
+  return {
+    tipo,
+    id: linha.alvo_id,
+    nome: linha.alvo_nome,
+    divisao: linha.alvo_divisao,
+  };
+}
+
+/**
+ * Quem está conectado, com o alvo nos papéis da hierarquia (na coordenação, sem o campo, como antes da D12).
+ * null quando um papel da hierarquia vem sem alvo: sem o alvo, a sessão não vale.
+ */
+function usuarioDaSessao(
+  linha: { id: number; nome: string; papel: Papel } & ColunasAlvo,
+): UsuarioSessao | null {
+  const alvo = alvoDaLinha(linha.papel, linha);
+  if (alvo === null) return null;
+  const usuario: UsuarioSessao = {
+    id: linha.id,
+    nome: linha.nome,
+    papel: linha.papel,
+  };
+  return alvo === undefined ? usuario : { ...usuario, alvo };
+}
+
+interface LinhaUsuario extends ColunasAlvo {
   id: number;
   nome: string;
   email: string | null;
@@ -45,7 +122,7 @@ interface LinhaUsuario {
   criado_em: string;
 }
 
-interface LinhaLink {
+export interface LinhaLink {
   id: number;
   usuario_id: number;
   criado_em: string;
@@ -79,7 +156,7 @@ export function situacaoDoLink(
   return link.expira_em > agora ? "valido" : "expirado";
 }
 
-function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
+export function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
   return {
     id: linha.id,
     criado_em: linha.criado_em,
@@ -94,34 +171,44 @@ function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
 // Usuários
 // ---------------------------------------------------------------------------------------------------
 
-/** Usuários com os links (sem hash) e as sessões válidas (no prazo e não paradas). `id` null = todos. */
+/**
+ * Usuários com os links (sem hash) e as sessões válidas (no prazo e não paradas): um usuário pelo id (de qualquer
+ * papel, com o alvo nos da hierarquia) ou, com `id` null, todos os da coordenação (a hierarquia tem a lista
+ * própria, em db/acessos-hierarquia.ts).
+ */
 async function carregarUsuarios(
   db: D1Database,
   agora: string,
   id: number | null,
 ): Promise<Usuario[]> {
+  // ?1 = o id, ou null para a lista da coordenação; ?2 = os papéis da coordenação (lista JSON do contrato).
+  const doFiltro = `((?1 IS NULL AND u.papel IN (SELECT value FROM json_each(?2))) OR u.id = ?1)`;
+  const coordenacao = JSON.stringify(PAPEIS_COORDENACAO);
   const [usuarios, links, sessoes] = await db.batch([
     db
       .prepare(
-        `SELECT id, nome, email, papel, ativo, criado_em FROM usuarios
-         WHERE ?1 IS NULL OR id = ?1
-         ORDER BY nome COLLATE NOCASE, id`,
+        `SELECT u.id, u.nome, u.email, u.papel, u.ativo, u.criado_em, ${COLUNAS_ALVO}
+         FROM usuarios AS u ${JUNTAR_ALVO}
+         WHERE ${doFiltro}
+         ORDER BY u.nome COLLATE NOCASE, u.id`,
       )
-      .bind(id),
+      .bind(id, coordenacao),
     db
       .prepare(
-        `SELECT id, usuario_id, criado_em, expira_em, revogado_em, ultimo_uso_em FROM links_acesso
-         WHERE ?1 IS NULL OR usuario_id = ?1
-         ORDER BY criado_em DESC, id DESC`,
+        `SELECT l.id, l.usuario_id, l.criado_em, l.expira_em, l.revogado_em, l.ultimo_uso_em
+         FROM links_acesso AS l JOIN usuarios AS u ON u.id = l.usuario_id
+         WHERE ${doFiltro}
+         ORDER BY l.criado_em DESC, l.id DESC`,
       )
-      .bind(id),
+      .bind(id, coordenacao),
     db
       .prepare(
-        `SELECT usuario_id, count(*) AS total FROM sessoes
-         WHERE (?1 IS NULL OR usuario_id = ?1) AND expira_em > ?2 AND ultimo_uso_em >= ?3
-         GROUP BY usuario_id`,
+        `SELECT s.usuario_id, count(*) AS total
+         FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id
+         WHERE ${doFiltro} AND s.expira_em > ?3 AND s.ultimo_uso_em >= ?4
+         GROUP BY s.usuario_id`,
       )
-      .bind(id, agora, limiteDeInatividade(agora)),
+      .bind(id, coordenacao, agora, limiteDeInatividade(agora)),
   ]);
 
   const linksPorUsuario = new Map<number, LinkAcesso[]>();
@@ -136,18 +223,27 @@ async function carregarUsuarios(
     ),
   );
 
-  return (usuarios.results as LinhaUsuario[]).map((linha) => ({
-    id: linha.id,
-    nome: linha.nome,
-    email: linha.email,
-    papel: linha.papel,
-    ativo: linha.ativo === 1,
-    criado_em: linha.criado_em,
-    sessoes_ativas: sessoesPorUsuario.get(linha.id) ?? 0,
-    links: linksPorUsuario.get(linha.id) ?? [],
-  }));
+  return (usuarios.results as LinhaUsuario[]).map((linha) => {
+    const alvo = alvoDaLinha(linha.papel, linha);
+    if (alvo === null)
+      throw new Error(
+        `Usuário ${linha.id} (${linha.papel}) sem alvo: o banco não deveria permitir`,
+      );
+    const usuario: Usuario = {
+      id: linha.id,
+      nome: linha.nome,
+      email: linha.email,
+      papel: linha.papel,
+      ativo: linha.ativo === 1,
+      criado_em: linha.criado_em,
+      sessoes_ativas: sessoesPorUsuario.get(linha.id) ?? 0,
+      links: linksPorUsuario.get(linha.id) ?? [],
+    };
+    return alvo === undefined ? usuario : { ...usuario, alvo };
+  });
 }
 
+/** As pessoas da coordenação (admin e coordenacao). Os usuários da hierarquia têm a lista própria. */
 export function listarUsuarios(
   db: D1Database,
   agora: string,
@@ -155,6 +251,7 @@ export function listarUsuarios(
   return carregarUsuarios(db, agora, null);
 }
 
+/** Um usuário de qualquer papel (com o alvo, nos papéis da hierarquia), ou null. */
 export async function buscarUsuario(
   db: D1Database,
   id: number,
@@ -164,10 +261,13 @@ export async function buscarUsuario(
   return usuario ?? null;
 }
 
-/** Cria o usuário e o primeiro link numa transação só. */
+/**
+ * Cria uma pessoa da coordenação e o primeiro link numa transação só. Os usuários da hierarquia nascem só pelos
+ * links em lote (db/acessos-hierarquia.ts), presos ao alvo.
+ */
 export async function criarUsuarioComLink(
   db: D1Database,
-  dados: { nome: string; email: string | null; papel: Papel },
+  dados: { nome: string; email: string | null; papel: PapelCoordenacao },
   link: NovoLink,
   autoria?: Autoria,
 ): Promise<{ usuarioId: number; linkId: number }> {
@@ -311,7 +411,10 @@ export async function criarLink(
   return criacao.results[0]?.id ?? null;
 }
 
-/** O link do hash, se ainda abre sessão: não revogado, dentro da validade e de usuário ativo. */
+/**
+ * O link do hash, se ainda abre sessão: não revogado, dentro da validade e de usuário ativo. O usuário vem com o
+ * alvo nos papéis da hierarquia (lido na hora).
+ */
 export async function buscarLinkValido(
   db: D1Database,
   tokenHash: string,
@@ -319,17 +422,17 @@ export async function buscarLinkValido(
 ): Promise<{ linkId: number; usuario: UsuarioSessao } | null> {
   const linha = await db
     .prepare(
-      `SELECT l.id AS link_id, u.id, u.nome, u.papel
-       FROM links_acesso AS l JOIN usuarios AS u ON u.id = l.usuario_id
+      `SELECT l.id AS link_id, u.id, u.nome, u.papel, ${COLUNAS_ALVO}
+       FROM links_acesso AS l JOIN usuarios AS u ON u.id = l.usuario_id ${JUNTAR_ALVO}
        WHERE l.token_hash = ?1 AND l.revogado_em IS NULL AND l.expira_em > ?2 AND u.ativo = 1`,
     )
     .bind(tokenHash, agora)
-    .first<{ link_id: number; id: number; nome: string; papel: Papel }>();
+    .first<
+      { link_id: number; id: number; nome: string; papel: Papel } & ColunasAlvo
+    >();
   if (linha === null) return null;
-  return {
-    linkId: linha.link_id,
-    usuario: { id: linha.id, nome: linha.nome, papel: linha.papel },
-  };
+  const usuario = usuarioDaSessao(linha);
+  return usuario === null ? null : { linkId: linha.link_id, usuario };
 }
 
 /** "ultimo_link_admin": revogar deixaria nenhum admin ativo com link válido (nada muda). */
@@ -446,7 +549,8 @@ export async function criarSessao(
 
 /**
  * Usuário da sessão, se ela vale: existe, não venceu, foi usada nos últimos INATIVIDADE_MAXIMA_SESSAO_DIAS
- * (RIFA-013b; exatamente 7 dias ainda vale) e o usuário está ativo.
+ * (RIFA-013b; exatamente 7 dias ainda vale) e o usuário está ativo. Nos papéis da hierarquia, vem com o alvo
+ * (D12), lido da hierarquia na hora: é dele, e só dele, que as rotas de /api/minha tiram o alvo.
  */
 export async function buscarUsuarioDaSessao(
   db: D1Database,
@@ -455,13 +559,22 @@ export async function buscarUsuarioDaSessao(
 ): Promise<UsuarioSessao | null> {
   const linha = await db
     .prepare(
-      `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em
-       FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id
+      `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em, ${COLUNAS_ALVO}
+       FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id ${JUNTAR_ALVO}
        WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1`,
     )
     .bind(idHash, agora, limiteDeInatividade(agora))
-    .first<UsuarioSessao & { ultimo_uso_em: string }>();
+    .first<
+      {
+        id: number;
+        nome: string;
+        papel: Papel;
+        ultimo_uso_em: string;
+      } & ColunasAlvo
+    >();
   if (linha === null) return null;
+  const usuario = usuarioDaSessao(linha);
+  if (usuario === null) return null;
   const limiteToque = new Date(
     Date.parse(agora) - INTERVALO_TOQUE_SESSAO_MS,
   ).toISOString();
@@ -471,7 +584,7 @@ export async function buscarUsuarioDaSessao(
       .bind(idHash, agora)
       .run();
   }
-  return { id: linha.id, nome: linha.nome, papel: linha.papel };
+  return usuario;
 }
 
 export async function apagarSessao(

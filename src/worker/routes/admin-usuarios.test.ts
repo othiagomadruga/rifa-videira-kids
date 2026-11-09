@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   ROTAS_ACESSO,
+  ROTAS_ACESSO_HIERARQUIA,
   respostaCriarLinkSchema,
   respostaCriarUsuarioSchema,
   respostaListaUsuariosSchema,
@@ -75,12 +76,16 @@ async function statusDoLogin(token: string): Promise<number> {
 }
 
 describe("CA4: só admin administra os acessos", () => {
-  const rotasAdmin = Object.values(ROTAS_ACESSO).filter((rota) => {
+  // Os dois catálogos juntos: usuários e links (RIFA-007) e os acessos da hierarquia (RIFA-014).
+  const rotasAdmin = [
+    ...Object.values(ROTAS_ACESSO),
+    ...Object.values(ROTAS_ACESSO_HIERARQUIA),
+  ].filter((rota) => {
     const papeis: readonly Papel[] | null = rota.papeis;
     return papeis !== null && !papeis.includes("coordenacao");
   });
 
-  it("as rotas só de admin são as 5 de usuários e links", () => {
+  it("as rotas só de admin são as 5 de usuários e links e as 2 dos acessos da hierarquia", () => {
     expect(
       rotasAdmin.map((rota) => `${rota.metodo} ${rota.caminho}`).sort(),
     ).toEqual(
@@ -90,6 +95,8 @@ describe("CA4: só admin administra os acessos", () => {
         "PATCH /api/admin/usuarios/:id",
         "POST /api/admin/usuarios/:id/links",
         "DELETE /api/admin/links/:id",
+        "GET /api/admin/acessos-hierarquia",
+        "POST /api/admin/acessos-hierarquia/links",
       ].sort(),
     );
   });
@@ -107,7 +114,9 @@ describe("CA4: só admin administra os acessos", () => {
         ? { nome: nomeRecusado, papel: "admin" }
         : rota.metodo === "PATCH"
           ? { ativo: false }
-          : undefined;
+          : rota.caminho === "/api/admin/acessos-hierarquia/links"
+            ? { papel: "lider", ids: [1] }
+            : undefined;
     const coordenacao = (await sessaoDe(app, "coordenacao")).sessao;
 
     const semSessao = await chamar(app, rota.metodo, caminho, { corpo });
@@ -243,6 +252,28 @@ describe("CA4: criação de usuário e de link", () => {
       criado.link.id,
     ]);
     expect(usuario.sessoes_ativas).toBe(2);
+  });
+
+  it("RIFA-014: criar usuário continua só da coordenação; os papéis da hierarquia dão 400 e nada é gravado", async () => {
+    for (const papel of ["lider", "discipulador", "rede"]) {
+      const nome = `Hierarquia pela rota errada ${papel}`;
+      const res = await chamar(app, "POST", "/api/admin/usuarios", {
+        corpo: { nome, papel },
+        sessao: admin,
+      });
+      expect({ papel, status: res.status }).toEqual({ papel, status: 400 });
+      expect(await res.json()).toMatchObject({
+        erro: {
+          codigo: "requisicao_invalida",
+          detalhes: [{ caminho: ["papel"] }],
+        },
+      });
+      expect(
+        await env.DB.prepare("SELECT 1 FROM usuarios WHERE nome = ?1")
+          .bind(nome)
+          .first(),
+      ).toBeNull();
+    }
   });
 
   it("valida o corpo e os parâmetros no formato único", async () => {

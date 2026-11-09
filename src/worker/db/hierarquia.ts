@@ -3,7 +3,8 @@
  *
  * - CRUD das três entidades com as regras do contrato (docs/api.md): nomes únicos sem diferenciar
  *   maiúsculas (inclusive acentuadas) e ignorando espaços nas pontas; id inexistente no corpo =
- *   `referencia_invalida`; excluir algo referenciado = `em_uso` (as FKs são RESTRICT).
+ *   `referencia_invalida`; excluir algo referenciado = `em_uso` (as FKs da hierarquia são RESTRICT). O acesso
+ *   do alvo (o usuário do líder, do discipulador ou da rede, RIFA-014) cai junto, em cascata (migração 0006).
  * - Importação da planilha (POST /api/admin/hierarquia/importar): cria e atualiza pelo nome, nunca apaga,
  *   e grava tudo num único `db.batch` (uma transação): ou o arquivo inteiro entra, ou nada.
  *
@@ -455,15 +456,29 @@ export function atualizarCelula(
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Exclusão (DELETE): sem cascata; a FK RESTRICT do banco decide se está em uso
+// Exclusão (DELETE): a FK RESTRICT do banco decide se está em uso. O acesso do alvo cai em cascata (0006)
 // ---------------------------------------------------------------------------------------------------
 
 interface Dependentes {
   tabela: "discipuladores" | "celulas" | "afiliados";
   coluna: "rede_id" | "discipulador_id" | "celula_id";
   mensagem: (quantidade: number) => string;
+  /** A coluna de `usuarios` que prende o acesso a este alvo (o usuário cai junto com ele). */
+  colunaDoAcesso: "celula_id" | "discipulador_id" | "rede_id";
+  /** Quando a trilha de auditoria segura o acesso do alvo (o usuário dele aparece como autor de uma ação). */
+  mensagemDaTrilha: string;
 }
 
+/** Recusada por uma referência que sumiu antes da conferência (outra exclusão ao mesmo tempo). */
+const MENSAGEM_REFERENCIA_QUE_MUDOU =
+  "A exclusão foi recusada por uma referência que mudou enquanto isso: atualize a página e tente de novo.";
+
+/**
+ * Apaga o registro. A exclusão leva junto, em cascata, o acesso do alvo (o usuário do líder, do discipulador ou
+ * da rede, com os links e as sessões, migração 0006). Recusada por chave estrangeira, a mensagem diz o motivo
+ * certo, conferido no banco: os dependentes da hierarquia (RESTRICT) ou, sem eles, a trilha de auditoria, que
+ * segura (RESTRICT) o usuário do acesso quando ele aparece como autor de uma ação.
+ */
 async function remover(
   db: D1Database,
   tabela: Tabela,
@@ -480,13 +495,25 @@ async function remover(
       : falha("nao_encontrado", TEXTOS[tabela].naoEncontrado);
   } catch (erro) {
     if (!violou(erro, "FOREIGN KEY")) throw erro;
-    const linha = await db
-      .prepare(
-        `SELECT count(*) AS total FROM ${dependentes.tabela} WHERE ${dependentes.coluna} = ?`,
-      )
-      .bind(id)
-      .first<{ total: number }>();
-    return falha("em_uso", dependentes.mensagem(linha?.total ?? 0));
+    const [filhos, naTrilha] = await db.batch<{ total: number }>([
+      db
+        .prepare(
+          `SELECT count(*) AS total FROM ${dependentes.tabela} WHERE ${dependentes.coluna} = ?`,
+        )
+        .bind(id),
+      db
+        .prepare(
+          `SELECT count(*) AS total FROM auditoria
+           WHERE usuario_id IN (SELECT id FROM usuarios WHERE ${dependentes.colunaDoAcesso} = ?)`,
+        )
+        .bind(id),
+    ]);
+    const quantidade = filhos.results[0]?.total ?? 0;
+    if (quantidade > 0)
+      return falha("em_uso", dependentes.mensagem(quantidade));
+    if ((naTrilha.results[0]?.total ?? 0) > 0)
+      return falha("em_uso", dependentes.mensagemDaTrilha);
+    return falha("em_uso", MENSAGEM_REFERENCIA_QUE_MUDOU);
   }
 }
 
@@ -499,6 +526,9 @@ export function removerRede(
     coluna: "rede_id",
     mensagem: (quantidade) =>
       `A rede tem discipuladores (${quantidade}). Exclua os discipuladores ou mova-os para outra rede antes de excluir a rede.`,
+    colunaDoAcesso: "rede_id",
+    mensagemDaTrilha:
+      "A rede não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
   });
 }
 
@@ -511,6 +541,9 @@ export function removerDiscipulador(
     coluna: "discipulador_id",
     mensagem: (quantidade) =>
       `O discipulador tem células (${quantidade}). Exclua as células ou mova-as para outro discipulador antes de excluir o discipulador.`,
+    colunaDoAcesso: "discipulador_id",
+    mensagemDaTrilha:
+      "O discipulador não pode ser excluído: o acesso dele aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
   });
 }
 
@@ -523,6 +556,9 @@ export function removerCelula(
     coluna: "celula_id",
     mensagem: (quantidade) =>
       `A célula tem afiliados vinculados (${quantidade}). Desvincule os afiliados antes de excluir a célula.`,
+    colunaDoAcesso: "celula_id",
+    mensagemDaTrilha:
+      "A célula não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
   });
 }
 

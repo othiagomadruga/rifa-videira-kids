@@ -14,6 +14,9 @@ export default defineConfig({
           cloudflareTest(async () => ({
             wrangler: { configPath: "./wrangler.jsonc" },
             miniflare: {
+              // D1 só dos testes, vazio no início de cada arquivo: a migração 0006 aplicada sobre dados gravados
+              // com as migrações anteriores (src/worker/test/migrations.test.ts). Soma-se ao DB do wrangler.jsonc.
+              d1Databases: ["DB_MIGRACAO"],
               bindings: {
                 TEST_MIGRATIONS: await readD1Migrations(pastaMigracoes),
                 // Segredo do webhook da Rifei nos testes (valor fictício; em dev vem do .dev.vars).

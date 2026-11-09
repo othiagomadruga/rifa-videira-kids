@@ -1,6 +1,7 @@
 // RIFA-013b, item 7: limite de requisições por IP no app real, com o binding de Rate Limiting do
 // wrangler.jsonc (simulado pelo Miniflare no workerd local: janela fixa alinhada ao relógio, por período).
-// - POST /api/sessao: 10 por minuto por IP, toda tentativa conta;
+// - POST /api/sessao: 60 por minuto por IP desde a D12 (eram 10), toda tentativa conta; 60 logins de verdade
+//   do mesmo IP passam e o 61º leva 429 (RIFA-014, CA9: a reunião dos líderes atrás do Wi-Fi da igreja);
 // - /api/publico/*: 60 idas ao banco por minuto por IP; resposta do cache não conta.
 // Cada teste usa IPs próprios (aleatórios): os contadores do binding valem para o arquivo todo.
 import { env, exports } from "cloudflare:workers";
@@ -9,7 +10,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { STATUS_HTTP_DO_ERRO, erroApiSchema } from "../../shared/contracts";
 import { SEM_CACHE } from "../lib/cache-publico";
 import { LIMITE_LOGIN, LIMITE_PUBLICO } from "../lib/limite-requisicoes";
-import { ORIGEM } from "../test/acesso-teste";
+import { ORIGEM, criarAcessoNoBanco } from "../test/acesso-teste";
 import { semearCampanha } from "../test/painel-apoio";
 import { PREFIXO_PUBLICO, criarPublico } from "./publico";
 
@@ -20,13 +21,16 @@ function ipNovo(): string {
 }
 
 /**
- * A janela do binding é fixa e alinhada ao relógio (Miniflare): se faltam menos de 5 s para ela virar,
+ * A janela do binding é fixa e alinhada ao relógio (Miniflare): se faltam menos de `folgaMs` para ela virar,
  * espera a próxima, para a sequência do teste caber inteira numa janela só.
  */
-async function esperarJanelaInteira(periodoSegundos: number): Promise<void> {
+async function esperarJanelaInteira(
+  periodoSegundos: number,
+  folgaMs = 5000,
+): Promise<void> {
   const periodoMs = periodoSegundos * 1000;
   const resta = periodoMs - (Date.now() % periodoMs);
-  if (resta < 5000)
+  if (resta < folgaMs)
     await new Promise((resolve) => setTimeout(resolve, resta + 50));
 }
 
@@ -65,8 +69,41 @@ describe("binding de Rate Limiting no workerd local", () => {
   });
 });
 
-describe("POST /api/sessao: 10 tentativas por minuto por IP", () => {
-  it("a 11ª tentativa do mesmo IP leva 429 no formato único; outro IP continua (401 do link inválido)", async () => {
+describe("POST /api/sessao: 60 tentativas por minuto por IP (D12; eram 10)", () => {
+  it("CA9: 60 logins de verdade do mesmo IP passam (60 pessoas com o próprio link); o 61º leva 429", async () => {
+    expect(LIMITE_LOGIN.limite).toBe(60);
+    const tokens = [];
+    for (let pessoa = 0; pessoa <= LIMITE_LOGIN.limite; pessoa++)
+      tokens.push((await criarAcessoNoBanco("coordenacao")).token);
+    // Os 61 logins cabem com folga numa janela (cada um leva poucos ms).
+    await esperarJanelaInteira(LIMITE_LOGIN.periodoSegundos, 20_000);
+    const ip = ipNovo();
+    for (const [vez, token] of tokens.slice(0, LIMITE_LOGIN.limite).entries()) {
+      const res = await entrar(ip, JSON.stringify({ token }));
+      expect({ vez: vez + 1, status: res.status }).toEqual({
+        vez: vez + 1,
+        status: 200,
+      });
+      expect(res.headers.get("Set-Cookie")).toMatch(/^__Host-sessao=/);
+    }
+    const sessentaEUm = await entrar(
+      ip,
+      JSON.stringify({ token: tokens[LIMITE_LOGIN.limite] }),
+    );
+    expect(sessentaEUm.headers.get("Set-Cookie")).toBeNull();
+    await esperar429(sessentaEUm);
+    // O link do 61º continua bom: de outro IP, entra.
+    expect(
+      (
+        await entrar(
+          ipNovo(),
+          JSON.stringify({ token: tokens[LIMITE_LOGIN.limite] }),
+        )
+      ).status,
+    ).toBe(200);
+  });
+
+  it("a 61ª tentativa do mesmo IP leva 429 no formato único; outro IP continua (401 do link inválido)", async () => {
     await esperarJanelaInteira(LIMITE_LOGIN.periodoSegundos);
     const ip = ipNovo();
 

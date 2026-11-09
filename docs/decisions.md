@@ -117,7 +117,7 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   máximo uma vez por minuto). O link pessoal continua abrindo uma sessão nova; a administração não conta a sessão
   parada como ativa, e cada login a apaga.
 - **Limite de requisições por IP** com o binding de Rate Limiting do Workers (`ratelimits` no `wrangler.jsonc`;
-  funciona no workerd local e nos testes): 10 por minuto no `POST /api/sessao` (toda tentativa) e 60 por minuto
+  funciona no workerd local e nos testes): 10 por minuto no `POST /api/sessao` (toda tentativa; 60 desde a D12) e 60 por minuto
   nas idas ao banco das rotas abertas (`/api/publico/*` e `/api/health`). A resposta que sai do cache de 30 s não conta: muita gente atrás do mesmo
   IP (o Wi-Fi da igreja, a operadora do celular) abre o ranking sem esbarrar no limite. Chave: o
   `CF-Connecting-IP` (IPv6 pelo /64); sem ele (só nos testes), sem limite. Acima: 429 `muitas_requisicoes` com
@@ -174,3 +174,35 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
 - **Limite de login por IP sobe de 10 para 60 por minuto**: na reunião dos líderes, dezenas de pessoas abrem o link
   ao mesmo tempo atrás do mesmo IP. O token tem 256 bits, então o limite nunca foi o que impede adivinhar link:
   ele só protege CPU e banco.
+
+## D14. Visão individual: base em cache e montador enxuto (RIFA-014-api, 2026-11-09)
+
+(A D13 é da RIFA-012, a conferência por CSV, que entra na `main` pela branch dela.) Decisões técnicas da
+implementação da D12 (o contrato não mudou; só `percentualBp` passou a ser exportada de
+`calculos.ts`, sem mudar o comportamento, para a curva usar a mesma conta do percentual da meta).
+
+- **Leitura**: a do painel (D10), com três comandos a mais no mesmo lote (os discipuladores, as redes e, por célula,
+  o líder e os afiliados vinculados): por requisição, a sessão, a campanha e um lote, ~1,3 linha lida no D1 por
+  pedido. Os dados de base ficam até 30 s na memória do isolate (`src/worker/db/visao-individual.ts`), nunca a
+  resposta, que é por pessoa; uma base sem o alvo de quem pede (ex.: célula criada depois dela) é lida de novo.
+  Por quê: a tela se atualiza a cada 60 s em cada celular aberto, e sem o cache cada atualização leria todos os
+  pedidos da campanha (a cota diária do D1 Free, D10).
+- **CPU**: o Worker Free tem 10 ms por requisição, e cada montador de `calculos.ts` percorre todas as linhas de venda
+  que recebe (~1,5 µs por linha no workerd); a visão chama vários (o resumo do alvo e de cada item da equipe, e de 2
+  a 4 rankings). O montador da visão (`src/worker/lib/visao-individual.ts`) passa a cada um só o que pesa no
+  resultado, sem mudar a resposta: no resumo, as células do escopo e uma que representa as outras pela soma das
+  pessoas (a meta proporcional depende delas só por isso); nos rankings, por célula, as vendas dos dias fechados da
+  janela somadas numa linha e as de hoje, e no de uma divisão só as células dela. `lib/visao-individual.test.ts`
+  confere, campo a campo, que tudo bate com os montadores chamados com todas as células e vendas. Medido no
+  workerd com 36 células, 12 discipuladores, 4 redes e ~7 mil pedidos (`routes/minha-desempenho.test.ts`, sozinho):
+  com a máquina calma, mediana de 1 a 4 ms de Worker por requisição (conforme o papel e o cache) e pior caso até
+  8 ms; com a máquina ocupada por outros testes, mediana até 6 ms e picos acima de 10 ms, que medem a disputa pelos
+  núcleos (o relógio do workerd é de parede). Antes das reduções, a mediana da rede era de ~7 ms e o pior caso passava
+  de 15 ms. O teste prende o orçamento do D1 (exato) e só uma mediana folgada de CPU, como a RIFA-012 e o painel.
+- **Lote de links**: poucas instruções sobre listas JSON (`json_each`), como a importação da hierarquia, por causa do
+  limite de consultas por invocação do D1 (até 6 instruções para 200 alvos). Se outra gravação muda os alvos entre a
+  conferência e o lote (o alvo some, ganha um usuário ou é desativado), uma restrição do banco desfaz o lote inteiro
+  e a conferência é refeita uma vez.
+- **Ordem de nomes** na lista dos acessos e na equipe: a de português (`Intl.Collator("pt-BR")`, como o ranking), e
+  não a do `COLLATE NOCASE` do SQLite, que só ignora maiúsculas ASCII e poria "Célula Ágape" depois de "Célula
+  Betel".

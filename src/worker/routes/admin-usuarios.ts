@@ -2,25 +2,27 @@
  * Administração dos acessos (RIFA-007), só para o papel admin. Montada em /api/admin.
  * Documentação: docs/acesso.md.
  *
- * - POST /api/admin/usuarios { nome, email?, papel } → 201 { usuario, link }: a URL do link só aparece aqui;
- * - GET /api/admin/usuarios → 200 { itens }: usuários com os links (sem token) e as sessões ativas;
- * - PATCH /api/admin/usuarios/:id { ativo } → 200 usuário: desativar encerra as sessões dele; 409 `em_uso`
- *   ao desativar a si mesmo ou o último admin ativo (não há troca de papel, então não há como rebaixá-lo);
- * - POST /api/admin/usuarios/:id/links → 201 { link }: link novo (os anteriores continuam valendo);
- * - DELETE /api/admin/links/:id → 204: revoga o link e encerra as sessões abertas por ele; 409 `em_uso` se
- *   nenhum admin ativo ficaria com link válido (a equipe perderia o acesso de admin).
+ * - POST /api/admin/usuarios { nome, email?, papel } → 201 { usuario, link }: a URL do link só aparece aqui. Só
+ *   cria pessoas da coordenação (o schema recusa os papéis da hierarquia, que nascem pelos links em lote de
+ *   routes/acessos-hierarquia.ts, RIFA-014);
+ * - GET /api/admin/usuarios → 200 { itens }: as pessoas da coordenação, com os links (sem token) e as sessões
+ *   ativas (a hierarquia tem a lista própria, em GET /api/admin/acessos-hierarquia);
+ * - PATCH /api/admin/usuarios/:id { ativo } → 200 usuário (de qualquer papel; na hierarquia, com o alvo):
+ *   desativar encerra as sessões dele; 409 `em_uso` ao desativar a si mesmo ou o último admin ativo (não há
+ *   troca de papel, então não há como rebaixá-lo);
+ * - POST /api/admin/usuarios/:id/links → 201 { link }: link novo (os anteriores continuam valendo), para um
+ *   usuário de qualquer papel;
+ * - DELETE /api/admin/links/:id → 204: revoga o link (de qualquer papel) e encerra as sessões abertas por ele;
+ *   409 `em_uso` se nenhum admin ativo ficaria com link válido (a equipe perderia o acesso de admin).
  *
  * As quatro escritas deixam na trilha de auditoria (RIFA-013b, GET /api/admin/auditoria) quem fez e o
  * alvo, na mesma transação e só quando a ação acontece; o resumo nunca traz nome nem e-mail.
  */
 import { Hono, type Context } from "hono";
 import {
-  PREFIXO_LINK_ACESSO,
-  VALIDADE_LINK_DIAS,
   corpoAtualizarUsuarioSchema,
   corpoCriarUsuarioSchema,
   parametroIdSchema,
-  type LinkAcessoCriado,
   type Usuario,
 } from "../../shared/contracts";
 import {
@@ -30,9 +32,8 @@ import {
   definirAtivo,
   listarUsuarios,
   revogarLink,
-  type NovoLink,
 } from "../db/acessos";
-import { gerarSegredo, sha256Hex } from "../lib/cripto";
+import { gerarLink, linkCriado } from "../lib/links-acesso";
 import { responderErro } from "../lib/respostas-erro";
 import {
   autoriaDaSessao,
@@ -41,47 +42,12 @@ import {
 } from "../middleware/sessao";
 import { validarJson, validarParametros } from "../middleware/validacao";
 
-const DIA_MS = 24 * 60 * 60 * 1000;
-
 export const adminUsuarios = new Hono<AmbienteSessao>();
 
 // Só admin, mesmo que o app esqueça de pôr /api/admin/* atrás de exigirSessao. Os caminhos são específicos
 // de propósito: um use("*") aqui valeria para todo /api/admin/* (hierarquia, campanha...).
 adminUsuarios.use("/usuarios/*", exigirSessao(["admin"]));
 adminUsuarios.use("/links/*", exigirSessao(["admin"]));
-
-interface LinkGerado extends NovoLink {
-  token: string;
-}
-
-async function gerarLink(agora: Date): Promise<LinkGerado> {
-  const token = gerarSegredo();
-  return {
-    token,
-    tokenHash: await sha256Hex(token),
-    criadoEm: agora.toISOString(),
-    expiraEm: new Date(
-      agora.getTime() + VALIDADE_LINK_DIAS * DIA_MS,
-    ).toISOString(),
-  };
-}
-
-/** O link como sai na resposta de criação, com a URL `<origem>/acesso/<token>`. */
-function linkCriado(
-  c: Context,
-  id: number,
-  link: LinkGerado,
-): LinkAcessoCriado {
-  return {
-    id,
-    criado_em: link.criadoEm,
-    expira_em: link.expiraEm,
-    revogado_em: null,
-    ultimo_uso_em: null,
-    situacao: "valido",
-    url: `${new URL(c.req.url).origin}${PREFIXO_LINK_ACESSO}${link.token}`,
-  };
-}
 
 function respostaUsuarioNaoEncontrado(c: Context) {
   return responderErro(c, "nao_encontrado", "Usuário não encontrado");

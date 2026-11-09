@@ -45,9 +45,9 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 **Coordenação** (RIFA-007; contrato em `acesso.ts`, detalhes em [acesso.md](acesso.md)):
 
-- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
+- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403).
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -101,7 +101,7 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 
 | Rota | Limite | O que conta |
 |---|---|---|
-| `POST /api/sessao` | 10 por minuto | toda tentativa que passa da checagem de origem |
+| `POST /api/sessao` | 60 por minuto (desde a D12; eram 10) | toda tentativa que passa da checagem de origem |
 | `/api/publico/*` e `GET /api/health` | 60 por minuto, somados | só as que vão ao banco: no público, a resposta do cache de 30 s **não conta** (muita gente atrás do mesmo IP, como o Wi-Fi da igreja, não esbarra no limite); o health lê o banco toda vez |
 
 Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Control: no-store`, sem ler o banco. O contador é por data center da Cloudflare e aproximado ("permissivo"). Sem o binding, vale uma janela na memória de cada isolate.
@@ -649,31 +649,50 @@ Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`;
 
 ### `GET /api/minha/visao?periodo=atual|campanha` (`hierarquia`)
 
-- Papéis `lider`, `discipulador` e `rede`. Sem sessão: 401. Sessão da coordenação: 403. Não aceita id de nada:
-  o alvo é o da sessão (`usuarios.celula_id`, `discipulador_id` ou `rede_id`).
+- Papéis `lider`, `discipulador` e `rede`. Sem sessão: 401 em todo caminho de `/api/minha/*`, exista a rota ou
+  não. Sessão da coordenação: 403. Não aceita id de nada: o alvo é o da sessão (`usuarios.celula_id`,
+  `discipulador_id` ou `rede_id`); id na consulta, nos cabeçalhos ou no corpo é ignorado (a consulta só tem
+  `periodo`; um POST não chega a rota nenhuma, 404).
 - Devolve o alvo, quem entrou, a referência da campanha, os números do alvo (hoje, período e campanha, mais os
   bilhetes vendidos), a curva em pontos-base da meta, a posição no ranking do nível (geral e na divisão, com o
   nome e a posição do vizinho de cima e do de baixo), os primeiros da divisão (como o ranking público) e, para
   discipulador e rede, os números da `equipe` (quem está abaixo). O líder recebe `afiliados_vinculados` da célula.
+- Os números são os do painel da coordenação para o mesmo escopo (`montarResumoPainel` e `montarRankingPainel`,
+  com as metas sobre todas as células); a curva usa a meta exata, então o ponto de hoje é o
+  `percentual_meta_bp` da campanha. Com meta em centavos, os bilhetes de hoje saem somados das vendas do dia.
+- `equipe`: do discipulador, as células dele por nome; da rede, os discipuladores dela por nome (inclusive os sem
+  células), cada um seguido das células dele por nome (ordem de português: "Célula 2" antes de "Célula 10").
+  `posicao_divisao` é a posição no ranking do nível do item, na divisão e na janela pedidas.
 - **Sem dinheiro em nenhum nível** (schemas estritos e regras cruzadas): com meta em centavos, as quantidades da
   meta saem null; no critério arrecadação, nenhuma distância. A distância até os vizinhos (`diferenca`) sai null
-  até o PO decidir (D12).
+  até o PO decidir (D12). A rota confere a resposta no schema estrito antes de sair: um campo a mais vira 500.
 - Alvo sem células (R8): `ranking.geral` e `ranking.divisao` null; na equipe, `posicao_divisao` null.
-- `periodo` escolhe a janela do ranking (padrão: o período atual). Sem cache compartilhado da resposta.
+- `periodo` escolhe a janela do ranking (padrão: o período atual); fora de `atual` e `campanha`, 400.
+- Sem campanha ativa: 404 `nao_encontrado`, como o painel.
+- Cache: a resposta é por pessoa e sai com `Cache-Control: no-store`, nunca guardada. Os dados de base (a
+  campanha, as células, as vendas por dia, os discipuladores, as redes e os afiliados por célula) ficam até 30 s
+  na memória do isolate, como as rotas abertas (D10); uma base sem o alvo de quem pede (ex.: uma célula criada
+  depois dela) é lida de novo. Por requisição: a sessão e, sem a base guardada, a campanha e um lote no D1 (o
+  orçamento do painel, ~1,3 linha lida por pedido).
 
 ### `GET /api/admin/acessos-hierarquia?papel=lider|discipulador|rede` (**só admin**)
 
 Todos os alvos do papel, com ou sem acesso: o alvo, quem deve receber o link (`pessoa_nome`, da hierarquia), o
-telefone do líder (só células) e o usuário do alvo (nome, ativo, sessões e links, sem token), ou null.
+telefone do líder (só células) e o usuário do alvo (nome, ativo, sessões e links, sem token), ou null. Ordem: pelo
+caminho na hierarquia (nome da rede, do discipulador e da célula, em ordem de português; empate, pelo id). Papel
+fora dos três da hierarquia: 400.
 
 ### `POST /api/admin/acessos-hierarquia/links` (**só admin**)
 
 `{ "papel", "ids": [...], "revogar_anteriores"?: false }` → **201** `{ "itens": [...] }`, um link NOVO por alvo,
 na ordem de `ids`, com a URL (a única vez em que ela aparece). Cria o usuário do alvo quando falta e atualiza o
-nome dele para o `pessoa_nome` atual. `revogar_anteriores: true` revoga os links válidos anteriores e encerra as
-sessões deles no mesmo lote. Tudo ou nada: 404 `nao_encontrado` se algum id não é alvo do papel, 409 `em_uso` se
-algum alvo tem usuário desativado (`detalhes`: `detalhesIdsRecusadosSchema`, `{ "ids": [...] }`). Uma linha na
-trilha de auditoria por chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes).
+nome dele para o `pessoa_nome` atual (sem ele, o nome do alvo). `revogar_anteriores: true` revoga os links válidos
+anteriores e encerra as sessões abertas por eles no mesmo lote. Tudo ou nada: 404 `nao_encontrado` se algum id não
+é alvo do papel, 409 `em_uso` se algum alvo tem usuário desativado (`detalhes`: `detalhesIdsRecusadosSchema`,
+`{ "ids": [...] }`, em ordem crescente; o 404 é conferido antes do 409). Uma linha na trilha de auditoria por
+chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes, como "Links novos para 2
+células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
+schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
 
 ## Rotas RASCUNHO (Sprint 4)
 
