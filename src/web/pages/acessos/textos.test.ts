@@ -11,6 +11,7 @@ import {
   situacaoDoAcesso,
   telefoneParaWhatsApp,
   textoDaSituacao,
+  textoDosAparelhos,
 } from "./textos";
 
 const URL_FICTICIA =
@@ -129,6 +130,12 @@ describe("situação do acesso de cada alvo", () => {
         ],
       }),
     ).toEqual({ tipo: "valido", ultimoUso: "2026-11-13T09:00:00.000Z" });
+  });
+
+  it("os aparelhos conectados, no singular e no plural", () => {
+    expect(textoDosAparelhos(0)).toBe("Nenhum aparelho conectado");
+    expect(textoDosAparelhos(1)).toBe("1 aparelho conectado");
+    expect(textoDosAparelhos(1200)).toBe("1.200 aparelhos conectados");
   });
 
   it("o lote vai para quem não tem link válido, menos os desativados", () => {

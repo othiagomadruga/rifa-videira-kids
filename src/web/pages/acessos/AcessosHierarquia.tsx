@@ -35,6 +35,7 @@ import {
   precisaDeLink,
   situacaoDoAcesso,
   textoDaSituacao,
+  textoDosAparelhos,
 } from "./textos";
 
 /** Alvos carregados do papel e o erro da última carga (com dados, o erro é de uma recarga). */
@@ -222,22 +223,19 @@ export function AcessosHierarquia() {
             chave: "telefone",
             titulo: "Telefone",
             celula: (item: ItemAcessoHierarquia) =>
-              item.telefone ?? (
+              item.telefone === null ? (
                 <span className="acessos-suave">Sem telefone</span>
+              ) : (
+                <span className="acessos-telefone">{item.telefone}</span>
               ),
           },
         ]
       : []),
     {
+      // A situação do acesso e os aparelhos conectados (as sessões abertas pelos links do alvo).
       chave: "situacao",
       titulo: "Situação",
       celula: (item) => <Situacao item={item} />,
-    },
-    {
-      chave: "sessoes",
-      titulo: "Aparelhos conectados",
-      alinhamento: "fim",
-      celula: (item) => formatarNumero(item.usuario?.sessoes_ativas ?? 0),
     },
     {
       chave: "acoes",
@@ -402,35 +400,53 @@ export function AcessosHierarquia() {
   );
 }
 
+// O conteúdo de cada célula da tabela vai num só bloco (.acessos-celula): no celular, a célula vira uma
+// linha "rótulo: valor" e o valor precisa ser um item só, senão as partes ficam espremidas lado a lado.
+
 /** A pessoa que deve receber o link; se o último link foi para outra pessoa, avisa (troque o acesso). */
 function Pessoa({ item }: { item: ItemAcessoHierarquia }) {
   const atual = item.pessoa_nome ?? item.alvo.nome;
   return (
-    <>
+    <div className="acessos-celula">
       {item.pessoa_nome ?? (
         <span className="acessos-suave">Sem responsável na hierarquia</span>
       )}
       {item.usuario && item.usuario.nome !== atual && (
-        <span className="acessos-suave acessos-nota-linha">
-          O último link foi para {item.usuario.nome}: se a pessoa mudou, troque
-          o acesso.
-        </span>
+        <>
+          {" "}
+          <span className="acessos-suave acessos-nota-linha">
+            O último link foi para {item.usuario.nome}: se a pessoa mudou,
+            troque o acesso.
+          </span>
+        </>
       )}
-    </>
+    </div>
   );
 }
 
+/** A situação do acesso (selo e detalhe) e os aparelhos conectados, quando o alvo já tem usuário. */
 function Situacao({ item }: { item: ItemAcessoHierarquia }) {
   const { tom, rotulo, detalhe } = textoDaSituacao(
     situacaoDoAcesso(item.usuario),
   );
   return (
-    <>
+    <div className="acessos-celula">
       <Badge tom={tom}>{rotulo}</Badge>
       {detalhe && (
-        <span className="acessos-suave acessos-nota-linha">{detalhe}</span>
+        <>
+          {" "}
+          <span className="acessos-suave acessos-nota-linha">{detalhe}</span>
+        </>
       )}
-    </>
+      {item.usuario && (
+        <>
+          {" "}
+          <span className="acessos-nota-linha">
+            {textoDosAparelhos(item.usuario.sessoes_ativas)}
+          </span>
+        </>
+      )}
+    </div>
   );
 }
 

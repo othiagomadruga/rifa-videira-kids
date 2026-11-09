@@ -111,24 +111,17 @@ describe("CA4: a lista dos alvos", () => {
       within(tabela())
         .getAllByRole("columnheader")
         .map((titulo) => titulo.textContent),
-    ).toEqual([
-      "Célula",
-      "Pessoa",
-      "Telefone",
-      "Situação",
-      "Aparelhos conectados",
-      "Ações",
-    ]);
+    ).toEqual(["Célula", "Pessoa", "Telefone", "Situação", "Ações"]);
     expect(coluna("Célula Ágape", "Pessoa")).toBe("Maria Fictícia");
     expect(coluna("Célula Ágape", "Telefone")).toBe("(91) 98888-7777");
+    // Sem usuário ainda: nem link nem aparelho.
     expect(coluna("Célula Ágape", "Situação")).toBe("Sem link");
-    expect(coluna("Célula Ágape", "Aparelhos conectados")).toBe("0");
     expect(acoes("Célula Ágape")).toEqual(["Novo link para Célula Ágape"]);
 
+    // A situação traz o último uso e os aparelhos conectados (as sessões abertas pelos links).
     expect(coluna("Célula Betel", "Situação")).toBe(
-      "Link válidoÚltimo uso em 11/11/2026 09:00.",
+      "Link válido Último uso em 11/11/2026 09:00. 1 aparelho conectado",
     );
-    expect(coluna("Célula Betel", "Aparelhos conectados")).toBe("1");
     expect(acoes("Célula Betel")).toEqual([
       "Novo link para Célula Betel",
       "Trocar acesso de Célula Betel",
@@ -138,7 +131,7 @@ describe("CA4: a lista dos alvos", () => {
 
     expect(coluna("Célula Canaã", "Telefone")).toBe("Sem telefone");
     expect(coluna("Célula Canaã", "Situação")).toBe(
-      "Só links revogados ou vencidos",
+      "Só links revogados ou vencidos Nenhum aparelho conectado",
     );
     expect(acoes("Célula Canaã")).toEqual([
       "Novo link para Célula Canaã",
@@ -152,7 +145,10 @@ describe("CA4: a lista dos alvos", () => {
 
     // A hierarquia trocou o líder da Éfeso depois do último link: a tela sugere trocar o acesso.
     expect(coluna("Célula Éfeso", "Pessoa")).toBe(
-      "Rute FictíciaO último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
+      "Rute Fictícia O último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
+    );
+    expect(coluna("Célula Éfeso", "Situação")).toBe(
+      "Link válido Último uso em 10/11/2026 20:30. 2 aparelhos conectados",
     );
 
     // Só Ágape (sem link) e Canaã (só revogados ou vencidos): a desativada fica de fora.
@@ -178,13 +174,7 @@ describe("CA4: a lista dos alvos", () => {
       within(tabela())
         .getAllByRole("columnheader")
         .map((titulo) => titulo.textContent),
-    ).toEqual([
-      "Discipulador",
-      "Pessoa",
-      "Situação",
-      "Aparelhos conectados",
-      "Ações",
-    ]);
+    ).toEqual(["Discipulador", "Pessoa", "Situação", "Ações"]);
     expect(coluna("Davi Fictício", "Situação")).toBe("Sem link");
     expect(
       screen.getByRole("button", {
@@ -292,11 +282,11 @@ describe("CA4: gerar em lote, copiar e abrir o WhatsApp; o link aparece uma vez 
     }
     await waitFor(() =>
       expect(coluna("Célula Ágape", "Situação")).toBe(
-        "Link válidoAinda não usado.",
+        "Link válido Ainda não usado. Nenhum aparelho conectado",
       ),
     );
     expect(coluna("Célula Canaã", "Situação")).toBe(
-      "Link válidoAinda não usado.",
+      "Link válido Ainda não usado. Nenhum aparelho conectado",
     );
     // Nada mais a gerar: o botão continua focável (aria-disabled) e recebe o foco de volta.
     const loteDepois = screen.getByRole("button", {
@@ -466,12 +456,11 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
     await waitFor(() => expect(trocar).toHaveFocus());
     // O link antigo foi revogado (as sessões dele acabaram) e o nome do usuário é o da hierarquia.
     await waitFor(() =>
-      expect(coluna("Célula Éfeso", "Aparelhos conectados")).toBe("0"),
+      expect(coluna("Célula Éfeso", "Situação")).toBe(
+        "Link válido Ainda não usado. Nenhum aparelho conectado",
+      ),
     );
     expect(coluna("Célula Éfeso", "Pessoa")).toBe("Rute Fictícia");
-    expect(coluna("Célula Éfeso", "Situação")).toBe(
-      "Link válidoAinda não usado.",
-    );
     expect(
       api.alvos.lider[4].usuario?.links.map((item) => item.situacao),
     ).toEqual(["valido", "revogado"]);
@@ -537,9 +526,10 @@ describe("CA4: desativar, reativar e revogar com as rotas que a tela já tem", (
       within(confirmacao).getByRole("button", { name: "Revogar link" }),
     );
 
+    // Sem outro link válido, a sessão aberta pelo link revogado acabou.
     await waitFor(() =>
       expect(coluna("Célula Betel", "Situação")).toBe(
-        "Só links revogados ou vencidos",
+        "Só links revogados ou vencidos Nenhum aparelho conectado",
       ),
     );
     expect(api.chamadasA("DELETE", "/api/admin/links/3001")).toHaveLength(1);

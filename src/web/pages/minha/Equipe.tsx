@@ -38,9 +38,8 @@ export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
         </h2>
         <p className="minha-equipe__descricao">
           {alvo.tipo === "rede"
-            ? "Os discipuladores da rede e as células de cada um."
-            : "As células que você acompanha."}{" "}
-          A posição é no ranking dos {divisao}, na mesma disputa do seu.
+            ? `Os discipuladores da rede e as células de cada um. A posição é a de cada um entre os do mesmo nível (discipuladores ou células) dos ${divisao}, no mesmo período do seu ranking.`
+            : `As células que você acompanha. A posição é a de cada célula entre as células dos ${divisao}, no mesmo período do seu ranking.`}
         </p>
       </div>
       {semAdesao.length > 0 && (

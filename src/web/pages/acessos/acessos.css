@@ -40,17 +40,35 @@
   cursor: not-allowed;
 }
 
+/* O conteúdo de uma célula da tabela num bloco só: no celular, a célula vira "rótulo: valor". */
+.acessos-celula {
+  min-width: 0;
+}
+
 .acessos-divisao,
 .acessos-nota-linha {
   display: block;
   font-weight: var(--peso-normal);
 }
 
+/* Na tabela (computador), o telefone não quebra no meio. */
+@media (min-width: 48rem) {
+  .acessos-telefone {
+    white-space: nowrap;
+  }
+}
+
+/* As ações dividem a largura: dois botões por linha quando cabem, um por linha no celular. */
 .acessos-acoes-linha {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--espaco-2);
+}
+
+.acessos-acoes-linha > * {
+  flex: 1 1 9rem;
 }
 
 /* Links gerados (no diálogo): um bloco por alvo, com os botões e a mensagem para conferir. */

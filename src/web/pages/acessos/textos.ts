@@ -9,7 +9,7 @@ import type {
 } from "../../../shared/contracts";
 import type { TomBadge } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
-import { formatarDataHora } from "../../lib/formatadores";
+import { formatarDataHora, formatarNumero } from "../../lib/formatadores";
 
 export function primeiroNome(nome: string): string {
   return nome.trim().split(/\s+/)[0] ?? nome;
@@ -161,6 +161,14 @@ export function textoDaSituacao(situacao: SituacaoAcesso): {
         detalhe: "Os links não abrem sessão: reative para gerar outro.",
       };
   }
+}
+
+/** As sessões abertas pelos links do alvo: "Nenhum aparelho conectado", "1 aparelho conectado"... */
+export function textoDosAparelhos(sessoes: number): string {
+  if (sessoes === 0) return "Nenhum aparelho conectado";
+  return sessoes === 1
+    ? "1 aparelho conectado"
+    : `${formatarNumero(sessoes)} aparelhos conectados`;
 }
 
 /**
