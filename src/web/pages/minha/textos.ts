@@ -140,12 +140,17 @@ export function textoDeHoje(
   hoje: MetaDoDiaIndividual,
   bilhetesHoje: number | null,
   unidade: UnidadeMeta,
+  /** O alvo não tem meta na campanha (ex.: sem células): não há o que "cobrir" hoje. */
+  semMeta = false,
 ): TextoDeHoje {
   const meta = emBilhetes(hoje.meta, unidade);
   const realizado = emBilhetes(hoje.realizado, unidade);
   const falta = emBilhetes(hoje.falta, unidade);
   const vendidosHoje =
     bilhetesHoje === null ? null : `Vendidos hoje: ${bilhetes(bilhetesHoje)}.`;
+  if (semMeta) {
+    return { destaque: "Sem meta hoje", detalhe: vendidosHoje, batida: false };
+  }
   const coberta =
     meta === 0 || (meta === null && hoje.percentual_meta_bp === null);
   if (coberta) {

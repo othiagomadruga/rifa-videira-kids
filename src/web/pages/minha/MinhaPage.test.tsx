@@ -456,6 +456,15 @@ describe("fases, primeira venda e alvo sem células", () => {
     );
   });
 
+  it("alvo sem meta (sem células), durante: o dia não aparece como coberto", async () => {
+    await abrirCenario({ papel: "discipulador", semCelulas: true });
+
+    const hoje = regiao("Hoje · 04/12", 3);
+    expect(hoje).toHaveTextContent("Sem meta hoje");
+    expect(hoje).toHaveTextContent("Vendidos hoje: 0 bilhetes.");
+    expect(hoje).not.toHaveTextContent(/coberta/);
+  });
+
   it("rede sem células: a explicação do ranking das redes", async () => {
     await abrirCenario({ papel: "rede", semCelulas: true });
 

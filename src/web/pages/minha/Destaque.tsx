@@ -107,6 +107,7 @@ export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
           hoje={hoje}
           bilhetesHoje={desempenho.bilhetes.hoje}
           unidade={unidade}
+          semMeta={campanha.situacao === "sem_meta"}
         />
       )}
     </section>
@@ -117,13 +118,15 @@ function Hoje({
   hoje,
   bilhetesHoje,
   unidade,
+  semMeta,
 }: {
   hoje: NonNullable<DesempenhoIndividual["hoje"]>;
   bilhetesHoje: number | null;
   unidade: UnidadeMeta;
+  semMeta: boolean;
 }) {
   const idHoje = useId();
-  const texto = textoDeHoje(hoje, bilhetesHoje, unidade);
+  const texto = textoDeHoje(hoje, bilhetesHoje, unidade, semMeta);
   return (
     <section
       className="minha-hoje"

@@ -148,6 +148,33 @@ describe("meta de hoje", () => {
     });
   });
 
+  it("alvo sem meta na campanha: 'Sem meta hoje' e os bilhetes vendidos, nunca 'coberta' (nos dois casos)", () => {
+    const semMetaNoDia = {
+      meta: 0,
+      realizado: 0,
+      falta: 0,
+      batida: true,
+      percentual_meta_bp: null,
+    };
+    expect(textoDeHoje(hoje(semMetaNoDia), 2, "bilhetes", true)).toEqual({
+      destaque: "Sem meta hoje",
+      detalhe: "Vendidos hoje: 2 bilhetes.",
+      batida: false,
+    });
+    expect(
+      textoDeHoje(
+        hoje({ ...semMetaNoDia, meta: null, realizado: null, falta: null }),
+        1,
+        "centavos",
+        true,
+      ),
+    ).toEqual({
+      destaque: "Sem meta hoje",
+      detalhe: "Vendidos hoje: 1 bilhete.",
+      batida: false,
+    });
+  });
+
   it("meta de hoje zero (o que sobrou até ontem cobre o dia): coberta, nos dois casos", () => {
     const coberta = {
       destaque: "Meta de hoje já coberta",
