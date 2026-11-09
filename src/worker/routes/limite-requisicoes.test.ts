@@ -34,6 +34,10 @@ async function esperarJanelaInteira(
     await new Promise((resolve) => setTimeout(resolve, resta + 50));
 }
 
+// A espera pela janela (até a folga: 20 s no CA9) soma-se ao tempo de cada teste e, conforme o segundo do minuto em
+// que ele começa, passaria do prazo padrão do Vitest (5 s): o arquivo inteiro tem prazo maior.
+vi.setConfig({ testTimeout: 60_000 });
+
 function entrar(ip: string | null, corpo = '{"token":"link-que-nao-existe"}') {
   const headers = new Headers({
     "Content-Type": "application/json",

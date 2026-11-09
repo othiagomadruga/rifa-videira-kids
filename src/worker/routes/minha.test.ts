@@ -640,3 +640,36 @@ describe("campanha, cache e alvo novo", () => {
     expect(corpo.ranking.geral?.participantes).toBe(6);
   });
 });
+
+describe("o schema estrito antes de sair (D12)", () => {
+  it("a rota devolve o que o schema estrito devolve; se ele recusa a visão, 500 erro_interno sem nenhum dado", async () => {
+    await semear({ unidade: "bilhetes", valor: 10 }, "percentual_meta");
+    const lider = await entrarComo("lider", 2);
+    const parse = vi.spyOn(respostaVisaoIndividualSchema, "parse");
+
+    const res = await requisitar("GET", "/api/minha/visao", lider);
+    expect(res.status).toBe(200);
+    // A rota passou a visão pelo schema estrito, uma vez, e respondeu com o resultado dele.
+    expect(parse).toHaveBeenCalledTimes(1);
+    expect(await res.json()).toEqual(parse.mock.results[0].value);
+
+    // Uma visão que o schema recusa (um campo a mais, uma regra cruzada quebrada) não sai: 500, só o erro.
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    parse.mockImplementationOnce(() => {
+      throw new Error("visão fora do schema");
+    });
+    const recusada = await requisitar("GET", "/api/minha/visao", lider);
+    const texto = await recusada.text();
+    expect({
+      status: recusada.status,
+      cache: recusada.headers.get("Cache-Control"),
+      corpo: JSON.parse(texto) as unknown,
+    }).toEqual({
+      status: 500,
+      cache: "no-store",
+      corpo: { erro: { codigo: "erro_interno", mensagem: "Erro interno" } },
+    });
+    expect(texto).not.toContain("Célula Betel");
+    expect(log).toHaveBeenCalled();
+  });
+});
