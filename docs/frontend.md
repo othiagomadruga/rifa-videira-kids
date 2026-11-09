@@ -11,13 +11,16 @@ src/web/
   main.tsx              entrada: createBrowserRouter(rotas) + <App>
   App.tsx               <RouterProvider>; o roteador vem de fora (navegador ou memória nos testes)
   rotas.tsx             tabela de rotas do site
-  styles.css            CSS global: importa tema/tokens.css e tema/base.css
-  tema/                 tokens.css (variáveis), base.css (reset, foco, utilitários), marca.ts (nomes)
-  lib/                  api.ts (cliente da API), sessao.tsx (sessão da coordenação) e formatadores.ts (pt-BR)
+  styles.css            CSS global: importa tema/tokens.css, tema/base.css e tema/movimento.css
+  tema/                 tokens.css (variáveis), base.css (reset, foco, utilitários), movimento.css (keyframes e
+                        esqueleto), marca.ts (nomes e arquivos da marca) e marca/ (logo da Videira e selo do Kids)
+  lib/                  api.ts (cliente da API), sessao.tsx (sessão da coordenação), formatadores.ts (pt-BR) e o
+                        movimento: movimento.ts, contagem.ts (count-up) e useListaAnimada.ts (stagger e FLIP)
   components/ui/        componentes base; importe de "components/ui" (index.ts)
+  components/movimento/ TextoContado (número que conta até o valor); importe de "components/movimento"
   components/EmConstrucao.tsx   aviso das telas que ainda são só a casca
   pages/<tela>/         uma pasta por tela: componente, CSS, chamadas à API e testes da tela
-  test/                 setup.ts e renderizar.tsx (ajudantes de teste)
+  test/                 setup.ts, renderizar.tsx e movimento.ts (ajudantes de teste)
 ```
 
 ## Rotas
@@ -98,16 +101,16 @@ A API está em `docs/acesso.md`. No site:
 | `DataTable` | Tabela no computador (a partir de 48rem) e cartões empilhados no celular, com o mesmo HTML | `colunas` (`{ chave, titulo, celula, alinhamento?: "fim", principal? }`), `linhas`, `chaveDaLinha`, `legenda`, `mostrarLegenda?`, `vazio?` |
 | `Dialogo` | Diálogo modal acessível, num portal no `<body>`: `aria-modal`, nome (título `<h2>`) e descrição; o foco entra ao abrir, fica preso (Tab e Shift+Tab dão a volta), Esc e o × pedem para fechar e o foco volta para quem abriu; o resto da página fica `inert` e sem rolagem. Clicar fora não fecha | `aberto`, `titulo`, `descricao?`, `aoFechar`, `children`, `rodape?`, `aoEnviar?` (corpo e rodapé num `<form noValidate>`), `papel?: "dialog" \| "alertdialog"`, `focoInicial?`, `focoAoFechar?` (refs) |
 | `Abas` | Abas no padrão WAI-ARIA (tablist/tab/tabpanel): só a aba atual entra no Tab, setas (dão a volta), Home e End trocam e levam o foco; os painéis ficam montados (`hidden`), então nada se perde ao trocar | `rotulo` (nome da lista), `abas` (`{ id, rotulo, conteudo }`), `abaAtiva`, `aoMudar(id)` (controlada), `id?`; `idDaAba(id, aba)` dá o id do botão de uma aba |
-| `Stat` | Indicador: rótulo, valor e variação | `rotulo`, `valor` (já formatado), `variacao?` (`{ texto, sentido: "subiu" \| "caiu" \| "estavel", tom? }`) |
+| `Stat` | Indicador: rótulo, valor e variação. Um `valor` que é só um número formatado ("1.234", "35%") conta até o valor ao aparecer e ao mudar (veja "Movimento") | `rotulo`, `valor` (já formatado), `variacao?` (`{ texto, sentido: "subiu" \| "caiu" \| "estavel", tom? }`) |
 | `IndicadorSituacao` | Situação de um indicador (em dia, abaixo, sem meta...): ícone, título e detalhe; o texto faz sentido sem a cor. Não é região viva (numa tela que se atualiza sozinha, seria ruído) | `tom`: `sucesso` \| `alerta` \| `perigo` \| `neutro`; `titulo`, `children?` (o detalhe, ex.: "6 bilhetes acima do esperado"), `icone?` (padrão ✓, !, ! e –) |
 | `GraficoLinhas` | Gráfico de linhas acessível (SVG): título e descrição no SVG, legenda sempre visível, rótulo direto só no fim das linhas, mira com dica no ponteiro, no toque e no teclado (o SVG recebe foco; setas, Home e End percorrem os pontos e o leitor de tela ouve os valores; Esc fecha) e "Ver os dados em tabela" com todos os valores. Desenha na largura real do espaço (o texto não encolhe no celular) | `titulo`, `descricao` (a conclusão, não a lista de valores), `rotulosX` (curtos, no eixo), `rotulosPonto?` (dica e tabela), `tituloColunaX`, `series` (`{ rotulo, valores: (number \| null)[], estilo: "destaque" \| "referencia", rotuloFinal? }`), `extras?` (colunas só da dica e da tabela), `formatarValor`, `formatarEixo?`, `indiceAtual?` e `rotuloAtual?` (ex.: hoje) |
 | `ProgressBar` | Percentual da meta, acessível (`role="progressbar"`, `aria-valuenow` de 0 a 100) | `rotulo`, `valor`, `meta` (mesma unidade), `textoValor?` |
-| `Badge` | Status | `tom`: `neutro` \| `info` \| `sucesso` \| `alerta` \| `perigo`; o texto precisa fazer sentido sem a cor |
+| `Badge` | Status curto (não quebra linha: nome de célula ou de pessoa vai fora dele) | `tom`: `neutro` \| `info` \| `sucesso` \| `alerta` \| `perigo`; o texto precisa fazer sentido sem a cor |
 | `Aviso` | Mensagem na própria tela (não flutua nem some sozinha): resultado de uma ação, aviso ou erro | `tom`: `info` \| `sucesso` \| `alerta` \| `perigo`; `titulo?`, `children?`, `acao?`, `aoFechar?` (botão "Fechar aviso"), `anuncio?`: `alerta` (role="alert"; padrão em alerta e perigo) \| `status` (padrão em info e sucesso) \| `nenhum` |
 | `EmptyState` | Nada para mostrar | `titulo`, `descricao?`, `acao?` |
 | `ErrorState` | Falha (`role="alert"`) | `titulo?`, `mensagem?`, `aoTentarDeNovo?` (mostra "Tentar de novo") |
 | `Loading` | Carregando (`role="status"`) | `texto?` |
-| `Marca` | Símbolo e nome (provisórios) | `complemento?` |
+| `Marca` | Logo da Videira (WebP, com PNG de reserva) e o nome do produto em texto; em fundo escuro, o logo vai num selo claro. A altura do logo vem de `--marca-altura` | `complemento?` |
 
 Notas:
 
@@ -117,6 +120,7 @@ Notas:
 - `GraficoLinhas`: até 4 séries, com valores inteiros (as marcas do eixo Y vão de 0 a um valor redondo, com passo 1, 2 ou 5 × 10ⁿ). `destaque` é a série principal (linha cheia, área suave e marcador no último ponto, desenhada por cima); `referencia` é a base de comparação (tracejada e cinza: a diferença não depende só da cor). `null` interrompe a linha (ex.: os dias que ainda não chegaram) e vira "sem dado" na tabela. Um rótulo direto que encostaria noutro sai (fica o do destaque; o valor segue na dica e na tabela). A dica fica ao lado da mira, sem cobri-la (mais estreita no celular); no toque, fica até o próximo toque ou até o foco sair. Cores: papéis em `GraficoLinhas.css` ligados aos tokens (`--grafico-destaque` = `--cor-info`, `--grafico-referencia` = `--cor-borda-forte`, grade `--cor-borda`, textos `--cor-texto-suave` e `--cor-texto`), e o `GraficoLinhas.test.tsx` confere o contraste nos temas claro e telão lendo o `tokens.css` (marcas 3:1, textos 4,5:1): mudou uma cor do tema, o teste diz se o gráfico continua legível.
 - `Dialogo`: renderize o formulário só quando abrir (`{editando && <MeuDialogo />}`, com `aberto` fixo) para o estado começar do zero a cada abertura. `aoFechar` é um pedido: quem usa pode ignorar (ex.: enquanto salva). Numa confirmação destrutiva use `papel="alertdialog"` e ponha "Cancelar" antes do botão de perigo: sem nada focável no corpo, o foco inicial vai para o primeiro botão do rodapé. Se o botão que abriu vai sumir (ex.: excluiu a linha), aponte `focoAoFechar` para outro elemento antes de fechar. No teste, foque o botão antes do `fireEvent.click` (o jsdom não foca no clique) para conferir a volta do foco.
 - `Aviso`: um `role="status"` que já entra na tela com o texto pode não ser lido. Para anunciar com certeza o resultado de uma ação, deixe uma região viva fixa na tela (ex.: `<p className="visualmente-oculto" role="status">{mensagem}</p>`) e use `anuncio="nenhum"` no `Aviso` visível.
+- Nomes longos (célula, discipulador, rede, pessoa): os componentes que mostram nomes (`Aviso`, `Card`, os estados, `Stat`, `IndicadorSituacao`, `ProgressBar`, `Dialogo`, `PageHeader`, campos, legendas da `DataTable` e do gráfico) usam `overflow-wrap: anywhere`, que quebra a palavra e também deixa o bloco encolher (o `break-word` do `body` não basta dentro de grade e flex). No CSS de tela, faça o mesmo onde entra um nome (`components/ui/quebra-de-nomes.test.ts` confere os componentes).
 - Botão com o nome do item só para leitor de tela: `Editar <span className="visualmente-oculto">{nome}</span>`, com o espaço **fora** do `<span>` (dentro dele, o espaço some no cálculo do nome acessível, ao menos no Testing Library, e o nome vira "EditarCélula").
 
 ## Cliente da API (`lib/api.ts`)
@@ -150,12 +154,38 @@ Notas:
 
 ## Tema e marca (`tema/`)
 
-- `tokens.css` define as variáveis: cores (`--cor-fundo`, `--cor-superficie`, `--cor-texto`, `--cor-texto-suave`, `--cor-primaria`, `--cor-foco`, estados `--cor-sucesso`/`-suave` etc.), espaçamento (`--espaco-1` a `--espaco-8`, escala de 4 px), raios (`--raio-1` a `--raio-3`, `--raio-pilula`), tipografia (`--fonte-base`, `--texto-xs` a `--texto-4xl`, `--peso-*`), sombras (`--sombra-1` a `--sombra-3`), foco (`--foco-anel`) e medidas (`--largura-conteudo`, `--margem-pagina`, `--alvo-toque`). CSS de tela não usa cor nem tamanho fora delas.
-- Fonte do sistema (`system-ui` e equivalentes). Foco visível em tudo (`:focus-visible`). Com `prefers-reduced-motion`, animações e transições param.
-- Contraste conferido: texto com pelo menos 4,5:1 e bordas e foco com 3:1 no tema claro (AA); texto com 7:1 ou mais no telão (AAA). Ao mudar uma cor, confira de novo.
+- `tokens.css` define as variáveis: cores (`--cor-fundo`, `--cor-superficie`, `--cor-texto`, `--cor-texto-suave`, `--cor-primaria`, `--cor-foco`, estados `--cor-sucesso`/`-suave` etc.), espaçamento (`--espaco-1` a `--espaco-8`, escala de 4 px), raios (`--raio-1` a `--raio-4`, `--raio-pilula`), tipografia (`--fonte-base`, `--texto-xs` a `--texto-4xl`, `--peso-*`), sombras (`--sombra-1` a `--sombra-3` e `--sombra-marca`), foco (`--foco-anel`), marca (`--marca-*`, `--gradiente-marca`, `--gradiente-marca-forte`, `--cor-comemoracao`), fundo ambiente (`--cor-ambiente-1` a `-3`), movimento (`--duracao-*`, `--curva-*`, `--deslize-entrada`) e medidas (`--largura-conteudo`, `--margem-pagina`, `--alvo-toque`). CSS de tela não usa cor nem tamanho fora delas.
+- Fonte do sistema (`system-ui` e equivalentes). Foco visível em tudo (`:focus-visible`). Com `prefers-reduced-motion`, nada se mexe (veja "Movimento").
+- Contraste conferido: texto com pelo menos 4,5:1 e bordas e foco com 3:1 no tema claro (AA); texto com 7:1 ou mais no telão (AAA). `tema/tokens.test.ts` lê o `tokens.css` e confere cada par (e o degradê forte, ponto a ponto, e os brilhos do fundo ambiente): mudou uma cor, rode o teste.
 - Pontos de quebra (media queries não aceitam variáveis): `48rem` (tabela em vez de cartões) e `64rem` (menu lateral).
-- Telão: `data-tema="telao"` no elemento raiz redefine as variáveis (fundo escuro, alto contraste, sem sombras) e cria `--telao-texto-base` (cerca de 46 px em 1920×1080, acompanha largura e altura). Tamanhos do telão em `em` a partir dele, para caber sem rolagem.
-- Marca provisória: até chegarem os arquivos oficiais, a marca é neutra. Para trocá-la: cores em `tokens.css` (`--cor-primaria` e família), símbolo em `components/ui/Marca.tsx` (vira a imagem do logotipo), nomes em `tema/marca.ts` e `theme-color` no `index.html`.
+- Telão: `data-tema="telao"` no elemento raiz redefine as variáveis (fundo marinho da Videira, alto contraste, sem sombras) e cria `--telao-texto-base` (cerca de 46 px em 1920×1080, acompanha largura e altura). Tamanhos do telão em `em` a partir dele, para caber sem rolagem.
+
+### Marca da Videira (RIFA-020)
+
+- **Cores do logo** (amostradas do PNG do PO): marinho `#1b203c` (o nome "Videira": é o `--cor-texto`), verde-água `#43bab8`, azul `#5983ba` e roxo `#5e297c` (o degradê do símbolo; o roxo é o `--cor-primaria`: botões, links, item atual do menu). No telão, o fundo é marinho e a cor de destaque é um verde-água claro (títulos, pódio).
+- **Degradê da marca** (verde-água → azul → roxo): `--gradiente-marca` é decorativo (faixas de 4 px no topo, traço dos títulos, linhas), sem texto em cima; para texto branco em cima (a faixa da fase no ranking público, a barra de progresso), use `--gradiente-marca-forte` (5:1 ou mais em todos os pontos).
+- **Amarelo do Kids** (`--cor-comemoracao`, `#fcd44d`): só na comemoração, sempre com texto marinho em cima (11:1): o 1º lugar e a meta batida (100% ou mais). Não vira cor de ação nem de estado.
+- **Logo da Videira** (`components/ui/Marca.tsx`): no cabeçalho de todas as telas (telas abertas, coordenação, telão), com o nome "Rifa Videira Kids" em texto ao lado. Alt: "Videira Igreja em Células". Não se redesenha nem se recolore: em fundo escuro, o logo vai num selo claro (`--cor-selo-marca`). Favicon (`public/favicon.ico`, 16 a 64 px) e `public/apple-touch-icon.png` (180 px, fundo branco) só com o símbolo.
+- **Logo do Kids**, discreto: um selo de 40 px no rodapé das telas abertas (`PublicShell`), com a frase "Campanha em prol do espaço Videira Kids" (a imagem é decorativa, `alt=""`, porque a frase já diz o nome), e um selo só no telão, ao lado do relógio (`alt="Videira Kids"`). Nunca no cabeçalho nem do tamanho do logo da Videira.
+- **Arquivos** (`tema/marca/`, importados por `tema/marca.ts`, o Vite põe hash no nome): `videira-logo.webp` (6 KB, a que o navegador usa) e `videira-logo.png` (reserva para navegador sem WebP), 272×105, sem o fundo branco do original (o branco saiu pixel a pixel, com o alfa da borda calculado pela cor cheia vizinha, para não ficar halo); `kids-selo.png` (128×128, 256 cores). Os PNG do PO são pequenos (o da Videira tem 308×120): para o telão em 4K e para impressão, peça ao PO o SVG oficial, a versão negativa (para fundo escuro, sem o selo) e uma resolução maior.
+- Para trocar a marca: cores em `tokens.css` (as `--marca-*` e os papéis), arquivos em `tema/marca/` e nomes em `tema/marca.ts`; `theme-color` e ícones no `index.html`.
+
+## Movimento (RIFA-020)
+
+O movimento é de produto, não enfeite: mostra o que chegou e o que mudou, curto e sem atrasar a leitura.
+
+- **O que se mexe**: a entrada das telas (fade e deslize curto; cada bloco que chega depois de carregar também); os itens de lista e ranking entrando em sequência (stagger); o ranking reordenando quando os dados atualizam (FLIP, no público e no telão); os números contando até o valor (count-up, no `Stat` e no % dos rankings); a barra de progresso enchendo; o menu do celular abrindo; o diálogo e o aviso chegando; microinterações de botão (no mouse, sobe 1 px; ao pressionar, afunda); o esqueleto com brilho no carregando (ranking público); o fundo ambiente das telas abertas e do telão (brilhos da marca derivando devagar); um pulso discreto (2 vezes) quando a meta é batida.
+- **`prefers-reduced-motion: reduce` desliga tudo.** No CSS, toda `animation` e toda transição de movimento ficam dentro de `@media (prefers-reduced-motion: no-preference)` (fora dele, transição só de cor e sombra); o `base.css` ainda zera as durações com `reduce`, como rede de segurança. No JS, nada chama `element.animate` direto: tudo passa por `animar()` de `lib/movimento.ts`, que não anima com `reduce` nem sem `matchMedia` (por isso, no jsdom dos testes, nada anima e tudo aparece pronto). `usePrefereMenosMovimento()` acompanha a troca da preferência com a página aberta.
+- **Só `transform` e `opacity`** (nada de layout shift; o FLIP mede `offsetTop`/`offsetLeft`, que ignoram o transform). O count-up não muda o tamanho de nada: o texto final fica no lugar, transparente, e o número que conta passa por cima.
+- **Curto**: de 150 a 450 ms (`--duracao-rapida`, `--duracao-media`, `--duracao-lenta`, `--curva-saida`); só o fundo ambiente (32 a 75 s), o brilho do esqueleto (1,6 s) e o girar do carregando são contínuos. **Nada pisca** mais de 3 vezes por segundo (WCAG 2.3.1).
+- **Telão**: o movimento só acontece quando os dados mudam (os itens entram quando o ranking chega; uma atualização igual não mexe em nada; quem troca de posição desliza); a única coisa contínua é o fundo ambiente, muito lento. O topo reserva o lugar da fase e da linha "Atualizado às" desde o carregando, para nada ser empurrado quando os dados chegam.
+- **CSP**: nada de `<style>` nem de `style="..."` em HTML; a Web Animations API e o `style` do React (CSSOM) podem. View Transitions ficaram de fora: o `viewTransition` do React Router 8.5 está marcado como obsoleto (deprecated) em favor do `<ViewTransition>` do React 19.3, que mudaria o comportamento de toda atualização em `startTransition`; a entrada das telas por CSS dá a transição entre rotas sem esse risco.
+- **Como usar nas telas**:
+  - número que conta: `<TextoContado texto={formatarPercentual(bp)} />` (de `components/movimento`); o texto já formatado, com um número só ("12 de 24", hora e data ficam parados). Para o valor puro, `useContagem(alvo)` (de `lib/contagem.ts`) devolve `{ valor, animando }`;
+  - lista que se mexe com os dados: `const ref = useListaAnimada<HTMLOListElement>(chaves.join("|"))` na `<ol ref={ref}>`, e em cada item `key={chave}` e `data-chave-animada={chave}`; as chaves vêm de `chavesPorNome(itens)` (o nome; repetidos ganham "#2");
+  - entrada de um bloco: já vem pronta para os filhos diretos do conteúdo do `AppShell` e do `PublicShell` (uma seção que anima os próprios itens pode desligar a dela, como a disputa do ranking público);
+  - keyframes prontos em `tema/movimento.css` (`ui-entrar`, `ui-surgir`, `ui-encher`, `ui-pulsar`, `ui-brilho`, `ui-deriva-a`/`-b`) e o esqueleto `.mov-esqueleto` (dê a altura do conteúdo que vem).
+- **Testes**: `tema/movimento-css.test.ts` varre todo o CSS do site (gating, só `transform`/`opacity` nos keyframes, durações, nada piscando) e confere que só `lib/movimento.ts` chama `element.animate`; os ganchos têm testes com `reduce` e com movimento (`lib/*.test.ts*`), e as telas públicas também (`ranking-publico-movimento.test.tsx`, `telao-movimento.test.tsx`).
 
 ## Regras
 
@@ -164,6 +194,7 @@ Notas:
 3. Sem bibliotecas de UI ou de CSS, sem fonte externa, sem CDN.
 4. Acessibilidade: um `<h1>` por tela (o do `PageHeader`); campo sempre com rótulo; status nunca só pela cor; alvos de toque com 44 px ou mais (`--alvo-toque`); foco visível.
 5. Sem rolagem horizontal em 390 px. O telão não rola em 1920×1080.
+6. Movimento só com `prefers-reduced-motion: no-preference`, só `transform` e `opacity`, curto (até 450 ms) e sem piscar; no telão, só quando os dados mudam (veja "Movimento").
 
 ## Testes
 
@@ -172,4 +203,5 @@ Notas:
 - A sessão já vem conhecida nos testes, sem `GET /api/sessao`: `USUARIO_DE_TESTE` (papel coordenacao). `renderizarRota(caminho, { usuario: ADMIN_DE_TESTE })` entra como admin; `{ usuario: null }` faz o site perguntar à API, como no navegador (o `fetch` simulado responde `GET /api/sessao`).
 - Para a API, troque o `fetch`: `vi.stubGlobal("fetch", vi.fn(async () => respostaJson({ ... }, 200)))` e, no `afterEach`, `vi.unstubAllGlobals()`.
 - O `@testing-library/user-event` não está instalado: use `fireEvent`.
+- Movimento (`test/movimento.ts`): o jsdom não tem `matchMedia`, então nada anima nos testes. Para testar o movimento, `simularPreferencia(false)` (ou `true` para `reduce`; `mudar()` troca com a página aberta), `espiarAnimate()` (o `element.animate` vira um espião) e `controlarQuadros()` (`requestAnimationFrame` que só anda com `quadro(ms)`); no `afterEach`, `desfazerMovimento()`. O jsdom não faz layout: para o FLIP, simule `offsetTop` e `offsetParent` (veja `lib/useListaAnimada.test.tsx`).
 - Nada de `.only` nem `.skip` no que vai para a `main`.
