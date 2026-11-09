@@ -1,0 +1,100 @@
+/*
+ * Movimento compartilhado (RIFA-020): os keyframes do site e o esqueleto do carregando. Regras em
+ * docs/frontend.md:
+ * - só transform e opacity (nada de layout shift); durações de 150 a 450 ms, menos o fundo ambiente e o
+ *   brilho do esqueleto, que são lentos e contínuos;
+ * - toda animação e toda transição de movimento ficam em @media (prefers-reduced-motion: no-preference):
+ *   com reduce, nada se mexe (tema/movimento-css.test.ts confere todos os CSS do site);
+ * - nada pisca: nenhuma animação repete mais de 3 vezes por segundo (WCAG 2.3.1).
+ * Os keyframes podem ficar fora do @media: sem a regra que os usa, não rodam.
+ */
+
+/* Entrada: fade e deslize curto para cima (telas, blocos que chegam, avisos). */
+@keyframes ui-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(var(--deslize-entrada));
+  }
+}
+
+/* Entrada só com fade (o que não pode se deslocar, como o topo do telão). */
+@keyframes ui-surgir {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Barra de progresso enchendo da esquerda para a direita. */
+@keyframes ui-encher {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Pulso discreto da meta batida: o número cresce um pouco e volta (2 vezes, ~2 por segundo). */
+@keyframes ui-pulsar {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.12);
+  }
+}
+
+/* Brilho que atravessa o esqueleto do carregando. */
+@keyframes ui-brilho {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Fundo ambiente: dois brilhos que derivam devagar, em sentidos opostos. */
+@keyframes ui-deriva-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(14vmax, 10vmax, 0) scale(1.12);
+  }
+}
+
+@keyframes ui-deriva-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+
+  to {
+    transform: translate3d(-12vmax, -9vmax, 0) scale(0.96);
+  }
+}
+
+/* Esqueleto do carregando: o bloco tem o tamanho do conteúdo que vem; o brilho só passa por cima. */
+.mov-esqueleto {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mov-esqueleto::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--cor-brilho-esqueleto),
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: ui-brilho 1.6s var(--curva-suave) infinite;
+  }
+}
