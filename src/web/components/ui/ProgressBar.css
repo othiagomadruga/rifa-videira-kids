@@ -1,3 +1,8 @@
+/*
+ * Barra de progresso: o degradê forte da marca (>= 3:1 sobre o trilho em todos os pontos) que enche da
+ * esquerda ao aparecer. Meta batida: a barra fica verde (sucesso) e o percentual vira a pílula amarela do
+ * Kids, com um pulso discreto (2 vezes). O espaço da pílula é reservado sempre: nada muda de tamanho.
+ */
 .ui-progress {
   display: grid;
   gap: var(--espaco-2);
@@ -18,8 +23,15 @@
 
 .ui-progress__valor {
   flex: none;
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
   font-weight: var(--peso-negrito);
   font-variant-numeric: tabular-nums;
+}
+
+.ui-progress[data-completa] .ui-progress__valor {
+  background: var(--cor-comemoracao);
+  color: var(--cor-sobre-comemoracao);
 }
 
 .ui-progress__trilho {
@@ -33,9 +45,21 @@
   height: 100%;
   border-radius: inherit;
   background: var(--cor-progresso);
-  transition: width 400ms ease-out;
+  background-image: var(--gradiente-progresso);
+  transform-origin: left center;
 }
 
 .ui-progress[data-completa] .ui-progress__barra {
   background: var(--cor-progresso-completo);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ui-progress__barra {
+    transition: width var(--duracao-lenta) var(--curva-saida);
+    animation: ui-encher 450ms var(--curva-saida) backwards;
+  }
+
+  .ui-progress[data-completa] .ui-progress__valor {
+    animation: ui-pulsar 450ms var(--curva-suave) 450ms 2;
+  }
 }

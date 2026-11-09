@@ -51,8 +51,15 @@
   height: 1.25rem;
   border: 3px solid var(--cor-trilho);
   border-top-color: var(--cor-primaria);
+  border-right-color: var(--marca-verde-agua);
   border-radius: 50%;
-  animation: ui-girar 0.8s linear infinite;
+}
+
+/* Gira só sem prefers-reduced-motion (com reduce, fica o anel parado e o texto). */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-loading__indicador {
+    animation: ui-girar 0.8s linear infinite;
+  }
 }
 
 @keyframes ui-girar {

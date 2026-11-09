@@ -113,3 +113,14 @@
     flex: none;
   }
 }
+
+/* Abrir: o fundo escurece e o painel sobe um pouco (sem prefers-reduced-motion). */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-dialogo {
+    animation: ui-surgir var(--duracao-media) var(--curva-suave);
+  }
+
+  .ui-dialogo__painel {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida);
+  }
+}

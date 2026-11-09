@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TextoContado } from "../movimento";
 import "./Stat.css";
 
 export type SentidoVariacao = "subiu" | "caiu" | "estavel";
@@ -35,12 +36,15 @@ const TOM_PADRAO: Record<SentidoVariacao, TomVariacao> = {
   estavel: "neutro",
 };
 
-// Indicador: rótulo, valor em destaque e, opcionalmente, a variação.
+// Indicador: rótulo, valor em destaque e, opcionalmente, a variação. Um valor que é só um número formatado
+// ("1.234", "35%", "R$ 1.234,56") conta até o valor ao aparecer e ao mudar (sem prefers-reduced-motion).
 export function Stat({ rotulo, valor, variacao }: Props) {
   return (
     <div className="ui-stat">
       <p className="ui-stat__rotulo">{rotulo}</p>
-      <p className="ui-stat__valor">{valor}</p>
+      <p className="ui-stat__valor">
+        {typeof valor === "string" ? <TextoContado texto={valor} /> : valor}
+      </p>
       {variacao && (
         <p
           className={`ui-stat__variacao ui-stat__variacao--${

@@ -6,13 +6,25 @@ type Props = {
   complemento?: string;
 };
 
-// Marca provisória (símbolo em texto + nome). Quando chegarem os arquivos
-// oficiais, o símbolo vira a imagem do logotipo aqui mesmo.
+// Marca: o logo da Videira (WebP, com PNG de reserva para navegador antigo) e o nome do produto em texto.
+// width e height reservam o lugar do logo antes de ele carregar (nada pula). Em fundo escuro (telão), o
+// logo fica num selo claro, porque o nome "Videira" do logo é marinho (Marca.css).
 export function Marca({ complemento }: Props) {
+  const { logo } = MARCA;
   return (
     <span className="ui-marca">
-      <span className="ui-marca__simbolo" aria-hidden="true">
-        {MARCA.simbolo}
+      <span className="ui-marca__selo">
+        <picture className="ui-marca__imagem">
+          <source srcSet={logo.webp} type="image/webp" />
+          <img
+            className="ui-marca__logo"
+            src={logo.png}
+            alt={logo.alt}
+            width={logo.largura}
+            height={logo.altura}
+            decoding="async"
+          />
+        </picture>
       </span>
       <span className="ui-marca__textos">
         <span className="ui-marca__nome">{MARCA.produto}</span>
