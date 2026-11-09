@@ -184,10 +184,13 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
   (`vezes`): o corpo compacto de `src/shared/contracts/conferencia.ts`, conferido por um validador leve (laços
   simples, sem zod item a item). Ganho extra: nome, e-mail e telefone nem saem do navegador.
 - O Worker não usa o Intl por linha; o banco devolve só os pedidos com os códigos do arquivo (um texto JSON por
-  lote, tuplas curtas) e os ausentes e totais já somados. Medido no workerd com 7 mil pedidos: ~7–8 ms em
-  `/analisar` e ~6–8 ms em `/recuperar` (`src/worker/routes/reconciliacao-desempenho.test.ts`).
+  lote, tuplas curtas) e os ausentes e totais já somados. CPU medida na revisão no workerd, com o app completo e
+  o login, com 7 mil pedidos: 18 a 22 ms na 1ª requisição do isolate e 9 a 10 ms nas seguintes; no teto aceito
+  (1 MiB), de 15 a 75 ms. Ainda passa dos 10 ms do plano Free: o caminho (plano pago da Cloudflare ou a análise
+  também no navegador) é decisão do PO, pendente. O teste de desempenho
+  (`src/worker/routes/reconciliacao-desempenho.test.ts`) mede só as rotas, sem o login, e aceita até 30 ms.
 - O corpo vai até 1 MiB (`LIMITE_CORPO_CONFERENCIA_BYTES`, ~15 mil pedidos); a rota lê o corpo uma vez só, de
-  uma vez quando há `Content-Length` (o teto geral leria em pedaços de 4 KB: ~2,5 ms a mais para 420 KB), por
+  uma vez quando há `Content-Length` (o teto geral leria em pedaços de 4 KB: ~2,5 ms a mais para ~430 KB), por
   isso continua fora do teto geral, com o mesmo número.
 - Regra do valor de um pedido em várias linhas e trava do código que não bate: integracao-rifei.md, seção 10.
 - O "Recuperar" muda os números da campanha, então entra na trilha de auditoria da D11 (decisão do SM): ação

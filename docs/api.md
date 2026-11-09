@@ -805,7 +805,7 @@ Auditoria das recuperações da **campanha ativa** (sem campanha ativa, a lista 
 
 Só existe linha quando a recuperação gravou algo. Dados: tabela `recuperacoes` e as colunas `pedidos.origem` e `pedidos.recuperacao_id` (migração `0004_conferencia.sql`, aditiva).
 
-**CPU no Worker** (medido no workerd, `src/worker/routes/reconciliacao-desempenho.test.ts`: tempo da requisição menos o tempo esperando o D1): com 7 mil pedidos, ~7–8 ms em `/analisar` e ~6–8 ms em `/recuperar` (eram 295–375 ms com o CSV lido no Worker). O banco devolve os pedidos com os códigos do arquivo num texto JSON único por lote (tuplas curtas) e os ausentes e totais já somados.
+**CPU no Worker** (medida na revisão no workerd, com o app completo e o login): com 7 mil pedidos, 18 a 22 ms na 1ª requisição do isolate e 9 a 10 ms nas seguintes; no teto aceito (1 MiB), de 15 a 75 ms (eram 295–375 ms com o CSV lido no Worker). Ainda passa dos 10 ms do plano Free: o caminho (plano pago da Cloudflare ou a análise também no navegador) depende do PO (D13). O banco devolve os pedidos com os códigos do arquivo num texto JSON único por lote (tuplas curtas) e os ausentes e totais já somados. `src/worker/routes/reconciliacao-desempenho.test.ts` mede só as rotas (sem o login; tempo da requisição menos a espera do D1) e aceita até 30 ms.
 
 ---
 

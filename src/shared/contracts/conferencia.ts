@@ -8,8 +8,8 @@
  * linhas iguais do arquivo (`vezes` diz quantas). Nome, e-mail, telefone e as demais colunas pessoais
  * nunca saem do navegador (D1), nem os números dos bilhetes (só a contagem deles).
  *
- * O validador é leve de propósito (laços simples, sem zod item a item): um arquivo de 7 mil pedidos tem
- * de ser conferido em poucos milissegundos de CPU do Worker (o plano Free permite 10 ms por requisição).
+ * O validador é leve de propósito (laços simples, sem zod item a item): a CPU do Worker é curta (o plano
+ * Free dá 10 ms por requisição; os números medidos e o que falta decidir estão na D13, docs/decisions.md).
  */
 import { diaDoCalendario } from "./calendario";
 
@@ -27,10 +27,12 @@ export const LIMITE_LINHAS_CSV_RECONCILIACAO = 50_000;
 /** Colunas lidas do cabeçalho; as que passarem disso são ignoradas (aviso `colunas_demais`). */
 export const LIMITE_COLUNAS_CSV_RECONCILIACAO = 200;
 /**
- * Teto do corpo das duas rotas: o MESMO teto geral das escritas da coordenação
- * (LIMITE_CORPO_COORDENACAO_BYTES, src/worker/middleware/limite-corpo.ts), que responde 413 acima dele
- * sem ler o resto. O corpo compacto tem uns 60 bytes por pedido: 7 mil pedidos dão uns 420 KB. O
- * navegador confere o tamanho antes de enviar e explica o que fazer (exportar um período menor).
+ * Teto do corpo das duas rotas, conferido pela própria rota (src/worker/routes/reconciliacao.ts), que lê o
+ * corpo uma vez só: estas rotas ficam FORA do teto geral das escritas da coordenação
+ * (src/worker/middleware/limite-corpo.ts), com o mesmo número (1 MiB). Acima dele, 413
+ * `corpo_muito_grande` sem ler o resto. O corpo compacto tem uns 60 bytes por pedido: 7 mil pedidos dão
+ * uns 430 KB. O navegador confere o tamanho antes de enviar e explica o que fazer (exportar um período
+ * menor).
  */
 export const LIMITE_CORPO_CONFERENCIA_BYTES = 1024 * 1024;
 /** Pedidos por chamada de "Recuperar". */
