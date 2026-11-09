@@ -111,6 +111,11 @@ export function DialogoTrocarAcesso({
 
 type Copia = "nada" | "copiada" | "falhou";
 
+/**
+ * Os links gerados (no lote, num "Novo link" ou num "Trocar acesso"). Fechar (Esc, × ou "Pronto") com algum
+ * link que ainda não foi copiado nem aberto no WhatsApp pede confirmação: depois de fechar, ele não aparece
+ * de novo.
+ */
 export function DialogoLinksGerados({
   itens,
   aoFechar,
@@ -119,20 +124,45 @@ export function DialogoLinksGerados({
   aoFechar: () => void;
 }) {
   const [anuncio, setAnuncio] = useState("");
+  /** Links já mandados: copiados com sucesso ou abertos no WhatsApp (pelo id do link). */
+  const [entregues, setEntregues] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
+  const [confirmando, setConfirmando] = useState(false);
+  const [fecharDepois, setFecharDepois] = useState(false);
   const [primeiro] = itens;
+  const pendentes = itens.filter((item) => !entregues.has(item.link.id));
   const titulo =
     itens.length === 1 && primeiro
       ? `Link de acesso: ${primeiro.alvo.nome}`
       : `${itens.length} links de acesso gerados`;
+
+  // "Fechar mesmo assim": a confirmação sai da tela primeiro e este diálogo fecha no quadro seguinte, para
+  // cada um desfazer o próprio isolamento na ordem certa (fechando os dois juntos, a página ficaria sem
+  // rolagem).
+  useEffect(() => {
+    if (fecharDepois && !confirmando) aoFechar();
+  }, [fecharDepois, confirmando, aoFechar]);
+
+  function pedirParaFechar() {
+    if (pendentes.length === 0) aoFechar();
+    else setConfirmando(true);
+  }
+
+  function marcarEntregue(linkId: number) {
+    setEntregues((atuais) =>
+      atuais.has(linkId) ? atuais : new Set(atuais).add(linkId),
+    );
+  }
 
   return (
     <Dialogo
       aberto
       titulo={titulo}
       descricao="Estes links só aparecem agora: mande cada um antes de fechar."
-      aoFechar={aoFechar}
+      aoFechar={pedirParaFechar}
       rodape={
-        <Button variante="secundario" onClick={aoFechar}>
+        <Button variante="secundario" onClick={pedirParaFechar}>
           Pronto
         </Button>
       }
@@ -159,13 +189,15 @@ export function DialogoLinksGerados({
             <LinkGerado
               key={item.link.id}
               item={item}
-              aoCopiar={(copia, destinatario) =>
+              aoCopiar={(copia, destinatario) => {
+                if (copia === "copiada") marcarEntregue(item.link.id);
                 setAnuncio(
                   copia === "copiada"
                     ? `Mensagem para ${destinatario} copiada.`
                     : `Não deu para copiar sozinho a mensagem para ${destinatario}: ela ficou selecionada no campo.`,
-                )
-              }
+                );
+              }}
+              aoAbrirWhatsApp={() => marcarEntregue(item.link.id)}
             />
           ))}
         </ul>
@@ -174,6 +206,56 @@ export function DialogoLinksGerados({
           {anuncio}
         </p>
       </div>
+      {confirmando && (
+        <Dialogo
+          aberto
+          papel="alertdialog"
+          titulo="Fechar sem mandar todos os links?"
+          descricao={
+            pendentes.length === 1
+              ? "1 link ainda não foi copiado nem aberto no WhatsApp."
+              : `${pendentes.length} links ainda não foram copiados nem abertos no WhatsApp.`
+          }
+          aoFechar={() => setConfirmando(false)}
+          rodape={
+            <>
+              <Button
+                variante="secundario"
+                onClick={() => setConfirmando(false)}
+              >
+                Voltar aos links
+              </Button>
+              <Button
+                variante="perigo"
+                onClick={() => {
+                  setFecharDepois(true);
+                  setConfirmando(false);
+                }}
+              >
+                Fechar mesmo assim
+              </Button>
+            </>
+          }
+        >
+          <div className="acessos-formulario">
+            <p>
+              Depois de fechar,{" "}
+              {pendentes.length === 1 ? "este link" : "estes links"} não{" "}
+              {pendentes.length === 1 ? "aparece" : "aparecem"} de novo. Para
+              mandar depois, só gerando outro, com &quot;Novo link&quot; na
+              linha de cada um:
+            </p>
+            <ul className="acessos-pendentes">
+              {pendentes.map((item) => (
+                <li key={item.link.id}>
+                  {item.alvo.nome}
+                  {item.pessoa_nome && ` (${item.pessoa_nome})`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Dialogo>
+      )}
     </Dialogo>
   );
 }
@@ -181,9 +263,12 @@ export function DialogoLinksGerados({
 function LinkGerado({
   item,
   aoCopiar,
+  aoAbrirWhatsApp,
 }: {
   item: LinkGeradoHierarquia;
   aoCopiar: (copia: Exclude<Copia, "nada">, destinatario: string) => void;
+  /** O admin abriu a conversa do WhatsApp com a mensagem pronta (conta como mandado). */
+  aoAbrirWhatsApp: () => void;
 }) {
   const [copia, setCopia] = useState<Copia>("nada");
   const refDetalhes = useRef<HTMLDetailsElement>(null);
@@ -242,6 +327,8 @@ function LinkGerado({
             href={linkWhatsAppDoNumero(numero, mensagem)}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={aoAbrirWhatsApp}
+            onAuxClick={aoAbrirWhatsApp}
           >
             Abrir no WhatsApp{" "}
             <span className="visualmente-oculto">de {destinatario}</span>

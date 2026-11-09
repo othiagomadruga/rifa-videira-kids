@@ -351,6 +351,84 @@ describe("CA4: gerar em lote, copiar e abrir o WhatsApp; o link aparece uma vez 
     );
   });
 
+  it("fechar com link ainda não mandado (Pronto, Esc ou ×) pede confirmação; voltar mantém os links; fechar mesmo assim os esquece", async () => {
+    const { api } = await abrirAba();
+    simularAreaDeTransferencia(async () => {});
+    const lote = screen.getByRole("button", {
+      name: "Gerar links para quem ainda não tem (2)",
+    });
+    acionar(lote);
+    const dialogo = await screen.findByRole("dialog", {
+      name: "2 links de acesso gerados",
+    });
+    // Só a mensagem da Ágape é copiada; a da Canaã fica para trás.
+    fireEvent.click(
+      within(dialogo).getByRole("button", {
+        name: "Copiar mensagem para Maria Fictícia",
+      }),
+    );
+    await within(dialogo).findByText("Mensagem copiada.", {
+      selector: ".acessos-copia",
+    });
+
+    const pronto = within(dialogo).getByRole("button", { name: "Pronto" });
+    acionar(pronto);
+    let confirmacao = screen.getByRole("alertdialog", {
+      name: "Fechar sem mandar todos os links?",
+    });
+    expect(confirmacao).toHaveAccessibleDescription(
+      "1 link ainda não foi copiado nem aberto no WhatsApp.",
+    );
+    expect(confirmacao).toHaveTextContent(
+      'Depois de fechar, este link não aparece de novo. Para mandar depois, só gerando outro, com "Novo link" na linha de cada um:',
+    );
+    expect(
+      within(confirmacao)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Célula Canaã (Ana Fictícia)"]);
+    const voltar = within(confirmacao).getByRole("button", {
+      name: "Voltar aos links",
+    });
+    await waitFor(() => expect(voltar).toHaveFocus());
+
+    // Voltar: os links continuam na tela e o foco volta ao "Pronto".
+    fireEvent.click(voltar);
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(dialogo).toBeInTheDocument();
+    expect(pronto).toHaveFocus();
+
+    // Esc também pede confirmação (e o Esc na confirmação fecha só ela); o × também.
+    fireEvent.keyDown(pronto, { key: "Escape" });
+    confirmacao = screen.getByRole("alertdialog");
+    fireEvent.keyDown(
+      within(confirmacao).getByRole("button", { name: "Voltar aos links" }),
+      { key: "Escape" },
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(dialogo).toBeInTheDocument();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Fechar" }));
+    confirmacao = screen.getByRole("alertdialog");
+
+    // Fechar mesmo assim: os dois diálogos saem, os links somem e a página volta ao normal.
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Fechar mesmo assim" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    for (const url of api.urlsEmitidas)
+      expect(document.body.innerHTML).not.toContain(url);
+    expect(document.body.style.overflow).toBe("");
+    expect(document.querySelector("[inert]")).toBeNull();
+    await waitFor(() => expect(lote).toHaveFocus());
+  });
+
   it("os links não vão para o endereço, o título, o armazenamento do navegador nem o console", async () => {
     const espioes = (["log", "info", "warn", "error", "debug"] as const).map(
       (metodo) => vi.spyOn(console, metodo),
@@ -386,6 +464,14 @@ describe("CA4: gerar em lote, copiar e abrir o WhatsApp; o link aparece uma vez 
       esperarQueNadaGuardouOToken();
 
       fireEvent.click(within(dialogo).getByRole("button", { name: "Pronto" }));
+      // Nenhum link foi mandado: a tela pede confirmação antes de fechar.
+      fireEvent.click(
+        within(
+          screen.getByRole("alertdialog", {
+            name: "Fechar sem mandar todos os links?",
+          }),
+        ).getByRole("button", { name: "Fechar mesmo assim" }),
+      );
 
       await waitFor(() =>
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -484,16 +570,19 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
       api.chamadasA("POST", ROTA_LINKS).map((chamada) => chamada.corpo),
     ).toEqual([{ papel: "lider", ids: [2], revogar_anteriores: false }]);
     expect(dialogo).toHaveTextContent("Este link só aparece agora.");
-    expect(
-      within(dialogo).getByRole("link", {
-        name: "Abrir no WhatsApp de João Fictício",
-      }),
-    ).toHaveAttribute(
+    const whatsapp = within(dialogo).getByRole("link", {
+      name: "Abrir no WhatsApp de João Fictício",
+    });
+    expect(whatsapp).toHaveAttribute(
       "href",
       expect.stringMatching(/^https:\/\/wa\.me\/559132221111\?text=/),
     );
+    // Abrir no WhatsApp conta como mandado: "Pronto" fecha sem pedir confirmação.
+    whatsapp.addEventListener("click", (evento) => evento.preventDefault());
+    fireEvent.click(whatsapp);
     fireEvent.click(within(dialogo).getByRole("button", { name: "Pronto" }));
 
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     await waitFor(() => expect(novo).toHaveFocus());
     // O link anterior continua valendo: agora são dois "Revogar link".
     await waitFor(() =>
@@ -554,8 +643,19 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
       "O telefone não está num formato que o WhatsApp abre: copie a mensagem e mande por fora.",
     );
     expect(dialogo).toHaveTextContent("Para Rute Fictícia");
+    // Copiada a mensagem, "Pronto" fecha sem pedir confirmação.
+    simularAreaDeTransferencia(async () => {});
+    fireEvent.click(
+      within(dialogo).getByRole("button", {
+        name: "Copiar mensagem para Rute Fictícia",
+      }),
+    );
+    await within(dialogo).findByText("Mensagem copiada.", {
+      selector: ".acessos-copia",
+    });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Pronto" }));
 
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     await waitFor(() => expect(trocar).toHaveFocus());
     // O link antigo foi revogado (as sessões dele acabaram) e o nome do usuário é o da hierarquia.
     await waitFor(() =>
