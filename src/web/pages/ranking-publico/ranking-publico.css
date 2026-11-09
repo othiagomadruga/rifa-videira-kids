@@ -1,6 +1,30 @@
 /* Ranking público ("/"), pensado para o celular (o link vai para o grupo de WhatsApp): letras grandes,
-   uma célula por linha; a partir de 48rem, jovens e adultos lado a lado. */
+   uma célula por linha; a partir de 48rem, jovens e adultos lado a lado. Cores e movimento: docs/frontend.md
+   (RIFA-020). Decoração só em CSS: o texto de cada item é exatamente o que se lê ("1º Célula Ágape 75% da meta"). */
 
+.ranking-publico__carregando,
+.ranking-publico__esqueleto {
+  display: grid;
+  gap: var(--espaco-5);
+}
+
+/* Esqueleto: os blocos têm a altura do que vem (a fase, o título e os itens). */
+.ranking-publico__esqueleto-fase {
+  height: 5.25rem;
+  border-radius: var(--raio-4);
+}
+
+.ranking-publico__esqueleto-titulo {
+  width: 6rem;
+  height: 1.5rem;
+}
+
+.ranking-publico__esqueleto-item {
+  height: 4.25rem;
+  border-radius: var(--raio-3);
+}
+
+/* Onde a campanha está: faixa no degradê forte da marca (branco em cima com 5:1 ou mais). */
 .ranking-publico__fase {
   display: flex;
   flex-wrap: wrap;
@@ -8,15 +32,18 @@
   justify-content: space-between;
   gap: var(--espaco-1) var(--espaco-4);
   padding: var(--espaco-4) var(--espaco-5);
-  border-radius: var(--raio-3);
+  border-radius: var(--raio-4);
   background: var(--cor-primaria);
+  background-image: var(--gradiente-marca-forte);
   color: var(--cor-sobre-primaria);
+  box-shadow: var(--sombra-marca);
 }
 
 .ranking-publico__fase-destaque {
   font-size: var(--texto-2xl);
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
   line-height: var(--altura-linha-titulo);
+  letter-spacing: -0.01em;
 }
 
 .ranking-publico__fase-detalhe {
@@ -49,9 +76,22 @@
   min-width: 0;
 }
 
+/* Título da divisão com o traço do degradê da marca na frente. */
 .ranking-publico__divisao-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
   font-size: var(--texto-lg);
   color: var(--cor-primaria-forte);
+}
+
+.ranking-publico__divisao-titulo::before {
+  content: "";
+  flex: none;
+  width: 1.5rem;
+  height: 0.3rem;
+  border-radius: var(--raio-pilula);
+  background: var(--gradiente-marca);
 }
 
 .ranking-publico__lista {
@@ -63,6 +103,7 @@
 }
 
 .ranking-publico__item {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -74,12 +115,25 @@
   box-shadow: var(--sombra-1);
 }
 
-/* Pódio (até o 3º lugar, empatados inclusive): selo cheio e faixa da cor da marca. */
+/* Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. */
 .ranking-publico__item[data-destaque] {
   border-color: var(--cor-primaria);
-  box-shadow:
-    inset 4px 0 0 var(--cor-primaria),
-    var(--sombra-1);
+  box-shadow: var(--sombra-2);
+}
+
+.ranking-publico__item[data-destaque]::before {
+  content: "";
+  position: absolute;
+  top: var(--espaco-2);
+  bottom: var(--espaco-2);
+  left: -1px;
+  width: 4px;
+  border-radius: 0 var(--raio-pilula) var(--raio-pilula) 0;
+  background: linear-gradient(
+    var(--marca-verde-agua-forte),
+    var(--marca-azul-forte),
+    var(--marca-roxo)
+  );
 }
 
 .ranking-publico__posicao {
@@ -101,6 +155,13 @@
   color: var(--cor-sobre-primaria);
 }
 
+/* 1º lugar: o amarelo do Kids (comemoração), com o número em marinho (11:1). */
+.ranking-publico__item[data-primeiro] .ranking-publico__posicao {
+  border-color: var(--cor-comemoracao);
+  background: var(--cor-comemoracao);
+  color: var(--cor-sobre-comemoracao);
+}
+
 .ranking-publico__nome {
   font-size: var(--texto-lg);
   font-weight: var(--peso-forte);
@@ -108,11 +169,21 @@
   overflow-wrap: anywhere;
 }
 
+/* O % numa pílula (o espaço dela vale sempre, então a meta batida não muda o tamanho de nada). */
 .ranking-publico__percentual {
+  padding: var(--espaco-1) var(--espaco-2);
+  border-radius: var(--raio-pilula);
   font-size: var(--texto-lg);
   font-weight: var(--peso-negrito);
   font-variant-numeric: tabular-nums;
+  text-align: end;
   white-space: nowrap;
+}
+
+/* Meta batida (100% ou mais): a pílula no amarelo do Kids. O número continua dizendo o percentual. */
+.ranking-publico__item[data-meta-batida] .ranking-publico__percentual {
+  background: var(--cor-comemoracao);
+  color: var(--cor-sobre-comemoracao);
 }
 
 .ranking-publico__sem-vendas {
@@ -138,5 +209,27 @@
 @media (min-width: 48rem) {
   .ranking-publico__divisoes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * Movimento (sem prefers-reduced-motion). Os itens entram em sequência e deslizam ao trocar de lugar pelo
+ * useListaAnimada (JS); por isso a seção da disputa não entra junto com a tela (o fade dela somaria ao dos
+ * itens): só os títulos aparecem com um fade curto. A meta batida pulsa 2 vezes depois que o % conta.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-public-shell__pagina > .ranking-publico__disputa {
+    animation: none;
+  }
+
+  .ranking-publico__janela,
+  .ranking-publico__legenda,
+  .ranking-publico__divisao-titulo,
+  .ranking-publico__sem-vendas {
+    animation: ui-surgir var(--duracao-media) var(--curva-suave) backwards;
+  }
+
+  .ranking-publico__item[data-meta-batida] .ranking-publico__percentual {
+    animation: ui-pulsar 450ms var(--curva-suave) 500ms 2;
   }
 }

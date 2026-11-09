@@ -1,4 +1,4 @@
-/* Como entrar: texto curto, passos numerados. */
+/* Como entrar: texto curto, passos numerados (os números no roxo da Videira, sem tirar a semântica da lista). */
 .entrar-explicacao {
   display: flex;
   flex-direction: column;
@@ -12,7 +12,21 @@
   padding-left: var(--espaco-5);
 }
 
+.entrar-passos > li {
+  padding-left: var(--espaco-1);
+}
+
+.entrar-passos > li::marker {
+  color: var(--cor-primaria);
+  font-weight: var(--peso-extra);
+}
+
+/* O aviso de segurança do link, com a faixa do degradê forte da marca ao lado. */
 .entrar-nota {
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-primaria);
+  border-image: var(--gradiente-marca-forte) 1;
+  background: var(--cor-primaria-suave);
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
 }

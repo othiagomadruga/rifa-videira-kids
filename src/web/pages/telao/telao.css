@@ -3,8 +3,12 @@
  * partir de --telao-texto-base (tokens.css: ~46 px em 1920×1080, acompanha a largura e a altura). O
  * font-size fica só nos textos (os blocos herdam o do .telao), então cada em vale o texto-base: nenhum
  * texto abaixo de 0,9em (≥ 40 px em 1920×1080) e as posições com 1,5em (~69 px). telao-css.test.ts confere.
+ * Cores da Videira (RIFA-020): fundo marinho, verde-água nos títulos e no pódio, o amarelo do Kids no 1º
+ * lugar e na meta batida; texto com 7:1 ou mais (tokens.test.ts).
  */
 .telao {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.4em;
@@ -24,14 +28,60 @@
   cursor: none;
 }
 
-/* Topo: marca | onde a campanha está | relógio. */
+/* Fundo ambiente: brilhos escuros da marca atrás de tudo (fora da grade, cortados pelo .telao). */
+.telao__ambiente {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 82% 12%,
+    var(--cor-ambiente-3),
+    transparent 40%
+  );
+}
+
+.telao__ambiente::before,
+.telao__ambiente::after {
+  content: "";
+  position: absolute;
+  width: 80vmax;
+  height: 80vmax;
+  border-radius: 50%;
+}
+
+.telao__ambiente::before {
+  top: -38vmax;
+  left: -30vmax;
+  background: radial-gradient(closest-side, var(--cor-ambiente-1), transparent);
+}
+
+.telao__ambiente::after {
+  right: -32vmax;
+  bottom: -44vmax;
+  background: radial-gradient(closest-side, var(--cor-ambiente-2), transparent);
+}
+
+/* Topo: marca | onde a campanha está | selo do Kids e relógio. A faixa do degradê da marca embaixo. */
 .telao__topo {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 1em;
-  padding-bottom: 0.3em;
-  border-bottom: 2px solid var(--cor-borda);
+  padding-bottom: 0.35em;
+}
+
+.telao__topo::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.08em;
+  border-radius: var(--raio-pilula);
+  background: var(--gradiente-marca);
 }
 
 .telao__marca {
@@ -39,18 +89,20 @@
 }
 
 .telao .ui-marca {
-  gap: 0.4em;
-}
+  --marca-altura: 1.35em;
 
-.telao .ui-marca__simbolo {
-  font-size: 0.9em;
+  gap: 0.4em;
 }
 
 .telao .ui-marca__nome {
   font-size: 1em;
 }
 
+/* O lugar da fase vale desde o início: 1,5em × 1,1 + 0,9em × 1,2 (as duas linhas). */
 .telao__fase {
+  display: grid;
+  align-content: center;
+  min-height: 2.73em;
   text-align: center;
 }
 
@@ -58,7 +110,6 @@
   font-size: 1.5em;
   font-weight: 800;
   line-height: 1.1;
-  color: var(--cor-primaria);
 }
 
 .telao__fase-detalhe {
@@ -68,7 +119,21 @@
 }
 
 .telao__hora {
+  display: flex;
+  align-items: center;
   justify-self: end;
+  gap: 0.5em;
+}
+
+/* Selo do Kids: pequeno e ao lado do relógio, longe do logo da Videira. */
+.telao__kids {
+  flex: none;
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 0.3em;
+}
+
+.telao__hora-textos {
   text-align: right;
 }
 
@@ -79,7 +144,9 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Uma linha reservada desde o início (vazia até os dados chegarem). */
 .telao__atualizado {
+  min-height: 1.2em;
   font-size: 0.9em;
   color: var(--cor-texto-suave);
 }
@@ -149,7 +216,8 @@
   justify-content: space-between;
   gap: 0.5em;
   padding-bottom: 0.1em;
-  border-bottom: 3px solid var(--cor-primaria);
+  border-bottom: 0.08em solid var(--cor-primaria);
+  border-image: var(--gradiente-marca) 1;
 }
 
 .telao__divisao-titulo {
@@ -184,9 +252,14 @@
   background: var(--cor-superficie);
 }
 
-/* Pódio (até o 3º lugar, empatados inclusive): borda e selo da cor da marca. */
+/* Pódio (até o 3º lugar, empatados inclusive): borda e selo no verde-água da Videira. */
 .telao__item[data-destaque] {
   border-color: var(--cor-primaria);
+}
+
+/* 1º lugar: o amarelo do Kids (comemoração), com o número em marinho. */
+.telao__item[data-primeiro] {
+  border-color: var(--cor-comemoracao);
 }
 
 .telao__posicao {
@@ -206,6 +279,11 @@
   color: var(--cor-sobre-primaria);
 }
 
+.telao__item[data-primeiro] .telao__posicao {
+  background: var(--cor-comemoracao);
+  color: var(--cor-sobre-comemoracao);
+}
+
 /* Nome longo quebra em até duas linhas (o resto vira reticências): a lista cabe sempre. */
 .telao__nome {
   display: -webkit-box;
@@ -219,11 +297,20 @@
   overflow-wrap: anywhere;
 }
 
+/* O % numa pílula (espaço reservado sempre); a meta batida pinta a pílula de amarelo. */
 .telao__percentual {
+  padding: 0 0.3em;
+  border-radius: var(--raio-pilula);
   font-size: 1.1em;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  text-align: end;
   white-space: nowrap;
+}
+
+.telao__item[data-meta-batida] .telao__percentual {
+  background: var(--cor-comemoracao);
+  color: var(--cor-sobre-comemoracao);
 }
 
 .telao__resto {
@@ -238,6 +325,35 @@
   border-radius: 0.4em;
   font-size: 0.9em;
   color: var(--cor-texto-suave);
+}
+
+/*
+ * Movimento (sem prefers-reduced-motion), só quando os dados mudam: o que chega com eles aparece com um fade
+ * curto, os itens entram em sequência e deslizam ao trocar de posição (useListaAnimada) e a meta batida pulsa
+ * 2 vezes. A única coisa contínua é o fundo ambiente, muito lento (60 s e 75 s).
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .telao__ambiente::before {
+    animation: ui-deriva-a 60s ease-in-out infinite alternate;
+  }
+
+  .telao__ambiente::after {
+    animation: ui-deriva-b 75s ease-in-out infinite alternate;
+  }
+
+  .telao__fase-destaque,
+  .telao__fase-detalhe,
+  .telao__janela,
+  .telao__divisao-topo,
+  .telao__resto,
+  .telao__sem-vendas,
+  .telao__mensagem {
+    animation: ui-surgir var(--duracao-lenta) var(--curva-suave) backwards;
+  }
+
+  .telao__item[data-meta-batida] .telao__percentual {
+    animation: ui-pulsar 450ms var(--curva-suave) 500ms 2;
+  }
 }
 
 /*
