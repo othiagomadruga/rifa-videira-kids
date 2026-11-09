@@ -127,6 +127,22 @@ describe("validarCorpoConferencia", () => {
     expect(JSON.stringify(ruins)).not.toMatch(/HYPERLINK|example\.com|pago"/);
   });
 
+  it("dia que não existe no calendário (31 de fevereiro, 29/02 fora do bissexto) não passa", () => {
+    for (const dia of ["2026-02-31", "2026-02-29", "2026-04-31"])
+      expect(
+        problemas(corpo({ dia: [dia, null], instante: [null, null] })),
+      ).toEqual([
+        {
+          caminho: ["dia", 0],
+          codigo: "invalid_value",
+          mensagem: "Use uma data que existe, no formato AAAA-MM-DD",
+        },
+      ]);
+    expect(
+      problemas(corpo({ dia: ["2028-02-29", null], instante: [null, null] })),
+    ).toEqual([]);
+  });
+
   it("instante sem o dia não passa", () => {
     expect(
       problemas(

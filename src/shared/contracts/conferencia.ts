@@ -11,6 +11,8 @@
  * O validador é leve de propósito (laços simples, sem zod item a item): um arquivo de 7 mil pedidos tem
  * de ser conferido em poucos milissegundos de CPU do Worker (o plano Free permite 10 ms por requisição).
  */
+import { diaDoCalendario } from "./calendario";
+
 // ---------------------------------------------------------------------------------------------------
 // Limites
 // ---------------------------------------------------------------------------------------------------
@@ -358,8 +360,12 @@ const LISTAS: Record<
   },
   dia: {
     campo: "data",
-    vale: (item) => typeof item === "string" && FORMATO_DIA.test(item),
-    mensagem: "Use a data no formato AAAA-MM-DD",
+    // O formato e o dia de verdade ("2026-02-31" não existe: sem isto, a conta do dia no fuso dava 500).
+    vale: (item) =>
+      typeof item === "string" &&
+      FORMATO_DIA.test(item) &&
+      diaDoCalendario(item) !== null,
+    mensagem: "Use uma data que existe, no formato AAAA-MM-DD",
   },
   instante: {
     campo: "data",

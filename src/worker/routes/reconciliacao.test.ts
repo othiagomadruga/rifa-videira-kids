@@ -374,6 +374,29 @@ describe("CA1: análise pedido a pedido (o arquivo tem o código do pedido)", ()
     }
   });
 
+  it('dia que não existe no corpo ("2026-02-31"): 400 requisicao_invalida, e não 500', async () => {
+    const base = await corpo();
+    const dia = [...base.dia!];
+    dia[0] = "2026-02-31";
+    for (const caminho of [ANALISAR, RECUPERAR]) {
+      const erro = esperarErro(
+        await postar(conferencia, caminho, {
+          ...base,
+          dia,
+          ...(caminho === RECUPERAR ? { pedidos: ["R-0101"] } : {}),
+        }),
+        400,
+        "requisicao_invalida",
+      );
+      expect(erro.detalhes).toContainEqual(
+        expect.objectContaining({
+          caminho: ["dia", 0],
+          codigo: "invalid_value",
+        }),
+      );
+    }
+  });
+
   it("D1: coluna com nome de dado pessoal mapeada (sem passar pela tela): 400 coluna_pessoal", async () => {
     const base = await corpo();
     for (const [campo, nome] of [
