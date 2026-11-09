@@ -3,7 +3,7 @@ import { Outlet } from "react-router";
 import { Button, ErrorState, Loading, Marca } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
-import "./minha.css";
+import "./minha-moldura.css";
 
 type Saida = { saindo: boolean; erro: string | null };
 

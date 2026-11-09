@@ -1,6 +1,7 @@
 import type { Alvo } from "../../../shared/contracts/dominio";
 import { NOMES_DIVISAO } from "../../../shared/contracts/calculos";
 import { PageHeader } from "../../components/ui";
+import "./minha-moldura.css";
 
 /** Tipo do alvo para mostrar ao lado do nome. */
 const ROTULO_DO_ALVO: Record<Alvo["tipo"], string> = {

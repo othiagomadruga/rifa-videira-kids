@@ -38,6 +38,7 @@ import {
   textoDaSituacao,
   textoDosAparelhos,
 } from "./textos";
+import "./acessos-hierarquia.css";
 
 /** Alvos carregados do papel e o erro da última carga (com dados, o erro é de uma recarga). */
 type Carga = {

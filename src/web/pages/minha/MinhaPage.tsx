@@ -2,7 +2,6 @@ import { Suspense, lazy } from "react";
 import { Loading } from "../../components/ui";
 import { useUsuarioConectado } from "../../lib/sessao";
 import { Cabecalho } from "./Cabecalho";
-import "./minha.css";
 
 // Visão individual (RIFA-014, RF08, D12): o líder vê a célula; o discipulador, ele e as células dele; a rede,
 // ela, os discipuladores e as células. Celular primeiro (360 px, legível ao sol): o % da meta e a meta de

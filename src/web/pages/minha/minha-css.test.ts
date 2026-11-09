@@ -2,8 +2,15 @@
 // lendo o CSS: só variáveis do tema (nenhuma cor nem medida solta), nenhuma largura fixa (as grades usam
 // min(100%, …) e as colunas encolhem) e o contraste dos pares de texto e fundo que a tela usa, calculado a
 // partir do tokens.css. A medida na tela de verdade (360 px sem rolagem lateral) está nas capturas do
-// Playwright.
+// Playwright. E o pacote inicial do site leva só a moldura (minha-moldura.css): o resto (minha.css) vem
+// junto com a VisaoIndividual, carregada à parte.
 import { describe, expect, it } from "vitest";
+
+/** O código da tela (sem os testes), para conferir quem importa cada CSS. */
+const FONTES = import.meta.glob<string>(
+  ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}"],
+  { query: "?raw", import: "default", eager: true },
+);
 
 // O Vitest esvazia todo import de CSS (até com ?raw): o texto vem do disco, pelo fs do Node.
 type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
@@ -20,9 +27,12 @@ const lerArquivo = (relativo: string) =>
 
 const semComentarios = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const tokensCss = lerArquivo("../../tema/tokens.css");
-const minhaCss = semComentarios(lerArquivo("./minha.css"));
+const molduraCss = semComentarios(lerArquivo("./minha-moldura.css"));
+const visaoCss = semComentarios(lerArquivo("./minha.css"));
+/** Todo o CSS da tela: a moldura (pacote inicial) e o da visão (pacote à parte). */
+const minhaCss = `${molduraCss}\n${visaoCss}`;
 
-/** As declarações do minha.css: propriedade e valor. */
+/** As declarações dos dois arquivos: propriedade e valor. */
 const DECLARACOES = [...minhaCss.matchAll(/([\w-]+)\s*:\s*([^;{}]+);/g)].map(
   ([, propriedade, valor]) => ({ propriedade, valor: valor.trim() }),
 );
@@ -143,5 +153,41 @@ describe("CA5: o CSS da visão individual", () => {
     expect(
       contraste(cor("--cor-primaria"), cor("--cor-primaria-suave")),
     ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("CSS no pacote inicial: só a moldura da visão individual", () => {
+  /** Quem importa este CSS (os arquivos da pasta, pelo import de lado a lado). */
+  const quemImporta = (css: string) =>
+    Object.entries(FONTES)
+      .filter(([, fonte]) => fonte.includes(`import "./${css}";`))
+      .map(([arquivo]) => arquivo)
+      .sort();
+
+  it("a moldura e o cabeçalho (que aparecem enquanto a tela carrega) importam só minha-moldura.css", () => {
+    expect(quemImporta("minha-moldura.css")).toEqual([
+      "./Cabecalho.tsx",
+      "./MinhaLayout.tsx",
+    ]);
+  });
+
+  it("o resto do CSS (minha.css) vem só com a VisaoIndividual, que é carregada à parte", () => {
+    expect(quemImporta("minha.css")).toEqual(["./VisaoIndividual.tsx"]);
+    expect(FONTES["./MinhaPage.tsx"]).toMatch(
+      /lazy\(\(\) =>\s*import\("\.\/VisaoIndividual"\)/,
+    );
+    // Nenhum arquivo do pacote inicial importa a VisaoIndividual sem ser pelo lazy.
+    for (const [arquivo, fonte] of Object.entries(FONTES)) {
+      expect(fonte, arquivo).not.toMatch(/from "\.\/VisaoIndividual"/);
+    }
+  });
+
+  it("cada arquivo tem só as classes da sua parte", () => {
+    const classes = (css: string) =>
+      new Set([...css.matchAll(/\.(minha-[\w-]+)/g)].map(([, nome]) => nome));
+    for (const nome of classes(molduraCss))
+      expect(nome).toMatch(/^minha-(moldura|cabecalho)/);
+    for (const nome of classes(visaoCss))
+      expect(nome).not.toMatch(/^minha-(moldura|cabecalho)/);
   });
 });

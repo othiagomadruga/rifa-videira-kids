@@ -23,6 +23,7 @@ import {
   motivoSemWhatsApp,
   telefoneParaWhatsApp,
 } from "./textos";
+import "./acessos-hierarquia.css";
 
 // ---------------------------------------------------------------------------------------------------
 // Trocar acesso: revoga os links válidos do alvo (o aparelho antigo sai) e gera um link novo

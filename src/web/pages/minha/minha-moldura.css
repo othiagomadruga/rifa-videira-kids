@@ -1,0 +1,63 @@
+/* Visão individual (/minha), a parte que vai no pacote inicial: a moldura (a marca com o papel e "Sair"
+   no topo, sem menu) e o cabeçalho, que aparecem enquanto o resto da tela carrega. O resto do CSS da tela
+   fica em minha.css, que vem junto com a VisaoIndividual (pacote à parte). Só variáveis do tema. */
+
+.minha-moldura {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.minha-moldura__topo {
+  padding: var(--espaco-3) var(--margem-pagina);
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.minha-moldura__limite {
+  width: 100%;
+  max-width: var(--largura-conteudo);
+  margin: 0 auto;
+}
+
+.minha-moldura__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-4);
+}
+
+.minha-moldura__erro {
+  margin-top: var(--espaco-2);
+  color: var(--cor-perigo);
+  font-weight: var(--peso-forte);
+}
+
+.minha-moldura__conteudo {
+  flex: 1;
+  padding: var(--espaco-5) var(--margem-pagina) var(--espaco-7);
+}
+
+.minha-moldura__pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+  min-width: 0;
+}
+
+/* Cabeçalho: o tipo do alvo e a divisão num selo, e quem entrou. */
+.minha-cabecalho__alvo {
+  display: inline-block;
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria-forte);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+.minha-cabecalho__pessoa strong {
+  color: var(--cor-texto);
+}

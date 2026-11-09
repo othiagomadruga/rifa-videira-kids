@@ -9,6 +9,7 @@ import { CartaoPeriodo, Destaque } from "./Destaque";
 import { Equipe } from "./Equipe";
 import { RankingIndividual } from "./RankingIndividual";
 import { useVisaoIndividual } from "./useVisaoIndividual";
+import "./minha.css";
 
 // O conteúdo da visão individual (carregado à parte, só em /minha: veja MinhaPage.tsx): o cabeçalho, os
 // estados (carregando, erro, sem campanha) e a visão do alvo, que se atualiza sozinha a cada minuto.
