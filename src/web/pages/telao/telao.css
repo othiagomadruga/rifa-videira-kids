@@ -357,8 +357,8 @@
 }
 
 /*
- * Fora de um telão deitado (ex.: celular em pé), as divisões empilham, o topo quebra em duas linhas e a
- * página pode rolar.
+ * Fora de um telão deitado (ex.: celular em pé), as divisões empilham, o topo vira uma coluna (marca, fase e
+ * relógio, cada um na sua linha: a largura de um não aperta o outro) e a página pode rolar.
  */
 @media (max-aspect-ratio: 1/1) {
   .telao {
@@ -369,12 +369,13 @@
   }
 
   .telao__topo {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 0.4em;
   }
 
-  .telao__fase {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .telao__hora {
+    justify-self: center;
   }
 
   .telao__divisoes {

@@ -5,7 +5,14 @@
 .ranking-publico__carregando,
 .ranking-publico__esqueleto {
   display: grid;
+  align-content: start;
   gap: var(--espaco-5);
+}
+
+/* O carregando ocupa a tela: o rodapé começa abaixo da dobra e não é empurrado quando o ranking chega. */
+.ranking-publico__carregando {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Esqueleto: os blocos têm a altura do que vem (a fase, o título e os itens). */
