@@ -304,7 +304,7 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
       return responderErro(
         c,
         "requisicao_invalida",
-        "A coluna escolhida como código do pedido não parece ser o código da Rifei: troque a coluna e confira de novo antes de recuperar",
+        "A coluna escolhida como código do pedido não parece ser o código da Rifei: troque a coluna e confira de novo antes de recuperar. Se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema",
         [
           {
             caminho: ["colunas", "pedido_id"],

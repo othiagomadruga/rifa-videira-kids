@@ -171,6 +171,8 @@ export interface PedidoDoArquivo {
   inconsistente: boolean;
   /** `aprovado` quando o arquivo não tem a coluna de status; `desconhecido` quando ela está vazia. */
   status: StatusArquivoReconciliacao;
+  /** Alguma linha do código está paga (mesmo num pedido inconsistente): conta na trava do código. */
+  algumaLinhaPaga: boolean;
   /** A mesma quantidade em todas as linhas (null se faltar em alguma ou se elas diferirem). */
   qtdIgual: number | null;
   /** A quantidade juntada: a da coluna (ou, sem ela, a contagem dos números). */
@@ -198,6 +200,7 @@ interface Acumulo {
   linhas: number;
   inconsistente: boolean;
   status: StatusArquivoReconciliacao | null;
+  algumaPaga: boolean;
   qtdPrimeira: number | null;
   qtdIguais: boolean;
   qtdLinhas: number;
@@ -226,6 +229,7 @@ function novoAcumulo(id: string): Acumulo {
     linhas: 0,
     inconsistente: false,
     status: null,
+    algumaPaga: false,
     qtdPrimeira: null,
     qtdIguais: true,
     qtdLinhas: 0,
@@ -276,6 +280,7 @@ function pedidoDoAcumulo(
     linhas: a.linhas,
     inconsistente: a.inconsistente,
     status: temStatus ? (a.status ?? "desconhecido") : "aprovado",
+    algumaLinhaPaga: !temStatus || a.algumaPaga,
     qtdIgual,
     qtd: qtdDaColuna ?? contados,
     qtdDiferenteDosNumeros:
@@ -305,6 +310,7 @@ function pedidoDeUmaPosicao(
     linhas: n,
     inconsistente: false,
     status: corpo.status ? (corpo.status[i] ?? "desconhecido") : "aprovado",
+    algumaLinhaPaga: !corpo.status || corpo.status[i] === "aprovado",
     qtdIgual: q,
     qtd: qtdDaColuna ?? numeros,
     qtdDiferenteDosNumeros:
@@ -332,6 +338,7 @@ function acumular1(a: Acumulo, corpo: CorpoConferencia, i: number): void {
   if (st !== null) {
     if (a.status === null) a.status = st;
     else if (a.status !== st) a.inconsistente = true;
+    if (st === "aprovado") a.algumaPaga = true;
   }
   const q = corpo.qtd_bilhetes?.[i] ?? null;
   if (q !== null) {
@@ -594,8 +601,10 @@ export interface ConferenciaDoCodigo {
 /**
  * Trava do código: com pelo menos MINIMO_CODIGOS_PARA_CONFERIR pagos no arquivo e menos de
  * PROPORCAO_MINIMA_CODIGOS_ENCONTRADOS deles no sistema (em qualquer campanha), a coluna escolhida
- * provavelmente não é o código da Rifei. Exceção: se o sistema tem pelo menos o mesmo mínimo de pagos no
- * período do arquivo e a maioria deles aparece no arquivo, a coluna é a certa (o webhook é que falhou).
+ * provavelmente não é o código da Rifei. Conta como pago o código com alguma linha paga, mesmo com as
+ * linhas inconsistentes: com a coluna errada (ex.: o afiliado), o mesmo "código" junta linhas de pedidos
+ * diferentes, que quase nunca batem entre si. Exceção: se o sistema tem pelo menos o mesmo mínimo de pagos
+ * no período do arquivo e a maioria deles aparece no arquivo, a coluna é a certa (o webhook é que falhou).
  */
 export function conferirCodigo(
   pedidos: Iterable<PedidoDoArquivo>,
@@ -605,7 +614,7 @@ export function conferirCodigo(
   let pagos = 0;
   let encontrados = 0;
   for (const pedido of pedidos) {
-    if (pedido.inconsistente || pedido.status !== "aprovado") continue;
+    if (!pedido.algumaLinhaPaga) continue;
     pagos++;
     if (noSistema(pedido.id)) encontrados++;
   }

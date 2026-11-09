@@ -46,7 +46,7 @@ describe("avisos", () => {
     avisos.contar("valor_por_bilhete", 3, "pedido", { preco: 2000 });
     const [codigo, porBilhete, ambiguo] = avisos.lista();
     expect(codigo.mensagem).toBe(
-      "A coluna escolhida como código do pedido (Número) não parece ser o código da Rifei: só 0 de 7 pedidos pagos do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo.",
+      "A coluna escolhida como código do pedido (Número) não parece ser o código da Rifei: só 0 de 7 pedidos pagos do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo. Se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema.",
     );
     expect(porBilhete.mensagem).toContain("R$ 20,00");
     expect(porBilhete.mensagem).toContain("vezes o número de linhas");

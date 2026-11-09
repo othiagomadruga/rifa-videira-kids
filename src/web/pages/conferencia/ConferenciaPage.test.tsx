@@ -522,6 +522,12 @@ describe("CA4: as travas da revisão (código que não bate e valor ambíguo)", 
     expect(
       screen.getByText(/Só 0 de 7 pedidos pagos do arquivo existem no sistema/),
     ).toBeInTheDocument();
+    // Se a coluna está certa, o caminho é outro período (o webhook parou).
+    expect(
+      screen.getByText(
+        "Se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema.",
+      ),
+    ).toBeInTheDocument();
     const perdidas = grupo("Vendas perdidas");
     for (const caixa of within(perdidas).getAllByRole("checkbox")) {
       expect(caixa).not.toBeChecked();

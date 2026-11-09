@@ -149,6 +149,10 @@ function PorPedido({
           recuperado: em “Colunas do arquivo”, troque o{" "}
           <strong>Código do pedido</strong> pela coluna certa e confira de novo.
         </p>
+        <p>
+          Se a coluna está certa e o webhook parou, exporte um período que
+          inclua dias com vendas já no sistema.
+        </p>
       </Aviso>
     );
   } else if (resumo.com_divergencia === 0 && resumo.pedidos_no_arquivo > 0) {

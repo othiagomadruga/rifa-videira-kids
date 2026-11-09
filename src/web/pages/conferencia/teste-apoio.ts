@@ -250,7 +250,7 @@ export const ANALISE_TRAVADA: RespostaAnalisePorPedido =
       {
         codigo: "codigo_nao_confere",
         mensagem:
-          "A coluna escolhida como código do pedido (Pedido) não parece ser o código da Rifei: só 0 de 7 pedidos pagos do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo.",
+          "A coluna escolhida como código do pedido (Pedido) não parece ser o código da Rifei: só 0 de 7 pedidos pagos do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo. Se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema.",
         quantidade: null,
       },
     ],

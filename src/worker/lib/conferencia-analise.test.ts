@@ -661,6 +661,40 @@ describe("trava do código que não bate (B3 da revisão)", () => {
       }),
     ).toEqual({ confere: true, pagos_no_arquivo: 0, encontrados: 0 });
   });
+
+  it("código com alguma linha paga conta como pago mesmo inconsistente (a coluna errada junta pedidos diferentes)", () => {
+    // Ex.: o afiliado escolhido como código: cada "código" junta uma linha paga e uma pendente.
+    const linhas = [
+      ["Pedido", "Status", "Quantidade", "Valor", "Data"],
+      ...["T-1", "T-2", "T-3", "T-4", "T-5", "T-6", "T-7"].flatMap((codigo) => [
+        [codigo, "Pago", "1", "20,00", "27/11/2026 10:00"],
+        [codigo, "Pendente", "1", "20,00", "27/11/2026 11:00"],
+      ]),
+    ];
+    const corpo = corpoDe(linhas);
+    const { pedidos } = agruparPedidos(corpo);
+    expect(
+      [...pedidos.values()].every(
+        (pedido) => pedido.inconsistente && pedido.algumaLinhaPaga,
+      ),
+    ).toBe(true);
+    expect(
+      conferirCodigo(pedidos.values(), () => undefined, {
+        pagosNoPeriodo: 0,
+        pagosNoPeriodoNoArquivo: 0,
+      }),
+    ).toEqual({ confere: false, pagos_no_arquivo: 7, encontrados: 0 });
+    // Na análise: a trava vale e o aviso explica, mesmo sem nenhuma venda perdida listada.
+    const resposta = analisar(linhas);
+    expect(resposta.codigo).toEqual({
+      confere: false,
+      pagos_no_arquivo: 7,
+      encontrados: 0,
+    });
+    expect(resposta.avisos.map((aviso) => aviso.codigo)).toEqual(
+      expect.arrayContaining(["codigo_nao_confere", "pedido_inconsistente"]),
+    );
+  });
 });
 
 describe("afiliado do arquivo: número, rótulo cadastrado (sem acento e maiúsculas) ou não reconhecido", () => {

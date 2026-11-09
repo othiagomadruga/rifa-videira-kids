@@ -260,7 +260,7 @@ Com o código, as linhas de cada pedido se juntam (quantidades iguais contam uma
 
 ### Trava do código que não bate
 
-Se a coluna escolhida como código do pedido não é o código da Rifei (por exemplo, o número do bilhete), todas as vendas pareceriam perdidas e o "Recuperar" gravaria lixo. Com pelo menos 5 pedidos pagos no arquivo e menos da metade deles no sistema, a análise responde `codigo.confere: false`, mostra o aviso "a coluna escolhida como código do pedido não parece ser o código da Rifei", não marca nada para recuperar e o "Recuperar" responde 400 até a coluna ser trocada. Exceção: se o sistema tem pelo menos 5 pagos no período do arquivo e a maioria deles aparece no arquivo, a coluna é a certa (foi o webhook que parou) e a recuperação segue.
+Se a coluna escolhida como código do pedido não é o código da Rifei (por exemplo, o número do bilhete), todas as vendas pareceriam perdidas e o "Recuperar" gravaria lixo. Com pelo menos 5 pedidos pagos no arquivo e menos da metade deles no sistema, a análise responde `codigo.confere: false`, mostra o aviso "a coluna escolhida como código do pedido não parece ser o código da Rifei", não marca nada para recuperar e o "Recuperar" responde 400 até a coluna ser trocada. Conta como pago o código com alguma linha paga, mesmo com as linhas inconsistentes (com a coluna errada, o mesmo "código" junta linhas de pedidos diferentes). Exceção: se o sistema tem pelo menos 5 pagos no período do arquivo e a maioria deles aparece no arquivo, a coluna é a certa (foi o webhook que parou) e a recuperação segue. Por isso o aviso também diz: se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema.
 
 ### Recuperar
 

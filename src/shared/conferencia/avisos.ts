@@ -63,7 +63,7 @@ const MENSAGENS: Record<
   (dados: DadosDoAviso) => string
 > = {
   codigo_nao_confere: ({ nomes, pagos, encontrados }) =>
-    `A coluna escolhida como código do pedido${nomes[0] ? ` (${nomes[0]})` : ""} não parece ser o código da Rifei: só ${formatarInteiro(encontrados ?? 0)} de ${quantos(pagos ?? 0, "pedido pago", "pedidos pagos")} do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo.`,
+    `A coluna escolhida como código do pedido${nomes[0] ? ` (${nomes[0]})` : ""} não parece ser o código da Rifei: só ${formatarInteiro(encontrados ?? 0)} de ${quantos(pagos ?? 0, "pedido pago", "pedidos pagos")} do arquivo existem no sistema. Nada foi marcado para recuperar: troque a coluna do código do pedido e confira de novo. Se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema.`,
   sem_coluna_pedido: () =>
     "O arquivo não tem a coluna do código do pedido: a comparação é pelos totais (por afiliado e por dia) e não dá para recuperar vendas.",
   sem_coluna_status: () =>

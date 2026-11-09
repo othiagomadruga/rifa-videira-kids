@@ -1226,6 +1226,9 @@ describe("CA2: trava do código que não bate (a coluna escolhida não é o cód
           codigo: "codigo_nao_confere",
         }),
       ]);
+      expect(erro.mensagem).toContain(
+        "Se a coluna está certa e o webhook parou, exporte um período que inclua dias com vendas já no sistema",
+      );
     }
     expect(await contar("pedidos", "id LIKE '700%'")).toBe(0);
     expect(await contar("recuperacoes")).toBe(0);
