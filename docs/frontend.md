@@ -2,7 +2,7 @@
 
 Convenções do site em `src/web/`. Stack e comandos: seção "Stack e comandos" do `CLAUDE.md`. Decisões técnicas: `docs/decisions.md`.
 
-Princípios: celular primeiro, sem rolagem horizontal em 390 px; CSS puro com variáveis (sem biblioteca de UI ou de CSS, sem fonte externa, sem CDN); acessibilidade AA; **o público nunca vê valores em R$**.
+Princípios: celular primeiro, sem rolagem horizontal em 390 px (360 px na visão individual); CSS puro com variáveis (sem biblioteca de UI ou de CSS, sem fonte externa, sem CDN); acessibilidade AA; **o público e a hierarquia (líder, discipulador e rede) nunca veem valores em R$**.
 
 ## Estrutura de pastas
 
@@ -13,7 +13,7 @@ src/web/
   rotas.tsx             tabela de rotas do site
   styles.css            CSS global: importa tema/tokens.css e tema/base.css
   tema/                 tokens.css (variáveis), base.css (reset, foco, utilitários), marca.ts (nomes)
-  lib/                  api.ts (cliente da API), sessao.tsx (sessão da coordenação) e formatadores.ts (pt-BR)
+  lib/                  api.ts (cliente da API), sessao.tsx (sessão, áreas por papel e guarda) e formatadores.ts (pt-BR)
   components/ui/        componentes base; importe de "components/ui" (index.ts)
   components/EmConstrucao.tsx   aviso das telas que ainda são só a casca
   pages/<tela>/         uma pasta por tela: componente, CSS, chamadas à API e testes da tela
@@ -26,8 +26,9 @@ src/web/
 | --- | --- | --- | --- | --- |
 | `/` | Ranking da campanha | `ranking-publico` | RIFA-010/011 | público (WhatsApp), **sem R$** |
 | `/telao` | Telão | `telao` | RIFA-011 | telão do culto, **sem R$**, sem navegação |
-| `/acesso/<token>` | Entrar no sistema da Rifa Videira Kids | `acesso` | RIFA-007 | coordenação (link pessoal do WhatsApp) |
-| `/entrar` | Entrar | `entrar` | RIFA-007 | coordenação (sem sessão) |
+| `/acesso/<token>` | Entrar no sistema da Rifa Videira Kids | `acesso` | RIFA-007/014 | coordenação, líderes, discipuladores e redes (link pessoal do WhatsApp) |
+| `/entrar` | Entrar | `entrar` | RIFA-007 | todos com link (sem sessão) |
+| `/minha` | o nome do alvo (ex.: Célula Ágape) | `minha` | RIFA-014 | líder, discipulador e rede, **sem R$**, sem menu |
 | `/coordenacao` | Visão geral | `visao-geral` | RIFA-009 | coordenação |
 | `/coordenacao/campanha` | Campanha | `campanha` | RIFA-004 | coordenação |
 | `/coordenacao/hierarquia` | Hierarquia | `hierarquia` | RIFA-005 | coordenação |
@@ -36,13 +37,14 @@ src/web/
 | `/coordenacao/rankings` | Rankings | `rankings` | RIFA-010 | coordenação |
 | `/coordenacao/bumbo` | Bumbo | `bumbo` | RIFA-011 | coordenação |
 | `/coordenacao/conferencia` | Conferência | `conferencia` | RIFA-012 | coordenação |
-| `/coordenacao/acessos` | Acessos | `acessos` | RIFA-007 | só admin |
+| `/coordenacao/acessos` | Acessos | `acessos` | RIFA-007/014 | só admin |
 | `/status` | Status do sistema | `status` | RIFA-001 | técnico (saúde da API) |
 | qualquer outra | Página não encontrada | `nao-encontrada` | | todos |
 
-- As telas da coordenação ficam no layout com menu (`pages/coordenacao/`), **só com sessão** (veja "Sessão e acesso da coordenação"). A lista `TELAS_COORDENACAO` em `pages/coordenacao/telas.ts` gera as rotas filhas **e** o menu; `papeis: ["admin"]` numa tela tira o link do menu dos outros papéis e mostra "sem permissão" na rota (`pages/coordenacao/ExigirPapel.tsx`).
+- As telas da coordenação ficam no layout com menu (`pages/coordenacao/`), **só com sessão de admin ou coordenação** (veja "Sessão e acesso"). A lista `TELAS_COORDENACAO` em `pages/coordenacao/telas.ts` gera as rotas filhas **e** o menu; `papeis: ["admin"]` numa tela tira o link do menu dos outros papéis e mostra "sem permissão" na rota (`pages/coordenacao/ExigirPapel.tsx`).
+- `/minha` fica na moldura própria (`pages/minha/MinhaLayout.tsx`: marca com o papel e "Sair", sem menu), **só com sessão de líder, discipulador ou rede**.
 - `/`, `/acesso`, `/entrar`, `/status` e a 404 usam o layout aberto (`PublicShell`: marca + conteúdo, sem navegação). `/telao` não usa layout.
-- Uma tela que quebra ao renderizar mostra `pages/erro/ErroRota.tsx` (na coordenação, dentro do layout, sem perder o menu).
+- Uma tela que quebra ao renderizar mostra `pages/erro/ErroRota.tsx` (na coordenação e em `/minha`, dentro da moldura, sem perder o menu ou o "Sair").
 - O Worker devolve o `index.html` para qualquer caminho fora de `/api/*` (modo SPA); quem decide a tela é o React.
 
 ## Como construir uma tela
@@ -71,17 +73,31 @@ src/web/
 7. Testes ao lado do código (`<Tela>Page.test.tsx`), renderizando pela rota de verdade (veja "Testes").
 8. Arquivos compartilhados (`rotas.tsx`, `pages/coordenacao/telas.ts`, `components/ui/`, `tema/`, `lib/`) só mudam quando a tarefa pedir; diga no relatório o que mudou. Tela nova da coordenação: uma entrada em `telas.ts` (rota e menu juntos) e o caso em `rotas.test.tsx`.
 
-## Sessão e acesso da coordenação (RIFA-007)
+## Sessão e acesso (RIFA-007; papéis da hierarquia na RIFA-014)
 
-A API está em `docs/acesso.md`. No site:
+A API está em `docs/acesso.md` e, para a hierarquia, em `docs/api.md` ("Visão individual e acessos da hierarquia") e na D12 de `docs/decisions.md`. No site:
 
-- **Sessão** (`lib/sessao.tsx`): o `ProvedorSessao` fica na raiz das rotas. O cookie é HttpOnly: o site pergunta a `GET /api/sessao` quem está conectado, e só quando precisa (guarda da coordenação e `/entrar`); as telas abertas não fazem chamada por ela. `useSessao()` dá `estado` (`desconhecida`, `verificando`, `conectada` com o `usuario`, `desconectada` com o `motivo`: `sem_sessao`, `expirou` ou `saiu`, e `erro`), `verificar()`, `entrar(token)` e `sair()`. Nas telas da coordenação, `useUsuarioConectado()` devolve `{ id, nome, papel }`; `ROTULO_PAPEL` dá o nome do papel.
-- **Guarda** (`pages/coordenacao/CoordenacaoLayout.tsx`): toda rota `/coordenacao/*` confere a sessão; enquanto isso, só o carregando ("Conferindo o seu acesso…", `role="status"`). Sem sessão, vai para `/entrar` (com `replace`) e guarda a tela pedida; um 401 de qualquer rota durante o uso (gancho do `lib/api.ts`) faz o mesmo, com o aviso "Sua sessão terminou". Falha sem resposta mostra o erro com "Tentar de novo". Os 401 das próprias rotas da sessão não contam (o do `POST /api/sessao` é link inválido e não derruba a sessão aberta).
-- **Voltar depois de entrar**: a tela pedida fica no `localStorage` (só o caminho, só caminhos `/coordenacao...`, por uma hora, apagada ao usar e ao sair), porque o link do WhatsApp costuma abrir outra aba. `/acesso` usa esse destino depois do login; `/entrar` usa o `state.de` quando já há sessão.
-- **`/acesso/<token>`** (`pages/acesso`): o token fica só na memória da tela. Ao abrir, a entrada do histórico vira `/acesso` (`navigate` com `replace`, que no navegador é `history.replaceState` sem o token) antes de a página aparecer; o token não vai para título, `state` do histórico, log nem outra chamada. Nada é pedido à API ao abrir (o preview do WhatsApp abre a URL): só o toque em "Entrar" faz `POST /api/sessao`. 401: "Este link não vale mais: peça um link novo à coordenação". Token fora do formato: "Este link está incompleto", sem chamar a API. `/acesso` sem token (recarregou) vai para `/entrar`.
-- **`/entrar`** (`pages/entrar`): explica que o acesso é pelo link pessoal, sem senha, que chega pelo WhatsApp. Com sessão, vai para `/coordenacao` (ou para o `state.de`). Depois de "Sair", mostra "Você saiu do sistema neste aparelho".
-- **Menu e conta**: o `AppShell` recebe `conta` (nome, papel e "Sair": `POST /api/sessao/sair` → `/entrar`). O item "Acessos" só aparece para o admin (`papeis` em `telas.ts`).
-- **`/coordenacao/acessos`** (`pages/acessos`, só admin): um cartão por pessoa (nome, papel, ativo, links válidos com "Revogar", aparelhos conectados), "Nova pessoa", "Gerar link novo", "Desativar acesso"/"Reativar acesso" (o próprio cartão não tem "Desativar acesso": a API recusaria com 409). O link com o token só existe na resposta que o cria: a tela o mostra uma vez, num `Dialogo` com o alerta "Este link só aparece agora", "Copiar link" (área de transferência; sem ela, seleciona o link no campo) e "Enviar pelo WhatsApp" (`https://wa.me/?text=` com uma mensagem curta e o link), e o esquece ao fechar. Os 409 `em_uso` aparecem em português, conforme o caso (a si mesmo, o último admin ativo, o último link válido de admin). Valores do contrato (caminhos, papéis, limites, formato do token) são cópias, conferidas por `pages/acessos/acessos-contrato.test.ts`.
+- **Sessão** (`lib/sessao.tsx`): o `ProvedorSessao` fica na raiz das rotas. O cookie é HttpOnly: o site pergunta a `GET /api/sessao` quem está conectado, e só quando precisa (as guardas e `/entrar`); as telas abertas não fazem chamada por ela. `useSessao()` dá `estado` (`desconhecida`, `verificando`, `conectada` com o `usuario`, `desconectada` com o `motivo`: `sem_sessao`, `expirou` ou `saiu`, e `erro`), `verificar()`, `entrar(token)` e `sair()`. Atrás de uma guarda, `useUsuarioConectado()` devolve `{ id, nome, papel, alvo? }` (`alvo`: a célula, o discipulador ou a rede, só nos papéis da hierarquia); `ROTULO_PAPEL` dá o nome do papel.
+- **Áreas por papel** (`lib/sessao.tsx`): admin e coordenação usam `/coordenacao`; líder, discipulador e rede usam só `/minha` (`areaDoPapel`, `inicioDoPapel`; `PAPEIS_DA_HIERARQUIA` é a cópia de `PAPEIS_HIERARQUIA`, conferida por `pages/minha/minha-contrato.test.ts`). Endereço da outra área leva à área do papel, com `replace` (a API recusa do mesmo jeito, com 403).
+- **Guarda** (`useGuardaDaArea(area)`, usada por `pages/coordenacao/CoordenacaoLayout.tsx` e `pages/minha/MinhaLayout.tsx`): toda rota da área confere a sessão; enquanto isso, só o carregando ("Conferindo o seu acesso…", `role="status"`). Sem sessão, vai para `/entrar` (com `replace`) e guarda a tela pedida; um 401 de qualquer rota durante o uso (gancho do `lib/api.ts`) faz o mesmo, com o aviso "Sua sessão terminou". Sessão de um papel da outra área: vai para o início da área dele, sem montar a tela (nada é pedido à API da outra área). Falha sem resposta mostra o erro com "Tentar de novo". Os 401 das próprias rotas da sessão não contam (o do `POST /api/sessao` é link inválido e não derruba a sessão aberta).
+- **Voltar depois de entrar**: a tela pedida fica no `localStorage` (só o caminho, só caminhos `/coordenacao...` e `/minha...`, por uma hora, apagada ao usar e ao sair), porque o link do WhatsApp costuma abrir outra aba. `/acesso` usa esse destino depois do login e `/entrar` usa o `state.de` quando já há sessão, mas **só se o destino for da área do papel** de quem entrou (`destinoDoPapel`); senão, o início da área dele.
+- **`/acesso/<token>`** (`pages/acesso`): o token fica só na memória da tela. Ao abrir, a entrada do histórico vira `/acesso` (`navigate` com `replace`, que no navegador é `history.replaceState` sem o token) antes de a página aparecer; o token não vai para título, `state` do histórico, log nem outra chamada. Nada é pedido à API ao abrir (o preview do WhatsApp abre a URL): só o toque em "Entrar" faz `POST /api/sessao`. Depois de entrar, cada papel vai para a sua área. 401: "Este link não vale mais: peça um link novo à coordenação". Token fora do formato: "Este link está incompleto", sem chamar a API. `/acesso` sem token (recarregou) vai para `/entrar`.
+- **`/entrar`** (`pages/entrar`): explica que o acesso é pelo link pessoal, sem senha, que chega pelo WhatsApp. Com sessão, vai para a área do papel (ou para o `state.de`, se for da área). Depois de "Sair", mostra "Você saiu do sistema neste aparelho".
+- **Menu e conta**: o `AppShell` recebe `conta` (nome, papel e "Sair": `POST /api/sessao/sair` → `/entrar`). O item "Acessos" só aparece para o admin (`papeis` em `telas.ts`). Em `/minha`, o "Sair" fica na barra do topo, ao lado da marca com o papel.
+- **`/coordenacao/acessos`** (`pages/acessos`, só admin), em duas abas (`Abas`; a segunda só carrega, num pacote à parte, quando é aberta):
+  - **Coordenação**: um cartão por pessoa (nome, papel, ativo, links válidos com "Revogar", aparelhos conectados), "Nova pessoa", "Gerar link novo", "Desativar acesso"/"Reativar acesso" (o próprio cartão não tem "Desativar acesso": a API recusaria com 409). O link com o token só existe na resposta que o cria: a tela o mostra uma vez, num `Dialogo` com o alerta "Este link só aparece agora", "Copiar link" (área de transferência; sem ela, seleciona o link no campo) e "Enviar pelo WhatsApp" (`https://wa.me/?text=` com uma mensagem curta e o link), e o esquece ao fechar. Os 409 `em_uso` aparecem em português, conforme o caso (a si mesmo, o último admin ativo, o último link válido de admin).
+  - **Líderes, discipuladores e redes** (`AcessosHierarquia.tsx`, RIFA-014): escolha do papel (`Select`) e a tabela de todos os alvos do papel (`GET /api/admin/acessos-hierarquia?papel=`): alvo, pessoa da hierarquia (com o aviso quando o último link foi para outra pessoa), telefone (só líder), situação (sem link; link válido com o último uso; só revogados ou vencidos; desativado) e aparelhos. "Gerar links para quem ainda não tem" manda num lote só os alvos sem link válido (os desativados ficam de fora: a API recusaria o lote com 409); por linha, "Novo link", "Trocar acesso" (`revogar_anteriores`, com confirmação `alertdialog` que avisa que o aparelho antigo sai), "Revogar link" e "Desativar"/"Reativar" (as rotas da coordenação). Os links gerados aparecem uma vez, num `Dialogo` (`DialogosHierarquia.tsx`) com o aviso, "Copiar mensagem" e "Abrir no WhatsApp" (`https://wa.me/<telefone>?text=`, com o telefone do líder normalizado por `telefoneParaWhatsApp`; sem telefone ou fora do formato, só copiar; sem a área de transferência, a mensagem aparece selecionada no campo). A mensagem sai de `mensagemHierarquia` (`textos.ts`): cumprimenta a pessoa, diz para que é o link e avisa que é pessoal. Os botões ocupados ou sem nada a fazer usam `aria-disabled` (continuam focáveis: o foco volta para eles ao fechar o diálogo).
+  - Valores do contrato (caminhos, papéis, limites, formato do token) são cópias, conferidas por `pages/acessos/acessos-contrato.test.ts`.
+
+## Visão individual (`/minha`, RIFA-014)
+
+Para líder, discipulador e rede (o alvo vem só da sessão: a tela não manda id de nada). `GET /api/minha/visao` (`pages/minha/minha-api.ts`), com `periodo=atual` (o ranking da semana) antes e durante a campanha e `periodo=campanha` depois do fim (o resultado final, como o ranking público).
+
+- **Celular primeiro, legível ao sol**: 360 px sem rolagem lateral (`minha-css.test.ts` confere que o CSS não tem largura fixa e o contraste dos pares de texto e fundo; a medida na tela de verdade é das capturas). O % da meta da campanha em destaque, bem grande, com a situação contra a curva (em dia ou abaixo), a projeção e a meta de **hoje** ("Faltam 7 bilhetes hoje"); o período atual; a curva em % da meta (`GraficoLinhas`, pontos-base); o ranking (posição na divisão e no geral, com o **nome e a posição** do vizinho de cima e do de baixo, nunca a distância: D12) e os primeiros da divisão com "Você" (`aria-current`); a equipe do discipulador (as células dele) e da rede (agrupada por discipulador), numa `DataTable`, com o aviso de quem ainda não aderiu (célula sem afiliado vinculado). O líder sem afiliado vinculado vê o aviso para falar com a coordenação.
+- **Nunca dinheiro**: com a meta em centavos, as quantidades da meta chegam null e a tela mostra só percentuais (`emBilhetes` em `textos.ts` nunca mostra uma quantidade da meta fora de bilhetes); os bilhetes vendidos (campo `bilhetes`, que não é dinheiro) aparecem com qualquer unidade. `guarda-minha.test.ts` confere o código da pasta (sem formatar dinheiro, sem ler a distância até os vizinhos, só rotas `/api/minha/...`, contrato só por tipos ou por `calculos`) e `MinhaPage.test.tsx` varre o DOM sem "R$" em todos os cenários.
+- **Frases no lugar da posição**: antes da 1ª venda do alvo, uma frase de incentivo; alvo sem células (posições null), a explicação de que ainda não há células no ranking; antes do início, a contagem regressiva no destaque.
+- **Estados**: carregando, erro (com "Tentar de novo"), sem campanha (404). Atualiza sozinha a cada 60 s com a aba visível (`useVisaoIndividual.ts`, como o ranking público); uma falha mantém os números e avisa numa região viva fixa.
+- **Pacote à parte**: `MinhaPage.tsx` carrega `VisaoIndividual.tsx` com `lazy` (como a configuração da Campanha); enquanto ele chega, o cabeçalho (`Cabecalho.tsx`, da sessão) e o carregando.
 
 ## Componentes base (`components/ui`)
 
@@ -160,16 +176,19 @@ Notas:
 ## Regras
 
 1. **O público nunca recebe R$.** `/` e `/telao` (e qualquer tela futura aberta ao público) mostram só posições, top 3 e percentuais, nunca valores em dinheiro. Nessas pastas o código não tem `formatarMoeda`, "R$", `currency`, `BRL` nem campos `_centavos`: o `rotas.test.tsx` confere a tela renderizada e o código. Esse teste lê só os arquivos dessas pastas (não segue os imports): tela pública nova entra no `import.meta.glob` dele, e componente usado por tela pública também não formata dinheiro. Esconder no front não basta, porque o que chega ao navegador é público: a tela pública só chama rotas da API que não devolvem valores.
-2. Dinheiro em centavos inteiros, percentuais em pontos-base e datas no fuso de Belém, sempre pelos formatadores.
-3. Sem bibliotecas de UI ou de CSS, sem fonte externa, sem CDN.
-4. Acessibilidade: um `<h1>` por tela (o do `PageHeader`); campo sempre com rótulo; status nunca só pela cor; alvos de toque com 44 px ou mais (`--alvo-toque`); foco visível.
-5. Sem rolagem horizontal em 390 px. O telão não rola em 1920×1080.
+2. **Líder, discipulador e rede nunca recebem R$** (D12): a visão individual (`/minha`) mostra percentuais, posições, nomes e bilhetes do próprio alvo e da equipe dele; dos pares, só nome e posição. O código de `pages/minha` não formata nem lê dinheiro (`guarda-minha.test.ts`) e a tela renderizada é varrida em todos os cenários (`MinhaPage.test.tsx`).
+3. Dinheiro em centavos inteiros, percentuais em pontos-base e datas no fuso de Belém, sempre pelos formatadores.
+4. Sem bibliotecas de UI ou de CSS, sem fonte externa, sem CDN.
+5. Acessibilidade: um `<h1>` por tela (o do `PageHeader`); campo sempre com rótulo; status nunca só pela cor; alvos de toque com 44 px ou mais (`--alvo-toque`); foco visível.
+6. Sem rolagem horizontal em 390 px (360 px na visão individual). O telão não rola em 1920×1080.
 
 ## Testes
 
 - `npx vitest run --project web` roda só os testes do site (jsdom + Testing Library).
 - `renderizarRota("/coordenacao/pedidos")` (em `test/renderizar.tsx`) renderiza o site inteiro com as rotas reais e um roteador em memória, e devolve também o `roteador` (para conferir `roteador.state.location.pathname`).
 - A sessão já vem conhecida nos testes, sem `GET /api/sessao`: `USUARIO_DE_TESTE` (papel coordenacao). `renderizarRota(caminho, { usuario: ADMIN_DE_TESTE })` entra como admin; `{ usuario: null }` faz o site perguntar à API, como no navegador (o `fetch` simulado responde `GET /api/sessao`).
+- Visão individual: `pages/minha/teste-apoio.ts` tem as sessões `LIDER`, `DISCIPULADOR` e `REDE` (com o alvo), `visaoDe(cenario)` (a resposta de `GET /api/minha/visao` por papel, fase, unidade da meta, sem vendas, sem células...; toda resposta passa pelo `respostaVisaoIndividualSchema`), `todosOsCenarios()` e `criarApiFalsa(visao, sessao)`. Os acessos da hierarquia ficam na API falsa de `pages/acessos/teste-apoio.ts` (`alvosExemplo()`).
+- Telas carregadas com `lazy` (`/minha`, a aba da hierarquia em Acessos, a configuração da Campanha) aparecem depois de um instante: espere com `findBy...` (o primeiro teste de um arquivo é o que carrega o pacote; a ordem dos testes não pode importar).
 - Para a API, troque o `fetch`: `vi.stubGlobal("fetch", vi.fn(async () => respostaJson({ ... }, 200)))` e, no `afterEach`, `vi.unstubAllGlobals()`.
 - O `@testing-library/user-event` não está instalado: use `fireEvent`.
 - Nada de `.only` nem `.skip` no que vai para a `main`.

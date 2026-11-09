@@ -1,9 +1,11 @@
-// Sessão da coordenação no site (RIFA-007): quem está conectado, entrar pelo link pessoal e sair.
-// O cookie da sessão é HttpOnly: o site não o lê, pergunta a GET /api/sessao (docs/acesso.md).
-// O ProvedorSessao fica na raiz das rotas (rotas.tsx). A guarda da coordenação (CoordenacaoLayout) e as
-// telas /acesso e /entrar usam useSessao(); as telas da coordenação, useUsuarioConectado().
-// Do contrato vêm só os TIPOS (os valores poriam o zod no pacote do site): os caminhos abaixo são cópias,
-// conferidas por pages/acessos/acessos-contrato.test.ts.
+// Sessão no site (RIFA-007; papéis da hierarquia na RIFA-014): quem está conectado, entrar pelo link pessoal
+// e sair. O cookie da sessão é HttpOnly: o site não o lê, pergunta a GET /api/sessao (docs/acesso.md).
+// O ProvedorSessao fica na raiz das rotas (rotas.tsx). Cada área com sessão tem a sua guarda
+// (useGuardaDaArea): a coordenação (/coordenacao, CoordenacaoLayout) e a visão individual de líderes,
+// discipuladores e redes (/minha, MinhaLayout). As telas /acesso e /entrar usam useSessao(); as telas
+// atrás de uma guarda, useUsuarioConectado().
+// Do contrato vêm só os TIPOS (os valores poriam o zod no pacote do site): os caminhos e papéis abaixo são
+// cópias, conferidas por pages/acessos/acessos-contrato.test.ts e pages/minha/minha-contrato.test.ts.
 import {
   createContext,
   useCallback,
@@ -14,8 +16,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation, useNavigate } from "react-router";
 import type {
   Papel,
+  PapelHierarquia,
   RespostaSessao,
   UsuarioSessao,
 } from "../../shared/contracts";
@@ -154,12 +158,12 @@ export function useSessao(): ValorSessao {
   return valor;
 }
 
-/** Quem está conectado. Só nas telas atrás da guarda da coordenação, onde a sessão sempre existe. */
+/** Quem está conectado. Só nas telas atrás de uma guarda (useGuardaDaArea), onde a sessão sempre existe. */
 export function useUsuarioConectado(): UsuarioSessao {
   const { estado } = useSessao();
   if (estado.situacao !== "conectada") {
     throw new Error(
-      "Tela da coordenação sem sessão: use dentro da guarda (CoordenacaoLayout).",
+      "Tela sem sessão: use dentro da guarda da área (CoordenacaoLayout ou MinhaLayout).",
     );
   }
   return estado.usuario;
@@ -174,6 +178,99 @@ function ehCaminhoDaSessao(caminho: string): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Áreas do site por papel (RIFA-014, D12)
+// ---------------------------------------------------------------------------------------------------
+// Admin e coordenação usam /coordenacao; líder, discipulador e rede usam só /minha (a visão individual).
+// Endereço da outra área leva à área do papel (a API recusa do mesmo jeito, com 403).
+
+export type AreaDoSite = "coordenacao" | "hierarquia";
+
+/** Tela inicial de cada área. */
+export const INICIO_DA_AREA: Record<AreaDoSite, string> = {
+  coordenacao: "/coordenacao",
+  hierarquia: "/minha",
+};
+
+/** PAPEIS_HIERARQUIA do contrato (cópia; os outros papéis são os da coordenação). */
+export const PAPEIS_DA_HIERARQUIA: readonly PapelHierarquia[] = [
+  "lider",
+  "discipulador",
+  "rede",
+];
+
+export function ehPapelDaHierarquia(papel: Papel): papel is PapelHierarquia {
+  return (PAPEIS_DA_HIERARQUIA as readonly Papel[]).includes(papel);
+}
+
+export function areaDoPapel(papel: Papel): AreaDoSite {
+  return ehPapelDaHierarquia(papel) ? "hierarquia" : "coordenacao";
+}
+
+/** /minha para líder, discipulador e rede; /coordenacao para admin e coordenação. */
+export function inicioDoPapel(papel: Papel): string {
+  return INICIO_DA_AREA[areaDoPapel(papel)];
+}
+
+/**
+ * Para onde ir depois de entrar: o destino guardado (ou o `state.de` de /entrar) só vale se for um caminho
+ * seguro da área do papel; senão, a tela inicial da área dele.
+ */
+export function destinoDoPapel(destino: unknown, papel: Papel): string {
+  const seguro = destinoSeguro(destino);
+  const area = areaDoPapel(papel);
+  return seguro !== null && areaDoCaminho(seguro) === area
+    ? seguro
+    : INICIO_DA_AREA[area];
+}
+
+/** A área de um caminho que já passou por destinoSeguro. */
+function areaDoCaminho(caminho: string): AreaDoSite {
+  return caminho.startsWith(INICIO_DA_AREA.hierarquia)
+    ? "hierarquia"
+    : "coordenacao";
+}
+
+/**
+ * Guarda de uma área com sessão (CoordenacaoLayout e MinhaLayout):
+ * - sessão ainda desconhecida: pergunta a GET /api/sessao;
+ * - sem sessão (ao abrir, por um 401 no meio do uso ou depois de "Sair"): vai para /entrar e, menos depois de
+ *   sair, guarda a tela pedida, para voltar a ela depois de entrar;
+ * - sessão de um papel da outra área: vai para a tela inicial da área dele (com replace).
+ * Devolve quem está conectado quando o papel é desta área; senão, null (a guarda mostra o carregando ou o erro).
+ */
+export function useGuardaDaArea(area: AreaDoSite): UsuarioSessao | null {
+  const { estado, verificar } = useSessao();
+  const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const { situacao } = estado;
+  const motivo = estado.situacao === "desconectada" ? estado.motivo : null;
+  const usuario = estado.situacao === "conectada" ? estado.usuario : null;
+  const areaDoUsuario = usuario ? areaDoPapel(usuario.papel) : null;
+
+  useEffect(() => {
+    if (situacao === "desconhecida") verificar();
+  }, [situacao, verificar]);
+
+  useEffect(() => {
+    if (motivo === null) return;
+    const destino: EstadoNavegacaoEntrar = { motivo };
+    if (motivo !== "saiu") {
+      destino.de = `${pathname}${search}`;
+      guardarDestino(destino.de);
+    }
+    void navigate("/entrar", { replace: true, state: destino });
+  }, [motivo, pathname, search, navigate]);
+
+  useEffect(() => {
+    if (areaDoUsuario !== null && areaDoUsuario !== area) {
+      void navigate(INICIO_DA_AREA[areaDoUsuario], { replace: true });
+    }
+  }, [areaDoUsuario, area, navigate]);
+
+  return areaDoUsuario === area ? usuario : null;
+}
+
+// ---------------------------------------------------------------------------------------------------
 // Para onde voltar depois de entrar
 // ---------------------------------------------------------------------------------------------------
 // Sem sessão, a guarda manda para /entrar e guarda a tela pedida. A pessoa então abre o link pessoal
@@ -185,7 +282,7 @@ export const VALIDADE_DESTINO_MS = 60 * 60 * 1000;
 
 /** O que a guarda manda para /entrar no `state` da navegação. */
 export type EstadoNavegacaoEntrar = {
-  /** Tela pedida (só caminhos da coordenação). */
+  /** Tela pedida (só caminhos das áreas com sessão: /coordenacao... e /minha...). */
   de?: string;
   motivo?: MotivoSemSessao;
 };
@@ -204,10 +301,14 @@ export function lerEstadoEntrar(state: unknown): EstadoNavegacaoEntrar {
   return lido;
 }
 
-/** Só caminhos da área da coordenação ("/coordenacao", "/coordenacao/pedidos?x=1"); o resto vira null. */
+/**
+ * Só caminhos das áreas com sessão: a coordenação ("/coordenacao", "/coordenacao/pedidos?x=1") e a visão
+ * individual ("/minha", "/minha?periodo=campanha"); o resto vira null. A área do papel é conferida à parte
+ * (destinoDoPapel).
+ */
 export function destinoSeguro(valor: unknown): string | null {
   if (typeof valor !== "string" || valor.includes("//")) return null;
-  return /^\/coordenacao(?:\/[\w/-]*)?(?:\?[^#\\]*)?$/.test(valor)
+  return /^\/(?:coordenacao|minha)(?:\/[\w/-]*)?(?:\?[^#\\]*)?$/.test(valor)
     ? valor
     : null;
 }
@@ -220,11 +321,11 @@ export function guardarDestino(caminho: string): void {
       JSON.stringify({ caminho, ate: Date.now() + VALIDADE_DESTINO_MS }),
     );
   } catch {
-    // Armazenamento indisponível (ex.: bloqueado no navegador): depois de entrar, vai para a Visão geral.
+    // Armazenamento indisponível (ex.: bloqueado no navegador): depois de entrar, vai para o início da área.
   }
 }
 
-/** Lê e apaga o destino guardado. Vencido, fora da coordenação ou ilegível: null. */
+/** Lê e apaga o destino guardado. Vencido, fora das áreas com sessão ou ilegível: null. */
 export function retirarDestino(): string | null {
   try {
     const texto = localStorage.getItem(CHAVE_DESTINO);

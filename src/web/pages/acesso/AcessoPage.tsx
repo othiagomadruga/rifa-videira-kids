@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { Aviso, Button, Card, PageHeader } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
-import { retirarDestino, useSessao } from "../../lib/sessao";
+import { destinoDoPapel, retirarDestino, useSessao } from "../../lib/sessao";
 import "./acesso.css";
 
 /** PREFIXO_LINK_ACESSO sem a barra final: o endereço que fica no lugar do link (cópia do contrato). */
@@ -18,10 +18,12 @@ type Estado =
   /** Sem resposta ou outra falha: dá para tocar em Entrar de novo. */
   | { tipo: "falha"; erro: unknown };
 
-// Página do link pessoal da coordenação (/acesso/<token>). O token fica só na memória desta tela: ao
-// abrir, sai da barra de endereço e do histórico (a entrada vira /acesso), e não vai para título, log
-// nem outro lugar. A sessão só nasce no toque em "Entrar" (POST /api/sessao): o preview de link do
-// WhatsApp abre a URL, mas não toca no botão. Sem token (ex.: /acesso recarregado), vai para /entrar.
+// Página do link pessoal (/acesso/<token>) da coordenação e de líderes, discipuladores e redes. O token fica
+// só na memória desta tela: ao abrir, sai da barra de endereço e do histórico (a entrada vira /acesso), e não
+// vai para título, log nem outro lugar. A sessão só nasce no toque em "Entrar" (POST /api/sessao): o preview
+// de link do WhatsApp abre a URL, mas não toca no botão. Depois de entrar, cada papel vai para a sua área
+// (/coordenacao ou /minha; o destino guardado só vale se for da área do papel). Sem token (ex.: /acesso
+// recarregado), vai para /entrar.
 export function AcessoPage() {
   const textoDaUrl = useParams()["*"] ?? "";
   // Lido uma vez, ao abrir; logo depois o endereço já não tem o token.
@@ -52,8 +54,10 @@ export function AcessoPage() {
     enviando.current = true;
     setEstado({ tipo: "entrando" });
     try {
-      await entrar(token);
-      void navigate(retirarDestino() ?? "/coordenacao", { replace: true });
+      const usuario = await entrar(token);
+      void navigate(destinoDoPapel(retirarDestino(), usuario.papel), {
+        replace: true,
+      });
     } catch (erro) {
       enviando.current = false;
       setEstado(
@@ -72,7 +76,7 @@ export function AcessoPage() {
     <div className="acesso">
       <PageHeader
         titulo="Entrar no sistema da Rifa Videira Kids"
-        descricao="Área da coordenação, pelo seu link pessoal (sem senha)."
+        descricao="Pelo seu link pessoal, sem senha."
       />
       <Card>
         <div className="acesso-cartao">

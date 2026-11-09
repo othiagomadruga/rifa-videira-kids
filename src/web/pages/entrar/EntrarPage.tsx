@@ -1,26 +1,33 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { Aviso, Card, Loading, PageHeader } from "../../components/ui";
-import { esquecerDestino, lerEstadoEntrar, useSessao } from "../../lib/sessao";
+import {
+  destinoDoPapel,
+  esquecerDestino,
+  lerEstadoEntrar,
+  useSessao,
+} from "../../lib/sessao";
 import "./entrar.css";
 
 // Como entrar (sem sessão): o acesso é pelo link pessoal que chega no WhatsApp, sem senha. Quem já tem
-// sessão vai direto para a coordenação (ou para a tela que tinha pedido, quando veio da guarda).
+// sessão vai direto para a área do papel (/coordenacao ou /minha), ou para a tela que tinha pedido, quando
+// veio da guarda e a tela é da área dele.
 export function EntrarPage() {
   const { estado, verificar } = useSessao();
   const navigate = useNavigate();
   const { de, motivo } = lerEstadoEntrar(useLocation().state);
   const { situacao } = estado;
+  const papel = estado.situacao === "conectada" ? estado.usuario.papel : null;
 
   useEffect(() => {
     if (situacao === "desconhecida") verificar();
   }, [situacao, verificar]);
 
   useEffect(() => {
-    if (situacao !== "conectada") return;
+    if (papel === null) return;
     esquecerDestino();
-    void navigate(de ?? "/coordenacao", { replace: true });
-  }, [situacao, de, navigate]);
+    void navigate(destinoDoPapel(de, papel), { replace: true });
+  }, [papel, de, navigate]);
 
   const conferindo =
     situacao === "desconhecida" ||
@@ -31,7 +38,7 @@ export function EntrarPage() {
     <>
       <PageHeader
         titulo="Entrar"
-        descricao="Área da coordenação da Rifa Videira Kids."
+        descricao="Coordenação, líderes, discipuladores e redes da Rifa Videira Kids."
       />
       {conferindo ? (
         <Loading texto="Conferindo o seu acesso…" />

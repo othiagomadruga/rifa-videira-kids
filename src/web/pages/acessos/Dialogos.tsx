@@ -360,7 +360,11 @@ export function DialogoRevogar({
   pessoa,
   link,
   ...props
-}: PropsConfirmacao & { pessoa: Usuario; link: LinkAcesso }) {
+}: PropsConfirmacao & {
+  /** A pessoa da coordenação ou o usuário de um alvo da hierarquia (só o nome importa aqui). */
+  pessoa: Pick<Usuario, "nome">;
+  link: LinkAcesso;
+}) {
   const { executando, erro, confirmar } = useConfirmacao(
     () => revogarLink(link.id),
     mensagemAoRevogar,
@@ -410,7 +414,11 @@ export function DialogoDesativar({
   pessoa,
   aSiMesmo,
   ...props
-}: PropsConfirmacao & { pessoa: Usuario; aSiMesmo: boolean }) {
+}: PropsConfirmacao & {
+  /** A pessoa da coordenação ou o usuário de um alvo da hierarquia (com o papel do alvo). */
+  pessoa: Pick<Usuario, "id" | "nome" | "papel">;
+  aSiMesmo: boolean;
+}) {
   const { executando, erro, confirmar } = useConfirmacao(
     () => definirAtivo(pessoa.id, false),
     (falha) => mensagemAoDesativar(falha, aSiMesmo),

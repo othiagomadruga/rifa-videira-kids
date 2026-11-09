@@ -1,4 +1,89 @@
-/* Gestão dos acessos: um cartão por pessoa; no computador, cartões lado a lado. */
+/* Gestão dos acessos, em duas abas. Coordenação: um cartão por pessoa; no computador, cartões lado a lado.
+   Líderes, discipuladores e redes: a tabela dos alvos (cartões no celular), com o lote no topo. */
+.acessos-coordenacao,
+.acessos-hierarquia {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.acessos-coordenacao__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.acessos-hierarquia__controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3) var(--espaco-5);
+}
+
+.acessos-hierarquia__controles > .ui-campo {
+  flex: 0 1 16rem;
+}
+
+.acessos-hierarquia__lote {
+  display: grid;
+  gap: var(--espaco-1);
+  flex: 1 1 18rem;
+  justify-items: start;
+}
+
+/* Botão ocupado ou sem nada a fazer: continua focável (aria-disabled), mas parece desabilitado. */
+.acessos-hierarquia .ui-button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.acessos-divisao,
+.acessos-nota-linha {
+  display: block;
+  font-weight: var(--peso-normal);
+}
+
+.acessos-acoes-linha {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+}
+
+/* Links gerados (no diálogo): um bloco por alvo, com os botões e a mensagem para conferir. */
+.acessos-gerados {
+  display: grid;
+  gap: var(--espaco-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acessos-gerado {
+  display: grid;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-fundo);
+}
+
+.acessos-gerado__alvo {
+  font-size: var(--texto-md);
+  overflow-wrap: anywhere;
+}
+
+.acessos-gerado__mensagem summary {
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) 0;
+  color: var(--cor-link);
+  font-weight: var(--peso-medio);
+  cursor: pointer;
+}
+
 .acessos-lista {
   display: grid;
   gap: var(--espaco-4);

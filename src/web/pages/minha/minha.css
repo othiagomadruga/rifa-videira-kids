@@ -1,0 +1,399 @@
+/* Visão individual (/minha): celular primeiro (360 px sem rolagem lateral), números grandes e texto escuro
+   sobre fundo claro para ler ao sol; no computador, os cartões lado a lado. Só variáveis do tema. */
+
+/* Moldura: a marca (com o papel) e "Sair" no topo, sem menu. */
+.minha-moldura {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.minha-moldura__topo {
+  padding: var(--espaco-3) var(--margem-pagina);
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.minha-moldura__limite {
+  width: 100%;
+  max-width: var(--largura-conteudo);
+  margin: 0 auto;
+}
+
+.minha-moldura__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-4);
+}
+
+.minha-moldura__erro {
+  margin-top: var(--espaco-2);
+  color: var(--cor-perigo);
+  font-weight: var(--peso-forte);
+}
+
+.minha-moldura__conteudo {
+  flex: 1;
+  padding: var(--espaco-5) var(--margem-pagina) var(--espaco-7);
+}
+
+.minha-moldura__pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+  min-width: 0;
+}
+
+/* Cabeçalho: o tipo do alvo e a divisão num selo, e quem entrou. */
+.minha-cabecalho__alvo {
+  display: inline-block;
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria-forte);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+.minha-cabecalho__pessoa strong {
+  color: var(--cor-texto);
+}
+
+.minha-visao {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+/* O destaque e o período: um por linha no celular; lado a lado quando couberem. */
+.minha-cartoes {
+  display: grid;
+  gap: var(--espaco-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  align-items: start;
+}
+
+/* Destaque: o % da meta da campanha bem grande e a meta de hoje. */
+.minha-destaque {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding: var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 2px solid var(--cor-primaria);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+.minha-destaque__fase,
+.minha-destaque__detalhe,
+.minha-destaque__nota {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-destaque__fase strong {
+  color: var(--cor-texto);
+}
+
+.minha-destaque__rotulo {
+  font-size: var(--texto-lg);
+}
+
+.minha-destaque__numero {
+  font-size: clamp(var(--texto-4xl), 1.5rem + 6vw, calc(2 * var(--texto-4xl)));
+  font-weight: var(--peso-negrito);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* Antes do início: a contagem regressiva no lugar do número. */
+.minha-destaque__contagem {
+  font-size: clamp(
+    var(--texto-3xl),
+    1.25rem + 3vw,
+    calc(1.5 * var(--texto-4xl))
+  );
+  font-weight: var(--peso-negrito);
+  line-height: 1.1;
+}
+
+.minha-destaque__meta {
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+}
+
+.minha-hoje {
+  display: grid;
+  gap: var(--espaco-1);
+  padding: var(--espaco-3);
+  border-left: 4px solid var(--cor-primaria);
+  border-radius: var(--raio-2);
+  background: var(--cor-primaria-suave);
+}
+
+.minha-hoje[data-batida] {
+  border-left-color: var(--cor-sucesso);
+  background: var(--cor-sucesso-suave);
+}
+
+.minha-hoje__titulo {
+  font-size: var(--texto-md);
+}
+
+.minha-hoje__data {
+  font-weight: var(--peso-medio);
+}
+
+.minha-hoje__destaque {
+  font-size: var(--texto-2xl);
+  font-weight: var(--peso-negrito);
+  line-height: 1.2;
+  color: var(--cor-primaria-forte);
+}
+
+.minha-hoje[data-batida] .minha-hoje__destaque {
+  color: var(--cor-sucesso);
+}
+
+.minha-hoje__icone {
+  margin-right: var(--espaco-2);
+}
+
+.minha-hoje__detalhe {
+  font-size: var(--texto-sm);
+}
+
+.minha-periodo__corpo {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.minha-periodo__subtitulo {
+  margin-top: calc(-1 * var(--espaco-3));
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-periodo__nota,
+.minha-curva__subtitulo,
+.minha-ranking__nota {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-curva__subtitulo {
+  margin: calc(-1 * var(--espaco-3)) 0 var(--espaco-3);
+}
+
+/* Ranking: a posição na divisão e no geral, com os vizinhos, e os primeiros da divisão. */
+.minha-ranking__corpo {
+  display: grid;
+  gap: var(--espaco-4);
+}
+
+.minha-ranking__janela {
+  margin-top: calc(-1 * var(--espaco-3));
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+.minha-ranking__frase {
+  padding: var(--espaco-3);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie-2);
+  font-weight: var(--peso-medio);
+}
+
+.minha-ranking__frase[data-incentivo] {
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria-forte);
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+}
+
+.minha-posicoes {
+  display: grid;
+  gap: var(--espaco-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+.minha-posicao {
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-1);
+  min-width: 0;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-fundo);
+}
+
+.minha-posicao__titulo {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-posicao__numero {
+  font-size: var(--texto-3xl);
+  font-weight: var(--peso-negrito);
+  line-height: 1.1;
+}
+
+.minha-posicao__pares {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-vizinhos {
+  display: grid;
+  gap: var(--espaco-1);
+  margin-top: var(--espaco-2);
+}
+
+.minha-vizinhos > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--espaco-2);
+}
+
+.minha-vizinhos dt {
+  color: var(--cor-texto-suave);
+}
+
+.minha-vizinhos dt::after {
+  content: ":";
+}
+
+.minha-vizinhos dd {
+  margin: 0;
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.minha-primeiros {
+  display: grid;
+  gap: var(--espaco-2);
+}
+
+.minha-primeiros__titulo {
+  font-size: var(--texto-md);
+}
+
+.minha-primeiros__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */
+.minha-primeiros__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+}
+
+/* O próprio alvo: borda grossa, fundo e peso (não depende só da cor) e o selo "Você". */
+.minha-primeiros__item[data-eu] {
+  border: 2px solid var(--cor-primaria);
+  background: var(--cor-primaria-suave);
+  font-weight: var(--peso-forte);
+}
+
+.minha-primeiros__posicao {
+  min-width: 2.5ch;
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrito);
+}
+
+.minha-primeiros__nome {
+  overflow-wrap: anywhere;
+}
+
+/* Equipe (discipulador e rede): a tabela das células; na rede, um grupo por discipulador. */
+.minha-equipe {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.minha-equipe__cabecalho {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.minha-equipe__titulo {
+  font-size: var(--texto-xl);
+}
+
+.minha-equipe__descricao,
+.minha-equipe__vazia {
+  color: var(--cor-texto-suave);
+}
+
+.minha-equipe__grupos {
+  display: grid;
+  gap: var(--espaco-6);
+}
+
+.minha-grupo {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.minha-grupo__titulo {
+  font-size: var(--texto-lg);
+  overflow-wrap: anywhere;
+}
+
+.minha-grupo__resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-5);
+  margin: 0;
+}
+
+.minha-grupo__resumo > div {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.minha-grupo__resumo dt {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-grupo__resumo dd {
+  margin: 0;
+  font-weight: var(--peso-forte);
+}
+
+/* Rodapé: a hora da atualização e, só quando falha, o aviso (região viva sempre presente, nunca oculta). */
+.minha-rodape {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-rodape__falha:not(:empty) {
+  margin-top: var(--espaco-2);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-alerta);
+  border-radius: var(--raio-2);
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+  font-weight: var(--peso-forte);
+}
