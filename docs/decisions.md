@@ -188,7 +188,7 @@ O PO pediu o design do site com as cores e o logo da Videira, o logo do Kids dis
   calculado pela cor cheia vizinha (o miolo fica opaco; sem halo em fundo escuro). WebP (6 KB) com PNG de reserva num
   `<picture>`, com `width` e `height` (nada pula ao carregar). Em fundo escuro (telão), o logo vai num selo claro em
   vez de ser recolorido. Faltam do PO: SVG oficial, versão negativa e resolução maior (o PNG tem 308×120).
-- **Movimento sem dependência** (a regra 3 do `docs/frontend.md` proíbe biblioteca de UI e CDN): CSS (keyframes e
+- **Movimento sem dependência** (as regras do `docs/frontend.md` proíbem biblioteca de UI e CDN): CSS (keyframes e
   transições) e a Web Animations API. Toda animação de CSS fica em `@media (prefers-reduced-motion: no-preference)`
   e todo `element.animate` passa por `lib/movimento.ts`, que não anima com `reduce` nem sem `matchMedia` (o jsdom:
   os testes que já existiam continuam vendo tudo pronto, sem mudar uma linha). Um teste varre todo o CSS do site.
