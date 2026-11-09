@@ -1104,6 +1104,50 @@ describe("CA2: regra do valor dos pedidos em várias linhas (um bilhete por linh
       { pedido_id: "R-0302", motivo: "valor_ambiguo" },
     ]);
   });
+
+  it("o que a conferência gravou não firma a convenção: recuperar X1 e X2 não faz o Y ambíguo virar R$ 180,00", async () => {
+    // X1 e X2: 3 linhas de R$ 20,00 (o preço), recuperados como R$ 60,00.
+    const xs = ["R-0310", "R-0311"].flatMap((pedido) => [
+      linha(pedido, "R$ 20,00"),
+      linha(pedido, "R$ 20,00"),
+      linha(pedido, "R$ 20,00"),
+    ]);
+    const gravados = await recuperar({
+      ...(await corpo(csvDoCenario(xs))),
+      pedidos: ["R-0310", "R-0311"],
+    });
+    expect(gravados.recuperados.map((pedido) => pedido.total_centavos)).toEqual(
+      [6000, 6000],
+    );
+
+    // O arquivo seguinte traz X1 e X2 (agora no sistema, origem conferencia) e Y: R$ 60,00 nas 3 linhas.
+    const y = [
+      linha("R-0312", "R$ 60,00", { quantidade: "3" }),
+      linha("R-0312", "R$ 60,00", { quantidade: "3" }),
+      linha("R-0312", "R$ 60,00", { quantidade: "3" }),
+    ];
+    const enviado = await corpo(csvDoCenario([...xs, ...y]));
+    const analise = await porPedido(enviado);
+    expect(
+      analise.divergencias[0].itens.map((item) => [
+        item.pedido_id,
+        item.arquivo?.total_centavos,
+        item.recuperavel,
+        item.observacoes,
+      ]),
+    ).toEqual([["R-0312", null, false, ["valor_ambiguo"]]]);
+    expect(analise.avisos.map((aviso) => aviso.codigo)).not.toContain(
+      "valor_do_pedido_repetido",
+    );
+    const previa = await recuperar({
+      ...enviado,
+      pedidos: ["R-0312"],
+      simular: true,
+    });
+    expect(previa.nao_recuperados).toEqual([
+      { pedido_id: "R-0312", motivo: "valor_ambiguo" },
+    ]);
+  });
 });
 
 describe("CA2: trava do código que não bate (a coluna escolhida não é o código da Rifei)", () => {

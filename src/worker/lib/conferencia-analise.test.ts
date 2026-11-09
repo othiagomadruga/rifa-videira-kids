@@ -400,6 +400,58 @@ describe("regra do valor dos pedidos em várias linhas (B2 da revisão)", () => 
     );
   });
 
+  it("pedidos recuperados pela própria conferência não firmam a convenção (X1 e X2 não transformam Y em R$ 180)", () => {
+    // X1 e X2: 3 linhas de R$ 20,00 (o preço), recuperados como R$ 60,00 pela regra do preço.
+    const linhas = [
+      CABECALHO,
+      ...["X1", "X2"].flatMap((codigo) =>
+        ["1", "2", "3"].map((numero) => [
+          codigo,
+          "Pago",
+          "1",
+          numero,
+          "R$ 20,00",
+          "101",
+          "28/11/2026",
+        ]),
+      ),
+      // Y: o mesmo valor (R$ 60,00, longe do preço) nas 3 linhas: ambíguo.
+      ["Y", "Pago", "3", "7", "R$ 60,00", "101", "28/11/2026"],
+      ["Y", "Pago", "3", "8", "R$ 60,00", "101", "28/11/2026"],
+      ["Y", "Pago", "3", "9", "R$ 60,00", "101", "28/11/2026"],
+    ];
+    const recuperados = ["X1", "X2"].map((codigo) =>
+      gravado(codigo, {
+        qtd_bilhetes: 3,
+        total_centavos: 6000,
+        origem: "conferencia",
+      }),
+    );
+    const plano = planejar(linhas, recuperados, ["Y"]);
+    expect(plano.convencao).toBeNull();
+    expect(plano.naoRecuperados).toEqual([
+      { pedido_id: "Y", motivo: "valor_ambiguo" },
+    ]);
+    const resposta = analisar(linhas, recuperados);
+    expect(grupo(resposta, "venda_perdida").itens).toMatchObject([
+      {
+        pedido_id: "Y",
+        arquivo: { total_centavos: null },
+        recuperavel: false,
+        observacoes: ["valor_ambiguo"],
+      },
+    ]);
+    // Com os mesmos pedidos vindos do webhook, a convenção vale (e Y seria R$ 180,00).
+    const doWebhook = recuperados.map((pedido) => ({
+      ...pedido,
+      origem: "webhook" as const,
+    }));
+    expect(planejar(linhas, doWebhook, ["Y"])).toMatchObject({
+      convencao: "por_bilhete",
+      gravar: [{ pedido_id: "Y", total_centavos: 18000 }],
+    });
+  });
+
   it("o mesmo arquivo em um bilhete por linha (valor de cada bilhete) e em um pedido por linha dá as mesmas divergências", () => {
     const gravados = [
       gravado("A", { qtd_bilhetes: 3, total_centavos: 6000 }),

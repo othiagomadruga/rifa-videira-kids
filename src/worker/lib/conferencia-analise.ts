@@ -469,8 +469,10 @@ export const MINIMO_PEDIDOS_DA_CONVENCAO = 2;
 
 /**
  * A convenção do arquivo, pelos pedidos em várias linhas com valor repetido que JÁ estão pagos no sistema
- * (na campanha): se a maioria bate com uma das duas contas (e pelo menos MINIMO_PEDIDOS_DA_CONVENCAO),
- * vale para todos os pedidos do arquivo. Sem maioria, null (a regra do preço decide pedido a pedido).
+ * (na campanha) e que vieram do WEBHOOK: se a maioria bate com uma das duas contas (e pelo menos
+ * MINIMO_PEDIDOS_DA_CONVENCAO), vale para todos os pedidos do arquivo. Sem maioria, null (a regra do preço
+ * decide pedido a pedido). Um pedido gravado pela própria conferência não prova nada: o total dele saiu
+ * desta mesma regra, e contá-lo transformaria um valor ambíguo noutro arquivo em "por bilhete".
  */
 export function convencaoDoArquivo(
   pedidos: Iterable<PedidoDoArquivo>,
@@ -486,7 +488,8 @@ export function convencaoDoArquivo(
     if (
       !gravado ||
       gravado.campanha_id !== campanhaId ||
-      gravado.status !== "approved"
+      gravado.status !== "approved" ||
+      gravado.origem !== "webhook"
     )
       continue;
     comparados++;
