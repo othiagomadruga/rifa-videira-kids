@@ -295,10 +295,12 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
     const comLink = await screen.findByRole("dialog", {
       name: "Link de acesso de Gestor do Bumbo",
     });
+    // O diálogo termina de abrir (o foco inicial vai para "Copiar link") antes do toque, como no navegador.
+    // Sem esta espera, o efeito do foco inicial pode rodar depois da cópia falhar e tirar o foco do campo.
+    const copiar = within(comLink).getByRole("button", { name: "Copiar link" });
+    await waitFor(() => expect(copiar).toHaveFocus());
 
-    fireEvent.click(
-      within(comLink).getByRole("button", { name: "Copiar link" }),
-    );
+    fireEvent.click(copiar);
 
     expect(
       await within(comLink).findByText(/Não deu para copiar sozinho/, {
