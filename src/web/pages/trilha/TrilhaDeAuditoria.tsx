@@ -26,7 +26,7 @@ type Trilha = {
   inicioDaUltima: number | null;
 };
 
-/** Id do bloco da ação de um registro: o foco vai para o primeiro registro novo depois de "Carregar mais". */
+/** Id do bloco "Quando" de um registro: o foco vai para o primeiro registro novo depois de "Carregar mais". */
 export const idDoRegistro = (id: number) => `trilha-registro-${id}`;
 /** A linha do fim da lista: recebe o foco se a última página vier vazia (o botão some). */
 export const ID_FIM_DA_TRILHA = "trilha-fim";
@@ -152,31 +152,20 @@ export function TrilhaDeAuditoria() {
   const bloco = (registro: RegistroAuditoria, classe: string) =>
     `trilha-celula ${classe}${novos.has(registro.id) ? " trilha-celula--nova" : ""}`;
 
+  // A ordem da leitura de um registro: quando (título do cartão no celular), quem, o quê, em quê e o resumo.
   const colunas: ColunaTabela<RegistroAuditoria>[] = [
     {
-      chave: "acao",
-      titulo: "Ação",
+      chave: "quando",
+      titulo: "Quando",
       principal: true,
       celula: (registro) => (
         <span
           id={idDoRegistro(registro.id)}
           tabIndex={-1}
-          className={bloco(registro, "trilha-acao")}
-        >
-          {rotuloDaAcao(registro.acao)}
-        </span>
-      ),
-    },
-    {
-      chave: "quando",
-      titulo: "Quando",
-      celula: (registro) => (
-        <time
-          dateTime={registro.em}
           className={bloco(registro, "trilha-quando")}
         >
-          {formatarDataHora(registro.em)}
-        </time>
+          <time dateTime={registro.em}>{formatarDataHora(registro.em)}</time>
+        </span>
       ),
     },
     {
@@ -185,6 +174,15 @@ export function TrilhaDeAuditoria() {
       celula: (registro) => (
         <span className={bloco(registro, "trilha-quem")}>
           {registro.usuario_nome}
+        </span>
+      ),
+    },
+    {
+      chave: "acao",
+      titulo: "Ação",
+      celula: (registro) => (
+        <span className={bloco(registro, "trilha-acao")}>
+          {rotuloDaAcao(registro.acao)}
         </span>
       ),
     },

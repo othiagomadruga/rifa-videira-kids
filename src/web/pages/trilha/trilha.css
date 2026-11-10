@@ -17,7 +17,7 @@
 }
 
 .trilha-acao {
-  font-weight: var(--peso-forte);
+  font-weight: var(--peso-medio);
 }
 
 /* O resumo fica abaixo do rótulo, alinhado à esquerda (no celular, ao lado do rótulo ele ficaria espremido na

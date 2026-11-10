@@ -160,7 +160,7 @@ export function ListaPedidosSuspeitos() {
       <p className="suspeitos-contagem">
         {pedidosMarcados(total)}
         {itens.length < total &&
-          `; mostrando os ${formatarNumero(itens.length)} mais recentes`}
+          `; mostrando ${itens.length === 1 ? "o mais recente" : `os ${formatarNumero(itens.length)} mais recentes`}`}
         .
       </p>
       <DataTable
