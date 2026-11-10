@@ -6,6 +6,10 @@ import { cabecalhosSeguranca } from "./middleware/cabecalhos-seguranca";
 import { limitarCorpoDaCoordenacao } from "./middleware/limite-corpo";
 import { exigirSessao } from "./middleware/sessao";
 import { sessao } from "./routes/acesso";
+import {
+  PREFIXO_ACESSOS_HIERARQUIA,
+  acessosHierarquia,
+} from "./routes/acessos-hierarquia";
 import { adminUsuarios } from "./routes/admin-usuarios";
 import {
   PREFIXO_AFILIADOS_ADESAO,
@@ -15,6 +19,7 @@ import { PREFIXO_AUDITORIA, auditoria } from "./routes/auditoria";
 import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
+import { PREFIXO_MINHA, minha } from "./routes/minha";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
 import {
   PREFIXO_PEDIDOS_SUSPEITOS,
@@ -29,8 +34,8 @@ import { webhookRifei } from "./routes/webhook-rifei";
 //
 // A ORDEM DO REGISTRO IMPORTA (docs/acesso.md, seção 6): o Hono roda middlewares e rotas na ordem em
 // que foram registrados, e um middleware registrado depois de uma rota não protege essa rota. Toda
-// rota da coordenação (/api/admin/* e /api/painel/*) entra DEPOIS do passo 4. O teste
-// src/worker/protecao.test.ts confere isso no app real.
+// rota da coordenação (/api/admin/* e /api/painel/*) e da hierarquia (/api/minha/*) entra DEPOIS do
+// passo 4. O teste src/worker/protecao.test.ts confere isso no app real.
 const app = new Hono<{ Bindings: Cloudflare.Env }>();
 
 // 1. Cabeçalhos de segurança em toda resposta da API, inclusive 401, 403, 404 e 500.
@@ -52,11 +57,17 @@ app.use("/api/painel/*", exigirSessao(["admin", "coordenacao"]));
 // lido. As importações de CSV conferem o teto delas na própria rota (middleware/limite-corpo.ts).
 app.use("/api/admin/*", limitarCorpoDaCoordenacao);
 app.use("/api/painel/*", limitarCorpoDaCoordenacao);
+// 4c. Hierarquia (RIFA-014, D12): todo /api/minha/* exige a sessão de um líder, discipulador ou rede, exista
+// a rota ou não; a coordenação leva 403. Papéis escritos aqui de propósito, como no passo 4. Os papéis da
+// hierarquia não entram em /api/admin/* nem em /api/painel/* (403 no passo 4).
+app.use("/api/minha/*", exigirSessao(["lider", "discipulador", "rede"]));
 
 // 5. Usuários e links: só admin (o sub-app também exige, em /usuarios/* e /links/*).
 app.route("/api/admin", adminUsuarios);
 // Trilha de auditoria (RIFA-013b): só admin (o sub-app também exige).
 app.route(PREFIXO_AUDITORIA, auditoria);
+// Acessos da hierarquia (RIFA-014): lista dos alvos e links em lote, só admin (o sub-app também exige).
+app.route(PREFIXO_ACESSOS_HIERARQUIA, acessosHierarquia);
 
 // 6. Demais rotas.
 // Webhook da Rifei: público, autenticado só pelo Bearer (D6), fora da sessão. Declara os próprios
@@ -75,6 +86,9 @@ app.route(PREFIXO_PAINEL, painel);
 // Visão pública (RIFA-PAINEL): ranking e bumbo sob /api/publico, ABERTOS (fora dos prefixos do
 // passo 4) e nunca com valores em R$ ou bilhetes (o sub-app confere a resposta no schema estrito).
 app.route(PREFIXO_PUBLICO, publico);
+// Visão individual (RIFA-014): sob /api/minha, protegida pelo passo 4c; o alvo vem só da sessão e a
+// resposta nunca traz dinheiro (o sub-app confere no schema estrito).
+app.route(PREFIXO_MINHA, minha);
 
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);

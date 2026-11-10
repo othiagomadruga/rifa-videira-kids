@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router";
+import { useState } from "react";
+import { Outlet } from "react-router";
 import {
   AppShell,
   ErrorState,
@@ -7,40 +7,19 @@ import {
   PublicShell,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
-import {
-  ROTULO_PAPEL,
-  guardarDestino,
-  useSessao,
-  type EstadoNavegacaoEntrar,
-} from "../../lib/sessao";
+import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
 import { itensDaNavegacao } from "./telas";
 
 type Saida = { saindo: boolean; erro: string | null };
 
-// Moldura de todas as telas em /coordenacao, só com sessão (guarda): menu conforme o papel, nome de quem
-// está conectado com o botão "Sair" e a tela atual (Outlet). Sem sessão (ao abrir ou por um 401 no meio
-// do uso), vai para /entrar e guarda a tela pedida, para voltar a ela depois de entrar.
+// Moldura de todas as telas em /coordenacao, só com sessão de admin ou coordenação (guarda): menu conforme o
+// papel, nome de quem está conectado com o botão "Sair" e a tela atual (Outlet). Sem sessão (ao abrir ou por
+// um 401 no meio do uso), vai para /entrar e guarda a tela pedida, para voltar a ela depois de entrar. Líder,
+// discipulador e rede vão para a área deles (/minha).
 export function CoordenacaoLayout() {
   const { estado, verificar, sair } = useSessao();
-  const navigate = useNavigate();
-  const { pathname, search } = useLocation();
+  const usuario = useGuardaDaArea("coordenacao");
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
-  const { situacao } = estado;
-  const motivo = estado.situacao === "desconectada" ? estado.motivo : null;
-
-  useEffect(() => {
-    if (situacao === "desconhecida") verificar();
-  }, [situacao, verificar]);
-
-  useEffect(() => {
-    if (motivo === null) return;
-    const destino: EstadoNavegacaoEntrar = { motivo };
-    if (motivo !== "saiu") {
-      destino.de = `${pathname}${search}`;
-      guardarDestino(destino.de);
-    }
-    void navigate("/entrar", { replace: true, state: destino });
-  }, [motivo, pathname, search, navigate]);
 
   async function sairDoSistema() {
     setSaida({ saindo: true, erro: null });
@@ -54,8 +33,7 @@ export function CoordenacaoLayout() {
     }
   }
 
-  if (estado.situacao === "conectada") {
-    const { usuario } = estado;
+  if (usuario) {
     return (
       <AppShell
         area="Coordenação"

@@ -124,7 +124,12 @@ export function PessoaCartao({
             <Button
               id={idBotaoAtivo(pessoa.id)}
               variante="secundario"
-              onClick={pessoa.ativo ? aoDesativar : aoReativar}
+              onClick={() => {
+                // Indisponível (outra ação desta pessoa em andamento): não abre a confirmação.
+                if (ocupada !== null) return;
+                if (pessoa.ativo) aoDesativar();
+                else aoReativar();
+              }}
               aria-disabled={ocupada !== null || undefined}
             >
               {pessoa.ativo

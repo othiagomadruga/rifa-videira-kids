@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type {
   LinkAcesso,
   LinkAcessoCriado,
   Usuario,
 } from "../../../shared/contracts";
 import {
+  Abas,
   Aviso,
   Button,
   EmptyState,
@@ -32,10 +33,61 @@ type LinkMostrado = { nome: string; link: LinkAcessoCriado };
 type Ocupada = { usuarioId: number; acao: "gerando" | "reativando" };
 type Resultado = { tom: "sucesso" | "perigo"; texto: string };
 
-// Gestão dos acessos (só admin): quem entra na área da coordenação, com o link pessoal de cada um. O link
+type AbaAcessos = "coordenacao" | "hierarquia";
+
+// A aba da hierarquia vem num pacote à parte, carregado quando o admin a abre pela primeira vez.
+const AcessosHierarquia = lazy(() =>
+  import("./AcessosHierarquia").then((modulo) => ({
+    default: modulo.AcessosHierarquia,
+  })),
+);
+
+// Gestão dos acessos (só admin), em duas abas: a coordenação (pessoas, cada uma com o próprio link) e os
+// líderes, discipuladores e redes (um acesso por alvo da hierarquia, com links em lote; RIFA-014). O link
 // (com o token) só aparece na resposta que o cria: a tela o mostra uma vez, num diálogo, e o esquece ao
-// fechar. A lista (GET) nunca traz o token.
+// fechar. As listas (GET) nunca trazem o token. A aba da hierarquia só carrega quando é aberta.
 export function AcessosPage() {
+  const [aba, setAba] = useState<AbaAcessos>("coordenacao");
+  const [hierarquiaAberta, setHierarquiaAberta] = useState(false);
+
+  function mudarAba(nova: AbaAcessos) {
+    setAba(nova);
+    if (nova === "hierarquia") setHierarquiaAberta(true);
+  }
+
+  return (
+    <>
+      <PageHeader
+        titulo="Acessos"
+        descricao="Quem entra no sistema. Cada um entra pelo próprio link, mandado pelo WhatsApp; o link só aparece na hora em que é criado."
+      />
+      <Abas
+        rotulo="Grupos de acesso"
+        abaAtiva={aba}
+        aoMudar={mudarAba}
+        abas={[
+          {
+            id: "coordenacao",
+            rotulo: "Coordenação",
+            conteudo: <AcessosCoordenacao />,
+          },
+          {
+            id: "hierarquia",
+            rotulo: "Líderes, discipuladores e redes",
+            conteudo: hierarquiaAberta ? (
+              <Suspense fallback={<Loading texto="Carregando os acessos…" />}>
+                <AcessosHierarquia />
+              </Suspense>
+            ) : null,
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+// Pessoas da coordenação (admin e coordenação): um cartão por pessoa, com os links e as ações.
+function AcessosCoordenacao() {
   const eu = useUsuarioConectado();
   const [carga, setCarga] = useState<Carga>({ dados: null, erro: null });
   const [versao, setVersao] = useState(0);
@@ -148,12 +200,13 @@ export function AcessosPage() {
   const { dados, erro } = carga;
 
   return (
-    <>
-      <PageHeader
-        titulo="Acessos"
-        descricao="Quem entra na área da coordenação. Cada pessoa entra pelo próprio link, mandado pelo WhatsApp; o link só aparece na hora em que é criado."
-        acoes={<Button onClick={() => setCriando(true)}>Nova pessoa</Button>}
-      />
+    <div className="acessos-coordenacao">
+      <div className="acessos-coordenacao__topo">
+        <p className="acessos-suave">
+          Quem entra na área da coordenação: admin e coordenação.
+        </p>
+        <Button onClick={() => setCriando(true)}>Nova pessoa</Button>
+      </div>
       {/* Região viva fixa: anuncia o resultado de cada ação. */}
       <p className="visualmente-oculto" role="status">
         {resultado?.texto ?? ""}
@@ -243,6 +296,6 @@ export function AcessosPage() {
           aoDesatualizar={recarregar}
         />
       )}
-    </>
+    </div>
   );
 }

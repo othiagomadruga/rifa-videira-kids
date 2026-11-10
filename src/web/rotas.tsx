@@ -7,6 +7,8 @@ import { ExigirPapel } from "./pages/coordenacao/ExigirPapel";
 import { TELAS_COORDENACAO } from "./pages/coordenacao/telas";
 import { EntrarPage } from "./pages/entrar/EntrarPage";
 import { ErroRota } from "./pages/erro/ErroRota";
+import { MinhaLayout } from "./pages/minha/MinhaLayout";
+import { MinhaPage } from "./pages/minha/MinhaPage";
 import { NaoEncontradaPage } from "./pages/nao-encontrada/NaoEncontradaPage";
 import { RankingPublicoPage } from "./pages/ranking-publico/RankingPublicoPage";
 import { StatusPage } from "./pages/status/StatusPage";
@@ -17,14 +19,19 @@ import { TelaoPage } from "./pages/telao/TelaoPage";
 //
 //   /                 ranking público (sem valores em R$)
 //   /telao            telão do culto (sem navegação)
-//   /acesso/<token>   link pessoal da coordenação: confirma e só então entra
+//   /acesso/<token>   link pessoal (coordenação, líder, discipulador e rede): confirma
+//                     e só então entra; depois, cada papel vai para a sua área
 //   /entrar           como entrar (sem sessão)
-//   /coordenacao/...  área da coordenação (menu lateral), só com sessão
+//   /coordenacao/...  área da coordenação (menu lateral), só com sessão de admin ou
+//                     coordenação; líder, discipulador e rede vão para /minha
+//   /minha            visão individual de líder, discipulador e rede (sem menu e sem
+//                     dinheiro), só com sessão deles; a coordenação vai para /coordenacao
 //   /status           saúde da API
 //   qualquer outra    404
 //
-// A sessão (lib/sessao.tsx) fica na raiz: só a guarda da coordenação e as telas de
-// entrada perguntam à API; as telas abertas não fazem chamada nenhuma por ela.
+// A sessão (lib/sessao.tsx) fica na raiz: só as guardas das áreas com sessão
+// (/coordenacao e /minha) e as telas de entrada perguntam à API; as telas abertas
+// não fazem chamada nenhuma por ela.
 export const rotas: RouteObject[] = [
   {
     path: "/",
@@ -58,6 +65,20 @@ export const rotas: RouteObject[] = [
                 path: "*",
                 element: <NaoEncontradaPage inicio="/coordenacao" />,
               },
+            ],
+          },
+        ],
+      },
+      {
+        path: "minha",
+        Component: MinhaLayout,
+        children: [
+          {
+            // Erro na visão individual aparece dentro da moldura (com o "Sair").
+            ErrorBoundary: ErroRota,
+            children: [
+              { index: true, Component: MinhaPage },
+              { path: "*", element: <NaoEncontradaPage inicio="/minha" /> },
             ],
           },
         ],

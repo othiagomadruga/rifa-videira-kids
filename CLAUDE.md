@@ -49,10 +49,12 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   Decisões e porquês em `docs/decisions.md`.
 - **Pastas:**
   - `src/worker/`: API. `index.ts` (app Hono e a ORDEM de montagem: cabeçalhos → health → sessão → login em
-    `/api/admin/*` e `/api/painel/*` → rotas; ver docs/acesso.md §6), `routes/` (uma rota por arquivo),
+    `/api/admin/*` e `/api/painel/*` (coordenação) e em `/api/minha/*` (líder, discipulador e rede, D12) → rotas;
+    ver docs/acesso.md §6), `routes/` (uma rota por arquivo),
     `middleware/` (sessão, CSRF, cabeçalhos de segurança), `db/` (acesso ao D1), `lib/` (erros, CSV, cripto),
     `worker-env.d.ts` (tipos dos bindings: binding novo no `wrangler.jsonc` é declarado aqui também).
-    `src/worker/protecao.test.ts` falha se alguma rota da coordenação ficar aberta: rota nova entra atrás do login.
+    `src/worker/protecao.test.ts` falha se alguma rota da coordenação ou da hierarquia ficar aberta, ou se um papel
+    entrar na área do outro: rota nova entra atrás do login.
   - `src/web/`: site. `main.tsx`, `App.tsx`, `rotas.tsx`, `lib/api.ts` (cliente da API), `pages/<tela>/` (uma pasta por tela, com as chamadas à API dela), `components/`. Convenções em `docs/frontend.md`.
   - `src/shared/contracts/`: contrato da API (tipos usados pelo Worker e pelo site). Só o SM altera.
   - `migrations/`: migrações D1 em SQL, numeradas (`0001_<nome>.sql`...). Migração aplicada não se edita: crie outra.

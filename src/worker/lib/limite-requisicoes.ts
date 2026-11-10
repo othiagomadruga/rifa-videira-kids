@@ -1,6 +1,8 @@
 /**
  * Limite de requisições por cliente (RIFA-013b; docs/decisions.md D11):
- * - POST /api/sessao: LIMITE_LOGIN (10 por minuto), toda tentativa conta;
+ * - POST /api/sessao: LIMITE_LOGIN (60 por minuto desde a D12; eram 10), toda tentativa conta. O token tem
+ *   256 bits: o limite nunca foi o que impede adivinhar link, só protege CPU e banco, e na reunião dos líderes
+ *   dezenas de pessoas abrem o link ao mesmo tempo atrás do mesmo IP;
  * - rotas abertas (/api/publico/* e /api/health): LIMITE_PUBLICO (60 por minuto), só as idas ao banco
  *   contam. A resposta que sai do cache (30 s) é barata e não conta: muita gente atrás do mesmo IP (o Wi-Fi
  *   da igreja, a operadora do celular) abre o ranking sem esbarrar no limite.
@@ -39,7 +41,7 @@ export const LIMITE_PUBLICO: RegraDeLimite = {
 
 export const LIMITE_LOGIN: RegraDeLimite = {
   binding: "LIMITE_LOGIN",
-  limite: 10,
+  limite: 60,
   periodoSegundos: 60,
 };
 
