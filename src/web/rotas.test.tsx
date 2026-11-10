@@ -30,15 +30,17 @@ const MENU_COORDENACAO = [
   ["Hierarquia", "/coordenacao/hierarquia"],
   ["Adesão", "/coordenacao/adesao"],
   ["Pedidos", "/coordenacao/pedidos"],
+  ["Pedidos suspeitos", "/coordenacao/pedidos-suspeitos"],
   ["Rankings", "/coordenacao/rankings"],
   ["Bumbo", "/coordenacao/bumbo"],
   ["Conferência", "/coordenacao/conferencia"],
 ] as const;
 
-// O admin vê também a gestão dos acessos, no fim.
+// O admin vê também a gestão dos acessos e a trilha de auditoria, no fim.
 const MENU_ADMIN = [
   ...MENU_COORDENACAO,
   ["Acessos", "/coordenacao/acessos"],
+  ["Trilha", "/coordenacao/trilha"],
 ] as const;
 
 function tituloDaPagina(nome: string) {

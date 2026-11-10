@@ -1,0 +1,72 @@
+/* Tela Pedidos suspeitos (RIFA-024): a contagem e a tabela dos pedidos marcados (cartões no celular, abaixo de
+   48rem, como as outras). Vem junto com ListaPedidosSuspeitos (pacote à parte). Celular primeiro: nenhuma
+   largura fixa, e os textos que podem ser longos (id do pedido, nome da célula, motivos) quebram em vez de
+   alargar a página. */
+.suspeitos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.suspeitos-contagem {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* O conteúdo de cada célula num bloco só: no celular, a célula vira "rótulo: valor". */
+.suspeitos-celula {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Os motivos ficam abaixo do rótulo, alinhados à esquerda (no celular, ao lado do rótulo eles ficariam
+   espremidos na metade da largura). Na tabela, a célula volta a ser uma célula comum. */
+.suspeitos td:has(> .suspeitos-motivos) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espaco-1);
+  text-align: left;
+}
+
+.suspeitos td:has(> .suspeitos-motivos)::before {
+  max-width: none;
+}
+
+.suspeitos-motivos {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suspeitos-motivo {
+  padding-left: var(--espaco-3);
+  border-left: 3px solid var(--cor-alerta);
+  line-height: var(--altura-linha);
+}
+
+.suspeitos-motivo__rotulo {
+  display: block;
+  font-weight: var(--peso-forte);
+}
+
+.suspeitos-motivo__detalhe {
+  display: block;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.suspeitos-valor {
+  font-weight: var(--peso-forte);
+}
+
+@media (min-width: 48rem) {
+  .suspeitos-quando,
+  .suspeitos-valor {
+    white-space: nowrap;
+  }
+}
