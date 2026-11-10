@@ -1,7 +1,7 @@
 // CA2 e CA3 (RIFA-020): o logo da Videira no cabeçalho das telas abertas (ranking público, entrar, acesso), no
 // shell da coordenação e no telão, com o alt certo e o nome do produto em texto; o favicon é o símbolo. O logo do
 // Kids, discreto: no rodapé das telas abertas (fora do cabeçalho) e no máximo um selo no telão.
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderizarRota, respostaJson } from "../test/renderizar";
 import { MARCA } from "./marca";
@@ -97,6 +97,30 @@ describe("CA2: o logo da Videira", () => {
     const marca = document.querySelector<HTMLElement>(".telao__marca");
     expect(marca).not.toBeNull();
     conferirLogo(marca as HTMLElement);
+  });
+
+  it("telão: o selo claro só aparece com o logo carregado (nada de retângulo branco vazio)", () => {
+    renderizarRota("/telao");
+    const logo = screen.getByRole("img", { name: ALT_LOGO });
+    const selo = logo.closest(".ui-marca__selo");
+    expect(selo).not.toHaveAttribute("data-carregado");
+
+    fireEvent.load(logo);
+    expect(selo).toHaveAttribute("data-carregado");
+
+    // O fundo claro do selo vem só com data-carregado; antes, só o lugar (padding) fica reservado.
+    const css = fs
+      .readFileSync(caminho("../components/ui/Marca.css"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const regras = [
+      ...css.matchAll(
+        /(\[data-tema="telao"\] \.ui-marca__selo[^{]*)\{([^}]*)\}/g,
+      ),
+    ].map(([, seletor, corpo]) => ({ seletor: seletor.trim(), corpo }));
+    const comFundo = regras.filter(({ corpo }) => /background/.test(corpo));
+    expect(comFundo.map(({ seletor }) => seletor)).toEqual([
+      '[data-tema="telao"] .ui-marca__selo[data-carregado]',
+    ]);
   });
 
   it("o logo é um só em cada tela (o símbolo provisório 'VK' saiu)", () => {

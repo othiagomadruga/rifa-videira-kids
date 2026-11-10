@@ -62,6 +62,25 @@
   font-size: var(--texto-xs);
 }
 
+/*
+ * Telas bem estreitas (menos de 360 px): logo, espaços e botão "Menu" mais compactos, para o nome da área
+ * ("Coordenação") caber inteiro numa linha, sem quebrar a palavra no meio.
+ */
+@media (max-width: 22.4375rem) {
+  .ui-app-shell__topo {
+    gap: var(--espaco-2);
+  }
+
+  .ui-app-shell__topo .ui-marca {
+    --marca-altura: 1.5rem;
+  }
+
+  .ui-app-shell__botao-menu {
+    gap: var(--espaco-1);
+    padding: 0 var(--espaco-3);
+  }
+}
+
 .ui-app-shell__botao-menu {
   flex: none;
   display: inline-flex;

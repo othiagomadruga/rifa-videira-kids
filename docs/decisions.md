@@ -230,6 +230,9 @@ O PO pediu o design do site com as cores e o logo da Videira, o logo do Kids dis
   transform de uma animação em curso), relativa à lista; um `ResizeObserver` mede de novo quando a tela muda de
   tamanho, para uma rotação de celular não virar "movimento" na próxima atualização. Os itens ganham chave pelo nome
   (`chavesPorNome`), então o count-up de cada célula parte do % dela, e não do item que estava naquela linha.
+- **Pulso da meta batida pela Web Animations API, não por CSS** (revisão): o React move o `<li>` com `insertBefore`
+  quando a ordem muda, e uma animação de CSS recomeça no nó movido, então uma célula só ultrapassada pulsava de
+  novo. O `usePulsoDaMeta` dispara só quando a meta passa a estar batida (ou o item já aparece batido).
 - **Sem View Transitions**: o `viewTransition` do React Router 8.5 está marcado como obsoleto em favor do
   `<ViewTransition>` do React 19.3, que animaria toda atualização feita em `startTransition`. A entrada das telas por
   CSS dá a transição entre rotas sem esse risco; pode voltar numa tarefa própria, se o PO quiser o cross-fade.

@@ -215,6 +215,50 @@ describe("CA5: só transform e opacity, curto e sem piscar", () => {
       ).toBeLessThanOrEqual(3);
   });
 
+  // A largura da barra de progresso é a exceção (docs/frontend.md): a barra fica num trilho de tamanho fixo e
+  // com overflow hidden, então mudar a largura dela não empurra nada (e o scaleX achataria as pontas redondas).
+  it("dentro dele, as transições animam só transform, opacity, cores e sombra (exceção: a largura da barra de progresso)", () => {
+    const permitidas = new Set([
+      "transform",
+      "opacity",
+      "color",
+      "background-color",
+      "border-color",
+      "outline-color",
+      "box-shadow",
+    ]);
+    const transicoes = TODAS.filter(
+      (d) =>
+        (d.propriedade === "transition" ||
+          d.propriedade === "transition-property") &&
+        dentroDoMovimentoLiberado(d),
+    );
+    expect(transicoes.length).toBeGreaterThan(2);
+    const animadas = transicoes.flatMap((declaracao) =>
+      declaracao.valor.split(/,(?![^(]*\))/).map((parte) => ({
+        declaracao,
+        propriedade: parte.trim().split(/\s+/)[0],
+      })),
+    );
+    for (const { declaracao, propriedade } of animadas) {
+      const excecao =
+        propriedade === "width" &&
+        declaracao.blocos.at(-1) === ".ui-progress__barra";
+      expect(
+        permitidas.has(propriedade) || excecao,
+        `${onde(declaracao)} (${propriedade})`,
+      ).toBe(true);
+    }
+    // A exceção existe mesmo (se a barra mudar para scaleX, tire-a daqui).
+    expect(
+      animadas.some(
+        ({ declaracao, propriedade }) =>
+          propriedade === "width" &&
+          declaracao.blocos.at(-1) === ".ui-progress__barra",
+      ),
+    ).toBe(true);
+  });
+
   it("as transições de movimento duram até 450 ms", () => {
     const transicoes = TODAS.filter(
       (d) => d.propriedade === "transition" && dentroDoMovimentoLiberado(d),

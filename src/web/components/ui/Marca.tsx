@@ -6,9 +6,15 @@ type Props = {
   complemento?: string;
 };
 
+/** O logo chegou: o selo claro (fundo escuro) pode aparecer. Atributo fora do React, que não o controla. */
+function marcarCarregado(logo: HTMLImageElement) {
+  logo.closest(".ui-marca__selo")?.setAttribute("data-carregado", "");
+}
+
 // Marca: o logo da Videira (WebP, com PNG de reserva para navegador antigo) e o nome do produto em texto.
 // width e height reservam o lugar do logo antes de ele carregar (nada pula). Em fundo escuro (telão), o
-// logo fica num selo claro, porque o nome "Videira" do logo é marinho (Marca.css).
+// logo fica num selo claro, porque o nome "Videira" do logo é marinho; o selo só aparece com o logo carregado
+// (data-carregado), para não ficar um retângulo branco vazio enquanto a imagem chega (Marca.css).
 export function Marca({ complemento }: Props) {
   const { logo } = MARCA;
   return (
@@ -24,6 +30,12 @@ export function Marca({ complemento }: Props) {
             height={logo.altura}
             decoding="async"
             fetchPriority="high"
+            // Já no cache: o load pode ter acontecido antes do React ouvir.
+            ref={(imagem) => {
+              if (imagem?.complete && imagem.naturalWidth > 0)
+                marcarCarregado(imagem);
+            }}
+            onLoad={(evento) => marcarCarregado(evento.currentTarget)}
           />
         </picture>
       </span>

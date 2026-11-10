@@ -45,10 +45,17 @@
   color: var(--cor-texto-suave);
 }
 
-/* Fundo escuro (telão): o logo vai num selo claro; não se recolore o logo. */
+/*
+ * Fundo escuro (telão): o logo vai num selo claro; não se recolore o logo. O lugar do selo vale desde o início,
+ * mas o fundo claro só aparece com o logo carregado (data-carregado, em Marca.tsx): nada de retângulo branco
+ * vazio enquanto a imagem chega (nem se ela falhar: aí fica o alt, claro sobre o escuro).
+ */
 [data-tema="telao"] .ui-marca__selo {
   padding: 0.2em 0.4em;
   border-radius: 0.35em;
+}
+
+[data-tema="telao"] .ui-marca__selo[data-carregado] {
   background: var(--cor-selo-marca);
 }
 
