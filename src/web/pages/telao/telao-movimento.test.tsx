@@ -2,7 +2,7 @@
 // e da linha "Atualizado às" desde o carregando (nada empurra nada quando os dados chegam). CA4: com
 // prefers-reduced-motion nada anima; com movimento, os itens entram em sequência quando os dados chegam e uma
 // atualização sem mudança não mexe em nada (no telão, o movimento só acontece quando os dados mudam).
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { respostaRankingPublicoSchema } from "../../../shared/contracts/api";
 import type {
@@ -175,6 +175,8 @@ describe("CA4: movimento no telão", () => {
     expect(
       animados.filter((nome) => nome === "telao__percentual"),
     ).toHaveLength(1);
+    // Cada contagem pede o primeiro quadro num efeito, que pode rodar um instante depois do findBy.
+    await waitFor(() => expect(quadros.pendentes()).toBe(3));
     act(() => quadros.quadro(0));
     act(() => quadros.quadro(1000));
     expect(document.querySelector(".mov-contagem")).toBeNull();
