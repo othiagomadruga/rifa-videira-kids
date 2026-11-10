@@ -75,6 +75,7 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
     Da sessão de nuvem do Claude o upload dos assets falha (o proxy troca o JWT do upload), então não rode
     `npm run deploy` daqui; comandos D1 remotos funcionam. Segredos do Worker: `npx wrangler secret put <NOME>`.
   - Primeiro admin em produção: `npm run acesso:criar -- --nome "<nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev`.
+  - **Lançamento:** roteiro em `docs/lancamento.md` (contas do PO, 1ª publicação, configuração em produção, compra de teste, reunião dos líderes, dia a dia e contingência).
 - **Segredos locais:** copie `.dev.vars.example` para `.dev.vars` (ignorado pelo git) e troque os valores.
 - **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test e build (Node 22) em todo push e pull request, e publica na Cloudflare nos pushes da `main`.
 - **Dependências:** `wrangler`, `@cloudflare/vite-plugin` e `@cloudflare/vitest-plugin` têm versão fixa e sobem juntos.
