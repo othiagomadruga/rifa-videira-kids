@@ -157,7 +157,7 @@ describe("situação do acesso de cada alvo", () => {
     ).toEqual({ tipo: "valido", ultimoUso: "2026-11-13T09:00:00.000Z" });
   });
 
-  it("o último link foi para outra pessoa: 'troque o acesso' com link válido; sem ele ou desativado, 'gere um link novo'", () => {
+  it("o último link foi para outra pessoa: 'troque o acesso' com link válido; sem ele, 'gere um link novo'; desativado, 'reative e gere um link novo'", () => {
     // Éfeso: o último link foi para Lia, a hierarquia diz Rute, e o link é válido (a linha tem "Trocar acesso").
     expect(avisoDeOutraPessoa(efeso)).toBe(
       "O último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
@@ -166,12 +166,14 @@ describe("situação do acesso de cada alvo", () => {
       if (!item.usuario) throw new Error("o exemplo tem usuário");
       return { ...item, usuario: { ...item.usuario, nome: "Antiga Fictícia" } };
     };
-    // Canaã (só revogados ou vencidos) e Dorcas (desativada): sem "Trocar acesso" na linha.
-    for (const item of [outraPessoa(canaa), outraPessoa(dorcas)]) {
-      expect(avisoDeOutraPessoa(item)).toBe(
-        "O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.",
-      );
-    }
+    // Canaã (só revogados ou vencidos): a linha tem "Novo link".
+    expect(avisoDeOutraPessoa(outraPessoa(canaa))).toBe(
+      "O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.",
+    );
+    // Dorcas (desativada): a linha só tem "Reativar acesso".
+    expect(avisoDeOutraPessoa(outraPessoa(dorcas))).toBe(
+      "O último link foi para Antiga Fictícia: se a pessoa mudou, reative e gere um link novo.",
+    );
     // O link é da pessoa da hierarquia, ou ainda não há usuário: nada a avisar.
     expect(avisoDeOutraPessoa(betel)).toBeNull();
     expect(avisoDeOutraPessoa(agape)).toBeNull();

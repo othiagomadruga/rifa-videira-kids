@@ -190,18 +190,30 @@ export function textoDosAparelhos(sessoes: number): string {
     : `${formatarNumero(sessoes)} aparelhos conectados`;
 }
 
+/** O que fazer quando a pessoa mudou, conforme o que a linha oferece. */
+const QUANDO_A_PESSOA_MUDOU: Record<SituacaoAcesso["tipo"], string> = {
+  // A linha tem "Trocar acesso".
+  valido: "troque o acesso",
+  // A linha tem "Novo link".
+  sem_link: "gere um link novo",
+  sem_link_valido: "gere um link novo",
+  // A linha só tem "Reativar acesso": o link novo vem depois.
+  desativado: "reative e gere um link novo",
+};
+
 /**
  * O último link do alvo foi para outra pessoa (a hierarquia mudou depois): o que fazer, conforme a linha. Com
- * link válido, a linha tem "Trocar acesso"; sem link válido ou desativado, não tem, e o caminho é gerar um
- * link novo. null quando o link é da pessoa da hierarquia (ou ainda não há usuário).
+ * link válido, "troque o acesso" (a linha tem "Trocar acesso"); sem link válido, "gere um link novo"; com o
+ * acesso desativado, "reative e gere um link novo" (a linha só tem "Reativar acesso"). null quando o link é
+ * da pessoa da hierarquia (ou ainda não há usuário).
  */
 export function avisoDeOutraPessoa(item: ItemAcessoHierarquia): string | null {
   const { usuario } = item;
   if (!usuario || usuario.nome === (item.pessoa_nome ?? item.alvo.nome)) {
     return null;
   }
-  const comTroca = situacaoDoAcesso(usuario).tipo === "valido";
-  return `O último link foi para ${usuario.nome}: se a pessoa mudou, ${comTroca ? "troque o acesso" : "gere um link novo"}.`;
+  const oQueFazer = QUANDO_A_PESSOA_MUDOU[situacaoDoAcesso(usuario).tipo];
+  return `O último link foi para ${usuario.nome}: se a pessoa mudou, ${oQueFazer}.`;
 }
 
 /**

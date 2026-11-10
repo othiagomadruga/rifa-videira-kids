@@ -175,7 +175,7 @@ describe("CA4: a lista dos alvos", () => {
     expect(document.body.innerHTML).not.toContain("/acesso/");
   });
 
-  it("a pessoa mudou: com 'Trocar acesso' na linha, 'troque o acesso'; sem ele (sem link válido ou desativado), 'gere um link novo'", async () => {
+  it("a pessoa mudou: o aviso pede o que a linha oferece ('Trocar acesso', 'Novo link' ou 'Reativar acesso')", async () => {
     const alvos = alvosExemplo();
     for (const indice of [2, 3]) {
       const usuario = alvos.lider[indice].usuario;
@@ -183,21 +183,26 @@ describe("CA4: a lista dos alvos", () => {
     }
     await abrirAba(criarApiFalsa(undefined, undefined, alvos));
 
+    // Link válido: a linha tem "Trocar acesso".
     expect(coluna("Célula Éfeso", "Pessoa")).toBe(
       "Rute Fictícia O último link foi para Lia Fictícia: se a pessoa mudou, troque o acesso.",
     );
     expect(acoes("Célula Éfeso")).toContain("Trocar acesso de Célula Éfeso");
-    for (const [alvo, pessoa] of [
-      ["Célula Canaã", "Ana Fictícia"],
-      ["Célula Dorcas", "Pedro Fictício"],
-    ]) {
-      expect(coluna(alvo, "Pessoa")).toBe(
-        `${pessoa} O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.`,
-      );
-      expect(acoes(alvo).some((acao) => acao?.startsWith("Trocar"))).toBe(
-        false,
-      );
-    }
+    // Só links revogados ou vencidos: a linha tem "Novo link", sem "Trocar acesso".
+    expect(coluna("Célula Canaã", "Pessoa")).toBe(
+      "Ana Fictícia O último link foi para Antiga Fictícia: se a pessoa mudou, gere um link novo.",
+    );
+    expect(acoes("Célula Canaã")).toEqual([
+      "Novo link para Célula Canaã",
+      "Desativar acesso de Célula Canaã",
+    ]);
+    // Desativada: a linha só tem "Reativar acesso"; o link novo vem depois de reativar.
+    expect(coluna("Célula Dorcas", "Pessoa")).toBe(
+      "Pedro Fictício O último link foi para Antiga Fictícia: se a pessoa mudou, reative e gere um link novo.",
+    );
+    expect(acoes("Célula Dorcas")).toEqual([
+      "Reativar acesso de Célula Dorcas",
+    ]);
   });
 
   it("a escolha do papel troca a lista (discipuladores e redes, sem a coluna de telefone)", async () => {
@@ -656,6 +661,52 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
     );
     expect(document.body.innerHTML).not.toContain(api.urlsEmitidas[0]);
     expect(anuncio()).toContain("Link novo de Célula Betel gerado.");
+  });
+
+  it("'Abrir no WhatsApp' com o botão do meio conta como mandado; com o direito (só o menu do navegador), não", async () => {
+    await abrirAba();
+    acionar(
+      within(linha("Célula Betel")).getByRole("button", {
+        name: "Novo link para Célula Betel",
+      }),
+    );
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Link de acesso: Célula Betel",
+    });
+    const whatsapp = within(dialogo).getByRole("link", {
+      name: "Abrir no WhatsApp de João Fictício",
+    });
+    const cliqueAuxiliar = (botao: number) =>
+      fireEvent(
+        whatsapp,
+        new MouseEvent("auxclick", {
+          bubbles: true,
+          cancelable: true,
+          button: botao,
+        }),
+      );
+    const pronto = within(dialogo).getByRole("button", { name: "Pronto" });
+
+    // Botão direito: abre o menu do navegador e não manda nada; fechar ainda pede confirmação.
+    cliqueAuxiliar(2);
+    acionar(pronto);
+    const confirmacao = screen.getByRole("alertdialog", {
+      name: "Fechar sem mandar todos os links?",
+    });
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Voltar aos links" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+
+    // Botão do meio: abre o link numa aba nova e conta como mandado; "Pronto" fecha sem perguntar.
+    cliqueAuxiliar(1);
+    acionar(pronto);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 
   it("Trocar acesso: pede confirmação (o aparelho antigo sai), revoga os anteriores e mostra o link novo uma vez", async () => {
