@@ -15,7 +15,8 @@
   transition:
     background-color var(--transicao),
     border-color var(--transicao),
-    color var(--transicao);
+    color var(--transicao),
+    box-shadow var(--transicao);
 }
 
 .ui-button:disabled {
@@ -31,6 +32,7 @@
 .ui-button--primario:hover:not(:disabled) {
   background: var(--cor-primaria-forte);
   color: var(--cor-sobre-primaria);
+  box-shadow: var(--sombra-marca);
 }
 
 .ui-button--secundario {
@@ -41,6 +43,7 @@
 
 .ui-button--secundario:hover:not(:disabled) {
   background: var(--cor-superficie-2);
+  border-color: var(--cor-primaria);
   color: var(--cor-texto);
 }
 
@@ -72,4 +75,29 @@
 
 .ui-button--largura-total {
   width: 100%;
+}
+
+/*
+ * Microinterações (sem prefers-reduced-motion): no mouse, o botão sobe 1 px; ao pressionar, afunda um pouco.
+ * No toque não há hover (o botão não fica "levantado" depois do toque).
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-button {
+    transition:
+      background-color var(--transicao),
+      border-color var(--transicao),
+      color var(--transicao),
+      box-shadow var(--transicao),
+      transform var(--duracao-rapida) var(--curva-saida);
+  }
+
+  .ui-button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .ui-button:hover:not(:disabled):not(:active) {
+    transform: translateY(-1px);
+  }
 }

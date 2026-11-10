@@ -1,6 +1,7 @@
 /*
- * Estilos globais: tokens do tema e base. Cada componente e cada tela importa o
- * próprio CSS (classes com prefixo: ui-* nos componentes, <tela>-* nas telas).
+ * Estilos globais: tokens do tema, base e movimento (keyframes e esqueleto). Cada componente e cada tela
+ * importa o próprio CSS (classes com prefixo: ui-* nos componentes, <tela>-* nas telas, mov-* no movimento).
  */
 @import "./tema/tokens.css";
 @import "./tema/base.css";
+@import "./tema/movimento.css";

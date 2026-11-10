@@ -47,6 +47,7 @@
   display: grid;
   gap: var(--espaco-1);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ui-aviso__titulo {
@@ -78,4 +79,11 @@
 .ui-aviso__fechar:hover {
   color: var(--cor-texto);
   background: color-mix(in srgb, var(--aviso-cor) 12%, transparent);
+}
+
+/* O aviso chega (resultado de uma ação, erro): fade e deslize curto. */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-aviso {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
+  }
 }

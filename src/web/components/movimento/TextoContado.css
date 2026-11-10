@@ -1,0 +1,16 @@
+/* Count-up: o texto final reserva o lugar (transparente) e o número que conta fica por cima. */
+.mov-contagem {
+  position: relative;
+  display: inline-block;
+}
+
+.mov-contagem__final {
+  color: transparent;
+}
+
+.mov-contagem__quadro {
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+  text-align: inherit;
+}

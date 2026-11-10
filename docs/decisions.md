@@ -223,3 +223,36 @@ implementação da D12 (o contrato não mudou; só `percentualBp` passou a ser e
 - **Ordem de nomes** na lista dos acessos e na equipe: a de português (`Intl.Collator("pt-BR")`, como o ranking), e
   não a do `COLLATE NOCASE` do SQLite, que só ignora maiúsculas ASCII e poria "Célula Ágape" depois de "Célula
   Betel".
+
+## D15. Identidade da Videira e movimento sem biblioteca (RIFA-020, 2026-11-09)
+
+O PO pediu o design do site com as cores e o logo da Videira, o logo do Kids discreto e "efeito de motion".
+
+- **Cores do logo, contraste conferido por teste.** A paleta sai do PNG do PO (marinho, verde-água, azul e roxo;
+  o amarelo do logo do Kids só como comemoração). O `tema/tokens.test.ts` lê o `tokens.css` e confere cada par de
+  texto e fundo (AA no site, AAA no telão), o degradê forte ponto a ponto e o centro dos brilhos do fundo ambiente.
+  O tema continua um bloco `:root` e um `[data-tema="telao"]`, com hex de 6 dígitos nos papéis (`--cor-*`), porque
+  os testes de outras telas (gráfico, visão individual) leem os mesmos valores.
+- **Logo sem redesenhar.** O PNG da Videira tem fundo branco opaco: o branco saiu pixel a pixel, com o alfa da borda
+  calculado pela cor cheia vizinha (o miolo fica opaco; sem halo em fundo escuro). WebP (6 KB) com PNG de reserva num
+  `<picture>`, com `width` e `height` (nada pula ao carregar). Em fundo escuro (telão), o logo vai num selo claro em
+  vez de ser recolorido. Faltam do PO: SVG oficial, versão negativa e resolução maior (o PNG tem 308×120).
+- **Movimento sem dependência** (as regras do `docs/frontend.md` proíbem biblioteca de UI e CDN): CSS (keyframes e
+  transições) e a Web Animations API. Toda animação de CSS fica em `@media (prefers-reduced-motion: no-preference)`
+  e todo `element.animate` passa por `lib/movimento.ts`, que não anima com `reduce` nem sem `matchMedia` (o jsdom:
+  os testes que já existiam continuam vendo tudo pronto, sem mudar uma linha). Um teste varre todo o CSS do site.
+- **Count-up sem layout shift**: o texto final fica no lugar, transparente (reserva o espaço e é o que o leitor de
+  tela lê) e o número que conta passa por cima, `aria-hidden`. Parado, é só o texto, sem elemento a mais.
+- **FLIP pelo layout, não pelo retângulo na tela**: a posição de cada item vem de `offsetTop`/`offsetLeft` (ignoram o
+  transform de uma animação em curso), relativa à lista; um `ResizeObserver` mede de novo quando a tela muda de
+  tamanho, para uma rotação de celular não virar "movimento" na próxima atualização. Os itens ganham chave pelo nome
+  (`chavesPorNome`), então o count-up de cada célula parte do % dela, e não do item que estava naquela linha.
+- **Pulso da meta batida pela Web Animations API, não por CSS** (revisão): o React move o `<li>` com `insertBefore`
+  quando a ordem muda, e uma animação de CSS recomeça no nó movido, então uma célula só ultrapassada pulsava de
+  novo. O `usePulsoDaMeta` dispara só quando a meta passa a estar batida (ou o item já aparece batido).
+- **Sem View Transitions**: o `viewTransition` do React Router 8.5 está marcado como obsoleto em favor do
+  `<ViewTransition>` do React 19.3, que animaria toda atualização feita em `startTransition`. A entrada das telas por
+  CSS dá a transição entre rotas sem esse risco; pode voltar numa tarefa própria, se o PO quiser o cross-fade.
+- **Telão: movimento só quando os dados mudam.** Atualização igual não mexe em nada; a exceção é o fundo ambiente,
+  muito lento (60 e 75 s). O topo reserva o lugar da fase e da linha "Atualizado às" desde o carregando: o layout
+  shift do telão em 1920×1080 caiu de 0,35 para 0,003.

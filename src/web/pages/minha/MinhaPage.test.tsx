@@ -450,7 +450,7 @@ describe("fases, primeira venda e alvo sem células", () => {
     expect(regiao("Curva da campanha")).toHaveTextContent(
       "Ainda não há meta para desenhar a curva.",
     );
-    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(within(regiao("Curva da campanha")).queryByRole("img")).toBeNull();
     expect(regiao("Suas células")).toHaveTextContent(
       "Ainda não há células ligadas a você.",
     );

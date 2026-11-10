@@ -1,4 +1,10 @@
+/*
+ * Marca: logo da Videira | nome do produto (e o complemento, ex.: "Coordenação"). A altura do logo vem de
+ * --marca-altura (quem usa a marca muda só ela); a largura acompanha a proporção do arquivo (272×105).
+ */
 .ui-marca {
+  --marca-altura: 2.25rem;
+
   display: inline-flex;
   align-items: center;
   gap: var(--espaco-3);
@@ -6,32 +12,54 @@
   color: var(--cor-texto);
 }
 
-.ui-marca__simbolo {
+.ui-marca__selo {
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 2.25em;
-  height: 2.25em;
-  border-radius: var(--raio-2);
-  background: var(--cor-primaria);
-  color: var(--cor-sobre-primaria);
-  font-size: var(--texto-sm);
-  font-weight: var(--peso-negrito);
-  letter-spacing: 0.04em;
+  display: inline-flex;
+}
+
+.ui-marca__imagem {
+  display: contents;
+}
+
+.ui-marca__logo {
+  width: auto;
+  height: var(--marca-altura);
 }
 
 .ui-marca__textos {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-left: var(--espaco-3);
+  border-left: 1px solid var(--cor-borda);
   line-height: 1.2;
 }
 
 .ui-marca__nome {
   font-weight: var(--peso-negrito);
+  letter-spacing: -0.01em;
 }
 
 .ui-marca__complemento {
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
+}
+
+/*
+ * Fundo escuro (telão): o logo vai num selo claro; não se recolore o logo. O lugar do selo vale desde o início,
+ * mas o fundo claro só aparece com o logo carregado (data-carregado, em Marca.tsx): nada de retângulo branco
+ * vazio enquanto a imagem chega (nem se ela falhar: aí fica o alt, claro sobre o escuro).
+ */
+[data-tema="telao"] .ui-marca__selo {
+  padding: 0.2em 0.4em;
+  border-radius: 0.35em;
+}
+
+[data-tema="telao"] .ui-marca__selo[data-carregado] {
+  background: var(--cor-selo-marca);
+}
+
+[data-tema="telao"] .ui-marca__textos {
+  border-left: 0;
+  padding-left: 0;
 }
