@@ -33,6 +33,7 @@ import {
   respostaEntregasWebhookSchema,
   respostaEstadoWebhookSchema,
   PAGINA_PEDIDOS_MAXIMA,
+  PAGINA_ENTREGAS_MAXIMA,
   desempenhoIndividualSchema,
   pontoCurvaIndividualSchema,
   rankingIndividualSchema,
@@ -1322,7 +1323,7 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
 
 describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenação, só leitura)", () => {
   const PESSOAL =
-    /email|telefone|phone|document|cpf|endereco|address|buyer|comprador|numeros|nascimento/i;
+    /email|telefone|phone|document|cpf|endereco|address|zipcode|buyer|comprador|^name$|numeros|numbers|nascimento|birth|observation|fbp|fbc|payload/i;
   const totais = { pedidos: 0, bilhetes: 0, total_centavos: 0 };
   const pedido = {
     id: "R-123",
@@ -1446,5 +1447,157 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
       respostaEstadoWebhookSchema.safeParse({ ...estado, situacao: "parado" })
         .success,
     ).toBe(false);
+  });
+
+  it("estritas em todos os níveis: campo a mais em qualquer objeto recusa a resposta", () => {
+    const pedidos = {
+      itens: [pedido],
+      proximo: null,
+      totais: { in_process: totais, approved: totais, expired: totais },
+    };
+    const estado = {
+      situacao: "ok",
+      ultima_entrega_em: null,
+      ultima_processada_em: null,
+      ultimo_aprovado_em: null,
+      ultimas_24h: {
+        processado: 0,
+        duplicado: 0,
+        ignorado_outra_campanha: 0,
+        ignorado_transicao: 0,
+        erro_validacao: 0,
+      },
+      verificado_em: "2026-11-25T15:00:00.000Z",
+    };
+    const extra = { a_mais: 1 };
+    const casos: [string, z.ZodType, unknown][] = [
+      ["pedidos", respostaPedidosSchema, { ...pedidos, ...extra }],
+      [
+        "pedidos.celula",
+        respostaPedidosSchema,
+        {
+          ...pedidos,
+          itens: [{ ...pedido, celula: { ...pedido.celula, ...extra } }],
+        },
+      ],
+      [
+        "pedidos.totais",
+        respostaPedidosSchema,
+        { ...pedidos, totais: { ...pedidos.totais, ...extra } },
+      ],
+      [
+        "pedidos.totais.approved",
+        respostaPedidosSchema,
+        {
+          ...pedidos,
+          totais: { ...pedidos.totais, approved: { ...totais, ...extra } },
+        },
+      ],
+      [
+        "entregas",
+        respostaEntregasWebhookSchema,
+        { itens: [entrega], proximo: null, ...extra },
+      ],
+      ["estado", respostaEstadoWebhookSchema, { ...estado, ...extra }],
+      [
+        "estado.ultimas_24h",
+        respostaEstadoWebhookSchema,
+        { ...estado, ultimas_24h: { ...estado.ultimas_24h, ...extra } },
+      ],
+    ];
+    expect(respostaPedidosSchema.safeParse(pedidos).success).toBe(true);
+    expect(respostaEstadoWebhookSchema.safeParse(estado).success).toBe(true);
+    for (const [nome, schema, corpo] of casos)
+      expect({ nome, ok: schema.safeParse(corpo).success }).toEqual({
+        nome,
+        ok: false,
+      });
+  });
+
+  it("entregas: do erro e dos avisos só sai o código, nunca o detalhe gravado (com a mensagem)", () => {
+    const detalhe = {
+      caminho: ["total"],
+      codigo: "invalid_type",
+      mensagem: "Invalid input: expected number, received string",
+      ocorrencias: 1,
+    };
+    for (const item of [
+      { ...entrega, avisos: [detalhe] },
+      {
+        ...entrega,
+        resultado: "erro_validacao",
+        status_resultante: null,
+        erro: [detalhe],
+      },
+      { ...entrega, erro: detalhe },
+    ])
+      expect(
+        respostaEntregasWebhookSchema.safeParse({
+          itens: [item],
+          proximo: null,
+        }).success,
+      ).toBe(false);
+    expect(nomesDeCampos(respostaEntregasWebhookSchema)).not.toContain(
+      "mensagem",
+    );
+  });
+
+  it("tipos: status, resultado e DDD do domínio; cursores no tipo certo", () => {
+    for (const item of [
+      { ...pedido, status: "pago" },
+      { ...pedido, ddd: "1" },
+      { ...pedido, ddd: "01" },
+      { ...pedido, ddd: "911" },
+    ])
+      expect(
+        respostaPedidosSchema.safeParse({
+          itens: [item],
+          proximo: null,
+          totais: { in_process: totais, approved: totais, expired: totais },
+        }).success,
+      ).toBe(false);
+    expect(
+      respostaPedidosSchema.safeParse({
+        itens: [],
+        proximo: 42,
+        totais: { in_process: totais, approved: totais, expired: totais },
+      }).success,
+    ).toBe(false);
+    for (const item of [
+      { ...entrega, resultado: "ok" },
+      { ...entrega, status_resultante: "pago" },
+    ])
+      expect(
+        respostaEntregasWebhookSchema.safeParse({
+          itens: [item],
+          proximo: null,
+        }).success,
+      ).toBe(false);
+    expect(
+      respostaEntregasWebhookSchema.safeParse({ itens: [], proximo: "42" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("consulta de entregas: limites, cursor numérico positivo, resultado do domínio e pedido não vazio", () => {
+    // O teto da página é o custo máximo de uma leitura no D1 (D10): mudar é decisão, não acidente.
+    expect([PAGINA_PEDIDOS_MAXIMA, PAGINA_ENTREGAS_MAXIMA]).toEqual([200, 200]);
+    expect(consultaEntregasWebhookSchema.parse({ antes_de: "42" })).toEqual({
+      limite: 50,
+      antes_de: 42,
+    });
+    for (const consulta of [
+      { limite: "0" },
+      { limite: String(PAGINA_ENTREGAS_MAXIMA + 1) },
+      { antes_de: "0" },
+      { antes_de: "-3" },
+      { antes_de: "abc" },
+      { resultado: "ok" },
+      { pedido_id: "   " },
+    ])
+      expect({
+        consulta,
+        ok: consultaEntregasWebhookSchema.safeParse(consulta).success,
+      }).toEqual({ consulta, ok: false });
   });
 });
