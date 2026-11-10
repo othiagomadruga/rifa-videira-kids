@@ -87,10 +87,15 @@ interface Passo {
 
 const chaveValor = /^\s*([\w-]+):\s*(.*?)(?:\s+#.*)?$/;
 
+/** Valores que este leitor não entende: âncora, alias, tag, mapa/lista em fluxo e bloco que não seja `run: |`. */
+const formaNaoSuportada = /^[&*!{[>|]/;
+
 /**
  * Passos dos jobs de um workflow no formato deste repositório, que o Prettier mantém: job com 2 espaços,
  * passos em "      - " e as chaves de cada passo com 8 (as de env/with e o corpo do run, com 10).
  * Comentários e linhas em branco ficam de fora. Conferido contra um parser de YAML na RIFA-019.
+ * Fora do corpo de um `run: |`, uma linha em outra forma (um `env: *x` copiaria o env de outro passo, por
+ * exemplo) faz o leitor recusar o ci.yml em vez de lê-lo errado.
  */
 function lerPassos(texto: string): Passo[] {
   const passos: Passo[] = [];
@@ -114,10 +119,19 @@ function lerPassos(texto: string): Passo[] {
       passos.push(passo);
       linha = " ".repeat(8) + linha.slice(8);
     } else if (recuo < 8) passo = undefined;
-    if (!passo) continue;
 
     const [, chave = "", valor = ""] = chaveValor.exec(linha) ?? [];
-    if (linha.length - linha.trimStart().length === 8) {
+    const naChaveDoPasso = linha.length - linha.trimStart().length === 8;
+    const noCorpoDoRun = passo && !naChaveDoPasso && bloco === "run";
+    if (
+      !noCorpoDoRun &&
+      (chave === "" ||
+        (formaNaoSuportada.test(valor) && !(chave === "run" && valor === "|")))
+    )
+      throw new Error(`ci.yml: forma que o teste não lê: ${original.trim()}`);
+    if (!passo) continue;
+
+    if (naChaveDoPasso) {
       bloco = undefined;
       if (chave === "env" || chave === "with") bloco = chave;
       else if (chave === "run" && valor === "|") bloco = "run";
@@ -181,8 +195,9 @@ describe(".github/workflows/ci.yml", () => {
     expect(ci).not.toMatch(/^( {4})?env:/m);
     // Fora dos comentários, os segredos aparecem em duas linhas só: a do Publicar e a do passo que confere se
     // o segredo existe, que recebe só "true"/"false". Nada de secrets em with:, GITHUB_ENV ou outro passo.
+    // Linha com "#" e "${{" também conta: no corpo de um run: | ela é script, e o GitHub troca a expressão.
     const comSegredos = linhas
-      .filter((linha) => !linha.trim().startsWith("#"))
+      .filter((linha) => !linha.trim().startsWith("#") || linha.includes("${{"))
       .filter((linha) => /\bsecrets\b/i.test(linha))
       .map((linha) => linha.trim());
     expect(comSegredos).toEqual([

@@ -48,7 +48,8 @@ jobs:
     # O token da Cloudflare NÃO fica no ambiente do job: só o passo "Publicar" o recebe, e ele só aplica as
     # migrations no D1 remoto e publica o que o passo "Construir" já gerou. Assim o checkout, o setup-node,
     # o npm ci (que roda os scripts de instalação do esbuild e do workerd) e o build (Vite e os plugins)
-    # nunca o veem. Decisão D11 em docs/decisions.md; conferido em src/worker/config-publicacao.test.ts.
+    # não o recebem no ambiente; o que eles deixam no disco ainda roda no Publicar (risco descrito na D11).
+    # Decisão D11 em docs/decisions.md; conferido em src/worker/config-publicacao.test.ts.
     steps:
       - name: Conferir o segredo da Cloudflare
         id: segredo
