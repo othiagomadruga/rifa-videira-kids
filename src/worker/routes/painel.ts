@@ -39,8 +39,21 @@ function local<T extends `${typeof PREFIXO_PAINEL}/${string}`>(
   return caminho.slice(PREFIXO_PAINEL.length) as CaminhoLocal<T>;
 }
 
+/**
+ * Os montadores do contrato que o painel usa. Injetáveis, como os das rotas abertas (routes/publico.ts): o teste de
+ * desempenho (painel-desempenho.test.ts) conta o trabalho de cada requisição. Em produção, os de calculos.ts.
+ */
+export const MONTADORES_DO_PAINEL = Object.freeze({
+  montarResumoPainel,
+  montarRankingPainel,
+});
+export type MontadoresDoPainel = typeof MONTADORES_DO_PAINEL;
+
 /** O sub-app com o relógio dado (os testes fixam o instante; em produção, o do sistema). */
-export function criarPainel(relogio: Relogio = relogioDoSistema) {
+export function criarPainel(
+  relogio: Relogio = relogioDoSistema,
+  montadores: MontadoresDoPainel = MONTADORES_DO_PAINEL,
+) {
   const painel = new Hono<Ambiente>();
 
   // Valores da coordenação nunca ficam em cache (o login também marca no-store; aqui vale até no erro).
@@ -61,7 +74,7 @@ export function criarPainel(relogio: Relogio = relogioDoSistema) {
       if (!lido.ok)
         return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
       return c.json(
-        montarResumoPainel(
+        montadores.montarResumoPainel(
           lido.entrada,
           { escopo: lido.escopo, data: consulta.data },
           lido.agora,
@@ -80,7 +93,9 @@ export function criarPainel(relogio: Relogio = relogioDoSistema) {
       });
       if (!lido.ok)
         return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
-      return c.json(montarRankingPainel(lido.entrada, consulta, lido.agora));
+      return c.json(
+        montadores.montarRankingPainel(lido.entrada, consulta, lido.agora),
+      );
     },
   );
 

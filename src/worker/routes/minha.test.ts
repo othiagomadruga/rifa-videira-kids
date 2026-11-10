@@ -14,6 +14,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -638,6 +639,94 @@ describe("campanha, cache e alvo novo", () => {
     expect(batch.mock.calls.length).toBe(antes + 1);
     expect(corpo.alvo).toMatchObject({ id: 6, nome: "Célula Filadélfia" });
     expect(corpo.ranking.geral?.participantes).toBe(6);
+  });
+});
+
+describe("a hierarquia muda com a base em cache: nunca 500 (RIFA-014-api-b)", () => {
+  // A sessão lê o alvo na hora; a base da visão pode ter sido lida até 30 s antes. Se o alvo de quem pede mudou de
+  // divisão, a base guardada não serve (relê): sem isso, a visão misturava a divisão nova (da sessão) com os
+  // rankings da antiga (da base) e o schema recusava a resposta (500) por até 30 s.
+  beforeEach(async () => {
+    await semear({ unidade: "bilhetes", valor: 10 }, "percentual_meta");
+  });
+
+  /** A visão de quem pede depois da mudança, dentro dos 30 s da base guardada: relida, e na divisão nova. */
+  async function depoisDaMudanca(
+    sessao: Record<string, string>,
+    mudanca: string,
+  ): Promise<RespostaVisaoIndividual> {
+    await env.DB.prepare(mudanca).run();
+    const batch = vi.spyOn(env.DB, "batch");
+    const { corpo } = await visao(sessao);
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(corpo.alvo.divisao).toBe("adultos");
+    return corpo;
+  }
+
+  it("a rede que troca de divisão: a visão dela relê a base e sai na divisão nova, com os rankings dela", async () => {
+    const rede = await entrarComo("rede", 1);
+    expect((await visao(rede)).corpo.alvo.divisao).toBe("jovens");
+    const corpo = await depoisDaMudanca(
+      rede,
+      "UPDATE redes SET divisao = 'adultos' WHERE id = 1",
+    );
+    expect(corpo.ranking.geral?.participantes).toBe(2);
+    expect(corpo.ranking.divisao?.participantes).toBe(2);
+    expect(corpo.equipe.map(({ tipo, id }) => `${tipo}:${id}`)).toEqual([
+      "discipulador:10",
+      "celula:1",
+      "celula:2",
+      "discipulador:20",
+      "celula:3",
+    ]);
+    expect(corpo.equipe.every((item) => item.posicao_divisao !== null)).toBe(
+      true,
+    );
+  });
+
+  it("a célula que vai para um discipulador de outra divisão: a visão do líder relê a base", async () => {
+    const lider = await entrarComo("lider", 1);
+    expect((await visao(lider)).corpo.alvo.divisao).toBe("jovens");
+    const corpo = await depoisDaMudanca(
+      lider,
+      "UPDATE celulas SET discipulador_id = 30 WHERE id = 1",
+    );
+    // Na divisão dos adultos: Dorcas, Éfeso e agora a Ágape.
+    expect(corpo.ranking.divisao?.participantes).toBe(3);
+    expect(corpo.ranking.geral?.participantes).toBe(5);
+  });
+
+  it("o discipulador que vai para uma rede de outra divisão: a visão dele relê a base, com as células na posição nova", async () => {
+    const discipulador = await entrarComo("discipulador", 10);
+    expect((await visao(discipulador)).corpo.alvo.divisao).toBe("jovens");
+    const corpo = await depoisDaMudanca(
+      discipulador,
+      "UPDATE discipuladores SET rede_id = 2 WHERE id = 10",
+    );
+    expect(corpo.equipe.map((item) => item.id)).toEqual([1, 2]);
+    expect(corpo.equipe.every((item) => item.posicao_divisao !== null)).toBe(
+      true,
+    );
+    // Na divisão dos adultos: Caleb e agora Abel (Davi não tem células).
+    expect(corpo.ranking.divisao?.participantes).toBe(2);
+  });
+
+  it("para as outras pessoas (o alvo delas não mudou), a hierarquia pode aparecer até 30 s atrasada, sem erro", async () => {
+    const abel = await entrarComo("discipulador", 10);
+    expect((await visao(abel)).corpo.equipe.map((item) => item.id)).toEqual([
+      1, 2,
+    ]);
+    // A Betel vai do Abel para o Boaz (mesma divisão): a visão do Abel não precisa reler a base.
+    await env.DB.prepare(
+      "UPDATE celulas SET discipulador_id = 20 WHERE id = 2",
+    ).run();
+    expect((await visao(abel)).corpo.equipe.map((item) => item.id)).toEqual([
+      1, 2,
+    ]);
+    andarDoRelogio();
+    expect((await visao(abel)).corpo.equipe.map((item) => item.id)).toEqual([
+      1,
+    ]);
   });
 });
 

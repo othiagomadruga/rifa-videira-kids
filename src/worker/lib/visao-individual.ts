@@ -71,6 +71,17 @@ export interface DadosDaVisao {
   >;
 }
 
+/**
+ * Os montadores do contrato que a visão chama. Injetáveis, como os de routes/publico.ts: o teste de desempenho
+ * (routes/minha-desempenho.test.ts) conta o trabalho de cada visão (as chamadas, as linhas de venda e as células
+ * que eles recebem). Em produção, os de calculos.ts.
+ */
+export const MONTADORES_DA_VISAO = Object.freeze({
+  montarResumoPainel,
+  montarRankingPainel,
+});
+export type MontadoresDaVisao = typeof MONTADORES_DA_VISAO;
+
 /** Quem pede, da sessão: o nome do usuário e o alvo (com o id do banco, nunca da requisição). */
 export interface QuemPede {
   pessoa: string;
@@ -217,6 +228,7 @@ export function montarVisaoIndividual(
   quem: QuemPede,
   consulta: ConsultaVisaoIndividual,
   agora: Date,
+  montadores: MontadoresDaVisao = MONTADORES_DA_VISAO,
 ): RespostaVisaoIndividual {
   const { entrada } = dados;
   const { campanha } = entrada;
@@ -261,7 +273,7 @@ export function montarVisaoIndividual(
 
   /** Os números de um escopo (o alvo ou alguém da equipe) e a meta exata dele. */
   function calcular(escopo: EscopoResolvido, celulas: CelulaCalculo[]) {
-    const resumo = montarResumoPainel(
+    const resumo = montadores.montarResumoPainel(
       { campanha, celulas: comAsOutras(celulas), vendas: vendasDe(celulas) },
       { escopo, data },
       agora,
@@ -293,7 +305,7 @@ export function montarVisaoIndividual(
   // janela vem do próprio montador (sem células, ele só calcula a janela, que não depende das vendas).
   const nivel: NivelRanking = alvo.tipo;
   const { periodo } = consulta;
-  const janela = montarRankingPainel(
+  const janela = montadores.montarRankingPainel(
     { campanha, celulas: [], vendas: [] },
     { nivel, periodo, data },
     agora,
@@ -307,7 +319,7 @@ export function montarVisaoIndividual(
   const celulasDa = (divisao: Divisao) =>
     entrada.celulas.filter((celula) => celula.divisao === divisao);
   const ranking = (nivelDoRanking: NivelRanking, divisao?: Divisao) =>
-    montarRankingPainel(
+    montadores.montarRankingPainel(
       divisao === undefined
         ? { campanha, celulas: entrada.celulas, vendas: vendasDoRanking.todas }
         : {

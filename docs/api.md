@@ -677,9 +677,11 @@ Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`;
 - Sem campanha ativa: 404 `nao_encontrado`, como o painel.
 - Cache: a resposta é por pessoa e sai com `Cache-Control: no-store`, nunca guardada. Os dados de base (a
   campanha, as células, as vendas por dia, os discipuladores, as redes e os afiliados por célula) ficam até 30 s
-  na memória do isolate, como as rotas abertas (D10); uma base sem o alvo de quem pede (ex.: uma célula criada
-  depois dela) é lida de novo. Por requisição: a sessão e, sem a base guardada, a campanha e um lote no D1 (o
-  orçamento do painel, ~1,3 linha lida por pedido).
+  na memória do isolate, como as rotas abertas (D10). O alvo de quem pede vem da sessão, lido na hora: se a base
+  guardada não tem esse alvo, ou o tem noutra divisão (uma célula criada depois dela; a rede que trocou de divisão;
+  a célula ou o discipulador que foi para outra divisão), ela é lida de novo. Para as outras pessoas, cujo alvo não
+  mudou, a hierarquia (quem está em qual equipe, nomes, rankings) pode aparecer até 30 s atrasada. Por requisição:
+  a sessão e, sem a base guardada, a campanha e um lote no D1 (o orçamento do painel, ~1,3 linha lida por pedido).
 
 ### `GET /api/admin/acessos-hierarquia?papel=lider|discipulador|rede` (**só admin**)
 

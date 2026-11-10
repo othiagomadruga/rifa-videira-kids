@@ -9,7 +9,11 @@
  * - Cache por isolate de até 30 s (TTL_BASE_DA_VISAO_MS), como as rotas abertas (D10): a visão de cada pessoa é
  *   atualizada a cada minuto no celular, e sem o cache cada uma leria do D1 todos os pedidos da campanha. Só os
  *   dados de base ficam guardados, NUNCA a resposta, que é por pessoa. A base guardada só serve se tiver o alvo
- *   de quem pede (um alvo criado depois dela faz uma leitura nova, que também renova o cache).
+ *   de quem pede NA MESMA DIVISÃO da sessão (lida na hora): um alvo criado depois dela, ou que mudou de divisão
+ *   (a rede trocou de divisão; a célula ou o discipulador foi para outra divisão), faz uma leitura nova, que
+ *   também renova o cache. Sem isso, a visão misturaria a divisão nova (da sessão) com os rankings da antiga (da
+ *   base) e não passaria no schema (500) por até 30 s. Para as outras pessoas, cujo alvo não mudou, a hierarquia
+ *   pode aparecer até 30 s atrasada.
  */
 import type { Alvo, Divisao, EntradaCalculo } from "../../shared/contracts";
 import type { DadosDaVisao } from "../lib/visao-individual";
@@ -63,21 +67,35 @@ const comandosDaVisao = (db: D1Database) => [
   ),
 ];
 
-/** A base tem o alvo? (Na base guardada, um alvo criado depois dela não está.) */
-function temOAlvo(base: BaseDaVisao, alvo: Alvo): boolean {
+/**
+ * A base tem o alvo, na mesma divisão da sessão? Numa base guardada, um alvo criado depois dela não está, e um
+ * que mudou de divisão está na antiga: a célula pela divisão dela; o discipulador e a rede, pela da rede.
+ */
+function temOAlvoNaDivisao(base: BaseDaVisao, alvo: Alvo): boolean {
+  const divisaoDaRede = (id: number) =>
+    base.redes.find((rede) => rede.id === id)?.divisao;
   switch (alvo.tipo) {
     case "celula":
-      return base.celulas.has(alvo.id);
-    case "discipulador":
-      return base.discipuladores.some((item) => item.id === alvo.id);
+      return base.entrada.celulas.some(
+        (celula) => celula.id === alvo.id && celula.divisao === alvo.divisao,
+      );
+    case "discipulador": {
+      const discipulador = base.discipuladores.find(
+        (item) => item.id === alvo.id,
+      );
+      return (
+        discipulador !== undefined &&
+        divisaoDaRede(discipulador.rede_id) === alvo.divisao
+      );
+    }
     case "rede":
-      return base.redes.some((item) => item.id === alvo.id);
+      return divisaoDaRede(alvo.id) === alvo.divisao;
   }
 }
 
 /**
- * A base da visão, do cache (no prazo e com o alvo) ou do banco (e guarda). Sem campanha ativa: 404
- * `nao_encontrado`, como o painel (nada é guardado).
+ * A base da visão, do cache (no prazo e com o alvo na divisão da sessão) ou do banco (e guarda). Sem campanha
+ * ativa: 404 `nao_encontrado`, como o painel (nada é guardado).
  */
 export async function lerBaseDaVisao(
   db: D1Database,
@@ -86,7 +104,7 @@ export async function lerBaseDaVisao(
   cache: CacheDaBase,
 ): Promise<{ ok: true; base: BaseDaVisao } | FalhaLeitura> {
   const guardada = cache.ler(agora);
-  if (guardada !== null && temOAlvo(guardada, alvo))
+  if (guardada !== null && temOAlvoNaDivisao(guardada, alvo))
     return { ok: true, base: guardada };
 
   const lido = await lerEntradaDoCalculo(db, () => agora, {}, comandosDaVisao);

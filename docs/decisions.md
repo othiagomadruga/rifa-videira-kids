@@ -200,21 +200,38 @@ implementação da D12 (o contrato não mudou; só `percentualBp` passou a ser e
 - **Leitura**: a do painel (D10), com três comandos a mais no mesmo lote (os discipuladores, as redes e, por célula,
   o líder e os afiliados vinculados): por requisição, a sessão, a campanha e um lote, ~1,3 linha lida no D1 por
   pedido. Os dados de base ficam até 30 s na memória do isolate (`src/worker/db/visao-individual.ts`), nunca a
-  resposta, que é por pessoa; uma base sem o alvo de quem pede (ex.: célula criada depois dela) é lida de novo.
-  Por quê: a tela se atualiza a cada 60 s em cada celular aberto, e sem o cache cada atualização leria todos os
-  pedidos da campanha (a cota diária do D1 Free, D10).
+  resposta, que é por pessoa. Por quê: a tela se atualiza a cada 60 s em cada celular aberto, e sem o cache cada
+  atualização leria todos os pedidos da campanha (a cota diária do D1 Free, D10). O alvo vem da sessão, lido na
+  hora; a base guardada só serve se tiver o alvo NA MESMA DIVISÃO (a célula pela divisão dela; o discipulador e a
+  rede, pela da rede). Senão (alvo criado depois dela, rede que trocou de divisão, célula ou discipulador que foi
+  para outra divisão), ela é lida de novo: misturar a divisão nova da sessão com os rankings da antiga dava 500
+  por até 30 s (RIFA-014-api-b). Para as outras pessoas, cujo alvo não mudou, a hierarquia pode aparecer até 30 s
+  atrasada.
 - **CPU**: o Worker Free tem 10 ms por requisição, e cada montador de `calculos.ts` percorre todas as linhas de venda
   que recebe (~1,5 µs por linha no workerd); a visão chama vários (o resumo do alvo e de cada item da equipe, e de 2
   a 4 rankings). O montador da visão (`src/worker/lib/visao-individual.ts`) passa a cada um só o que pesa no
   resultado, sem mudar a resposta: no resumo, as células do escopo e uma que representa as outras pela soma das
   pessoas (a meta proporcional depende delas só por isso); nos rankings, por célula, as vendas dos dias fechados da
   janela somadas numa linha e as de hoje, e no de uma divisão só as células dela. `lib/visao-individual.test.ts`
-  confere, campo a campo, que tudo bate com os montadores chamados com todas as células e vendas. Medido no
-  workerd com 36 células, 12 discipuladores, 4 redes e ~7 mil pedidos (`routes/minha-desempenho.test.ts`, sozinho):
-  com a máquina calma, mediana de 1 a 4 ms de Worker por requisição (conforme o papel e o cache) e pior caso até
-  8 ms; com a máquina ocupada por outros testes, mediana até 6 ms e picos acima de 10 ms, que medem a disputa pelos
-  núcleos (o relógio do workerd é de parede). Antes das reduções, a mediana da rede era de ~7 ms e o pior caso passava
-  de 15 ms. O teste prende o orçamento do D1 (exato) e só uma mediana folgada de CPU, como a RIFA-012 e o painel.
+  confere, campo a campo, que tudo bate com os montadores chamados com todas as células e vendas.
+- **CPU medida** pelo revisor no app completo (workerd, 36 células, 12 discipuladores, 4 redes e ~7 mil pedidos): a
+  1ª visão de um isolate frio leva de 24 a 28 ms; depois, sem o cache da base, a mediana é de 3 a 5 ms no líder, de
+  4 a 7 ms no discipulador e de 8 a 9 ms na rede, com o pior caso de 13 a 18 ms. Ou seja, os 10 ms do plano Free
+  NÃO valem no 1º pedido de cada isolate nem na visão da rede sob carga. Se o Free recusar pedidos por CPU (erro
+  1102), as saídas são o Workers Paid ou guardar também os rankings junto com a base, por 30 s.
+- **Trava de desempenho determinística**: o relógio do workerd é de parede (mede também a disputa pelos núcleos),
+  então o teste não trava a CPU pelo tempo. Trava o TRABALHO por visão (`routes/minha-desempenho.test.ts`, cenário
+  de 36 células): as chamadas aos montadores e as linhas de venda e as células passadas a eles, com teto de 2 vezes
+  o medido (passar do dobro falha, em qualquer máquina; uma piora de 3 vezes, com folga), além das idas e das linhas lidas no D1, exatas.
+  A contagem usa os montadores injetáveis da visão (`MONTADORES_DA_VISAO`, como os de `routes/publico.ts`): o
+  `vi.mock` de módulo não roda no workerd (o mocker do Vitest chama `AsyncLocalStorage.disable()`, que ele não
+  implementa). O teste do painel e das rotas abertas (`routes/painel-desempenho.test.ts`, com ~7 mil e 259 mil
+  pedidos) trocou o teto de 50 ms de relógio, que derrubava a suíte com a máquina cheia, pela mesma trava: uma
+  chamada ao montador por requisição, com 927 linhas de venda e 36 células nos dois volumes (o banco agrega por
+  célula e dia), teto de 2 vezes, e os montadores injetáveis de `criarPainel` (`MONTADORES_DO_PAINEL`) e de
+  `criarPublico`. Desfazer a agregação da leitura (um pedido por linha) mantém as respostas certas, mas leva 6.939
+  e 259.227 linhas ao montador, e a trava falha. As travas exatas do D1 (2 idas e no máximo 1,5 linha lida por
+  pedido) continuam, e a CPU fica só no log.
 - **Lote de links**: poucas instruções sobre listas JSON (`json_each`), como a importação da hierarquia, por causa do
   limite de consultas por invocação do D1 (até 6 instruções para 200 alvos). Se outra gravação muda os alvos entre a
   conferência e o lote (o alvo some, ganha um usuário ou é desativado), uma restrição do banco desfaz o lote inteiro
