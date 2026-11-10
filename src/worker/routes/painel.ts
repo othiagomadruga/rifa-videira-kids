@@ -43,7 +43,10 @@ function local<T extends `${typeof PREFIXO_PAINEL}/${string}`>(
  * Os montadores do contrato que o painel usa. Injetáveis, como os das rotas abertas (routes/publico.ts): o teste de
  * desempenho (painel-desempenho.test.ts) conta o trabalho de cada requisição. Em produção, os de calculos.ts.
  */
-export const MONTADORES_DO_PAINEL = { montarResumoPainel, montarRankingPainel };
+export const MONTADORES_DO_PAINEL = Object.freeze({
+  montarResumoPainel,
+  montarRankingPainel,
+});
 export type MontadoresDoPainel = typeof MONTADORES_DO_PAINEL;
 
 /** O sub-app com o relógio dado (os testes fixam o instante; em produção, o do sistema). */

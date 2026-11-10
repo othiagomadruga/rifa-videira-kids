@@ -76,7 +76,10 @@ export interface DadosDaVisao {
  * (routes/minha-desempenho.test.ts) conta o trabalho de cada visão (as chamadas, as linhas de venda e as células
  * que eles recebem). Em produção, os de calculos.ts.
  */
-export const MONTADORES_DA_VISAO = { montarResumoPainel, montarRankingPainel };
+export const MONTADORES_DA_VISAO = Object.freeze({
+  montarResumoPainel,
+  montarRankingPainel,
+});
 export type MontadoresDaVisao = typeof MONTADORES_DA_VISAO;
 
 /** Quem pede, da sessão: o nome do usuário e o alvo (com o id do banco, nunca da requisição). */
