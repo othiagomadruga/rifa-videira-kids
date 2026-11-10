@@ -512,7 +512,7 @@ describe("CA2: editar e excluir", () => {
     expect(nome).toHaveAccessibleDescription(
       "Já existe uma célula com esse nome.",
     );
-    expect(nome).toHaveFocus();
+    await waitFor(() => expect(nome).toHaveFocus());
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
@@ -568,7 +568,7 @@ describe("CA2: editar e excluir", () => {
     expect(email).toHaveAccessibleDescription(
       "Confira o e-mail (ou deixe em branco).",
     );
-    expect(email).toHaveFocus();
+    await waitFor(() => expect(email).toHaveFocus());
   });
 
   it("exclui a célula depois de confirmar", async () => {
