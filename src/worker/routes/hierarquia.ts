@@ -3,7 +3,8 @@
  * `coordenacao` (docs/api.md). Os caminhos e os schemas vêm do contrato (`ROTAS`).
  *
  * Este sub-app NÃO autentica: o index.ts o monta sob /api/admin, depois do middleware da coordenação:
- * `app.route(PREFIXO_HIERARQUIA, hierarquia)`.
+ * `app.route(PREFIXO_HIERARQUIA, hierarquia)`. Quem está na sessão assina a trilha de auditoria da importação
+ * aplicada (RIFA-013b) e do CRUD (RIFA-018); sem sessão (os testes do sub-app sozinho), nada é registrado.
  */
 import { zValidator } from "@hono/zod-validator";
 import { Hono, type Context } from "hono";
@@ -44,7 +45,7 @@ import {
 } from "../middleware/limite-corpo";
 import { autoriaDaSessao, type AmbienteSessao } from "../middleware/sessao";
 
-// Montado atrás do login: `c.var.usuario` é quem importa (trilha de auditoria, RIFA-013b).
+// Montado atrás do login: `c.var.usuario` é quem grava (trilha de auditoria, RIFA-013b e RIFA-018).
 type Ambiente = AmbienteSessao;
 
 /** Onde o index.ts monta este sub-app. */
@@ -164,7 +165,11 @@ hierarquia.post(
   exigirJson,
   validar("json", ROTAS.criarRede.corpo),
   async (c) =>
-    responder(c, await criarRede(c.env.DB, c.req.valid("json")), 201),
+    responder(
+      c,
+      await criarRede(c.env.DB, c.req.valid("json"), autoriaDaSessao(c)),
+      201,
+    ),
 );
 
 hierarquia.put(
@@ -179,6 +184,7 @@ hierarquia.put(
         c.env.DB,
         c.req.valid("param").id,
         c.req.valid("json"),
+        autoriaDaSessao(c),
       ),
     ),
 );
@@ -187,7 +193,11 @@ hierarquia.delete(
   local(ROTAS.removerRede.caminho),
   validar("param", ROTAS.removerRede.parametros),
   async (c) => {
-    const resultado = await removerRede(c.env.DB, c.req.valid("param").id);
+    const resultado = await removerRede(
+      c.env.DB,
+      c.req.valid("param").id,
+      autoriaDaSessao(c),
+    );
     return resultado.ok ? c.body(null, 204) : responder(c, resultado);
   },
 );
@@ -217,7 +227,15 @@ hierarquia.post(
   exigirJson,
   validar("json", ROTAS.criarDiscipulador.corpo),
   async (c) =>
-    responder(c, await criarDiscipulador(c.env.DB, c.req.valid("json")), 201),
+    responder(
+      c,
+      await criarDiscipulador(
+        c.env.DB,
+        c.req.valid("json"),
+        autoriaDaSessao(c),
+      ),
+      201,
+    ),
 );
 
 hierarquia.put(
@@ -232,6 +250,7 @@ hierarquia.put(
         c.env.DB,
         c.req.valid("param").id,
         c.req.valid("json"),
+        autoriaDaSessao(c),
       ),
     ),
 );
@@ -243,6 +262,7 @@ hierarquia.delete(
     const resultado = await removerDiscipulador(
       c.env.DB,
       c.req.valid("param").id,
+      autoriaDaSessao(c),
     );
     return resultado.ok ? c.body(null, 204) : responder(c, resultado);
   },
@@ -271,7 +291,11 @@ hierarquia.post(
   exigirJson,
   validar("json", ROTAS.criarCelula.corpo),
   async (c) =>
-    responder(c, await criarCelula(c.env.DB, c.req.valid("json")), 201),
+    responder(
+      c,
+      await criarCelula(c.env.DB, c.req.valid("json"), autoriaDaSessao(c)),
+      201,
+    ),
 );
 
 hierarquia.put(
@@ -286,6 +310,7 @@ hierarquia.put(
         c.env.DB,
         c.req.valid("param").id,
         c.req.valid("json"),
+        autoriaDaSessao(c),
       ),
     ),
 );
@@ -294,7 +319,11 @@ hierarquia.delete(
   local(ROTAS.removerCelula.caminho),
   validar("param", ROTAS.removerCelula.parametros),
   async (c) => {
-    const resultado = await removerCelula(c.env.DB, c.req.valid("param").id);
+    const resultado = await removerCelula(
+      c.env.DB,
+      c.req.valid("param").id,
+      autoriaDaSessao(c),
+    );
     return resultado.ok ? c.body(null, 204) : responder(c, resultado);
   },
 );

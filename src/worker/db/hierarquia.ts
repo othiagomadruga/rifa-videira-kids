@@ -5,6 +5,7 @@
  *   maiúsculas (inclusive acentuadas) e ignorando espaços nas pontas; id inexistente no corpo =
  *   `referencia_invalida`; excluir algo referenciado = `em_uso` (as FKs da hierarquia são RESTRICT). O acesso
  *   do alvo (o usuário do líder, do discipulador ou da rede, RIFA-014) cai junto, em cascata (migração 0006).
+ *   Cada POST, PUT e DELETE que muda algo deixa uma linha na trilha de auditoria, no mesmo `db.batch` (RIFA-018).
  * - Importação da planilha (POST /api/admin/hierarquia/importar): cria e atualiza pelo nome, nunca apaga,
  *   e grava tudo num único `db.batch` (uma transação): ou o arquivo inteiro entra, ou nada.
  *
@@ -37,7 +38,11 @@ import {
 } from "../../shared/contracts";
 import { lerTabelaCsv, type ColunaIgnorada } from "../lib/csv";
 import { mensagemDeCelula } from "../lib/mensagens-validacao";
-import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
+import {
+  prepararRegistroAuditoria,
+  type Autoria,
+  type CondicaoAuditoria,
+} from "./auditoria";
 
 export type DadosRede = z.output<typeof redeEntradaSchema>;
 export type DadosDiscipulador = z.output<typeof discipuladorEntradaSchema>;
@@ -218,8 +223,220 @@ export async function obterCelula(
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Gravação (POST e PUT)
+// Gravação (POST, PUT e DELETE), com a trilha de auditoria no mesmo lote (RIFA-018)
 // ---------------------------------------------------------------------------------------------------
+
+/** Valor de uma coluna gravada pelo CRUD (texto, inteiro ou nulo). */
+type ValorColuna = string | number | null;
+
+/**
+ * Como cada coluna entra no resumo da trilha: `nome` (da rede, do discipulador ou da célula) e `valor` (divisão,
+ * ids e qtd_pessoas) com o antes e o depois; `pessoal` (os dados do líder e o responsável da rede) só pelo nome
+ * da coluna, nunca o valor.
+ */
+type FormatoColuna = "nome" | "valor" | "pessoal";
+
+interface Entidade {
+  tabela: Tabela;
+  /** O tipo do alvo na trilha (`celula:7`). */
+  tipo: "rede" | "discipulador" | "celula";
+  /** Como o resumo chama o item, e a concordância de "criada", "alterada" e "removida". */
+  rotulo: string;
+  feminino: boolean;
+  /** As colunas que o POST e o PUT gravam, na ordem dos valores (`valoresRede`...). */
+  colunas: readonly { nome: string; formato: FormatoColuna }[];
+  /** A coluna de `usuarios` que prende o acesso a este alvo (D12; cai junto com ele) e como o resumo o chama. */
+  colunaDoAcesso: "celula_id" | "discipulador_id" | "rede_id";
+  acesso: string;
+}
+
+const ENTIDADES = {
+  redes: {
+    tabela: "redes",
+    tipo: "rede",
+    rotulo: "Rede",
+    feminino: true,
+    colunas: [
+      { nome: "nome", formato: "nome" },
+      { nome: "divisao", formato: "valor" },
+      { nome: "responsavel_nome", formato: "pessoal" },
+    ],
+    colunaDoAcesso: "rede_id",
+    acesso: "acesso da rede",
+  },
+  discipuladores: {
+    tabela: "discipuladores",
+    tipo: "discipulador",
+    rotulo: "Discipulador",
+    feminino: false,
+    colunas: [
+      { nome: "rede_id", formato: "valor" },
+      { nome: "nome", formato: "nome" },
+    ],
+    colunaDoAcesso: "discipulador_id",
+    acesso: "acesso do discipulador",
+  },
+  celulas: {
+    tabela: "celulas",
+    tipo: "celula",
+    rotulo: "Célula",
+    feminino: true,
+    colunas: [
+      { nome: "discipulador_id", formato: "valor" },
+      { nome: "nome", formato: "nome" },
+      { nome: "qtd_pessoas", formato: "valor" },
+      { nome: "lider_nome", formato: "pessoal" },
+      { nome: "lider_email", formato: "pessoal" },
+      { nome: "lider_telefone", formato: "pessoal" },
+    ],
+    colunaDoAcesso: "celula_id",
+    acesso: "acesso do líder",
+  },
+} as const satisfies Record<Tabela, Entidade>;
+
+/** A linha como a leitura a viu: os valores das colunas (na ordem de `colunas`) e o usuário do acesso do alvo. */
+interface Retrato {
+  valores: readonly ValorColuna[];
+  acessoId: number | null;
+}
+
+async function lerRetrato(
+  db: D1Database,
+  entidade: Entidade,
+  id: number,
+): Promise<Retrato | null> {
+  const linha = await db
+    .prepare(
+      `SELECT ${entidade.colunas.map(({ nome }) => `t.${nome}`).join(", ")},
+         (SELECT u.id FROM usuarios AS u WHERE u.${entidade.colunaDoAcesso} = t.id) AS acesso_id
+       FROM ${entidade.tabela} AS t WHERE t.id = ?1`,
+    )
+    .bind(id)
+    .first<Record<string, ValorColuna>>();
+  if (linha === null) return null;
+  return {
+    valores: entidade.colunas.map(({ nome }) => linha[nome] ?? null),
+    acessoId: (linha.acesso_id as number | null) ?? null,
+  };
+}
+
+/**
+ * A linha `id` continua como no retrato (com `comAcesso`, o acesso do alvo também), em SQL: `?<inicio>` é o id e
+ * os seguintes são os de `valoresDoRetrato`. Os textos comparam em BINARY: o NOCASE das colunas de nome não
+ * esconde uma troca só de maiúsculas.
+ */
+function comoNoRetrato(
+  entidade: Entidade,
+  inicio: number,
+  comAcesso: boolean,
+): string {
+  const condicoes = [
+    `id = ?${inicio}`,
+    ...entidade.colunas.map(
+      ({ nome }, i) => `${nome} IS ?${inicio + 1 + i} COLLATE BINARY`,
+    ),
+  ];
+  if (comAcesso)
+    condicoes.push(
+      `(SELECT u.id FROM usuarios AS u WHERE u.${entidade.colunaDoAcesso} = ?${inicio}) IS ?${inicio + 1 + entidade.colunas.length}`,
+    );
+  return condicoes.join(" AND ");
+}
+
+function valoresDoRetrato(
+  id: number,
+  retrato: Retrato,
+  comAcesso: boolean,
+): unknown[] {
+  return [id, ...retrato.valores, ...(comAcesso ? [retrato.acessoId] : [])];
+}
+
+/** A condição da trilha no lote: o registro só fica se a linha ainda é a do retrato (a mesma da gravação). */
+function condicaoDoRetrato(
+  entidade: Entidade,
+  id: number,
+  retrato: Retrato,
+  comAcesso: boolean,
+): CondicaoAuditoria {
+  return {
+    sql: `EXISTS (SELECT 1 FROM ${entidade.tabela} WHERE ${comoNoRetrato(entidade, 6, comAcesso)})`,
+    valores: valoresDoRetrato(id, retrato, comAcesso),
+  };
+}
+
+// --- Resumos da trilha: o nome do item, ids e qtd_pessoas; dos dados pessoais, só o nome da coluna ---
+
+const flexao = (entidade: Entidade, raiz: string) =>
+  `${raiz}${entidade.feminino ? "a" : "o"}`;
+
+/** "Célula "Célula Alfa"": o rótulo e o nome do item (o id do alvo pode voltar num item novo). */
+function nomeDoItem(
+  entidade: Entidade,
+  valores: readonly ValorColuna[],
+): string {
+  const indice = entidade.colunas.findIndex(
+    ({ formato }) => formato === "nome",
+  );
+  return `${entidade.rotulo} ${JSON.stringify(valores[indice])}`;
+}
+
+/** As colunas de configuração com o valor: "discipulador_id 5, qtd_pessoas 12". */
+function configuracao(
+  entidade: Entidade,
+  valores: readonly ValorColuna[],
+): string {
+  return entidade.colunas
+    .flatMap(({ nome, formato }, i) =>
+      formato === "valor" ? [`${nome} ${String(valores[i])}`] : [],
+    )
+    .join(", ");
+}
+
+/** POST: "Célula "Célula Alfa" criada (discipulador_id 5, qtd_pessoas 12)". */
+function resumirCriacao(
+  entidade: Entidade,
+  valores: readonly ValorColuna[],
+): string {
+  return `${nomeDoItem(entidade, valores)} ${flexao(entidade, "criad")} (${configuracao(entidade, valores)})`;
+}
+
+/**
+ * PUT: só o que mudou, com o antes e o depois ("qtd_pessoas (12 → 15)": a meta e o ranking mudam junto); os dados
+ * pessoais só pelo nome da coluna ("lider_telefone (apagado)"). null: nada muda, e o PUT não registra.
+ */
+function resumirAtualizacao(
+  entidade: Entidade,
+  antes: readonly ValorColuna[],
+  depois: readonly ValorColuna[],
+): string | null {
+  const mudancas = entidade.colunas.flatMap(({ nome, formato }, i) => {
+    const [de, para] = [antes[i], depois[i]];
+    if (de === para) return [];
+    if (formato === "pessoal")
+      return [
+        `${nome} (${de === null ? "informado" : para === null ? "apagado" : "alterado"})`,
+      ];
+    const texto = (valor: ValorColuna) =>
+      formato === "nome" ? JSON.stringify(valor) : String(valor);
+    return [`${nome} (${texto(de)} → ${texto(para)})`];
+  });
+  return mudancas.length === 0
+    ? null
+    : `${nomeDoItem(entidade, depois)} ${flexao(entidade, "alterad")}: ${mudancas.join(", ")}`;
+}
+
+/**
+ * DELETE: o item e, se havia, o acesso da hierarquia que cai junto em cascata (D12), pelo id do usuário. O nome do
+ * item fica no resumo porque o id do usuário pode voltar numa pessoa nova (usuarios.id não é AUTOINCREMENT).
+ */
+function resumirRemocao(entidade: Entidade, retrato: Retrato): string {
+  const removido = `${nomeDoItem(entidade, retrato.valores)} ${flexao(entidade, "removid")} (${configuracao(entidade, retrato.valores)})`;
+  return retrato.acessoId === null
+    ? removido
+    : `${removido}; ${entidade.acesso} removido junto, usuário ${retrato.acessoId} (com os links e as sessões)`;
+}
+
+// --- Gravação ---
 
 async function existe(
   db: D1Database,
@@ -266,32 +483,42 @@ function referenciaInvalida(referencia: Referencia): Falha {
   return falha("referencia_invalida", referencia.mensagem, [detalhe]);
 }
 
-/**
- * Regras comuns de POST e PUT: o registro existe (PUT), a referência existe, o nome está livre. Depois
- * grava e relê o item. Violação de UNIQUE ou de FK que escape das checagens (corrida) vira o mesmo erro.
- */
-async function salvar<T>(
+/** O que o POST e o PUT gravam. */
+interface Gravacao<T> {
+  /** Os valores das colunas, na ordem de `colunas` da entidade. */
+  valores: readonly ValorColuna[];
+  nome: string;
+  referencia?: Referencia;
+  reler: (db: D1Database, id: number) => Promise<T | null>;
+}
+
+/** Regras comuns de POST e PUT: a referência existe e o nome está livre. */
+async function conferir(
   db: D1Database,
   tabela: Tabela,
-  opcoes: {
-    id?: number;
-    nome: string;
-    referencia?: Referencia;
-    gravar: () => Promise<number>;
-    reler: (db: D1Database, id: number) => Promise<T | null>;
-  },
-): Promise<Resultado<T>> {
-  const { id, referencia } = opcoes;
-  if (id !== undefined && !(await existe(db, tabela, id)))
-    return falha("nao_encontrado", TEXTOS[tabela].naoEncontrado);
+  gravacao: Gravacao<unknown>,
+  exceto?: number,
+): Promise<Falha | null> {
+  const { referencia } = gravacao;
   if (referencia && !(await existe(db, referencia.tabela, referencia.id)))
     return referenciaInvalida(referencia);
-  if (await nomeEmUso(db, tabela, opcoes.nome, id))
+  if (await nomeEmUso(db, tabela, gravacao.nome, exceto))
     return falha("nome_duplicado", TEXTOS[tabela].duplicado);
+  return null;
+}
 
-  let gravado: number;
+/**
+ * Roda o lote (uma transação do D1: a gravação e o registro da trilha ficam juntos ou nenhum fica). Violação de
+ * UNIQUE ou de FK que escape das conferências (corrida) vira o mesmo erro delas.
+ */
+async function gravarLote(
+  db: D1Database,
+  tabela: Tabela,
+  referencia: Referencia | undefined,
+  comandos: D1PreparedStatement[],
+): Promise<Resultado<D1Result<{ id: number }>[]>> {
   try {
-    gravado = await opcoes.gravar();
+    return { ok: true, valor: await db.batch<{ id: number }>(comandos) };
   } catch (erro) {
     if (violou(erro, "UNIQUE"))
       return falha("nome_duplicado", TEXTOS[tabela].duplicado);
@@ -299,33 +526,109 @@ async function salvar<T>(
       return referenciaInvalida(referencia);
     throw erro;
   }
-  return encontrado(await opcoes.reler(db, gravado), tabela);
 }
 
-async function inserir(
-  db: D1Database,
-  sql: string,
-  valores: unknown[],
-): Promise<number> {
-  const linha = await db
-    .prepare(`${sql} RETURNING id`)
-    .bind(...valores)
-    .first<{ id: number }>();
-  if (linha === null) throw new Error("INSERT sem RETURNING id");
-  return linha.id;
+/**
+ * Quantas vezes o PUT e o DELETE releem e refazem o lote quando a linha (ou o acesso do alvo) muda entre a
+ * leitura e o lote, por outra gravação ao mesmo tempo. A gravação vai condicionada ao retrato lido, e o registro
+ * da trilha também: o resumo descreve sempre o que mudou de fato.
+ */
+const TENTATIVAS_GRAVACAO = 3;
+
+function mudouEnquantoIsso(entidade: Entidade): Falha {
+  return falha(
+    "em_uso",
+    `${entidade.feminino ? "A" : "O"} ${entidade.rotulo.toLowerCase()} mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.`,
+  );
 }
 
-async function atualizar(
+/** POST: grava e relê o item; com `autoria`, a linha `hierarquia.criar` vai no mesmo lote. */
+async function criar<T>(
   db: D1Database,
-  sql: string,
-  valores: unknown[],
+  entidade: Entidade,
+  gravacao: Gravacao<T>,
+  autoria?: Autoria,
+): Promise<Resultado<T>> {
+  const recusa = await conferir(db, entidade.tabela, gravacao);
+  if (recusa) return recusa;
+  const colunas = entidade.colunas.map(({ nome }) => nome);
+  const lote = await gravarLote(db, entidade.tabela, gravacao.referencia, [
+    db
+      .prepare(
+        `INSERT INTO ${entidade.tabela} (${colunas.join(", ")})
+         VALUES (${colunas.map((_, i) => `?${i + 1}`).join(", ")}) RETURNING id`,
+      )
+      .bind(...gravacao.valores),
+    // Mesma transação: last_insert_rowid() é o item recém-criado.
+    ...(autoria
+      ? [
+          prepararRegistroAuditoria(db, {
+            ...autoria,
+            acao: "hierarquia.criar",
+            alvo: { tipo: entidade.tipo, idSql: "last_insert_rowid()" },
+            resumo: resumirCriacao(entidade, gravacao.valores),
+          }),
+        ]
+      : []),
+  ]);
+  if (!lote.ok) return lote;
+  const id = lote.valor[0]?.results[0]?.id;
+  if (id === undefined) throw new Error("INSERT sem RETURNING id");
+  return encontrado(await gravacao.reler(db, id), entidade.tabela);
+}
+
+/**
+ * PUT: confere, grava e relê o item. O UPDATE só vale se a linha ainda é a lida (senão, lê de novo e refaz); com
+ * `autoria` e alguma mudança, a linha `hierarquia.atualizar` vai no mesmo lote, ANTES do UPDATE e com a mesma
+ * condição (depois dele, a linha já não é a do retrato). PUT igual ao que está gravado não registra.
+ */
+async function atualizarItem<T>(
+  db: D1Database,
+  entidade: Entidade,
   id: number,
-): Promise<number> {
-  await db
-    .prepare(sql)
-    .bind(...valores, id)
-    .run();
-  return id;
+  gravacao: Gravacao<T>,
+  autoria?: Autoria,
+): Promise<Resultado<T>> {
+  const { tabela } = entidade;
+  const sets = entidade.colunas.map(({ nome }, i) => `${nome} = ?${i + 1}`);
+  const atualizar = `UPDATE ${tabela} SET ${sets.join(", ")}, atualizado_em = ${AGORA}
+    WHERE ${comoNoRetrato(entidade, entidade.colunas.length + 1, false)}`;
+  for (let tentativa = 1; tentativa <= TENTATIVAS_GRAVACAO; tentativa++) {
+    const antes = await lerRetrato(db, entidade, id);
+    if (antes === null)
+      return falha("nao_encontrado", TEXTOS[tabela].naoEncontrado);
+    const recusa = await conferir(db, tabela, gravacao, id);
+    if (recusa) return recusa;
+    const resumo = resumirAtualizacao(
+      entidade,
+      antes.valores,
+      gravacao.valores,
+    );
+    const lote = await gravarLote(db, tabela, gravacao.referencia, [
+      ...(autoria && resumo !== null
+        ? [
+            prepararRegistroAuditoria(
+              db,
+              {
+                ...autoria,
+                acao: "hierarquia.atualizar",
+                alvo: `${entidade.tipo}:${id}`,
+                resumo,
+              },
+              condicaoDoRetrato(entidade, id, antes, false),
+            ),
+          ]
+        : []),
+      db
+        .prepare(atualizar)
+        .bind(...gravacao.valores, ...valoresDoRetrato(id, antes, false)),
+    ]);
+    if (!lote.ok) return lote;
+    if ((lote.valor.at(-1)?.meta.changes ?? 0) > 0)
+      return encontrado(await gravacao.reler(db, id), tabela);
+    // A linha mudou (ou sumiu) entre a leitura e o lote: nada foi gravado nem registrado; lê de novo.
+  }
+  return mudouEnquantoIsso(entidade);
 }
 
 const referenciaRede = (id: number): Referencia => ({
@@ -346,16 +649,17 @@ const referenciaDiscipulador = (id: number): Referencia => ({
 const textoOpcional = (valor: string | null) =>
   valor === null ? null : normalizarEspacos(valor);
 
-const valoresRede = (dados: DadosRede) => [
+// Na ordem de `colunas` de ENTIDADES.
+const valoresRede = (dados: DadosRede): ValorColuna[] => [
   normalizarEspacos(dados.nome),
   dados.divisao,
   textoOpcional(dados.responsavel_nome),
 ];
-const valoresDiscipulador = (dados: DadosDiscipulador) => [
+const valoresDiscipulador = (dados: DadosDiscipulador): ValorColuna[] => [
   dados.rede_id,
   normalizarEspacos(dados.nome),
 ];
-const valoresCelula = (dados: DadosCelula) => [
+const valoresCelula = (dados: DadosCelula): ValorColuna[] => [
   dados.discipulador_id,
   normalizarEspacos(dados.nome),
   dados.qtd_pessoas,
@@ -364,95 +668,94 @@ const valoresCelula = (dados: DadosCelula) => [
   textoOpcional(dados.lider_telefone),
 ];
 
-const INSERIR_REDE =
-  "INSERT INTO redes (nome, divisao, responsavel_nome) VALUES (?, ?, ?)";
-const ATUALIZAR_REDE = `UPDATE redes SET nome = ?, divisao = ?, responsavel_nome = ?,
-  atualizado_em = ${AGORA} WHERE id = ?`;
-const INSERIR_DISCIPULADOR =
-  "INSERT INTO discipuladores (rede_id, nome) VALUES (?, ?)";
-const ATUALIZAR_DISCIPULADOR = `UPDATE discipuladores SET rede_id = ?, nome = ?,
-  atualizado_em = ${AGORA} WHERE id = ?`;
-const INSERIR_CELULA = `INSERT INTO celulas
-  (discipulador_id, nome, qtd_pessoas, lider_nome, lider_email, lider_telefone)
-  VALUES (?, ?, ?, ?, ?, ?)`;
-const ATUALIZAR_CELULA = `UPDATE celulas SET discipulador_id = ?, nome = ?, qtd_pessoas = ?,
-  lider_nome = ?, lider_email = ?, lider_telefone = ?, atualizado_em = ${AGORA} WHERE id = ?`;
+const gravacaoRede = (dados: DadosRede): Gravacao<Rede> => ({
+  valores: valoresRede(dados),
+  nome: dados.nome,
+  reler: buscarRede,
+});
+const gravacaoDiscipulador = (
+  dados: DadosDiscipulador,
+): Gravacao<Discipulador> => ({
+  valores: valoresDiscipulador(dados),
+  nome: dados.nome,
+  referencia: referenciaRede(dados.rede_id),
+  reler: buscarDiscipulador,
+});
+const gravacaoCelula = (dados: DadosCelula): Gravacao<Celula> => ({
+  valores: valoresCelula(dados),
+  nome: dados.nome,
+  referencia: referenciaDiscipulador(dados.discipulador_id),
+  reler: buscarCelula,
+});
+
+// Com `autoria` (a sessão de quem grava, RIFA-018), cada gravação deixa uma linha na trilha, no mesmo lote.
 
 export function criarRede(
   db: D1Database,
   dados: DadosRede,
+  autoria?: Autoria,
 ): Promise<Resultado<Rede>> {
-  return salvar(db, "redes", {
-    nome: dados.nome,
-    gravar: () => inserir(db, INSERIR_REDE, valoresRede(dados)),
-    reler: buscarRede,
-  });
+  return criar(db, ENTIDADES.redes, gravacaoRede(dados), autoria);
 }
 
 export function atualizarRede(
   db: D1Database,
   id: number,
   dados: DadosRede,
+  autoria?: Autoria,
 ): Promise<Resultado<Rede>> {
-  return salvar(db, "redes", {
-    id,
-    nome: dados.nome,
-    gravar: () => atualizar(db, ATUALIZAR_REDE, valoresRede(dados), id),
-    reler: buscarRede,
-  });
+  return atualizarItem(db, ENTIDADES.redes, id, gravacaoRede(dados), autoria);
 }
 
 export function criarDiscipulador(
   db: D1Database,
   dados: DadosDiscipulador,
+  autoria?: Autoria,
 ): Promise<Resultado<Discipulador>> {
-  return salvar(db, "discipuladores", {
-    nome: dados.nome,
-    referencia: referenciaRede(dados.rede_id),
-    gravar: () => inserir(db, INSERIR_DISCIPULADOR, valoresDiscipulador(dados)),
-    reler: buscarDiscipulador,
-  });
+  return criar(
+    db,
+    ENTIDADES.discipuladores,
+    gravacaoDiscipulador(dados),
+    autoria,
+  );
 }
 
 export function atualizarDiscipulador(
   db: D1Database,
   id: number,
   dados: DadosDiscipulador,
+  autoria?: Autoria,
 ): Promise<Resultado<Discipulador>> {
-  return salvar(db, "discipuladores", {
+  return atualizarItem(
+    db,
+    ENTIDADES.discipuladores,
     id,
-    nome: dados.nome,
-    referencia: referenciaRede(dados.rede_id),
-    gravar: () =>
-      atualizar(db, ATUALIZAR_DISCIPULADOR, valoresDiscipulador(dados), id),
-    reler: buscarDiscipulador,
-  });
+    gravacaoDiscipulador(dados),
+    autoria,
+  );
 }
 
 export function criarCelula(
   db: D1Database,
   dados: DadosCelula,
+  autoria?: Autoria,
 ): Promise<Resultado<Celula>> {
-  return salvar(db, "celulas", {
-    nome: dados.nome,
-    referencia: referenciaDiscipulador(dados.discipulador_id),
-    gravar: () => inserir(db, INSERIR_CELULA, valoresCelula(dados)),
-    reler: buscarCelula,
-  });
+  return criar(db, ENTIDADES.celulas, gravacaoCelula(dados), autoria);
 }
 
 export function atualizarCelula(
   db: D1Database,
   id: number,
   dados: DadosCelula,
+  autoria?: Autoria,
 ): Promise<Resultado<Celula>> {
-  return salvar(db, "celulas", {
+  return atualizarItem(
+    db,
+    ENTIDADES.celulas,
     id,
-    nome: dados.nome,
-    referencia: referenciaDiscipulador(dados.discipulador_id),
-    gravar: () => atualizar(db, ATUALIZAR_CELULA, valoresCelula(dados), id),
-    reler: buscarCelula,
-  });
+    gravacaoCelula(dados),
+    autoria,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -463,8 +766,6 @@ interface Dependentes {
   tabela: "discipuladores" | "celulas" | "afiliados";
   coluna: "rede_id" | "discipulador_id" | "celula_id";
   mensagem: (quantidade: number) => string;
-  /** A coluna de `usuarios` que prende o acesso a este alvo (o usuário cai junto com ele). */
-  colunaDoAcesso: "celula_id" | "discipulador_id" | "rede_id";
   /** Quando a trilha de auditoria segura o acesso do alvo (o usuário dele aparece como autor de uma ação). */
   mensagemDaTrilha: string;
 }
@@ -475,91 +776,145 @@ const MENSAGEM_REFERENCIA_QUE_MUDOU =
 
 /**
  * Apaga o registro. A exclusão leva junto, em cascata, o acesso do alvo (o usuário do líder, do discipulador ou
- * da rede, com os links e as sessões, migração 0006). Recusada por chave estrangeira, a mensagem diz o motivo
- * certo, conferido no banco: os dependentes da hierarquia (RESTRICT) ou, sem eles, a trilha de auditoria, que
- * segura (RESTRICT) o usuário do acesso quando ele aparece como autor de uma ação.
+ * da rede, com os links e as sessões, migração 0006). O DELETE só vale se a linha e o acesso ainda são os lidos
+ * (senão, lê de novo e refaz); com `autoria`, a linha `hierarquia.remover` vai no mesmo lote, ANTES do DELETE e
+ * com a mesma condição, e diz qual acesso caiu junto. Recusada por chave estrangeira (nada apagado, nada
+ * registrado), a mensagem diz o motivo certo, conferido no banco: os dependentes da hierarquia (RESTRICT) ou, sem
+ * eles, a trilha de auditoria, que segura (RESTRICT) o usuário do acesso quando ele aparece como autor de uma ação.
  */
 async function remover(
   db: D1Database,
-  tabela: Tabela,
+  entidade: Entidade,
   id: number,
   dependentes: Dependentes,
+  autoria?: Autoria,
 ): Promise<Resultado<null>> {
-  try {
-    const { meta } = await db
-      .prepare(`DELETE FROM ${tabela} WHERE id = ?`)
-      .bind(id)
-      .run();
-    return meta.changes > 0
-      ? { ok: true, valor: null }
-      : falha("nao_encontrado", TEXTOS[tabela].naoEncontrado);
-  } catch (erro) {
-    if (!violou(erro, "FOREIGN KEY")) throw erro;
-    const [filhos, naTrilha] = await db.batch<{ total: number }>([
-      db
-        .prepare(
-          `SELECT count(*) AS total FROM ${dependentes.tabela} WHERE ${dependentes.coluna} = ?`,
-        )
-        .bind(id),
-      db
-        .prepare(
-          `SELECT count(*) AS total FROM auditoria
-           WHERE usuario_id IN (SELECT id FROM usuarios WHERE ${dependentes.colunaDoAcesso} = ?)`,
-        )
-        .bind(id),
-    ]);
-    const quantidade = filhos.results[0]?.total ?? 0;
-    if (quantidade > 0)
-      return falha("em_uso", dependentes.mensagem(quantidade));
-    if ((naTrilha.results[0]?.total ?? 0) > 0)
-      return falha("em_uso", dependentes.mensagemDaTrilha);
-    return falha("em_uso", MENSAGEM_REFERENCIA_QUE_MUDOU);
+  const { tabela } = entidade;
+  for (let tentativa = 1; tentativa <= TENTATIVAS_GRAVACAO; tentativa++) {
+    const retrato = await lerRetrato(db, entidade, id);
+    if (retrato === null)
+      return falha("nao_encontrado", TEXTOS[tabela].naoEncontrado);
+    let lote: D1Result[];
+    try {
+      lote = await db.batch([
+        ...(autoria
+          ? [
+              prepararRegistroAuditoria(
+                db,
+                {
+                  ...autoria,
+                  acao: "hierarquia.remover",
+                  alvo: `${entidade.tipo}:${id}`,
+                  resumo: resumirRemocao(entidade, retrato),
+                },
+                condicaoDoRetrato(entidade, id, retrato, true),
+              ),
+            ]
+          : []),
+        db
+          .prepare(
+            `DELETE FROM ${tabela} WHERE ${comoNoRetrato(entidade, 1, true)}`,
+          )
+          .bind(...valoresDoRetrato(id, retrato, true)),
+      ]);
+    } catch (erro) {
+      if (!violou(erro, "FOREIGN KEY")) throw erro;
+      return motivoDaRecusa(db, entidade, id, dependentes);
+    }
+    if ((lote.at(-1)?.meta.changes ?? 0) > 0) return { ok: true, valor: null };
+    // A linha ou o acesso mudou (ou sumiu) entre a leitura e o lote: nada foi apagado nem registrado; lê de novo.
   }
+  return mudouEnquantoIsso(entidade);
+}
+
+/** A exclusão foi recusada por chave estrangeira: os dependentes da hierarquia ou a trilha de auditoria. */
+async function motivoDaRecusa(
+  db: D1Database,
+  entidade: Entidade,
+  id: number,
+  dependentes: Dependentes,
+): Promise<Falha> {
+  const [filhos, naTrilha] = await db.batch<{ total: number }>([
+    db
+      .prepare(
+        `SELECT count(*) AS total FROM ${dependentes.tabela} WHERE ${dependentes.coluna} = ?`,
+      )
+      .bind(id),
+    db
+      .prepare(
+        `SELECT count(*) AS total FROM auditoria
+         WHERE usuario_id IN (SELECT id FROM usuarios WHERE ${entidade.colunaDoAcesso} = ?)`,
+      )
+      .bind(id),
+  ]);
+  const quantidade = filhos.results[0]?.total ?? 0;
+  if (quantidade > 0) return falha("em_uso", dependentes.mensagem(quantidade));
+  if ((naTrilha.results[0]?.total ?? 0) > 0)
+    return falha("em_uso", dependentes.mensagemDaTrilha);
+  return falha("em_uso", MENSAGEM_REFERENCIA_QUE_MUDOU);
 }
 
 export function removerRede(
   db: D1Database,
   id: number,
+  autoria?: Autoria,
 ): Promise<Resultado<null>> {
-  return remover(db, "redes", id, {
-    tabela: "discipuladores",
-    coluna: "rede_id",
-    mensagem: (quantidade) =>
-      `A rede tem discipuladores (${quantidade}). Exclua os discipuladores ou mova-os para outra rede antes de excluir a rede.`,
-    colunaDoAcesso: "rede_id",
-    mensagemDaTrilha:
-      "A rede não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
-  });
+  return remover(
+    db,
+    ENTIDADES.redes,
+    id,
+    {
+      tabela: "discipuladores",
+      coluna: "rede_id",
+      mensagem: (quantidade) =>
+        `A rede tem discipuladores (${quantidade}). Exclua os discipuladores ou mova-os para outra rede antes de excluir a rede.`,
+      mensagemDaTrilha:
+        "A rede não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
+    },
+    autoria,
+  );
 }
 
 export function removerDiscipulador(
   db: D1Database,
   id: number,
+  autoria?: Autoria,
 ): Promise<Resultado<null>> {
-  return remover(db, "discipuladores", id, {
-    tabela: "celulas",
-    coluna: "discipulador_id",
-    mensagem: (quantidade) =>
-      `O discipulador tem células (${quantidade}). Exclua as células ou mova-as para outro discipulador antes de excluir o discipulador.`,
-    colunaDoAcesso: "discipulador_id",
-    mensagemDaTrilha:
-      "O discipulador não pode ser excluído: o acesso dele aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
-  });
+  return remover(
+    db,
+    ENTIDADES.discipuladores,
+    id,
+    {
+      tabela: "celulas",
+      coluna: "discipulador_id",
+      mensagem: (quantidade) =>
+        `O discipulador tem células (${quantidade}). Exclua as células ou mova-as para outro discipulador antes de excluir o discipulador.`,
+      mensagemDaTrilha:
+        "O discipulador não pode ser excluído: o acesso dele aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
+    },
+    autoria,
+  );
 }
 
 export function removerCelula(
   db: D1Database,
   id: number,
+  autoria?: Autoria,
 ): Promise<Resultado<null>> {
-  return remover(db, "celulas", id, {
-    tabela: "afiliados",
-    coluna: "celula_id",
-    mensagem: (quantidade) =>
-      `A célula tem afiliados vinculados (${quantidade}). Desvincule os afiliados antes de excluir a célula.`,
-    colunaDoAcesso: "celula_id",
-    mensagemDaTrilha:
-      "A célula não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
-  });
+  return remover(
+    db,
+    ENTIDADES.celulas,
+    id,
+    {
+      tabela: "afiliados",
+      coluna: "celula_id",
+      mensagem: (quantidade) =>
+        `A célula tem afiliados vinculados (${quantidade}). Desvincule os afiliados antes de excluir a célula.`,
+      mensagemDaTrilha:
+        "A célula não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
+    },
+    autoria,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------

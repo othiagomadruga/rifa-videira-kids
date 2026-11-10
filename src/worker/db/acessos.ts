@@ -312,9 +312,20 @@ export async function criarUsuarioComLink(
 export type ResultadoDefinirAtivo = "ok" | "nao_encontrado" | "ultimo_admin";
 
 /**
+ * O UPDATE de definirAtivo muda o usuário `id` para `valor`: ele não está assim ainda, e a desativação não deixa a
+ * equipe sem admin ativo. A mesma condição vale para a gravação e para o registro da trilha (placeholders dados).
+ */
+function mudaAtivo(id: string, valor: string): string {
+  return `id = ${id} AND ativo <> ${valor}
+    AND NOT (${valor} = 0 AND papel = 'admin' AND ativo = 1
+             AND (SELECT count(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1) = 1)`;
+}
+
+/**
  * Ativa ou desativa o usuário. Desativar apaga as sessões dele na mesma transação e é recusado se ele for o
  * último admin ativo. A condição fica no próprio UPDATE: dois admins desativando um ao outro ao mesmo tempo
- * não deixam a equipe sem admin (o segundo UPDATE já vê só um admin ativo).
+ * não deixam a equipe sem admin (o segundo UPDATE já vê só um admin ativo). Pedir o estado que o usuário já
+ * tem (reativar quem está ativo, desativar quem está desativado) responde "ok" sem mudar nada nem registrar.
  */
 export async function definirAtivo(
   db: D1Database,
@@ -323,7 +334,8 @@ export async function definirAtivo(
   autoria?: Autoria,
 ): Promise<ResultadoDefinirAtivo> {
   const valor = ativo ? 1 : 0;
-  // Auditoria: só se a mudança aconteceu (recusada, o usuário continua como estava).
+  // Auditoria: ANTES do UPDATE e com a mesma condição dele, então só registra se o estado muda (recusada ou
+  // sem mudança, nada fica na trilha).
   const registro =
     autoria &&
     prepararRegistroAuditoria(
@@ -337,33 +349,30 @@ export async function definirAtivo(
           : "Acesso desativado (as sessões foram encerradas)",
       },
       {
-        sql: "EXISTS (SELECT 1 FROM usuarios WHERE id = ?6 AND ativo = ?7)",
+        sql: `EXISTS (SELECT 1 FROM usuarios WHERE ${mudaAtivo("?6", "?7")})`,
         valores: [usuarioId, valor],
       },
     );
-  const [atualizacao, , existente] = await db.batch([
+  const resultados = await db.batch<{ ativo: number }>([
+    ...(registro ? [registro] : []),
     db
-      .prepare(
-        `UPDATE usuarios SET ativo = ?2
-         WHERE id = ?1
-           AND NOT (?2 = 0 AND papel = 'admin' AND ativo = 1
-                    AND (SELECT count(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1) = 1)`,
-      )
+      .prepare(`UPDATE usuarios SET ativo = ?2 WHERE ${mudaAtivo("?1", "?2")}`)
       .bind(usuarioId, valor),
-    // Só se a desativação aconteceu: recusada, o usuário continua ativo e as sessões ficam.
+    // Só se o usuário ficou desativado: recusada a desativação, ele continua ativo e as sessões ficam.
     db
       .prepare(
         `DELETE FROM sessoes WHERE usuario_id = ?1 AND ?2 = 0
            AND EXISTS (SELECT 1 FROM usuarios WHERE id = ?1 AND ativo = 0)`,
       )
       .bind(usuarioId, valor),
-    db
-      .prepare("SELECT 1 AS existe FROM usuarios WHERE id = ?1")
-      .bind(usuarioId),
-    ...(registro ? [registro] : []),
+    db.prepare("SELECT ativo FROM usuarios WHERE id = ?1").bind(usuarioId),
   ]);
-  if (atualizacao.meta.changes > 0) return "ok";
-  return existente.results.length > 0 ? "ultimo_admin" : "nao_encontrado";
+  const [atualizacao, , existente] = resultados.slice(-3);
+  if ((atualizacao?.meta.changes ?? 0) > 0) return "ok";
+  const atual = existente?.results[0];
+  if (atual === undefined) return "nao_encontrado";
+  // Já estava no estado pedido: nada a mudar.
+  return atual.ativo === valor ? "ok" : "ultimo_admin";
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -440,10 +449,25 @@ export type ResultadoRevogarLink =
   "ok" | "nao_encontrado" | "ultimo_link_admin";
 
 /**
- * Revoga o link (mantém a data da primeira revogação) e apaga as sessões abertas por ele. Recusa revogar um
- * link válido de admin ativo se nenhum outro admin ativo tiver link válido: a equipe ficaria sem como entrar
- * como admin quando as sessões acabassem. A condição fica no próprio UPDATE, como em definirAtivo: duas
- * revogações ao mesmo tempo dos dois últimos links não passam juntas (a segunda já vê só um link).
+ * O UPDATE de revogarLink revoga o link `id` em `agora`: ele ainda não está revogado e não é o último link válido
+ * de um admin ativo. A mesma condição vale para a gravação e para o registro da trilha (placeholders dados).
+ */
+function revogaLink(id: string, agora: string): string {
+  return `id = ${id} AND revogado_em IS NULL
+    AND NOT (expira_em > ${agora}
+             AND usuario_id IN (SELECT id FROM usuarios WHERE papel = 'admin' AND ativo = 1)
+             AND NOT EXISTS (
+               SELECT 1 FROM links_acesso AS outro JOIN usuarios AS u ON u.id = outro.usuario_id
+               WHERE outro.id <> ${id} AND outro.revogado_em IS NULL AND outro.expira_em > ${agora}
+                 AND u.papel = 'admin' AND u.ativo = 1))`;
+}
+
+/**
+ * Revoga o link e apaga as sessões abertas por ele. Recusa revogar um link válido de admin ativo se nenhum outro
+ * admin ativo tiver link válido: a equipe ficaria sem como entrar como admin quando as sessões acabassem. A
+ * condição fica no próprio UPDATE, como em definirAtivo: duas revogações ao mesmo tempo dos dois últimos links
+ * não passam juntas (a segunda já vê só um link). Revogar de novo um link já revogado responde "ok" sem mudar
+ * nada (a data continua a da primeira revogação) e sem registrar.
  */
 export async function revogarLink(
   db: D1Database,
@@ -451,8 +475,8 @@ export async function revogarLink(
   agora: string,
   autoria?: Autoria,
 ): Promise<ResultadoRevogarLink> {
-  // Auditoria: o dono do link entra no resumo (uma leitura pequena) e o registro só fica se o link ficou
-  // revogado (a revogação recusada não registra nada).
+  // Auditoria: o dono do link entra no resumo (uma leitura pequena; o dono de um link não muda) e o registro vai
+  // ANTES do UPDATE, com a mesma condição dele: a revogação recusada ou repetida não registra nada.
   const dono =
     autoria &&
     (await db
@@ -471,21 +495,15 @@ export async function revogarLink(
         resumo: `Link do usuário ${dono.usuario_id} revogado (as sessões abertas por ele foram encerradas)`,
       },
       {
-        sql: "EXISTS (SELECT 1 FROM links_acesso WHERE id = ?6 AND revogado_em IS NOT NULL)",
-        valores: [linkId],
+        sql: `EXISTS (SELECT 1 FROM links_acesso WHERE ${revogaLink("?6", "?7")})`,
+        valores: [linkId, agora],
       },
     );
-  const [revogacao, , existente] = await db.batch([
+  const resultados = await db.batch<{ revogado: number }>([
+    ...(registro ? [registro] : []),
     db
       .prepare(
-        `UPDATE links_acesso SET revogado_em = coalesce(revogado_em, ?2)
-         WHERE id = ?1
-           AND NOT (revogado_em IS NULL AND expira_em > ?2
-                    AND usuario_id IN (SELECT id FROM usuarios WHERE papel = 'admin' AND ativo = 1)
-                    AND NOT EXISTS (
-                      SELECT 1 FROM links_acesso AS outro JOIN usuarios AS u ON u.id = outro.usuario_id
-                      WHERE outro.id <> ?1 AND outro.revogado_em IS NULL AND outro.expira_em > ?2
-                        AND u.papel = 'admin' AND u.ativo = 1))`,
+        `UPDATE links_acesso SET revogado_em = ?2 WHERE ${revogaLink("?1", "?2")}`,
       )
       .bind(linkId, agora),
     // Só se o link está revogado: recusada a revogação, as sessões abertas por ele continuam.
@@ -496,12 +514,17 @@ export async function revogarLink(
       )
       .bind(linkId),
     db
-      .prepare("SELECT 1 AS existe FROM links_acesso WHERE id = ?1")
+      .prepare(
+        "SELECT revogado_em IS NOT NULL AS revogado FROM links_acesso WHERE id = ?1",
+      )
       .bind(linkId),
-    ...(registro ? [registro] : []),
   ]);
-  if (revogacao.meta.changes > 0) return "ok";
-  return existente.results.length > 0 ? "ultimo_link_admin" : "nao_encontrado";
+  const [revogacao, , existente] = resultados.slice(-3);
+  if ((revogacao?.meta.changes ?? 0) > 0) return "ok";
+  const atual = existente?.results[0];
+  if (atual === undefined) return "nao_encontrado";
+  // Já estava revogado: nada a mudar.
+  return atual.revogado === 1 ? "ok" : "ultimo_link_admin";
 }
 
 // ---------------------------------------------------------------------------------------------------
