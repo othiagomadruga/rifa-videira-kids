@@ -352,10 +352,6 @@
   .telao__mensagem {
     animation: ui-surgir var(--duracao-lenta) var(--curva-suave) backwards;
   }
-
-  .telao__item[data-meta-batida] .telao__percentual {
-    animation: ui-pulsar 450ms var(--curva-suave) 500ms 2;
-  }
 }
 
 /*

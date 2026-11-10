@@ -167,7 +167,14 @@ describe("CA4: movimento no telão", () => {
     renderizarRota("/telao");
     await screen.findByText(/^Atualizado às 15:30$/);
 
-    expect(animate).toHaveBeenCalledTimes(3);
+    // Os 3 itens entram e a pílula de Ágape (120%, já batida) pulsa.
+    const animados = animate.mock.contexts.map(
+      (elemento) => (elemento as Element).className,
+    );
+    expect(animados.filter((nome) => nome === "telao__item")).toHaveLength(3);
+    expect(
+      animados.filter((nome) => nome === "telao__percentual"),
+    ).toHaveLength(1);
     act(() => quadros.quadro(0));
     act(() => quadros.quadro(1000));
     expect(document.querySelector(".mov-contagem")).toBeNull();

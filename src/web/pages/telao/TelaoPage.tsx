@@ -15,6 +15,7 @@ import {
   chavesPorNome,
   useListaAnimada,
 } from "../../lib/useListaAnimada";
+import { usePulsoDaMeta } from "../../lib/usePulsoDaMeta";
 import { MARCA, tituloDaAba } from "../../tema/marca";
 import type {
   RankingDaDivisao,
@@ -228,6 +229,7 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
   const metaBatida =
     item.percentual_meta_bp !== undefined &&
     item.percentual_meta_bp >= META_BATIDA_BP;
+  const refPercentual = usePulsoDaMeta<HTMLSpanElement>(metaBatida);
   return (
     <li
       className="telao__item"
@@ -242,7 +244,7 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
       {item.percentual_meta_bp !== undefined && (
         <>
           {" "}
-          <span className="telao__percentual">
+          <span ref={refPercentual} className="telao__percentual">
             <TextoContado texto={formatarPercentual(item.percentual_meta_bp)} />{" "}
             <span className="visualmente-oculto">da meta</span>
           </span>

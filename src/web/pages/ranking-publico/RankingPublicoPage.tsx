@@ -21,6 +21,7 @@ import {
   chavesPorNome,
   useListaAnimada,
 } from "../../lib/useListaAnimada";
+import { usePulsoDaMeta } from "../../lib/usePulsoDaMeta";
 import type { RankingDaDivisao, RankingPublico } from "./ranking-publico-api";
 import { formatarPosicao, textoDaFase, textoDaJanela } from "./textos";
 import { useRankingPublico } from "./useRankingPublico";
@@ -187,6 +188,7 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
   const metaBatida =
     item.percentual_meta_bp !== undefined &&
     item.percentual_meta_bp >= META_BATIDA_BP;
+  const refPercentual = usePulsoDaMeta<HTMLSpanElement>(metaBatida);
   return (
     <li
       className="ranking-publico__item"
@@ -203,7 +205,7 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
       {item.percentual_meta_bp !== undefined && (
         <>
           {" "}
-          <span className="ranking-publico__percentual">
+          <span ref={refPercentual} className="ranking-publico__percentual">
             <TextoContado texto={formatarPercentual(item.percentual_meta_bp)} />{" "}
             <span className="visualmente-oculto">da meta</span>
           </span>

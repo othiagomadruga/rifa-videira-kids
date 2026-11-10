@@ -241,8 +241,4 @@
   .ranking-publico__sem-vendas {
     animation: ui-surgir var(--duracao-media) var(--curva-suave) backwards;
   }
-
-  .ranking-publico__item[data-meta-batida] .ranking-publico__percentual {
-    animation: ui-pulsar 450ms var(--curva-suave) 500ms 2;
-  }
 }

@@ -11,6 +11,7 @@ import type {
   ReferenciaCampanha,
 } from "../../../shared/contracts/calculos";
 import { DURACAO_CONTAGEM_MS } from "../../lib/movimento";
+import { ATRASO_PULSO_MS } from "../../lib/usePulsoDaMeta";
 import {
   controlarQuadros,
   desfazerMovimento,
@@ -53,6 +54,26 @@ const PRIMEIRA: Rodada = {
   adultos: [
     [1, "Célula Dorcas", 8800],
     [2, "Célula Éfeso", 7400],
+  ],
+};
+
+/** Ágape e Betel já bateram a meta. */
+const DUAS_BATIDAS: Rodada = {
+  ...PRIMEIRA,
+  jovens: [
+    [1, "Célula Ágape", 11200],
+    [2, "Célula Betel", 10500],
+    [3, "Célula Canaã", 8100],
+  ],
+};
+
+/** As duas que já tinham batido só trocam de lugar. */
+const DUAS_BATIDAS_TROCAM: Rodada = {
+  ...PRIMEIRA,
+  jovens: [
+    [1, "Célula Betel", 11800],
+    [2, "Célula Ágape", 11400],
+    [3, "Célula Canaã", 8100],
   ],
 };
 
@@ -125,17 +146,36 @@ const lista = (divisao: "Jovens" | "Adultos") =>
     .getAllByRole("listitem")
     .map((item) => item.textContent);
 
-/** As chamadas do element.animate: o texto do item animado e os quadros. */
-function animacoes(animate: ReturnType<typeof espiarAnimate>) {
-  return animate.mock.contexts.map((elemento, indice) => ({
-    item: (elemento as Element).querySelector(".ranking-publico__nome")
-      ?.textContent,
-    quadros: animate.mock.calls[indice][0] as unknown as Keyframe[],
-    opcoes: animate.mock.calls[
-      indice
-    ][1] as unknown as KeyframeAnimationOptions,
-  }));
+/** As chamadas do element.animate num tipo de elemento: o nome do item, os quadros e as opções. */
+function chamadasEm(
+  animate: ReturnType<typeof espiarAnimate>,
+  eh: (elemento: Element) => boolean,
+) {
+  return animate.mock.contexts.flatMap((contexto, indice) => {
+    const elemento = contexto as Element;
+    if (!eh(elemento)) return [];
+    return [
+      {
+        item: elemento.closest("li")?.querySelector(".ranking-publico__nome")
+          ?.textContent,
+        quadros: animate.mock.calls[indice][0] as unknown as Keyframe[],
+        opcoes: animate.mock.calls[
+          indice
+        ][1] as unknown as KeyframeAnimationOptions,
+      },
+    ];
+  });
 }
+
+/** Entrada e troca de lugar: as animações dos itens (<li>). */
+const animacoes = (animate: ReturnType<typeof espiarAnimate>) =>
+  chamadasEm(animate, (elemento) => elemento.tagName === "LI");
+
+/** O pulso da meta batida: as animações da pílula do %. */
+const pulsos = (animate: ReturnType<typeof espiarAnimate>) =>
+  chamadasEm(animate, (elemento) =>
+    elemento.classList.contains("ranking-publico__percentual"),
+  );
 
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "offsetTop", {
@@ -264,6 +304,69 @@ describe("CA4: ranking público com movimento", () => {
       "2º Célula Ágape 114% da meta",
       "3º Célula Canaã 81% da meta",
     ]);
+  });
+});
+
+// B1 da revisão: o pulso era uma animação de CSS e recomeçava quando o React movia o <li> (insertBefore), então
+// uma célula só ultrapassada pulsava de novo. Agora é Web Animations API, disparada só quando a meta passa a
+// estar batida (ou o item já aparece batido).
+describe("pulso da meta batida", () => {
+  it("quem bate a meta numa atualização pulsa uma vez (2 repetições), depois que o % conta", async () => {
+    simularPreferencia(false);
+    const animate = espiarAnimate();
+    controlarQuadros();
+    simularApi(PRIMEIRA, BETEL_PASSA);
+    renderizarRota("/");
+    await screen.findByText(/^Atualizado às/);
+    // Ágape já aparece batida (112%): pulsa ao chegar.
+    expect(pulsos(animate).map(({ item }) => item)).toEqual(["Célula Ágape"]);
+    animate.mockClear();
+
+    await atualizar();
+    const [pulso, ...outros] = pulsos(animate);
+    expect(outros).toHaveLength(0);
+    expect(pulso.item).toBe("Célula Betel");
+    expect(pulso.opcoes).toMatchObject({
+      duration: 450,
+      delay: ATRASO_PULSO_MS,
+      iterations: 2,
+    });
+    expect(pulso.quadros).toEqual([
+      { transform: "scale(1)" },
+      { transform: "scale(1.12)", offset: 0.45 },
+      { transform: "scale(1)" },
+    ]);
+    // O pulso começa depois que o % termina de contar.
+    expect(ATRASO_PULSO_MS).toBeGreaterThan(DURACAO_CONTAGEM_MS);
+  });
+
+  it("quem já tinha batido e só troca de lugar não pulsa de novo (só desliza)", async () => {
+    simularPreferencia(false);
+    const animate = espiarAnimate();
+    controlarQuadros();
+    simularApi(DUAS_BATIDAS, DUAS_BATIDAS_TROCAM);
+    renderizarRota("/");
+    await screen.findByText(/^Atualizado às/);
+    expect(pulsos(animate)).toHaveLength(2);
+    animate.mockClear();
+
+    await atualizar();
+    expect(pulsos(animate)).toEqual([]);
+    expect(animacoes(animate).map(({ item }) => item)).toEqual([
+      "Célula Betel",
+      "Célula Ágape",
+    ]);
+  });
+
+  it("com prefers-reduced-motion: reduce, nenhum pulso (nem ao chegar, nem ao bater a meta)", async () => {
+    simularPreferencia(true);
+    const animate = espiarAnimate();
+    simularApi(PRIMEIRA, BETEL_PASSA);
+    renderizarRota("/");
+    await screen.findByText(/^Atualizado às/);
+    await atualizar();
+    expect(lista("Jovens")[0]).toBe("1º Célula Betel 118% da meta");
+    expect(animate).not.toHaveBeenCalled();
   });
 });
 
