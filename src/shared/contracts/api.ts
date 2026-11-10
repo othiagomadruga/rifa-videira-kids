@@ -461,7 +461,7 @@ export type RespostaPedidosSuspeitos = z.infer<
 
 // ---------------------------------------------------------------------------------------------------
 // GET /api/admin/auditoria (RIFA-013b, só admin): quem mudou o quê na campanha, nos vínculos, na
-// hierarquia (importação) e nos acessos. Paginação por cursor: do mais novo para o mais antigo.
+// hierarquia (importação e CRUD) e nos acessos. Paginação por cursor: do mais novo para o mais antigo.
 // ---------------------------------------------------------------------------------------------------
 
 /**
@@ -472,7 +472,14 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos;
  * - acessos_hierarquia.gerar_links: POST /api/admin/acessos-hierarquia/links (RIFA-014, D12), uma linha por
  *   lote, alvo `papel:<papel>`, resumo sem nomes (quantos alvos, quantos usuários criados e se revogou os
- *   anteriores; os ids só se couberem no resumo).
+ *   anteriores; os ids só se couberem no resumo);
+ * - hierarquia.criar, hierarquia.atualizar e hierarquia.remover: POST, PUT e DELETE de /api/admin/redes,
+ *   /discipuladores e /celulas (RIFA-018), alvo `<rede|discipulador|celula>:<id>`; resumo com o nome do item,
+ *   o antes e o depois do que mudou (os dados do líder e o responsável da rede só pelo nome do campo) e, na
+ *   remoção, o acesso da hierarquia que caiu junto (o id do usuário).
+ * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
+ * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
+ * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
  */
 export const ACOES_AUDITORIA = [
   "campanha.salvar",
@@ -484,6 +491,9 @@ export const ACOES_AUDITORIA = [
   "link.criar",
   "link.revogar",
   "acessos_hierarquia.gerar_links",
+  "hierarquia.criar",
+  "hierarquia.atualizar",
+  "hierarquia.remover",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
