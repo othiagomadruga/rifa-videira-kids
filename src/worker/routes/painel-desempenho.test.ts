@@ -1,9 +1,16 @@
-// CA5: desempenho das quatro rotas no workerd com volume sintético (36 células × 24 dias). Mede, por rota,
-// o tempo total da requisição, o tempo esperando o D1 e a diferença (o trabalho do Worker: validação,
-// montador e JSON), além do montador sozinho, e as linhas lidas no D1 (o que o plano do D1 cobra). Os
-// limites são folgados, para pegar regressão grosseira (N+1, laço quadrático, consulta que volta a ler
-// várias linhas por pedido) sem depender da máquina; os números medidos saem no log do teste. As rotas
-// abertas vão sem o cache de 30 s (lib/cache-publico.ts): aqui se mede a resposta montada.
+// CA5: desempenho das quatro rotas no workerd com volume sintético (36 células × 24 dias), com ~7 mil e com 259
+// mil pedidos. As rotas abertas vão sem o cache de 30 s (lib/cache-publico.ts): aqui se mede a resposta montada.
+// - Travas exatas, que não dependem da máquina: as idas ao D1 por requisição (a campanha e um lote, sem N+1), as
+//   linhas lidas no D1 por pedido (o que o plano do D1 cobra) e o TRABALHO de cada requisição: quantas vezes ela
+//   chama os montadores de calculos.ts e quantas linhas de venda e células passa a eles. O custo de um montador
+//   cresce com as linhas e as células que recebe (~1,5 µs por linha), e a leitura agrega os pedidos por célula e
+//   dia (D10) justamente para que ele não cresça com o volume: a requisição que passar do dobro do trabalho medido
+//   falha, em qualquer máquina (desfazer a agregação, um pedido por linha, passa muito do teto). A contagem usa os
+//   montadores injetáveis das rotas (criarPainel e criarPublico), embrulhados: o vi.mock de módulo não roda no
+//   workerd (o mocker do Vitest chama AsyncLocalStorage.disable(), que ele não implementa).
+// - A CPU fica só no log: o tempo total, o tempo esperando o D1 e a diferença (o trabalho do Worker: validação,
+//   montador e JSON), além do montador sozinho. O relógio do workerd anda de 1 em 1 ms e é de parede: com a máquina
+//   cheia (a suíte em paralelo), ele mede a disputa pelos núcleos, e um teto pelo tempo derrubava a suíte.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -25,15 +32,13 @@ import {
   limparBanco,
   semearCampanha,
 } from "../test/painel-apoio";
-import { PREFIXO_PAINEL, criarPainel } from "./painel";
-import { PREFIXO_PUBLICO, criarPublico } from "./publico";
+import { PREFIXO_PAINEL, criarPainel, type MontadoresDoPainel } from "./painel";
+import { PREFIXO_PUBLICO, criarPublico, type OpcoesPublico } from "./publico";
 
 const DIAS = 24;
 const TOTAL_CELULAS = 36;
 /** Dia 20 de 24, às 12:00 em Belém: 19 dias fechados e o de hoje. */
 const AGORA = new Date("2026-12-12T15:00:00.000Z");
-/** Limite folgado do trabalho do Worker por requisição (o medido fica em poucos ms). */
-const LIMITE_WORKER_MS = 50;
 /**
  * Linhas lidas no D1 por pedido aprovado, por requisição. Medido: ~1,3 com ~7 mil pedidos e ~1,0 com
  * 259 mil (1 por pedido, pelo índice da migração 0003, e ~2 por grupo afiliado × dia). Pela view
@@ -41,12 +46,65 @@ const LIMITE_WORKER_MS = 50;
  */
 const LIMITE_LINHAS_POR_PEDIDO = 1.5;
 
+/** O trabalho de uma requisição: as chamadas aos montadores e o que elas receberam, somado. */
+interface Trabalho {
+  chamadas: number;
+  /** Linhas de venda (vendas por célula e dia) passadas aos montadores. */
+  linhas: number;
+  /** Células passadas aos montadores (cada uma ganha uma série diária no montador). */
+  celulas: number;
+}
+
+/**
+ * O trabalho de cada uma das cinco requisições, igual nos dois volumes (o banco agrega por célula e dia), medido em
+ * 2026-11-10: uma chamada ao montador, com 927 linhas de venda (uma por célula e dia local com venda: 36 × 25, o
+ * último já depois do fim; mais 24 das vendas sem célula e 3 de antes do início) e as 36 células. O teto é o dobro:
+ * passar dele falha. Se o trabalho cair (ou o cenário mudar), atualize o medido.
+ */
+const TRABALHO_MEDIDO: Trabalho = { chamadas: 1, linhas: 927, celulas: 36 };
+const FOLGA_DO_TRABALHO = 2;
+
 const relogio = () => AGORA;
-const app = new Hono<{ Bindings: Cloudflare.Env }>();
-app.route(PREFIXO_PAINEL, criarPainel(relogio));
-app.route(PREFIXO_PUBLICO, criarPublico({ relogio, cache: SEM_CACHE }));
-app.notFound(rotaInexistente);
-app.onError(erroNaoTratado);
+
+/** Os montadores do painel e das rotas abertas, embrulhados para contar o trabalho (fazem o mesmo que os do contrato). */
+function montadoresQueContam() {
+  const trabalho: Trabalho = { chamadas: 0, linhas: 0, celulas: 0 };
+  const contar =
+    <A extends unknown[], R>(
+      montar: (entrada: EntradaCalculo, ...resto: A) => R,
+    ) =>
+    (entrada: EntradaCalculo, ...resto: A): R => {
+      trabalho.chamadas += 1;
+      trabalho.linhas += entrada.vendas.length;
+      trabalho.celulas += entrada.celulas.length;
+      return montar(entrada, ...resto);
+    };
+  const painel: MontadoresDoPainel = {
+    montarResumoPainel: contar(montarResumoPainel),
+    montarRankingPainel: contar(montarRankingPainel),
+  };
+  const publico: OpcoesPublico["montadores"] = {
+    montarRankingPublico: contar(montarRankingPublico),
+    montarBumbo: contar(montarBumbo),
+  };
+  return { trabalho, painel, publico };
+}
+
+/** O painel e as rotas abertas (sem o cache de 30 s) com os montadores dados. */
+function appCom(
+  painel: MontadoresDoPainel,
+  publico: OpcoesPublico["montadores"],
+) {
+  const app = new Hono<{ Bindings: Cloudflare.Env }>();
+  app.route(PREFIXO_PAINEL, criarPainel(relogio, painel));
+  app.route(
+    PREFIXO_PUBLICO,
+    criarPublico({ relogio, cache: SEM_CACHE, montadores: publico }),
+  );
+  app.notFound(rotaInexistente);
+  app.onError(erroNaoTratado);
+  return app;
+}
 
 const CAMPANHA = campanhaEntradaSchema.parse({
   nome: "Rifa Videira Kids",
@@ -207,7 +265,25 @@ const mediana = (valores: number[]) =>
   [...valores].sort((a, b) => a - b)[Math.floor(valores.length / 2)];
 const ms = (valor: number) => valor.toFixed(1).padStart(6);
 
+/** O trabalho da requisição abaixo do dobro do medido (e a contagem viu a chamada ao montador). */
+function esperarTrabalhoNoTeto(rota: string, trabalho: Trabalho): void {
+  expect({ rota, chamou: trabalho.chamadas >= 1 }).toEqual({
+    rota,
+    chamou: true,
+  });
+  for (const medida of ["chamadas", "linhas", "celulas"] as const)
+    expect({
+      rota,
+      medida,
+      valor: trabalho[medida],
+      dentroDoTeto:
+        trabalho[medida] <= FOLGA_DO_TRABALHO * TRABALHO_MEDIDO[medida],
+    }).toEqual({ rota, medida, valor: trabalho[medida], dentroDoTeto: true });
+}
+
 async function medir(pedidos: number) {
+  // Desfazer a agregação da leitura (um pedido por linha de venda) passaria do teto do trabalho neste volume.
+  expect(pedidos).toBeGreaterThan(FOLGA_DO_TRABALHO * TRABALHO_MEDIDO.linhas);
   const linhas: string[] = [];
   const leitura = await lerEntradaDoCalculo(env.DB, relogio);
   if (!leitura.ok) throw new Error(leitura.mensagem);
@@ -216,7 +292,10 @@ async function medir(pedidos: number) {
     const totais: number[] = [];
     const banco: number[] = [];
     let linhasLidas = 0;
+    let trabalhoMedido: Trabalho | undefined;
     for (let rodada = 0; rodada < 3; rodada++) {
+      const { trabalho, painel, publico } = montadoresQueContam();
+      const app = appCom(painel, publico);
       const { db, contagem } = bancoQueConta();
       const inicio = performance.now();
       const res = await app.request(rota.caminho, {}, { ...env, DB: db });
@@ -233,6 +312,8 @@ async function medir(pedidos: number) {
         rota: rota.nome,
         idas: 2,
       });
+      esperarTrabalhoNoTeto(rota.nome, trabalho);
+      trabalhoMedido = trabalho;
       // A 1ª rodada aquece o isolate (formatadores do Intl, dias conferidos do fuso).
       if (rodada > 0) {
         totais.push(total);
@@ -248,11 +329,6 @@ async function medir(pedidos: number) {
     const worker = mediana(
       totais.map((total, indice) => total - banco[indice]),
     );
-    expect({ rota: rota.nome, worker: worker < LIMITE_WORKER_MS }).toEqual({
-      rota: rota.nome,
-      worker: true,
-    });
-    expect(montador).toBeLessThan(LIMITE_WORKER_MS);
     const porPedido = linhasLidas / pedidos;
     expect({
       rota: rota.nome,
@@ -260,7 +336,7 @@ async function medir(pedidos: number) {
       dentroDoLimite: porPedido <= LIMITE_LINHAS_POR_PEDIDO,
     }).toEqual({ rota: rota.nome, porPedido, dentroDoLimite: true });
     linhas.push(
-      `${rota.nome.padEnd(36)} total ${ms(mediana(totais))} ms | D1 ${ms(mediana(banco))} ms | Worker ${ms(worker)} ms | montador ${ms(montador)} ms | linhas lidas no D1 ${linhasLidas.toLocaleString("pt-BR")} (${porPedido.toFixed(2)} por pedido)`,
+      `${rota.nome.padEnd(36)} total ${ms(mediana(totais))} ms | D1 ${ms(mediana(banco))} ms | Worker ${ms(worker)} ms | montador ${ms(montador)} ms | linhas lidas no D1 ${linhasLidas.toLocaleString("pt-BR")} (${porPedido.toFixed(2)} por pedido) | trabalho ${JSON.stringify(trabalhoMedido)}`,
     );
   }
   console.log(
@@ -280,14 +356,14 @@ describe("CA5: desempenho com volume sintético", () => {
     campanhaId = await semearCampanha(env.DB, CAMPANHA);
   });
 
-  it("≈300 pedidos por dia no total (8 por célula por dia): cada rota em poucos ms de Worker", async () => {
+  it("≈300 pedidos por dia no total (8 por célula por dia): o trabalho de cada rota no teto, e o D1 no orçamento", async () => {
     await env.DB.prepare("DELETE FROM pedidos").run();
     const pedidos = await semearPedidos(env.DB, campanhaId, 8);
 
     await medir(pedidos);
   }, 60_000);
 
-  it("300 pedidos por dia POR célula (259.200): o banco agrega, e o Worker continua em poucos ms", async () => {
+  it("300 pedidos por dia POR célula (259.200): o banco agrega, e o trabalho de cada rota é o mesmo", async () => {
     await env.DB.prepare("DELETE FROM pedidos").run();
     const pedidos = await semearPedidos(env.DB, campanhaId, 300);
     const { results } = await env.DB.prepare(
