@@ -34,22 +34,29 @@ function arquivosVarridos(): string[] {
   ];
 }
 
-/** Regras numeradas da seção "## Regras" do docs/frontend.md: número → texto. */
-function regrasDoFrontend(): Map<number, string> {
+/**
+ * Regras numeradas da seção "## Regras" do docs/frontend.md, na ordem do arquivo: [número, texto]. Uma lista (e
+ * não um Map) para um número repetido aparecer: o Markdown renumera a lista e a referência ficaria velha.
+ */
+function regrasDoFrontend(): [number, string][] {
   const texto = ler("docs/frontend.md");
   const inicio = texto.indexOf("\n## Regras\n");
   if (inicio < 0) throw new Error("seção ## Regras não encontrada");
   const fim = texto.indexOf("\n## ", inicio + 1);
   const secao = texto.slice(inicio, fim < 0 ? undefined : fim);
-  return new Map(
-    [...secao.matchAll(/^(\d+)\. (.+)$/gm)].map((regra) => [
-      Number(regra[1]),
-      regra[2],
-    ]),
-  );
+  return [...secao.matchAll(/^(\d+)\. (.+)$/gm)].map((regra) => [
+    Number(regra[1]),
+    regra[2],
+  ]);
 }
 
-type Referencia = { arquivo: string; numeros: number[]; trecho: string };
+type Referencia = {
+  arquivo: string;
+  numeros: number[];
+  trecho: string;
+  /** O texto logo depois da referência, para saber do que ela fala. */
+  depois: string;
+};
 
 // "regra 4 do `docs/frontend.md`", "regras 1 e 2 de [frontend.md](frontend.md)", "docs/frontend.md, regra 4"...
 const ANTES =
@@ -68,6 +75,10 @@ function referencias(): Referencia[] {
           arquivo,
           numeros: achado[1].split(/, | e | a /).map(Number),
           trecho: achado[0],
+          depois: texto.slice(
+            achado.index + achado[0].length,
+            achado.index + achado[0].length + 60,
+          ),
         });
       }
     }
@@ -76,13 +87,14 @@ function referencias(): Referencia[] {
 }
 
 describe("referências às regras do docs/frontend.md", () => {
-  const regras = regrasDoFrontend();
+  const lista = regrasDoFrontend();
+  const regras = new Map(lista);
   const achadas = referencias();
 
-  it("a seção de regras está numerada de 1 em diante, sem buraco", () => {
-    expect(regras.size).toBeGreaterThanOrEqual(7);
-    expect([...regras.keys()]).toEqual(
-      Array.from({ length: regras.size }, (_, i) => i + 1),
+  it("a seção de regras está numerada de 1 em diante, sem buraco nem número repetido", () => {
+    expect(lista.length).toBeGreaterThanOrEqual(7);
+    expect(lista.map(([numero]) => numero)).toEqual(
+      Array.from({ length: lista.length }, (_, i) => i + 1),
     );
   });
 
@@ -95,11 +107,14 @@ describe("referências às regras do docs/frontend.md", () => {
   });
 
   it("docs/acesso.md §4 (CSP) aponta para a regra que proíbe CDN e fonte externa", () => {
-    const doAcesso = achadas.filter(
-      (referencia) => referencia.arquivo === "docs/acesso.md",
+    // A referência da CSP é a que segue com "já proíbe CDN": outras referências no mesmo arquivo não atrapalham.
+    const daCsp = achadas.filter(
+      (referencia) =>
+        referencia.arquivo === "docs/acesso.md" &&
+        /\bCDN\b/.test(referencia.depois),
     );
-    expect(doAcesso).toHaveLength(1);
-    const [numero] = doAcesso[0].numeros;
-    expect(regras.get(numero)).toMatch(/sem fonte externa, sem CDN/);
+    expect(daCsp).toHaveLength(1);
+    const [numero] = daCsp[0].numeros;
+    expect(regras.get(numero)).toMatch(/\bCDN\b/);
   });
 });

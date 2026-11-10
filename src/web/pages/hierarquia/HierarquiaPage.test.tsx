@@ -500,7 +500,10 @@ describe("CA2: editar e excluir", () => {
     fireEvent.change(campos.getByLabelText("Nome da célula"), {
       target: { value: "célula fé " },
     });
-    fireEvent.click(campos.getByRole("button", { name: "Salvar" }));
+    // Como no navegador, o toque leva o foco ao Salvar: o campo só volta a ter o foco se a tela o levar.
+    const salvar = campos.getByRole("button", { name: "Salvar" });
+    act(() => salvar.focus());
+    fireEvent.click(salvar);
 
     const alerta = await campos.findByRole("alert");
     expect(alerta).toHaveTextContent("Não foi possível salvar");
