@@ -165,6 +165,63 @@ describe("PUT com outra gravação no meio", () => {
     expect(await trilhaDo(`celula:${celula.id}`)).toEqual([]);
   });
 
+  it("recusado pelo banco dentro do lote (o nome ou a referência mudou no meio): o registro, que vem antes do UPDATE, é desfeito junto", async () => {
+    // Outra célula pega o nome depois da conferência: o UNIQUE barra o UPDATE no lote.
+    const nome = bancoComConcorrente(() =>
+      env.DB.prepare(
+        `INSERT INTO celulas (discipulador_id, nome, qtd_pessoas, lider_nome)
+         VALUES (?1, 'Celula Disputada', 5, 'Lider Ficticio')`,
+      )
+        .bind(celula.discipulador_id)
+        .run(),
+    );
+    expect(
+      await atualizarCelula(
+        nome.db,
+        celula.id,
+        { ...dados, nome: "Celula Disputada", qtd_pessoas: 15 },
+        autoria(),
+      ),
+    ).toMatchObject({ ok: false, codigo: "nome_duplicado" });
+
+    // O discipulador novo some depois da conferência: a FK barra o UPDATE no lote.
+    const outro = await criarDiscipulador(env.DB, {
+      rede_id: (await env.DB.prepare(
+        "SELECT rede_id FROM discipuladores WHERE id = ?1",
+      )
+        .bind(celula.discipulador_id)
+        .first<{ rede_id: number }>())!.rede_id,
+      nome: "Discipulador que Some",
+    });
+    if (!outro.ok) throw new Error("discipulador");
+    const referencia = bancoComConcorrente(() =>
+      env.DB.prepare("DELETE FROM discipuladores WHERE id = ?1")
+        .bind(outro.valor.id)
+        .run(),
+    );
+    expect(
+      await atualizarCelula(
+        referencia.db,
+        celula.id,
+        { ...dados, discipulador_id: outro.valor.id, qtd_pessoas: 15 },
+        autoria(),
+      ),
+    ).toMatchObject({ ok: false, codigo: "referencia_invalida" });
+
+    expect(
+      await env.DB.prepare(
+        "SELECT nome, discipulador_id, qtd_pessoas FROM celulas WHERE id = ?1",
+      )
+        .bind(celula.id)
+        .first(),
+    ).toEqual({
+      nome: "Celula da Corrida",
+      discipulador_id: celula.discipulador_id,
+      qtd_pessoas: 12,
+    });
+    expect(await trilhaDo(`celula:${celula.id}`)).toEqual([]);
+  });
+
   it("a linha sumiu entre a leitura e o lote: 404 e nada registrado", async () => {
     const { db } = bancoComConcorrente(() =>
       env.DB.prepare("DELETE FROM celulas WHERE id = ?1").bind(celula.id).run(),
