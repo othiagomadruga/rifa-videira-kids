@@ -29,9 +29,10 @@ import {
   redeEntradaSchema,
   redeSchema,
   resultadoEventoWebhookSchema,
+  statusPedidoSchema,
 } from "./dominio";
 import { detalheResumidoSchema } from "./erros";
-import { payloadRifeiSchema } from "./rifei";
+import { dddSchema, payloadRifeiSchema } from "./rifei";
 // Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
 import type { Papel } from "./acesso";
 
@@ -1212,6 +1213,174 @@ export type RespostaVisaoIndividual = z.infer<
 >;
 
 // ---------------------------------------------------------------------------------------------------
+// Pedidos e entregas do webhook (RIFA-025, coordenação). Só leitura. Nada de dado pessoal: o banco não
+// guarda nenhum (D1); do comprador só sai o DDD.
+// ---------------------------------------------------------------------------------------------------
+
+export const PAGINA_PEDIDOS_PADRAO = 50;
+export const PAGINA_PEDIDOS_MAXIMA = 200;
+
+/**
+ * GET /api/admin/pedidos: pedidos da campanha ativa, do registrado mais novo para o mais antigo (empate pelo
+ * id). Sem campanha ativa: lista vazia e totais zerados.
+ */
+export const consultaPedidosSchema = z
+  .object({
+    limite: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(PAGINA_PEDIDOS_MAXIMA)
+      .default(PAGINA_PEDIDOS_PADRAO),
+    /** Cursor opaco: o `proximo` da página anterior. Cursor inválido: 400. */
+    antes_de: z.string().min(1).max(300).optional(),
+    status: statusPedidoSchema.optional(),
+    /** Só os pedidos desta célula (resolvida pelo afiliado na leitura, D7). */
+    celula_id: z.coerce.number().int().positive().optional(),
+    /** "true" = só os pedidos sem célula (sem afiliado ou com afiliado ainda não vinculado). */
+    sem_celula: z
+      .enum(["true", "false"])
+      .transform((valor) => valor === "true")
+      .optional(),
+    /** Busca exata pelo id do pedido na Rifei. */
+    id: z.string().trim().min(1).max(128).optional(),
+  })
+  .refine(
+    (consulta) =>
+      !(consulta.celula_id !== undefined && consulta.sem_celula === true),
+    {
+      message: "Use celula_id ou sem_celula, não os dois",
+      path: ["sem_celula"],
+    },
+  );
+export type ConsultaPedidos = z.output<typeof consultaPedidosSchema>;
+
+export const itemPedidoSchema = z.strictObject({
+  /** id do pedido na Rifei. */
+  id: z.string().min(1).max(128),
+  status: statusPedidoSchema,
+  qtd_bilhetes: z.number().int().nonnegative(),
+  total_centavos: centavosSchema,
+  affiliate_id: affiliateIdSchema.nullable(),
+  /** A célula do afiliado, resolvida na leitura (D7); null = sem afiliado ou afiliado não vinculado. */
+  celula: z.strictObject({ id: idSchema, nome: z.string().min(1) }).nullable(),
+  ddd: dddSchema.nullable(),
+  criado_em: instanteSchema.nullable(),
+  aprovado_em: instanteSchema.nullable(),
+  expirado_em: instanteSchema.nullable(),
+  /** Nossos: primeira gravação e última alteração. */
+  registrado_em: instanteSchema,
+  atualizado_em: instanteSchema,
+  /** Está na lista de pedidos suspeitos (D11): conta nas vendas, mas merece um olhar. */
+  suspeito: z.boolean(),
+});
+export type ItemPedido = z.infer<typeof itemPedidoSchema>;
+
+const totaisStatusSchema = z.strictObject({
+  pedidos: z.number().int().nonnegative(),
+  bilhetes: z.number().int().nonnegative(),
+  total_centavos: centavosSchema,
+});
+
+export const respostaPedidosSchema = z.strictObject({
+  itens: z.array(itemPedidoSchema),
+  /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
+  proximo: z.string().min(1).max(300).nullable(),
+  /** Totais por status com os MESMOS filtros (célula, sem célula, id), sem a paginação nem o filtro de status. */
+  totais: z.strictObject({
+    in_process: totaisStatusSchema,
+    approved: totaisStatusSchema,
+    expired: totaisStatusSchema,
+  }),
+});
+export type RespostaPedidos = z.infer<typeof respostaPedidosSchema>;
+
+export const PAGINA_ENTREGAS_PADRAO = 50;
+export const PAGINA_ENTREGAS_MAXIMA = 200;
+
+/** GET /api/admin/webhook/entregas: cada entrega autenticada do webhook (D3), da mais nova para a mais antiga. */
+export const consultaEntregasWebhookSchema = z.object({
+  limite: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PAGINA_ENTREGAS_MAXIMA)
+    .default(PAGINA_ENTREGAS_PADRAO),
+  /** Cursor: só entregas com id menor que este (o `proximo` da página anterior). */
+  antes_de: z.coerce.number().int().positive().optional(),
+  resultado: resultadoEventoWebhookSchema.optional(),
+  /** Só as entregas deste pedido. */
+  pedido_id: z.string().trim().min(1).max(128).optional(),
+});
+export type ConsultaEntregasWebhook = z.output<
+  typeof consultaEntregasWebhookSchema
+>;
+
+export const entregaWebhookSchema = z.strictObject({
+  id: idSchema,
+  recebido_em: instanteSchema,
+  /** new_order, paid_order, expired_order (ou o que veio, se for outro); null quando o corpo nem foi lido. */
+  evento: z.string().max(64).nullable(),
+  pedido_id: z.string().max(128).nullable(),
+  resultado: resultadoEventoWebhookSchema,
+  status_anterior: statusPedidoSchema.nullable(),
+  status_resultante: statusPedidoSchema.nullable(),
+  /** Só em erro_validacao: o código do erro (sem dado pessoal). */
+  erro: z.string().min(1).max(64).nullable(),
+  /** Códigos dos avisos (ex.: os de plausibilidade da D11); lista vazia quando não há. */
+  avisos: z.array(z.string().min(1).max(64)),
+});
+export type EntregaWebhook = z.infer<typeof entregaWebhookSchema>;
+
+export const respostaEntregasWebhookSchema = z.strictObject({
+  itens: z.array(entregaWebhookSchema),
+  proximo: idSchema.nullable(),
+});
+export type RespostaEntregasWebhook = z.infer<
+  typeof respostaEntregasWebhookSchema
+>;
+
+/**
+ * Horas sem nenhuma entrega processada, DURANTE a campanha, que acendem o alerta de webhook parado. A noite
+ * costuma ficar sem venda, então o alerta só vale das 8h às 22h no fuso da campanha (SUPOSIÇÃO do SM, D16).
+ */
+export const HORAS_SEM_ENTREGA_ALERTA = 4;
+export const SITUACOES_WEBHOOK = [
+  "ok",
+  "nunca_recebeu",
+  "sem_entregas_recentes",
+  "erros_recentes",
+] as const;
+
+/** GET /api/admin/webhook/estado: para o alerta da visão geral e da tela de pedidos. */
+export const respostaEstadoWebhookSchema = z.strictObject({
+  /**
+   * - nunca_recebeu: nenhuma entrega da campanha ativa até agora (antes de configurar a Rifei, é o normal);
+   * - erros_recentes: alguma entrega com erro_validacao nas últimas 24 h;
+   * - sem_entregas_recentes: durante a campanha, das 8h às 22h locais, mais de HORAS_SEM_ENTREGA_ALERTA horas sem
+   *   entrega processada da campanha;
+   * - ok: nenhum dos casos (a ordem de prioridade é esta: nunca_recebeu, erros_recentes, sem_entregas_recentes).
+   */
+  situacao: z.enum(SITUACOES_WEBHOOK),
+  /** Última entrega autenticada, de qualquer resultado e campanha. */
+  ultima_entrega_em: instanteSchema.nullable(),
+  /** Última entrega processada da campanha ativa (resultado processado ou duplicado). */
+  ultima_processada_em: instanteSchema.nullable(),
+  /** Aprovação mais recente entre os pedidos da campanha ativa. */
+  ultimo_aprovado_em: instanteSchema.nullable(),
+  /** Contagem das últimas 24 h, por resultado. */
+  ultimas_24h: z.strictObject({
+    processado: z.number().int().nonnegative(),
+    duplicado: z.number().int().nonnegative(),
+    ignorado_outra_campanha: z.number().int().nonnegative(),
+    ignorado_transicao: z.number().int().nonnegative(),
+    erro_validacao: z.number().int().nonnegative(),
+  }),
+  verificado_em: instanteSchema,
+});
+export type RespostaEstadoWebhook = z.infer<typeof respostaEstadoWebhookSchema>;
+
+// ---------------------------------------------------------------------------------------------------
 // RASCUNHO: POST /api/admin/reconciliacao (CSV "Exportar Pedidos" da Rifei → divergências)
 // O CSV traz dados pessoais: é lido só em memória e nada dele é gravado nem devolvido além do abaixo.
 // ---------------------------------------------------------------------------------------------------
@@ -1518,6 +1687,29 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaVisaoIndividualSchema,
     sucesso: { status: 200, corpo: respostaVisaoIndividualSchema },
+  },
+  listarPedidos: {
+    metodo: "GET",
+    caminho: "/api/admin/pedidos",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    consulta: consultaPedidosSchema,
+    sucesso: { status: 200, corpo: respostaPedidosSchema },
+  },
+  entregasWebhook: {
+    metodo: "GET",
+    caminho: "/api/admin/webhook/entregas",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    consulta: consultaEntregasWebhookSchema,
+    sucesso: { status: 200, corpo: respostaEntregasWebhookSchema },
+  },
+  estadoWebhook: {
+    metodo: "GET",
+    caminho: "/api/admin/webhook/estado",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaEstadoWebhookSchema },
   },
   reconciliacao: {
     metodo: "POST",

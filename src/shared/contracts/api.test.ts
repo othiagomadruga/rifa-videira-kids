@@ -27,6 +27,12 @@ import {
   normalizarEspacos,
   respostaImportarHierarquiaSchema,
   consultaVisaoIndividualSchema,
+  consultaPedidosSchema,
+  consultaEntregasWebhookSchema,
+  respostaPedidosSchema,
+  respostaEntregasWebhookSchema,
+  respostaEstadoWebhookSchema,
+  PAGINA_PEDIDOS_MAXIMA,
   desempenhoIndividualSchema,
   pontoCurvaIndividualSchema,
   rankingIndividualSchema,
@@ -93,6 +99,10 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/publico/bumbo",
         // Sprint 5 (RIFA-014): visão individual do líder, do discipulador e da rede.
         "GET /api/minha/visao",
+        // Sprint 5 (RIFA-025): pedidos, entregas do webhook e o estado do webhook.
+        "GET /api/admin/pedidos",
+        "GET /api/admin/webhook/entregas",
+        "GET /api/admin/webhook/estado",
       ].sort(),
     );
   });
@@ -1307,5 +1317,134 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
         resposta,
         ok: false,
       });
+  });
+});
+
+describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenação, só leitura)", () => {
+  const PESSOAL =
+    /email|telefone|phone|document|cpf|endereco|address|buyer|comprador|numeros|nascimento/i;
+  const totais = { pedidos: 0, bilhetes: 0, total_centavos: 0 };
+  const pedido = {
+    id: "R-123",
+    status: "approved",
+    qtd_bilhetes: 3,
+    total_centavos: 6000,
+    affiliate_id: 7101,
+    celula: { id: 101, nome: "Célula Ágape" },
+    ddd: "91",
+    criado_em: "2026-11-25T14:00:00.000Z",
+    aprovado_em: "2026-11-25T14:05:00.000Z",
+    expirado_em: null,
+    registrado_em: "2026-11-25T14:00:01.000Z",
+    atualizado_em: "2026-11-25T14:05:01.000Z",
+    suspeito: false,
+  };
+  const entrega = {
+    id: 42,
+    recebido_em: "2026-11-25T14:05:01.000Z",
+    evento: "paid_order",
+    pedido_id: "R-123",
+    resultado: "processado",
+    status_anterior: "in_process",
+    status_resultante: "approved",
+    erro: null,
+    avisos: [],
+  };
+
+  it("nenhuma resposta tem campo de dado pessoal do comprador", () => {
+    for (const schema of [
+      respostaPedidosSchema,
+      respostaEntregasWebhookSchema,
+      respostaEstadoWebhookSchema,
+    ])
+      expect(
+        nomesDeCampos(schema).filter((campo) => PESSOAL.test(campo)),
+      ).toEqual([]);
+  });
+
+  it("consulta de pedidos: padrão, limites, sem_celula como texto e celula_id junto com sem_celula recusado", () => {
+    expect(consultaPedidosSchema.parse({})).toEqual({ limite: 50 });
+    expect(
+      consultaPedidosSchema.parse({ sem_celula: "true", status: "approved" }),
+    ).toEqual({
+      limite: 50,
+      sem_celula: true,
+      status: "approved",
+    });
+    for (const consulta of [
+      { limite: "0" },
+      { limite: String(PAGINA_PEDIDOS_MAXIMA + 1) },
+      { status: "pago" },
+      { sem_celula: "sim" },
+      { celula_id: "3", sem_celula: "true" },
+      { antes_de: "" },
+    ])
+      expect({
+        consulta,
+        ok: consultaPedidosSchema.safeParse(consulta).success,
+      }).toEqual({
+        consulta,
+        ok: false,
+      });
+    expect(
+      consultaPedidosSchema.safeParse({ celula_id: "3", sem_celula: "false" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("respostas estritas: aceitam o formato e recusam campo a mais", () => {
+    const pedidos = {
+      itens: [pedido],
+      proximo: "opaco",
+      totais: {
+        in_process: totais,
+        approved: { pedidos: 1, bilhetes: 3, total_centavos: 6000 },
+        expired: totais,
+      },
+    };
+    expect(respostaPedidosSchema.safeParse(pedidos).success).toBe(true);
+    expect(
+      respostaPedidosSchema.safeParse({
+        ...pedidos,
+        itens: [{ ...pedido, comprador: "x" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [entrega],
+        proximo: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [{ ...entrega, payload: {} }],
+        proximo: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      consultaEntregasWebhookSchema.parse({ resultado: "erro_validacao" }),
+    ).toEqual({
+      limite: 50,
+      resultado: "erro_validacao",
+    });
+    const estado = {
+      situacao: "sem_entregas_recentes",
+      ultima_entrega_em: "2026-11-25T09:00:00.000Z",
+      ultima_processada_em: "2026-11-25T09:00:00.000Z",
+      ultimo_aprovado_em: "2026-11-25T08:59:00.000Z",
+      ultimas_24h: {
+        processado: 30,
+        duplicado: 2,
+        ignorado_outra_campanha: 0,
+        ignorado_transicao: 1,
+        erro_validacao: 0,
+      },
+      verificado_em: "2026-11-25T15:00:00.000Z",
+    };
+    expect(respostaEstadoWebhookSchema.safeParse(estado).success).toBe(true);
+    expect(
+      respostaEstadoWebhookSchema.safeParse({ ...estado, situacao: "parado" })
+        .success,
+    ).toBe(false);
   });
 });

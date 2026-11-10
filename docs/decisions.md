@@ -293,3 +293,19 @@ O PO pediu o design do site com as cores e o logo da Videira, o logo do Kids dis
 - **Telão: movimento só quando os dados mudam.** Atualização igual não mexe em nada; a exceção é o fundo ambiente,
   muito lento (60 e 75 s). O topo reserva o lugar da fase e da linha "Atualizado às" desde o carregando: o layout
   shift do telão em 1920×1080 caiu de 0,35 para 0,003.
+
+## D16. Pedidos, entregas do webhook e alerta de webhook parado (RIFA-025, 2026-11-10)
+
+O roteiro de lançamento (docs/lancamento.md) mostrou que a coordenação não tinha como ver os pedidos nem as
+entregas do webhook (só por SQL no D1) e que ninguém ficava sabendo se o webhook parasse.
+
+- **Só leitura, sem dado pessoal**: `GET /api/admin/pedidos` (pedidos da campanha ativa, com a célula resolvida
+  pelo afiliado na leitura, D7, totais por status e cursor opaco), `GET /api/admin/webhook/entregas` (cada
+  entrega autenticada, com resultado, transição de status e só os CÓDIGOS de erro e de aviso) e
+  `GET /api/admin/webhook/estado`. O banco não guarda dado pessoal (D1); do comprador sai só o DDD.
+- **Alerta de webhook parado** (`situacao` do estado): `nunca_recebeu` antes da primeira entrega da campanha;
+  `erros_recentes` com algum `erro_validacao` nas últimas 24 h; `sem_entregas_recentes` durante a campanha, das
+  8h às 22h no fuso dela, com mais de `HORAS_SEM_ENTREGA_ALERTA` (4) horas sem entrega processada. SUPOSIÇÃO do
+  SM: à noite costuma não haver venda, e 4 h de dia sem nenhuma venda numa campanha de 36 células já merece
+  olhar. O número e a janela ficam em constantes do contrato, fáceis de mudar. O site mostra o alerta na
+  visão geral e na tela de pedidos, com o caminho para a conferência pelo CSV.

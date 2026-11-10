@@ -702,6 +702,30 @@ chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo s
 células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
 schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
 
+## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
+
+Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoal: do comprador, só o DDD.
+
+### `GET /api/admin/pedidos` (`coordenacao`)
+
+Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta: `limite` (1 a 200, padrão 50),
+`antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
+`sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
+afiliado, a célula resolvida na leitura (D7), DDD, os instantes e `suspeito`. `totais` traz pedidos,
+bilhetes e centavos por status com os mesmos filtros, menos a paginação e o filtro de status. Sem campanha
+ativa: lista vazia e totais zerados.
+
+### `GET /api/admin/webhook/entregas` (`coordenacao`)
+
+Cada entrega autenticada do webhook, da mais nova para a mais antiga: quando chegou, evento, pedido,
+resultado, transição de status e só os códigos do erro e dos avisos. Consulta: `limite`, `antes_de` (id),
+`resultado` e `pedido_id`.
+
+### `GET /api/admin/webhook/estado` (`coordenacao`)
+
+`situacao` (`ok`, `nunca_recebeu`, `erros_recentes` ou `sem_entregas_recentes`; regra na D16), a última entrega,
+a última processada da campanha, a última aprovação e a contagem das últimas 24 h por resultado.
+
 ## Rotas RASCUNHO (Sprint 4)
 
 Forma provável, que pode mudar quando for implementada. O schema já está em `api.ts`, marcado como `situacao: 'rascunho'`.
