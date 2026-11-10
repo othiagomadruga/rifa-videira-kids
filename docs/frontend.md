@@ -38,10 +38,12 @@ src/web/
 | `/coordenacao/hierarquia` | Hierarquia | `hierarquia` | RIFA-005 | coordenação |
 | `/coordenacao/adesao` | Adesão | `adesao` | RIFA-006 | coordenação |
 | `/coordenacao/pedidos` | Pedidos | `pedidos` | RIFA-003 | coordenação |
+| `/coordenacao/pedidos-suspeitos` | Pedidos suspeitos | `pedidos-suspeitos` | RIFA-024 | coordenação (com R$) |
 | `/coordenacao/rankings` | Rankings | `rankings` | RIFA-010 | coordenação |
 | `/coordenacao/bumbo` | Bumbo | `bumbo` | RIFA-011 | coordenação |
 | `/coordenacao/conferencia` | Conferência | `conferencia` | RIFA-012 | coordenação |
 | `/coordenacao/acessos` | Acessos | `acessos` | RIFA-007/014 | só admin |
+| `/coordenacao/trilha` | Trilha | `trilha` | RIFA-024 | só admin |
 | `/status` | Status do sistema | `status` | RIFA-001 | técnico (saúde da API) |
 | qualquer outra | Página não encontrada | `nao-encontrada` | | todos |
 
@@ -102,6 +104,14 @@ Para líder, discipulador e rede (o alvo vem só da sessão: a tela não manda i
 - **Frases no lugar da posição**: antes da 1ª venda do alvo, uma frase de incentivo; alvo sem células (posições null), a explicação de que ainda não há células no ranking; antes do início, a contagem regressiva no destaque.
 - **Estados**: carregando, erro (com "Tentar de novo"), sem campanha (404). Atualiza sozinha a cada 60 s com a aba visível (`useVisaoIndividual.ts`, como o ranking público); uma falha mantém os números e avisa numa região viva fixa.
 - **Pacote à parte**: `MinhaPage.tsx` carrega `VisaoIndividual.tsx` com `lazy` (como a configuração da Campanha); enquanto ele chega, o cabeçalho (`Cabecalho.tsx`, da sessão) e o carregando. O CSS segue a mesma divisão: `minha-moldura.css` (moldura e cabeçalho) vai no pacote inicial; `minha.css` (o resto da tela) vem só com a `VisaoIndividual` (`minha-css.test.ts` confere quem importa cada um).
+
+## Trilha e pedidos suspeitos (RIFA-024)
+
+As duas telas leem rotas da RIFA-013b (`docs/api.md`) e carregam à parte (`lazy`, como a Campanha), cada uma com o próprio CSS; tabela no computador e cartões abaixo de 48rem (`DataTable`).
+
+- **`/coordenacao/trilha`** (`pages/trilha`, só admin: `papeis: ["admin"]` em `telas.ts`, como `ROTAS.auditoria`): `GET /api/admin/auditoria`, do mais novo para o mais antigo, com quando (fuso da campanha), quem, a ação em português (`ROTULO_ACAO` em `textos.ts`, uma para cada ação de `ACOES_AUDITORIA`), o alvo legível ("usuario:3" → "Usuário 3") e o resumo. "Carregar mais" pede a página seguinte com `antes_de` (o `proximo` da anterior), leva o foco ao primeiro registro novo e anuncia numa região viva fixa; na última página, o botão some. A rota não filtra por ação, então a tela também não.
+- **`/coordenacao/pedidos-suspeitos`** (`pages/pedidos-suspeitos`, toda a coordenação, com R$): `GET /api/admin/pedidos/suspeitos`, com pedido, quando foi aprovado, a célula para a qual conta, bilhetes, total e os motivos em português, cada um com o detalhe calculado do próprio pedido. Um aviso fixo diz que esses pedidos **contam** nas vendas e que tirá-los é decisão do PO.
+- Estados: carregando, vazio, erro (com "Tentar de novo") e 403 (sem "Tentar de novo"); o 401 leva a `/entrar` pela guarda. Caminhos, tamanho da página, teto de bilhetes e tolerância de desconto são cópias, conferidas por `trilha-contrato.test.ts` e `pedidos-suspeitos-contrato.test.ts`; o CSS em 390 px, por `trilha-css.test.ts` e `pedidos-suspeitos-css.test.ts`.
 
 ## Componentes base (`components/ui`)
 
