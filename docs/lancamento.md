@@ -14,8 +14,8 @@ Cada etapa depende da anterior. As datas são sugestão; quem decide é o PO.
 | # | Etapa | Quem | Prazo sugerido |
 |---|---|---|---|
 | 0 | Decisões do PO (seção 1.5) | Thiago | já |
-| 1 | Contas: Cloudflare (plano e token), GitHub (segredo), Rifei (campanha) e Efí | Thiago | até 14/11 |
-| 2 | Primeira publicação e conferência | Thiago e SM | até 14/11 |
+| 1 | Contas: Cloudflare (plano), Rifei (campanha) e Efí | Thiago | até 14/11 |
+| 2 | Bookmark do D1, depois o token da Cloudflare no GitHub, primeira publicação e conferência | Thiago e SM | até 14/11 |
 | 3 | Configuração em produção: admin, segredo do webhook, campanha, planilha das células | Thiago e Admin | até 16/11 |
 | 4 | Compra de teste de ponta a ponta | Thiago e Admin | até 17/11 |
 | 5 | Links dos líderes e reunião de cadastro | Admin e Coordenação | entre 18 e 21/11 |
@@ -29,12 +29,14 @@ Cada etapa depende da anterior. As datas são sugestão; quem decide é o PO.
 
 ### 1.1 Cloudflare
 
-**a) Plano Workers Paid (recomendado).** No plano gratuito, cada requisição tem 10 ms de CPU, o Worker atende até 100 mil requisições por dia e o D1 lê até 5 milhões de linhas por dia. As medições do projeto mostram que isso estoura: a primeira visão do líder em cada servidor leva de 24 a 28 ms (`docs/decisions.md`, D14), a conferência por CSV (RIFA-012) leva de 18 a 22 ms, e o ranking aberto nos celulares e no telão consome a cota do D1 (D10). No gratuito, o que estoura é recusado pela Cloudflare (erro 1102 ou limite diário).
+**a) Plano Workers Paid (recomendado).** No plano gratuito, cada requisição tem 10 ms de CPU, o Worker atende até 100 mil requisições por dia e o D1 lê até 5 milhões de linhas por dia. As medições do projeto mostram que isso estoura: a primeira visão do líder em cada servidor leva de 24 a 28 ms (`docs/decisions.md`, D14), a conferência por CSV (RIFA-012, ainda fora da `main`) leva de 18 a 22 ms, e o ranking aberto nos celulares e no telão consome a cota do D1 (D10). No gratuito, o que estoura é recusado pela Cloudflare (erro 1102 ou limite diário).
 
 - Onde: no painel da Cloudflare, procure por **"Workers Paid"** (fica nos planos de **Workers & Pages**). Documentação oficial: página **"Workers pricing"** (preço de referência: US$ 5 por mês; confira antes de assinar).
 - O plano vale para a conta; não precisa mudar nada no código.
 
 **b) Token de API para o GitHub publicar.**
+
+Faça isto **só depois do bookmark do D1** (2.1): o token vai direto para o GitHub (1.2), e com ele lá o próximo push na `main` já publica.
 
 1. No painel da Cloudflare, procure por **"API Tokens"** no seu perfil (**My Profile**) e use **Create Token**. Documentação oficial: **"Create API token"** (Cloudflare Fundamentals) e **"Running Wrangler in CI/CD"** (Workers).
 2. Comece pelo modelo **"Edit Cloudflare Workers"**. Confira se a lista de permissões tem **D1** com **Edit**; se não tiver, acrescente (a publicação aplica as migrações no D1).
@@ -117,10 +119,10 @@ npx wrangler d1 migrations list DB --remote  # lista as migrações que ainda v�
 ### 2.2 Publicar
 
 1. **[SM]** Confira que a última execução do CI na `main` está verde.
-2. **[Thiago]** Cadastre o segredo `CLOUDFLARE_API_TOKEN` (1.2).
+2. **[Thiago]** Com o bookmark anotado (2.1), crie o token (1.1 b) e cadastre direto no segredo `CLOUDFLARE_API_TOKEN` (1.2).
 3. **[SM]** Dispare a publicação com um push na `main` ou, sem nada novo para subir, no GitHub: **Actions** → a última execução da `main` → **Re-run jobs** → **Re-run all jobs**. Se o job de publicação ainda disser "publicação pulada", faça um push na `main` (o `ci.yml` não tem disparo manual).
 
-O job de publicação constrói o site e o Worker, aplica as migrações no D1 remoto, publica e consulta `/api/health` em produção até 6 vezes.
+O job de publicação constrói o site e o Worker (sem o token) e, no passo "Publicar" (`npm run deploy:publicar`), confere o que foi construído (`wrangler deploy --dry-run`), aplica as migrações no D1 remoto e publica. Depois consulta `/api/health` em produção até 6 vezes.
 
 **A partir daqui, todo push na `main` publica.** Sugestão para a campanha: o SM só faz merge de correção, com a `main` verde e fora do horário do culto e dos picos de venda.
 
@@ -137,7 +139,7 @@ O job de publicação constrói o site e o Worker, aplica as migrações no D1 r
    curl -sS -D - -o /dev/null https://rifa-videira-kids.madruga.workers.dev/
    curl -sS -D - -o /dev/null https://rifa-videira-kids.madruga.workers.dev/api/health
    ```
-   Os dois precisam trazer, com estes valores (os de `public/_headers`, `docs/acesso.md` seção 4):
+   Os dois precisam trazer, com estes valores (os de `public/_headers`, `docs/acesso.md` seção 4; o curl pode mostrar os nomes em minúsculas):
    - `Referrer-Policy: no-referrer`
    - `X-Content-Type-Options: nosniff`
    - `X-Frame-Options: DENY`
@@ -157,14 +159,19 @@ O job de publicação constrói o site e o Worker, aplica as migrações no D1 r
 
 ### 2.4 Se der errado
 
-- **O CI falhou antes de publicar:** nada foi ao ar. Corrija e faça outro push.
+- **O CI falhou antes de publicar:** nada foi ao ar. Isso inclui falha no build e no `wrangler deploy --dry-run` do passo "Publicar": as migrações nem rodaram. Corrija e faça outro push.
 - **As migrações rodaram e a publicação falhou:** o banco ficou à frente do código. As migrações são aditivas; corrija e publique de novo.
 - **Voltar o banco ao ponto anotado** (apaga tudo o que foi gravado depois dele: pedidos, vínculos, acessos):
   ```sh
   npx wrangler d1 time-travel restore DB --bookmark=<bookmark anotado>
-  # ou por instante: --timestamp=2026-11-14T12:00:00Z (até 30 dias para trás)
+  # ou por instante: --timestamp=2026-11-14T12:00:00Z (até 30 dias para trás no Workers Paid)
   ```
-- **Voltar o código a uma versão anterior:** `npx wrangler deployments list` mostra as versões e `npx wrangler rollback -m "<motivo>"` volta para a anterior. Na primeira publicação não existe versão anterior. O rollback não mexe no banco.
+  - O comando pede confirmação e, no fim, mostra o bookmark de antes da volta: anote, ele desfaz a volta.
+  - Links revogados depois do ponto voltam a valer, e os gerados depois somem: revogue de novo (7.3) e gere os que faltarem.
+  - Voltar para antes de uma migração apaga o que ela criou: a próxima publicação aplica de novo.
+- **Voltar o código a uma versão anterior:** `npx wrangler deployments list` mostra as últimas publicações (as de código e as de segredo, como a de 3.2) e `npx wrangler rollback -m "<motivo>"` volta para a anterior. Na primeira publicação não existe versão anterior. O rollback não mexe no banco.
+  - Se o wrangler avisar que segredos mudaram desde aquela versão (ex.: `RIFEI_WEBHOOK_TOKEN`), responda **não**: aquela versão tem os segredos de antes, e o webhook pode parar ou voltar ao token antigo. Escolha uma versão mais nova pelo id: `npx wrangler rollback <id da versão> -m "<motivo>"`.
+  - Depois do rollback, refaça o teste de 2.3 item 6: com o 3.2 já feito, precisa dar `nao_autenticado` (401).
 
 ---
 
@@ -178,10 +185,10 @@ Na sua máquina, na pasta do repositório (1.1 c):
 npm run acesso:criar -- --nome "<seu nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev
 ```
 
-- O link `https://rifa-videira-kids.madruga.workers.dev/acesso/<token>` aparece **uma vez só**. Abra no seu celular e toque em **Entrar**: você cai na área `/coordenacao`.
-- O link vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
+- O link `https://rifa-videira-kids.madruga.workers.dev/acesso/<token>` aparece **uma vez só**. Abra no navegador e toque em **Entrar**: você cai na área `/coordenacao`.
+- O link vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho, como o seu celular). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
 - O script só aceita `--nome`, `--papel` (`admin` ou `coordenacao`), `--remote`, `--local` e `--origem` (`docs/acesso.md`, seção 5). Não existe opção de e-mail.
-- Se o link aparecer numa sessão do Claude ou em outro lugar que não seja o seu celular, entre uma vez, gere um link novo na tela Acessos e revogue o primeiro.
+- Se o link aparecer numa sessão do Claude ou em qualquer lugar além do seu terminal, entre uma vez, gere um link novo na tela Acessos e revogue o primeiro.
 
 Depois, no site **[Admin]**: **Acessos → Coordenação → Nova pessoa** (nome, e-mail opcional, papel). O link aparece uma vez, com **Copiar link** e **Enviar pelo WhatsApp**: mande só para a própria pessoa.
 
@@ -192,10 +199,11 @@ Depois, no site **[Admin]**: **Acessos → Coordenação → Nova pessoa** (nome
 
 1. Gere um token forte e grave como segredo do Worker:
    ```sh
-   openssl rand -base64 32                     # gera o token (não salve em arquivo)
+   openssl rand -hex 32                        # gera o token (não salve em arquivo)
    npx wrangler secret put RIFEI_WEBHOOK_TOKEN # cole o token quando pedir
    npx wrangler secret list                    # deve listar o nome RIFEI_WEBHOOK_TOKEN (sem o valor)
    ```
+   Sem `openssl` (ex.: Windows), gere com o Node: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Em hexadecimal o token só tem letras e números, sem `+`, `/` ou `=` que um formulário possa cortar.
 2. Na Rifei (menu do usuário → **Integrações** → **Outro** → **Adicionar**):
    - **URL:** `https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei`
    - **Token:** o mesmo do passo 1.
@@ -223,7 +231,7 @@ Cuidados:
 
 ### 3.4 Planilha das 36 células [Coordenação]
 
-Siga [importar-hierarquia.md](importar-hierarquia.md). Em resumo: **Coordenação → Hierarquia → Importar a planilha das células** → **Baixe o modelo** → **Escolha o arquivo** → **Conferir** (não grava nada) → **Importar**.
+Siga [importar-hierarquia.md](importar-hierarquia.md). Em resumo: **Coordenação → Hierarquia →** aba **Importar planilha** → **Baixe o modelo** → **Escolha o arquivo** → **Conferir** (não grava nada) → **Importar**.
 
 - Confira no resultado: 36 células criadas, sem erros. Leia os avisos (coluna ignorada não entra).
 - Preencha `lider_telefone`: é ele que abre o WhatsApp do líder na hora de mandar o link (5.1) e de cobrar quem falta (5.3).
@@ -296,7 +304,7 @@ O que continua mostrando o teste: a Adesão (a célula fica "Já vendeu") e os t
 1. **Links em lote [Admin]:** **Acessos → Líderes, discipuladores e redes** → Papel **Líderes de célula** → **Gerar links para quem ainda não tem (36)**.
    - Abre uma janela com um link por líder. Em cada um: **Abrir no WhatsApp** (abre a conversa com o número da planilha e a mensagem pronta) ou **Copiar mensagem** (sem telefone ou com número estranho).
    - **Os links só aparecem agora**: mande todos antes de tocar em **Pronto**. Se fechar antes, use **Novo link** na linha do líder.
-   - A mensagem que o sistema monta é esta (o nome e a célula mudam):
+   - A mensagem que o sistema monta é esta (o nome e a célula mudam; o link vem na última linha):
      > Olá, Fulano! Este é o seu link pessoal para acompanhar a sua célula (Célula X) na campanha da rifa do Videira Kids: as vendas, a meta e a posição no ranking.
      > O link é só seu: não repasse para ninguém, porque quem tiver o link entra como você.
    - Se o PO quiser (1.5), repita com o papel **Discipuladores** e **Redes**.
@@ -317,12 +325,12 @@ O que continua mostrando o teste: a Adesão (a célula fica "Já vendeu") e os t
    - **Um de cada vez:** com dois líderes ao mesmo tempo, não dá para saber qual código é de quem.
    - Se o líder souber o código: **Todas as células** → a célula → **Código de afiliado** → **Salvar código**.
    - A compra iniciada e não paga só reserva números até expirar; nunca conta como venda.
-4. **Acompanhe o resumo** no topo da Adesão: células, vinculadas, com venda, e **Quem falta**.
+4. **Acompanhe** o resumo no topo da Adesão (células vinculadas, células que já venderam e afiliados sem célula) e a seção **Quem falta**.
 
 ### 5.3 Depois
 
 - **Quem falta:** a seção **Quem falta** lista as células sem afiliado, com o líder e o telefone (toque para ligar ou **Copiar**). Cobre um por um até 22/11.
-- **Quem não entrou no sistema:** em **Acessos → Líderes, discipuladores e redes**, a coluna **Situação** mostra quem nunca usou o link. Reenvie com **Novo link**.
+- **Quem não entrou no sistema [Admin]:** em **Acessos → Líderes, discipuladores e redes**, a coluna **Situação** mostra quem nunca usou o link. Reenvie com **Novo link**.
 - **Fila "Sem célula" vazia antes de 23/11.** Venda de afiliado sem célula conta no total da campanha, mas em nenhuma célula, rede ou ranking. Vincular depois leva todas as vendas antigas para a célula (nada se perde), mas o ranking fica errado até lá.
 - Mande ao SM os números finais (células vinculadas e quem falta) para o DevMission.
 
@@ -371,7 +379,7 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). **At
 |---|---|
 | https://rifa-videira-kids.madruga.workers.dev/status | "API ok" ou o erro |
 | GitHub → **Actions** | se a última publicação falhou |
-| Cloudflare → **Workers & Pages** → `rifa-videira-kids` → logs (procure por **"Logs"** ou **"Observability"** na página do Worker; documentação oficial: **"Workers Logs"**) | erros do Worker (os logs ficam ligados no `wrangler.jsonc` e só têm ids, nunca dado pessoal) |
+| Cloudflare → **Workers & Pages** → `rifa-videira-kids` → logs (procure por **"Logs"** ou **"Observability"** na página do Worker; documentação oficial: **"Workers Logs"**) | erros do Worker (os logs ficam ligados no `wrangler.jsonc`; o nosso código só registra ids e erros, nunca dado do comprador) |
 | `npx wrangler tail rifa-videira-kids --format pretty` [Thiago] | os logs ao vivo |
 | www.cloudflarestatus.com | problema geral da Cloudflare |
 | Central de Ajuda e suporte da Rifei | venda, pagamento ou webhook do lado da Rifei |
@@ -386,11 +394,12 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). **At
 
 **Sinal:** a Rifei mostra vendas pagas e a Visão geral não sobe.
 
-1. Veja a última entrega e os resultados do dia [Thiago ou SM]:
+1. Veja a última entrega e os resultados desde uma data (troque a data) [Thiago ou SM]:
    ```sh
    npx wrangler d1 execute DB --remote --command "SELECT max(recebido_em) AS ultima FROM webhook_eventos"
    npx wrangler d1 execute DB --remote --command "SELECT resultado, count(*) AS n FROM webhook_eventos WHERE recebido_em >= '2026-11-23' GROUP BY resultado"
    ```
+   Os horários do banco estão em UTC: 3 horas à frente de Belém.
 2. Ache a causa:
    - Nada chega: o webhook continua cadastrado na Rifei, com a URL certa e os três eventos? O site está no ar (6.5)?
    - Muitos `ignorado_outra_campanha` (alguns são normais: outras campanhas da mesma conta da Rifei): o slug mudou (renomear a campanha na Rifei pode mudar o slug) ou a campanha do sistema não está ativa. Corrija o slug em **Campanha**.
@@ -401,25 +410,26 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). **At
 ### 7.2 O site caiu
 
 1. Confira 6.5: `/status`, a última publicação no GitHub e o status da Cloudflare.
-2. Se começou depois de uma publicação: `npx wrangler rollback -m "<motivo>"` volta o código para a versão anterior (veja as versões com `npx wrangler deployments list`). Depois, o SM corrige na `main`.
-3. Se um dado estragado derrubou o sistema: volte o banco com o Time Travel (2.4) para um instante antes do problema. **Tudo gravado depois se perde**: recupere as vendas pela conferência (6.4). Antes de qualquer mudança arriscada no meio da campanha (importação grande, migração nova), anote um bookmark novo (2.1).
+2. Se começou depois de uma publicação: `npx wrangler rollback -m "<motivo>"` volta o código para a versão anterior (veja as versões com `npx wrangler deployments list` e os cuidados em 2.4). Depois, o SM corrige na `main`.
+3. Se um dado estragado derrubou o sistema: volte o banco com o Time Travel (2.4) para um instante antes do problema. **Tudo gravado depois se perde**: recupere as vendas pela conferência (6.4), quando estiver no ar, e refaça as revogações de link desse intervalo. Antes de qualquer mudança arriscada no meio da campanha (importação grande, migração nova), anote um bookmark novo (2.1).
 4. Avise os líderes no grupo que as vendas pela Rifei continuam normais.
 
-### 7.3 Um link pessoal vazou (revogar)
+### 7.3 Um link pessoal vazou (revogar) [Admin]
 
 - **De alguém da coordenação** (vê tudo, inclusive valores): **Acessos → Coordenação** → o cartão da pessoa → **Revogar link** em cada link válido → **Gerar link novo** e mande só para a pessoa. A revogação derruba as sessões abertas por aquele link.
   - O último link válido de admin não pode ser revogado: gere o novo primeiro.
   - Para tirar o acesso de vez: **Desativar acesso** (derruba todas as sessões da pessoa).
+  - **Se alguém pode ter entrado com o link:** veja na trilha de auditoria (4.2) o que esse usuário fez depois do vazamento. Um link de coordenação muda campanha, hierarquia e vínculos; um de admin também cria pessoas e links (`usuario.criar`, `link.criar`, `acessos_hierarquia.gerar_links`). Desfaça o que não foi a equipe: em **Acessos**, revogue os links que ele gerou e desative as pessoas que ele criou.
 - **De um líder, discipulador ou rede** (vê só os números do alvo dele, sem reais): **Acessos → Líderes, discipuladores e redes** → **Trocar acesso** na linha. Gera um link novo, revoga os anteriores e tira do sistema o aparelho que estava com o link velho. Mande o novo para a pessoa certa.
 - **Os links públicos** (`/` e `/telao`) não têm segredo: não há o que revogar.
-- **Vazou um token:**
+- **Vazou um token [Thiago]:**
   - `RIFEI_WEBHOOK_TOKEN`: gere outro e troque primeiro no Worker, depois na Rifei (3.2). As entregas entre os dois passos se perdem: confira pelo CSV (6.4).
   - `CLOUDFLARE_API_TOKEN`: em **API Tokens** na Cloudflare, apague ou renove o token e cadastre o novo no GitHub (1.2).
 
 ### 7.4 Um líder trocou (trocar acesso)
 
 1. **Hierarquia → Células → Editar célula:** novo nome e telefone do líder (ou corrija a planilha e importe de novo).
-2. **Acessos → Líderes, discipuladores e redes → Trocar acesso** na célula: o link novo vai para o novo líder e o aparelho do antigo sai.
+2. **[Admin]** **Acessos → Líderes, discipuladores e redes → Trocar acesso** na célula: o link novo vai para o novo líder e o aparelho do antigo sai.
 3. O novo líder vira afiliado na Rifei, e a coordenação vincula o código dele na **Adesão** (**Adicionar outro código** na célula).
 4. **Mantenha o código do líder antigo vinculado**, para as vendas dele continuarem na célula. Desvincular tira todas as vendas dele da célula, inclusive as antigas. O vínculo não tem data: se o líder antigo continuar vendendo pelo link dele, a venda continua indo para a célula.
 
