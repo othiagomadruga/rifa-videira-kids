@@ -215,6 +215,19 @@ describe("CA5: só transform e opacity, curto e sem piscar", () => {
       ).toBeLessThanOrEqual(3);
   });
 
+  // B1 da revisão: animação de CSS recomeça quando o React move o nó (troca de lugar no ranking). O pulso de
+  // item que muda de lugar é pelo usePulsoDaMeta; o ui-pulsar de CSS fica só na ProgressBar.
+  it("o pulso de CSS (ui-pulsar) só fica na ProgressBar", () => {
+    const comPulso = ANIMACOES.filter((d) =>
+      animacoes(d).some((animacao) => animacao.nome === "ui-pulsar"),
+    );
+    expect(comPulso.length).toBeGreaterThan(0);
+    for (const declaracao of comPulso)
+      expect(declaracao.arquivo, onde(declaracao)).toBe(
+        "components/ui/ProgressBar.css",
+      );
+  });
+
   // A largura da barra de progresso é a exceção (docs/frontend.md): a barra fica num trilho de tamanho fixo e
   // com overflow hidden, então mudar a largura dela não empurra nada (e o scaleX achataria as pontas redondas).
   it("dentro dele, as transições animam só transform, opacity, cores e sombra (exceção: a largura da barra de progresso)", () => {
