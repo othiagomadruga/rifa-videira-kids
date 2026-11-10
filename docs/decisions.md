@@ -132,8 +132,23 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
 - **Trilha de auditoria** (tabela `auditoria`, migração 0005): quem (o usuário da sessão), quando, a ação, o alvo
   e um resumo sem dados pessoais, gravados no MESMO `db.batch` da ação (ação recusada não registra nada): PUT da
   campanha (com o slug e o preço antes e depois), vínculos de afiliado, importação da hierarquia aplicada e as
-  ações do admin sobre usuários e links. O CRUD da hierarquia não entra. Leitura: `GET /api/admin/auditoria`, só
-  admin, com cursor. Quem pode fazer o quê não mudou.
+  ações do admin sobre usuários e links. Leitura: `GET /api/admin/auditoria`, só admin, com cursor. Quem pode
+  fazer o quê não mudou.
+- **CRUD da hierarquia na trilha** (RIFA-018, 2026-11-10; antes ficava de fora): POST, PUT e DELETE de redes,
+  discipuladores e células gravam `hierarquia.criar`, `hierarquia.atualizar` e `hierarquia.remover` (alvo
+  `<rede|discipulador|celula>:<id>`) no mesmo lote. O resumo leva o nome do item, ids e `qtd_pessoas` (que mexe na
+  meta e no ranking) com o antes e o depois; dos dados do líder e do responsável da rede, só o nome do campo
+  (`lider_telefone (apagado)`). A remoção diz o acesso da hierarquia que caiu junto em cascata (D12), pelo id do
+  usuário. O PUT e o DELETE leem a linha e gravam só se ela continua como lida (o registro vai ANTES da gravação,
+  com a mesma condição); se outra gravação a mudou no meio, refazem (até 3 vezes; depois, 409 `em_uso`). Assim o
+  "antes" do resumo e o acesso removido são sempre os de fato, sem transação interativa (o D1 não tem). Por quê:
+  a campanha (PUT) lê o "antes" fora do lote e aceita a corrida; aqui o resumo da remoção é o único registro de
+  que um usuário foi apagado, então ele não pode ficar sem o acesso que caiu.
+- **Ação sem mudança não registra** (RIFA-018): o PUT da hierarquia igual ao gravado, reativar quem está ativo,
+  desativar quem está desativado e revogar link já revogado. Nos acessos, o registro passou para antes do UPDATE,
+  com a condição do próprio UPDATE (que agora exige o estado diferente): a mesma conta decide a gravação e o
+  registro, inclusive a recusa do último admin e do último link válido de admin dentro do lote. As respostas não
+  mudaram (200 e 204). O PUT da campanha e o do afiliado continuam registrando o salvamento igual.
 
 ## D12. Visão individual por hierarquia: papéis presos a um alvo, sem dinheiro (RIFA-014, 2026-11-07)
 
@@ -168,9 +183,10 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
   coluna ou um gatilho cita a que sai, então os dois gatilhos do papel saem antes do DROP e voltam depois (provado
   no D1 local). Antes da primeira publicação com a 0006, anotar o bookmark do Time Travel do D1.
 - **Cuidado com ids**: `usuarios.id` não é AUTOINCREMENT, então o id de um usuário apagado em cascata (com o alvo)
-  pode voltar num usuário novo, e a trilha `usuario:<id>` passaria a apontar para outra pessoa. A exclusão em
-  cascata também não aparece na trilha: a RIFA-018 (auditoria do CRUD da hierarquia) registra a remoção do alvo
-  junto com o acesso dele.
+  pode voltar num usuário novo, e a trilha `usuario:<id>` passaria a apontar para outra pessoa. Desde a RIFA-018
+  (D11), a remoção do alvo fica na trilha (`hierarquia.remover`) com o nome do alvo e o id do usuário do acesso que
+  caiu junto: é ela que diz até quando (e de qual alvo) aquele id era, e as linhas `usuario:<id>` mais novas que
+  ela são de outra pessoa.
 - **Limite de login por IP sobe de 10 para 60 por minuto**: na reunião dos líderes, dezenas de pessoas abrem o link
   ao mesmo tempo atrás do mesmo IP. O token tem 256 bits, então o limite nunca foi o que impede adivinhar link:
   ele só protege CPU e banco.

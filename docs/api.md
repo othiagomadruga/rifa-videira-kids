@@ -226,6 +226,7 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
   - rede com discipuladores: `409 em_uso`;
   - discipulador com células: `409 em_uso`;
   - célula com afiliado vinculado: `409 em_uso` (desvincule antes).
+- **Trilha de auditoria** (RIFA-018): cada POST, PUT e DELETE que muda algo grava uma linha (`hierarquia.criar`, `hierarquia.atualizar`, `hierarquia.remover`; [GET /api/admin/auditoria](#get-apiadminauditoria-só-admin-sprint-4-rifa-013b)) no mesmo `db.batch` da gravação: recusado (400, 404, 409) ou sem mudança, nada fica. O PUT e o DELETE gravam só se a linha (e, no DELETE, o acesso do alvo) ainda é a que foi lida; se outra gravação a mudou no meio, leem de novo e refazem, até 3 vezes, e depois respondem `409 em_uso` ("A célula mudou enquanto isso..."), sem gravar nada.
 
 ### `POST /api/admin/hierarquia/importar` (`coordenacao`)
 
@@ -399,8 +400,11 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `campanha.salvar` | `PUT /api/admin/campanha` | `campanha:<id>` | criada (com o slug e o preço) ou os campos alterados; `slug_rifei` e `preco_bilhete_centavos` com o antes e o depois |
 | `afiliado.salvar` | `PUT /api/admin/afiliados/:affiliateId` | `afiliado:<affiliate_id>` | célula antes → depois (pelos ids); o rótulo só como "alterado"/"apagado" |
 | `hierarquia.importar` | `POST /api/admin/hierarquia/importar` aplicada | `hierarquia` | linhas e contagens de criados e atualizados (a simulação não registra) |
+| `hierarquia.criar` | `POST /api/admin/redes`, `/discipuladores` ou `/celulas` (RIFA-018) | `rede:<id>`, `discipulador:<id>` ou `celula:<id>` | o nome do item e a configuração: `Célula "Célula Ágape" criada (discipulador_id 3, qtd_pessoas 12)` |
+| `hierarquia.atualizar` | `PUT` do mesmo recurso (RIFA-018) | idem | só o que mudou, com o antes e o depois (`nome`, `divisao`, `rede_id`, `discipulador_id`, `qtd_pessoas`: a meta e o ranking mudam junto); os dados do líder e o responsável da rede só pelo nome do campo, como `informado`, `alterado` ou `apagado`: `Célula "Célula Ágape" alterada: qtd_pessoas (12 → 15), lider_telefone (apagado)`. O PUT igual ao gravado não registra |
+| `hierarquia.remover` | `DELETE` do mesmo recurso (RIFA-018) | idem | o nome do item, a configuração e o acesso da hierarquia que caiu junto (D12), pelo id do usuário: `Célula "Célula Ágape" removida (discipulador_id 3, qtd_pessoas 12); acesso do líder removido junto, usuário 15 (com os links e as sessões)` |
 | `usuario.criar` | `POST /api/admin/usuarios` | `usuario:<id>` | o papel (sem nome nem e-mail) |
-| `usuario.ativar` / `usuario.desativar` | `PATCH /api/admin/usuarios/:id` | `usuario:<id>` | reativado / desativado |
+| `usuario.ativar` / `usuario.desativar` | `PATCH /api/admin/usuarios/:id` que muda o estado (reativar quem está ativo ou desativar quem está desativado não registra) | `usuario:<id>` | reativado / desativado |
 | `link.criar` | `POST /api/admin/usuarios/:id/links` | `link:<id>` | o usuário do link |
 | `link.revogar` | `DELETE /api/admin/links/:id` | `link:<id>` | o usuário do link |
 
@@ -421,8 +425,10 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 ```
 
 - `proximo`: passe em `antes_de` para a página seguinte; `null` = não há mais.
-- O `resumo` **nunca tem dados pessoais**: só ids e configuração (nomes de pessoas, e-mails, telefones e o rótulo livre do afiliado ficam de fora). `usuario_nome` vem da tabela de usuários (o admin já vê os nomes na administração dos acessos).
-- **Erros**: 400 `requisicao_invalida` (consulta fora do schema), 401, 403 (`coordenacao`). O CRUD de redes, discipuladores e células não é registrado.
+- O `resumo` **nunca tem dados pessoais**: só ids e configuração (nomes de pessoas, e-mails, telefones e o rótulo livre do afiliado ficam de fora). O nome da rede, do discipulador e da célula entra (é o nome do item, não de uma pessoa da equipe). `usuario_nome` vem da tabela de usuários (o admin já vê os nomes na administração dos acessos).
+- **O que não muda nada não registra** (RIFA-018): o PUT da hierarquia igual ao gravado, reativar quem está ativo, desativar quem está desativado e revogar um link já revogado (`DELETE /api/admin/links/:id` de novo: 204, a data continua a da primeira revogação). O PUT da campanha e o do afiliado registram também o salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
+- **Ids que voltam** (D12): `usuarios.id` e os ids de redes, discipuladores e células não são AUTOINCREMENT, então o id de um item apagado pode voltar num item novo (o de maior id, apagado, é o que volta). Por isso o resumo da hierarquia sempre leva o nome do item, e a remoção diz o usuário do acesso que caiu junto e de qual alvo ele era: as linhas mais antigas com `usuario:<id>` (ou `celula:<id>`) falam do dono anterior do id, e a linha `hierarquia.remover` marca até quando.
+- **Erros**: 400 `requisicao_invalida` (consulta fora do schema), 401, 403 (`coordenacao`).
 
 ---
 
