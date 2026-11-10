@@ -228,16 +228,20 @@ describe(".github/workflows/ci.yml", () => {
     expect(build?.env).toEqual({});
     expect(build?.with).toEqual({});
 
-    // O Publicar não roda o Vite nem os plugins: toda a cadeia de npm run (com pre/post) é só wrangler.
+    // O Publicar não roda o Vite nem os plugins: toda a cadeia de npm run (com pre/post) é só wrangler. O
+    // dry-run vem antes das migrations: sem o build (dist/ e .wrangler/deploy/config.json), ele falha em
+    // segundos, sem rede, e o D1 remoto fica intocado (provado com --local na RIFA-019).
     const publicar = deploy.find((passo) => passo.campos.name === PUBLICAR);
     expect(publicar?.run).toBe("npm run deploy:publicar");
     expect(comandosDoScript("deploy:publicar")).toEqual([
+      "wrangler deploy --dry-run",
       "wrangler d1 migrations apply DB --remote",
       "wrangler deploy",
     ]);
-    // Quem roda `npm run deploy` na própria máquina continua com build, migrations e deploy, nessa ordem.
+    // Quem roda `npm run deploy` na própria máquina continua com build, conferência, migrations e deploy.
     expect(comandosDoScript("deploy")).toEqual([
       "vite build",
+      "wrangler deploy --dry-run",
       "wrangler d1 migrations apply DB --remote",
       "wrangler deploy",
     ]);

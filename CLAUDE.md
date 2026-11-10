@@ -72,7 +72,8 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   - `npm run db:migrate:local`: aplica as migrações no D1 local (`.wrangler/state`).
   - **Publicação:** automática pelo GitHub Actions a cada push na `main` (job `deploy` do ci.yml, depois dos testes),
     com o segredo `CLOUDFLARE_API_TOKEN` do repositório. O token só chega ao passo que roda `npm run deploy:publicar`
-    (migrações no D1 remoto + `wrangler deploy` do que já foi construído); o build roda antes, sem ele (D11).
+    (`wrangler deploy --dry-run`, que barra a falta do build antes das migrações; migrações no D1 remoto; `wrangler deploy`
+    do que já foi construído); o build roda antes, sem ele (D11).
     `npm run deploy` = `npm run build` + `npm run deploy:publicar`. D1 de produção já criado (id real no `wrangler.jsonc`).
     Da sessão de nuvem do Claude o upload dos assets falha (o proxy troca o JWT do upload), então não rode
     `npm run deploy` daqui; comandos D1 remotos funcionam. Segredos do Worker: `npx wrangler secret put <NOME>`.

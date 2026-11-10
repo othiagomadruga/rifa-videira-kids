@@ -91,6 +91,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 4d8a1d1dae5b596e42e97dcf28292572
         # Não roda o Vite: o wrangler segue o .wrangler/deploy/config.json e publica dist/ como está (no_bundle).
+        # O wrangler deploy --dry-run vem antes das migrations: sem o build, falha em segundos e o D1 fica intocado.
         run: npm run deploy:publicar
 
       - name: Conferir /api/health em produção
