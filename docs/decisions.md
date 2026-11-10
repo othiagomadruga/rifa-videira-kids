@@ -108,6 +108,16 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   existe recebe só `true`/`false`. As actions vão fixadas pelo SHA do commit, com a tag no comentário
   (`actions/checkout` v7.0.1 e `actions/setup-node` v7.1.0): uma tag pode ser movida, o SHA não. Para atualizar,
   troque os dois juntos (`git ls-remote --tags https://github.com/actions/<action>`).
+  - **RIFA-019 (2026-11-10):** o build (Vite e os plugins) também ficou fora do alcance do token: no job `deploy`
+    ele roda no passo "Construir o site e o Worker (sem o token)", e o "Publicar" roda só `npm run deploy:publicar`
+    (migrations no D1 remoto + `wrangler deploy`). O `wrangler deploy` segue o `.wrangler/deploy/config.json` que o
+    `@cloudflare/vite-plugin` gera no build e publica o `dist/` como está (`no_bundle`); sem o build, ele recusa
+    (o `assets` do `wrangler.jsonc` não tem `directory`) e não empacota nada por conta própria. `npm run deploy`
+    continua igual para quem publicar da própria máquina (`npm run build && npm run deploy:publicar`). Os dois
+    `actions/checkout` usam `persist-credentials: false`: nenhum passo usa git depois, e o `GITHUB_TOKEN` não fica
+    no `.git/config` ao alcance do `npm ci`, do build e do wrangler. Tudo conferido no texto do ci.yml e do
+    package.json em `src/worker/config-publicacao.test.ts` (o projeto não tem parser de YAML; o leitor por linhas
+    do teste foi conferido contra o PyYAML).
 - **Limite do corpo antes de ler** (`src/worker/middleware/limite-corpo.ts`, com o leitor do webhook): 4 KiB no
   `POST /api/sessao` e 1 MiB nos POST/PUT/PATCH da coordenação, depois do login (sem sessão, o corpo nem é lido);
   acima, 413 `corpo_muito_grande`. As importações de CSV têm o teto delas na própria rota: a da hierarquia
