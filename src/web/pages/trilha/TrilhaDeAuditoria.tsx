@@ -74,8 +74,13 @@ export function TrilhaDeAuditoria() {
 
   useEffect(() => {
     if (focoPendente.current === null) return;
-    document.getElementById(focoPendente.current)?.focus();
+    const alvo = document.getElementById(focoPendente.current);
     focoPendente.current = null;
+    if (!alvo) return;
+    // O registro novo vai para o meio da tela (o foco sozinho o deixaria colado na borda de baixo). O jsdom
+    // não tem scrollIntoView.
+    alvo.focus({ preventScroll: true });
+    alvo.scrollIntoView?.({ block: "center" });
   }, [trilha]);
 
   function tentarDeNovo() {

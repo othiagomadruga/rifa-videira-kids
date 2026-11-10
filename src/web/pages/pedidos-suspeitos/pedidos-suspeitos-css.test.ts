@@ -75,11 +75,11 @@ describe("RIFA-024: sem rolagem lateral em 390 px (CSS dos Pedidos suspeitos)", 
     expect(CSS).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   });
 
-  it("nenhuma largura fixa nem medida em px (as bordas finas são a exceção)", () => {
+  it("nenhuma largura fixa (só percentuais e variáveis) nem medida em px (as bordas finas são a exceção)", () => {
     for (const { propriedade, valor } of DECLARACOES) {
       if (/(^|-)width$/.test(propriedade)) {
         expect(
-          /^(100%|0|none|var\(--[\w-]+\))$/.test(valor),
+          /^(\d+%|0|none|var\(--[\w-]+\))$/.test(valor),
           `${propriedade}: ${valor}`,
         ).toBe(true);
       }

@@ -65,8 +65,19 @@
 }
 
 @media (min-width: 48rem) {
-  .suspeitos-quando,
+  /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna dos motivos ficava espremida). */
+  .suspeitos-celula {
+    overflow-wrap: break-word;
+  }
+
+  /* A data e o valor não quebram no meio; "Marcado em" pode ir para a linha de cima. */
+  .suspeitos time,
   .suspeitos-valor {
     white-space: nowrap;
+  }
+
+  /* Os motivos são o texto mais longo da linha: ficam com a maior parte da largura. */
+  .suspeitos td:has(> .suspeitos-motivos) {
+    width: 40%;
   }
 }

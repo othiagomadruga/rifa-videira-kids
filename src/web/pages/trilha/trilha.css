@@ -62,7 +62,13 @@
 }
 
 @media (min-width: 48rem) {
-  .trilha-quando {
+  /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Campanha"). */
+  .trilha-celula {
+    overflow-wrap: break-word;
+  }
+
+  .trilha-quando,
+  .trilha-alvo {
     white-space: nowrap;
   }
 }

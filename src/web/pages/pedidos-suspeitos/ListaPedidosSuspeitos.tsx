@@ -43,14 +43,11 @@ const COLUNAS: ColunaTabela<PedidoSuspeito>[] = [
     titulo: "Quando",
     celula: (pedido) =>
       pedido.aprovado_em ? (
-        <time
-          dateTime={pedido.aprovado_em}
-          className="suspeitos-celula suspeitos-quando"
-        >
+        <time dateTime={pedido.aprovado_em} className="suspeitos-celula">
           {formatarDataHora(pedido.aprovado_em)}
         </time>
       ) : (
-        <span className="suspeitos-celula suspeitos-quando">
+        <span className="suspeitos-celula">
           Marcado em{" "}
           <time dateTime={pedido.marcado_em}>
             {formatarDataHora(pedido.marcado_em)}
