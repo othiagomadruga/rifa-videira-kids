@@ -1233,7 +1233,7 @@ export const consultaPedidosSchema = z
       .max(PAGINA_PEDIDOS_MAXIMA)
       .default(PAGINA_PEDIDOS_PADRAO),
     /** Cursor opaco: o `proximo` da página anterior. Cursor inválido: 400. */
-    antes_de: z.string().min(1).max(300).optional(),
+    antes_de: z.string().min(1).max(2048).optional(),
     status: statusPedidoSchema.optional(),
     /** Só os pedidos desta célula (resolvida pelo afiliado na leitura, D7). */
     celula_id: z.coerce.number().int().positive().optional(),
@@ -1263,7 +1263,8 @@ export const itemPedidoSchema = z.strictObject({
   total_centavos: centavosSchema,
   affiliate_id: affiliateIdSchema.nullable(),
   /** A célula do afiliado, resolvida na leitura (D7); null = sem afiliado ou afiliado não vinculado. */
-  celula: z.strictObject({ id: idSchema, nome: z.string().min(1) }).nullable(),
+  celula_id: idSchema.nullable(),
+  celula_nome: z.string().min(1).max(120).nullable(),
   ddd: dddSchema.nullable(),
   criado_em: instanteSchema.nullable(),
   aprovado_em: instanteSchema.nullable(),
@@ -1285,13 +1286,18 @@ const totaisStatusSchema = z.strictObject({
 export const respostaPedidosSchema = z.strictObject({
   itens: z.array(itemPedidoSchema),
   /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
-  proximo: z.string().min(1).max(300).nullable(),
-  /** Totais por status com os MESMOS filtros (célula, sem célula, id), sem a paginação nem o filtro de status. */
-  totais: z.strictObject({
-    in_process: totaisStatusSchema,
-    approved: totaisStatusSchema,
-    expired: totaisStatusSchema,
-  }),
+  proximo: z.string().min(1).max(2048).nullable(),
+  /**
+   * Totais por status com os MESMOS filtros (célula, sem célula, id), sem a paginação nem o filtro de status.
+   * Só na primeira página: null quando a consulta traz `antes_de` (poupa uma leitura do D1 por "carregar mais").
+   */
+  totais: z
+    .strictObject({
+      in_process: totaisStatusSchema,
+      approved: totaisStatusSchema,
+      expired: totaisStatusSchema,
+    })
+    .nullable(),
 });
 export type RespostaPedidos = z.infer<typeof respostaPedidosSchema>;
 
@@ -1316,19 +1322,47 @@ export type ConsultaEntregasWebhook = z.output<
   typeof consultaEntregasWebhookSchema
 >;
 
+/** Códigos com que o webhook recusa uma entrega autenticada (os de ./erros). */
+export const CODIGOS_RECUSA_WEBHOOK = [
+  "json_invalido",
+  "payload_invalido",
+  "corpo_muito_grande",
+] as const;
+
+/**
+ * Um problema ou aviso gravado na entrega, reduzido ao que não pode ter dado pessoal: o campo (caminho do schema,
+ * com "." entre as partes e "*" nas posições de lista; nunca texto da entrada), o código (vocabulário fixo do zod
+ * ou da D11) e quantas vezes ocorreu. A mensagem gravada NÃO sai.
+ */
+export const codigoDetalheSchema = z.strictObject({
+  campo: z.string().max(200),
+  codigo: z.string().min(1).max(64),
+  ocorrencias: z.number().int().min(1),
+});
+
 export const entregaWebhookSchema = z.strictObject({
   id: idSchema,
   recebido_em: instanteSchema,
   /** new_order, paid_order, expired_order (ou o que veio, se for outro); null quando o corpo nem foi lido. */
   evento: z.string().max(64).nullable(),
   pedido_id: z.string().max(128).nullable(),
+  /** O slug que veio: mostra na hora um slug digitado errado na Rifei. */
+  slug: z.string().max(200).nullable(),
   resultado: resultadoEventoWebhookSchema,
   status_anterior: statusPedidoSchema.nullable(),
   status_resultante: statusPedidoSchema.nullable(),
-  /** Só em erro_validacao: o código do erro (sem dado pessoal). */
-  erro: z.string().min(1).max(64).nullable(),
-  /** Códigos dos avisos (ex.: os de plausibilidade da D11); lista vazia quando não há. */
-  avisos: z.array(z.string().min(1).max(64)),
+  /**
+   * Só em erro_validacao. `codigo`: json_invalido ou corpo_muito_grande quando a rota gravou esse único problema
+   * (caminho vazio); senão payload_invalido. `problemas`: os detalhes gravados, reduzidos (codigoDetalheSchema).
+   */
+  erro: z
+    .strictObject({
+      codigo: z.enum(CODIGOS_RECUSA_WEBHOOK),
+      problemas: z.array(codigoDetalheSchema).min(1),
+    })
+    .nullable(),
+  /** Avisos gravados (ex.: os de plausibilidade da D11), reduzidos; lista vazia quando não há. */
+  avisos: z.array(codigoDetalheSchema),
 });
 export type EntregaWebhook = z.infer<typeof entregaWebhookSchema>;
 
@@ -1341,34 +1375,45 @@ export type RespostaEntregasWebhook = z.infer<
 >;
 
 /**
- * Horas sem nenhuma entrega processada, DURANTE a campanha, que acendem o alerta de webhook parado. A noite
- * costuma ficar sem venda, então o alerta só vale das 8h às 22h no fuso da campanha (SUPOSIÇÃO do SM, D16).
+ * Horas de dia (das 8h às 22h no fuso da campanha) sem entrega da campanha que acendem o alerta de webhook parado.
+ * SUPOSIÇÃO do SM (D16): à noite costuma não haver venda; 4 h de dia sem nenhuma, com 36 células, merece olhar.
  */
 export const HORAS_SEM_ENTREGA_ALERTA = 4;
+export const HORA_INICIO_ALERTA = 8;
+export const HORA_FIM_ALERTA = 22;
+/** Na ordem de prioridade: a primeira que valer é a `situacao`. */
 export const SITUACOES_WEBHOOK = [
-  "ok",
-  "nunca_recebeu",
-  "sem_entregas_recentes",
   "erros_recentes",
+  "sem_entregas_recentes",
+  "nunca_recebeu",
+  "ok",
 ] as const;
 
-/** GET /api/admin/webhook/estado: para o alerta da visão geral e da tela de pedidos. */
+/**
+ * GET /api/admin/webhook/estado: para o alerta da visão geral e da tela de pedidos (regras na D16).
+ * "Entrega da campanha" = slug igual ao da campanha ativa e resultado processado, duplicado ou ignorado_transicao.
+ */
 export const respostaEstadoWebhookSchema = z.strictObject({
   /**
-   * - nunca_recebeu: nenhuma entrega da campanha ativa até agora (antes de configurar a Rifei, é o normal);
-   * - erros_recentes: alguma entrega com erro_validacao nas últimas 24 h;
-   * - sem_entregas_recentes: durante a campanha, das 8h às 22h locais, mais de HORAS_SEM_ENTREGA_ALERTA horas sem
-   *   entrega processada da campanha;
-   * - ok: nenhum dos casos (a ordem de prioridade é esta: nunca_recebeu, erros_recentes, sem_entregas_recentes).
+   * - erros_recentes: algum erro_validacao nas últimas 24 h com slug ausente ou igual ao da campanha ativa;
+   * - sem_entregas_recentes: a data local está dentro da campanha, a hora local está entre HORA_INICIO_ALERTA e
+   *   HORA_FIM_ALERTA, e passaram mais de HORAS_SEM_ENTREGA_ALERTA horas desde o mais recente entre a última
+   *   entrega da campanha e as HORA_INICIO_ALERTA de hoje (cobre o "nunca recebeu" depois do início);
+   * - nunca_recebeu: nenhuma entrega da campanha até agora, fora do caso anterior (inclusive sem campanha ativa).
+   *   ATENÇÃO: entrega recusada por token (401/503) não é gravada, então token errado também aparece aqui;
+   * - ok: nenhum dos casos.
    */
   situacao: z.enum(SITUACOES_WEBHOOK),
   /** Última entrega autenticada, de qualquer resultado e campanha. */
   ultima_entrega_em: instanteSchema.nullable(),
-  /** Última entrega processada da campanha ativa (resultado processado ou duplicado). */
+  /** Última entrega da campanha ativa (definição acima). */
   ultima_processada_em: instanteSchema.nullable(),
   /** Aprovação mais recente entre os pedidos da campanha ativa. */
   ultimo_aprovado_em: instanteSchema.nullable(),
-  /** Contagem das últimas 24 h, por resultado. */
+  /**
+   * Contagem das últimas 24 h, por resultado, de qualquer slug. Com ignorado_outra_campanha > 0 e nada da campanha,
+   * o site sugere conferir o slug na Rifei.
+   */
   ultimas_24h: z.strictObject({
     processado: z.number().int().nonnegative(),
     duplicado: z.number().int().nonnegative(),

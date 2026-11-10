@@ -303,9 +303,22 @@ entregas do webhook (só por SQL no D1) e que ninguém ficava sabendo se o webho
   pelo afiliado na leitura, D7, totais por status e cursor opaco), `GET /api/admin/webhook/entregas` (cada
   entrega autenticada, com resultado, transição de status e só os CÓDIGOS de erro e de aviso) e
   `GET /api/admin/webhook/estado`. O banco não guarda dado pessoal (D1); do comprador sai só o DDD.
-- **Alerta de webhook parado** (`situacao` do estado): `nunca_recebeu` antes da primeira entrega da campanha;
-  `erros_recentes` com algum `erro_validacao` nas últimas 24 h; `sem_entregas_recentes` durante a campanha, das
-  8h às 22h no fuso dela, com mais de `HORAS_SEM_ENTREGA_ALERTA` (4) horas sem entrega processada. SUPOSIÇÃO do
-  SM: à noite costuma não haver venda, e 4 h de dia sem nenhuma venda numa campanha de 36 células já merece
-  olhar. O número e a janela ficam em constantes do contrato, fáceis de mudar. O site mostra o alerta na
-  visão geral e na tela de pedidos, com o caminho para a conferência pelo CSV.
+- **Alerta de webhook parado** (`situacao` do estado, na ordem de prioridade): `erros_recentes` com algum
+  `erro_validacao` nas últimas 24 h com slug ausente ou igual ao da campanha; `sem_entregas_recentes` quando a data
+  local está na campanha, a hora local está entre 8h e 22h e passaram mais de `HORAS_SEM_ENTREGA_ALERTA` (4) horas
+  desde o mais recente entre a última entrega da campanha e as 8h de hoje (sem falso alarme toda manhã; cobre o
+  "nunca recebeu" depois do início); `nunca_recebeu` fora disso; `ok`. "Entrega da campanha" = slug da campanha
+  ativa e resultado processado, duplicado ou ignorado_transicao. Entrega recusada por token (401/503) não é
+  gravada: token errado aparece como `nunca_recebeu`, e o site diz para conferir URL, token e slug na Rifei. Com
+  `ignorado_outra_campanha` nas 24 h e nada da campanha, o site sugere conferir o slug. SUPOSIÇÃO do SM: 4 h de dia
+  sem venda numa campanha de 36 células merece olhar; constantes no contrato.
+- **Erro e avisos das entregas** saem reduzidos a campo (caminho do schema, nunca texto da entrada), código
+  (vocabulário fixo do zod ou da D11) e ocorrências; a mensagem gravada não sai. O código da recusa é
+  json_invalido ou corpo_muito_grande quando a rota gravou esse único problema, senão payload_invalido.
+- **Obrigatório na implementação** (medido na revisão do contrato, com 7 mil pedidos e 20 mil entregas):
+  migração 0007 com `pedidos (campanha_id, registrado_em, id)` e `webhook_eventos (resultado, id)`; travas com
+  `EXPLAIN QUERY PLAN` e `rows_read` como em `painel.test.ts`, porque o índice novo desvia o planejador (totais com
+  `+campanha_id`, totais e lista por célula com `afiliados CROSS JOIN pedidos`, última entrega por `MAX(recebido_em)`,
+  contagem de 24 h com `resultado IN (...)`). Totais só na primeira página. O campo `origem` (webhook ou
+  conferência) entra junto com a RIFA-012, por quem chegar por último na main.
+- Fica para decisão do PO: gravar o instante do último 401 do webhook (seria uma escrita sem autenticação).

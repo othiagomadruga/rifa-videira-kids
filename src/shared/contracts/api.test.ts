@@ -1331,7 +1331,8 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
     qtd_bilhetes: 3,
     total_centavos: 6000,
     affiliate_id: 7101,
-    celula: { id: 101, nome: "Célula Ágape" },
+    celula_id: 101,
+    celula_nome: "Célula Ágape",
     ddd: "91",
     criado_em: "2026-11-25T14:00:00.000Z",
     aprovado_em: "2026-11-25T14:05:00.000Z",
@@ -1345,6 +1346,7 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
     recebido_em: "2026-11-25T14:05:01.000Z",
     evento: "paid_order",
     pedido_id: "R-123",
+    slug: "videira-kids",
     resultado: "processado",
     status_anterior: "in_process",
     status_resultante: "approved",
@@ -1473,14 +1475,6 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
     const casos: [string, z.ZodType, unknown][] = [
       ["pedidos", respostaPedidosSchema, { ...pedidos, ...extra }],
       [
-        "pedidos.celula",
-        respostaPedidosSchema,
-        {
-          ...pedidos,
-          itens: [{ ...pedido, celula: { ...pedido.celula, ...extra } }],
-        },
-      ],
-      [
         "pedidos.totais",
         respostaPedidosSchema,
         { ...pedidos, totais: { ...pedidos.totais, ...extra } },
@@ -1512,6 +1506,54 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
         nome,
         ok: false,
       });
+  });
+
+  it("pedidos: totais só na primeira página (null depois do cursor); entregas: erro e avisos reduzidos a campo, código e ocorrências", () => {
+    expect(
+      respostaPedidosSchema.safeParse({
+        itens: [pedido],
+        proximo: null,
+        totais: null,
+      }).success,
+    ).toBe(true);
+    const problema = { campo: "total", codigo: "invalid_type", ocorrencias: 1 };
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [
+          {
+            ...entrega,
+            resultado: "erro_validacao",
+            status_resultante: null,
+            erro: { codigo: "payload_invalido", problemas: [problema] },
+          },
+          {
+            ...entrega,
+            avisos: [
+              {
+                campo: "total",
+                codigo: "total_acima_do_esperado",
+                ocorrencias: 1,
+              },
+            ],
+          },
+        ],
+        proximo: null,
+      }).success,
+    ).toBe(true);
+    for (const erro of [
+      { codigo: "invalid_type", problemas: [problema] },
+      { codigo: "payload_invalido", problemas: [] },
+      {
+        codigo: "payload_invalido",
+        problemas: [{ ...problema, mensagem: "x" }],
+      },
+    ])
+      expect(
+        respostaEntregasWebhookSchema.safeParse({
+          itens: [{ ...entrega, resultado: "erro_validacao", erro }],
+          proximo: null,
+        }).success,
+      ).toBe(false);
   });
 
   it("entregas: do erro e dos avisos só sai o código, nunca o detalhe gravado (com a mensagem)", () => {
