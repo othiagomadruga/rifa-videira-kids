@@ -572,6 +572,10 @@ describe("CA4: a tela da conferência", () => {
     expect(
       screen.queryByRole("region", { name: "Vendas perdidas" }),
     ).toBeNull();
+    // Sem desconsiderados (quantidade 0, como a API manda), o grupo não aparece.
+    expect(
+      screen.queryByRole("region", { name: "Desconsiderados" }),
+    ).toBeNull();
     expect(
       screen.getAllByRole("status").map((item) => item.textContent),
     ).toContain("Conferência pronta: tudo confere.");

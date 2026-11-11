@@ -205,6 +205,16 @@ const COMUM = {
   conferido_em: "2026-12-01T15:00:00.000Z",
 };
 
+/**
+ * O grupo `desconsiderados` vazio (D20): a API manda sempre, também sem nenhum (o `.optional()` do contrato é só da
+ * transição). Toda fixture por pedido o traz, para o contrato poder deixá-lo obrigatório sem quebrar o site.
+ */
+export const SEM_DESCONSIDERADOS = {
+  quantidade: 0,
+  itens: [],
+  itens_omitidos: 0,
+} as const;
+
 export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
   respostaAnalisePorPedidoSchema.parse({
     modo: "por_pedido",
@@ -231,6 +241,7 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
       ausentes_fora_do_periodo: 1,
     },
     divergencias: TIPOS.map((tipo) => grupo(tipo, ITENS_POR_TIPO[tipo] ?? [])),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 /** A mesma conferência depois de recuperar R-0101 e R-0102: elas saem das vendas perdidas. */
@@ -246,6 +257,7 @@ export const ANALISE_DEPOIS: RespostaAnalisePorPedido =
           : (ITENS_POR_TIPO[tipo] ?? []),
       ),
     ),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 export const ANALISE_SEM_DIFERENCA: RespostaAnalisePorPedido =
@@ -254,6 +266,7 @@ export const ANALISE_SEM_DIFERENCA: RespostaAnalisePorPedido =
     avisos: [],
     resumo: { ...ANALISE_POR_PEDIDO.resumo, conferem: 8, com_divergencia: 0 },
     divergencias: TIPOS.map((tipo) => grupo(tipo, [])),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 /**
@@ -322,6 +335,7 @@ export const ANALISE_TRAVADA: RespostaAnalisePorPedido =
           : [],
       ),
     ),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 /**
@@ -349,6 +363,7 @@ export const ANALISE_AMBIGUA: RespostaAnalisePorPedido =
           : [],
       ),
     ),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
