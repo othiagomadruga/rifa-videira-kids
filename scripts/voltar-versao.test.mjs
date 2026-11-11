@@ -16,6 +16,7 @@ import {
   MOTIVO_MAXIMO,
   descreverPublicacoes,
   lerPedido,
+  noArJaVoltou,
   principal,
   versaoAnterior,
   versaoNoAr,
@@ -263,6 +264,67 @@ describe("a volta (wrangler falso)", () => {
     expect(segundo.codigo).toBe(1);
     expect(segundo.erros).toContain("Não existe versão anterior para voltar");
     expect(umaSo.chamadas).toHaveLength(1);
+  });
+
+  it("logo depois de uma volta, sem o id: para com erro em vez de desfazê-la (toque a mais, Re-run); com o id, volta", async () => {
+    // A volta para a ANTERIOR (p4) pôs no ar de novo uma versão que já tinha estado no ar (p2).
+    const depoisDaVolta = [
+      ...PUBLICACOES,
+      {
+        id: "p4",
+        created_on: "2026-11-17T12:00:00.000000Z",
+        source: "wrangler",
+        strategy: "percentage",
+        annotations: {
+          "workers/triggered_by": "deployment",
+          "workers/message": "site fora do ar",
+        },
+        versions: [{ version_id: ANTERIOR, percentage: 100 }],
+      },
+    ];
+    expect(noArJaVoltou(depoisDaVolta)).toBe(true);
+    expect(noArJaVoltou(PUBLICACOES)).toBe(false);
+    expect(noArJaVoltou([PUBLICACOES[2]])).toBe(false);
+    expect(noArJaVoltou([])).toBe(false);
+    // A regra do rollback, sozinha, desfaria a volta.
+    expect(versaoAnterior(depoisDaVolta)).toBe(ATUAL);
+
+    const pasta = mkdtempSync(join(tmpdir(), "voltar-versao-"));
+    const resumo = join(pasta, "resumo.md");
+    writeFileSync(resumo, "");
+    try {
+      const semId = wranglerFalso(listaOk(depoisDaVolta));
+      const recusa = await rodarPrincipal(
+        { MOTIVO: "x", VERSAO: "", GITHUB_STEP_SUMMARY: resumo },
+        semId.executar,
+      );
+      expect(recusa.codigo).toBe(1);
+      expect(semId.chamadas).toHaveLength(1);
+      expect(recusa.erros).toContain(
+        `::error::O site já está numa versão que voltou (${ANTERIOR}`,
+      );
+      expect(recusa.erros).toContain("Nada mudou no site");
+      expect(recusa.erros).toContain(`rode de novo com ${ATUAL} em "versao"`);
+      expect(readFileSync(resumo, "utf8")).toContain(
+        "Nada mudou: o site já está numa versão que voltou",
+      );
+    } finally {
+      rmSync(pasta, { recursive: true, force: true });
+    }
+
+    const comId = wranglerFalso(listaOk(depoisDaVolta), { status: 0 });
+    const desfeita = await rodarPrincipal(
+      { MOTIVO: "x", VERSAO: ATUAL },
+      comId.executar,
+    );
+    expect(desfeita.codigo).toBe(0);
+    expect(comId.chamadas[1]).toEqual([
+      "versions",
+      "deploy",
+      `${ATUAL}@100%`,
+      "--message=x",
+      "--yes",
+    ]);
   });
 
   it("a versão pedida já está no ar: nada muda; outra falha do wrangler: erro", async () => {

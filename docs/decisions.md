@@ -797,7 +797,12 @@ terminal, e a publicação só acontecia por push na `main`.
   120 caracteres, como o rollback pede; versão vazia ou um id de versão), passa o motivo como `--message=<motivo>`
   (um motivo que comece com "-" não vira opção) e escreve no log e no resumo da execução (a página do run, legível
   no celular) a lista das publicações recentes, com data, id, origem e mensagem, sem o e-mail de quem publicou.
-  Antes da primeira publicação, ou com uma publicação só, termina com erro: não há versão anterior.
+  Antes da primeira publicação, ou com uma publicação só, termina com erro: não há versão anterior. Revisão: com
+  `versao` vazio e a versão no ar sendo uma volta (ela já tinha 100% numa publicação mais antiga da lista), a regra
+  do rollback escolheria a versão que a volta tirou do ar (um toque a mais no celular ou um Re-run poria o defeito
+  de novo no ar); aí o script termina com erro sem mudar nada, e pede o id em `versao` para desfazer a volta ou
+  voltar mais. Fora desse caso, a escolha é a do rollback. O `wrangler rollback` também força os segredos trocados
+  em qualquer terminal sem interação (a sessão do Claude, um script): ali, o SM usa o `wrangler versions deploy`.
 - **Publicar de novo sem commit:** o `ci.yml` ganhou `workflow_dispatch` (sem entradas). Na `main`, **Run workflow**
   refaz o build e a publicação, como um push; noutra branch, só o job `ci`. O `publicar` passa a rodar em
   `(push || workflow_dispatch) && main`; o resto da D18 não muda (token só no "Publicar"). Por quê: o "Re-run all

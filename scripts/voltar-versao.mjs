@@ -1,7 +1,8 @@
 // RIFA-035 (D22 em docs/decisions.md): volta o código do site (o Worker na Cloudflare) para uma versão anterior.
 // Roda no workflow "Voltar o site para a versão anterior" (.github/workflows/voltar-versao.yml), no único passo
 // com o token da Cloudflare: `node scripts/voltar-versao.mjs`, com as entradas do workflow em MOTIVO e VERSAO
-// (vazio: a versão anterior à que está no ar, pela mesma regra do `wrangler rollback`). Não mexe no banco.
+// (vazio: a versão anterior à que está no ar, pela mesma regra do `wrangler rollback`; se a versão no ar já é uma
+// volta, para com erro em vez de desfazê-la). Não mexe no banco.
 //
 // Por que não o `wrangler rollback`: sem terminal (no CI), o wrangler 4.156.1 responde "sim" sozinho a toda
 // pergunta, com ou sem --yes, inclusive a "os segredos mudaram desde aquela versão; continuar?", e volta com os
@@ -80,6 +81,20 @@ export function versaoAnterior(publicacoes) {
     if (versao) return versao;
   }
   return undefined;
+}
+
+/**
+ * true quando a versão no ar já tinha estado no ar (com 100%) numa publicação mais antiga da lista: a publicação
+ * atual é uma volta. Aí a "anterior" do rollback é a versão que a volta tirou do ar, e rodar de novo sem o id
+ * (um toque a mais no celular, um Re-run) desfaria a volta.
+ */
+export function noArJaVoltou(publicacoes) {
+  const [atual, ...antigas] = maisNovasPrimeiro(publicacoes);
+  const versao = versaoInteira(atual);
+  return (
+    versao !== undefined &&
+    antigas.some((publicacao) => versaoInteira(publicacao) === versao)
+  );
 }
 
 /** Texto vindo da Cloudflare numa linha, sem controles nem crases (vai para o log e para o resumo). */
@@ -212,6 +227,19 @@ export async function principal({
       ...listaNoResumo,
     ]);
     return 0;
+  }
+  // Uma volta já feita: sem o id, a regra do rollback escolheria a versão que ela tirou do ar (o defeito volta).
+  if (pedido.versao === undefined && noArJaVoltou(publicacoes)) {
+    avisar(
+      `::error::O site já está numa versão que voltou (${noAr}, que já tinha estado no ar antes). Com "versao" vazio, a volta seria desfeita e a ${alvo}, que saiu do ar, voltaria. Nada mudou no site. Para desfazer a volta de propósito, rode de novo com ${alvo} em "versao"; para voltar mais, informe em "versao" o id da versão desejada (a lista está no resumo desta execução; docs/lancamento.md, 2.4).`,
+    );
+    resumir(env, [
+      "### Nada mudou: o site já está numa versão que voltou",
+      "",
+      `No ar: \`${noAr}\`, que já tinha estado no ar antes. Com "versao" vazio, a volta seria desfeita (a \`${alvo}\`, que saiu do ar, voltaria). Para desfazer a volta de propósito, rode de novo com esse id em "versao"; para voltar mais, informe o id da versão desejada.`,
+      ...listaNoResumo,
+    ]);
+    return 1;
   }
 
   escrever(
