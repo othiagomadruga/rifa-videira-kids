@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { RespostaMapaDdd } from "../../../shared/contracts/api";
 import {
@@ -125,48 +125,34 @@ export function MapaDeVendas() {
       <p className="visualmente-oculto" role="status">
         {atual && respondido ? anuncio(atual) : ""}
       </p>
-      <div className="mapa-barra">
-        <div className="mapa-filtros">
-          <Select
-            rotulo="Período"
-            value={filtros.periodo}
-            onChange={(evento) =>
-              mudarFiltros({ periodo: lerPeriodo(evento.target.value) })
-            }
-          >
-            {PERIODOS.map((periodo) => (
-              <option key={periodo} value={periodo}>
-                {TEXTO_PERIODO[periodo]}
-              </option>
-            ))}
-          </Select>
-          <Select
-            rotulo="Divisão"
-            value={filtros.divisao ?? ""}
-            onChange={(evento) =>
-              mudarFiltros({ divisao: lerDivisao(evento.target.value) })
-            }
-          >
-            <option value="">Todas</option>
-            {ORDEM_DIVISOES.map((divisao) => (
-              <option key={divisao} value={divisao}>
-                {NOMES_DIVISAO[divisao]}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {resposta && (
-          <Button
-            variante="secundario"
-            className="mapa-atualizar"
-            aria-disabled={respondido ? undefined : true}
-            onClick={() => {
-              if (respondido) pedirDeNovo();
-            }}
-          >
-            {respondido ? "Atualizar" : "Atualizando…"}
-          </Button>
-        )}
+      <div className="mapa-filtros">
+        <Select
+          rotulo="Período"
+          value={filtros.periodo}
+          onChange={(evento) =>
+            mudarFiltros({ periodo: lerPeriodo(evento.target.value) })
+          }
+        >
+          {PERIODOS.map((periodo) => (
+            <option key={periodo} value={periodo}>
+              {TEXTO_PERIODO[periodo]}
+            </option>
+          ))}
+        </Select>
+        <Select
+          rotulo="Divisão"
+          value={filtros.divisao ?? ""}
+          onChange={(evento) =>
+            mudarFiltros({ divisao: lerDivisao(evento.target.value) })
+          }
+        >
+          <option value="">Todas</option>
+          {ORDEM_DIVISOES.map((divisao) => (
+            <option key={divisao} value={divisao}>
+              {NOMES_DIVISAO[divisao]}
+            </option>
+          ))}
+        </Select>
       </div>
       {filtros.divisao && (
         <p className="mapa-nota-divisao">
@@ -178,6 +164,19 @@ export function MapaDeVendas() {
         resultado={respondido || resposta ? resultado : null}
         falhaAoAtualizar={atual?.falhaAoAtualizar ?? null}
         aoTentarDeNovo={pedirDeNovo}
+        botaoAtualizar={
+          // Sem atualização automática (D17): só este botão pede de novo, sem tirar os números da tela.
+          <Button
+            variante="secundario"
+            className="mapa-atualizar"
+            aria-disabled={respondido ? undefined : true}
+            onClick={() => {
+              if (respondido) pedirDeNovo();
+            }}
+          >
+            {respondido ? "Atualizar" : "Atualizando…"}
+          </Button>
+        }
       />
     </div>
   );
@@ -188,12 +187,15 @@ type PropsConteudo = {
   resultado: Resultado | null;
   falhaAoAtualizar: unknown;
   aoTentarDeNovo: () => void;
+  /** Vai no resumo, ao lado da hora da consulta (só quando há números na tela). */
+  botaoAtualizar: ReactNode;
 };
 
 function Conteudo({
   resultado,
   falhaAoAtualizar,
   aoTentarDeNovo,
+  botaoAtualizar,
 }: PropsConteudo) {
   if (resultado === null) return <Loading texto="Carregando o mapa…" />;
   if (resultado.tipo === "erro") {
@@ -228,13 +230,13 @@ function Conteudo({
           titulo="Não foi possível atualizar agora."
           anuncio="nenhum"
         >
+          <p>{mensagemDoErro(falhaAoAtualizar)}</p>
           <p>
-            {mensagemDoErro(falhaAoAtualizar)} Os números abaixo são os das{" "}
-            {formatarHora(resposta.atualizado_em)}.
+            Os números abaixo são os das {formatarHora(resposta.atualizado_em)}.
           </p>
         </Aviso>
       )}
-      <Resumo resposta={resposta} />
+      <Resumo resposta={resposta} botaoAtualizar={botaoAtualizar} />
       {temVenda(resposta.total) ? (
         <>
           <MapaDoBrasil resposta={resposta} />
@@ -248,7 +250,13 @@ function Conteudo({
 }
 
 /** A janela (nome e datas), o total e a hora da consulta. */
-function Resumo({ resposta }: { resposta: RespostaMapaDdd }) {
+function Resumo({
+  resposta,
+  botaoAtualizar,
+}: {
+  resposta: RespostaMapaDdd;
+  botaoAtualizar: ReactNode;
+}) {
   const { janela, total, atualizado_em } = resposta;
   return (
     <div className="mapa-resumo">
@@ -267,10 +275,13 @@ function Resumo({ resposta }: { resposta: RespostaMapaDdd }) {
           .
         </p>
       )}
-      <p className="mapa-resumo__hora">
-        Atualizado às {formatarHora(atualizado_em)}. O mapa não se atualiza
-        sozinho.
-      </p>
+      <div className="mapa-resumo__rodape">
+        <p className="mapa-resumo__hora">
+          Atualizado às {formatarHora(atualizado_em)}. O mapa não se atualiza
+          sozinho.
+        </p>
+        {botaoAtualizar}
+      </div>
     </div>
   );
 }

@@ -61,24 +61,13 @@
   --mapa-tinta: var(--cor-sobre-primaria);
 }
 
-/* Filtros e "Atualizar": o botão desce para a linha de baixo quando não cabe. */
-.mapa-barra {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--espaco-3);
-}
-
+/* Os dois filtros lado a lado; no computador, sem ocupar a largura toda. */
 .mapa-filtros {
-  flex: 1 1 18rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: var(--espaco-3);
+  max-width: 36rem;
   min-width: 0;
-}
-
-.mapa-atualizar {
-  flex: none;
 }
 
 .mapa-nota-divisao {
@@ -101,9 +90,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A hora da consulta e o "Atualizar"; o botão desce para a linha de baixo quando não cabe. */
+.mapa-resumo__rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-4);
+}
+
 .mapa-resumo__hora {
   color: var(--cor-texto-suave);
   font-size: var(--texto-sm);
+}
+
+.mapa-atualizar {
+  flex: none;
 }
 
 .mapa-valor {
@@ -287,6 +288,11 @@
   font-weight: var(--peso-extra);
 }
 
+/* "menos de 0,1%" é texto, não número: no tamanho do nome. */
+.mapa-quadro__parte strong[data-longo] {
+  font-size: var(--texto-sm);
+}
+
 .mapa-quadro__linha {
   color: var(--cor-texto-suave);
 }
@@ -445,6 +451,10 @@
 
   .mapa-quadro__parte strong {
     font-size: var(--texto-2xl);
+  }
+
+  .mapa-quadro__parte strong[data-longo] {
+    font-size: var(--texto-md);
   }
 
   .mapa-ddds tr:has(> td > [data-linha-tipo="exterior"]) td {

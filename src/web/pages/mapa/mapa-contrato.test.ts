@@ -191,7 +191,7 @@ describe("faixas da cor e textos", () => {
         }),
       ),
     ).toBe(
-      "Pará: 1 pedido aprovado, 1.234 bilhetes, R$ 12.340,00, 72,3% dos bilhetes",
+      "Pará: 1 pedido aprovado, 1.234 bilhetes, R$\u00a012.340,00, 72,3% dos bilhetes",
     );
     expect(rotuloDaUf("TO", undefined)).toBe("Tocantins: sem venda");
   });

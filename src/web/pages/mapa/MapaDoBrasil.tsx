@@ -164,7 +164,14 @@ function Quadro({ uf, totais }: { uf: Uf | null; totais?: TotaisMapa }) {
       {totais && temVenda(totais) ? (
         <>
           <p className="mapa-quadro__parte">
-            <strong>{textoParte(totais)}</strong> dos bilhetes
+            <strong
+              data-longo={
+                textoParte(totais).startsWith("menos") ? "" : undefined
+              }
+            >
+              {textoParte(totais)}
+            </strong>{" "}
+            dos bilhetes
           </p>
           <p className="mapa-quadro__linha">
             {textoPedidos(totais.pedidos_aprovados)}

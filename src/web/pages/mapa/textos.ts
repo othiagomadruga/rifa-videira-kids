@@ -19,7 +19,7 @@ export type DddDoMapa = RespostaMapaDdd["ddds"][number];
 
 /** Opções do seletor de período (curtas; o resumo mostra o nome e as datas da janela). */
 export const TEXTO_PERIODO: Record<JanelaRanking, string> = {
-  campanha: "Campanha inteira",
+  campanha: "Campanha",
   atual: "Período atual",
 };
 
