@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { useRef, useState, type ComponentProps } from "react";
+import { StrictMode, useRef, useState, type ComponentProps } from "react";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { Button, Dialogo } from ".";
 
@@ -316,6 +316,43 @@ describe("Dialogo", () => {
       expect(document.body.style.overflow).toBe("hidden");
       unmount();
       expect(document.body.style.overflow).toBe("");
+    });
+
+    it("no StrictMode (efeito duplo) e com estilo de antes no body: a trava compensa a barra e devolve o estilo uma vez só", () => {
+      document.body.style.overflow = "auto";
+      document.body.style.paddingRight = "4px";
+      // O jsdom não faz layout: uma barra de rolagem de 15 px.
+      Object.defineProperty(document.documentElement, "clientWidth", {
+        configurable: true,
+        value: window.innerWidth - 15,
+      });
+      onTestFinished(() => {
+        Reflect.deleteProperty(document.documentElement, "clientWidth");
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "";
+      });
+      const { unmount } = render(
+        <StrictMode>
+          <Empilhados juntos />
+        </StrictMode>,
+      );
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(document.body.style.paddingRight).toBe("15px");
+
+      fireEvent.keyDown(screen.getByRole("button", { name: "Botão de cima" }), {
+        key: "Escape",
+      });
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(document.body.style.paddingRight).toBe("15px");
+
+      fireEvent.click(screen.getByRole("button", { name: "Abrir o de cima" }));
+      expect(
+        screen.getByRole("dialog", { name: "De cima" }),
+      ).toBeInTheDocument();
+      unmount();
+
+      expect(document.body.style.overflow).toBe("auto");
+      expect(document.body.style.paddingRight).toBe("4px");
     });
   });
 });

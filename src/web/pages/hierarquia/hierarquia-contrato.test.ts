@@ -20,19 +20,8 @@ import {
 } from "./hierarquia-api";
 import { COLUNAS_DA_PLANILHA } from "./planilha";
 import { DIVISOES, TRECHO_MUDOU_ENQUANTO_ISSO } from "./textos";
-
-type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
-const { process } = globalThis as unknown as {
-  process: { getBuiltinModule(nome: "node:fs"): ModuloFs };
-};
-// O caminho vai numa variável: com um texto fixo, o Vite trocaria o new URL(..., import.meta.url) pela URL do asset.
-const lerDoRepositorio = (relativo: string) =>
-  process
-    .getBuiltinModule("node:fs")
-    .readFileSync(
-      decodeURIComponent(new URL(relativo, import.meta.url).pathname),
-      "utf8",
-    );
+// Só o texto do arquivo (como em shared/contracts/calculos.test.ts): nada do Worker roda no jsdom.
+import fonteDoWorker from "../../../worker/db/hierarquia.ts?raw";
 
 describe("cópias do contrato na tela da hierarquia", () => {
   it("caminhos da API", () => {
@@ -81,12 +70,12 @@ describe("cópias do contrato na tela da hierarquia", () => {
   });
 
   it("o trecho que pede para recarregar as listas está nas duas mensagens do 409 em_uso de outra gravação ao mesmo tempo", () => {
-    const worker = lerDoRepositorio("../../../worker/db/hierarquia.ts");
     const mudouEnquantoIsso =
-      /function mudouEnquantoIsso\([\s\S]*?\n\}/.exec(worker)?.[0] ?? "";
+      /function mudouEnquantoIsso\([\s\S]*?\n\}/.exec(fonteDoWorker)?.[0] ?? "";
     const referenciaQueMudou =
-      /const MENSAGEM_REFERENCIA_QUE_MUDOU =\s*"([^"]*)"/.exec(worker)?.[1] ??
-      "";
+      /const MENSAGEM_REFERENCIA_QUE_MUDOU =\s*"([^"]*)"/.exec(
+        fonteDoWorker,
+      )?.[1] ?? "";
 
     expect(mudouEnquantoIsso).toContain('"em_uso"');
     expect(mudouEnquantoIsso).toContain(TRECHO_MUDOU_ENQUANTO_ISSO);
