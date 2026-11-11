@@ -78,9 +78,12 @@ export function textoParte(totais: TotaisMapa): string {
   return formatarPercentual(totais.parte_bilhetes_bp, { casasDecimais: 1 });
 }
 
-/** O rótulo completo de uma UF no mapa (o nome acessível do quadrado). */
+/**
+ * O rótulo completo de uma UF no mapa (o nome acessível do quadrado). Leva a sigla, que é o texto visível do
+ * quadrado: quem usa comando de voz diz "clicar SP" (WCAG 2.5.3, rótulo no nome).
+ */
 export function rotuloDaUf(uf: Uf, totais: TotaisMapa | undefined): string {
-  const nome = NOME_DA_UF[uf];
+  const nome = `${NOME_DA_UF[uf]} (${uf})`;
   if (!totais || !temVenda(totais)) return `${nome}: sem venda`;
   return `${nome}: ${textoPedidos(totais.pedidos_aprovados)}, ${textoBilhetes(totais.bilhetes)}, ${formatarMoeda(totais.total_centavos)}, ${textoParte(totais)} dos bilhetes`;
 }

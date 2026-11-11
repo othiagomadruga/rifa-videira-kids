@@ -115,19 +115,21 @@ describe("CA1: o mapa pinta cada UF pela parte dos bilhetes", () => {
 
     expect(await quadrado("PA")).toHaveAttribute(
       "aria-label",
-      `Pará: 2.170 pedidos aprovados, 6.500 bilhetes, R$${NBSP}65.000,00, 65,0% dos bilhetes`,
+      `Pará (PA): 2.170 pedidos aprovados, 6.500 bilhetes, R$${NBSP}65.000,00, 65,0% dos bilhetes`,
     );
     expect(await quadrado("RS")).toHaveAttribute(
       "aria-label",
-      `Rio Grande do Sul: 1 pedido aprovado, 1 bilhete, R$${NBSP}10,00, menos de 0,1% dos bilhetes`,
+      `Rio Grande do Sul (RS): 1 pedido aprovado, 1 bilhete, R$${NBSP}10,00, menos de 0,1% dos bilhetes`,
     );
     expect(await quadrado("TO")).toHaveAttribute(
       "aria-label",
-      "Tocantins: sem venda",
+      "Tocantins (TO): sem venda",
     );
     // O nome acessível é o rótulo (a sigla visível é aria-hidden).
     expect(
-      within(await mapa()).getByRole("button", { name: /^São Paulo: 700/ }),
+      within(await mapa()).getByRole("button", {
+        name: /^São Paulo \(SP\): 700/,
+      }),
     ).toBe(await quadrado("SP"));
   });
 
@@ -406,6 +408,64 @@ describe("CA3: filtros de período e divisão", () => {
       await screen.findByText("Semana 2", { selector: "strong" }),
     ).toBeInTheDocument();
   });
+
+  it("a resposta do filtro anterior que chega depois da nova é ignorada (não apaga o mapa nem troca os números)", async () => {
+    // A API falsa não para com o cancelamento (o fetch de verdade para): a resposta velha chega mesmo assim.
+    let liberarAntiga: () => void = () => {};
+    simularApi((consulta, ordem) =>
+      ordem === 0
+        ? new Promise<Response>((resolver) => {
+            liberarAntiga = () => resolver(respostaJson(mapaDeBelem()));
+          })
+        : respostaJson(
+            mapaDeBelem({
+              janela: JANELA_SEMANA_2,
+              divisao: consulta.divisao ?? null,
+            }),
+          ),
+    );
+    abrir();
+    fireEvent.change(await screen.findByLabelText("Período"), {
+      target: { value: "atual" },
+    });
+    expect(
+      await screen.findByText("Semana 2", { selector: "strong" }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      liberarAntiga();
+      await new Promise((resolver) => setTimeout(resolver, 0));
+    });
+
+    expect(
+      screen.getByText("Semana 2", { selector: "strong" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Campanha inteira", { selector: "strong" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Carregando o mapa…")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Mapa das vendas por estado" }),
+    ).toBeInTheDocument();
+  });
+
+  it("sair da tela no meio da consulta cancela o pedido", async () => {
+    let sinal: AbortSignal | undefined;
+    const fetchMock = vi.fn(
+      (caminho: string, opcoes?: RequestInit) =>
+        new Promise<Response>(() => {
+          if (caminho.startsWith("/api/painel/mapa-ddd"))
+            sinal = opcoes?.signal ?? undefined;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { roteador } = abrir();
+    await screen.findByLabelText("Período");
+    await waitFor(() => expect(sinal).toBeDefined());
+    expect(sinal?.aborted).toBe(false);
+
+    await act(() => roteador.navigate("/coordenacao/rankings"));
+    expect(sinal?.aborted).toBe(true);
+  });
 });
 
 describe("CA4: estados vazio, sem campanha e erro", () => {
@@ -669,7 +729,11 @@ describe("CA6: acessibilidade", () => {
       expect(botao).not.toBeDisabled();
       expect(botao).not.toHaveAttribute("tabindex", "-1");
       expect(botao.getAttribute("aria-label")).toMatch(
-        /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][^:]+: (sem venda|\d[\d.]* pedidos? aprovados?, )/,
+        /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][^:]+ \([A-Z]{2}\): (sem venda|\d[\d.]* pedidos? aprovados?, )/,
+      );
+      // O nome acessível contém o texto visível (a sigla): "clicar SP" funciona no comando de voz (WCAG 2.5.3).
+      expect(botao.getAttribute("aria-label")).toContain(
+        `(${botao.textContent})`,
       );
       act(() => botao.focus());
       expect(botao).toHaveFocus();

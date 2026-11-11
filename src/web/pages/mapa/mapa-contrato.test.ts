@@ -179,7 +179,7 @@ describe("faixas da cor e textos", () => {
     );
   });
 
-  it("o rótulo de uma UF tem o nome e os números; sem venda, diz que não vendeu", () => {
+  it("o rótulo de uma UF tem o nome, a sigla (o texto visível) e os números; sem venda, diz que não vendeu", () => {
     expect(
       rotuloDaUf(
         "PA",
@@ -191,9 +191,9 @@ describe("faixas da cor e textos", () => {
         }),
       ),
     ).toBe(
-      "Pará: 1 pedido aprovado, 1.234 bilhetes, R$\u00a012.340,00, 72,3% dos bilhetes",
+      "Pará (PA): 1 pedido aprovado, 1.234 bilhetes, R$\u00a012.340,00, 72,3% dos bilhetes",
     );
-    expect(rotuloDaUf("TO", undefined)).toBe("Tocantins: sem venda");
+    expect(rotuloDaUf("TO", undefined)).toBe("Tocantins (TO): sem venda");
   });
 
   it("top 3 por bilhetes, em qualquer lugar da lista; empates dividem a posição", () => {

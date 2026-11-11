@@ -70,14 +70,18 @@ export function MapaDeVendas() {
 
   useEffect(() => {
     const controle = new AbortController();
+    // A resposta de uma consulta cancelada (outro filtro, "Atualizar", saiu da tela) é ignorada também no sucesso:
+    // senão, chegando depois da nova, ela trocaria a carga pela de outro filtro e a tela voltaria ao carregando.
     carregarMapa(caminho, { signal: controle.signal }).then(
-      (resposta) =>
+      (resposta) => {
+        if (controle.signal.aborted) return;
         setCarga({
           caminho,
           pedido,
           resultado: { tipo: "ok", resposta },
           falhaAoAtualizar: null,
-        }),
+        });
+      },
       (erro: unknown) => {
         if (controle.signal.aborted) return;
         setCarga((anterior) => {
