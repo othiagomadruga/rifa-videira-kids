@@ -20,7 +20,6 @@ import {
   simularApi as simularPainel,
 } from "../visao-geral/teste-apoio";
 import { INTERVALO_ESTADO_MS } from "./alerta-webhook";
-import { esquecerEstadoWebhook } from "./useEstadoWebhook";
 import {
   BASE_MS,
   ROTA_ESTADO,
@@ -38,8 +37,6 @@ const minutosAntes = (minutos: number) =>
 const zerado = estado("ok").ultimas_24h;
 
 beforeEach(() => {
-  // Cada teste começa como uma página recém-aberta (o estado fica guardado no módulo entre as telas).
-  esquecerEstadoWebhook();
   // Só os temporizadores: as promessas e o agendador do React continuam reais.
   vi.useFakeTimers({
     shouldAdvanceTime: true,
