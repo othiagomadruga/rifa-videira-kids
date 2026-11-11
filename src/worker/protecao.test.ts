@@ -294,6 +294,20 @@ describe("a) toda rota da coordenação exige sessão", () => {
     }
   });
 
+  it("toda rota registrada sob /api/admin e /api/painel está em ROTAS_DA_COORDENACAO (o 403 das só de admin é conferido)", () => {
+    // Os catálogos à parte (ROTAS_REGRAS_CAMPANHA, D20; ROTAS_TOKEN_WEBHOOK, D21) entram em ROTAS_DA_COORDENACAO no
+    // mesmo merge que monta as rotas: sem isso, uma rota só de admin montada sem a checagem do papel passaria.
+    const conferidas = new Set(
+      ROTAS_DA_COORDENACAO.map((rota) => `${rota.metodo} ${rota.caminho}`),
+    );
+    const fora = rotasRegistradas()
+      .filter((rota) => eDaCoordenacao(rota.caminho))
+      .map((rota) => `${rota.metodo} ${rota.caminho}`)
+      .filter((chave) => !conferidas.has(chave));
+
+    expect(fora).toEqual([]);
+  });
+
   it("fora de /api/admin e /api/painel, só fica sem sessão a rota que o contrato declara aberta", async () => {
     const fora = rotasRegistradas().filter(
       (rota) => !eDaCoordenacao(rota.caminho),
