@@ -10,33 +10,7 @@ Para a coordenação. Complementa a seção 5 do [lancamento.md](lancamento.md) 
 
 ---
 
-## 1. Convite para a reunião (grupo dos líderes)
-
-Sem link nenhum. Mande depois dos links pessoais (seção 2), para a última frase ser verdade.
-
-> *Reunião de cadastro da Rifa Videira Kids*
-> (dia), às (hora), em (local). Leva 20 minutos.
->
-> Vamos aprender a vender pela Rifei com o seu próprio link, para a venda contar para a sua célula, e a acompanhar a sua célula pelo celular.
->
-> *Traga:*
-> 1. O celular carregado, com o WhatsApp.
-> 2. O e-mail que você vai usar na Rifei, aberto no celular.
->
-> Você já recebeu no privado o seu link pessoal do sistema. Ele é só seu: não repasse.
-> As vendas começam em 23/11.
-
-- "Aberto no celular": a criação da conta de afiliado pode pedir uma confirmação por e-mail. `[confirmar com a Rifei: se o cadastro de afiliado manda confirmação ou código por e-mail; se não mandar, basta saber o e-mail]`
-- Quem já tem conta de afiliado na Rifei traz o e-mail dela. `[confirmar com a Rifei: se uma conta de comprador serve como afiliado]`
-
-**Lembrete na véspera** (opcional, no grupo):
-
-> Lembrete: amanhã, às (hora), em (local), reunião de cadastro da Rifa Videira Kids (20 minutos). Traga o celular carregado, com o WhatsApp, e o e-mail que vai usar na Rifei.
-> Se puder, abra antes o seu link pessoal (a mensagem que mandamos no privado) e toque em *Entrar*.
-
-Quem abrir antes aparece em **Acessos → Líderes, discipuladores e redes**, na coluna **Situação**, com "Último uso em …". Quem ainda não abriu aparece com "Ainda não usado": dá para avisar antes da reunião.
-
-## 2. Mensagem do link pessoal (no privado de cada líder)
+## 1. Mensagem do link pessoal (no privado de cada líder)
 
 O sistema já monta a mensagem. Em **Acessos → Líderes, discipuladores e redes** → Papel **Líderes de célula** → **Gerar links para quem ainda não tem**, cada linha tem **Abrir no WhatsApp** (abre a conversa com o número da planilha e a mensagem pronta) e **Copiar mensagem**. Os links só aparecem nessa janela: mande todos antes de tocar em **Pronto** (detalhes no [lancamento.md](lancamento.md), seção 5.1).
 
@@ -57,6 +31,32 @@ A mensagem do sistema (o nome e a célula mudam; o link vem na última linha):
 
 Ela repete o que a página do link diz ("Toque em **Entrar** para continuar") e ajuda no "perdi o link" do guia (procurar "link pessoal" na conversa).
 
+## 2. Convite para a reunião (grupo dos líderes)
+
+Sem link nenhum. Mande depois dos links pessoais (seção 1), para a última frase ser verdade.
+
+> *Reunião de cadastro da Rifa Videira Kids*
+> (dia), às (hora), em (local). Leva 20 minutos. No fim, a coordenação chama um líder de cada vez para ligar o seu link da Rifei à sua célula: fique até chamarem o seu nome.
+>
+> Vamos aprender a vender pela Rifei com o seu próprio link, para a venda contar para a sua célula, e a acompanhar a sua célula pelo celular.
+>
+> *Traga:*
+> 1. O celular carregado, com o WhatsApp.
+> 2. O e-mail que você vai usar na Rifei, aberto no celular.
+>
+> Você já recebeu no privado o seu link pessoal do sistema. Ele é só seu: não repasse.
+> As vendas começam em 23/11.
+
+- "Aberto no celular": a criação da conta de afiliado pode pedir uma confirmação por e-mail. `[confirmar com a Rifei: se o cadastro de afiliado manda confirmação ou código por e-mail; se não mandar, basta saber o e-mail]`
+- Quem já tem conta na Rifei traz o e-mail dela. `[confirmar com a Rifei: se uma conta que já existe, de comprador ou de afiliado de outro organizador, serve para ser afiliado desta campanha; a Área de afiliados é de cada organizador]`
+
+**Lembrete na véspera** (opcional, no grupo):
+
+> Lembrete: amanhã, às (hora), em (local), reunião de cadastro da Rifa Videira Kids (20 minutos e, no fim, o cadastro de cada líder). Traga o celular carregado, com o WhatsApp, e o e-mail que vai usar na Rifei.
+> Se puder, abra antes o seu link pessoal (a mensagem que mandamos no privado) e toque em *Entrar*.
+
+Quem abrir antes aparece em **Acessos → Líderes, discipuladores e redes**, na coluna **Situação**, com "Último uso em …". Quem ainda não abriu aparece com "Ainda não usado": dá para avisar antes da reunião.
+
 ## 3. Roteiro da reunião (20 minutos)
 
 **Antes de começar**
@@ -69,7 +69,7 @@ Ela repete o que a página do link diz ("Toque em **Entrar** para continuar") e 
 
 | Tempo | Bloco | O que fazer e falar |
 |---|---|---|
-| 0 a 3 min | **Abertura** | Para que é a campanha: o espaço Videira Kids. As vendas começam em 23/11. Cada célula tem uma meta, e o ranking separa jovens e adultos. Os rankings não mostram valores em reais (a pedido do pastor). Hoje cada líder sai com duas coisas: o link de vendas da Rifei e o acesso à tela da célula. |
+| 0 a 3 min | **Abertura** | Para que é a campanha: o espaço Videira Kids. As vendas começam em 23/11. Cada célula tem uma meta, e o ranking separa jovens e adultos. Os rankings não mostram valores em reais (por decisão da liderança da igreja). Hoje cada líder sai com duas coisas: o link de vendas da Rifei e o acesso à tela da célula. |
 | 3 a 9 min | **Como vender** | Mande os convites de afiliado. Todos ao mesmo tempo: abrem o convite e criam a conta de afiliado com o e-mail. Mostre onde fica o link de afiliado `[confirmar com a Rifei]`. Frase-chave: "Só conta para a sua célula a venda paga feita pelo seu link. Pelo link comum da campanha, ela ajuda a campanha, mas não entra na célula." Vender também para quem não é da igreja. |
 | 9 a 13 min | **Como entrar** | Todos abrem o link pessoal que receberam no privado e tocam em **Entrar**. Mostre a tela: hoje, a contagem regressiva ("Faltam … dias para começar"); a partir de 23/11, a meta em %, **Em dia** ou **Abaixo do esperado**, **Hoje**, o **Ranking** e **Os primeiros**. Reforce: o link é só seu, não repasse. O aviso amarelo "Seu link de afiliado ainda não está ligado à sua célula" some depois da vinculação (próximo bloco). |
 | 13 a 17 min | **Teste ao vivo** | Um voluntário, na frente de todos: abre o próprio link de afiliado e começa a compra de 1 bilhete, sem pagar. Em segundos, "Afiliado (código)" aparece no topo de **Sem célula**, na Adesão. Toque em **Vincular**, escolha a célula do voluntário e confirme. Na tela dele, o aviso amarelo some em até 2 minutos. Explique a fila (abaixo): um líder de cada vez, quando chamar o nome. |

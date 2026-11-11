@@ -16,7 +16,7 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 - Você vende pela **Rifei** com o **seu link de afiliado**: assim a venda conta para a sua célula.
 - Você acompanha a sua célula pelo **seu link pessoal** do sistema, sem senha.
-- Todo dia: o **bumbo** de manhã, no grupo dos líderes, e o **telão** no culto.
+- Todo dia de manhã, o **bumbo** no grupo dos líderes; no culto, o **telão**.
 
 ### 1. Vender pela Rifei (o seu link de afiliado)
 
@@ -63,8 +63,8 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 **Mudei de celular.** No celular novo, toque no mesmo link e em **Entrar**. Se o celular antigo ficou com outra pessoa, peça à coordenação para trocar o seu acesso: você recebe um link novo e o celular antigo sai do sistema. A conversa não veio para o celular novo? Peça um link novo.
 
-**A venda não apareceu.** Espere 1 minuto: a tela se atualiza sozinha. Só conta a venda **paga**, feita **pelo seu link de afiliado**, a partir de 23/11. No bumbo, a venda de hoje só aparece amanhã. Ainda não apareceu? Avise a coordenação, com o dia e a hora da compra.
+**A venda não apareceu.** Espere 2 minutos: a tela se atualiza sozinha. Só conta a venda **paga**, feita **pelo seu link de afiliado**, a partir de 23/11. No bumbo, a venda de hoje só aparece amanhã. Ainda não apareceu? Avise a coordenação, com o dia e a hora da compra.
 
-**Por que não aparece o valor em reais?** A pedido do pastor, os rankings mostram as posições, sem valores em reais, para ninguém desanimar por estar atrás. Na sua tela você vê o % da meta e os bilhetes da sua célula. O valor arrecadado fica com a coordenação.
+**Por que não aparece o valor em reais?** Por decisão da liderança da igreja, os rankings mostram as posições, sem valores em reais, para ninguém desanimar por estar atrás. Na sua tela você vê o % da meta e os bilhetes da sua célula. O valor arrecadado fica com a coordenação.
 
 **Quem vê o quê?** Você vê os números da sua célula; das outras, só o nome e a posição. Os outros líderes também só veem o nome e a posição da sua célula. O grupo, o telão e a página do ranking mostram só os primeiros colocados, sem valores em reais. A coordenação vê tudo. Nome e telefone de quem compra ficam só na Rifei: o sistema da campanha não guarda.
