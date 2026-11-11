@@ -53,11 +53,26 @@ const TEXTOS: Record<
   celula: { uma: "uma célula", esta: "Esta célula", excluida: "excluída" },
 };
 
-/** Erros que pedem para recarregar as listas (o registro sumiu ou a referência não existe mais). */
+/**
+ * Trecho das mensagens do 409 `em_uso` de outra gravação ao mesmo tempo (RIFA-018): "A célula mudou enquanto
+ * isso (outra alteração ao mesmo tempo)..." e "A exclusão foi recusada por uma referência que mudou enquanto
+ * isso...". A API não manda outro sinal, então o site procura o texto (cópia de `src/worker/db/hierarquia.ts`,
+ * conferida por `hierarquia-contrato.test.ts`).
+ */
+export const TRECHO_MUDOU_ENQUANTO_ISSO = "mudou enquanto isso";
+
+/**
+ * Erros que pedem para recarregar as listas: o registro sumiu, a referência não existe mais ou outra gravação
+ * mudou o registro ao mesmo tempo (409 `em_uso` com "mudou enquanto isso"; os outros `em_uso`, como os
+ * dependentes, não mudam nada na lista).
+ */
 export function dadosDesatualizados(erro: unknown): boolean {
+  if (!(erro instanceof ErroApi)) return false;
   return (
-    erro instanceof ErroApi &&
-    (erro.codigo === "nao_encontrado" || erro.codigo === "referencia_invalida")
+    erro.codigo === "nao_encontrado" ||
+    erro.codigo === "referencia_invalida" ||
+    (erro.codigo === "em_uso" &&
+      erro.mensagem.includes(TRECHO_MUDOU_ENQUANTO_ISSO))
   );
 }
 

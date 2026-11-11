@@ -519,15 +519,16 @@ describe("CA2: editar e excluir", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("409 em_uso ao salvar (outra gravação ao mesmo tempo) mostra a mensagem da API", async () => {
+  it("409 em_uso ao salvar (outra gravação ao mesmo tempo) mostra a mensagem da API e recarrega as listas sozinha", async () => {
     const mensagem =
       "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.";
     const api = criarApiFalsa();
-    api.proxima(
-      "PUT",
-      "/api/admin/celulas/101",
-      respostaErro(409, "em_uso", mensagem),
-    );
+    // Outra pessoa renomeou a célula Fé enquanto esta edição estava aberta.
+    api.proxima("PUT", "/api/admin/celulas/101", () => {
+      const fe = api.dados.celulas.find((celula) => celula.id === 102);
+      if (fe) fe.nome = "Célula Fé e Graça";
+      return respostaErro(409, "em_uso", mensagem);
+    });
     await abrirTela(api);
     const { dialogo } = await abrirEdicaoDaCelula("Célula Esperança");
     const campos = within(dialogo);
@@ -541,6 +542,10 @@ describe("CA2: editar e excluir", () => {
     expect(campos.getByLabelText("Nome da célula")).not.toHaveAttribute(
       "aria-invalid",
     );
+    await waitFor(() =>
+      expect(nomesDe("Células")).toContain("Célula Fé e Graça"),
+    );
+    expect(api.chamadasA("GET", "/api/admin/celulas")).toHaveLength(2);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
@@ -675,6 +680,7 @@ describe("CA2: editar e excluir", () => {
       caminho: "/api/admin/redes/2",
       mensagem:
         "A rede tem discipuladores (1). Exclua os discipuladores ou mova-os para outra rede antes de excluir a rede.",
+      recarrega: false,
     },
     {
       caso: "a trilha de auditoria segura o acesso do discipulador",
@@ -683,6 +689,7 @@ describe("CA2: editar e excluir", () => {
       caminho: "/api/admin/discipuladores/13",
       mensagem:
         "O discipulador não pode ser excluído: o acesso dele aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
+      recarrega: false,
     },
     {
       caso: "a célula mudou enquanto isso",
@@ -691,6 +698,7 @@ describe("CA2: editar e excluir", () => {
       caminho: "/api/admin/celulas/102",
       mensagem:
         "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.",
+      recarrega: true,
     },
     {
       caso: "uma referência mudou enquanto isso",
@@ -699,14 +707,27 @@ describe("CA2: editar e excluir", () => {
       caminho: "/api/admin/redes/1",
       mensagem:
         "A exclusão foi recusada por uma referência que mudou enquanto isso: atualize a página e tente de novo.",
+      recarrega: true,
     },
   ] as const)(
-    "409 em_uso ao excluir mostra a mensagem da API, e não o texto fixo: $caso",
-    async ({ aba, nome, caminho, mensagem }) => {
-      const { alerta } = await excluirComEmUso(aba, nome, caminho, mensagem);
+    "409 em_uso ao excluir mostra a mensagem da API, e não o texto fixo; só o de outra gravação ao mesmo tempo recarrega as listas: $caso",
+    async ({ aba, nome, caminho, mensagem, recarrega }) => {
+      const { api, alerta } = await excluirComEmUso(
+        aba,
+        nome,
+        caminho,
+        mensagem,
+      );
 
       expect(alerta).toHaveTextContent(mensagem);
       expect(alerta).not.toHaveTextContent("Não dá para excluir");
+      // Deixa rodar os efeitos da resposta (a recarga sai de um efeito) antes de contar as leituras.
+      await act(async () => {});
+      await waitFor(() =>
+        expect(api.chamadasA("GET", "/api/admin/redes")).toHaveLength(
+          recarrega ? 2 : 1,
+        ),
+      );
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     },
   );

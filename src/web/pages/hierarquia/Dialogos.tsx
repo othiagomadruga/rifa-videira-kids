@@ -42,7 +42,7 @@ type PropsEdicao<T> = {
   aoFechar: () => void;
   /** Salvou: quem abriu fecha o diálogo e recarrega as listas. */
   aoSalvar: (salvo: T) => void;
-  /** O registro (ou a referência escolhida) não existe mais: recarregue as listas. */
+  /** O registro (ou a referência escolhida) não existe mais ou mudou ao mesmo tempo: recarregue as listas. */
   aoDesatualizar: () => void;
 };
 
