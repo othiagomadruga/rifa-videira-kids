@@ -141,7 +141,7 @@ O Hono roda middlewares e rotas na ordem em que foram registrados. Um middleware
 1. `cabecalhosSeguranca` em primeiro lugar, logo depois de `new Hono()`: vale para toda resposta, inclusive 401, 403, 404 e 500;
 2. as rotas de sessão, abertas;
 3. `exigirSessao(["admin", "coordenacao"])` em `/api/admin/*` e `/api/painel/*`, **antes** de qualquer rota desses prefixos (hierarquia, campanha, painel...), e logo depois dele o teto do corpo das escritas (`limitarCorpoDaCoordenacao`, RIFA-013b): sem sessão, o corpo nem é lido; e `exigirSessao(["lider", "discipulador", "rede"])` em `/api/minha/*` (RIFA-014), antes da rota da visão: sem sessão, 401 em todo caminho do prefixo, exista a rota ou não; coordenação, 403. Os papéis vão escritos no `index.ts` de propósito: um papel novo não ganha acesso sozinho;
-4. as rotas de usuários e links, os acessos da hierarquia e a trilha de auditoria (só admin; os sub-apps também exigem). O token do webhook (RIFA-039, D21) é só admin no handler de cada rota, nunca num `use` de `/api/admin/webhook/*`, onde as entregas e o estado são da coordenação;
+4. as rotas de usuários e links, os acessos da hierarquia e a trilha de auditoria (só admin; os sub-apps também exigem). O token do webhook (RIFA-039, D21) é só admin no handler de cada rota (ou num `use` do caminho exato, como a trilha), nunca num `use` de `/api/admin/webhook/*`, onde as entregas e o estado são da coordenação;
 5. as demais rotas, inclusive a visão individual (`/api/minha`), que também exige os papéis da hierarquia no próprio sub-app.
 
 ```ts

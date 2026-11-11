@@ -412,8 +412,8 @@ CREATE TABLE token_webhook (
     excluded.token_hash, gerado_em = excluded.gerado_em` (1 linha lida e 1 escrita, medido).
 - **Último uso** (GET): `ULTIMA_ENTREGA` de `src/worker/db/estado-webhook.ts` (índice `webhook_eventos_por_resultado`,
   ~8 linhas lidas com 3 mil entregas), comparado com `gerado_em` por `ultimoUsoDoWebhook`.
-- **Voltar ao segredo do Worker** (contingência do SM, fora da API e sem trilha):
-  `npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`.
+- **Voltar ao segredo do Worker** (contingência do SM, fora da API e sem trilha; com o segredo já gravado no Worker,
+  senão o webhook responde 503): `npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`.
 - Teste da migração (`src/worker/test/migrations.test.ts`): aplicar a 0009 sobre dados das anteriores e conferir a
   tabela vazia, uma linha só (`id` 2 e INSERT sem id recusados), o hash fora do formato (maiúsculo, curto, texto
   qualquer) e o instante fora do formato recusados, o UPSERT e o `DO NOTHING`.

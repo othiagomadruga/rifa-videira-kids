@@ -233,11 +233,11 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
   ```
   - O comando pede confirmação e, no fim, mostra o bookmark de antes da volta: anote, ele desfaz a volta.
   - Links revogados depois do ponto voltam a valer, e os gerados depois somem: revogue de novo (7.3) e gere os que faltarem.
-  - O token do webhook gerado no site depois do ponto some (volta o anterior, ou nenhum): o webhook passa a recusar as entregas da Rifei. Gere de novo e cole na Rifei (3.2).
-  - Voltar para antes de uma migração apaga o que ela criou: a próxima publicação aplica de novo.
+  - O token do webhook gerado no site depois do ponto some, e volta a valer o que valia no ponto (o token anterior ou o segredo do Worker, mesmo que tenha vazado): o webhook passa a recusar as entregas da Rifei. Gere de novo e cole na Rifei (3.2).
+  - Voltar para antes de uma migração apaga o que ela criou: a próxima publicação aplica de novo (ou o SM, na hora: `npx wrangler d1 migrations apply DB --remote`). Até lá, o que depende dela falha: para antes da `0009` (token do site), o webhook responde 500 a toda entrega.
 - **Voltar o código a uma versão anterior:** `npx wrangler deployments list` mostra as últimas publicações (as de código e as de segredo, como a da alternativa da 3.2) e `npx wrangler rollback -m "<motivo>"` volta para a anterior. Na primeira publicação não existe versão anterior. O rollback não mexe no banco.
   - Se o wrangler avisar que segredos mudaram desde aquela versão (ex.: `RIFEI_WEBHOOK_TOKEN`), responda **não**: aquela versão tem os segredos de antes, e o webhook pode parar ou voltar ao token antigo. Escolha uma versão mais nova pelo id: `npx wrangler rollback <id da versão> -m "<motivo>"`.
-  - **Não volte para uma versão de antes da RIFA-039** (o token do webhook pelo site): ela só conhece o segredo do Worker, e o webhook passa a recusar tudo (503, ou 401 com um segredo antigo) até a versão nova voltar. Se for inevitável, grave o segredo do Worker com um token novo e cole o mesmo token na Rifei (alternativa da 3.2).
+  - **Não volte para uma versão de antes da RIFA-039** (o token do webhook pelo site): ela só conhece o segredo do Worker, e o webhook passa a recusar tudo (503, ou 401 com um segredo antigo) até a versão nova voltar. Se for inevitável, grave o segredo do Worker com um token novo e cole o mesmo token na Rifei (alternativa da 3.2). Ao voltar para a versão nova, o token do site (que continua no banco) volta a ter prioridade sobre esse segredo: antes, o SM apaga o token do site (`DELETE FROM token_webhook`, 3.2), ou gere de novo no site e cole na Rifei.
   - Depois do rollback, refaça o teste de 2.3 item 6: com o 3.2 já feito, precisa dar `nao_autenticado` (401).
 
 ---
@@ -291,7 +291,7 @@ npx wrangler secret list                    # deve listar o nome RIFEI_WEBHOOK_T
 Sem `openssl` (ex.: Windows), gere com o Node: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Em hexadecimal o token só tem letras e números, sem `+`, `/` ou `=` que um formulário possa cortar. Depois, cole o mesmo token na Rifei (passo 2) e confira (passo 3).
 
 - **O token do site tem prioridade:** com um token gerado pelo site, o segredo do Worker não vale. Gerar o primeiro token no site, com o segredo configurado, também para as vendas até colar o novo na Rifei (a tela pede confirmação).
-- Para voltar ao segredo depois de usar o site (contingência), o SM apaga o token do site no D1: `npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`.
+- Para voltar ao segredo depois de usar o site (contingência): com o segredo já gravado no Worker (comandos acima), o SM apaga o token do site no D1 (`npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`) e você cola o valor do segredo na Rifei logo em seguida. Entre os dois, as entregas recebem 401; sem o segredo gravado, o webhook passa a responder 503.
 - Para trocar o segredo: gere outro e mude primeiro o Worker, depois a Rifei. Entre os dois passos as entregas recebem 401 e se perdem (seção 7.1).
 
 ### 3.3 Campanha [Admin, com as decisões do PO]
@@ -551,3 +551,4 @@ O que o sistema ainda não faz e o lançamento precisaria (ou faria melhor com):
 8. **Rifei e Efí:** o passo a passo está na [seção 12 de integracao-rifei.md](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Ainda NÃO DOCUMENTADO pela Rifei: onde ligar os afiliados e gerar o convite, o formato do link de afiliado, onde ver o código de cada afiliado, onde adicionar a Efí e o nome do campo da chave Pix. Vão para o suporte (12.7) e para a compra de teste (seção 9).
 9. **Vínculo afiliado → célula sem data:** trocar ou desvincular é retroativo (7.4).
 10. **Primeira publicação sem volta do código:** não há versão anterior para o `wrangler rollback`; só o Time Travel do banco.
+11. **Token do webhook pelo site (RIFA-039) em construção:** até a tela **Webhook da Rifei** entrar no ar, o token só sai pela alternativa do wrangler (3.2), que pede o Node na máquina de quem grava o segredo. <!-- RIFA-039 -->

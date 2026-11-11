@@ -2598,8 +2598,9 @@ export const detalhesTokenWebhookEmUsoSchema = z.strictObject({
  * ROTAS_REGRAS_CAMPANHA: o src/worker/protecao.test.ts exige o 403 da coordenação nas rotas só de admin, que uma
  * rota ainda não montada não dá (404). A tarefa -api põe este catálogo no teste no mesmo merge que monta as rotas.
  *
- * O "só admin" vai no HANDLER das duas rotas, nunca num `use` de /api/admin/webhook/*: as entregas e o estado do
- * webhook (ROTAS.entregasWebhook e ROTAS.estadoWebhook) continuam da coordenação.
+ * O "só admin" vai no HANDLER das duas rotas (ou num `use` do caminho exato, como routes/auditoria.ts), nunca num
+ * `use` de /api/admin/webhook/*: as entregas e o estado do webhook (ROTAS.entregasWebhook e ROTAS.estadoWebhook)
+ * continuam da coordenação.
  */
 export const ROTAS_TOKEN_WEBHOOK = {
   /** 200: o estado (sem o token). Lê a linha do token e a última entrega (`ULTIMA_ENTREGA` de db/estado-webhook.ts). */
