@@ -702,6 +702,34 @@ chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo s
 células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
 schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
 
+## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
+
+Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoal: do comprador, só o DDD.
+
+### `GET /api/admin/pedidos` (`coordenacao`)
+
+Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta: `limite` (1 a 200, padrão 50),
+`antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
+`sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
+afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes e `suspeito`.
+`totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a paginação e o filtro de
+status, só na primeira página (null quando a consulta traz `antes_de`). Sem campanha ativa: lista vazia e totais
+zerados.
+
+### `GET /api/admin/webhook/entregas` (`coordenacao`)
+
+Cada entrega autenticada do webhook, da mais nova para a mais antiga: quando chegou, evento, pedido, slug,
+resultado e transição de status. Do erro (só em `erro_validacao`) saem o código da recusa (`json_invalido`,
+`payload_invalido` ou `corpo_muito_grande`) e os problemas; dos avisos, a lista. Problemas e avisos saem reduzidos
+a campo (caminho do schema), código e ocorrências: a mensagem gravada não sai. Consulta: `limite`, `antes_de`
+(id), `resultado` e `pedido_id`.
+
+### `GET /api/admin/webhook/estado` (`coordenacao`)
+
+`situacao` (na ordem de prioridade: `erros_recentes`, `sem_entregas_recentes`, `nunca_recebeu` ou `ok`; regra na
+D16), a última entrega, a última entrega da campanha, a última aprovação e a contagem das últimas 24 h por
+resultado.
+
 ## Rotas RASCUNHO (Sprint 4)
 
 Forma provável, que pode mudar quando for implementada. O schema já está em `api.ts`, marcado como `situacao: 'rascunho'`.
