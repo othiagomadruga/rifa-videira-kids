@@ -21,6 +21,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "pedido.desconsiderar": "Pedido desconsiderado",
   "pedido.reconsiderar": "Pedido voltou a contar",
   "afiliado.remover": "Afiliado removido",
+  // RIFA-039 (D21): o token do webhook gerado pela tela (o rótulo do alvo `webhook` vem na tarefa -web).
+  "webhook.gerar_token": "Token do webhook gerado",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */

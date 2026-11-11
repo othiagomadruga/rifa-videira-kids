@@ -228,6 +228,7 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Pedido desconsiderado",
       "Pedido voltou a contar",
       "Afiliado removido",
+      "Token do webhook gerado",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();
