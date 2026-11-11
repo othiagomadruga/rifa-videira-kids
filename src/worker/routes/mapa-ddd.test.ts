@@ -1,14 +1,16 @@
 // GET /api/painel/mapa-ddd (RIFA-015, D17; docs/api.md, "Mapa de vendas por DDD") com o D1 dos testes e o relógio
 // fixo. Toda resposta 200 passa pelo respostaMapaDddSchema (estrito, com as invariantes de soma do contrato). O
 // total é comparado com o painel e os rankings chamados sobre os MESMOS dados (CA1) e com uma conta à parte, feita
-// aqui no JS pelo dia local de cada pedido, sem o SQL (CA4). O login é provado no app real (CA5), como em
-// protecao.test.ts. Orçamento do D1 e plano: src/worker/db/mapa-ddd-desempenho.test.ts.
+// aqui no JS pelo dia local de cada pedido, sem o SQL (CA4), também com o fuso da campanha fora de Belém (Katmandu e
+// Nova York, com horário de verão). O login é provado no app real (CA5), como em protecao.test.ts. Orçamento do D1
+// e plano: src/worker/db/mapa-ddd-desempenho.test.ts.
 import { env, exports } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   PAPEIS_HIERARQUIA,
   UF_DO_DDD,
+  campanhaEntradaSchema,
   diaLocalDoInstante,
   diasEntre,
   erroApiSchema,
@@ -30,9 +32,11 @@ import {
   AFILIADOS,
   AGORA,
   CELULAS,
+  DADOS_CAMPANHA,
   PEDIDOS,
   aprovado,
   camposDe,
+  dia,
   limparBanco,
   semearCenario,
   textosDe,
@@ -165,17 +169,21 @@ const CELULA_DO_AFILIADO = new Map<number, number | null>(
   AFILIADOS.map((afiliado) => [afiliado.affiliate_id, afiliado.celula_id]),
 );
 
-/** Aprovados da campanha ativa com o dia local em [de, ate] e, com `divisao`, de uma célula dela. */
+/**
+ * Aprovados da campanha ativa com o dia local (no `fuso`; padrão: o do cenário) em [de, ate] e, com `divisao`, de uma
+ * célula dela.
+ */
 function contam(
   pedidos: readonly PedidoTeste[],
   de: string,
   ate: string,
   divisao?: Divisao,
+  fuso = "America/Belem",
 ): PedidoTeste[] {
   return pedidos.filter((pedido) => {
     if (pedido.status !== "approved" || pedido.campanha === "outra")
       return false;
-    const dia = diaLocalDoInstante(pedido.aprovado_em!, "America/Belem");
+    const dia = diaLocalDoInstante(pedido.aprovado_em!, fuso);
     if (diasEntre(de, dia) < 0 || diasEntre(dia, ate) < 0) return false;
     if (divisao === undefined) return true;
     const celulaId =
@@ -525,6 +533,36 @@ describe("CA3: UF pelo DDD, exterior, sem DDD, ordem, desempates e partes trunca
     expect(corpo.ddds.map((item) => item.ddd)).not.toContain("23");
   });
 
+  it("pais e ddd ficam sempre como texto: número ligado pelo JS (REAL no D1) o CHECK recusa; inteiro no SQL vira texto e conta no PA", async () => {
+    const inserir = (id: string, valores: string, ...ligados: unknown[]) =>
+      env.DB.prepare(
+        `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos, aprovado_em, pais, ddd)
+         VALUES ('${id}', (SELECT id FROM campanhas WHERE ativa = 1), 'approved', 2, 4000,
+           '2026-11-24T15:00:00.000Z', ${valores})`,
+      )
+        .bind(...ligados)
+        .run();
+    await expect(inserir("PT-PAIS-JS", "?1, NULL", 55)).rejects.toThrow(
+      /CHECK constraint failed: pais/,
+    );
+    await inserir("PT-PAIS-SQL", "55, 91");
+    expect(
+      await env.DB.prepare(
+        "SELECT typeof(pais) AS pais, typeof(ddd) AS ddd FROM pedidos WHERE id = 'PT-PAIS-SQL'",
+      ).first(),
+    ).toEqual({ pais: "text", ddd: "text" });
+    const corpo = await mapa();
+
+    // O 91 tinha 2 pedidos e 4 bilhetes; o exterior continua com os 2 de antes.
+    expect(corpo.ddds.find((item) => item.ddd === "91")).toMatchObject({
+      uf: "PA",
+      pedidos_aprovados: 3,
+      bilhetes: 6,
+    });
+    expect(corpo.exterior.pedidos_aprovados).toBe(2);
+    await semearCenario({ pedidos: AGRUPAMENTO });
+  });
+
   it("total sem bilhete: as partes ficam em 0", async () => {
     await semearCenario({
       pedidos: [comTelefone(aprovado(101, DIA_2, 0, 0), "55", "91")],
@@ -669,6 +707,131 @@ describe("CA4: periodo=atual é o período que contém hoje; divisao filtra pela
 });
 
 // ---------------------------------------------------------------------------------------------------
+// R6 com o fuso da campanha fora de Belém (revisão): o intervalo UTC sai do fuso dela, como o dia do painel
+// ---------------------------------------------------------------------------------------------------
+
+describe("R6 com outro fuso: o total bate com o painel e com a conta pelo dia local no fuso da campanha", () => {
+  type Caso = {
+    fuso: string;
+    data_inicio: string;
+    /** aprovado_em (UTC), país e DDD; os bilhetes vão de 1 em diante, um valor por pedido. */
+    pedidos: [string, string | null, string | null][];
+    relogios: string[];
+  };
+  const CASOS: [string, Caso][] = [
+    [
+      "Asia/Kathmandu (UTC+05:45, fixo)",
+      {
+        fuso: "Asia/Kathmandu",
+        data_inicio: "2026-11-23",
+        // 23/11 00:00 em Katmandu = 22/11 18:15Z; o dia 21 (13/12) termina em 13/12 18:15Z.
+        pedidos: [
+          ["2026-11-22T18:14:59.999Z", "55", "11"], // 22/11 23:59:59.999: antes do início
+          ["2026-11-22T18:15:00.000Z", "55", "91"], // 23/11 00:00: dia 1
+          ["2026-12-01T18:14:59.999Z", "55", "61"], // 01/12 23:59:59.999: dia 9
+          ["2026-12-01T18:15:00.000Z", "1", null], // 02/12 00:00: dia 10
+          ["2026-12-13T18:14:59.999Z", null, null], // 13/12 23:59:59.999: dia 21 (último)
+          ["2026-12-13T18:15:00.000Z", "55", "21"], // 14/12 00:00: depois do fim
+        ],
+        relogios: [
+          "2026-11-22T18:14:59.999Z", // ainda 22/11 lá: antes do início
+          "2026-11-22T18:15:00.000Z", // a largada lá (em Belém, ainda 22/11)
+          "2026-12-01T18:14:59.999Z", // fim do dia 9 lá: o 02/12 ainda não chegou
+          "2026-12-01T18:15:00.000Z", // dia 10 lá
+          "2026-12-20T15:00:00.000Z", // depois do fim
+        ],
+      },
+    ],
+    [
+      "America/New_York (fim do horário de verão em 01/11/2026)",
+      {
+        fuso: "America/New_York",
+        data_inicio: "2026-10-26",
+        // 26/10 00:00 EDT (UTC−4) = 26/10 04:00Z; o dia 21 (15/11) termina em 16/11 05:00Z (EST, UTC−5).
+        pedidos: [
+          ["2026-10-26T03:59:59.999Z", "55", "11"], // 25/10 23:59:59.999 EDT: antes do início
+          ["2026-10-26T04:00:00.000Z", "55", "91"], // 26/10 00:00 EDT: dia 1
+          ["2026-11-02T04:30:00.000Z", "55", "61"], // 01/11 23:30 EST (com −4 fixo, seria 02/11)
+          ["2026-11-02T05:00:00.000Z", "351", null], // 02/11 00:00 EST
+          ["2026-11-16T04:59:59.999Z", "55", "94"], // 15/11 23:59:59.999 EST: dia 21 (último)
+          ["2026-11-16T05:00:00.000Z", "55", "21"], // 16/11 00:00 EST: depois do fim
+        ],
+        relogios: [
+          "2026-10-26T03:59:59.999Z", // ainda 25/10 lá: antes do início
+          "2026-10-26T04:00:00.000Z", // a largada lá
+          "2026-11-02T04:59:59.999Z", // 01/11 23:59:59.999 EST: o 02/11 ainda não chegou
+          "2026-11-02T05:00:00.000Z", // 02/11 00:00 EST
+          "2026-11-20T15:00:00.000Z", // depois do fim
+        ],
+      },
+    ],
+  ];
+  const AFILIADOS_DOS_PEDIDOS = [101, null, 104, 900, 102, 105] as const;
+
+  describe.each(CASOS)("%s", (_nome, caso) => {
+    const pedidos = caso.pedidos.map(([instante, pais, ddd], indice) =>
+      comTelefone(
+        aprovado(
+          AFILIADOS_DOS_PEDIDOS[indice % AFILIADOS_DOS_PEDIDOS.length],
+          instante,
+          indice + 1,
+        ),
+        pais,
+        ddd,
+      ),
+    );
+    const ultimoDia = dia(21, caso.data_inicio);
+
+    beforeAll(async () => {
+      await semearCenario({
+        campanha: campanhaEntradaSchema.parse({
+          ...DADOS_CAMPANHA,
+          fuso_horario: caso.fuso,
+          data_inicio: caso.data_inicio,
+        }),
+        pedidos,
+      });
+    });
+
+    it.each(caso.relogios)("relógio em %s", async (instante) => {
+      agora = new Date(instante);
+      const hoje = diaLocalDoInstante(agora, caso.fuso);
+      const ate = (fim: string) => (diasEntre(hoje, fim) > 0 ? hoje : fim);
+
+      const daCampanha = await mapa();
+      expect(totais(daCampanha.total)).toEqual((await resumo()).vendas);
+      expect(resumoDoMapa(daCampanha)).toEqual(
+        esperado(
+          contam(
+            pedidos,
+            caso.data_inicio,
+            ate(ultimoDia),
+            undefined,
+            caso.fuso,
+          ),
+        ),
+      );
+
+      const doPeriodo = await mapa("?periodo=atual");
+      expect(doPeriodo.janela).toEqual(
+        (await ranking("?periodo=atual")).janela,
+      );
+      expect(resumoDoMapa(doPeriodo)).toEqual(
+        esperado(
+          contam(
+            pedidos,
+            doPeriodo.janela.data_inicio,
+            ate(doPeriodo.janela.data_fim),
+            undefined,
+            caso.fuso,
+          ),
+        ),
+      );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
 // CA5: erros e login
 // ---------------------------------------------------------------------------------------------------
 
@@ -705,6 +868,8 @@ describe("CA5: 400 na consulta inválida, 404 sem campanha ativa, 401/403 por pa
         codigo: "nao_encontrado",
         mensagem: "A campanha ainda não foi configurada",
       });
+    // Os outros testes deste bloco contam com o cenário (a ordem pode ser embaralhada).
+    await semearCenario();
   });
 
   describe("no app real (index.ts)", () => {

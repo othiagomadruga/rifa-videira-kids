@@ -19,7 +19,9 @@
  * janela e agrupa por país e DDD numa B-tree temporária, que o D1 também conta: ~2 linhas lidas por pedido
  * aprovado da janela. Os `+` tiram campanha_id e affiliate_id do planejador: o índice da migração 0003 (campanha,
  * afiliado, dia...) não cobre país e DDD, e o de (affiliate_id, status) leria os pedidos aprovados de todas as
- * datas. Sem índice novo (D17). Nenhum dado do comprador além de país e DDD é lido.
+ * datas. Hoje o planejador já escolhe (status, aprovado_em) sem eles (conferido na revisão, com e sem ANALYZE, e com
+ * uma divisão de um afiliado só); os `+` são a garantia de que estatísticas novas não o levem àqueles índices. Sem
+ * índice novo (D17). Nenhum dado do comprador além de país e DDD é lido.
  */
 import {
   diasEntre,

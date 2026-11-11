@@ -720,7 +720,7 @@ fora, como no painel). Só a coordenação; a versão aberta depende do PO.
 - **Custo no D1** (D10, D17; `src/worker/db/mapa-ddd-desempenho.test.ts`, com 7 mil pedidos): duas idas (a
   campanha ativa e a consulta agregada), pelo índice `(status, aprovado_em)` só na janela, com o plano travado.
   ~2 linhas lidas por pedido aprovado da janela (10.925 na campanha inteira, 3.939 numa semana); com divisão, ~1,5
-  (8.172 e 2.796).
+  (8.172 com jovens na campanha inteira, 2.796 com adultos numa semana).
 - **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404
   `nao_encontrado` (sem campanha ativa).
 

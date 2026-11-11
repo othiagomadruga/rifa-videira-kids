@@ -3,8 +3,8 @@
 // afiliado). O D1 cobra por linha lida e o mapa fica com os índices atuais (D17: sem índice novo): a consulta desce
 // pelo índice (status, aprovado_em) SÓ na janela e agrupa por país e DDD numa B-tree temporária, que o D1 também
 // conta (a volta à tabela para ler país e DDD, não). Medido em 2026-11-11, por requisição (a campanha ativa e a
-// consulta): campanha inteira 10.925 linhas (2,0 por aprovado da janela), semana 3.939 (2,0); com divisão, 8.172 e
-// 2.796 (~1,5: a B-tree só recebe os da divisão). O teto tem folga sobre o medido; o plano travado barra os planos
+// consulta): campanha inteira 10.925 linhas (2,0 por aprovado da janela), semana 3.939 (2,0); com divisão, 8.172
+// (jovens, campanha inteira) e 2.796 (adultos, semana) (~1,5: a B-tree só recebe os da divisão). O teto tem folga sobre o medido; o plano travado barra os planos
 // ruins, que leem a campanha inteira em qualquer janela: pelo índice da migração 0003 (campanha, afiliado, dia), a
 // semana leria ~7,6 mil linhas; pelo de (affiliate_id, status), com a divisão, ~6,7 mil (e cresce com as edições).
 import { env } from "cloudflare:workers";
