@@ -21,11 +21,16 @@ import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
 import { PREFIXO_MINHA, minha } from "./routes/minha";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
+import { PREFIXO_PEDIDOS, pedidos } from "./routes/pedidos";
 import {
   PREFIXO_PEDIDOS_SUSPEITOS,
   pedidosSuspeitos,
 } from "./routes/pedidos-suspeitos";
 import { PREFIXO_PUBLICO, publico } from "./routes/publico";
+import {
+  PREFIXO_WEBHOOK_COORDENACAO,
+  webhookCoordenacao,
+} from "./routes/webhook-coordenacao";
 import { webhookRifei } from "./routes/webhook-rifei";
 
 // API do sistema. O Worker só recebe /api e /api/* (assets.run_worker_first no
@@ -79,6 +84,9 @@ app.route(PREFIXO_HIERARQUIA, hierarquia);
 app.route(PREFIXO_CAMPANHA, campanha);
 // Pedidos que o webhook marcou como implausíveis (RIFA-013b): sob /api/admin, protegidos pelo passo 4.
 app.route(PREFIXO_PEDIDOS_SUSPEITOS, pedidosSuspeitos);
+// Pedidos da campanha, entregas e estado do webhook (RIFA-025, D16): só leitura, sob /api/admin (passo 4).
+app.route(PREFIXO_PEDIDOS, pedidos);
+app.route(PREFIXO_WEBHOOK_COORDENACAO, webhookCoordenacao);
 // Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
 // Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.
