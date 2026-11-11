@@ -44,12 +44,9 @@ export function recorteDaLinha(
   return { uf: UF_DO_DDD[ddd], ddd };
 }
 
-/** Maior número de bilhetes primeiro; no empate, a chave (sigla ou DDD) em ordem crescente. */
-const pelosBilhetes =
-  <T extends Totais>(chave: (item: T) => string) =>
-  (a: T, b: T): number =>
-    b.bilhetes - a.bilhetes ||
-    (chave(a) < chave(b) ? -1 : chave(a) > chave(b) ? 1 : 0);
+/** Comparação binária de textos (siglas e DDDs: maiúsculas e dígitos). */
+const crescente = (a: string, b: string): number =>
+  a < b ? -1 : a > b ? 1 : 0;
 
 export function montarMapaDdd(
   linhas: readonly LinhaMapaDdd[],
@@ -75,7 +72,6 @@ export function montarMapaDdd(
       const daUf = porUf.get(uf) ?? { uf, ...vazio() };
       somar(daUf, linha);
       porUf.set(uf, daUf);
-      // `ddd` é a chave do agrupamento do banco: cada DDD do Brasil vem numa linha só.
       const doDdd = porDdd.get(ddd) ?? { uf, ddd, ...vazio() };
       somar(doDdd, linha);
       porDdd.set(ddd, doDdd);
@@ -93,12 +89,15 @@ export function montarMapaDdd(
       ) ?? 0,
   });
 
-  const ufs = [...porUf.values()].sort(pelosBilhetes((item) => item.uf));
+  const ufs = [...porUf.values()].sort(
+    (a, b) => b.bilhetes - a.bilhetes || crescente(a.uf, b.uf),
+  );
   const posicaoDaUf = new Map(ufs.map((item, indice) => [item.uf, indice]));
   const ddds = [...porDdd.values()].sort(
     (a, b) =>
       posicaoDaUf.get(a.uf)! - posicaoDaUf.get(b.uf)! ||
-      pelosBilhetes<typeof a>((item) => item.ddd)(a, b),
+      b.bilhetes - a.bilhetes ||
+      crescente(a.ddd, b.ddd),
   );
 
   return {

@@ -714,7 +714,15 @@ painel (R6 de [regras-de-calculo.md](regras-de-calculo.md)): campanha ativa, dia
 janela (`janela`, a mesma dos rankings). Com `divisao`, só as vendas das células da divisão (as sem célula ficam de
 fora, como no painel). Só a coordenação; a versão aberta depende do PO.
 
-- **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 404 `nao_encontrado` (sem campanha ativa).
+- **Janela**: do primeiro dia dela até hoje, no fuso da campanha (como o realizado do painel e dos rankings, os
+  dias depois de hoje não entram); antes do primeiro dia, nada conta. Sem venda no recorte: `ufs` e `ddds` vazios
+  e os recortes zerados, com parte 0.
+- **Custo no D1** (D10, D17; `src/worker/db/mapa-ddd-desempenho.test.ts`, com 7 mil pedidos): duas idas (a
+  campanha ativa e a consulta agregada), pelo índice `(status, aprovado_em)` só na janela, com o plano travado.
+  ~2 linhas lidas por pedido aprovado da janela (10.925 na campanha inteira, 3.939 numa semana); com divisão, ~1,5
+  (8.172 e 2.796).
+- **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404
+  `nao_encontrado` (sem campanha ativa).
 
 ## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
 
