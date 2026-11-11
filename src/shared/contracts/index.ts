@@ -9,3 +9,4 @@ export * from "./api";
 export * from "./acesso";
 export * from "./calendario";
 export * from "./calculos";
+export * from "./ddd";

@@ -702,6 +702,20 @@ chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo s
 células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
 schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
 
+## Mapa de vendas por DDD (Sprint 5, RIFA-015; docs/decisions.md D17)
+
+### `GET /api/painel/mapa-ddd?periodo=campanha|atual&divisao=jovens|adultos` (`coordenacao`)
+
+Pedidos aprovados da janela (padrão: a campanha até hoje), agrupados por UF e por DDD (tabela fixa em
+`src/shared/contracts/ddd.ts`), mais `exterior` (`pais` gravado e diferente de 55), `sem_ddd` (`pais` null, Brasil
+sem DDD ou DDD fora da tabela) e `total` (= ufs + exterior + sem_ddd). Cada recorte traz `pedidos_aprovados`, `bilhetes`,
+`total_centavos` e a parte dos bilhetes em pontos-base truncados (a soma pode ficar abaixo de 10000). A venda conta pela regra do
+painel (R6 de [regras-de-calculo.md](regras-de-calculo.md)): campanha ativa, dia local de `aprovado_em` dentro da
+janela (`janela`, a mesma dos rankings). Com `divisao`, só as vendas das células da divisão (as sem célula ficam de
+fora, como no painel). Só a coordenação; a versão aberta depende do PO.
+
+- **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 404 `nao_encontrado` (sem campanha ativa).
+
 ## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
 
 Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoal: do comprador, só o DDD.

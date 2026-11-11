@@ -28,6 +28,8 @@ import {
   respostaImportarHierarquiaSchema,
   consultaVisaoIndividualSchema,
   consultaPedidosSchema,
+  consultaMapaDddSchema,
+  respostaMapaDddSchema,
   consultaEntregasWebhookSchema,
   respostaPedidosSchema,
   respostaEntregasWebhookSchema,
@@ -108,6 +110,8 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/admin/pedidos",
         "GET /api/admin/webhook/entregas",
         "GET /api/admin/webhook/estado",
+        // Sprint 5 (RIFA-015): mapa de vendas por DDD.
+        "GET /api/painel/mapa-ddd",
       ].sort(),
     );
   });
@@ -1726,5 +1730,123 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
         consulta,
         ok: consultaEntregasWebhookSchema.safeParse(consulta).success,
       }).toEqual({ consulta, ok: false });
+  });
+});
+
+describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
+  const totais = (bilhetes: number, parte: number) => ({
+    pedidos_aprovados: bilhetes,
+    bilhetes,
+    total_centavos: bilhetes * 2000,
+    parte_bilhetes_bp: parte,
+  });
+  const mapa = {
+    janela: {
+      tipo: "campanha",
+      ordem: null,
+      nome: "Campanha",
+      data_inicio: "2026-11-23",
+      data_fim: "2026-12-16",
+    },
+    divisao: null,
+    ufs: [{ ...totais(8, 8000), uf: "PA" }],
+    ddds: [
+      { ...totais(6, 6000), ddd: "91", uf: "PA" },
+      { ...totais(2, 2000), ddd: "94", uf: "PA" },
+    ],
+    exterior: totais(1, 1000),
+    sem_ddd: totais(1, 1000),
+    total: totais(10, 10000),
+    atualizado_em: "2026-11-25T15:00:00.000Z",
+  };
+
+  it("consulta: campanha por padrão, período e divisão opcionais", () => {
+    expect(consultaMapaDddSchema.parse({})).toEqual({ periodo: "campanha" });
+    expect(
+      consultaMapaDddSchema.parse({ periodo: "atual", divisao: "jovens" }),
+    ).toEqual({
+      periodo: "atual",
+      divisao: "jovens",
+    });
+    for (const consulta of [{ periodo: "semana" }, { divisao: "criancas" }])
+      expect(consultaMapaDddSchema.safeParse(consulta).success).toBe(false);
+  });
+
+  it("resposta estrita: UF da lista, DDD no formato gravado, parte até 10000 e nenhum dado do comprador", () => {
+    expect(respostaMapaDddSchema.safeParse(mapa).success).toBe(true);
+    const invalidas: unknown[] = [
+      { ...mapa, ufs: [{ ...mapa.ufs[0], uf: "XX" }] },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], uf: "XX" }] },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "091" }] },
+      { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 10_001 } },
+      { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 9999.5 } },
+      { ...mapa, exterior: { ...mapa.exterior, pedidos_aprovados: -1 } },
+      { ...mapa, divisao: undefined },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], telefone: "+5591988887777" }] },
+      { ...mapa, a_mais: 1 },
+    ];
+    for (const resposta of invalidas)
+      expect({
+        resposta,
+        ok: respostaMapaDddSchema.safeParse(resposta).success,
+      }).toEqual({
+        resposta,
+        ok: false,
+      });
+    expect(
+      nomesDeCampos(respostaMapaDddSchema).filter((campo) =>
+        /telefone|phone|email|nome_comprador|buyer|documento|cpf/i.test(campo),
+      ),
+    ).toEqual([]);
+  });
+
+  it("invariantes: DDD da sua UF, UF = soma dos DDDs, total = ufs + exterior + sem_ddd, sem repetição", () => {
+    const quebradas: [string, unknown][] = [
+      [
+        "DDD de outra UF",
+        { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "11" }, mapa.ddds[1]] },
+      ],
+      [
+        "DDD de UF fora da lista",
+        {
+          ...mapa,
+          ufs: [{ ...mapa.ufs[0], ...totais(6, 6000) }],
+          ddds: [mapa.ddds[0], { ...mapa.ddds[1], ddd: "11", uf: "SP" }],
+        },
+      ],
+      [
+        "UF diferente da soma dos DDDs",
+        { ...mapa, ufs: [{ ...mapa.ufs[0], bilhetes: 7 }] },
+      ],
+      [
+        "total diferente da soma",
+        { ...mapa, total: { ...mapa.total, total_centavos: 19_999 } },
+      ],
+      [
+        "exterior a mais",
+        { ...mapa, exterior: { ...mapa.exterior, pedidos_aprovados: 2 } },
+      ],
+      ["UF repetida", { ...mapa, ufs: [mapa.ufs[0], mapa.ufs[0]] }],
+      ["DDD repetido", { ...mapa, ddds: [mapa.ddds[0], mapa.ddds[0]] }],
+    ];
+    for (const [caso, resposta] of quebradas)
+      expect({
+        caso,
+        ok: respostaMapaDddSchema.safeParse(resposta).success,
+      }).toEqual({
+        caso,
+        ok: false,
+      });
+    const vazio = totais(0, 0);
+    expect(
+      respostaMapaDddSchema.safeParse({
+        ...mapa,
+        ufs: [],
+        ddds: [],
+        exterior: vazio,
+        sem_ddd: vazio,
+        total: vazio,
+      }).success,
+    ).toBe(true);
   });
 });
