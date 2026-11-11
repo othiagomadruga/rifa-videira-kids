@@ -1,9 +1,10 @@
 /* Alerta de webhook parado (RIFA-025): no topo da Visão geral e da tela Pedidos. Vem no pacote inicial (a Visão
    geral é a tela de entrada da coordenação), por isso é pequeno e não depende do CSS da tela Pedidos. */
 
-/* Vazia, a região viva não ocupa espaço (o espaçamento da página é por gap). */
+/* Vazia, a região viva sai do fluxo (o espaçamento da página é por gap e ela abriria um buraco), mas continua na
+   árvore de acessibilidade: com display: none, o leitor de tela poderia não anunciar o aviso que chega depois. */
 .alerta-webhook:empty {
-  display: none;
+  position: absolute;
 }
 
 .alerta-webhook {

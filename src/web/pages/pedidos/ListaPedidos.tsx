@@ -66,7 +66,7 @@ const CONFIG: ConfigPaginas<ItemPedido, string, RespostaPedidos> = {
     `${pedidos(novos)} a mais na lista.${fim ? " Não há pedidos mais antigos." : ""}`,
   anunciarPrimeira: ({ itens, proximo }) =>
     itens.length === 0
-      ? "Nenhum pedido com estes filtros."
+      ? "Lista atualizada: nenhum pedido com estes filtros."
       : `Lista atualizada: ${pedidos(itens.length)}${proximo === null ? "" : " e há mais"}.`,
 };
 

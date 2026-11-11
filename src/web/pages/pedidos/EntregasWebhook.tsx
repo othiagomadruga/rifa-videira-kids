@@ -62,7 +62,7 @@ const CONFIG: ConfigPaginas<EntregaWebhook, number, RespostaEntregasWebhook> = {
     `${entregas(novas)} a mais na lista.${fim ? " Não há entregas mais antigas." : ""}`,
   anunciarPrimeira: ({ itens, proximo }) =>
     itens.length === 0
-      ? "Nenhuma entrega com este resultado."
+      ? "Lista atualizada: nenhuma entrega com este resultado."
       : `Lista atualizada: ${entregas(itens.length)}${proximo === null ? "" : " e há mais"}.`,
 };
 
@@ -224,7 +224,8 @@ function Transicao({ entrega }: { entrega: EntregaWebhook }) {
           <span aria-hidden="true" className="pedidos-seta">
             →
           </span>
-          <span className="visualmente-oculto">para</span> {mudanca.para}
+          {/* O leitor de tela ouve "de ... para ..." (a seta fica só na tela). */}
+          <span className="visualmente-oculto">{" para"}</span> {mudanca.para}
         </>
       );
   }
@@ -232,6 +233,11 @@ function Transicao({ entrega }: { entrega: EntregaWebhook }) {
 
 function ErroEAvisos({ entrega }: { entrega: EntregaWebhook }) {
   const { erro, avisos } = entrega;
+  // A recusa sem campo (JSON inválido, corpo grande demais) já está no título: não se repete na lista.
+  const problemas =
+    erro?.problemas.filter(
+      ({ campo, codigo }) => !(campo === "" && codigo === erro.codigo),
+    ) ?? [];
   if (erro === null && avisos.length === 0) {
     return <span className="pedidos-suave">Nenhum</span>;
   }
@@ -242,13 +248,15 @@ function ErroEAvisos({ entrega }: { entrega: EntregaWebhook }) {
           <p className="pedidos-detalhes__titulo">
             Erro: {ROTULO_RECUSA[erro.codigo]}
           </p>
-          <ul>
-            {erro.problemas.map((problema, indice) => (
-              <li key={`${problema.campo}-${problema.codigo}-${indice}`}>
-                {textoDoDetalhe(problema)}
-              </li>
-            ))}
-          </ul>
+          {problemas.length > 0 && (
+            <ul>
+              {problemas.map((problema, indice) => (
+                <li key={`${problema.campo}-${problema.codigo}-${indice}`}>
+                  {textoDoDetalhe(problema)}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {avisos.length > 0 && (
