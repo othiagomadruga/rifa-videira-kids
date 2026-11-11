@@ -9,11 +9,11 @@ Siga de cima para baixo. Cada passo leva à seção com os detalhes.
 1. **Abrir a conta Efí, já.** Efí Pro (CPF) ou Efí Empresas (CNPJ), pelo app. A Efí não publica o prazo da análise. Antes, decida quem é o titular. → [1.4](#14-conta-efí) e [1.5](#15-decisões-do-po)
 2. **Assinar o Workers Paid** na Cloudflare. A conferência pelo CSV exige. → [1.1 a](#11-cloudflare)
 3. **Token da Cloudflare no GitHub.** Antes de criar o token, peça ao SM o ponto de volta do banco (bookmark) e espere ele dizer que anotou: com o token no GitHub, qualquer mudança na `main` já publica. → [2.1](#21-antes-bookmark-do-time-travel-do-d1-thiago-ou-sm), [1.1 b](#11-cloudflare) e [1.2](#12-github)
-4. **Avisar o SM que o token está salvo.** Ele publica e confere o site. Depois, na sua máquina, crie o primeiro admin. → [2.2](#22-publicar), [1.1 c](#11-cloudflare) e [3.1](#31-primeiro-admin-thiago)
+4. **Avisar o SM que o token está salvo.** Ele publica, confere o site, cria o primeiro admin pela sessão dele e te manda o link. Abra, gere um link novo para você, entre pelo novo e só então revogue o primeiro. → [2.2](#22-publicar) e [3.1](#31-primeiro-admin-sm-depois-thiago)
 5. **Campanha na Rifei.** Escolha o plano pelo preço do bilhete, pague a taxa de liberação e anote o slug. → [1.3](#13-rifei)
 6. **Afiliados na Rifei.** Mande já as perguntas prontas ao suporte da Rifei. Com as respostas, ligue os afiliados e prepare os convites dos líderes. → [1.3](#13-rifei)
 7. **Efí na Rifei**, quando a Efí aprovar a conta. Faça num computador. → [1.4](#14-conta-efí)
-8. **Segredo e webhook na Rifei, de uma vez**, na sua máquina: gere o token, grave no Worker e cole na Rifei, com a URL e os três eventos. → [3.2](#32-segredo-do-webhook-e-webhook-na-rifei-thiago)
+8. **Token do webhook e webhook na Rifei, de uma vez, pelo site** (sem Node nem terminal): em **Acessos → Webhook da Rifei**, gere o token, copie e cole direto na Rifei, com a URL e os três eventos. → [3.2](#32-token-do-webhook-e-webhook-na-rifei-thiago)
 9. **Preencher a Campanha no site** e ativar: nome, slug da Rifei, datas, preço, meta, ranking e o que o público vê. → [1.5](#15-decisões-do-po) e [3.3](#33-campanha-admin-com-as-decisões-do-po)
 10. **Planilha das 36 células** (a coordenação pode fazer). → [3.4](#34-planilha-das-36-células-coordenação)
 11. **Compra de teste** de 1 bilhete, antes de 23/11. → [4](#4-compra-de-teste-de-ponta-a-ponta)
@@ -23,11 +23,11 @@ Depois da largada, o dia a dia é da coordenação (seção 6). Se algo cair: se
 
 ## Como ler este roteiro
 
-- **Quem faz:** **[Thiago]** (contas de terceiros e comandos com a conta Cloudflare), **[SM]** (a sessão do Claude que orquestra: merge, registro e comandos no D1), **[Admin]** (quem tem o papel admin no sistema), **[Coordenação]** (admin ou coordenação).
+- **Quem faz:** **[Thiago]** (contas de terceiros; o caminho principal não pede Node nem terminal, e os comandos com a conta Cloudflare ficam como alternativa), **[SM]** (a sessão do Claude que orquestra: merge, registro e comandos no D1), **[Admin]** (quem tem o papel admin no sistema), **[Coordenação]** (admin ou coordenação).
 - **PENDÊNCIA** marca o que o sistema ainda não faz e o lançamento precisaria. A lista completa está no fim.
 - **NÃO DOCUMENTADO** quer dizer que a fonte oficial (Rifei ou Efí) não diz. Confira na tela ou pergunte ao suporte.
 - O passo a passo da Rifei e da Efí, com os links oficiais, está em [integracao-rifei.md, seção 12](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Aqui fica o resumo.
-- **Credenciais** (o token da Cloudflare, o token do webhook, a Client Secret e o certificado da Efí e o seu link de admin) não passam por chat (nem o do SM), e-mail ou WhatsApp, e não vão para este documento, o git ou o DevMission. Aqui só se diz **onde** cada uma fica. Se uma delas passar por algum desses lugares, troque (3.1 e 7.3). Os links pessoais da equipe e dos líderes vão só no WhatsApp privado da própria pessoa (3.1 e 5.1), nunca em grupo.
+- **Credenciais** (o token da Cloudflare, o token do webhook, a Client Secret e o certificado da Efí e o seu link de admin) não passam por chat (nem o do SM), e-mail ou WhatsApp, e não vão para este documento, o git ou o DevMission. Aqui só se diz **onde** cada uma fica. Se uma delas passar por algum desses lugares, troque (3.1 e 7.3). A exceção combinada é o primeiro link de admin: o SM o cria pela sessão e o manda no chat, e você o troca logo ao entrar (3.1). O token do webhook vai do site direto para a Rifei (3.2). Os links pessoais da equipe e dos líderes vão só no WhatsApp privado da própria pessoa (3.1 e 5.1), nunca em grupo.
 
 ## Ordem geral
 
@@ -38,7 +38,7 @@ Cada etapa depende da anterior. As datas são sugestão; quem decide é o PO.
 | 0 | Abrir a conta Efí e as decisões fora do sistema (1.5) | Thiago | já |
 | 1 | Contas: Cloudflare (Workers Paid) e Rifei (campanha e perguntas ao suporte) | Thiago | até 14/11 |
 | 2 | Bookmark do D1, depois o token da Cloudflare no GitHub, primeira publicação e conferência | Thiago e SM | até 14/11 |
-| 3 | Configuração em produção: admin, segredo e webhook, Campanha, planilha das células e a Efí ligada à Rifei | Thiago e Admin | até 16/11 |
+| 3 | Configuração em produção: admin, token do webhook e webhook na Rifei, Campanha, planilha das células e a Efí ligada à Rifei | SM, Thiago e Admin | até 16/11 |
 | 4 | Compra de teste de ponta a ponta | Thiago e Admin | até 17/11 |
 | 5 | Convites de afiliado, links dos líderes e reunião de cadastro | Thiago, Admin e Coordenação | entre 18 e 21/11 |
 | 6 | Largada (23/11) e dia a dia | Coordenação | 23/11 em diante |
@@ -67,7 +67,7 @@ Faça isto **só depois do bookmark do D1** (2.1): o token vai direto para o Git
 
 Onde fica: **só** no segredo `CLOUDFLARE_API_TOKEN` do repositório no GitHub (1.2). O id da conta Cloudflare não é segredo e já está no `.github/workflows/ci.yml`.
 
-**c) Wrangler na sua máquina (para os comandos das seções 2 e 3).**
+**c) Wrangler na sua máquina (opcional: só para os caminhos alternativos).**
 
 ```sh
 git clone <repositório> && cd rifa-videira-kids
@@ -76,7 +76,7 @@ npx wrangler login     # abre o navegador para autorizar a sua conta Cloudflare
 npx wrangler whoami    # confere a conta
 ```
 
-A sessão do Claude na nuvem também roda comandos D1 remotos (`CLAUDE.md`), então o SM pode fazer as consultas e o bookmark. O `npm run acesso:criar` (3.1) é melhor rodar na sua máquina: o link impresso é uma credencial e ficaria no histórico da sessão.
+O lançamento não depende disto. A sessão do Claude na nuvem roda os comandos D1 remotos (`CLAUDE.md`): o SM faz as consultas, o bookmark (2.1) e o primeiro admin (3.1), e o token do webhook sai pelo site (3.2). Com a sua máquina pronta, você pode rodar o `npm run acesso:criar` você mesmo (o link não passa pelo chat) ou usar o segredo do Worker no lugar do token do site (alternativa da 3.2).
 
 ### 1.2 GitHub
 
@@ -115,7 +115,7 @@ A Rifei faz a venda, o pagamento e o sorteio. O sistema só recebe os pedidos pe
 - Os convites vão para os líderes antes da reunião (5.1, item 4).
 - Não confunda com o "Indique e Ganhe": é o programa de indicação da própria Rifei, não o afiliado da campanha.
 
-**Webhook** ([12.4](integracao-rifei.md#124-webhook-caminho-conferido)): é da conta, não da campanha. Faça só depois do segredo do Worker (3.2). Caminho conferido na documentação oficial: ícone do usuário → **Integrações** → seção **Outro** → **Adicionar**. Detalhes em 3.2.
+**Webhook** ([12.4](integracao-rifei.md#124-webhook-caminho-conferido)): é da conta, não da campanha. Faça junto com o token gerado no site (3.2). Caminho conferido na documentação oficial: ícone do usuário → **Integrações** → seção **Outro** → **Adicionar**. Detalhes em 3.2.
 
 **Exportar pedidos** ([12.5](integracao-rifei.md#125-exportar-pedidos-caminho-conferido), para a conferência da seção 6.4): página de pedidos da campanha no painel → **⋮** → **Exportar Pedidos**.
 
@@ -215,7 +215,7 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
    # esperado: 401
    ```
 5. **Migrações aplicadas:** `npx wrangler d1 migrations list DB --remote` não deve listar nenhuma pendente. O log do passo "Publicar" no GitHub também mostra as que rodaram. A migração `0004` (conferência por CSV, RIFA-012) entrou na `main` depois da `0005` à `0007`: num banco que já tenha essas, o wrangler aplica a `0004` por último (aplica, por nome, as que faltam), com o mesmo resultado (`src/worker/test/migracao-0004-depois.test.ts`).
-6. **Webhook fechado:** antes do segredo do webhook (3.2), ele recusa tudo:
+6. **Webhook fechado:** antes do token do webhook (3.2), ele recusa tudo:
    ```sh
    curl -sS -X POST https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei \
      -H "Authorization: Bearer teste" -H "Content-Type: application/json" -d "{}"
@@ -233,52 +233,66 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
   ```
   - O comando pede confirmação e, no fim, mostra o bookmark de antes da volta: anote, ele desfaz a volta.
   - Links revogados depois do ponto voltam a valer, e os gerados depois somem: revogue de novo (7.3) e gere os que faltarem.
-  - Voltar para antes de uma migração apaga o que ela criou: a próxima publicação aplica de novo.
-- **Voltar o código a uma versão anterior:** `npx wrangler deployments list` mostra as últimas publicações (as de código e as de segredo, como a de 3.2) e `npx wrangler rollback -m "<motivo>"` volta para a anterior. Na primeira publicação não existe versão anterior. O rollback não mexe no banco.
+  - O token do webhook gerado no site depois do ponto some, e volta a valer o que valia no ponto (o token anterior ou o segredo do Worker, mesmo que tenha vazado): o webhook passa a recusar as entregas da Rifei. Gere de novo e cole na Rifei (3.2).
+  - Voltar para antes de uma migração apaga o que ela criou: a próxima publicação aplica de novo (ou o SM, na hora: `npx wrangler d1 migrations apply DB --remote`). Até lá, o que depende dela falha: para antes da `0009` (token do site), o webhook responde 500 a toda entrega.
+- **Voltar o código a uma versão anterior:** `npx wrangler deployments list` mostra as últimas publicações (as de código e as de segredo, como a da alternativa da 3.2) e `npx wrangler rollback -m "<motivo>"` volta para a anterior. Na primeira publicação não existe versão anterior. O rollback não mexe no banco.
   - Se o wrangler avisar que segredos mudaram desde aquela versão (ex.: `RIFEI_WEBHOOK_TOKEN`), responda **não**: aquela versão tem os segredos de antes, e o webhook pode parar ou voltar ao token antigo. Escolha uma versão mais nova pelo id: `npx wrangler rollback <id da versão> -m "<motivo>"`.
+  - **Não volte para uma versão de antes da RIFA-039** (o token do webhook pelo site): ela só conhece o segredo do Worker, e o webhook passa a recusar tudo (503, ou 401 com um segredo antigo) até a versão nova voltar. Se for inevitável, grave o segredo do Worker com um token novo e cole o mesmo token na Rifei (alternativa da 3.2). Ao voltar para a versão nova, o token do site (que continua no banco) volta a ter prioridade sobre esse segredo: antes, o SM apaga o token do site (`DELETE FROM token_webhook`, 3.2), ou gere de novo no site e cole na Rifei.
   - Depois do rollback, refaça o teste de 2.3 item 6: com o 3.2 já feito, precisa dar `nao_autenticado` (401).
 
 ---
 
 ## 3. Configuração inicial em produção
 
-### 3.1 Primeiro admin [Thiago]
+### 3.1 Primeiro admin [SM, depois Thiago]
 
-Na sua máquina, na pasta do repositório (1.1 c):
+1. **[SM]** Da sessão dele, logo depois da primeira publicação (2.2):
+   ```sh
+   npm run acesso:criar -- --nome "<nome do Thiago>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev
+   ```
+   O link `https://rifa-videira-kids.madruga.workers.dev/acesso/<token>` aparece uma vez, no terminal da sessão, e o SM o manda ao Thiago no chat da sessão. Como passou pelo chat, esse link é só para a primeira entrada: o passo 2 o troca.
+2. **[Thiago]** Abra o link no navegador e toque em **Entrar**: você cai na área `/coordenacao`. Então, nesta ordem:
+   1. **Acessos → Coordenação** → no seu cartão, **Gerar link novo** → **Copiar link**;
+   2. abra o link novo numa aba nova e toque em **Entrar**;
+   3. só então, já dentro pelo link novo, use **Revogar link** no primeiro. Revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez: por isso ele vem antes. O sistema também não deixa revogar o último link válido de admin.
+3. Guarde o link novo só para você (ex.: no gerenciador de senhas). Ele vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho, como o seu celular). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
 
-```sh
-npm run acesso:criar -- --nome "<seu nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev
-```
-
-- O link `https://rifa-videira-kids.madruga.workers.dev/acesso/<token>` aparece **uma vez só**. Abra no navegador e toque em **Entrar**: você cai na área `/coordenacao`.
-- O link vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho, como o seu celular). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
 - O script só aceita `--nome`, `--papel` (`admin` ou `coordenacao`), `--remote`, `--local` e `--origem` (`docs/acesso.md`, seção 5). Não existe opção de e-mail.
-- **Sem a sua máquina pronta:** o SM pode rodar o mesmo comando da sessão dele e te passar o link. Nesse caso, e sempre que o link aparecer em qualquer lugar além do seu terminal: entre uma vez, gere um link novo para você em **Acessos → Coordenação** (no seu cartão, **Gerar link novo**), copie, abra numa aba nova e toque em **Entrar**. Só então, já dentro pelo link novo, use **Revogar link** no primeiro: revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez.
+- **Alternativa, com a sua máquina pronta (1.1 c):** rode você mesmo o comando do passo 1. O link aparece só no seu terminal, sem passar pelo chat; abra e toque em **Entrar** (o passo 2 fica opcional).
 
 Depois, no site **[Admin]**: **Acessos → Coordenação → Nova pessoa** (nome, e-mail opcional, papel). O link aparece uma vez, com **Copiar link** e **Enviar pelo WhatsApp**: mande só para a própria pessoa.
 
 - Crie **um segundo admin**: o sistema não deixa desativar o último admin nem revogar o último link válido de admin, e com dois ninguém fica preso.
 - O resto da equipe (inclusive quem cuida do bumbo) entra com o papel **coordenação**.
 
-### 3.2 Segredo do webhook e webhook na Rifei [Thiago]
+### 3.2 Token do webhook e webhook na Rifei [Thiago]
 
-O segredo se chama `RIFEI_WEBHOOK_TOKEN`.
+<!-- RIFA-039 -->O token do webhook sai do site: não precisa de Node nem de terminal (`docs/decisions.md`, D21). Faça com o site e a Rifei abertos ao mesmo tempo (no computador, em duas abas; no celular, alternando entre o navegador e a Rifei): o token vai da tela direto para a Rifei, sem passar por WhatsApp, e-mail ou chat.
 
-1. Gere um token forte e grave como segredo do Worker:
-   ```sh
-   openssl rand -hex 32                        # gera o token (não salve em arquivo)
-   npx wrangler secret put RIFEI_WEBHOOK_TOKEN # cole o token quando pedir
-   npx wrangler secret list                    # deve listar o nome RIFEI_WEBHOOK_TOKEN (sem o valor)
-   ```
-   Sem `openssl` (ex.: Windows), gere com o Node: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Em hexadecimal o token só tem letras e números, sem `+`, `/` ou `=` que um formulário possa cortar.
-2. Na Rifei ([12.4](integracao-rifei.md#124-webhook-caminho-conferido)): ícone do usuário → **Integrações** → role até **Outro** → **Adicionar** no webhook.
-   - **URL:** `https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei`
-   - **Token:** o mesmo do passo 1. A Rifei chama o token de opcional, mas **para o sistema ele é obrigatório**: sem ele, toda entrega é recusada e se perde.
+1. **No site [Admin]:** **Acessos → Webhook da Rifei → Gerar token do webhook**. O token aparece **uma vez só**, com **Copiar**, junto com a URL do webhook.
+   - Se já houver um token (ou o segredo do Worker da alternativa abaixo), gerar outro pede confirmação: o anterior para de valer na hora, e as vendas que chegarem antes de você colar o novo na Rifei se perdem (recupere pela conferência, 6.4). Faça a troca fora do horário de pico.
+2. **Na Rifei** ([12.4](integracao-rifei.md#124-webhook-caminho-conferido)): ícone do usuário → **Integrações** → role até **Outro** → **Adicionar** no webhook (ou edite o webhook que já existe).
+   - **URL:** `https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei` (a tela mostra, com **Copiar**).
+   - **Token:** cole o token copiado no passo 1. A Rifei chama o token de opcional, mas **para o sistema ele é obrigatório**: sem ele, toda entrega é recusada e se perde.
    - **Eventos:** os três: "Novo pedido", "Pedido pago" e "Pedido expirado".
-   - Toque em **Adicionar**.
-3. Confira: o teste de 2.3 item 6 passa a responder `nao_autenticado` (401), e não mais `nao_configurado`.
+   - Toque em **Adicionar** (ou salve).
+3. **Confira:** o teste de 2.3 item 6 passa a responder `nao_autenticado` (401), e não mais `nao_configurado`. Depois da compra de teste (seção 4), a tela **Webhook da Rifei** mostra o **último uso**; se continuar "ainda não usado" depois de um pedido, o token na Rifei não é o do site: gere outro e cole de novo.
 
-Onde fica o token: **só** no segredo do Worker (Cloudflare) e no webhook da Rifei. Não precisa guardar cópia: para trocar, gere outro e mude primeiro o Worker, depois a Rifei. Entre os dois passos as entregas recebem 401 e se perdem (seção 7.1).
+Onde fica o token: **só** no webhook da Rifei. O sistema guarda só um resumo (hash) que não deixa reconstruí-lo, e a tela nunca o mostra de novo. Não guarde cópia: perdeu ou vazou, gere outro (passo 1) e cole na Rifei. Cada geração fica na trilha de auditoria, sem o token.
+
+**Alternativa com o wrangler** (quem tiver a máquina pronta, 1.1 c; é o único caminho enquanto a tela da RIFA-039 não estiver no ar). O segredo se chama `RIFEI_WEBHOOK_TOKEN`:
+
+```sh
+openssl rand -hex 32                        # gera o token (não salve em arquivo)
+npx wrangler secret put RIFEI_WEBHOOK_TOKEN # cole o token quando pedir
+npx wrangler secret list                    # deve listar o nome RIFEI_WEBHOOK_TOKEN (sem o valor)
+```
+
+Sem `openssl` (ex.: Windows), gere com o Node: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Em hexadecimal o token só tem letras e números, sem `+`, `/` ou `=` que um formulário possa cortar. Depois, cole o mesmo token na Rifei (passo 2) e confira (passo 3).
+
+- **O token do site tem prioridade:** com um token gerado pelo site, o segredo do Worker não vale. Gerar o primeiro token no site, com o segredo configurado, também para as vendas até colar o novo na Rifei (a tela pede confirmação).
+- Para voltar ao segredo depois de usar o site (contingência): com o segredo já gravado no Worker (comandos acima), o SM apaga o token do site no D1 (`npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`) e você cola o valor do segredo na Rifei logo em seguida. Entre os dois, as entregas recebem 401; sem o segredo gravado, o webhook passa a responder 503.
+- Para trocar o segredo: gere outro e mude primeiro o Worker, depois a Rifei. Entre os dois passos as entregas recebem 401 e se perdem (seção 7.1).
 
 ### 3.3 Campanha [Admin, com as decisões do PO]
 
@@ -478,10 +492,10 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 
 1. **Veja as entregas [Coordenação]:** **Pedidos** → aba **Entregas do webhook** (a mais recente no topo; filtre por **Resultado**). Sem acesso ao site, o SM consulta o mesmo no D1 (tabela `webhook_eventos`).
 2. **Ache a causa:**
-   - Nada chega: o webhook continua cadastrado na Rifei, com a URL certa, o token e os três eventos (3.2)? O site está no ar (6.5)?
+   - Nada chega: o webhook continua cadastrado na Rifei, com a URL certa, o token e os três eventos (3.2)? O site está no ar (6.5)? **[Admin]** A tela **Acessos → Webhook da Rifei** mostra quando o token foi gerado e o último uso: "ainda não usado" depois de uma venda quer dizer que o token na Rifei não é o do site (gere outro e cole, 3.2).
    - Muitas **Outra campanha** (algumas são normais: outras campanhas da mesma conta da Rifei; quando só chegam essas, o alerta sugere conferir o slug): o slug mudou (renomear a campanha na Rifei pode mudar o slug) ou a campanha do sistema não está ativa. Corrija o slug em **Campanha**.
    - **Recusada:** a entrega veio com erro e não foi gravada. A coluna **Erro e avisos** diz o campo e o código: mande um print ao SM e confira o pedido na Rifei.
-   - O teste de 2.3 item 6 responde `nao_configurado`: o segredo sumiu do Worker. Refaça 3.2.
+   - O teste de 2.3 item 6 responde `nao_configurado`: não há token do site nem segredo do Worker (ex.: depois de voltar o banco ou o código, 2.4). Refaça 3.2.
    - Os logs mostram erro 1102 ou limite diário: o plano gratuito estourou. Assine o Workers Paid (1.1 a).
 3. **Recupere** as vendas perdidas pela conferência por CSV (6.4).
 
@@ -501,7 +515,7 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 - **De um líder, discipulador ou rede** (vê só os números do alvo dele, sem reais): **Acessos → Líderes, discipuladores e redes** → **Trocar acesso** na linha. Gera um link novo, revoga os anteriores e tira do sistema o aparelho que estava com o link velho. Mande o novo para a pessoa certa. <!-- RIFA-029 -->
 - **Os links públicos** (`/` e `/telao`) não têm segredo: não há o que revogar.
 - **Vazou um token [Thiago]:**
-  - `RIFEI_WEBHOOK_TOKEN`: gere outro e troque primeiro no Worker, depois na Rifei (3.2). As entregas entre os dois passos se perdem: confira pelo CSV (6.4).
+  - **Token do webhook:** gere outro no site (3.2, passo 1: o anterior para de valer na hora) e cole na Rifei. As entregas entre os dois passos se perdem: confira pelo CSV (6.4). Se estiver na alternativa do wrangler, gerar pelo site também neutraliza o `RIFEI_WEBHOOK_TOKEN` vazado (o do site tem prioridade).
   - `CLOUDFLARE_API_TOKEN`: em **API Tokens** na Cloudflare, apague ou renove o token e cadastre o novo no segredo `CLOUDFLARE_API_TOKEN` do GitHub (1.2; no ambiente `producao`, se o reforço da D18 estiver ligado).
   - Credenciais da Efí (Client Secret ou certificado): crie na Efí um certificado e uma aplicação novos e cadastre de novo na Rifei (12.2, passos B, C e E).
 
@@ -537,3 +551,4 @@ O que o sistema ainda não faz e o lançamento precisaria (ou faria melhor com):
 8. **Rifei e Efí:** o passo a passo está na [seção 12 de integracao-rifei.md](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Ainda NÃO DOCUMENTADO pela Rifei: onde ligar os afiliados e gerar o convite, o formato do link de afiliado, onde ver o código de cada afiliado, onde adicionar a Efí e o nome do campo da chave Pix. Vão para o suporte (12.7) e para a compra de teste (seção 9).
 9. **Vínculo afiliado → célula sem data:** trocar ou desvincular é retroativo (7.4).
 10. **Primeira publicação sem volta do código:** não há versão anterior para o `wrangler rollback`; só o Time Travel do banco.
+11. **Token do webhook pelo site (RIFA-039) em construção:** até a tela **Webhook da Rifei** entrar no ar, o token só sai pela alternativa do wrangler (3.2), que pede o Node na máquina de quem grava o segredo. <!-- RIFA-039 -->

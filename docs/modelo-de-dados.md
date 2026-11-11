@@ -7,6 +7,7 @@
 - Índices só de leitura: `0003_vendas_por_dia.sql` (painel) e `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts` e `src/worker/db/pedidos-webhook-desempenho.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
 - Regras do admin (Sprint 6, D20): o **plano** da migração `0008_regras_campanha.sql` está na [seção 9](#9-plano-da-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20). Ela é da tarefa -db, que a escreve junto com as consultas.
+- Token do webhook gerado pela tela (RIFA-039, D21): o **plano** da migração `0009_token_webhook.sql` está na [seção 10](#10-plano-da-migração-0009_token_webhooksql-rifa-039-d21). Ela é da tarefa -db e entra depois da 0008.
 
 ## 1. Visão geral
 
@@ -368,3 +369,51 @@ WHERE p.status = 'approved' AND p.desconsiderado_em IS NULL;
   aprovados e uma campanha) e conferir que tudo continua contando, os padrões da campanha, os CHECK (motivo sem
   data, observação sem desconsideração, motivo fora da lista, chave fora de 0/1), a view sem o desconsiderado e o
   plano do painel.
+
+## 10. Plano da migração `0009_token_webhook.sql` (RIFA-039; D21)
+
+Só o plano: a migração é da tarefa -db e entra na `main` depois da `0008_regras_campanha.sql` (RIFA-028). Aditiva:
+uma tabela nova, nenhuma linha muda. Com a tabela vazia, o webhook continua no segredo do Worker, como hoje. O SQL
+abaixo foi conferido no SQLite 3.53 (os CHECK, o UPSERT e a gravação condicional da trilha) e a leitura pela chave
+no D1 local do workerd (`rows_read` 1, com a tabela vazia ou não).
+
+**`token_webhook`** (uma linha no máximo; a regra das credenciais está em [decisions.md, D21](decisions.md#d21-token-do-webhook-gerado-pela-tela-da-coordenação-rifa-039-contrato-2026-11-11)):
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `id` | INTEGER PK | sempre 1 (`CHECK (id = 1)`): gerar de novo substitui a linha. Um INSERT sem id ganharia o rowid 2 e é recusado |
+| `token_hash` | TEXT | SHA-256 em hex minúsculo do token (64 caracteres), como `links_acesso.token_hash`. O token só existe na resposta que o gera |
+| `gerado_em` | TEXT (UTC) | quando o token foi gerado. O "último uso" não tem coluna: sai de `webhook_eventos` na leitura (D21) |
+
+```sql
+-- 0009_token_webhook.sql: token do webhook da Rifei gerado pela tela da coordenação (RIFA-039). Aplica-se depois
+-- de 0008. Documentação: docs/decisions.md (D21) e docs/api.md (GET e POST /api/admin/webhook/token).
+--
+-- * No máximo uma linha: gerar de novo substitui o token (UPSERT), e o anterior para de valer na hora.
+-- * Só o SHA-256 (hex minúsculo) do token, como os links de acesso (0002). O token tem 32 bytes em hex: o MESMO
+--   formato do hash, então este CHECK não distingue um do outro (os testes de varredura, sim).
+-- * Sem linha, vale o segredo do Worker RIFEI_WEBHOOK_TOKEN (como antes); com linha, só ela.
+-- * Quem gerou fica na trilha (auditoria, ação webhook.gerar_token), não aqui.
+CREATE TABLE token_webhook (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  token_hash  TEXT    NOT NULL CHECK (length(token_hash) = 64 AND token_hash NOT GLOB '*[^0-9a-f]*'),
+  gerado_em   TEXT    NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', gerado_em) IS gerado_em)
+);
+```
+
+- **Leitura do webhook**: `SELECT token_hash FROM token_webhook WHERE id = 1` (plano `SEARCH token_webhook USING
+  INTEGER PRIMARY KEY (rowid=?)`, 1 linha lida). A comparação é no Worker, em tempo constante, nunca no SQL.
+- **Gravação** (um `db.batch`, com o registro na trilha antes e a mesma condição, D11):
+  - sem `substituir`: `INSERT INTO auditoria (...) SELECT ... WHERE NOT EXISTS (SELECT 1 FROM token_webhook)` e
+    `INSERT INTO token_webhook (id, token_hash, gerado_em) VALUES (1, ?, ?) ON CONFLICT (id) DO NOTHING`. Com uma
+    linha já gravada (outra aba), as duas dão `changes` 0 e a API responde 409;
+  - com `substituir`: o registro com o `gerado_em` anterior lido por subconsulta (`coalesce(... (SELECT gerado_em
+    FROM token_webhook WHERE id = 1) ..., ...)`) e `INSERT ... ON CONFLICT (id) DO UPDATE SET token_hash =
+    excluded.token_hash, gerado_em = excluded.gerado_em` (1 linha lida e 1 escrita, medido).
+- **Último uso** (GET): `ULTIMA_ENTREGA` de `src/worker/db/estado-webhook.ts` (índice `webhook_eventos_por_resultado`,
+  ~8 linhas lidas com 3 mil entregas), comparado com `gerado_em` por `ultimoUsoDoWebhook`.
+- **Voltar ao segredo do Worker** (contingência do SM, fora da API e sem trilha; com o segredo já gravado no Worker,
+  senão o webhook responde 503): `npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`.
+- Teste da migração (`src/worker/test/migrations.test.ts`): aplicar a 0009 sobre dados das anteriores e conferir a
+  tabela vazia, uma linha só (`id` 2 e INSERT sem id recusados), o hash fora do formato (maiúsculo, curto, texto
+  qualquer) e o instante fora do formato recusados, o UPSERT e o `DO NOTHING`.
