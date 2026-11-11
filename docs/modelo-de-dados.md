@@ -319,10 +319,13 @@ ALTER TABLE pedidos ADD COLUMN desconsiderado_observacao TEXT
   CHECK (desconsiderado_observacao IS NULL
     OR (desconsiderado_em IS NOT NULL AND length(desconsiderado_observacao) BETWEEN 1 AND 140));
 
--- O índice da 0003, recriado com o mesmo nome e a condição nova: o desconsiderado sai dele.
+-- O índice da 0003, recriado com o mesmo nome e a condição nova: o desconsiderado sai dele. A coluna
+-- desconsiderado_em no fim (sempre NULL aqui) mantém o índice de cobertura: o SQLite deduz `status` do
+-- `status = 'approved'` do WHERE do índice, mas não deduz do `IS NULL`; sem ela, cada pedido volta à tabela.
 DROP INDEX pedidos_aprovados_por_afiliado_dia;
 CREATE INDEX pedidos_aprovados_por_afiliado_dia ON pedidos (
-  campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos
+  campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos,
+  desconsiderado_em
 ) WHERE status = 'approved' AND desconsiderado_em IS NULL;
 
 -- A lista com desconsiderado=true lê só os desconsiderados, na ordem da lista.
@@ -345,10 +348,15 @@ WHERE p.status = 'approved' AND p.desconsiderado_em IS NULL;
 ```
 
 - **O índice parcial só vale com a condição repetida.** Com `status = 'approved' AND desconsiderado_em IS NULL` na
-  consulta do painel, o plano é `SEARCH pedidos USING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)`,
-  sem B-tree temporária na agregação por afiliado e dia. Sem o `desconsiderado_em IS NULL`, o planejador vai para
-  `pedidos_por_campanha_registro` (0007) com `USE TEMP B-TREE FOR GROUP BY`: por isso a migração e as consultas
-  entram juntas, e o `painel.test.ts` trava o plano.
+  consulta do painel, o plano é `SEARCH pedidos USING COVERING INDEX pedidos_aprovados_por_afiliado_dia
+  (campanha_id=?)`, sem B-tree temporária na agregação por afiliado e dia (o que `painel.test.ts` exige hoje). Sem
+  o `desconsiderado_em IS NULL`, o planejador vai para `pedidos_por_campanha_registro` (0007) com `USE TEMP B-TREE
+  FOR GROUP BY`: por isso a migração e as consultas entram juntas, e o `painel.test.ts` trava o plano.
+- **A coluna `desconsiderado_em` no fim do índice** (revisão do contrato, provado no SQLite 3.53 e no D1 local do
+  workerd): sem ela, o plano com o filtro sai `USING INDEX`, não `USING COVERING INDEX` (o SQLite volta à tabela
+  para conferir o `IS NULL`), e a expressão de `painel.test.ts` falha. Vale também para as somas da conferência
+  (`PAGOS_DA_CAMPANHA` em `db/reconciliacao.ts`), que hoje usam este índice de cobertura e, sem o filtro, iriam
+  para o da 0007 (o agrupamento por afiliado ganha B-tree temporária).
 - A lista com `desconsiderado = true` usa `pedidos_desconsiderados_por_registro`; com `false` ou sem o filtro, o
   índice da 0007, como hoje. Um índice novo pode desviar o planejador noutras consultas (D16): os testes de plano
   e de linhas lidas conferem.

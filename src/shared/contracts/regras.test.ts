@@ -227,6 +227,34 @@ describe("D20: as regras na resposta da campanha", () => {
       aceita(campanhaSchema, { ...gravada, acesso: { discipuladores: false } }),
     ).toBe(false);
   });
+
+  it("um modelo gravado fora das regras de hoje sai como está (não derruba quem lê a campanha); a entrada recusa", () => {
+    const foraDasRegras = {
+      ...MENSAGENS_PADRAO,
+      link_coordenacao: "Olá {Nome}, sem o link",
+    };
+    expect(
+      campanhaSchema.parse({ ...respostaDeHoje, mensagens: foraDasRegras })
+        .mensagens,
+    ).toEqual(foraDasRegras);
+    expect(
+      problemasDoModelo("link_coordenacao", foraDasRegras.link_coordenacao),
+    ).toHaveLength(2);
+    expect(
+      aceita(campanhaEntradaSchema, {
+        ...corpoDeHoje,
+        mensagens: foraDasRegras,
+      }),
+    ).toBe(false);
+    // O tamanho continua conferido na resposta (é o CHECK da 0008).
+    for (const modelo of ["", "a".repeat(LIMITE_CARACTERES_MENSAGEM + 1)])
+      expect(
+        aceita(campanhaSchema, {
+          ...respostaDeHoje,
+          mensagens: { ...MENSAGENS_PADRAO, link_rede: modelo },
+        }),
+      ).toBe(false);
+  });
 });
 
 describe("RIFA-029: a chave de acesso de cada papel", () => {

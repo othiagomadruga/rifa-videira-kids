@@ -1684,8 +1684,9 @@ export const detalhesAcaoDesligadaSchema = z.strictObject({
 
 /**
  * `detalhes` do 409 `afiliado_com_pedidos` (DELETE /api/admin/afiliados/:affiliateId): quantos pedidos do afiliado
- * ainda contam (de qualquer status, não desconsiderados) e os ids dos mais recentes (até
- * LIMITE_PEDIDOS_NO_DETALHE), para o admin achá-los na lista de pedidos (busca por id).
+ * ainda contam (de qualquer status e de qualquer campanha, não desconsiderados) e os ids dos mais recentes (até
+ * LIMITE_PEDIDOS_NO_DETALHE, na ordem da lista de pedidos: `registrado_em` e `id` decrescentes), para o admin
+ * achá-los na lista de pedidos (busca por id).
  */
 export const detalhesAfiliadoComPedidosSchema = z
   .strictObject({
@@ -2416,7 +2417,8 @@ export type NomeRota = keyof typeof ROTAS;
  * só de admin, que uma rota ainda não montada não dá (404). A tarefa -api põe este catálogo no teste no mesmo merge
  * que monta as rotas.
  *
- * Ordem das respostas de erro em desconsiderar e reconsiderar: 400 (corpo); 404 sem campanha ativa; 409
+ * Ordem das respostas de erro em desconsiderar e reconsiderar, depois do login (401 sem sessão e 403 da coordenação,
+ * antes de ler o corpo, como nas outras rotas só de admin): 400 (corpo); 404 sem campanha ativa; 409
  * `acao_desligada` com a chave `pedidos.desconsiderar` desligada (antes de procurar o pedido); 404 pedido que não é
  * da campanha ativa. Repetir não muda nada: desconsiderar um pedido já desconsiderado e reconsiderar um que conta
  * devolvem 200 com o pedido como está (o motivo e a data da primeira vez) e não gravam na trilha (como revogar um
@@ -2444,11 +2446,14 @@ export const ROTAS_REGRAS_CAMPANHA = {
     sucesso: { status: 200, corpo: itemPedidoSchema },
   },
   /**
-   * RIFA-031: apaga o afiliado (vinculado ou não) se nenhum pedido dele conta (todos desconsiderados, ou nenhum).
+   * RIFA-031: apaga o afiliado (vinculado ou não) se nenhum pedido dele conta, em nenhuma campanha (todos
+   * desconsiderados, ou nenhum; um pedido de outra campanha não se desconsidera daqui, e esse afiliado fica).
    * Os pedidos desconsiderados dele ficam sem afiliado (a FK de pedidos é RESTRICT), no mesmo lote, e a trilha
    * (`afiliado.remover`) guarda o affiliate_id e quantos eram. 404: o afiliado não existe. 409
    * `afiliado_com_pedidos` (detalhes: detalhesAfiliadoComPedidosSchema): algum pedido dele conta. Não depende de
    * chave na campanha. Se a Rifei mandar depois um pedido com esse affiliate_id, ele volta como não vinculado (D7).
+   * O PUT do mesmo caminho (ROTAS.salvarAfiliado) continua da coordenação: o "só admin" vale só para o DELETE (no
+   * handler dele, nunca num `use` do caminho, que pegaria o PUT).
    */
   removerAfiliado: {
     metodo: "DELETE",

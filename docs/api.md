@@ -48,7 +48,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 - Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. Link válido de `discipulador` ou `rede` com o acesso do papel desligado na campanha (`acesso.discipuladores` ou `acesso.redes`, D20): 403 `acesso_desligado`, sem criar a sessão. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`) e as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -218,7 +218,7 @@ A resposta acrescenta os campos calculados:
 }
 ```
 
-`soma_percentuais_bp` diferente de 10000 é o sinal para a interface avisar. A resposta traz sempre `pedidos`, `acesso` e `mensagens` (sem nada gravado, os padrões).
+`soma_percentuais_bp` diferente de 10000 é o sinal para a interface avisar. A resposta traz sempre `pedidos`, `acesso` e `mensagens` (sem nada gravado, os padrões). Nela, as mensagens conferem só o tamanho (`mensagensGravadasSchema`): os marcadores são conferidos na entrada, e um modelo gravado fora das regras não derruba o painel nem as rotas abertas, que leem a campanha.
 
 ### CRUD `/api/admin/redes`, `/api/admin/discipuladores`, `/api/admin/celulas` (`coordenacao`)
 
@@ -848,10 +848,10 @@ totais do afiliado) por teste, fraude ou estorno, ou o devolve a elas. A Rifei n
 - **Repetir não muda nada**: desconsiderar o que já está desconsiderado e reconsiderar o que conta devolvem 200 com
   o pedido como está (o motivo e a data da primeira vez), sem linha na trilha. Para trocar o motivo, reconsidere e
   desconsidere de novo.
-- **Erros**, nesta ordem: 400 `requisicao_invalida` (corpo); 404 `nao_encontrado` sem campanha ativa; 409
-  `acao_desligada` com `{ "chave": "pedidos.desconsiderar" }` quando a chave está desligada (desligar a chave não
-  devolve às contas o que já foi desconsiderado: só bloqueia as duas ações); 404 `nao_encontrado` quando o pedido
-  não é da campanha ativa; 401; 403 (coordenação).
+- **Erros**: primeiro o login, antes de ler o corpo (401 sem sessão; 403 `proibido` da coordenação); depois, nesta
+  ordem: 400 `requisicao_invalida` (corpo); 404 `nao_encontrado` sem campanha ativa; 409 `acao_desligada` com
+  `{ "chave": "pedidos.desconsiderar" }` quando a chave está desligada (desligar a chave não devolve às contas o que
+  já foi desconsiderado: só bloqueia as duas ações); 404 `nao_encontrado` quando o pedido não é da campanha ativa.
 - Trilha: `pedido.desconsiderar` e `pedido.reconsiderar`, no mesmo lote da gravação. A mudança aparece nas rotas
   abertas e na visão individual em até 30 s (os caches da D10 e da D14), como uma venda nova.
 
@@ -859,15 +859,17 @@ totais do afiliado) por teste, fraude ou estorno, ou o devolve a elas. A Rifei n
 
 Remove um afiliado de teste, vinculado ou não. **204**.
 
-- Só se nenhum pedido dele conta, de qualquer status: todos desconsiderados (ou nenhum pedido). Senão, 409
-  `afiliado_com_pedidos` com `{ "pedidos_que_contam": 3, "pedidos": ["PED3", "PED2", "PED1"] }` (os ids dos mais
-  recentes, até 20, para achar na lista de pedidos e desconsiderar).
+- Só se nenhum pedido dele conta, de qualquer status e de qualquer campanha: todos desconsiderados (ou nenhum
+  pedido). Senão, 409 `afiliado_com_pedidos` com `{ "pedidos_que_contam": 3, "pedidos": ["PED3", "PED2", "PED1"] }`
+  (os ids dos mais recentes, até 20, na ordem da lista de pedidos, para achar na lista e desconsiderar). Um pedido
+  que conta noutra campanha não se desconsidera daqui: esse afiliado não é de teste e fica.
 - Os pedidos desconsiderados dele ficam sem afiliado (a chave estrangeira não deixa apagar um afiliado com pedido),
   no mesmo lote; a trilha (`afiliado.remover`) guarda o affiliate_id, a célula e quantos eram.
 - Se a Rifei mandar depois um pedido com esse `affiliate_id`, ele volta como não vinculado (D7). Não depende de
   chave na campanha.
-- **Erros**: 400 (`:affiliateId` não é inteiro positivo), 401, 403 (coordenação), 404 `nao_encontrado` (o
-  afiliado não existe), 409 `afiliado_com_pedidos`.
+- **Erros**: primeiro o login (401; 403 da coordenação, só no DELETE: o `PUT` do mesmo caminho continua da
+  coordenação); depois 400 (`:affiliateId` não é inteiro positivo), 404 `nao_encontrado` (o afiliado não existe) e
+  409 `afiliado_com_pedidos`.
 
 ---
 

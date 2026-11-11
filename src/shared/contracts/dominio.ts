@@ -213,6 +213,23 @@ export const mensagensConfigSchema = z.object({
   link_rede: modeloMensagemSchema("link_rede"),
 });
 
+/** Um modelo como está gravado: só o tamanho (o CHECK da 0008); os marcadores são conferidos na entrada. */
+const modeloGravadoSchema = z.string().min(1).max(LIMITE_CARACTERES_MENSAGEM);
+
+/**
+ * As mensagens na RESPOSTA da campanha (revisão do contrato, D20): o que está gravado, conferindo só o tamanho. Os
+ * marcadores ficam na entrada (mensagensConfigSchema), porque o `montarCampanha` passa a campanha por este schema
+ * em TODA leitura (painel, rotas abertas, bumbo e /minha): um modelo gravado fora das regras de hoje (SQL à mão, ou
+ * um marcador que deixar de existir) não pode derrubar essas rotas. O site mostra o problema na tela Campanha
+ * (`problemasDoModelo`) e, na tela Acessos, usa o padrão do tipo enquanto o modelo gravado tiver problema.
+ */
+export const mensagensGravadasSchema = z.object({
+  link_coordenacao: modeloGravadoSchema,
+  link_lider: modeloGravadoSchema,
+  link_discipulador: modeloGravadoSchema,
+  link_rede: modeloGravadoSchema,
+});
+
 export const campanhaEntradaSchema = z.object({
   nome: nomeSchema,
   /** Slug da campanha na Rifei: só eventos com este slug são processados (D5). */
@@ -266,7 +283,7 @@ export const campanhaSchema = z.object({
    */
   pedidos: pedidosConfigSchema.default(() => ({ ...PEDIDOS_PADRAO })),
   acesso: acessoConfigSchema.default(() => ({ ...ACESSO_PADRAO })),
-  mensagens: mensagensConfigSchema.default(() => ({ ...MENSAGENS_PADRAO })),
+  mensagens: mensagensGravadasSchema.default(() => ({ ...MENSAGENS_PADRAO })),
   criado_em: instanteSchema,
   atualizado_em: instanteSchema,
 });

@@ -292,7 +292,8 @@ export const ROTAS_ACESSO = {
   },
   /**
    * 409 `acao_desligada` (RIFA-029, D20; detalhes: detalhesAcaoDesligadaSchema): o usuário é discipulador ou rede e
-   * o acesso do papel está desligado na campanha (a chave `acesso.discipuladores` ou `acesso.redes`).
+   * o acesso do papel está desligado na campanha (a chave `acesso.discipuladores` ou `acesso.redes`). Depois do 404
+   * (o papel é o do usuário encontrado).
    */
   criarLink: {
     metodo: "POST",
