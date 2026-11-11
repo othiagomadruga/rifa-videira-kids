@@ -47,6 +47,7 @@ function pedido(parcial: Partial<PedidoSuspeito> = {}): PedidoSuspeito {
     ],
     aprovado_em: "2026-12-01T12:20:31.512Z",
     marcado_em: "2026-12-01T12:20:32.004Z",
+    desconsiderado: null,
     ...parcial,
   };
 }

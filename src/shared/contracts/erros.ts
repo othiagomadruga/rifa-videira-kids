@@ -19,6 +19,9 @@ export const CODIGOS_ERRO = [
   "nao_encontrado",
   "nome_duplicado",
   "em_uso",
+  "acao_desligada",
+  "acesso_desligado",
+  "afiliado_com_pedidos",
   "corpo_muito_grande",
   "muitas_requisicoes",
   "erro_interno",
@@ -40,6 +43,12 @@ export const STATUS_HTTP_DO_ERRO = {
   nao_encontrado: 404,
   nome_duplicado: 409,
   em_uso: 409,
+  /** Sprint 6 (D20): a chave da campanha que libera a ação está desligada (`detalhesAcaoDesligadaSchema`). */
+  acao_desligada: 409,
+  /** Sprint 6 (D20): o acesso do papel (discipulador ou rede) está desligado na campanha. */
+  acesso_desligado: 403,
+  /** Sprint 6 (D20): remover afiliado com pedido que conta (`detalhesAfiliadoComPedidosSchema`). */
+  afiliado_com_pedidos: 409,
   corpo_muito_grande: 413,
   muitas_requisicoes: 429,
   erro_interno: 500,

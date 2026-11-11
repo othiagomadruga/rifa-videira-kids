@@ -5,6 +5,7 @@
 - Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006 e a 0007 aplicadas sobre dados que já existiam).
 - Índices só de leitura: `0003_vendas_por_dia.sql` (painel) e `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts` e `src/worker/db/pedidos-webhook-desempenho.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
+- Regras do admin (Sprint 6, D20): o **plano** da migração `0008_regras_campanha.sql` está na [seção 9](#9-plano-da-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20). Ela é da tarefa -db, que a escreve junto com as consultas.
 
 ## 1. Visão geral
 
@@ -244,3 +245,95 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 - Do comprador: nome, e-mail, documento (CPF), data de nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. Ficam só `ddd` e `pais`.
 - O payload bruto do webhook nunca é gravado, só o redigido.
 - O CSV da reconciliação, que traz dados pessoais, é processado em memória e descartado.
+
+## 9. Plano da migração `0008_regras_campanha.sql` (RIFA-028, 029 e 032; D20)
+
+Só o plano: a migração é da tarefa -db e entra no MESMO merge que as consultas de `src/worker/db/` (item 3 do
+OBRIGATÓRIO da D20). Aditiva para os dados: nenhuma linha muda; os pedidos de antes contam como hoje e a campanha
+fica com os padrões. O SQL abaixo foi aplicado sobre a 0000 a 0007, com dados, num SQLite local (3.53): os CHECK, a
+view e os planos se comportaram como descrito.
+
+**`campanhas`** (as chaves e as mensagens da D20):
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `pedidos_desconsiderar` | INTEGER 0/1 NOT NULL DEFAULT 0 | `pedidos.desconsiderar` |
+| `acesso_discipuladores` | INTEGER 0/1 NOT NULL DEFAULT 1 | `acesso.discipuladores` |
+| `acesso_redes` | INTEGER 0/1 NOT NULL DEFAULT 1 | `acesso.redes` |
+| `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 caracteres | o modelo de cada mensagem; NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar |
+
+Os marcadores do modelo são conferidos pelo contrato (o banco só confere o tamanho). No PUT, o grupo ausente mantém
+as colunas dele (`COALESCE` com o valor gravado, ou o padrão no primeiro PUT).
+
+**`pedidos`** (a desconsideração, RIFA-028; os três andam juntos):
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `desconsiderado_em` | TEXT (UTC) NULL | NULL = o pedido conta |
+| `desconsiderado_motivo` | TEXT NULL | `teste`, `fraude`, `estorno` ou `outro`; preenchido **se e somente se** `desconsiderado_em` |
+| `desconsiderado_observacao` | TEXT NULL, 1–140 | só com `desconsiderado_em`; sem dado pessoal (o contrato recusa "@" e 8 dígitos seguidos) |
+
+Quem desconsiderou fica na trilha (`auditoria`), não no pedido. O webhook nunca escreve nessas colunas.
+
+```sql
+ALTER TABLE campanhas ADD COLUMN pedidos_desconsiderar INTEGER NOT NULL DEFAULT 0
+  CHECK (pedidos_desconsiderar IN (0, 1));
+ALTER TABLE campanhas ADD COLUMN acesso_discipuladores INTEGER NOT NULL DEFAULT 1
+  CHECK (acesso_discipuladores IN (0, 1));
+ALTER TABLE campanhas ADD COLUMN acesso_redes INTEGER NOT NULL DEFAULT 1
+  CHECK (acesso_redes IN (0, 1));
+ALTER TABLE campanhas ADD COLUMN mensagem_link_coordenacao TEXT
+  CHECK (mensagem_link_coordenacao IS NULL OR length(mensagem_link_coordenacao) BETWEEN 1 AND 1000);
+-- ... e o mesmo para mensagem_link_lider, mensagem_link_discipulador e mensagem_link_rede.
+
+ALTER TABLE pedidos ADD COLUMN desconsiderado_em TEXT
+  CHECK (desconsiderado_em IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', desconsiderado_em) IS desconsiderado_em);
+ALTER TABLE pedidos ADD COLUMN desconsiderado_motivo TEXT
+  CHECK ((desconsiderado_motivo IS NULL) = (desconsiderado_em IS NULL)
+    AND (desconsiderado_motivo IS NULL OR desconsiderado_motivo IN ('teste', 'fraude', 'estorno', 'outro')));
+ALTER TABLE pedidos ADD COLUMN desconsiderado_observacao TEXT
+  CHECK (desconsiderado_observacao IS NULL
+    OR (desconsiderado_em IS NOT NULL AND length(desconsiderado_observacao) BETWEEN 1 AND 140));
+
+-- O índice da 0003, recriado com o mesmo nome e a condição nova: o desconsiderado sai dele.
+DROP INDEX pedidos_aprovados_por_afiliado_dia;
+CREATE INDEX pedidos_aprovados_por_afiliado_dia ON pedidos (
+  campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos
+) WHERE status = 'approved' AND desconsiderado_em IS NULL;
+
+-- A lista com desconsiderado=true lê só os desconsiderados, na ordem da lista.
+CREATE INDEX pedidos_desconsiderados_por_registro ON pedidos (campanha_id, registrado_em, id)
+  WHERE desconsiderado_em IS NOT NULL;
+
+-- A view da 0001, recriada com a condição nova (as mesmas colunas e junções).
+DROP VIEW vendas_aprovadas;
+CREATE VIEW vendas_aprovadas AS
+SELECT
+  p.id AS pedido_id, p.campanha_id AS campanha_id, p.affiliate_id AS affiliate_id, p.qtd_bilhetes AS qtd_bilhetes,
+  p.total_centavos AS total_centavos, p.aprovado_em AS aprovado_em, p.ddd AS ddd, p.pais AS pais,
+  a.celula_id AS celula_id, c.discipulador_id AS discipulador_id, d.rede_id AS rede_id, r.divisao AS divisao
+FROM pedidos AS p
+LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
+LEFT JOIN celulas AS c ON c.id = a.celula_id
+LEFT JOIN discipuladores AS d ON d.id = c.discipulador_id
+LEFT JOIN redes AS r ON r.id = d.rede_id
+WHERE p.status = 'approved' AND p.desconsiderado_em IS NULL;
+```
+
+- **O índice parcial só vale com a condição repetida.** Com `status = 'approved' AND desconsiderado_em IS NULL` na
+  consulta do painel, o plano é `SEARCH pedidos USING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)`,
+  sem B-tree temporária na agregação por afiliado e dia. Sem o `desconsiderado_em IS NULL`, o planejador vai para
+  `pedidos_por_campanha_registro` (0007) com `USE TEMP B-TREE FOR GROUP BY`: por isso a migração e as consultas
+  entram juntas, e o `painel.test.ts` trava o plano.
+- A lista com `desconsiderado = true` usa `pedidos_desconsiderados_por_registro`; com `false` ou sem o filtro, o
+  índice da 0007, como hoje. Um índice novo pode desviar o planejador noutras consultas (D16): os testes de plano
+  e de linhas lidas conferem.
+- Ordem: as colunas antes do índice e da view, que as citam. A recriação da view não toca em dados.
+- **Remover afiliado** (RIFA-031): `pedidos.affiliate_id` é `ON DELETE RESTRICT` (0001), então o afiliado só sai
+  depois de `UPDATE pedidos SET affiliate_id = NULL` nos pedidos desconsiderados dele, no mesmo lote (provado: o
+  DELETE direto é recusado pela FK; depois do UPDATE, passa).
+- Teste da migração (`src/worker/test/migrations.test.ts`): aplicar a 0008 sobre dados das anteriores (pedidos
+  aprovados e uma campanha) e conferir que tudo continua contando, os padrões da campanha, os CHECK (motivo sem
+  data, observação sem desconsideração, motivo fora da lista, chave fora de 0/1), a view sem o desconsiderado e o
+  plano do painel.
+

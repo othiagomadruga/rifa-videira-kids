@@ -95,6 +95,7 @@ export function pedido(
     registrado_em: registrado,
     atualizado_em: registrado,
     suspeito: false,
+    desconsiderado: null,
     ...parcial,
   };
 }

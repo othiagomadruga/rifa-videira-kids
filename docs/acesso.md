@@ -34,17 +34,17 @@ Erros no formato único (`docs/api.md`, seção "Erros").
 
 | Rota | Quem | Sucesso | Erros |
 |---|---|---|---|
-| `POST /api/sessao` `{ token }` | aberto (mesma origem) | **200** `{ usuario: { id, nome, papel, alvo? } }` + `Set-Cookie` (`alvo` só nos papéis da hierarquia) | 401 `nao_autenticado` (link inexistente, fora do formato, expirado, revogado ou de usuário inativo); 400 `requisicao_invalida` (sem `token`); 400 `json_invalido`; 403 `proibido` (outra origem); 413 `corpo_muito_grande` (corpo acima de 4 KiB, recusado antes de ler o JSON); 429 `muitas_requisicoes` (mais de 60 tentativas por minuto do mesmo IP, com `Retry-After`) |
+| `POST /api/sessao` `{ token }` | aberto (mesma origem) | **200** `{ usuario: { id, nome, papel, alvo? } }` + `Set-Cookie` (`alvo` só nos papéis da hierarquia) | 401 `nao_autenticado` (link inexistente, fora do formato, expirado, revogado ou de usuário inativo); 400 `requisicao_invalida` (sem `token`); 400 `json_invalido`; 403 `proibido` (outra origem); 413 `corpo_muito_grande` (corpo acima de 4 KiB, recusado antes de ler o JSON); 429 `muitas_requisicoes` (mais de 60 tentativas por minuto do mesmo IP, com `Retry-After`); 403 `acesso_desligado` (link válido de discipulador ou rede com o acesso do papel desligado na campanha, D20: a sessão não é criada) |
 | `GET /api/sessao` | sessão de qualquer papel | **200** `{ usuario }` (com `alvo` nos papéis da hierarquia) | 401 |
 | `POST /api/sessao/sair` | aberto (mesma origem) | **204**, apaga a sessão e expira o cookie (também sem sessão) | 403 (outra origem) |
 | `POST /api/admin/usuarios` `{ nome, email?, papel }` | admin | **201** `{ usuario, link }`: `link.url` só aparece aqui. Só papéis da coordenação | 400 (inclusive papel da hierarquia), 401, 403 |
 | `GET /api/admin/usuarios` | admin | **200** `{ itens: [usuario] }`: só a coordenação (a hierarquia tem a lista própria, seção 9), sem token, URL ou hash | 401, 403 |
 | `PATCH /api/admin/usuarios/:id` `{ ativo }` | admin | **200** usuário, de qualquer papel (com `alvo` nos da hierarquia) | 400 (outro campo além de `ativo`), 401, 403, 404, 409 `em_uso` (desativar a si mesmo ou o último admin ativo) |
-| `POST /api/admin/usuarios/:id/links` | admin | **201** `{ link }`, com `link.url`, para um usuário de qualquer papel | 400, 401, 403, 404 |
+| `POST /api/admin/usuarios/:id/links` | admin | **201** `{ link }`, com `link.url`, para um usuário de qualquer papel | 400, 401, 403, 404, 409 `acao_desligada` (discipulador ou rede com o acesso desligado na campanha, D20) |
 | `DELETE /api/admin/links/:id` | admin | **204** (de novo: 204, mantém a data da primeira revogação), link de qualquer papel | 400, 401, 403, 404, 409 `em_uso` (nenhum admin ativo ficaria com link válido) |
 | `GET /api/admin/acessos-hierarquia?papel=` | admin | **200** `{ itens }`: todos os alvos do papel, com o usuário de cada um (seção 9) | 400, 401, 403 |
-| `POST /api/admin/acessos-hierarquia/links` `{ papel, ids, revogar_anteriores? }` | admin | **201** `{ itens }`: um link novo por alvo, com a URL (seção 9) | 400, 401, 403, 404 e 409 (com `detalhes.ids`) |
-| `GET /api/minha/visao` | `lider`, `discipulador`, `rede` | **200** a visão individual do alvo da sessão ([api.md](api.md#visão-individual-e-acessos-da-hierarquia-sprint-5-rifa-014-docsdecisionsmd-d12)) | 400 (`periodo` fora do schema), 401, 403 (coordenação), 404 (sem campanha) |
+| `POST /api/admin/acessos-hierarquia/links` `{ papel, ids, revogar_anteriores? }` | admin | **201** `{ itens }`: um link novo por alvo, com a URL (seção 9) | 400, 401, 403, 404 e 409 (com `detalhes.ids`); 409 `acao_desligada` (papel com o acesso desligado na campanha, D20) |
+| `GET /api/minha/visao` | `lider`, `discipulador`, `rede` | **200** a visão individual do alvo da sessão ([api.md](api.md#visão-individual-e-acessos-da-hierarquia-sprint-5-rifa-014-docsdecisionsmd-d12)) | 400 (`periodo` fora do schema), 401, 403 (coordenação), 403 `acesso_desligado` (discipulador ou rede com o acesso do papel desligado na campanha, D20; em todo `/api/minha/*`), 404 (sem campanha) |
 
 Usuário na administração (`usuarioSchema`):
 

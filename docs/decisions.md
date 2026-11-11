@@ -408,3 +408,154 @@ do passo com o token, e o que deixassem no disco rodava com ele.
   `$GITHUB_ENV`/`$GITHUB_PATH`, sem `defaults`, `shell`, `working-directory` ou `continue-on-error`, o artefato do
   mesmo run em `dist/`, actions por SHA, sem `environment:`) e em `scripts/conferir-artefato.test.mjs` (as
   adulterações recusadas).
+
+## D20. Regras do admin na campanha: desconsiderar pedido, acesso da hierarquia, remover afiliado e mensagens (RIFA-028, 029, 031 e 032; contrato, 2026-11-11)
+
+(A D19 é da RIFA-012, a conferência pelo CSV.) O PO pediu: "Todas essas decisões quero configuráveis na conta do
+admin, para ativar ou desativar ou aplicar o valor correspondente." Datas, preço, meta, percentuais, critério do
+ranking e o que o público vê já estavam na Campanha; faltavam as quatro regras abaixo. Contrato em
+`src/shared/contracts/` (`regras.ts`, sem zod; `dominio.ts`; `api.ts`; `acesso.ts`; `erros.ts`), testes em
+`regras.test.ts`.
+
+- **Três grupos novos na campanha** (`campanhaSchema` e o corpo do PUT), ao lado de `ranking` e `publico`:
+  `pedidos: { desconsiderar }` (padrão desligado, `PEDIDOS_PADRAO`), `acesso: { discipuladores, redes }` (padrão
+  ligados, `ACESSO_PADRAO`; o líder não tem chave) e `mensagens: { link_coordenacao, link_lider,
+  link_discipulador, link_rede }` (padrão = o texto de hoje, `MENSAGENS_PADRAO`). No PUT, **grupo ausente mantém o
+  gravado** (no primeiro PUT, o padrão) e grupo presente substitui o grupo inteiro. É diferente de `publico`
+  (ausente = padrão) de propósito: uma aba antiga do site, que não conhece os grupos, não religa um acesso
+  desligado nem apaga uma mensagem editada. Na resposta, os grupos têm `.default()`: a API de hoje não os devolve e
+  o parse do `montarCampanha` completa com o padrão, que é o que vale enquanto a 0008 não existe. Quem muda as
+  chaves é quem muda a Campanha hoje (admin e coordenação): pergunta ao PO.
+- **RIFA-028, desconsiderar pedido.** `POST /api/admin/pedidos/desconsiderar { pedido_id, motivo, observacao? }` e
+  `POST /api/admin/pedidos/reconsiderar { pedido_id }`, **só admin**, 200 com o pedido como a lista mostra. O id do
+  pedido vai no corpo, não na URL: é o texto da Rifei, de até 128 caracteres, e na URL dependeria da codificação.
+  Motivo `teste`, `fraude`, `estorno` ou `outro`; observação de até 140 caracteres, vazia = null, recusada com "@"
+  ou 8 dígitos seguidos (trava barata contra o contato do comprador; a tela também avisa). Vale para pedido de
+  qualquer status da campanha ativa: um pedido de teste ainda não pago também sai. Repetir não muda nada (200 com o
+  pedido como está, sem trilha), como revogar um link já revogado; trocar o motivo é reconsiderar e desconsiderar
+  de novo. Ordem dos erros: 400 (corpo), 404 sem campanha ativa, 409 `acao_desligada` com
+  `{ "chave": "pedidos.desconsiderar" }`, 404 pedido fora da campanha ativa. **Desligar a chave não devolve às
+  contas o que já foi desconsiderado**: só bloqueia desconsiderar e reconsiderar até ligar de novo (pergunta ao
+  PO). O pedido sai de TODAS as contas e continua na lista de pedidos com o selo (`desconsiderado: { motivo,
+  observacao, em }`; quem fez fica só na trilha, que é só do admin), na lista de suspeitos (com o mesmo campo) e na
+  trilha. A lista ganha o filtro `desconsiderado=true|false`, e os totais por status passam a contar só o que conta.
+  Webhook que chegar depois não o devolve às contas: o UPSERT do webhook nunca toca nas colunas novas.
+- **RIFA-029, acesso de discipuladores e de redes.** Com `acesso.discipuladores` (ou `acesso.redes`) desligado:
+  `POST /api/sessao` com link VÁLIDO do papel dá 403 `acesso_desligado` com `{ "papel" }` e não cria a sessão (link
+  inválido continua 401); todo `/api/minha/*` com sessão do papel, exista a rota ou não, dá o mesmo 403 (a sessão
+  não é apagada); gerar link do papel, em lote (`POST /api/admin/acessos-hierarquia/links`, antes de conferir os
+  ids) ou avulso (`POST /api/admin/usuarios/:id/links`), dá 409 `acao_desligada` com a chave. Nada é revogado: os
+  links e as sessões voltam a valer quando a chave volta. A lista dos acessos e o PATCH (ativar, desativar)
+  continuam. `GET /api/sessao` continua 200: o site descobre pelo 403 da visão e diz que a coordenação desligou
+  esse acesso. A chave é lida na hora, nunca do cache de 30 s da visão (D14). Sem campanha ativa, vale o padrão.
+- **RIFA-031, remover afiliado de teste.** `DELETE /api/admin/afiliados/:affiliateId`, **só admin**, 204, sem chave
+  na campanha. Só sem pedido que conte, de qualquer status (todos desconsiderados, ou nenhum): senão 409
+  `afiliado_com_pedidos` com `{ pedidos_que_contam, pedidos }` (até 20 ids, os mais recentes, para a busca da lista
+  de pedidos). Vinculado ou não. A FK `pedidos.affiliate_id` é RESTRICT: os pedidos desconsiderados dele ficam sem
+  afiliado no mesmo lote, e a trilha guarda quantos eram (e os ids, se couberem). Se a Rifei mandar depois um evento
+  com esse affiliate_id, ele volta como não vinculado (D7, o afiliado tardio); um pedido desconsiderado continua
+  desconsiderado.
+- **RIFA-032, mensagens do WhatsApp.** Um modelo por tipo de link (coordenação, líder, discipulador, rede), com os
+  marcadores `{nome}` (primeiro nome; vazio só na rede sem responsável), `{saudacao}` ("Olá, Maria!" ou "Olá!"),
+  `{alvo}` (nome da célula, do discipulador ou da rede; não existe no da coordenação) e `{link}` (obrigatório), até
+  1.000 caracteres. Marcador desconhecido (`{Nome}`, `{nomee}`) ou a falta do `{link}` dá 400 com a mensagem em
+  português (`problemasDoModelo`). O site preenche com `preencherMensagem` (o link só existe no navegador, na
+  resposta que o cria), numa passada só: um nome com "{link}" não vira o link. Os padrões, preenchidos, dão o texto
+  de hoje caractere por caractere (`regras.test.ts`, com os mesmos casos de `src/web/pages/acessos/textos.test.ts`).
+  **Entram** as quatro mensagens do link pessoal (tela Acessos: "Copiar mensagem" e "Abrir no WhatsApp"). **Não
+  entram** o bumbo (montado pela API a cada dia, com os números do dia; um texto livre no que é público quebraria a
+  garantia de nunca ter R$ nem quantidade, R9) nem os textos das telas. **"Aguardando pagamento"** é só o rótulo do
+  status `in_process` na tela Pedidos (`ROTULO_STATUS` e `ROTULO_STATUS_PLURAL` em
+  `src/web/pages/pedidos/textos.ts`: lista, filtro, cartões dos totais e transição das entregas do webhook) e em
+  docs/frontend.md; não está na API, no público nem nas mensagens. Trocar é só texto (-web) e os testes da tela
+  (PedidosPage, textos e EntregasWebhook); falta o PO dizer o texto novo.
+- **Trilha** (0005): ações `pedido.desconsiderar`, `pedido.reconsiderar` e `afiliado.remover`. Alvo `pedido:<id>`
+  (`alvoDoPedidoNaAuditoria`; só `pedido` quando não cabe nos 64 caracteres do alvo) e `afiliado:<id>`.
+- **Catálogo à parte**, `ROTAS_REGRAS_CAMPANHA` (como `ROTAS_ACESSO_HIERARQUIA` na RIFA-014): o
+  `src/worker/protecao.test.ts` percorre `ROTAS` e exige o 403 da coordenação nas rotas só de admin, que uma rota
+  ainda não montada não dá (404). Por isso as três rotas não estão em `ROTAS` nesta tarefa.
+- **A main continua verde com o contrato**: os campos novos das respostas têm `.default()` (a API de hoje não os
+  manda; o parse completa, e a campanha já sai com os padrões, porque o `montarCampanha` passa pelo schema). Nos
+  tipos eles são obrigatórios, então as fixtures do site que montam `Campanha`, `ItemPedido` e `PedidoSuspeito`
+  ganharam os campos; a Trilha ganhou o rótulo das 3 ações (o `Record<AcaoAuditoria, string>` de
+  `src/web/pages/trilha/textos.ts` exige); e os testes do Worker que comparam a resposta inteira (campanha, pedidos
+  e suspeitos) esperam os padrões. Nenhum código do Worker mudou.
+
+### OBRIGATÓRIO NA IMPLEMENTAÇÃO
+
+1. **Não existe tabela agregada.** A `0003_vendas_por_dia.sql` é um ÍNDICE parcial de cobertura
+   (`pedidos_aprovados_por_afiliado_dia`, `WHERE status = 'approved'`), não uma tabela: não há agregado para
+   corrigir nem recalcular. Desconsiderar é um `UPDATE` das três colunas do pedido pela chave primária; o SQLite
+   tira a linha do índice parcial e da view na mesma transação. Desfazer é o `UPDATE` de volta para null.
+2. **Atomicidade** (um `db.batch`, como a D11): (a) o registro na trilha, ANTES do UPDATE e com a MESMA condição;
+   (b) o UPDATE com `WHERE id = ? AND campanha_id = (ativa) AND desconsiderado_em IS NULL` (no reconsiderar, `IS NOT
+   NULL`) `AND EXISTS (campanha ativa com pedidos_desconsiderar = 1)`; (c) a leitura do item como a lista o monta.
+   A chave é lida DENTRO do lote: um admin que desliga a chave ao mesmo tempo não deixa passar. Sem mudança
+   (`changes` 0): uma leitura curta decide entre 200 como está, 404 e 409. Remover afiliado, no mesmo lote: o
+   registro (condicionado a nenhum pedido que conte), `UPDATE pedidos SET affiliate_id = NULL WHERE affiliate_id = ?
+   AND desconsiderado_em IS NOT NULL AND NOT EXISTS (pedido dele que conta)` e o `DELETE` do afiliado com a mesma
+   condição: um pedido novo do webhook no meio desfaz tudo (a FK RESTRICT recusa) ou não entra.
+3. **Migração `0008_regras_campanha.sql`** (plano em docs/modelo-de-dados.md, provado no SQLite local) e as
+   consultas no **mesmo merge**: o índice da 0003 é recriado com `AND desconsiderado_em IS NULL`, e o SQLite só
+   usa índice parcial com a condição repetida na consulta. Sem o filtro, o painel cai no índice da 0007 com B-tree
+   temporária (provado), e `src/worker/db/painel.test.ts` falha.
+4. **Todo lugar que soma pedidos exclui o desconsiderado** (`desconsiderado_em IS NULL`):
+   - `src/worker/db/painel.ts`: `selecionarVendasPorDia` (as duas formas: o literal de UTC−3, igual ao índice, e a
+     com o deslocamento por parâmetro) e `SELECIONAR_VENDAS` (uma a uma, `p.desconsiderado_em`). Alimenta metas,
+     ritmo, curva, projeção, vendas, sem célula e fora da janela de `/api/painel/resumo`; os rankings de
+     `/api/painel/ranking`; `/api/publico/ranking` e `/api/publico/bumbo` (telão e grupo); e a visão individual
+     `/api/minha/visao` (`lerEntradaDoCalculo` em `db/visao-individual.ts`). `calculos.ts` e
+     `lib/visao-individual.ts` não mudam: recebem as vendas já filtradas.
+   - View `vendas_aprovadas` (recriada na 0008 com `p.desconsiderado_em IS NULL`), lida em `src/worker/db/adesao.ts`:
+     `GET /api/admin/afiliados` (vendas, primeira e última venda de cada afiliado e `sem_afiliado`; os totais do
+     afiliado), a resposta do `PUT /api/admin/afiliados/:affiliateId` e `GET /api/admin/adesao`
+     (`pedidos_aprovados` e `primeira_venda_em` de cada célula: o "Já vendeu"; e o `com_venda` do resumo).
+   - `src/worker/db/mapa-ddd.ts`, `comandoMapaDdd` (D17): a coluna está na linha que a consulta já lê.
+   - `src/worker/db/lista-pedidos.ts`: os totais por status com `p.desconsiderado_em IS NULL`; o item com as três
+     colunas (vira `desconsiderado`); o filtro. Junto, `p.origem` em `COLUNAS_ITEM` (o campo `origem` da RIFA-012,
+     D16), conferindo `src/worker/db/pedidos-webhook-desempenho.test.ts`.
+   - `src/worker/db/pedidos-suspeitos.ts`: a lista traz a desconsideração (o JOIN com pedidos já existe); não sai
+     da lista nem do `total`.
+   - Caches: `lib/cache-publico.ts` (30 s) e a base da visão (`db/visao-individual.ts`, 30 s) não são invalidados:
+     a mudança aparece em até 30 s, como uma venda nova. O bumbo de uma data passada é recalculado e passa a vir
+     sem o pedido.
+   - Não excluem, de propósito: o `ultimo_aprovado_em` de `db/estado-webhook.ts` (é a saúde do webhook: a aprovação
+     chegou) e a marcação de suspeito do webhook (`db/pedidos.ts` e `lib/plausibilidade.ts`).
+   - Webhook (`db/pedidos.ts`): o UPSERT não toca nas colunas novas. Teste: `paid_order` de um pedido `in_process`
+     desconsiderado o deixa aprovado, desconsiderado e fora de todas as contas.
+5. **Orçamento do D1 (D10).** O painel continua com ~1 linha lida por pedido aprovado que conta (o desconsiderado
+   sai do índice); a view, o mapa e os totais da lista leem a coluna na linha que já leem (nenhuma linha a mais); a
+   página da lista com `desconsiderado=true` usa o índice parcial novo e lê só os desconsiderados (com `false`, o
+   da 0007); desconsiderar e reconsiderar leem menos de 10 linhas; remover afiliado lê os pedidos dele (índice por
+   afiliado). A chave do acesso custa +1 linha (a campanha ativa) em cada `/api/minha/*` e em cada `POST
+   /api/sessao` de discipulador e rede: lida na mesma consulta da sessão (subconsulta), sem ida a mais. O índice
+   novo pode desviar o planejador (D16): travar os planos e as linhas lidas em `db/painel.test.ts`,
+   `routes/painel-desempenho.test.ts`, `db/mapa-ddd-desempenho.test.ts`, `db/pedidos-webhook-desempenho.test.ts` e
+   `routes/minha-desempenho.test.ts` (linhas exatas, agora com a da chave), e medir antes e depois as leituras da
+   view em `db/adesao.ts` (o índice novo da 0003 também serve a ela).
+6. **Trilha** (tabela `auditoria`, 0005; D11). `pedido.desconsiderar`: resumo com o id do pedido em JSON (pode ter
+   aspas), o status, os bilhetes, a célula (pelo id) e o motivo; da observação, só "observação informada" (texto
+   livre, como o rótulo do afiliado). `pedido.reconsiderar`: o id, o motivo que tinha e quando fora desconsiderado.
+   `afiliado.remover`: a célula que ele tinha e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se
+   couberem nos 1.000 caracteres). No `campanha.salvar`, as chaves com o antes e o depois ("acesso.redes: ligado →
+   desligado") e, das mensagens, só o nome do modelo alterado. O que não muda nada não registra (RIFA-018).
+7. **Conferência pelo CSV (RIFA-012, D19).** Os pedidos do sistema somados pela conferência (`PAGOS_DA_CAMPANHA` em
+   `src/worker/db/reconciliacao.ts`: total do sistema, ausentes do arquivo, somas por afiliado e por dia) excluem o
+   desconsiderado, para os totais do sistema baterem com o painel. Na busca dos pedidos do arquivo pelo id, o
+   desconsiderado vem com a marca e **aparece como desconsiderado, nunca como "faltando"**: não é `venda_perdida`
+   (ele existe), não é `pagamento_nao_registrado`, `nao_pago_na_rifei` (um estorno já desconsiderado está
+   resolvido), `ausente_no_arquivo` (uma compra de teste fora do arquivo) nem diferença de valor, quantidade ou
+   afiliado: vai para um grupo à parte, com o id, o motivo e o status no arquivo. O "Recuperar" nunca o grava de
+   novo nem o reativa (`ja_existe`). A forma do grupo no contrato da conferência entra com a RIFA-012 na main.
+8. **Proteção** (`src/worker/protecao.test.ts`): `ROTAS_REGRAS_CAMPANHA` entra no teste no mesmo merge que monta as
+   rotas (401 sem cookie, 403 da coordenação, passa com admin). Com a chave desligada, o discipulador e a rede levam
+   403 `acesso_desligado` em todo `/api/minha/*` (inclusive caminho sem rota) e no `POST /api/sessao`; o líder não
+   muda. O teste de admin dos acessos (`routes/admin-usuarios.test.ts`) cobre o 409 do link avulso.
+9. **Site.** Campanha: as três chaves e as quatro mensagens, com a pré-visualização preenchida e os problemas do
+   modelo antes de salvar. Pedidos: o selo "Desconsiderado (motivo)", as ações (só admin e só com a chave ligada),
+   o filtro e a marca "Recuperado na conferência" (`origem`). Acessos: sem gerar nem mandar link do papel desligado
+   (o aviso diz que a chave está na Campanha), e as mensagens montadas com `preencherMensagem` e o modelo da
+   campanha no lugar de `mensagemWhatsApp` e `mensagemHierarquia` (os testes de hoje de
+   `src/web/pages/acessos/textos.test.ts` continuam passando sem mudar). Afiliados: "Remover" (só admin) com o 409
+   explicado e os ids. /minha e a página de acesso: a mensagem do 403 `acesso_desligado`. Trilha: o tipo de alvo
+   `pedido`.

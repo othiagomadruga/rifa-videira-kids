@@ -2,6 +2,9 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ACESSO_PADRAO,
+  MENSAGENS_PADRAO,
+  PEDIDOS_PADRAO,
   calcularCalendario,
   somarPercentuais,
   type Campanha,
@@ -37,6 +40,10 @@ function campanhaDaEntrada(
       mostra_percentual_meta: false,
       limite_ranking: 3,
     },
+    // Regras do admin (D20): a API devolve sempre; o formulário de hoje ainda não as mostra.
+    pedidos: { ...PEDIDOS_PADRAO },
+    acesso: { ...ACESSO_PADRAO },
+    mensagens: { ...MENSAGENS_PADRAO },
     criado_em: "2026-11-06T18:00:00.000Z",
     atualizado_em: "2026-11-06T18:00:00.000Z",
     ...extra,

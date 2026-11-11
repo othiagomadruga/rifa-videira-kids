@@ -11,6 +11,7 @@ O contrato executável está em `src/shared/contracts/`:
 | `acesso.ts` | acesso da equipe: papéis, sessão, usuários e links, e o catálogo `ROTAS_ACESSO` ([acesso.md](acesso.md)) |
 | `calendario.ts` | calendário da campanha: datas dos períodos, data final, fase e normalização dos percentuais |
 | `calculos.ts` | regras de cálculo (metas, curva, ritmo, projeção, ranking, bumbo) e as funções que montam as respostas do painel e das rotas abertas ([regras-de-calculo.md](regras-de-calculo.md)) |
+| `regras.ts` | regras do admin (Sprint 6, D20), sem zod: motivos da desconsideração, padrões das chaves, a chave de acesso de cada papel e os modelos das mensagens do WhatsApp com `preencherMensagem` |
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
@@ -45,7 +46,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 **Coordenação** (RIFA-007; contrato em `acesso.ts`, detalhes em [acesso.md](acesso.md)):
 
-- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
+- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. Link válido de `discipulador` ou `rede` com o acesso do papel desligado na campanha (`acesso.discipuladores` ou `acesso.redes`, D20): 403 `acesso_desligado`, sem criar a sessão. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
 - Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
@@ -75,6 +76,9 @@ Toda resposta que não é 2xx tem este corpo:
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
 | `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin |
+| `acao_desligada` | 409 | a chave da campanha que libera a ação está desligada (D20): desconsiderar ou reconsiderar pedido com `pedidos.desconsiderar` desligada; gerar link de discipulador ou rede com o acesso do papel desligado. `detalhes` = `{ "chave": "pedidos.desconsiderar" \| "acesso.discipuladores" \| "acesso.redes" }` (`detalhesAcaoDesligadaSchema`) |
+| `acesso_desligado` | 403 | discipulador ou rede com o acesso do papel desligado na campanha (D20): no `POST /api/sessao` (link válido) e em todo `/api/minha/*`. `detalhes` = `{ "papel": "discipulador" \| "rede" }` (`detalhesAcessoDesligadoSchema`) |
+| `afiliado_com_pedidos` | 409 | remover afiliado que tem pedido que conta (D20). `detalhes` = `{ "pedidos_que_contam": 3, "pedidos": ["PED1", "PED2", "PED3"] }` (até 20 ids; `detalhesAfiliadoComPedidosSchema`) |
 | `corpo_muito_grande` | 413 | corpo acima do limite (abaixo): do webhook (1 MiB, `LIMITE_CORPO_WEBHOOK_BYTES`), do `POST /api/sessao` (4 KiB) ou das escritas da coordenação (1 MiB) |
 | `muitas_requisicoes` | 429 | passou do limite de requisições por IP (abaixo), com `Retry-After` em segundos |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
@@ -168,11 +172,25 @@ Corpo do PUT:
     { "nome": "Semana 3", "dias": 7, "percentual_bp": 4500 }
   ],
   "ranking": { "criterio": "percentual_meta" },
-  "publico": { "mostra_percentual_meta": false, "limite_ranking": 3 }
+  "publico": { "mostra_percentual_meta": false, "limite_ranking": 3 },
+  "pedidos": { "desconsiderar": false },
+  "acesso": { "discipuladores": true, "redes": true },
+  "mensagens": {
+    "link_coordenacao": "{saudacao} Este é o seu link pessoal para entrar no sistema da Rifa Videira Kids. Ele é só seu, não repasse:\n{link}",
+    "link_lider": "{saudacao} Este é o seu link pessoal para acompanhar a sua célula ({alvo}) na campanha ...\n{link}",
+    "link_discipulador": "...",
+    "link_rede": "..."
+  }
 }
 ```
 
+(As mensagens estão encurtadas; os padrões completos são `MENSAGENS_PADRAO`, em `regras.ts`.)
+
 - `fuso_horario` (padrão `America/Belem`) e `publico` (padrão `{ false, 3 }`) são opcionais.
+- **Regras do admin** (Sprint 6, [D20](decisions.md#d20-regras-do-admin-na-campanha-desconsiderar-pedido-acesso-da-hierarquia-remover-afiliado-e-mensagens-rifa-028-029-031-e-032-contrato-2026-11-11)): `pedidos`, `acesso` e `mensagens` são opcionais e, diferente de `publico`, **o grupo ausente mantém o que está gravado** (no primeiro PUT, o padrão); o grupo presente vem inteiro e substitui o gravado.
+  - `pedidos.desconsiderar` (padrão `false`): libera desconsiderar e reconsiderar pedido ([abaixo](#regras-da-campanha-sprint-6-docsdecisionsmd-d20)). Desligar não devolve às contas o que já foi desconsiderado.
+  - `acesso.discipuladores` e `acesso.redes` (padrão `true`): desligado, quem tem o papel não entra nem usa `/api/minha/*` (403 `acesso_desligado`) e não se gera link do papel (409 `acao_desligada`); nada é revogado, e tudo volta a valer quando a chave volta. O líder não tem chave.
+  - `mensagens`: o modelo da mensagem do WhatsApp de cada link pessoal (tela Acessos), até 1.000 caracteres, com os marcadores `{nome}` (primeiro nome), `{saudacao}` ("Olá, Maria!" ou, sem nome, "Olá!"), `{alvo}` (nome da célula, do discipulador ou da rede; não existe em `link_coordenacao`) e `{link}` (obrigatório). Marcador desconhecido ou a falta do `{link}`: 400 com a mensagem em português. O padrão (`MENSAGENS_PADRAO`) é o texto de hoje; o site preenche com `preencherMensagem` (`regras.ts`). O bumbo não entra (é montado pela API, sem texto livre no que é público).
 - `meta.regra`:
   - `por_pessoa`: `valor` × pessoas da célula;
   - `total_proporcional`: `valor` é o total da campanha, dividido pelas células na proporção das pessoas;
@@ -200,7 +218,7 @@ A resposta acrescenta os campos calculados:
 }
 ```
 
-`soma_percentuais_bp` diferente de 10000 é o sinal para a interface avisar.
+`soma_percentuais_bp` diferente de 10000 é o sinal para a interface avisar. A resposta traz sempre `pedidos`, `acesso` e `mensagens` (sem nada gravado, os padrões).
 
 ### CRUD `/api/admin/redes`, `/api/admin/discipuladores`, `/api/admin/celulas` (`coordenacao`)
 
@@ -386,6 +404,7 @@ Lista de revisão dos pedidos aprovados que o webhook marcou como implausíveis 
 }
 ```
 
+- `desconsiderado` (D20): null enquanto o pedido conta; `{ "motivo", "observacao", "em" }` quando o admin já o desconsiderou (a revisão terminou). Ele continua na lista e no `total`.
 - `esperado_centavos` = bilhetes × preço do bilhete **no momento da marcação**; `celula_id`/`celula_nome` são da célula do afiliado agora (D7: é para ela que o pedido conta), null sem afiliado ou sem vínculo.
 - `motivos[].codigo` ∈ `MOTIVOS_PEDIDO_SUSPEITO`: `quantidade_acima_do_teto` (mais de 200 bilhetes), `total_acima_do_esperado` (total maior que bilhetes × preço), `total_abaixo_do_esperado` (mais de 50% abaixo).
 - **Sem nenhum dado do comprador**: nada de nome, e-mail, documento, telefone, DDD, país, UTM ou números dos bilhetes.
@@ -407,6 +426,9 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `usuario.ativar` / `usuario.desativar` | `PATCH /api/admin/usuarios/:id` que muda o estado (reativar quem está ativo ou desativar quem está desativado não registra) | `usuario:<id>` | reativado / desativado |
 | `link.criar` | `POST /api/admin/usuarios/:id/links` | `link:<id>` | o usuário do link |
 | `link.revogar` | `DELETE /api/admin/links/:id` | `link:<id>` | o usuário do link |
+| `pedido.desconsiderar` | `POST /api/admin/pedidos/desconsiderar` (D20) | `pedido:<id>` (só `pedido` se não couber em 64 caracteres: `alvoDoPedidoNaAuditoria`) | o id do pedido em JSON, o status, os bilhetes, a célula (pelo id) e o motivo; da observação, só "observação informada" |
+| `pedido.reconsiderar` | `POST /api/admin/pedidos/reconsiderar` (D20) | idem | o id, o motivo que tinha e quando fora desconsiderado |
+| `afiliado.remover` | `DELETE /api/admin/afiliados/:affiliateId` (D20) | `afiliado:<affiliate_id>` | a célula que ele tinha (pelo id) e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se couberem) |
 
 - **Consulta** (`consultaAuditoriaSchema`): `limite` (1 a 200, padrão 50) e `antes_de` (cursor: o `proximo` da página anterior).
 - **200** (`respostaAuditoriaSchema`): do mais novo para o mais antigo.
@@ -675,6 +697,9 @@ Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`;
 - Alvo sem células (R8): `ranking.geral` e `ranking.divisao` null; na equipe, `posicao_divisao` null.
 - `periodo` escolhe a janela do ranking (padrão: o período atual); fora de `atual` e `campanha`, 400.
 - Sem campanha ativa: 404 `nao_encontrado`, como o painel.
+- Acesso do papel desligado na campanha (`acesso.discipuladores` ou `acesso.redes`, D20): 403 `acesso_desligado`
+  com `{ "papel" }` em todo `/api/minha/*`, exista a rota ou não, para o discipulador ou a rede (o líder não tem
+  chave). A sessão não é apagada: volta a valer quando a chave volta. A chave é lida na hora (sem o cache da base).
 - Cache: a resposta é por pessoa e sai com `Cache-Control: no-store`, nunca guardada. Os dados de base (a
   campanha, as células, as vendas por dia, os discipuladores, as redes e os afiliados por célula) ficam até 30 s
   na memória do isolate, como as rotas abertas (D10). O alvo de quem pede vem da sessão, lido na hora: se a base
@@ -700,7 +725,10 @@ anteriores e encerra as sessões abertas por eles no mesmo lote. Tudo ou nada: 4
 `{ "ids": [...] }`, em ordem crescente; o 404 é conferido antes do 409). Uma linha na trilha de auditoria por
 chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes, como "Links novos para 2
 células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
-schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
+schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400. Papel `discipulador` ou `rede`
+com o acesso desligado na campanha (D20): 409 `acao_desligada` com `{ "chave": "acesso.discipuladores" }` (ou
+`acesso.redes`), antes de conferir os ids; o mesmo vale para o link avulso (`POST /api/admin/usuarios/:id/links`)
+de um usuário desses papéis.
 
 ## Mapa de vendas por DDD (Sprint 5, RIFA-015; docs/decisions.md D17)
 
@@ -733,10 +761,15 @@ Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoa
 Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta: `limite` (1 a 200, padrão 50),
 `antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
 `sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
-afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes e `suspeito`.
-`totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a paginação e o filtro de
-status, só na primeira página (null quando a consulta traz `antes_de`). Sem campanha ativa: lista vazia e totais
-zerados.
+afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes, `suspeito` e
+`desconsiderado` (D20). `totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a
+paginação e os filtros de status e de desconsiderado, só na primeira página (null quando a consulta traz
+`antes_de`). Sem campanha ativa: lista vazia e totais zerados.
+
+- **Desconsiderados** (D20): `desconsiderado` é null quando o pedido conta e `{ "motivo", "observacao", "em" }`
+  quando o admin o tirou das contas (motivo `teste`, `fraude`, `estorno` ou `outro`; quem fez fica só na trilha).
+  O filtro `desconsiderado=true` traz só eles e `desconsiderado=false`, só os que contam; outro valor dá 400. Os
+  `totais` por status contam só os que contam: um aprovado desconsiderado aparece na lista, mas não nos totais.
 
 - **Ordem e cursor**: `registrado_em` decrescente e, no empate, `id` decrescente (comparação binária). O cursor é
   o base64url (sem `=`) do JSON `[registrado_em, id]` do último item; a página seguinte começa logo depois dele,
@@ -787,6 +820,53 @@ resultado.
 - **Custo no D1**: duas idas (a campanha ativa e um lote), ~940 linhas lidas com ~1 mil entregas nas últimas
   24 h (a contagem por resultado é quase tudo), também com o slug da campanha trocado depois de entregas
   processadas (a última entrega da campanha sai do índice parcial da migração 0007).
+
+## Regras da campanha (Sprint 6; docs/decisions.md D20)
+
+Rotas **só de admin**, no catálogo `ROTAS_REGRAS_CAMPANHA` de `api.ts` (à parte de `ROTAS` até a API montá-las:
+o teste de proteção exige o 403 da coordenação, que uma rota ainda não montada não dá). As chaves ficam na
+campanha (`pedidos`, `acesso` e `mensagens`, no [PUT da campanha](#get-apiadmincampanha-e-put-apiadmincampanha-coordenacao)).
+
+### `POST /api/admin/pedidos/desconsiderar` e `POST /api/admin/pedidos/reconsiderar` (**só admin**; RIFA-028)
+
+Tira um pedido de TODAS as contas (metas, ritmo, rankings, painel, `/minha`, mapa, bumbo, telão, público, adesão e
+totais do afiliado) por teste, fraude ou estorno, ou o devolve a elas. A Rifei não manda estorno nem cancelamento
+(só `new_order`, `paid_order` e `expired_order`), por isso o caminho é manual.
+
+- **Corpo** (`corpoDesconsiderarPedidoSchema`): `{ "pedido_id": "PEDTESTE0001", "motivo": "teste", "observacao": "compra de teste na reunião" }`.
+  - `pedido_id`: o id da Rifei, sem os espaços das pontas (vai no corpo, não na URL).
+  - `motivo`: `teste`, `fraude`, `estorno` ou `outro`.
+  - `observacao` (opcional): até 140 caracteres, sem os espaços das pontas; vazia ou ausente = null. Sem dado
+    pessoal: um "@" ou 8 dígitos seguidos (telefone, CPF) dão 400.
+  - Reconsiderar (`corpoReconsiderarPedidoSchema`): `{ "pedido_id": "PEDTESTE0001" }`.
+- **200**: o pedido como um item de `GET /api/admin/pedidos` (`itemPedidoSchema`), com `desconsiderado` preenchido
+  (ou null, depois de reconsiderar).
+- Qualquer status da campanha ativa: um pedido de teste ainda não pago também sai, e o pagamento que chegar depois
+  não o devolve às contas (o webhook nunca mexe na desconsideração). Ele continua na lista de pedidos, com o selo,
+  na de suspeitos e na trilha.
+- **Repetir não muda nada**: desconsiderar o que já está desconsiderado e reconsiderar o que conta devolvem 200 com
+  o pedido como está (o motivo e a data da primeira vez), sem linha na trilha. Para trocar o motivo, reconsidere e
+  desconsidere de novo.
+- **Erros**, nesta ordem: 400 `requisicao_invalida` (corpo); 404 `nao_encontrado` sem campanha ativa; 409
+  `acao_desligada` com `{ "chave": "pedidos.desconsiderar" }` quando a chave está desligada (desligar a chave não
+  devolve às contas o que já foi desconsiderado: só bloqueia as duas ações); 404 `nao_encontrado` quando o pedido
+  não é da campanha ativa; 401; 403 (coordenação).
+- Trilha: `pedido.desconsiderar` e `pedido.reconsiderar`, no mesmo lote da gravação. A mudança aparece nas rotas
+  abertas e na visão individual em até 30 s (os caches da D10 e da D14), como uma venda nova.
+
+### `DELETE /api/admin/afiliados/:affiliateId` (**só admin**; RIFA-031)
+
+Remove um afiliado de teste, vinculado ou não. **204**.
+
+- Só se nenhum pedido dele conta, de qualquer status: todos desconsiderados (ou nenhum pedido). Senão, 409
+  `afiliado_com_pedidos` com `{ "pedidos_que_contam": 3, "pedidos": ["PED3", "PED2", "PED1"] }` (os ids dos mais
+  recentes, até 20, para achar na lista de pedidos e desconsiderar).
+- Os pedidos desconsiderados dele ficam sem afiliado (a chave estrangeira não deixa apagar um afiliado com pedido),
+  no mesmo lote; a trilha (`afiliado.remover`) guarda o affiliate_id, a célula e quantos eram.
+- Se a Rifei mandar depois um pedido com esse `affiliate_id`, ele volta como não vinculado (D7). Não depende de
+  chave na campanha.
+- **Erros**: 400 (`:affiliateId` não é inteiro positivo), 401, 403 (coordenação), 404 `nao_encontrado` (o
+  afiliado não existe), 409 `afiliado_com_pedidos`.
 
 ## Rotas RASCUNHO (Sprint 4)
 

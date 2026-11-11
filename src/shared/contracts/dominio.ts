@@ -9,6 +9,16 @@
 import { z } from "zod";
 import { detalheResumidoSchema } from "./erros";
 import {
+  ACESSO_PADRAO,
+  LIMITE_CARACTERES_MENSAGEM,
+  LIMITE_OBSERVACAO_DESCONSIDERACAO,
+  MENSAGENS_PADRAO,
+  MOTIVOS_DESCONSIDERACAO,
+  PEDIDOS_PADRAO,
+  problemasDoModelo,
+  type TipoMensagem,
+} from "./regras";
+import {
   codigoPaisSchema,
   dddSchema,
   payloadRifeiRedigidoSchema,
@@ -158,6 +168,51 @@ export const PUBLICO_PADRAO = {
   limite_ranking: 3,
 } as const;
 
+/**
+ * Pedidos (RIFA-028, D20). `desconsiderar` liga a ação do admin de tirar um pedido de todas as contas (teste,
+ * fraude ou estorno) e de desfazer. Desligar a chave NÃO devolve às contas o que já foi desconsiderado: só
+ * impede desconsiderar e desfazer até ligar de novo. Padrão: desligada (PEDIDOS_PADRAO).
+ */
+export const pedidosConfigSchema = z.object({
+  desconsiderar: z.boolean(),
+});
+
+/**
+ * Acesso da hierarquia (RIFA-029, D20). Desligado, quem tem o papel não entra (POST /api/sessao) nem usa
+ * /api/minha/* (403 `acesso_desligado`), e a tela Acessos não gera link do papel (409 `acao_desligada`). Os links
+ * e as sessões que já existem não são apagados: voltam a valer quando a chave volta. Os líderes não têm chave.
+ * Padrão: os dois ligados (ACESSO_PADRAO).
+ */
+export const acessoConfigSchema = z.object({
+  discipuladores: z.boolean(),
+  redes: z.boolean(),
+});
+
+/** Um modelo de mensagem (RIFA-032): texto com marcadores (regras.ts), até LIMITE_CARACTERES_MENSAGEM. */
+function modeloMensagemSchema(tipo: TipoMensagem) {
+  return z
+    .string()
+    .trim()
+    .min(1)
+    .max(LIMITE_CARACTERES_MENSAGEM)
+    .superRefine((modelo, ctx) => {
+      for (const message of problemasDoModelo(tipo, modelo))
+        ctx.addIssue({ code: "custom", message });
+    });
+}
+
+/**
+ * Mensagens do WhatsApp que levam o link pessoal (RIFA-032, D20), uma por tipo de pessoa, com os marcadores de
+ * MARCADORES_DO_MODELO (`{link}` obrigatório). O site preenche com `preencherMensagem` (regras.ts). Padrão: o
+ * texto de hoje (MENSAGENS_PADRAO). O bumbo não entra.
+ */
+export const mensagensConfigSchema = z.object({
+  link_coordenacao: modeloMensagemSchema("link_coordenacao"),
+  link_lider: modeloMensagemSchema("link_lider"),
+  link_discipulador: modeloMensagemSchema("link_discipulador"),
+  link_rede: modeloMensagemSchema("link_rede"),
+});
+
 export const campanhaEntradaSchema = z.object({
   nome: nomeSchema,
   /** Slug da campanha na Rifei: só eventos com este slug são processados (D5). */
@@ -179,6 +234,14 @@ export const campanhaEntradaSchema = z.object({
     ),
   ranking: rankingConfigSchema,
   publico: publicoConfigSchema.default(() => ({ ...PUBLICO_PADRAO })),
+  /**
+   * Regras do admin (Sprint 6, D20). Diferente de `publico`: cada grupo AUSENTE mantém o que está gravado (no
+   * primeiro PUT, o padrão), e um grupo presente substitui o grupo inteiro. Assim um corpo que não conhece os
+   * grupos (uma aba antiga do site) não religa nem desliga nada.
+   */
+  pedidos: pedidosConfigSchema.optional(),
+  acesso: acessoConfigSchema.optional(),
+  mensagens: mensagensConfigSchema.optional(),
 });
 export type CampanhaEntrada = z.input<typeof campanhaEntradaSchema>;
 
@@ -197,6 +260,13 @@ export const campanhaSchema = z.object({
   soma_percentuais_bp: z.number().int().positive(),
   ranking: rankingConfigSchema,
   publico: publicoConfigSchema,
+  /**
+   * Regras do admin (Sprint 6, D20), sempre presentes na resposta. O `.default()` é da transição: enquanto a API
+   * não grava os grupos (migração 0008), o parse do `montarCampanha` completa com o padrão, que é o que vale.
+   */
+  pedidos: pedidosConfigSchema.default(() => ({ ...PEDIDOS_PADRAO })),
+  acesso: acessoConfigSchema.default(() => ({ ...ACESSO_PADRAO })),
+  mensagens: mensagensConfigSchema.default(() => ({ ...MENSAGENS_PADRAO })),
   criado_em: instanteSchema,
   atualizado_em: instanteSchema,
 });
@@ -350,6 +420,21 @@ export const pedidoSchema = z.object({
   /** Nossos: primeira vez que o pedido foi gravado e última alteração. */
   registrado_em: instanteSchema,
   atualizado_em: instanteSchema,
+  /**
+   * RIFA-028 (D20): o admin desconsiderou o pedido (não conta em nada). null nos três = conta. Os três andam
+   * juntos (a observação é opcional). O webhook nunca mexe neles. `.default(null)`: linhas de antes da 0008.
+   */
+  desconsiderado_em: instanteSchema.nullable().default(null),
+  desconsiderado_motivo: z
+    .enum(MOTIVOS_DESCONSIDERACAO)
+    .nullable()
+    .default(null),
+  desconsiderado_observacao: z
+    .string()
+    .min(1)
+    .max(LIMITE_OBSERVACAO_DESCONSIDERACAO)
+    .nullable()
+    .default(null),
 });
 export type Pedido = z.infer<typeof pedidoSchema>;
 

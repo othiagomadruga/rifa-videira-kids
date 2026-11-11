@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MENSAGENS_PADRAO,
   campanhaSchema,
   detalheValidacaoSchema,
   erroApiSchema,
@@ -192,6 +193,10 @@ describe("CA1: PUT /api/admin/campanha grava campanha e períodos", () => {
       soma_percentuais_bp: 10500,
       ranking: { criterio: "percentual_meta" },
       publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+      // D20: os padrões das regras do admin (a API ainda não grava os grupos; o parse completa).
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: true, redes: true },
+      mensagens: MENSAGENS_PADRAO,
       criado_em: expect.stringMatching(
         /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
       ),

@@ -24,6 +24,7 @@ import {
   type Alvo,
   type TipoAlvo,
 } from "./dominio";
+import { PAPEIS_COM_CHAVE_DE_ACESSO } from "./regras";
 
 // ---------------------------------------------------------------------------------------------------
 // Papéis e parâmetros do acesso
@@ -130,6 +131,14 @@ export const corpoCriarSessaoSchema = z.object({
 export const respostaSessaoSchema = z.object({ usuario: usuarioSessaoSchema });
 export type RespostaSessao = z.infer<typeof respostaSessaoSchema>;
 
+/**
+ * `detalhes` do 403 `acesso_desligado` (RIFA-029, D20): o papel cujo acesso a coordenação desligou na campanha
+ * (`acesso.discipuladores` ou `acesso.redes`). O site diz que a coordenação desligou esse acesso por enquanto.
+ */
+export const detalhesAcessoDesligadoSchema = z.strictObject({
+  papel: z.enum(PAPEIS_COM_CHAVE_DE_ACESSO),
+});
+
 // ---------------------------------------------------------------------------------------------------
 // Administração (papel admin): /api/admin/usuarios e /api/admin/links
 // ---------------------------------------------------------------------------------------------------
@@ -223,6 +232,12 @@ export interface DefinicaoRotaAcesso extends Omit<DefinicaoRota, "metodo"> {
 }
 
 export const ROTAS_ACESSO = {
+  /**
+   * 401: link inválido, expirado ou revogado. 403 `acesso_desligado` (RIFA-029, D20; detalhes:
+   * detalhesAcessoDesligadoSchema): link VÁLIDO de discipulador ou rede com o acesso do papel desligado na campanha
+   * ativa; a sessão não é criada e o link continua valendo (entra quando a chave volta). Líder e coordenação não
+   * têm chave. A chave é lida na hora, sem cache.
+   */
   entrar: {
     metodo: "POST",
     caminho: "/api/sessao",
@@ -275,6 +290,10 @@ export const ROTAS_ACESSO = {
     corpo: corpoAtualizarUsuarioSchema,
     sucesso: { status: 200, corpo: usuarioSchema },
   },
+  /**
+   * 409 `acao_desligada` (RIFA-029, D20; detalhes: detalhesAcaoDesligadaSchema): o usuário é discipulador ou rede e
+   * o acesso do papel está desligado na campanha (a chave `acesso.discipuladores` ou `acesso.redes`).
+   */
   criarLink: {
     metodo: "POST",
     caminho: "/api/admin/usuarios/:id/links",
@@ -363,6 +382,8 @@ export const detalhesIdsRecusadosSchema = z.strictObject({
  *   abertas por eles (ex.: o líder da célula mudou). Sem ela, os links anteriores continuam valendo, como em
  *   criarLink.
  * - Tudo ou nada (um lote só no D1), e uma linha na trilha de auditoria por chamada:
+ *   - 409 `acao_desligada` (RIFA-029, D20; detalhes: detalhesAcaoDesligadaSchema) se o papel é discipulador ou rede
+ *     e o acesso dele está desligado na campanha, antes de conferir os ids;
  *   - 404 `nao_encontrado` se algum id não é um alvo do papel (detalhes: detalhesIdsRecusadosSchema);
  *   - 409 `em_uso` se algum alvo tem usuário desativado (detalhes: detalhesIdsRecusadosSchema): reative antes com o
  *     PATCH.

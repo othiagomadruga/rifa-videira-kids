@@ -207,6 +207,8 @@ describe("webhook: pedido aprovado implausível é gravado, conta e fica marcado
           motivos: MOTIVOS_DO_IMPLAUSIVEL,
           aprovado_em: "2026-12-01T12:20:31.512Z",
           marcado_em: expect.any(String),
+          // D20: o padrão do contrato até a API ler a desconsideração (migração 0008).
+          desconsiderado: null,
         },
       ],
       total: 1,

@@ -33,6 +33,13 @@ import {
 } from "./dominio";
 import { detalheResumidoSchema } from "./erros";
 import { UF_DO_DDD, UFS } from "./ddd";
+import {
+  CHAVES_REGRAS,
+  LIMITE_OBSERVACAO_DESCONSIDERACAO,
+  LIMITE_PEDIDOS_NO_DETALHE,
+  MOTIVOS_DESCONSIDERACAO,
+  observacaoTemContato,
+} from "./regras";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
 // Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
 import type { Papel } from "./acesso";
@@ -403,6 +410,23 @@ export const respostaAdesaoSchema = z.object({
 // A marcação NÃO tira o pedido das vendas: ele continua contando até a coordenação decidir (PO).
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * RIFA-028 (D20): o pedido que o admin tirou de todas as contas. Quem fez fica na trilha de auditoria (só admin),
+ * não aqui.
+ */
+export const desconsideracaoSchema = z.strictObject({
+  motivo: z.enum(MOTIVOS_DESCONSIDERACAO),
+  /** Texto curto do admin, sem dado pessoal; null = sem observação. */
+  observacao: z
+    .string()
+    .min(1)
+    .max(LIMITE_OBSERVACAO_DESCONSIDERACAO)
+    .nullable(),
+  /** Quando foi desconsiderado (a primeira vez, se o pedido não voltou a contar depois). */
+  em: instanteSchema,
+});
+export type Desconsideracao = z.infer<typeof desconsideracaoSchema>;
+
 /** Teto de bilhetes num pedido só: acima dele, o pedido aprovado é marcado para revisão. */
 export const TETO_BILHETES_POR_PEDIDO = 200;
 
@@ -448,6 +472,11 @@ export const pedidoSuspeitoSchema = z.object({
   motivos: z.array(motivoPedidoSuspeitoSchema).min(1),
   aprovado_em: instanteSchema.nullable(),
   marcado_em: instanteSchema,
+  /**
+   * RIFA-028 (D20): o admin já desconsiderou o pedido (a revisão terminou: ele não conta mais); null = continua
+   * contando. O pedido fica na lista (e no `total`). `.default(null)` só na transição: a API de hoje não manda.
+   */
+  desconsiderado: desconsideracaoSchema.nullable().default(null),
 });
 export type PedidoSuspeito = z.infer<typeof pedidoSuspeitoSchema>;
 
@@ -478,7 +507,12 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - hierarquia.criar, hierarquia.atualizar e hierarquia.remover: POST, PUT e DELETE de /api/admin/redes,
  *   /discipuladores e /celulas (RIFA-018), alvo `<rede|discipulador|celula>:<id>`; resumo com o nome do item,
  *   o antes e o depois do que mudou (os dados do líder e o responsável da rede só pelo nome do campo) e, na
- *   remoção, o acesso da hierarquia que caiu junto (o id do usuário).
+ *   remoção, o acesso da hierarquia que caiu junto (o id do usuário);
+ * - pedido.desconsiderar e pedido.reconsiderar (RIFA-028, D20): ROTAS_REGRAS_CAMPANHA, alvo `pedido:<id>` (só
+ *   `pedido` quando o id não cabe nos 64 caracteres do alvo); resumo com o id do pedido entre aspas, o status, os
+ *   bilhetes e a célula; na desconsideração, o motivo e, da observação, só "observação informada" (texto livre);
+ * - afiliado.remover (RIFA-031, D20): alvo `afiliado:<affiliate_id>`; resumo com a célula que ele tinha e quantos
+ *   pedidos desconsiderados ficaram sem afiliado (os ids, se couberem).
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -496,8 +530,23 @@ export const ACOES_AUDITORIA = [
   "hierarquia.criar",
   "hierarquia.atualizar",
   "hierarquia.remover",
+  "pedido.desconsiderar",
+  "pedido.reconsiderar",
+  "afiliado.remover",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
+
+/** Tamanho máximo do `alvo` de um registro (CHECK da coluna, migração 0005). */
+export const LIMITE_ALVO_AUDITORIA = 64;
+
+/**
+ * O `alvo` da trilha para um pedido (RIFA-028, D20): `pedido:<id>` quando cabe em LIMITE_ALVO_AUDITORIA (o id da
+ * Rifei tem até 128 caracteres); senão só `pedido`, e o id vai inteiro no resumo (que sempre o traz).
+ */
+export function alvoDoPedidoNaAuditoria(pedidoId: string): string {
+  const alvo = `pedido:${pedidoId}`;
+  return alvo.length <= LIMITE_ALVO_AUDITORIA ? alvo : "pedido";
+}
 
 /** Itens por página: padrão e máximo. */
 export const PAGINA_AUDITORIA_PADRAO = 50;
@@ -523,7 +572,7 @@ export const registroAuditoriaSchema = z.object({
   usuario_nome: z.string().min(1).max(120),
   acao: z.enum(ACOES_AUDITORIA),
   /** `<tipo>:<id>` ou só `<tipo>`: "campanha:1", "afiliado:1042", "hierarquia", "usuario:3", "link:12". */
-  alvo: z.string().min(1).max(64),
+  alvo: z.string().min(1).max(LIMITE_ALVO_AUDITORIA),
   /** O que mudou, sem dados pessoais: nunca nome, e-mail ou telefone de ninguém (só ids e configuração). */
   resumo: z.string().min(1).max(1000),
 });
@@ -1355,6 +1404,14 @@ export const consultaPedidosSchema = z
       .optional(),
     /** Busca exata pelo id do pedido na Rifei. */
     id: z.string().trim().min(1).max(128).optional(),
+    /**
+     * RIFA-028 (D20): "true" = só os desconsiderados; "false" = só os que contam; ausente = todos (os
+     * desconsiderados aparecem com o selo `desconsiderado`). Não muda os `totais` (como o filtro de status).
+     */
+    desconsiderado: z
+      .enum(["true", "false"])
+      .transform((valor) => valor === "true")
+      .optional(),
   })
   .refine(
     (consulta) =>
@@ -1385,6 +1442,11 @@ export const itemPedidoSchema = z.strictObject({
   atualizado_em: instanteSchema,
   /** Está na lista de pedidos suspeitos (D11): conta nas vendas, mas merece um olhar. */
   suspeito: z.boolean(),
+  /**
+   * RIFA-028 (D20): null = o pedido conta; preenchido = desconsiderado pelo admin (fica na lista, com o selo, e
+   * fora de todas as contas). `.default(null)` só na transição: a API de hoje não manda o campo.
+   */
+  desconsiderado: desconsideracaoSchema.nullable().default(null),
 });
 export type ItemPedido = z.infer<typeof itemPedidoSchema>;
 
@@ -1399,7 +1461,8 @@ export const respostaPedidosSchema = z.strictObject({
   /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
   proximo: z.string().min(1).max(2048).nullable(),
   /**
-   * Totais por status com os MESMOS filtros (célula, sem célula, id), sem a paginação nem o filtro de status.
+   * Totais por status com os MESMOS filtros (célula, sem célula, id), sem a paginação nem os filtros de status e
+   * de desconsiderado. Contam só os pedidos que contam: os desconsiderados (RIFA-028, D20) ficam fora dos três.
    * Só na primeira página: null quando a consulta traz `antes_de` (poupa uma leitura do D1 por "carregar mais").
    */
   totais: z
@@ -1538,6 +1601,80 @@ export const respostaEstadoWebhookSchema = z.strictObject({
   verificado_em: instanteSchema,
 });
 export type RespostaEstadoWebhook = z.infer<typeof respostaEstadoWebhookSchema>;
+
+// ---------------------------------------------------------------------------------------------------
+// Regras da campanha (Sprint 6, D20; só admin): desconsiderar pedido (RIFA-028) e remover afiliado de teste
+// (RIFA-031). As chaves ficam na campanha (`pedidos`, `acesso` e `mensagens`, em dominio.ts); as rotas, em
+// ROTAS_REGRAS_CAMPANHA.
+// ---------------------------------------------------------------------------------------------------
+
+/** O id do pedido na Rifei, como na busca da lista (sem os espaços das pontas). Vai no corpo, nunca na URL. */
+const pedidoIdCorpoSchema = z.string().trim().min(1).max(128);
+
+/** Observação do admin: sem os espaços das pontas; vazia vira null; sem e-mail, telefone ou documento. */
+const observacaoDesconsideracaoSchema = z
+  .string()
+  .trim()
+  .max(LIMITE_OBSERVACAO_DESCONSIDERACAO)
+  .refine((texto) => !observacaoTemContato(texto), {
+    message:
+      "Sem e-mail, telefone ou documento: a observação não guarda dado pessoal",
+  })
+  .transform((texto) => (texto === "" ? null : texto))
+  .nullable();
+
+/**
+ * POST /api/admin/pedidos/desconsiderar. O pedido sai de TODAS as contas (metas, ritmo, rankings, painel, /minha,
+ * mapa, bumbo, telão, público, adesão e totais do afiliado) e continua na lista de pedidos, com o selo, e na
+ * trilha. Webhook que chegar depois não o devolve às contas. Pedido de qualquer status (um pedido de teste pode
+ * ser desconsiderado antes de ser pago).
+ */
+export const corpoDesconsiderarPedidoSchema = z.strictObject({
+  pedido_id: pedidoIdCorpoSchema,
+  motivo: z.enum(MOTIVOS_DESCONSIDERACAO),
+  observacao: observacaoDesconsideracaoSchema.default(null),
+});
+export type CorpoDesconsiderarPedido = z.input<
+  typeof corpoDesconsiderarPedidoSchema
+>;
+
+/** POST /api/admin/pedidos/reconsiderar: desfaz a desconsideração (o pedido volta a contar). */
+export const corpoReconsiderarPedidoSchema = z.strictObject({
+  pedido_id: pedidoIdCorpoSchema,
+});
+export type CorpoReconsiderarPedido = z.input<
+  typeof corpoReconsiderarPedidoSchema
+>;
+
+/**
+ * `detalhes` do 409 `acao_desligada`: a chave da campanha que está desligada (o site leva à tela Campanha).
+ * - pedidos.desconsiderar: desconsiderar e reconsiderar pedido;
+ * - acesso.discipuladores e acesso.redes: gerar link para o papel (em lote ou avulso).
+ */
+export const detalhesAcaoDesligadaSchema = z.strictObject({
+  chave: z.enum(CHAVES_REGRAS),
+});
+
+/**
+ * `detalhes` do 409 `afiliado_com_pedidos` (DELETE /api/admin/afiliados/:affiliateId): quantos pedidos do afiliado
+ * ainda contam (de qualquer status, não desconsiderados) e os ids dos mais recentes (até
+ * LIMITE_PEDIDOS_NO_DETALHE), para o admin achá-los na lista de pedidos (busca por id).
+ */
+export const detalhesAfiliadoComPedidosSchema = z
+  .strictObject({
+    pedidos_que_contam: z.number().int().min(1),
+    pedidos: z
+      .array(z.string().min(1).max(128))
+      .min(1)
+      .max(LIMITE_PEDIDOS_NO_DETALHE),
+  })
+  .refine(
+    (detalhes) => detalhes.pedidos.length <= detalhes.pedidos_que_contam,
+    {
+      message: "Mais ids que pedidos que contam",
+      path: ["pedidos"],
+    },
+  );
 
 // ---------------------------------------------------------------------------------------------------
 // RASCUNHO: POST /api/admin/reconciliacao (CSV "Exportar Pedidos" da Rifei → divergências)
@@ -1845,7 +1982,11 @@ export const ROTAS = {
     consulta: consultaBumboSchema,
     sucesso: { status: 200, corpo: respostaBumboSchema },
   },
-  /** Sem sessão: 401. Sessão da coordenação: 403 (`proibido`). Sem campanha ativa: como o painel. */
+  /**
+   * Sem sessão: 401. Sessão da coordenação: 403 (`proibido`). Sem campanha ativa: como o painel. Discipulador ou
+   * rede com o acesso do papel desligado na campanha (RIFA-029, D20): 403 `acesso_desligado` em TODO /api/minha/*,
+   * com detalhesAcessoDesligadoSchema (a sessão não é apagada: volta a valer quando a chave volta).
+   */
   visaoIndividual: {
     metodo: "GET",
     caminho: "/api/minha/visao",
@@ -1889,3 +2030,56 @@ export const ROTAS = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRota = keyof typeof ROTAS;
+
+/**
+ * Rotas das regras da campanha (Sprint 6, D20), só admin. Catálogo à parte de ROTAS até a API montá-las, como foi
+ * com ROTAS_ACESSO_HIERARQUIA: o src/worker/protecao.test.ts percorre ROTAS e exige o 403 da coordenação nas rotas
+ * só de admin, que uma rota ainda não montada não dá (404). A tarefa -api põe este catálogo no teste no mesmo merge
+ * que monta as rotas.
+ *
+ * Ordem das respostas de erro em desconsiderar e reconsiderar: 400 (corpo); 404 sem campanha ativa; 409
+ * `acao_desligada` com a chave `pedidos.desconsiderar` desligada (antes de procurar o pedido); 404 pedido que não é
+ * da campanha ativa. Repetir não muda nada: desconsiderar um pedido já desconsiderado e reconsiderar um que conta
+ * devolvem 200 com o pedido como está (o motivo e a data da primeira vez) e não gravam na trilha (como revogar um
+ * link já revogado). Para trocar o motivo: reconsiderar e desconsiderar de novo.
+ */
+export const ROTAS_REGRAS_CAMPANHA = {
+  /** 200: o pedido como a lista mostra, já com `desconsiderado`. Trilha: `pedido.desconsiderar`. */
+  desconsiderarPedido: {
+    metodo: "POST",
+    caminho: "/api/admin/pedidos/desconsiderar",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoDesconsiderarPedidoSchema,
+    sucesso: { status: 200, corpo: itemPedidoSchema },
+  },
+  /** 200: o pedido como a lista mostra, com `desconsiderado: null`. Trilha: `pedido.reconsiderar`. */
+  reconsiderarPedido: {
+    metodo: "POST",
+    caminho: "/api/admin/pedidos/reconsiderar",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoReconsiderarPedidoSchema,
+    sucesso: { status: 200, corpo: itemPedidoSchema },
+  },
+  /**
+   * RIFA-031: apaga o afiliado (vinculado ou não) se nenhum pedido dele conta (todos desconsiderados, ou nenhum).
+   * Os pedidos desconsiderados dele ficam sem afiliado (a FK de pedidos é RESTRICT), no mesmo lote, e a trilha
+   * (`afiliado.remover`) guarda o affiliate_id e quantos eram. 404: o afiliado não existe. 409
+   * `afiliado_com_pedidos` (detalhes: detalhesAfiliadoComPedidosSchema): algum pedido dele conta. Não depende de
+   * chave na campanha. Se a Rifei mandar depois um pedido com esse affiliate_id, ele volta como não vinculado (D7).
+   */
+  removerAfiliado: {
+    metodo: "DELETE",
+    caminho: "/api/admin/afiliados/:affiliateId",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    parametros: parametroAffiliateIdSchema,
+    sucesso: { status: 204, corpo: null },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaRegrasCampanha = keyof typeof ROTAS_REGRAS_CAMPANHA;
