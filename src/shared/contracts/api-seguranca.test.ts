@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 16 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 17 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -188,6 +188,8 @@ describe("GET /api/admin/auditoria", () => {
       "pedido.desconsiderar",
       "pedido.reconsiderar",
       "afiliado.remover",
+      // RIFA-039 (D21): o token do webhook gerado pela tela.
+      "webhook.gerar_token",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
     for (const acao of ACOES_AUDITORIA)

@@ -58,6 +58,11 @@ import {
   observacaoTemContato,
 } from "./regras";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
+import {
+  CREDENCIAIS_WEBHOOK,
+  FORMATO_TOKEN_WEBHOOK,
+  credencialVigenteDoWebhook,
+} from "./token-webhook";
 // Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
 import type { Papel } from "./acesso";
 
@@ -67,7 +72,8 @@ import type { Papel } from "./acesso";
 
 /**
  * - aberto: sem autenticação (/api/health e /api/publico/*; o público nunca recebe valores financeiros);
- * - rifei_bearer: `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>` (/api/webhooks/*);
+ * - rifei_bearer: `Authorization: Bearer <token>` (/api/webhooks/*), com o token gerado pela tela (RIFA-039, D21: no
+ *   banco, só o SHA-256) ou, sem ele, o segredo do Worker `RIFEI_WEBHOOK_TOKEN`; nenhum dos dois: 503;
  * - coordenacao: equipe da campanha (/api/admin/* e /api/painel/*), com a sessão do link pessoal (RIFA-007);
  * - hierarquia: líder, discipulador e rede (/api/minha/*), com a mesma sessão (RIFA-014, D12). O alvo vem só
  *   da sessão: nenhuma rota deste grupo aceita id de célula, discipulador ou rede na URL, na consulta ou no corpo.
@@ -532,7 +538,10 @@ export type RespostaPedidosSuspeitos = z.infer<
  *   `pedido` quando o id não cabe nos 64 caracteres do alvo); resumo com o id do pedido entre aspas, o status, os
  *   bilhetes e a célula; na desconsideração, o motivo e, da observação, só "observação informada" (texto livre);
  * - afiliado.remover (RIFA-031, D20): alvo `afiliado:<affiliate_id>`; resumo com a célula que ele tinha e quantos
- *   pedidos desconsiderados ficaram sem afiliado (os ids, se couberem).
+ *   pedidos desconsiderados ficaram sem afiliado (os ids, se couberem);
+ * - webhook.gerar_token (RIFA-039, D21): ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook, alvo `webhook`
+ *   (ALVO_AUDITORIA_TOKEN_WEBHOOK); resumo com o que deixou de valer (nada, o segredo do Worker ou o token da tela
+ *   gerado em <instante>), NUNCA o token nem o hash. O 409 (sem `substituir`) não registra.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -554,6 +563,7 @@ export const ACOES_AUDITORIA = [
   "pedido.desconsiderar",
   "pedido.reconsiderar",
   "afiliado.remover",
+  "webhook.gerar_token",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -2467,3 +2477,157 @@ export const ROTAS_REGRAS_CAMPANHA = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRotaRegrasCampanha = keyof typeof ROTAS_REGRAS_CAMPANHA;
+
+// ---------------------------------------------------------------------------------------------------
+// Token do webhook da Rifei gerado pela tela (RIFA-039, D21; só admin): GET e POST /api/admin/webhook/token, no
+// catálogo ROTAS_TOKEN_WEBHOOK. Formato, credenciais e as regras puras em ./token-webhook.
+// ---------------------------------------------------------------------------------------------------
+
+/** O texto é uma URL http(s) absoluta cujo caminho é o do webhook (sem barra no fim, sem consulta). */
+function eUrlDoWebhookRifei(texto: string): boolean {
+  try {
+    const url = new URL(texto);
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      url.pathname === CAMINHOS_WEBHOOK_RIFEI[0] &&
+      url.search === "" &&
+      url.hash === "" &&
+      `${url.origin}${url.pathname}` === texto
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** A URL que vai no campo "URL" do webhook na Rifei: `<origem da requisição>/api/webhooks/rifei`. */
+const urlWebhookRifeiSchema = z.url().refine(eUrlDoWebhookRifei, {
+  message: `A URL do webhook é <origem>${CAMINHOS_WEBHOOK_RIFEI[0]}`,
+});
+
+/**
+ * O estado do token, como a tela mostra: qual credencial vale, desde quando e o último uso. **NUNCA traz o token nem
+ * o hash** (estrito: um campo a mais invalida). Coerência conferida pelo schema:
+ * - `vigente` = credencialVigenteDoWebhook (o token da tela tem prioridade; D21): "tela" se e somente se há
+ *   `gerado_em`; "segredo" só com `segredo_configurado`; null = nenhum dos dois (o webhook responde 503);
+ * - `ultimo_uso_em` = ultimoUsoDoWebhook: null sem credencial; com o token da tela, nunca antes de `gerado_em`.
+ */
+export const estadoTokenWebhookSchema = z
+  .strictObject({
+    /** A credencial que autentica o webhook agora; null = nenhuma (503 `nao_configurado`). */
+    vigente: z.enum(CREDENCIAIS_WEBHOOK).nullable(),
+    /** Quando o token da tela foi gerado; null sem token da tela. */
+    gerado_em: instanteSchema.nullable(),
+    /**
+     * A última entrega autenticada com a credencial vigente (webhook_eventos, qualquer resultado; ultimoUsoDoWebhook).
+     * Com o token da tela, null = a Rifei ainda não mandou nada com ele (foi colado?).
+     */
+    ultimo_uso_em: instanteSchema.nullable(),
+    /** O segredo do Worker `RIFEI_WEBHOOK_TOKEN` existe (não vazio). Com o token da tela, ele não vale. */
+    segredo_configurado: z.boolean(),
+    /** Para colar no campo "URL" do webhook na Rifei (origem da requisição, como as URLs dos links de acesso). */
+    url: urlWebhookRifeiSchema,
+  })
+  .superRefine((estado, ctx) => {
+    const vigente = credencialVigenteDoWebhook({
+      tokenDaTela: estado.gerado_em !== null,
+      segredoConfigurado: estado.segredo_configurado,
+    });
+    if (estado.vigente !== vigente)
+      ctx.addIssue({
+        code: "custom",
+        path: ["vigente"],
+        message:
+          "A credencial vigente não combina com gerado_em e segredo_configurado (o token da tela tem prioridade)",
+      });
+    if (
+      estado.ultimo_uso_em !== null &&
+      (vigente === null ||
+        (estado.gerado_em !== null && estado.ultimo_uso_em < estado.gerado_em))
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["ultimo_uso_em"],
+        message:
+          "Último uso sem credencial ou antes de o token da tela ser gerado",
+      });
+  });
+export type EstadoTokenWebhook = z.infer<typeof estadoTokenWebhookSchema>;
+
+/**
+ * POST /api/admin/webhook/token. `substituir: true` confirma que a credencial vigente (o token da tela ou o segredo
+ * do Worker) deixa de valer na hora: as entregas recebem 401 até o token novo ser colado na Rifei. Sem ela (padrão
+ * false) e com credencial vigente: 409 `em_uso` com detalhesTokenWebhookEmUsoSchema, nada muda. Sem credencial
+ * vigente, `substituir` não importa.
+ */
+export const corpoGerarTokenWebhookSchema = z.strictObject({
+  substituir: z.boolean().default(false),
+});
+export type CorpoGerarTokenWebhook = z.input<
+  typeof corpoGerarTokenWebhookSchema
+>;
+
+/**
+ * 201: a ÚNICA vez em que o token aparece (no banco, só o SHA-256; nunca no GET, na trilha, em log ou na URL). O
+ * site mostra uma vez, com "Copiar", e não guarda. `estado` já é o novo: o token da tela vigente e ainda sem uso.
+ */
+export const respostaGerarTokenWebhookSchema = z.strictObject({
+  /** 32 bytes em hex minúsculo (FORMATO_TOKEN_WEBHOOK): vai no campo "Token" do webhook na Rifei. */
+  token: z.string().regex(FORMATO_TOKEN_WEBHOOK),
+  estado: estadoTokenWebhookSchema.refine(
+    (estado) => estado.vigente === "tela" && estado.ultimo_uso_em === null,
+    {
+      message: "Depois de gerar, vale o token da tela, ainda sem uso",
+      path: ["vigente"],
+    },
+  ),
+});
+export type RespostaGerarTokenWebhook = z.infer<
+  typeof respostaGerarTokenWebhookSchema
+>;
+
+/**
+ * `detalhes` do 409 `em_uso` de POST /api/admin/webhook/token: a credencial que deixaria de valer. O site pede a
+ * confirmação ("as vendas param até o token novo ser colado na Rifei") e repete com `substituir: true`.
+ */
+export const detalhesTokenWebhookEmUsoSchema = z.strictObject({
+  vigente: z.enum(CREDENCIAIS_WEBHOOK),
+});
+
+/**
+ * Rotas do token do webhook (RIFA-039, D21), só admin. Catálogo à parte de ROTAS até a API montá-las, como
+ * ROTAS_REGRAS_CAMPANHA: o src/worker/protecao.test.ts exige o 403 da coordenação nas rotas só de admin, que uma
+ * rota ainda não montada não dá (404). A tarefa -api põe este catálogo no teste no mesmo merge que monta as rotas.
+ *
+ * O "só admin" vai no HANDLER das duas rotas (ou num `use` do caminho exato, como routes/auditoria.ts), nunca num
+ * `use` de /api/admin/webhook/*: as entregas e o estado do webhook (ROTAS.entregasWebhook e ROTAS.estadoWebhook)
+ * continuam da coordenação.
+ */
+export const ROTAS_TOKEN_WEBHOOK = {
+  /** 200: o estado (sem o token). Lê a linha do token e a última entrega (`ULTIMA_ENTREGA` de db/estado-webhook.ts). */
+  obterTokenWebhook: {
+    metodo: "GET",
+    caminho: "/api/admin/webhook/token",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: estadoTokenWebhookSchema },
+  },
+  /**
+   * 201: o token novo (uma vez) e o estado. Gerar de novo substitui o anterior, que para de valer na próxima
+   * requisição em todos os servidores (o webhook não guarda o token em cache). Erros, depois do login (401 sem
+   * sessão; 403 da coordenação, da hierarquia e de outra origem): 400 (corpo); 409 `em_uso` com
+   * detalhesTokenWebhookEmUsoSchema (credencial vigente sem `substituir: true`). Trilha: `webhook.gerar_token`, no
+   * mesmo lote da gravação.
+   */
+  gerarTokenWebhook: {
+    metodo: "POST",
+    caminho: "/api/admin/webhook/token",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoGerarTokenWebhookSchema,
+    sucesso: { status: 201, corpo: respostaGerarTokenWebhookSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaTokenWebhook = keyof typeof ROTAS_TOKEN_WEBHOOK;

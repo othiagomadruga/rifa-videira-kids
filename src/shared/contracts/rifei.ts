@@ -13,7 +13,11 @@ import {
   type DetalheResumido,
 } from "./erros";
 
-/** Nome do segredo do Worker com o token que a Rifei manda em `Authorization: Bearer <token>` (D6). */
+/**
+ * Nome do segredo do Worker com o token que a Rifei manda em `Authorization: Bearer <token>` (D6). Desde a RIFA-039
+ * (docs/decisions.md D21), vale só quando não há token gerado pela tela: o da tela tem prioridade
+ * (credencialVigenteDoWebhook em ./token-webhook).
+ */
 export const SEGREDO_WEBHOOK_RIFEI = "RIFEI_WEBHOOK_TOKEN";
 
 /** Eventos do webhook ("Novo pedido", "Pedido pago" e "Pedido expirado" na tela da Rifei). */
