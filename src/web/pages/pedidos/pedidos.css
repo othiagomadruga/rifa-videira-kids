@@ -29,6 +29,11 @@
   flex: 1 1 12rem;
 }
 
+/* Um filtro sozinho (o resultado das entregas) não estica até a largura da página no computador. */
+.pedidos-filtros > .ui-campo:only-child {
+  flex: 0 1 20rem;
+}
+
 .pedidos-busca {
   display: flex;
   flex: 2 1 18rem;
@@ -202,6 +207,12 @@
 .pedidos-slug {
   font-family: var(--fonte-mono);
   font-size: var(--texto-sm);
+}
+
+/* Sem slug ("Não lido"): texto comum, não código. */
+.pedidos-slug > .pedidos-suave {
+  font-family: var(--fonte-base);
+  font-size: var(--texto-md);
 }
 
 .pedidos-seta {
