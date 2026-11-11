@@ -3,7 +3,7 @@
 // índice da migração 0007 (pedidos_por_campanha_registro) atrai o planejador também onde ele piora a leitura:
 // cada consulta tem o plano travado com EXPLAIN QUERY PLAN e as linhas lidas (`meta.rows_read`) com folga sobre o
 // medido, mas bem abaixo da armadilha que a revisão mediu (entre parênteses em cada teste). Cada teste lê o mesmo
-// banco semeado uma vez; nenhum escreve.
+// banco semeado uma vez; só o do slug trocado escreve, e desfaz no fim.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -461,7 +461,7 @@ describe("estado: contagem com `resultado IN (...)` e últimas por `MAX(recebido
     expect(linhasLidas).toBeLessThanOrEqual(1.1 * volume.entregas24h);
   });
 
-  it("última entrega e última da campanha: o MAX para no topo de cada resultado (com ORDER BY ... LIMIT 1, ~34 mil)", async () => {
+  it("última entrega e última da campanha: o MAX para no topo do índice (com ORDER BY ... LIMIT 1, ~34 mil)", async () => {
     const ultima = await medir({ sql: ULTIMA_ENTREGA, valores: [] });
     const daCampanha = await medir({
       sql: ULTIMA_DA_CAMPANHA,
@@ -470,12 +470,26 @@ describe("estado: contagem com `resultado IN (...)` e últimas por `MAX(recebido
     expect(ultima.plano).toEqual([
       "SEARCH webhook_eventos USING COVERING INDEX webhook_eventos_por_resultado (resultado=?)",
     ]);
+    // A da campanha: o índice parcial da 0007 (só as entregas da campanha, por slug).
     expect(daCampanha.plano).toEqual([
-      "SEARCH webhook_eventos USING INDEX webhook_eventos_por_resultado (resultado=?)",
+      "SEARCH webhook_eventos USING INDEX webhook_eventos_da_campanha_por_slug (slug=?)",
     ]);
-    // Medido: 10 (2 por resultado) e 6.
+    // Medido: 10 (2 por resultado) e 1.
     expect(ultima.linhasLidas).toBeLessThanOrEqual(20);
-    expect(daCampanha.linhasLidas).toBeLessThanOrEqual(15);
+    expect(daCampanha.linhasLidas).toBeLessThanOrEqual(3);
+  });
+
+  it("última da campanha com o slug trocado depois de entregas processadas: 0 linha lida (pelo índice (resultado, recebido_em), ~17,6 mil)", async () => {
+    // Todas as entregas da campanha semeadas têm o slug antigo (SLUG); o novo não tem nenhuma.
+    const { plano, linhasLidas, linhas } = await medir({
+      sql: ULTIMA_DA_CAMPANHA,
+      valores: ["rifa-kids-slug-novo"],
+    });
+    expect(linhas).toBe(1);
+    expect(plano).toEqual([
+      "SEARCH webhook_eventos USING INDEX webhook_eventos_da_campanha_por_slug (slug=?)",
+    ]);
+    expect(linhasLidas).toBeLessThanOrEqual(3);
   });
 
   it("última aprovação: o índice (status, aprovado_em), 1 linha lida", async () => {
@@ -535,6 +549,31 @@ describe("orçamento por requisição (rotas reais, todas as leituras contadas)"
     ROTAS.entregasWebhook.sucesso.corpo.parse(corpo);
     expect(contagem.idas).toBe(1);
     expect(contagem.linhasLidas).toBeLessThanOrEqual(60);
+  });
+
+  it("estado com o slug da campanha trocado depois de entregas processadas: o mesmo orçamento, nunca_recebeu", async () => {
+    // O único teste que escreve: troca o slug da campanha e desfaz no fim.
+    await db
+      .prepare(
+        "UPDATE campanhas SET slug_rifei = 'rifa-kids-slug-novo' WHERE id = 1",
+      )
+      .run();
+    try {
+      const { corpo, contagem } = await requisitar(ROTAS.estadoWebhook.caminho);
+      const estado = ROTAS.estadoWebhook.sucesso.corpo.parse(corpo);
+      // Dia da campanha, 12:00 em ponto: ainda não passou de 4 h desde as 8h (D16).
+      expect(estado.situacao).toBe("nunca_recebeu");
+      expect(estado.ultima_processada_em).toBeNull();
+      expect(contagem.idas).toBe(2);
+      expect(contagem.linhasLidas).toBeLessThanOrEqual(
+        1.1 * volume.entregas24h + 100,
+      );
+    } finally {
+      await db
+        .prepare("UPDATE campanhas SET slug_rifei = ?1 WHERE id = 1")
+        .bind(SLUG)
+        .run();
+    }
   });
 
   it("estado: duas idas (a campanha e um lote), ~940 linhas lidas (≲ 1 mil)", async () => {

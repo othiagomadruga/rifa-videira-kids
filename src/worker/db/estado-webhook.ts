@@ -14,9 +14,12 @@
  * Custo (D10): duas idas ao banco, a campanha ativa (buscarCampanhaAtiva) e um db.batch. Os planos ficam
  * travados em db/pedidos-webhook-desempenho.test.ts: a contagem das 24 h usa `resultado IN (...)` (é o que faz o
  * índice webhook_eventos_por_resultado ser percorrido só na janela; sem o IN, o índice inteiro) e as últimas
- * entregas usam `MAX(recebido_em)`, que desce pelo mesmo índice e para na primeira linha de cada resultado (com
- * `ORDER BY recebido_em DESC LIMIT 1`, o planejador ia para o índice da migração 0007 e lia a tabela inteira).
- * Sem campanha ativa, as consultas da campanha nem vão ao banco: com o slug nulo, o MAX percorreria o índice todo.
+ * entregas usam `MAX(recebido_em)`, que para na primeira linha do índice (com `ORDER BY recebido_em DESC LIMIT 1`,
+ * o planejador ia para o índice (resultado, id) da migração 0007 e lia a tabela inteira). A última de qualquer
+ * resultado desce pelo índice (resultado, recebido_em); a da campanha, pelo índice parcial
+ * webhook_eventos_da_campanha_por_slug da 0007 (0 ou 1 linha lida, mesmo com o slug trocado depois de entregas
+ * processadas, quando o outro índice percorria todas as do slug antigo).
+ * Sem campanha ativa, as consultas da campanha nem vão ao banco.
  */
 import {
   HORAS_SEM_ENTREGA_ALERTA,
@@ -67,7 +70,10 @@ export const ULTIMA_ENTREGA = `SELECT MAX(recebido_em) AS em
   FROM webhook_eventos
   WHERE resultado IN (${lista(RESULTADOS_EVENTO_WEBHOOK)})`;
 
-/** Última entrega da campanha (?1 = slug_rifei da ativa). */
+/**
+ * Última entrega da campanha (?1 = slug_rifei da ativa). O `resultado IN (...)` é o MESMO do WHERE do índice
+ * parcial webhook_eventos_da_campanha_por_slug (migração 0007): é o que deixa o planejador usá-lo.
+ */
 export const ULTIMA_DA_CAMPANHA = `SELECT MAX(recebido_em) AS em
   FROM webhook_eventos
   WHERE resultado IN (${lista(RESULTADOS_DA_CAMPANHA)}) AND slug = ?1`;

@@ -92,8 +92,10 @@ describe("migrações: schema do D1", () => {
       webhook_eventos: [
         "webhook_eventos_por_pedido",
         "webhook_eventos_por_resultado",
-        // 0007 (RIFA-025): as entregas de um resultado pelo id (db/entregas-webhook.ts).
+        // 0007 (RIFA-025): as entregas de um resultado pelo id (db/entregas-webhook.ts) e, parcial, as entregas
+        // da campanha por slug (última entrega da campanha, db/estado-webhook.ts).
         "webhook_eventos_por_resultado_id",
+        "webhook_eventos_da_campanha_por_slug",
       ],
       links_acesso: ["links_acesso_por_usuario"],
       sessoes: [
@@ -851,7 +853,7 @@ describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
     expect(await fotografar0007(db)).toEqual(antes);
   });
 
-  it("os dois índices existem, com as colunas na ordem, e cobrem as linhas que já existiam", async () => {
+  it("os três índices existem, com as colunas na ordem, e cobrem as linhas que já existiam", async () => {
     const colunas = async (indice: string) =>
       (
         await db
@@ -868,6 +870,19 @@ describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
       "resultado",
       "id",
     ]);
+    expect(await colunas("webhook_eventos_da_campanha_por_slug")).toEqual([
+      "slug",
+      "recebido_em",
+    ]);
+    // Parcial: só as entregas da campanha (D16), com o WHERE que a consulta repete.
+    const parcial = await db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'webhook_eventos_da_campanha_por_slug'",
+      )
+      .first<{ sql: string }>();
+    expect(parcial?.sql).toMatch(
+      /WHERE resultado IN \('processado', 'duplicado', 'ignorado_transicao'\)$/,
+    );
     // Lidas pelo índice (INDEXED BY obriga), as linhas antigas estão todas lá, na ordem da lista.
     const { results: pedidos } = await db
       .prepare(
@@ -890,6 +905,19 @@ describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
     expect(entregas).toEqual([
       { resultado: "erro_validacao", n: 1 },
       { resultado: "processado", n: 2 },
+    ]);
+    // As duas entregas processadas antigas estão no índice parcial; o erro (fora do WHERE dele), não.
+    const { results: daCampanha } = await db
+      .prepare(
+        `SELECT recebido_em FROM webhook_eventos INDEXED BY webhook_eventos_da_campanha_por_slug
+         WHERE resultado IN ('processado', 'duplicado', 'ignorado_transicao') AND slug = ?1
+         ORDER BY recebido_em`,
+      )
+      .bind("campanha-antes-da-0007")
+      .all<{ recebido_em: string }>();
+    expect(daCampanha.map((linha) => linha.recebido_em)).toEqual([
+      "2026-11-24T12:59:00.000Z",
+      "2026-11-24T13:00:01.000Z",
     ]);
   });
 });

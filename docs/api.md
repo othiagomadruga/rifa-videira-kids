@@ -763,7 +763,8 @@ resultado.
 - `ultima_entrega_em` e `ultima_processada_em` são o maior `recebido_em`; `ultimo_aprovado_em`, o maior
   `aprovado_em` dos pedidos aprovados da campanha ativa; `verificado_em`, o instante da consulta.
 - **Custo no D1**: duas idas (a campanha ativa e um lote), ~940 linhas lidas com ~1 mil entregas nas últimas
-  24 h (a contagem por resultado é quase tudo).
+  24 h (a contagem por resultado é quase tudo), também com o slug da campanha trocado depois de entregas
+  processadas (a última entrega da campanha sai do índice parcial da migração 0007).
 
 ## Rotas RASCUNHO (Sprint 4)
 
