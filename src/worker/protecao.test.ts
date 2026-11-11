@@ -10,6 +10,8 @@
 //    ela passa pelo cache de 30 s (relógio fixo: nada depende do dia em que o teste roda);
 // g) os papéis da hierarquia (RIFA-014, D12) levam 403 em toda rota de /api/admin e /api/painel, e todo
 //    caminho de /api/minha exige a sessão de um deles (sem sessão, 401; coordenação, 403);
+// h) com o acesso do papel desligado na campanha (RIFA-029, D20), o discipulador e a rede levam 403
+//    `acesso_desligado` em todo /api/minha e no login, o líder não muda, e tudo volta com a chave;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -30,6 +32,7 @@ import {
   ROTAS,
   ROTAS_ACESSO,
   ROTAS_ACESSO_HIERARQUIA,
+  ROTAS_REGRAS_CAMPANHA,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
   diasEntre,
@@ -60,6 +63,7 @@ import {
   ORIGEM,
   cabecalhosDeSessao,
   cabecalhosDeSessaoDaHierarquia,
+  criarAcessoDaHierarquiaNoBanco,
 } from "./test/acesso-teste";
 import {
   CAMPOS_PUBLICOS,
@@ -101,10 +105,11 @@ interface RotaDaCoordenacao {
 
 /**
  * Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao, ou os `papeis` da rota quando ela é mais
- * restrita, como a auditoria), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria rota).
+ * restrita, como a auditoria e as regras da campanha), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria
+ * rota) e ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin).
  */
 const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
-  ...Object.values(ROTAS)
+  ...[...Object.values(ROTAS), ...Object.values(ROTAS_REGRAS_CAMPANHA)]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
       metodo: rota.metodo,
@@ -195,6 +200,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS),
     ...Object.values(ROTAS_ACESSO),
     ...Object.values(ROTAS_ACESSO_HIERARQUIA),
+    ...Object.values(ROTAS_REGRAS_CAMPANHA),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -216,13 +222,27 @@ afterEach(() => {
 describe("a) toda rota da coordenação exige sessão", () => {
   it("o contrato tem as rotas esperadas da coordenação (o filtro não ficou vazio)", () => {
     // 24 de ROTAS + 6 de ROTAS_ACESSO (5 só de admin e o GET /api/sessao) na Sprint 2; a auditoria (só admin)
-    // na Sprint 4; as 2 de ROTAS_ACESSO_HIERARQUIA (só admin) na Sprint 5.
-    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(33);
+    // na Sprint 4; as 2 de ROTAS_ACESSO_HIERARQUIA (só admin) na Sprint 5; as 3 de ROTAS_REGRAS_CAMPANHA (só
+    // admin) na Sprint 6.
+    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(36);
     expect(
       ROTAS_DA_COORDENACAO.filter(
         (rota) => !rota.papeis.includes("coordenacao"),
       ).length,
-    ).toBeGreaterThanOrEqual(8);
+    ).toBeGreaterThanOrEqual(11);
+    // As regras da campanha (D20) estão todas no filtro, só de admin, e montadas no app.
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    for (const rota of Object.values(ROTAS_REGRAS_CAMPANHA)) {
+      expect(
+        ROTAS_DA_COORDENACAO.find(
+          (item) =>
+            item.metodo === rota.metodo && item.caminho === rota.caminho,
+        )?.papeis,
+      ).toEqual(["admin"]);
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    }
   });
 
   it.each(casos(ROTAS_DA_COORDENACAO))(
@@ -1322,6 +1342,202 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
       );
     },
   );
+});
+
+describe("h) RIFA-029 (D20, CA4): acesso de discipuladores e redes pela chave da campanha", () => {
+  /** Caminhos sob /api/minha, com rota e sem: o 403 vale em todos (o login de /api/minha/* confere a chave). */
+  const CAMINHOS = [
+    "/api/minha/visao",
+    "/api/minha/visao?periodo=campanha",
+    "/api/minha/visao?periodo=invalido",
+    "/api/minha/qualquer",
+    "/api/minha/qualquer/coisa/funda",
+    "/api/minha",
+  ];
+  const PAPEIS_COM_CHAVE = ["discipulador", "rede"] as const;
+  const ALVO = { lider: 1, discipulador: 10, rede: 1 } as const;
+  const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
+  const tokens = {} as Record<PapelHierarquia, string>;
+
+  const chaves = (discipuladores: 0 | 1, redes: 0 | 1) =>
+    env.DB.prepare(
+      "UPDATE campanhas SET acesso_discipuladores = ?1, acesso_redes = ?2 WHERE ativa = 1",
+    )
+      .bind(discipuladores, redes)
+      .run();
+  const entrar = (token: string) =>
+    exports.default.fetch(`${ORIGEM}/api/sessao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: ORIGEM },
+      body: JSON.stringify({ token }),
+    });
+
+  beforeAll(async () => {
+    await semearCenario();
+    for (const papel of PAPEIS_HIERARQUIA) {
+      sessoes[papel] = await cabecalhosDeSessaoDaHierarquia(papel, ALVO[papel]);
+      tokens[papel] = (
+        await criarAcessoDaHierarquiaNoBanco(papel, ALVO[papel])
+      ).token;
+    }
+  });
+
+  afterAll(async () => {
+    await chaves(1, 1);
+  });
+
+  it.each(PAPEIS_COM_CHAVE)(
+    "%s desligado: 403 acesso_desligado com { papel } em todo /api/minha/*, no-store; a sessão não é apagada (GET /api/sessao, 200)",
+    async (papel) => {
+      await chaves(papel === "discipulador" ? 0 : 1, papel === "rede" ? 0 : 1);
+      for (const caminho of CAMINHOS) {
+        const res = await requisitar("GET", caminho, sessoes[papel]);
+        expect({
+          caminho,
+          status: res.status,
+          corpo: await res.json(),
+        }).toEqual({
+          caminho,
+          status: 403,
+          corpo: {
+            erro: {
+              codigo: "acesso_desligado",
+              mensagem: expect.stringContaining("desligou"),
+              detalhes: { papel },
+            },
+          },
+        });
+        expect(res.headers.get("Cache-Control")).toBe("no-store");
+        esperarCabecalhosDeSeguranca(res);
+      }
+      const sessao = await requisitar("GET", "/api/sessao", sessoes[papel]);
+      expect(sessao.status).toBe(200);
+      expect(
+        respostaSessaoSchema.parse(await sessao.json()).usuario.papel,
+      ).toBe(papel);
+      // O outro papel com chave e o líder seguem entrando na visão.
+      const outro = papel === "discipulador" ? "rede" : "discipulador";
+      for (const quem of ["lider", outro] as const)
+        expect({
+          quem,
+          status: (await requisitar("GET", "/api/minha/visao", sessoes[quem]))
+            .status,
+        }).toEqual({ quem, status: 200 });
+    },
+  );
+
+  it("com os dois desligados, o líder não é afetado e a coordenação continua com 403 proibido em /api/minha", async () => {
+    await chaves(0, 0);
+    const lider = await requisitar("GET", "/api/minha/visao", sessoes.lider);
+    expect(lider.status).toBe(200);
+    respostaVisaoIndividualSchema.parse(await lider.json());
+    await esperarErro(
+      await requisitar("GET", "/api/minha/visao", coordenacao),
+      403,
+      "proibido",
+    );
+    // Sem sessão, 401, como sempre (o login vem antes da chave).
+    await esperarErro(
+      await requisitar("GET", "/api/minha/visao"),
+      401,
+      "nao_autenticado",
+    );
+  });
+
+  it("login (POST /api/sessao) com link VÁLIDO do papel desligado: 403 acesso_desligado, sem cookie; link inválido continua 401; o líder entra", async () => {
+    await chaves(0, 0);
+    for (const papel of PAPEIS_COM_CHAVE) {
+      const antes = await env.DB.prepare(
+        "SELECT count(*) AS n FROM sessoes",
+      ).first<{
+        n: number;
+      }>();
+      const res = await entrar(tokens[papel]);
+      expect({ papel, status: res.status, corpo: await res.json() }).toEqual({
+        papel,
+        status: 403,
+        corpo: {
+          erro: {
+            codigo: "acesso_desligado",
+            mensagem: expect.any(String),
+            detalhes: { papel },
+          },
+        },
+      });
+      expect(res.headers.get("Set-Cookie")).toBeNull();
+      expect(
+        await env.DB.prepare("SELECT count(*) AS n FROM sessoes").first(),
+      ).toEqual(antes);
+    }
+    await esperarErro(await entrar("x".repeat(43)), 401, "nao_autenticado");
+    const lider = await entrar(tokens.lider);
+    expect(lider.status).toBe(200);
+    expect(lider.headers.get("Set-Cookie")).toContain("__Host-sessao=");
+  });
+
+  it("religada a chave, o link e a sessão de antes voltam a valer (nada foi revogado)", async () => {
+    await chaves(0, 0);
+    await chaves(1, 1);
+    for (const papel of PAPEIS_COM_CHAVE) {
+      expect(
+        (await requisitar("GET", "/api/minha/visao", sessoes[papel])).status,
+      ).toBe(200);
+      const res = await entrar(tokens[papel]);
+      expect(res.status).toBe(200);
+      expect(
+        respostaSessaoSchema.parse(await res.json()).usuario.alvo,
+      ).toMatchObject({ id: ALVO[papel] });
+    }
+  });
+
+  it("gerar links em lote do papel desligado: 409 acao_desligada com a chave, antes de conferir os ids (o líder gera)", async () => {
+    await chaves(0, 0);
+    for (const papel of PAPEIS_COM_CHAVE) {
+      const res = await requisitar(
+        "POST",
+        ROTAS_ACESSO_HIERARQUIA.gerarLinksHierarquia.caminho,
+        admin,
+        JSON.stringify({ papel, ids: [999999] }),
+      );
+      expect({ papel, status: res.status, corpo: await res.json() }).toEqual({
+        papel,
+        status: 409,
+        corpo: {
+          erro: {
+            codigo: "acao_desligada",
+            mensagem: expect.any(String),
+            detalhes: {
+              chave:
+                papel === "discipulador"
+                  ? "acesso.discipuladores"
+                  : "acesso.redes",
+            },
+          },
+        },
+      });
+    }
+    // O corpo inválido ainda dá 400 (antes da chave); o líder não tem chave (o id inexistente dá o 404 de sempre).
+    expect(
+      (
+        await requisitar(
+          "POST",
+          ROTAS_ACESSO_HIERARQUIA.gerarLinksHierarquia.caminho,
+          admin,
+          JSON.stringify({ papel: "rede", ids: [] }),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await requisitar(
+          "POST",
+          ROTAS_ACESSO_HIERARQUIA.gerarLinksHierarquia.caminho,
+          admin,
+          JSON.stringify({ papel: "lider", ids: [999999] }),
+        )
+      ).status,
+    ).toBe(404);
+  });
 });
 
 describe("formato único de erro em todas as partes montadas", () => {

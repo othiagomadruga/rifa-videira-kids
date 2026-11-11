@@ -23,6 +23,7 @@ import {
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
+import { sqlAcessoDoPapel } from "./regras-campanha";
 
 /** O `ultimo_uso_em` da sessão é regravado no máximo uma vez por minuto (a leitura não vira escrita). */
 const INTERVALO_TOQUE_SESSAO_MS = 60_000;
@@ -422,26 +423,44 @@ export async function criarLink(
 
 /**
  * O link do hash, se ainda abre sessão: não revogado, dentro da validade e de usuário ativo. O usuário vem com o
- * alvo nos papéis da hierarquia (lido na hora).
+ * alvo nos papéis da hierarquia (lido na hora) e `acessoLigado`, a chave de acesso do papel na campanha ativa
+ * (RIFA-029, D20: só discipulador e rede dependem dela), lida na mesma consulta (+1 linha só nesses papéis).
  */
 export async function buscarLinkValido(
   db: D1Database,
   tokenHash: string,
   agora: string,
-): Promise<{ linkId: number; usuario: UsuarioSessao } | null> {
+): Promise<{
+  linkId: number;
+  usuario: UsuarioSessao;
+  acessoLigado: boolean;
+} | null> {
   const linha = await db
     .prepare(
-      `SELECT l.id AS link_id, u.id, u.nome, u.papel, ${COLUNAS_ALVO}
+      `SELECT l.id AS link_id, u.id, u.nome, u.papel, ${COLUNAS_ALVO},
+         ${sqlAcessoDoPapel("u.papel")} AS acesso_ligado
        FROM links_acesso AS l JOIN usuarios AS u ON u.id = l.usuario_id ${JUNTAR_ALVO}
        WHERE l.token_hash = ?1 AND l.revogado_em IS NULL AND l.expira_em > ?2 AND u.ativo = 1`,
     )
     .bind(tokenHash, agora)
     .first<
-      { link_id: number; id: number; nome: string; papel: Papel } & ColunasAlvo
+      {
+        link_id: number;
+        id: number;
+        nome: string;
+        papel: Papel;
+        acesso_ligado: number;
+      } & ColunasAlvo
     >();
   if (linha === null) return null;
   const usuario = usuarioDaSessao(linha);
-  return usuario === null ? null : { linkId: linha.link_id, usuario };
+  return usuario === null
+    ? null
+    : {
+        linkId: linha.link_id,
+        usuario,
+        acessoLigado: linha.acesso_ligado === 1,
+      };
 }
 
 /** "ultimo_link_admin": revogar deixaria nenhum admin ativo com link válido (nada muda). */
@@ -570,6 +589,13 @@ export async function criarSessao(
   return criacao.results[0]?.expira_em ?? null;
 }
 
+/** A sessão que vale: quem está conectado e a chave de acesso do papel dele (RIFA-029). */
+export interface SessaoEncontrada {
+  usuario: UsuarioSessao;
+  /** A chave de acesso do papel na campanha ativa: só discipulador e rede podem ter false (D20). */
+  acessoLigado: boolean;
+}
+
 /**
  * Usuário da sessão, se ela vale: existe, não venceu, foi usada nos últimos INATIVIDADE_MAXIMA_SESSAO_DIAS
  * (RIFA-013b; exatamente 7 dias ainda vale) e o usuário está ativo. Nos papéis da hierarquia, vem com o alvo
@@ -580,9 +606,23 @@ export async function buscarUsuarioDaSessao(
   idHash: string,
   agora: string,
 ): Promise<UsuarioSessao | null> {
+  return (await buscarSessao(db, idHash, agora))?.usuario ?? null;
+}
+
+/**
+ * A sessão que vale (as regras de buscarUsuarioDaSessao) e a chave de acesso do papel (RIFA-029, D20), lida na
+ * MESMA consulta, na hora (subconsulta da campanha ativa: +1 linha, só no discipulador e na rede). A sessão de um
+ * papel desligado continua valendo (não é apagada): /api/minha/* responde 403 enquanto a chave estiver desligada.
+ */
+export async function buscarSessao(
+  db: D1Database,
+  idHash: string,
+  agora: string,
+): Promise<SessaoEncontrada | null> {
   const linha = await db
     .prepare(
-      `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em, ${COLUNAS_ALVO}
+      `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em, ${COLUNAS_ALVO},
+         ${sqlAcessoDoPapel("u.papel")} AS acesso_ligado
        FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id ${JUNTAR_ALVO}
        WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1`,
     )
@@ -593,6 +633,7 @@ export async function buscarUsuarioDaSessao(
         nome: string;
         papel: Papel;
         ultimo_uso_em: string;
+        acesso_ligado: number;
       } & ColunasAlvo
     >();
   if (linha === null) return null;
@@ -607,7 +648,7 @@ export async function buscarUsuarioDaSessao(
       .bind(idHash, agora)
       .run();
   }
-  return usuario;
+  return { usuario, acessoLigado: linha.acesso_ligado === 1 };
 }
 
 export async function apagarSessao(

@@ -631,17 +631,20 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       ]);
     });
 
-    it("o admin de antes continua entrando: o link e a sessão dele valem no banco migrado", async () => {
-      expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
-        linkId: 1,
-        usuario: { id: 1, nome: "Admin Antes da 0006", papel: "admin" },
-      });
-      expect(
-        await buscarLinkValido(db, hash("b"), AGORA_DA_MIGRACAO),
-      ).toBeNull();
-      expect(
-        await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
-      ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
+    it("o admin de antes continua com o link e a sessão no banco migrado (as consultas de hoje entram no describe da 0008)", async () => {
+      // As consultas do login (db/acessos.ts) leem a chave de acesso da 0008 (RIFA-029): no banco ainda na 0006,
+      // a conferência é das linhas; o login de verdade é conferido no fim do describe da 0008.
+      const { results } = await db
+        .prepare(
+          `SELECT l.id, l.revogado_em IS NULL AS valido, s.id_hash IS NOT NULL AS com_sessao
+           FROM links_acesso AS l LEFT JOIN sessoes AS s ON s.link_id = l.id
+           WHERE l.usuario_id = 1 ORDER BY l.id`,
+        )
+        .all();
+      expect(results).toEqual([
+        { id: 1, valido: 1, com_sessao: 1 },
+        { id: 2, valido: 0, com_sessao: 0 },
+      ]);
     });
 
     it("CHECK do papel: os 5 papéis, o alvo certo para cada um e nenhum alvo na coordenação", async () => {
@@ -1399,6 +1402,20 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           )
           .first(),
       ).toEqual({ affiliate_id: null, desconsiderado_motivo: "teste" });
+    });
+
+    it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
+      expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
+        linkId: 1,
+        usuario: { id: 1, nome: "Admin Antes da 0006", papel: "admin" },
+        acessoLigado: true,
+      });
+      expect(
+        await buscarLinkValido(db, hash("b"), AGORA_DA_MIGRACAO),
+      ).toBeNull();
+      expect(
+        await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
+      ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
     });
   });
 });

@@ -3,7 +3,11 @@
  * - GET /api/admin/afiliados: afiliados com as vendas aprovadas (`?vinculado=false` = fila de órfãos);
  * - PUT /api/admin/afiliados/:affiliateId: vincula, troca ou desvincula a célula; se o afiliado ainda não
  *   existe, cria (pré-cadastro, origem `manual`). As vendas dele mudam de célula na hora (D7);
- * - GET /api/admin/adesao: resumo e uma linha por célula ("quem falta").
+ * - GET /api/admin/adesao: resumo e uma linha por célula ("quem falta");
+ * - DELETE /api/admin/afiliados/:affiliateId (RIFA-031, D20; ROTAS_REGRAS_CAMPANHA), SÓ ADMIN: remove o afiliado de
+ *   teste se nenhum pedido dele conta (204); 404 se não existe; 409 `afiliado_com_pedidos` com quantos contam e os
+ *   ids dos mais recentes. O "só admin" fica no handler do DELETE, nunca num `use` do caminho, que pegaria o PUT
+ *   (da coordenação).
  *
  * Os caminhos e os schemas vêm do contrato (`ROTAS`). Este sub-app NÃO autentica: o index.ts o monta sob
  * /api/admin, depois do middleware da coordenação: `app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao)`.
@@ -13,7 +17,12 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
-import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
+import {
+  LIMITE_PEDIDOS_NO_DETALHE,
+  ROTAS,
+  ROTAS_REGRAS_CAMPANHA,
+  detalhesDeValidacao,
+} from "../../shared/contracts";
 import {
   buscarVinculoDoAfiliado,
   listarAfiliados,
@@ -21,8 +30,13 @@ import {
   resumirMudancaDoAfiliado,
   salvarAfiliado,
 } from "../db/adesao";
+import { removerAfiliado } from "../db/regras-campanha";
 import { responderErro } from "../lib/respostas-erro";
-import { autoriaDaSessao, type AmbienteSessao } from "../middleware/sessao";
+import {
+  autoriaDaSessao,
+  exigirSessao,
+  type AmbienteSessao,
+} from "../middleware/sessao";
 
 // Montado atrás do login: `c.var.usuario` é quem vincula (trilha de auditoria, RIFA-013b).
 type Ambiente = AmbienteSessao;
@@ -119,6 +133,36 @@ afiliadosAdesao.put(
     return responderErro(c, "referencia_invalida", mensagem, [
       { caminho: ["celula_id"], codigo: "referencia_invalida", mensagem },
     ]);
+  },
+);
+
+const { removerAfiliado: REMOVER } = ROTAS_REGRAS_CAMPANHA;
+
+afiliadosAdesao.delete(
+  local(REMOVER.caminho),
+  // Só admin, antes do parâmetro: a coordenação leva 403 (o PUT do mesmo caminho continua dela).
+  exigirSessao(REMOVER.papeis),
+  validar("param", REMOVER.parametros),
+  async (c) => {
+    const { affiliateId } = c.req.valid("param");
+    const autoria = autoriaDaSessao(c);
+    if (!autoria) throw new Error("remover afiliado sem sessão");
+    const resultado = await removerAfiliado(
+      c.env.DB,
+      affiliateId,
+      autoria,
+      LIMITE_PEDIDOS_NO_DETALHE,
+    );
+    if (resultado.ok) return c.body(null, 204);
+    if (resultado.motivo === "nao_encontrado")
+      return responderErro(c, "nao_encontrado", "Afiliado não encontrado");
+    const quantos = resultado.pedidosQueContam;
+    return responderErro(
+      c,
+      "afiliado_com_pedidos",
+      `O afiliado tem ${quantos} ${quantos === 1 ? "pedido que conta" : "pedidos que contam"}: desconsidere ${quantos === 1 ? "o pedido" : "os pedidos"} (teste) antes de remover`,
+      { pedidos_que_contam: quantos, pedidos: resultado.pedidos },
+    );
   },
 );
 

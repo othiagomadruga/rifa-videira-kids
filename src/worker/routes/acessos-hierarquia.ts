@@ -8,7 +8,8 @@
  * - POST /api/admin/acessos-hierarquia/links { papel, ids, revogar_anteriores? } → 201 { itens }: um link NOVO
  *   por alvo, na ordem de `ids`, com a URL (a única vez em que ela aparece). Tudo ou nada; 404 `nao_encontrado`
  *   se algum id não é alvo do papel e 409 `em_uso` se algum alvo tem o usuário desativado, com os ids em
- *   `detalhes`. Uma linha na trilha de auditoria por chamada, no mesmo lote.
+ *   `detalhes`. Uma linha na trilha de auditoria por chamada, no mesmo lote. Antes de conferir os ids: 409
+ *   `acao_desligada` (RIFA-029, D20) se o papel é discipulador ou rede e o acesso dele está desligado na campanha.
  *
  * Desativar, gerar um link avulso e revogar usam as rotas de admin-usuarios.ts, que aceitam qualquer papel.
  */
@@ -23,6 +24,11 @@ import {
   listarAcessosHierarquia,
   mensagensDoLote,
 } from "../db/acessos-hierarquia";
+import {
+  CHAVE_DO_PAPEL,
+  acessoDoPapelLigado,
+  mensagemChaveDeAcessoDesligada,
+} from "../db/regras-campanha";
 import { gerarLink, linkCriado } from "../lib/links-acesso";
 import { responderErro } from "../lib/respostas-erro";
 import {
@@ -68,6 +74,16 @@ acessosHierarquia.post(
   validarJson(GERAR.corpo),
   async (c) => {
     const { papel, ids, revogar_anteriores } = c.req.valid("json");
+    if (
+      (papel === "discipulador" || papel === "rede") &&
+      !(await acessoDoPapelLigado(c.env.DB, papel))
+    )
+      return responderErro(
+        c,
+        "acao_desligada",
+        mensagemChaveDeAcessoDesligada(papel),
+        { chave: CHAVE_DO_PAPEL[papel] },
+      );
     const agora = new Date();
     const links = await Promise.all(ids.map(() => gerarLink(agora)));
     const resultado = await gerarLinksHierarquia(

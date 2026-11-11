@@ -65,8 +65,13 @@ app.use("/api/admin/*", limitarCorpoDaCoordenacao);
 app.use("/api/painel/*", limitarCorpoDaCoordenacao);
 // 4c. Hierarquia (RIFA-014, D12): todo /api/minha/* exige a sessão de um líder, discipulador ou rede, exista
 // a rota ou não; a coordenação leva 403. Papéis escritos aqui de propósito, como no passo 4. Os papéis da
-// hierarquia não entram em /api/admin/* nem em /api/painel/* (403 no passo 4).
-app.use("/api/minha/*", exigirSessao(["lider", "discipulador", "rede"]));
+// hierarquia não entram em /api/admin/* nem em /api/painel/* (403 no passo 4). Com o acesso do papel desligado
+// na campanha (RIFA-029, D20), o discipulador e a rede levam 403 `acesso_desligado` em todo /api/minha/*
+// (a chave é lida junto com a sessão, na hora; o líder não tem chave).
+app.use(
+  "/api/minha/*",
+  exigirSessao(["lider", "discipulador", "rede"], { acessoDaCampanha: true }),
+);
 
 // 5. Usuários e links: só admin (o sub-app também exige, em /usuarios/* e /links/*).
 app.route("/api/admin", adminUsuarios);
@@ -85,10 +90,12 @@ app.route(PREFIXO_HIERARQUIA, hierarquia);
 app.route(PREFIXO_CAMPANHA, campanha);
 // Pedidos que o webhook marcou como implausíveis (RIFA-013b): sob /api/admin, protegidos pelo passo 4.
 app.route(PREFIXO_PEDIDOS_SUSPEITOS, pedidosSuspeitos);
-// Pedidos da campanha, entregas e estado do webhook (RIFA-025, D16): só leitura, sob /api/admin (passo 4).
+// Pedidos da campanha, entregas e estado do webhook (RIFA-025, D16): leitura, sob /api/admin (passo 4). Com
+// desconsiderar e reconsiderar pedido (RIFA-028, D20), só admin (o sub-app exige nas duas rotas).
 app.route(PREFIXO_PEDIDOS, pedidos);
 app.route(PREFIXO_WEBHOOK_COORDENACAO, webhookCoordenacao);
-// Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4).
+// Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4). Remover
+// afiliado de teste (RIFA-031, D20) é só admin (o sub-app exige no DELETE; o PUT do caminho segue da coordenação).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
 // Conferência pelo CSV da Rifei (RIFA-012): análise, "Recuperar" e auditoria sob /api/admin (passo 4).
 app.route(PREFIXO_RECONCILIACAO, reconciliacao);

@@ -51,8 +51,9 @@ export function criarMinha({
 }: OpcoesMinha = {}) {
   const minha = new Hono<AmbienteSessao>();
 
-  // Defesa a mais: o login dos papéis da hierarquia também aqui (a sessão é lida uma vez por requisição).
-  minha.use("*", exigirSessao(ROTA.papeis));
+  // Defesa a mais: o login dos papéis da hierarquia também aqui, com a chave de acesso do papel (RIFA-029; a
+  // sessão é lida uma vez por requisição).
+  minha.use("*", exigirSessao(ROTA.papeis, { acessoDaCampanha: true }));
   // Por pessoa: nunca em cache, nem nos erros.
   minha.use("*", async (c, next) => {
     await next();

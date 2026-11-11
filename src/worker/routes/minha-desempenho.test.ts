@@ -56,10 +56,16 @@ const LIMITE_LINHAS_POR_PEDIDO = 1.5;
 /**
  * As linhas lidas na requisição INTEIRA, exatas (`linhasLidasTotal` do bancoQueConta), medidas em 2026-11-11 (D20,
  * OBRIGATÓRIO 5): a sessão (o líder 5, o discipulador 4 e a rede 3: a sessão, o usuário e o alvo com a
- * hierarquia), a campanha ativa com os períodos (4) e o lote do painel com os dados da visão (8.991, igual para os
- * três). Uma linha a mais (uma consulta nova, um plano que mudou, um índice que desviou o planejador) falha aqui.
+ * hierarquia; mais 1 no discipulador e na rede, a campanha ativa da chave de acesso do papel, RIFA-029, lida na
+ * mesma consulta), a campanha ativa com os períodos (4) e o lote do painel com os dados da visão (8.991, igual para
+ * os três). Uma linha a mais (uma consulta nova, um plano que mudou, um índice que desviou o planejador) falha aqui.
  */
-const LINHAS_DA_SESSAO = { lider: 5, discipulador: 4, rede: 3 } as const;
+const CHAVE_DE_ACESSO = 1;
+const LINHAS_DA_SESSAO = {
+  lider: 5,
+  discipulador: 4 + CHAVE_DE_ACESSO,
+  rede: 3 + CHAVE_DE_ACESSO,
+} as const;
 const LINHAS_DA_CAMPANHA = 4;
 const LINHAS_DO_LOTE = 8_991;
 /**
@@ -96,7 +102,10 @@ const CAMPANHA = campanhaEntradaSchema.parse({
 function appDaVisao(cache = SEM_CACHE_DA_BASE, montadores?: MontadoresDaVisao) {
   const app = new Hono<{ Bindings: Cloudflare.Env }>();
   app.use("*", cabecalhosSeguranca);
-  app.use("/api/minha/*", exigirSessao(["lider", "discipulador", "rede"]));
+  app.use(
+    "/api/minha/*",
+    exigirSessao(["lider", "discipulador", "rede"], { acessoDaCampanha: true }),
+  );
   app.route(
     PREFIXO_MINHA,
     criarMinha({ relogio: () => AGORA, cache, montadores }),

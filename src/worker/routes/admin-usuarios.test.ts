@@ -14,6 +14,7 @@ import {
 import {
   ORIGEM,
   chamar,
+  criarAcessoDaHierarquiaNoBanco,
   criarAcessoNoBanco,
   criarAppDeTeste,
   entrar,
@@ -21,6 +22,7 @@ import {
   sessaoDe,
   type AppDeTeste,
 } from "../test/acesso-teste";
+import { semearCenario } from "../test/painel-apoio";
 
 let app: AppDeTeste;
 let admin: string;
@@ -621,5 +623,64 @@ describe("CA4: desativar usuário", () => {
     );
     expect(inexistente.status).toBe(404);
     expect(await inexistente.json()).toEqual(erro("nao_encontrado"));
+  });
+});
+
+describe("RIFA-029 (D20, CA4): link avulso de discipulador ou rede com o acesso desligado na campanha", () => {
+  const chaves = (discipuladores: 0 | 1, redes: 0 | 1) =>
+    env.DB.prepare(
+      "UPDATE campanhas SET acesso_discipuladores = ?1, acesso_redes = ?2 WHERE ativa = 1",
+    )
+      .bind(discipuladores, redes)
+      .run();
+  const gerar = (id: number) =>
+    chamar(app, "POST", `/api/admin/usuarios/${id}/links`, { sessao: admin });
+
+  it("409 acao_desligada com a chave do papel (depois do 404); o líder e a coordenação geram; religada, gera", async () => {
+    await semearCenario();
+    const usuarios = {
+      lider: (await criarAcessoDaHierarquiaNoBanco("lider", 1)).usuarioId,
+      discipulador: (await criarAcessoDaHierarquiaNoBanco("discipulador", 10))
+        .usuarioId,
+      rede: (await criarAcessoDaHierarquiaNoBanco("rede", 1)).usuarioId,
+    };
+    const coordenacao = (await criarAcessoNoBanco("coordenacao")).usuarioId;
+    await chaves(0, 0);
+    try {
+      for (const papel of ["discipulador", "rede"] as const) {
+        const res = await gerar(usuarios[papel]);
+        expect({ papel, status: res.status, corpo: await res.json() }).toEqual({
+          papel,
+          status: 409,
+          corpo: {
+            erro: {
+              codigo: "acao_desligada",
+              mensagem: expect.any(String),
+              detalhes: {
+                chave:
+                  papel === "discipulador"
+                    ? "acesso.discipuladores"
+                    : "acesso.redes",
+              },
+            },
+          },
+        });
+      }
+      // Nenhum link novo foi gravado para eles.
+      const links = await env.DB.prepare(
+        "SELECT count(*) AS n FROM links_acesso WHERE usuario_id IN (?1, ?2)",
+      )
+        .bind(usuarios.discipulador, usuarios.rede)
+        .first<{ n: number }>();
+      expect(links?.n).toBe(2);
+      // O 404 do usuário vem antes do 409.
+      expect((await gerar(999_999_999)).status).toBe(404);
+      for (const id of [usuarios.lider, coordenacao])
+        expect((await gerar(id)).status).toBe(201);
+    } finally {
+      await chaves(1, 1);
+    }
+    for (const papel of ["discipulador", "rede"] as const)
+      expect((await gerar(usuarios[papel])).status).toBe(201);
   });
 });
