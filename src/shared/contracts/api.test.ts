@@ -1735,7 +1735,7 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
 
 describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
   const totais = (bilhetes: number, parte: number) => ({
-    pedidos: bilhetes,
+    pedidos_aprovados: bilhetes,
     bilhetes,
     total_centavos: bilhetes * 2000,
     parte_bilhetes_bp: parte,
@@ -1780,7 +1780,7 @@ describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
       { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "091" }] },
       { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 10_001 } },
       { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 9999.5 } },
-      { ...mapa, exterior: { ...mapa.exterior, pedidos: -1 } },
+      { ...mapa, exterior: { ...mapa.exterior, pedidos_aprovados: -1 } },
       { ...mapa, divisao: undefined },
       { ...mapa, ddds: [{ ...mapa.ddds[0], telefone: "+5591988887777" }] },
       { ...mapa, a_mais: 1 },
@@ -1798,5 +1798,55 @@ describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
         /telefone|phone|email|nome_comprador|buyer|documento|cpf/i.test(campo),
       ),
     ).toEqual([]);
+  });
+
+  it("invariantes: DDD da sua UF, UF = soma dos DDDs, total = ufs + exterior + sem_ddd, sem repetição", () => {
+    const quebradas: [string, unknown][] = [
+      [
+        "DDD de outra UF",
+        { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "11" }, mapa.ddds[1]] },
+      ],
+      [
+        "DDD de UF fora da lista",
+        {
+          ...mapa,
+          ufs: [{ ...mapa.ufs[0], ...totais(6, 6000) }],
+          ddds: [mapa.ddds[0], { ...mapa.ddds[1], ddd: "11", uf: "SP" }],
+        },
+      ],
+      [
+        "UF diferente da soma dos DDDs",
+        { ...mapa, ufs: [{ ...mapa.ufs[0], bilhetes: 7 }] },
+      ],
+      [
+        "total diferente da soma",
+        { ...mapa, total: { ...mapa.total, total_centavos: 19_999 } },
+      ],
+      [
+        "exterior a mais",
+        { ...mapa, exterior: { ...mapa.exterior, pedidos_aprovados: 2 } },
+      ],
+      ["UF repetida", { ...mapa, ufs: [mapa.ufs[0], mapa.ufs[0]] }],
+      ["DDD repetido", { ...mapa, ddds: [mapa.ddds[0], mapa.ddds[0]] }],
+    ];
+    for (const [caso, resposta] of quebradas)
+      expect({
+        caso,
+        ok: respostaMapaDddSchema.safeParse(resposta).success,
+      }).toEqual({
+        caso,
+        ok: false,
+      });
+    const vazio = totais(0, 0);
+    expect(
+      respostaMapaDddSchema.safeParse({
+        ...mapa,
+        ufs: [],
+        ddds: [],
+        exterior: vazio,
+        sem_ddd: vazio,
+        total: vazio,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -708,8 +708,8 @@ schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais
 
 Pedidos aprovados da janela (padrão: a campanha até hoje), agrupados por UF e por DDD (tabela fixa em
 `src/shared/contracts/ddd.ts`), mais `exterior` (`pais` gravado e diferente de 55), `sem_ddd` (`pais` null, Brasil
-sem DDD ou DDD fora da tabela) e `total` (= ufs + exterior + sem_ddd). Cada recorte traz pedidos, bilhetes, centavos
-e a parte dos bilhetes em pontos-base truncados (a soma pode ficar abaixo de 10000). A venda conta pela regra do
+sem DDD ou DDD fora da tabela) e `total` (= ufs + exterior + sem_ddd). Cada recorte traz `pedidos_aprovados`, `bilhetes`,
+`total_centavos` e a parte dos bilhetes em pontos-base truncados (a soma pode ficar abaixo de 10000). A venda conta pela regra do
 painel (R6 de [regras-de-calculo.md](regras-de-calculo.md)): campanha ativa, dia local de `aprovado_em` dentro da
 janela (`janela`, a mesma dos rankings). Com `divisao`, só as vendas das células da divisão (as sem célula ficam de
 fora, como no painel). Só a coordenação; a versão aberta depende do PO.

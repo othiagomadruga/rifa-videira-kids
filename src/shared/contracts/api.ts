@@ -32,7 +32,7 @@ import {
   statusPedidoSchema,
 } from "./dominio";
 import { detalheResumidoSchema } from "./erros";
-import { UFS } from "./ddd";
+import { UF_DO_DDD, UFS } from "./ddd";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
 // Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
 import type { Papel } from "./acesso";
@@ -826,37 +826,96 @@ export type ConsultaMapaDdd = z.output<typeof consultaMapaDddSchema>;
 
 /** Pedidos aprovados, bilhetes e centavos de um recorte; `parte_bilhetes_bp` = bilhetes ÷ bilhetes do total. */
 const totaisMapaSchema = z.strictObject({
-  pedidos: quantidadeSchema,
+  pedidos_aprovados: quantidadeSchema,
   bilhetes: quantidadeSchema,
   total_centavos: centavosSchema,
   /** Pontos-base truncados (a soma das partes pode ficar abaixo de 10000); 0 quando o total não tem bilhete. */
   parte_bilhetes_bp: percentualBpSchema.max(10_000),
 });
 
-export const respostaMapaDddSchema = z.strictObject({
-  janela: janelaRankingSchema,
-  divisao: divisaoSchema.nullable(),
-  /** Só as UFs com venda, das que mais venderam bilhetes para as que menos (empate pela sigla). */
-  ufs: z.array(
-    totaisMapaSchema.extend({
-      uf: z.enum(UFS),
-    }),
-  ),
-  /** Os DDDs com venda (cada um da sua UF), na mesma ordem das UFs e, dentro delas, dos que mais venderam (empate pelo DDD). */
-  ddds: z.array(
-    totaisMapaSchema.extend({
-      ddd: dddSchema,
-      uf: z.enum(UFS),
-    }),
-  ),
-  /** Compradores com telefone de outro país (`pais` gravado e diferente de 55). */
-  exterior: totaisMapaSchema,
-  /** Sem país (sem telefone ou fora do E.164: `pais` null), Brasil sem DDD, ou DDD fora da tabela da Anatel. */
-  sem_ddd: totaisMapaSchema,
-  /** Tudo o que entrou no recorte (= ufs + exterior + sem_ddd). */
-  total: totaisMapaSchema,
-  atualizado_em: instanteSchema,
-});
+export const respostaMapaDddSchema = z
+  .strictObject({
+    janela: janelaRankingSchema,
+    divisao: divisaoSchema.nullable(),
+    /** Só as UFs com venda, das que mais venderam bilhetes para as que menos (empate pela sigla). */
+    ufs: z.array(
+      totaisMapaSchema.extend({
+        uf: z.enum(UFS),
+      }),
+    ),
+    /** Os DDDs com venda (cada um da sua UF), na mesma ordem das UFs e, dentro delas, dos que mais venderam (empate pelo DDD). */
+    ddds: z.array(
+      totaisMapaSchema.extend({
+        ddd: dddSchema,
+        uf: z.enum(UFS),
+      }),
+    ),
+    /** Compradores com telefone de outro país (`pais` gravado e diferente de 55). */
+    exterior: totaisMapaSchema,
+    /** Sem país (sem telefone ou fora do E.164: `pais` null), Brasil sem DDD, ou DDD fora da tabela da Anatel. */
+    sem_ddd: totaisMapaSchema,
+    /** Tudo o que entrou no recorte (= ufs + exterior + sem_ddd). */
+    total: totaisMapaSchema,
+    atualizado_em: instanteSchema,
+  })
+  .superRefine((mapa, ctx) => {
+    const problema = (path: PropertyKey[], message: string) =>
+      ctx.addIssue({ code: "custom", path, message });
+    const somar = (recortes: readonly (typeof mapa)["total"][]) =>
+      recortes.reduce(
+        (soma, r) => ({
+          pedidos_aprovados: soma.pedidos_aprovados + r.pedidos_aprovados,
+          bilhetes: soma.bilhetes + r.bilhetes,
+          total_centavos: soma.total_centavos + r.total_centavos,
+        }),
+        { pedidos_aprovados: 0, bilhetes: 0, total_centavos: 0 },
+      );
+    const confere = (
+      path: PropertyKey[],
+      esperado: (typeof mapa)["total"],
+      soma: ReturnType<typeof somar>,
+      message: string,
+    ) => {
+      for (const campo of [
+        "pedidos_aprovados",
+        "bilhetes",
+        "total_centavos",
+      ] as const)
+        if (esperado[campo] !== soma[campo])
+          problema([...path, campo], message);
+    };
+    const ufsVistas = new Set<string>();
+    mapa.ufs.forEach((item, indice) => {
+      if (ufsVistas.has(item.uf))
+        problema(["ufs", indice, "uf"], "UF repetida");
+      ufsVistas.add(item.uf);
+      confere(
+        ["ufs", indice],
+        item,
+        somar(mapa.ddds.filter((d) => d.uf === item.uf)),
+        "A UF é a soma dos DDDs dela",
+      );
+    });
+    const dddsVistos = new Set<string>();
+    mapa.ddds.forEach((item, indice) => {
+      if (dddsVistos.has(item.ddd))
+        problema(["ddds", indice, "ddd"], "DDD repetido");
+      dddsVistos.add(item.ddd);
+      if (UF_DO_DDD[item.ddd] !== item.uf)
+        problema(
+          ["ddds", indice, "uf"],
+          "O DDD não é desta UF (tabela da Anatel)",
+        );
+      if (!ufsVistas.has(item.uf))
+        problema(["ddds", indice, "uf"], "DDD de uma UF que não está em ufs");
+    });
+    confere(
+      ["total"],
+      mapa.total,
+      somar([...mapa.ufs, mapa.exterior, mapa.sem_ddd]),
+      "O total é ufs + exterior + sem_ddd",
+    );
+  });
 export type RespostaMapaDdd = z.infer<typeof respostaMapaDddSchema>;
 
 // ---------------------------------------------------------------------------------------------------
