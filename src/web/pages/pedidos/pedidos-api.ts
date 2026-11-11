@@ -1,0 +1,195 @@
+// Chamadas da tela Pedidos (coordenação, RIFA-025; docs/api.md, "Pedidos e entregas do webhook"):
+// - GET /api/admin/pedidos: pedidos da campanha ativa, do registrado mais novo para o mais antigo, com os totais
+//   por status só na primeira página e o cursor opaco (`antes_de` = o `proximo` da página anterior);
+// - GET /api/admin/webhook/entregas: cada entrega do webhook, da mais nova para a mais antiga (cursor numérico);
+// - GET /api/admin/celulas: as células da hierarquia, para as opções do filtro de célula.
+//
+// Do contrato vêm só os TIPOS: os valores de src/shared/contracts poriam o zod no pacote do site (veja
+// lib/api.ts). Caminhos, tamanhos de página, status e resultados são cópias, conferidas pelo tipo e por
+// pedidos-contrato.test.ts.
+import type {
+  Celula,
+  RespostaEntregasWebhook,
+  RespostaPedidos,
+  ResultadoEventoWebhook,
+  StatusPedido,
+} from "../../../shared/contracts";
+import type { ROTAS } from "../../../shared/contracts/api";
+import { ErroApi, api } from "../../lib/api";
+
+export const CAMINHO_PEDIDOS: (typeof ROTAS)["listarPedidos"]["caminho"] =
+  "/api/admin/pedidos";
+export const CAMINHO_ENTREGAS: (typeof ROTAS)["entregasWebhook"]["caminho"] =
+  "/api/admin/webhook/entregas";
+export const CAMINHO_CELULAS: (typeof ROTAS)["listarCelulas"]["caminho"] =
+  "/api/admin/celulas";
+
+/** PAGINA_PEDIDOS_PADRAO do contrato: pedidos por página. */
+export const PEDIDOS_POR_PAGINA = 50;
+/** PAGINA_ENTREGAS_PADRAO do contrato: entregas por página. */
+export const ENTREGAS_POR_PAGINA = 50;
+
+/** STATUS_PEDIDO do contrato, na mesma ordem. */
+export const STATUS_PEDIDO = [
+  "in_process",
+  "approved",
+  "expired",
+] as const satisfies readonly StatusPedido[];
+
+/** RESULTADOS_EVENTO_WEBHOOK do contrato, na mesma ordem. */
+export const RESULTADOS_ENTREGA = [
+  "processado",
+  "duplicado",
+  "ignorado_outra_campanha",
+  "ignorado_transicao",
+  "erro_validacao",
+] as const satisfies readonly ResultadoEventoWebhook[];
+
+/** Tamanho máximo do id do pedido na busca (o `id` de consultaPedidosSchema). */
+export const TAMANHO_MAXIMO_ID = 128;
+
+/** Filtros da lista de pedidos (a célula é uma célula, "só sem célula" ou todas). */
+export type FiltrosPedidos = {
+  status: StatusPedido | null;
+  celula:
+    { tipo: "todas" } | { tipo: "sem_celula" } | { tipo: "id"; id: number };
+  /** Busca exata pelo id do pedido na Rifei. */
+  id: string | null;
+};
+
+export const SEM_FILTROS: FiltrosPedidos = {
+  status: null,
+  celula: { tipo: "todas" },
+  id: null,
+};
+
+/** Filtro da lista de entregas. */
+export type FiltrosEntregas = { resultado: ResultadoEventoWebhook | null };
+
+const ID_NUMERICO = /^[1-9]\d{0,8}$/;
+
+const ehStatus = (valor: string | null): valor is StatusPedido =>
+  (STATUS_PEDIDO as readonly (string | null)[]).includes(valor);
+
+const ehResultado = (valor: string | null): valor is ResultadoEventoWebhook =>
+  (RESULTADOS_ENTREGA as readonly (string | null)[]).includes(valor);
+
+/** Texto da busca como a API aceita: sem os espaços das pontas, de 1 a 128 caracteres (senão, sem busca). */
+export function idDaBusca(texto: string | null): string | null {
+  const id = texto?.trim() ?? "";
+  return id.length > 0 && id.length <= TAMANHO_MAXIMO_ID ? id : null;
+}
+
+/**
+ * Os filtros da URL da tela (`?status=approved&celula_id=3&id=ABC`, `?sem_celula=true`), com os mesmos nomes da
+ * consulta da API. O que estiver fora do contrato é ignorado; com `celula_id` e `sem_celula`, vale a célula.
+ */
+export function filtrosDosPedidos(params: URLSearchParams): FiltrosPedidos {
+  const status = params.get("status");
+  const celulaId = params.get("celula_id");
+  const celula: FiltrosPedidos["celula"] =
+    celulaId !== null && ID_NUMERICO.test(celulaId)
+      ? { tipo: "id", id: Number(celulaId) }
+      : params.get("sem_celula") === "true"
+        ? { tipo: "sem_celula" }
+        : { tipo: "todas" };
+  return {
+    status: ehStatus(status) ? status : null,
+    celula,
+    id: idDaBusca(params.get("id")),
+  };
+}
+
+/** O filtro de resultado da URL (`?resultado=erro_validacao`); fora do contrato, nenhum. */
+export function filtrosDasEntregas(params: URLSearchParams): FiltrosEntregas {
+  const resultado = params.get("resultado");
+  return { resultado: ehResultado(resultado) ? resultado : null };
+}
+
+/** Os parâmetros dos filtros (os da URL da tela, que são também os da consulta da API), sem os vazios. */
+export function paramsDosPedidos(filtros: FiltrosPedidos): [string, string][] {
+  const params: [string, string][] = [];
+  if (filtros.status) params.push(["status", filtros.status]);
+  if (filtros.celula.tipo === "id")
+    params.push(["celula_id", String(filtros.celula.id)]);
+  if (filtros.celula.tipo === "sem_celula") params.push(["sem_celula", "true"]);
+  if (filtros.id) params.push(["id", filtros.id]);
+  return params;
+}
+
+export function paramsDasEntregas(
+  filtros: FiltrosEntregas,
+): [string, string][] {
+  return filtros.resultado ? [["resultado", filtros.resultado]] : [];
+}
+
+export const temFiltro = (filtros: FiltrosPedidos) =>
+  paramsDosPedidos(filtros).length > 0;
+
+/** "/api/admin/pedidos?limite=50&status=..." e, da segunda página em diante, "&antes_de=<proximo>". */
+export function caminhoDosPedidos(
+  filtros: FiltrosPedidos,
+  antesDe: string | null,
+): string {
+  const consulta = new URLSearchParams([
+    ["limite", String(PEDIDOS_POR_PAGINA)],
+    ...paramsDosPedidos(filtros),
+  ]);
+  if (antesDe !== null) consulta.set("antes_de", antesDe);
+  return `${CAMINHO_PEDIDOS}?${consulta.toString()}`;
+}
+
+/** "/api/admin/webhook/entregas?limite=50&resultado=..." e, depois, "&antes_de=<id>". */
+export function caminhoDasEntregas(
+  filtros: FiltrosEntregas,
+  antesDe: number | null,
+): string {
+  const consulta = new URLSearchParams([
+    ["limite", String(ENTREGAS_POR_PAGINA)],
+    ...paramsDasEntregas(filtros),
+  ]);
+  if (antesDe !== null) consulta.set("antes_de", String(antesDe));
+  return `${CAMINHO_ENTREGAS}?${consulta.toString()}`;
+}
+
+type Opcoes = { signal?: AbortSignal };
+
+export function carregarPedidos(
+  filtros: FiltrosPedidos,
+  antesDe: string | null,
+  opcoes: Opcoes = {},
+): Promise<RespostaPedidos> {
+  return api.get<RespostaPedidos>(caminhoDosPedidos(filtros, antesDe), opcoes);
+}
+
+export function carregarEntregas(
+  filtros: FiltrosEntregas,
+  antesDe: number | null,
+  opcoes: Opcoes = {},
+): Promise<RespostaEntregasWebhook> {
+  return api.get<RespostaEntregasWebhook>(
+    caminhoDasEntregas(filtros, antesDe),
+    opcoes,
+  );
+}
+
+/** O que o filtro de célula usa de cada célula (um item de GET /api/admin/celulas traz isso e mais). */
+export type CelulaDoFiltro = Pick<
+  Celula,
+  "id" | "nome" | "rede_id" | "rede_nome"
+>;
+
+export async function carregarCelulas(
+  opcoes: Opcoes = {},
+): Promise<CelulaDoFiltro[]> {
+  const { itens } = await api.get<{ itens: CelulaDoFiltro[] }>(
+    CAMINHO_CELULAS,
+    opcoes,
+  );
+  return itens;
+}
+
+/** 403: a sessão não tem permissão (ex.: o papel mudou com a tela aberta). */
+export function ehSemPermissao(erro: unknown): boolean {
+  return erro instanceof ErroApi && erro.status === 403;
+}

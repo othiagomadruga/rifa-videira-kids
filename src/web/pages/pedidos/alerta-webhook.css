@@ -1,0 +1,31 @@
+/* Alerta de webhook parado (RIFA-025): no topo da Visão geral e da tela Pedidos. Vem no pacote inicial (a Visão
+   geral é a tela de entrada da coordenação), por isso é pequeno e não depende do CSS da tela Pedidos. */
+
+/* Vazia, a região viva não ocupa espaço (o espaçamento da página é por gap). */
+.alerta-webhook:empty {
+  display: none;
+}
+
+.alerta-webhook {
+  min-width: 0;
+}
+
+/* Situação ok (ou falha ao consultar): uma linha discreta, sem aviso. */
+.alerta-webhook-linha {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espaco-2);
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  overflow-wrap: anywhere;
+}
+
+/* O ponto é só decoração: o texto diz tudo sem a cor. */
+.alerta-webhook-linha__ponto {
+  flex: none;
+  width: var(--espaco-2);
+  height: var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-sucesso);
+}

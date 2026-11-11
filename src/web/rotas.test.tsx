@@ -18,8 +18,7 @@ const TELAS = [
   // /entrar, /acesso e /coordenacao/acessos (RIFA-007), /coordenacao/campanha (RIFA-004),
   // /coordenacao/hierarquia (RIFA-005), /coordenacao/adesao (RIFA-006), /telao e /coordenacao/bumbo
   // (RIFA-011) já são telas de verdade: ver pages/entrar, pages/acesso, pages/acessos, pages/campanha,
-  // pages/hierarquia, pages/adesao, pages/telao e pages/bumbo.
-  ["/coordenacao/pedidos", "Pedidos", "RIFA-003"],
+  // pages/hierarquia, pages/adesao, pages/telao e pages/bumbo. /coordenacao/pedidos (RIFA-025): pages/pedidos.
   ["/coordenacao/conferencia", "Conferência", "RIFA-012"],
 ] as const;
 
