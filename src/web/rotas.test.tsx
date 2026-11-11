@@ -19,6 +19,7 @@ const TELAS = [
   // /coordenacao/hierarquia (RIFA-005), /coordenacao/adesao (RIFA-006), /telao e /coordenacao/bumbo
   // (RIFA-011) já são telas de verdade: ver pages/entrar, pages/acesso, pages/acessos, pages/campanha,
   // pages/hierarquia, pages/adesao, pages/telao e pages/bumbo. /coordenacao/pedidos (RIFA-025): pages/pedidos.
+  // /coordenacao/mapa (RIFA-015): pages/mapa.
   ["/coordenacao/conferencia", "Conferência", "RIFA-012"],
 ] as const;
 
@@ -31,6 +32,7 @@ const MENU_COORDENACAO = [
   ["Pedidos", "/coordenacao/pedidos"],
   ["Pedidos suspeitos", "/coordenacao/pedidos-suspeitos"],
   ["Rankings", "/coordenacao/rankings"],
+  ["Mapa", "/coordenacao/mapa"],
   ["Bumbo", "/coordenacao/bumbo"],
   ["Conferência", "/coordenacao/conferencia"],
 ] as const;
