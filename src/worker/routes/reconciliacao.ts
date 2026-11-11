@@ -11,9 +11,10 @@
  * teto do corpo é o da conferência (LIMITE_CORPO_CONFERENCIA_BYTES, 1 MiB), conferido aqui: o teto geral
  * (middleware/limite-corpo.ts) deixa estas rotas de fora para o corpo ser lido uma vez só.
  *
- * CPU: o plano Free dá 10 ms por requisição. Nada aqui lê o CSV nem usa o Intl por linha: a validação é
- * um laço simples (src/shared/contracts/conferencia.ts), o banco devolve só os pedidos com os códigos do
- * arquivo e os totais já somados (db/reconciliacao.ts), e a análise é um passeio pelos pedidos.
+ * CPU: a conferência exige o Workers Paid (D19; passa dos 10 ms do plano gratuito). Nada aqui lê o CSV nem
+ * usa o Intl por linha: a validação é um laço simples (src/shared/contracts/conferencia.ts), o banco devolve
+ * só os pedidos com os códigos do arquivo e os totais já somados (db/reconciliacao.ts), e a análise é um
+ * passeio pelos pedidos.
  *
  * Privacidade (D1): o corpo nem tem as colunas de dado pessoal (ficam no navegador), e um corpo com uma
  * coluna de nome pessoal mapeada é recusado. O log de erro leva só o nome do erro (e a mensagem do D1).

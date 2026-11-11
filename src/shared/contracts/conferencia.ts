@@ -8,8 +8,8 @@
  * linhas iguais do arquivo (`vezes` diz quantas). Nome, e-mail, telefone e as demais colunas pessoais
  * nunca saem do navegador (D1), nem os números dos bilhetes (só a contagem deles).
  *
- * O validador é leve de propósito (laços simples, sem zod item a item): a CPU do Worker é curta (o plano
- * Free dá 10 ms por requisição; os números medidos e o que falta decidir estão na D13, docs/decisions.md).
+ * O validador é leve de propósito (laços simples, sem zod item a item): a CPU do Worker conta (a conferência
+ * exige o Workers Paid; os números medidos estão na D19, docs/decisions.md).
  */
 import { diaDoCalendario } from "./calendario";
 

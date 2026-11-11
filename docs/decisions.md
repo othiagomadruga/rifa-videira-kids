@@ -133,7 +133,7 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   `POST /api/sessao` e 1 MiB nos POST/PUT/PATCH da coordenação, depois do login (sem sessão, o corpo nem é lido);
   acima, 413 `corpo_muito_grande`. As importações de CSV têm o teto delas na própria rota: a da hierarquia
   (3 × o limite de caracteres + 1 MB, respondendo como arquivo grande) e a conferência da RIFA-012, sob
-  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela (1 MiB, o corpo compacto: D13).
+  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela (1 MiB, o corpo compacto: D19).
 - **Sessão parada há mais de 7 dias** deixa de valer, mesmo dentro dos 45 dias (`ultimo_uso_em`, já gravado no
   máximo uma vez por minuto). O link pessoal continua abrindo uma sessão nova; a administração não conta a sessão
   parada como ativa, e cada login a apaga.
@@ -420,9 +420,14 @@ do passo com o token, e o que deixassem no disco rodava com ele.
 - O Worker não usa o Intl por linha; o banco devolve só os pedidos com os códigos do arquivo (um texto JSON por
   lote, tuplas curtas) e os ausentes e totais já somados. CPU medida na revisão no workerd, com o app completo e
   o login, com 7 mil pedidos: 18 a 22 ms na 1ª requisição do isolate e 9 a 10 ms nas seguintes; no teto aceito
-  (1 MiB), de 15 a 75 ms. Ainda passa dos 10 ms do plano Free: o caminho (plano pago da Cloudflare ou a análise
-  também no navegador) é decisão do PO, pendente. O teste de desempenho
-  (`src/worker/routes/reconciliacao-desempenho.test.ts`) mede só as rotas, sem o login, e aceita até 30 ms.
+  (1 MiB), de 15 a 75 ms.
+- **A conferência exige o Workers Paid** (decisão do PO, 2026-11-11). Os números acima passam dos 10 ms do plano
+  Free; entre o plano pago e levar também a análise ao navegador, o PO escolheu o plano. No Paid, o limite de CPU
+  por requisição é de segundos (30 s por padrão na documentação "Workers limits"; confira). Roteiro:
+  lancamento.md, 1.1 a. O teste de desempenho
+  (`src/worker/routes/reconciliacao-desempenho.test.ts`) mede só as rotas, sem o login, e continua aceitando até
+  30 ms: não é o limite do plano, é a trava contra regressão grosseira (ler o CSV no Worker voltaria às centenas de
+  ms; com 7 mil pedidos, o teste mede de 8 a 11 ms).
 - O corpo vai até 1 MiB (`LIMITE_CORPO_CONFERENCIA_BYTES`, ~15 mil pedidos); a rota lê o corpo uma vez só, de
   uma vez quando há `Content-Length` (o teto geral leria em pedaços de 4 KB: ~2,5 ms a mais para ~430 KB), por
   isso continua fora do teto geral, com o mesmo número.

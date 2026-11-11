@@ -12,7 +12,7 @@
  *   (LIMITE_CORPO_IMPORTACAO_HIERARQUIA_BYTES, routes/hierarquia.ts) e a conferência da RIFA-012
  *   (/api/admin/reconciliacao/*: LIMITE_CORPO_CONFERENCIA_BYTES, no contrato, lido uma vez só pela rota,
  *   e de uma vez quando há Content-Length; ler em pedaços aqui e de novo lá custava ~2 ms de CPU a mais
- *   para os 420 KB de 7 mil pedidos, e o plano Free dá 10 ms por requisição).
+ *   para os 420 KB de 7 mil pedidos; D19).
  * Acima do limite: 413 `corpo_muito_grande` (a importação da hierarquia responde como ao arquivo grande).
  */
 import type { Context } from "hono";

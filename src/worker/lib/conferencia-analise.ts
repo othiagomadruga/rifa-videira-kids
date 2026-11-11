@@ -5,7 +5,7 @@
  * POST /api/admin/reconciliacao/analisar (por pedido ou agregado) e o plano do "Recuperar".
  *
  * Módulo puro: recebe o corpo, o que o banco leu (db/reconciliacao.ts) e o instante "agora"; não lê o
- * banco nem o relógio, e não usa o Intl por linha (a CPU do Worker é curta: 10 ms no plano Free). As
+ * banco nem o relógio, e não usa o Intl por linha (a CPU do Worker conta: D19). As
  * respostas só levam códigos de pedido validados, status normalizados, números, centavos, dias e ids de
  * afiliado: nenhum texto livre do arquivo (D1).
  */

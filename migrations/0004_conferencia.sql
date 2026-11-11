@@ -4,7 +4,7 @@
 -- Documentação: docs/integracao-rifei.md (seção 10) e docs/api.md. Gravação: src/worker/db/reconciliacao.ts.
 --
 -- * O CSV traz nome, e-mail e telefone dos compradores. Ele é lido no navegador e não vai para a API
---   (D13): nenhuma coluna aqui guarda conteúdo do arquivo além do que o pedido recuperado precisa
+--   (D19): nenhuma coluna aqui guarda conteúdo do arquivo além do que o pedido recuperado precisa
 --   (código, quantidade, valor, afiliado e instante; os números dos bilhetes ficam no navegador e o
 --   pedido recuperado tem `numeros` nulo). Do arquivo em si ficam só o SHA-256, que identifica o
 --   arquivo usado sem guardar o conteúdo, e os nomes das colunas usadas (D1).

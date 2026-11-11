@@ -1,9 +1,9 @@
-// Desempenho da conferência pelo CSV (RIFA-012, revisão do ciclo 1: o plano Free dá 10 ms de CPU por
-// requisição). No workerd, com 1, 3 e 7 mil pedidos no banco e no arquivo, mede por rota o tempo total da
-// requisição, o tempo esperando o D1 e a diferença (o trabalho do Worker: ler e conferir o corpo, juntar
-// os pedidos, comparar e montar o JSON). O corpo é o que o navegador manda (corpoDe: a mesma leitura da
-// tela). Os números saem no log; o limite do teste é folgado (pega regressão grosseira, como a leitura do
-// CSV no Worker, que gastava 300 ms com 7 mil pedidos), e o relatório da tarefa traz os medidos.
+// Desempenho da conferência pelo CSV (RIFA-012). A conferência exige o Workers Paid (D19): passa dos 10 ms de
+// CPU por requisição do plano gratuito, e o Paid dá segundos. No workerd, com 1, 3 e 7 mil pedidos no banco e
+// no arquivo, mede por rota o tempo total da requisição, o tempo esperando o D1 e a diferença (o trabalho do
+// Worker: ler e conferir o corpo, juntar os pedidos, comparar e montar o JSON). O corpo é o que o navegador
+// manda (corpoDe: a mesma leitura da tela). Os números saem no log; o limite do teste é folgado e não é o do
+// plano: pega regressão grosseira, como a leitura do CSV no Worker, que gastava 300 ms com 7 mil pedidos.
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
@@ -22,7 +22,11 @@ import {
 } from "../test/conferencia-apoio";
 import { bancoQueConta } from "../test/painel-apoio";
 
-/** Folgado de propósito: a máquina do CI varia; o medido sai no log. */
+/**
+ * Folgado de propósito: a máquina do CI varia; o medido sai no log (de 8 a 11 ms com 7 mil pedidos na integração
+ * com a main). Não é o limite do plano (no Workers Paid são segundos): é a trava contra regressão grosseira, como
+ * voltar a ler o CSV no Worker.
+ */
 const LIMITE_WORKER_MS = 30;
 /** Pedidos do arquivo que não estão no banco (vendas perdidas). */
 const PERDIDOS = 50;

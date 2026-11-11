@@ -2,10 +2,11 @@
  * Conferência pelo CSV da Rifei (RIFA-012; docs/api.md e docs/integracao-rifei.md, seção 10): o que a
  * análise lê do banco, a gravação do "Recuperar" e a lista das recuperações feitas (auditoria).
  *
- * CPU (o Worker do plano Free tem 10 ms por requisição): o banco faz o trabalho pesado. Os códigos do
- * arquivo vão num parâmetro JSON (json_each) e voltam só os pedidos com esses códigos, cada lote num texto
- * JSON único (json_group_array: uma linha, em vez de milhares de objetos para o Worker montar); os pagos
- * que o arquivo não tem, os totais e o modo sem código chegam já contados e somados (GROUP BY).
+ * CPU (a conferência exige o Workers Paid, D19, e a CPU do Worker continua contando): o banco faz o
+ * trabalho pesado. Os códigos do arquivo vão num parâmetro JSON (json_each) e voltam só os pedidos com esses
+ * códigos, cada lote num texto JSON único (json_group_array: uma linha, em vez de milhares de objetos para o
+ * Worker montar); os pagos que o arquivo não tem, os totais e o modo sem código chegam já contados e somados
+ * (GROUP BY).
  *
  * Nada do arquivo chega aqui além dos códigos e, no "Recuperar", do pedido recuperado (código, quantidade,
  * valor, afiliado e instante) e, na auditoria, do SHA-256 do arquivo e dos nomes das colunas usadas (D1).
