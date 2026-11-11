@@ -326,3 +326,21 @@ entregas do webhook (só por SQL no D1) e que ninguém ficava sabendo se o webho
   contagem de 24 h com `resultado IN (...)`). Totais só na primeira página. O campo `origem` (webhook ou
   conferência) entra junto com a RIFA-012, por quem chegar por último na main.
 - Fica para decisão do PO: gravar o instante do último 401 do webhook (seria uma escrita sem autenticação).
+
+## D17. Mapa de vendas por DDD (RIFA-015, 2026-11-11)
+
+A reunião lembrou que, em SA, "um mapa mostrava as vendas por DDD" e foi um "detalhezinho que deu muita diferença"
+(RF10). O banco já guarda o DDD e o país do comprador (D1), sem nenhum outro dado dele.
+
+- **Só para a coordenação, com valores**: `GET /api/painel/mapa-ddd`. Conta só pedidos aprovados dentro da janela
+  (a campanha até hoje, ou o período atual) e, com `divisao`, só os das células da divisão (as vendas sem célula
+  ficam de fora). Agrupa por DDD no D1 e converte DDD em UF no Worker, pela tabela fixa da Anatel
+  (`src/shared/contracts/ddd.ts`, 67 DDDs, 27 UFs). Telefone de outro país vai para `exterior`; DDD ausente ou fora
+  da tabela, para `sem_ddd`. A parte de cada recorte é a dos bilhetes, em pontos-base.
+- **Mapa no site** sem dependência nova e sem arquivo de terceiros: um mapa em grade (cartograma), um quadrado
+  por UF na posição aproximada, com a cor pela parte das vendas, mais a lista por DDD. Nada de SVG de mapa baixado
+  da internet.
+- **Versão pública ou no telão** fica para o PO decidir (pergunta aberta). Se vier, mostra só presença e parte
+  relativa, nunca quantidade nem R$, como o resto do que é aberto.
+- Custo: uma leitura agrupada por DDD lê cerca de 1 linha por pedido aprovado da janela (como os totais do painel);
+  a tela não se atualiza sozinha.

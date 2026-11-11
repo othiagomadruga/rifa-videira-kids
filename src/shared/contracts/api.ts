@@ -32,6 +32,7 @@ import {
   statusPedidoSchema,
 } from "./dominio";
 import { detalheResumidoSchema } from "./erros";
+import { UFS } from "./ddd";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
 // Só o tipo (apagado na compilação): acesso.ts importa valores daqui, e este import não cria ciclo.
 import type { Papel } from "./acesso";
@@ -806,6 +807,53 @@ export const respostaRankingSchema = z.strictObject({
   atualizado_em: instanteSchema,
 });
 export type RespostaRanking = z.infer<typeof respostaRankingSchema>;
+
+// ---------------------------------------------------------------------------------------------------
+// GET /api/painel/mapa-ddd (coordenação, com valores; RIFA-015, D17): de onde vêm as vendas, pelo DDD do comprador
+// ---------------------------------------------------------------------------------------------------
+
+export const consultaMapaDddSchema = z.object({
+  /** `campanha` (padrão) = do primeiro dia até hoje; `atual` = o período que contém hoje (como nos rankings). */
+  periodo: z.enum(JANELAS_RANKING).default("campanha"),
+  /** Só as vendas das células desta divisão (as vendas sem célula ficam de fora quando há divisão). */
+  divisao: divisaoSchema.optional(),
+});
+export type ConsultaMapaDdd = z.output<typeof consultaMapaDddSchema>;
+
+/** Pedidos aprovados, bilhetes e centavos de um recorte; `parte_bilhetes_bp` = bilhetes ÷ bilhetes do total. */
+const totaisMapaSchema = z.strictObject({
+  pedidos: quantidadeSchema,
+  bilhetes: quantidadeSchema,
+  total_centavos: centavosSchema,
+  /** Pontos-base truncados; 0 quando o total não tem bilhete. */
+  parte_bilhetes_bp: percentualBpSchema.max(10_000),
+});
+
+export const respostaMapaDddSchema = z.strictObject({
+  janela: janelaRankingSchema,
+  divisao: divisaoSchema.nullable(),
+  /** Só as UFs com venda, das que mais venderam bilhetes para as que menos (empate pela sigla). */
+  ufs: z.array(
+    totaisMapaSchema.extend({
+      uf: z.enum(UFS),
+    }),
+  ),
+  /** Os DDDs com venda (cada um da sua UF), na mesma ordem das UFs e, dentro delas, dos que mais venderam. */
+  ddds: z.array(
+    totaisMapaSchema.extend({
+      ddd: dddSchema,
+      uf: z.enum(UFS),
+    }),
+  ),
+  /** Compradores com telefone de outro país (código diferente de 55). */
+  exterior: totaisMapaSchema,
+  /** Sem DDD gravado, ou com DDD fora da tabela da Anatel. */
+  sem_ddd: totaisMapaSchema,
+  /** Tudo o que entrou no recorte (= ufs + exterior + sem_ddd). */
+  total: totaisMapaSchema,
+  atualizado_em: instanteSchema,
+});
+export type RespostaMapaDdd = z.infer<typeof respostaMapaDddSchema>;
 
 // ---------------------------------------------------------------------------------------------------
 // GET /api/publico/ranking e GET /api/publico/bumbo (abertos: NENHUM valor financeiro)
@@ -1701,6 +1749,14 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaPainelResumoSchema,
     sucesso: { status: 200, corpo: respostaPainelResumoSchema },
+  },
+  mapaDdd: {
+    metodo: "GET",
+    caminho: "/api/painel/mapa-ddd",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    consulta: consultaMapaDddSchema,
+    sucesso: { status: 200, corpo: respostaMapaDddSchema },
   },
   painelRanking: {
     metodo: "GET",

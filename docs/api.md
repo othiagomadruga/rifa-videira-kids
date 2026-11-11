@@ -702,6 +702,15 @@ chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo s
 células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
 schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
 
+## Mapa de vendas por DDD (Sprint 5, RIFA-015; docs/decisions.md D17)
+
+### `GET /api/painel/mapa-ddd?periodo=campanha|atual&divisao=jovens|adultos` (`coordenacao`)
+
+Pedidos aprovados da janela (padrão: a campanha até hoje), agrupados por UF e por DDD (tabela fixa em
+`src/shared/contracts/ddd.ts`), mais `exterior` (país diferente de 55), `sem_ddd` e `total`. Cada recorte traz
+pedidos, bilhetes, centavos e a parte dos bilhetes em pontos-base. Com `divisao`, só as vendas das células da
+divisão. Só a coordenação; a versão aberta depende do PO.
+
 ## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
 
 Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoal: do comprador, só o DDD.

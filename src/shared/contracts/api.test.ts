@@ -28,6 +28,8 @@ import {
   respostaImportarHierarquiaSchema,
   consultaVisaoIndividualSchema,
   consultaPedidosSchema,
+  consultaMapaDddSchema,
+  respostaMapaDddSchema,
   consultaEntregasWebhookSchema,
   respostaPedidosSchema,
   respostaEntregasWebhookSchema,
@@ -108,6 +110,8 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/admin/pedidos",
         "GET /api/admin/webhook/entregas",
         "GET /api/admin/webhook/estado",
+        // Sprint 5 (RIFA-015): mapa de vendas por DDD.
+        "GET /api/painel/mapa-ddd",
       ].sort(),
     );
   });
@@ -1726,5 +1730,69 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
         consulta,
         ok: consultaEntregasWebhookSchema.safeParse(consulta).success,
       }).toEqual({ consulta, ok: false });
+  });
+});
+
+describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
+  const totais = (bilhetes: number, parte: number) => ({
+    pedidos: bilhetes,
+    bilhetes,
+    total_centavos: bilhetes * 2000,
+    parte_bilhetes_bp: parte,
+  });
+  const mapa = {
+    janela: {
+      tipo: "campanha",
+      ordem: null,
+      nome: "Campanha",
+      data_inicio: "2026-11-23",
+      data_fim: "2026-12-16",
+    },
+    divisao: null,
+    ufs: [{ ...totais(8, 8000), uf: "PA" }],
+    ddds: [
+      { ...totais(6, 6000), ddd: "91", uf: "PA" },
+      { ...totais(2, 2000), ddd: "94", uf: "PA" },
+    ],
+    exterior: totais(1, 1000),
+    sem_ddd: totais(1, 1000),
+    total: totais(10, 10000),
+    atualizado_em: "2026-11-25T15:00:00.000Z",
+  };
+
+  it("consulta: campanha por padrão, período e divisão opcionais", () => {
+    expect(consultaMapaDddSchema.parse({})).toEqual({ periodo: "campanha" });
+    expect(
+      consultaMapaDddSchema.parse({ periodo: "atual", divisao: "jovens" }),
+    ).toEqual({
+      periodo: "atual",
+      divisao: "jovens",
+    });
+    for (const consulta of [{ periodo: "semana" }, { divisao: "criancas" }])
+      expect(consultaMapaDddSchema.safeParse(consulta).success).toBe(false);
+  });
+
+  it("resposta estrita: UF da lista, DDD no formato gravado, parte até 10000 e nenhum dado do comprador", () => {
+    expect(respostaMapaDddSchema.safeParse(mapa).success).toBe(true);
+    const invalidas: unknown[] = [
+      { ...mapa, ufs: [{ ...mapa.ufs[0], uf: "XX" }] },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "091" }] },
+      { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 10_001 } },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], telefone: "+5591988887777" }] },
+      { ...mapa, a_mais: 1 },
+    ];
+    for (const resposta of invalidas)
+      expect({
+        resposta,
+        ok: respostaMapaDddSchema.safeParse(resposta).success,
+      }).toEqual({
+        resposta,
+        ok: false,
+      });
+    expect(
+      nomesDeCampos(respostaMapaDddSchema).filter((campo) =>
+        /telefone|phone|email|nome_comprador|buyer|documento|cpf/i.test(campo),
+      ),
+    ).toEqual([]);
   });
 });
