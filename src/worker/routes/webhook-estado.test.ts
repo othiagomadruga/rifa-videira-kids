@@ -196,6 +196,16 @@ describe("sem_entregas_recentes: de dia, num dia da campanha, mais de 4 h sem en
     expect(await situacao(belem("2026-12-17T15:00"))).toBe("ok");
   });
 
+  it("a data é a local, não a de UTC: das 21h às 22h em Belém já é o dia seguinte em UTC", async () => {
+    // Véspera às 21h30 (dia 23 em UTC): ainda não é a campanha.
+    expect(await situacao(belem("2026-11-22T21:30"))).toBe("nunca_recebeu");
+    await entrega(belem("2026-12-16T08:30"), "processado");
+    // Último dia às 21h30 (dia 17 em UTC): ainda é a campanha.
+    expect(await situacao(belem("2026-12-16T21:30"))).toBe(
+      "sem_entregas_recentes",
+    );
+  });
+
   it("slug errado conta como ignorado_outra_campanha: não é entrega da campanha nem apaga o alerta", async () => {
     await entrega(belem("2026-11-26T08:30"), "processado");
     await entrega(
@@ -288,6 +298,16 @@ describe("erros_recentes: erro_validacao nas últimas 24 h com slug ausente ou o
       "erros_recentes",
     );
     expect(await situacao(belem("2026-11-26T11:00:00.001"))).toBe("ok");
+  });
+
+  it("a contagem das 24 h também inclui o instante de exatamente 24 h atrás", async () => {
+    await entrega(belem("2026-11-25T11:00"), "duplicado");
+    expect(
+      (await estado(belem("2026-11-26T11:00:00.000"))).ultimas_24h.duplicado,
+    ).toBe(1);
+    expect(
+      (await estado(belem("2026-11-26T11:00:00.001"))).ultimas_24h.duplicado,
+    ).toBe(0);
   });
 
   it("prioridade: erros_recentes vence sem_entregas_recentes (e este vence nunca_recebeu)", async () => {
