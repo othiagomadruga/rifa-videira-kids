@@ -16,6 +16,8 @@ import {
   LINHAS_DA_GRADE,
   POSICAO_DA_UF,
   UFS_NA_ORDEM_DA_GRADE,
+  vizinhaNaDirecao,
+  type Direcao,
 } from "./grade";
 import {
   CAMINHO_MAPA_DDD,
@@ -127,7 +129,7 @@ describe("a grade do mapa (cartograma)", () => {
     expect(coluna("GO")).toBeLessThan(coluna("DF"));
   });
 
-  it("a ordem do HTML (e do Tab) é a de leitura da grade: linha a linha, da esquerda para a direita", () => {
+  it("a ordem do HTML (e do Home e do End) é a de leitura da grade: linha a linha, da esquerda para a direita", () => {
     expect(UFS_NA_ORDEM_DA_GRADE).toHaveLength(27);
     expect(UFS_NA_ORDEM_DA_GRADE.slice(0, 8)).toEqual([
       "RR",
@@ -140,6 +142,42 @@ describe("a grade do mapa (cartograma)", () => {
       "RN",
     ]);
     expect(UFS_NA_ORDEM_DA_GRADE.at(-1)).toBe("RS");
+  });
+
+  it("a seta vai à casa mais perto na direção, pulando as vazias, e fica onde está se não houver nenhuma (RIFA-027)", () => {
+    // A grade do mapa não tem buraco entre duas UFs da mesma linha ou coluna; esta tem:
+    //        0    1    2    3    4
+    //   0    A    .    B    .    .
+    //   1    .    .    .    .    .
+    //   2    C    .    D    E    .
+    //   3    .    .    .    .    F
+    const posicoes = {
+      A: [0, 0],
+      B: [0, 2],
+      C: [2, 0],
+      D: [2, 2],
+      E: [2, 3],
+      F: [3, 4],
+    } as const;
+    const ir = (de: keyof typeof posicoes, direcao: Direcao) =>
+      vizinhaNaDirecao(posicoes, de, direcao);
+
+    expect(ir("A", "direita")).toBe("B");
+    expect(ir("A", "baixo")).toBe("C");
+    expect(ir("B", "baixo")).toBe("D");
+    expect(ir("B", "esquerda")).toBe("A");
+    expect(ir("C", "cima")).toBe("A");
+    expect(ir("D", "cima")).toBe("B");
+    expect(ir("C", "direita")).toBe("D"); // a mais perto, não o E
+    expect(ir("E", "esquerda")).toBe("D");
+    // Sem casa na direção, na linha ou na coluna (uma UF na diagonal não conta): fica onde está.
+    expect(ir("A", "cima")).toBe("A");
+    expect(ir("A", "esquerda")).toBe("A");
+    expect(ir("B", "direita")).toBe("B");
+    expect(ir("E", "direita")).toBe("E");
+    expect(ir("E", "baixo")).toBe("E");
+    expect(ir("F", "cima")).toBe("F");
+    expect(ir("F", "esquerda")).toBe("F");
   });
 });
 
