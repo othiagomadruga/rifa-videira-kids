@@ -118,11 +118,21 @@ export const TEXTO_DO_CODIGO: Record<string, string> = {
   corpo_muito_grande: "o corpo passou do tamanho máximo",
   payload_invalido: "pedido inválido",
   itens_omitidos: "outros problemas, omitidos da lista",
+  // a API troca por este um código fora da forma do vocabulário (nada do que veio na entrega sai)
+  codigo_desconhecido: "problema não identificado",
 };
 
-/** O campo legível: "total", "buyer.phone", "numbers.*" → "numbers (cada item)"; vazio = a entrega toda. */
+/**
+ * O campo legível: "total", "buyer.phone", "numbers.*" → "numbers (cada item)"; vazio = a entrega toda. A API troca
+ * por "?" uma parte do caminho que não tem a forma de um nome de campo: ela vira "(campo não identificado)".
+ */
 export function textoDoCampo(campo: string): string {
-  return campo.replace(/\.\*(?=\.|$)/g, " (cada item)").replace(/^\*/, "item");
+  return campo
+    .split(".")
+    .map((parte) => (parte === "?" ? "(campo não identificado)" : parte))
+    .join(".")
+    .replace(/\.\*(?=\.|$)/g, " (cada item)")
+    .replace(/^\*/, "item");
 }
 
 type Detalhe = EntregaWebhook["avisos"][number];

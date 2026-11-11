@@ -45,6 +45,11 @@ describe("erro e avisos legíveis", () => {
       { campo: "event", codigo: "constructor", ocorrencias: 1 },
       "event: outro problema (constructor)",
     ],
+    // O que a API manda no lugar de um código ou de uma parte do caminho fora da forma (docs/api.md).
+    [
+      { campo: "buyer.?", codigo: "codigo_desconhecido", ocorrencias: 2 },
+      "buyer.(campo não identificado): problema não identificado (2 vezes)",
+    ],
   ])("%o → %s", (detalhe, texto) => {
     expect(textoDoDetalhe(detalhe)).toBe(texto);
   });
