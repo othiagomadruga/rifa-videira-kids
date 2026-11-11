@@ -246,9 +246,9 @@ function prenderFoco(evento: KeyboardEvent, painel: HTMLElement) {
 }
 
 /**
- * Deixa `inert` tudo o que está no <body> fora do diálogo e trava a rolagem da página (compensando a
- * barra de rolagem, para nada pular). Devolve a função que desfaz só o que foi feito aqui, então
- * diálogos empilhados se desfazem na ordem certa.
+ * Deixa `inert` tudo o que está no <body> fora do diálogo e trava a rolagem da página. Devolve a função
+ * que desfaz só o `inert` posto aqui (diálogos abertos um depois do outro se desfazem na ordem certa) e
+ * solta esta trava da rolagem.
  */
 function isolarDoResto(fundo: HTMLElement): () => void {
   const inertes: Element[] = [];
@@ -258,17 +258,45 @@ function isolarDoResto(fundo: HTMLElement): () => void {
       inertes.push(elemento);
     }
   }
-  const estilo = document.body.style;
-  const { overflow, paddingRight } = estilo;
-  const larguraJanela = document.documentElement.clientWidth;
-  const larguraBarra =
-    larguraJanela > 0 ? window.innerWidth - larguraJanela : 0;
-  estilo.overflow = "hidden";
-  if (larguraBarra > 0) estilo.paddingRight = `${larguraBarra}px`;
+  const soltarRolagem = travarRolagem();
 
   return () => {
     for (const elemento of inertes) elemento.removeAttribute("inert");
-    estilo.overflow = overflow;
-    estilo.paddingRight = paddingRight;
+    soltarRolagem();
+  };
+}
+
+// A trava da rolagem é uma só para todos os diálogos abertos: o primeiro guarda o estilo do <body> e o
+// último a fechar devolve. Guardar e devolver em cada diálogo dependeria da ordem dos efeitos, e o React
+// desmonta o de baixo antes do de cima quando os dois saem juntos (a página ficava sem rolagem) e monta o
+// de cima antes do de baixo quando os dois entram juntos (fechar o de cima soltava a rolagem).
+let travasDaRolagem = 0;
+let estiloAntesDaTrava = { overflow: "", paddingRight: "" };
+
+/** Trava a rolagem da página (compensando a barra de rolagem, para nada pular); devolve quem solta. */
+function travarRolagem(): () => void {
+  const estilo = document.body.style;
+  if (travasDaRolagem === 0) {
+    estiloAntesDaTrava = {
+      overflow: estilo.overflow,
+      paddingRight: estilo.paddingRight,
+    };
+    const larguraJanela = document.documentElement.clientWidth;
+    const larguraBarra =
+      larguraJanela > 0 ? window.innerWidth - larguraJanela : 0;
+    estilo.overflow = "hidden";
+    if (larguraBarra > 0) estilo.paddingRight = `${larguraBarra}px`;
+  }
+  travasDaRolagem += 1;
+
+  let solta = false;
+  return () => {
+    if (solta) return;
+    solta = true;
+    travasDaRolagem -= 1;
+    if (travasDaRolagem === 0) {
+      estilo.overflow = estiloAntesDaTrava.overflow;
+      estilo.paddingRight = estiloAntesDaTrava.paddingRight;
+    }
   };
 }
