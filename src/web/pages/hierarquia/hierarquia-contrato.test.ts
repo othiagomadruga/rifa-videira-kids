@@ -80,5 +80,12 @@ describe("cópias do contrato na tela da hierarquia", () => {
     expect(mudouEnquantoIsso).toContain('"em_uso"');
     expect(mudouEnquantoIsso).toContain(TRECHO_MUDOU_ENQUANTO_ISSO);
     expect(referenciaQueMudou).toContain(TRECHO_MUDOU_ENQUANTO_ISSO);
+    // A tela recarrega as listas sozinha nesses casos (RIFA-026): a mensagem diz isso, e não "atualize a página".
+    for (const mensagem of [mudouEnquantoIsso, referenciaQueMudou]) {
+      expect(mensagem).toContain(
+        "a lista foi atualizada; confira e tente de novo.",
+      );
+      expect(mensagem).not.toContain("atualize a página");
+    }
   });
 });

@@ -12,7 +12,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import { respostaMapaDddSchema } from "../../../shared/contracts/api";
-import { UFS } from "../../../shared/contracts/ddd";
+import { NOME_DA_UF, UFS, type Uf } from "../../../shared/contracts/ddd";
 import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
@@ -24,6 +24,7 @@ import {
   JANELA_SEMANA_2,
   SEM_CAMPANHA,
   mapaDasFaixas,
+  mapaDe,
   mapaDeBelem,
   mapaSemVendas,
   respostaErro,
@@ -81,6 +82,48 @@ const anuncio = () =>
     .find((elemento) => elemento.classList.contains("visualmente-oculto"));
 
 const NBSP = "\u00a0";
+
+/**
+ * O que o Tab percorre, na ordem do documento. O jsdom não anda com o Tab: o teste segue a regra do navegador
+ * (tabindex 0 ou mais, sem desabilitado, sem `hidden` nem `inert`, nada de dentro de um `<details>` fechado além
+ * do `<summary>`).
+ */
+function ordemDoTab(): HTMLElement[] {
+  return [
+    ...document.querySelectorAll<HTMLElement>(
+      "a[href], button, input, select, textarea, summary, [tabindex]",
+    ),
+  ].filter(
+    (elemento) =>
+      elemento.tabIndex >= 0 &&
+      !elemento.matches(":disabled") &&
+      !elemento.closest("[hidden], [inert]") &&
+      !elemento.closest("details:not([open]) > :not(summary)"),
+  );
+}
+
+/** Tab (ou Shift+Tab, com `voltar`): o foco vai ao próximo (ou ao anterior) da ordem do Tab. */
+function tab(voltar = false) {
+  const ordem = ordemDoTab();
+  const atual = ordem.indexOf(document.activeElement as HTMLElement);
+  const proximo = ordem[atual + (voltar ? -1 : 1)];
+  if (!proximo) throw new Error("o Tab saiu da página");
+  act(() => proximo.focus());
+  return proximo;
+}
+
+/** Foca o que vem antes do mapa na ordem do Tab e dá um Tab: entra no mapa. */
+async function entrarPeloTab() {
+  const grupo = await mapa();
+  const ordem = ordemDoTab();
+  const antes =
+    ordem[ordem.findIndex((elemento) => grupo.contains(elemento)) - 1];
+  act(() => antes.focus());
+  return tab();
+}
+
+/** A sigla da UF com o foco (o texto visível do botão). */
+const focada = () => document.activeElement?.textContent;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -711,7 +754,7 @@ describe("CA6: acessibilidade", () => {
     ]);
   });
 
-  it("cada UF é focável, com o rótulo completo, na ordem da grade (do norte para o sul)", async () => {
+  it("cada UF é um botão focável, com o rótulo completo, na ordem da grade (do norte para o sul)", async () => {
     simularApi();
     abrir();
 
@@ -727,7 +770,6 @@ describe("CA6: acessibilidade", () => {
     for (const botao of botoes) {
       expect(botao.tagName).toBe("BUTTON");
       expect(botao).not.toBeDisabled();
-      expect(botao).not.toHaveAttribute("tabindex", "-1");
       expect(botao.getAttribute("aria-label")).toMatch(
         /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][^:]+ \([A-Z]{2}\): (sem venda|\d[\d.]* pedidos? aprovados?, )/,
       );
@@ -738,6 +780,8 @@ describe("CA6: acessibilidade", () => {
       act(() => botao.focus());
       expect(botao).toHaveFocus();
       expect(botao).toHaveAttribute("data-ativa");
+      // Tabindex móvel (RIFA-027): a UF focada é a única parada do Tab no mapa.
+      expect(botoes.filter((outro) => outro.tabIndex === 0)).toEqual([botao]);
     }
   });
 
@@ -751,5 +795,153 @@ describe("CA6: acessibilidade", () => {
         "Mapa da Campanha inteira: 468 pedidos aprovados. Atualizado às 15:30.",
       ),
     );
+  });
+});
+
+describe("RIFA-027: teclado no mapa (tabindex móvel)", () => {
+  it("o Tab entra uma vez no mapa, na UF do quadro, e o Tab seguinte sai; o grupo diz como usar as setas", async () => {
+    simularApi(() => respostaJson(mapaDasFaixas()));
+    abrir();
+    const grupo = await mapa();
+    const pa = await quadrado("PA");
+
+    expect(grupo).toHaveAccessibleDescription(
+      "No teclado, use as setas para andar pelo mapa.",
+    );
+    expect(
+      screen.getByText("No teclado, use as setas para andar pelo mapa."),
+    ).toBeVisible();
+    // Uma parada só, a UF do quadro (a que mais vendeu): percorrer a página com o Tab passa uma vez pelo mapa.
+    const ordem = ordemDoTab();
+    expect(ordem.filter((elemento) => grupo.contains(elemento))).toEqual([pa]);
+
+    const antes = ordem[ordem.indexOf(pa) - 1];
+    act(() => antes.focus());
+    expect(antes).toHaveTextContent("Atualizar");
+    expect(tab()).toBe(pa);
+    expect(textoDoQuadro()).toContain("Pará65,0%");
+
+    const depois = tab();
+    expect(grupo.contains(depois)).toBe(false);
+    expect(depois).toHaveTextContent("Ver os estados em tabela");
+    expect(tab(true)).toBe(pa);
+    expect(tab(true)).toBe(antes);
+  });
+
+  it("cada seta vai à UF vizinha na direção e, sem UF na direção (borda ou casa vazia), fica onde está; o quadro acompanha o foco", async () => {
+    simularApi(() => respostaJson(mapaDasFaixas()));
+    abrir();
+    const grupo = await mapa();
+    await entrarPeloTab();
+    expect(focada()).toBe("PA");
+
+    const passos: [string, Uf][] = [
+      ["ArrowRight", "MA"],
+      ["ArrowDown", "TO"],
+      ["ArrowLeft", "MT"],
+      ["ArrowDown", "MS"],
+      ["ArrowDown", "MS"], // nada abaixo do MS na coluna dele
+      ["ArrowLeft", "MS"], // à esquerda do MS, só casas vazias
+      ["ArrowUp", "MT"],
+      ["ArrowUp", "PA"],
+      ["ArrowUp", "AP"],
+      ["ArrowUp", "AP"], // borda de cima
+      ["ArrowRight", "AP"], // à direita do AP, só casas vazias
+      ["ArrowLeft", "RR"],
+      ["ArrowLeft", "RR"], // a casa à esquerda do RR é vazia
+      ["ArrowDown", "AM"],
+      ["ArrowDown", "RO"],
+      ["ArrowLeft", "AC"],
+      ["ArrowDown", "AC"], // o AC é o único da coluna dele
+      ["End", "RS"],
+      ["ArrowUp", "SC"],
+      ["ArrowUp", "PR"],
+      ["ArrowRight", "RJ"],
+      ["ArrowRight", "RJ"], // borda da direita na linha do RJ
+      ["ArrowUp", "MG"],
+      ["ArrowRight", "ES"],
+      ["ArrowDown", "ES"],
+      ["ArrowLeft", "MG"],
+      ["ArrowLeft", "SP"],
+      ["ArrowLeft", "SP"], // à esquerda do SP fica o quadro
+    ];
+    for (const [tecla, uf] of passos) {
+      const de = focada();
+      // preventDefault em toda seta do mapa (a página não rola), mesmo quando o foco fica onde está.
+      expect(
+        fireEvent.keyDown(document.activeElement as HTMLElement, {
+          key: tecla,
+        }),
+        `${tecla} em ${de}`,
+      ).toBe(false);
+      expect(focada(), `${tecla} em ${de}`).toBe(uf);
+      const botao = await quadrado(uf);
+      expect(botao).toHaveAttribute("data-ativa");
+      expect(textoDoQuadro().startsWith(NOME_DA_UF[uf])).toBe(true);
+      expect(
+        within(grupo)
+          .getAllByRole("button")
+          .filter((outro) => outro.tabIndex === 0),
+      ).toEqual([botao]);
+    }
+  });
+
+  it("Home e End vão à primeira e à última UF da grade (RR e RS); outras teclas e as setas com Ctrl, Alt ou Meta não mexem no foco", async () => {
+    simularApi(() => respostaJson(mapaDasFaixas()));
+    abrir();
+    const sp = await quadrado("SP");
+    act(() => sp.focus());
+
+    expect(fireEvent.keyDown(sp, { key: "Home" })).toBe(false);
+    expect(focada()).toBe("RR");
+    expect(textoDoQuadro()).toBe("RoraimaSem venda aprovada.");
+
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "End" });
+    expect(focada()).toBe("RS");
+    expect(textoDoQuadro()).toContain("Rio Grande do Sul");
+
+    const rs = await quadrado("RS");
+    expect(fireEvent.keyDown(rs, { key: "a" })).toBe(true);
+    expect(fireEvent.keyDown(rs, { key: "ArrowUp", ctrlKey: true })).toBe(true);
+    expect(fireEvent.keyDown(rs, { key: "Home", altKey: true })).toBe(true);
+    expect(fireEvent.keyDown(rs, { key: "ArrowUp", metaKey: true })).toBe(true);
+    expect(rs).toHaveFocus();
+  });
+
+  it("o Tab volta à UF onde o foco estava; o mouse troca o quadro sem tirar o Tab da UF focada, e a próxima entrada é na UF do quadro", async () => {
+    simularApi(() => respostaJson(mapaDasFaixas()));
+    abrir();
+    const grupo = await mapa();
+    const mt = await quadrado("MT");
+    act(() => mt.focus());
+    fireEvent.keyDown(mt, { key: "ArrowDown" });
+    expect(focada()).toBe("MS");
+
+    // Sai e volta: entra no MS.
+    expect(grupo.contains(tab())).toBe(false);
+    expect(tab(true)).toBe(await quadrado("MS"));
+
+    // O mouse no SP troca o quadro; o Tab continua no MS, e sai do mapa no Tab seguinte.
+    fireEvent.pointerEnter(await quadrado("SP"));
+    expect(textoDoQuadro()).toContain("São Paulo");
+    expect((await quadrado("MS")).tabIndex).toBe(0);
+    expect((await quadrado("SP")).tabIndex).toBe(-1);
+    expect(grupo.contains(tab())).toBe(false);
+
+    // Fora do mapa, a parada é a UF do quadro (o SP).
+    expect(tab(true)).toBe(await quadrado("SP"));
+  });
+
+  it("sem venda em nenhuma UF (só do exterior), o Tab entra na primeira UF da grade", async () => {
+    simularApi(() =>
+      respostaJson(mapaDe({ ddds: {}, exterior: { pedidos: 2, bilhetes: 6 } })),
+    );
+    abrir();
+    const grupo = await mapa();
+
+    expect(ordemDoTab().filter((elemento) => grupo.contains(elemento))).toEqual(
+      [await quadrado("RR")],
+    );
+    expect(textoDoQuadro()).toBe("Escolha um estado.");
   });
 });

@@ -538,7 +538,7 @@ const TENTATIVAS_GRAVACAO = 3;
 function mudouEnquantoIsso(entidade: Entidade): Falha {
   return falha(
     "em_uso",
-    `${entidade.feminino ? "A" : "O"} ${entidade.rotulo.toLowerCase()} mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.`,
+    `${entidade.feminino ? "A" : "O"} ${entidade.rotulo.toLowerCase()} mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: a lista foi atualizada; confira e tente de novo.`,
   );
 }
 
@@ -772,7 +772,7 @@ interface Dependentes {
 
 /** Recusada por uma referência que sumiu antes da conferência (outra exclusão ao mesmo tempo). */
 const MENSAGEM_REFERENCIA_QUE_MUDOU =
-  "A exclusão foi recusada por uma referência que mudou enquanto isso: atualize a página e tente de novo.";
+  "A exclusão foi recusada por uma referência que mudou enquanto isso: a lista foi atualizada; confira e tente de novo.";
 
 /**
  * Apaga o registro. A exclusão leva junto, em cascata, o acesso do alvo (o usuário do líder, do discipulador ou

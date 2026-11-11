@@ -48,11 +48,53 @@ export const POSICAO_DA_UF: Readonly<Record<Uf, readonly [number, number]>> = {
 };
 
 /**
- * As UFs na ordem de leitura da grade (linha a linha, da esquerda para a direita): é a ordem do HTML, então o Tab
- * percorre o mapa como o olho, do norte para o sul.
+ * As UFs na ordem de leitura da grade (linha a linha, da esquerda para a direita): é a ordem do HTML (a do leitor de
+ * tela, do norte para o sul) e a do Home e do End no teclado (RIFA-027).
  */
 export const UFS_NA_ORDEM_DA_GRADE: readonly Uf[] = [...UFS].sort((a, b) => {
   const [linhaA, colunaA] = POSICAO_DA_UF[a];
   const [linhaB, colunaB] = POSICAO_DA_UF[b];
   return linhaA - linhaB || colunaA - colunaB;
 });
+
+/** A direção de uma seta do teclado na grade. */
+export type Direcao = "cima" | "baixo" | "esquerda" | "direita";
+
+const PASSO: Readonly<Record<Direcao, readonly [number, number]>> = {
+  cima: [-1, 0],
+  baixo: [1, 0],
+  esquerda: [0, -1],
+  direita: [0, 1],
+};
+
+/**
+ * A casa para onde a seta leva (RIFA-027): a mais perto na direção, na mesma linha (esquerda e direita) ou na mesma
+ * coluna (cima e baixo), pulando as casas vazias; sem nenhuma na direção, fica onde está. Recebe as posições para
+ * o teste usar uma grade com buracos (a do mapa não tem buraco entre duas UFs da mesma linha ou coluna).
+ */
+export function vizinhaNaDirecao<T extends string>(
+  posicoes: Readonly<Record<T, readonly [number, number]>>,
+  atual: T,
+  direcao: Direcao,
+): T {
+  const [linha, coluna] = posicoes[atual];
+  const [passoLinha, passoColuna] = PASSO[direcao];
+  let destino = atual;
+  let menor = Infinity;
+  for (const chave of Object.keys(posicoes) as T[]) {
+    const [l, c] = posicoes[chave];
+    const distancia =
+      passoLinha !== 0
+        ? c === coluna
+          ? (l - linha) * passoLinha
+          : 0
+        : l === linha
+          ? (c - coluna) * passoColuna
+          : 0;
+    if (distancia > 0 && distancia < menor) {
+      menor = distancia;
+      destino = chave;
+    }
+  }
+  return destino;
+}
