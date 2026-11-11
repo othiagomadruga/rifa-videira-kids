@@ -184,6 +184,30 @@ describe("scripts/conferir-artefato.mjs: principal, num diretório com o checkou
     expect(existsSync(join(raiz, REDIRECIONAMENTO))).toBe(false);
   });
 
+  // O JSON escrito à mão, com chaves que o JSON.stringify não produz. O wrangler 4.156.1 lê o wrangler.json
+  // com o jsonc-parser: a chave "__proto__" vira o protótipo da configuração (o `build` dela seria herdado,
+  // sem aparecer como chave própria), e numa chave repetida vale a última, como no JSON.parse daqui.
+  it.each([
+    [
+      "um __proto__ com build (o wrangler herdaria o build.command)",
+      '{"__proto__":{"build":{"command":"id"}},',
+      "__proto__",
+    ],
+    [
+      "build repetido na frente do JSON",
+      '{"build":{"command":"id"},"build":{},',
+      "build",
+    ],
+  ])("recusa %s", (_caso, comeco, chave) => {
+    const resto = JSON.stringify(geradaPeloBuild()).slice(1);
+    escrever(CONFIG_GERADA, comeco + resto);
+    expect(principal(raiz)).toBe(1);
+    expect(erros()).toEqual([
+      `::error::${CONFIG_GERADA}: "${chave}" difere do que o wrangler.jsonc gera no build.`,
+    ]);
+    expect(existsSync(join(raiz, REDIRECIONAMENTO))).toBe(false);
+  });
+
   it.each([
     ["sem o build", undefined, "não existe ou não é JSON"],
     ["JSON inválido", "{", "não existe ou não é JSON"],
