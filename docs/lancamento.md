@@ -277,8 +277,8 @@ O roteiro da reunião está na seção 5. Regra de ouro: **não use "Desvincular
   - `ignorado_outra_campanha`: o slug do sistema não é o da Rifei (3.3).
   - Nenhuma linha: o webhook não chegou (URL, token ou eventos na Rifei; seção 7.1).
   - `avisos` maior que zero: a Rifei mandou algum campo diferente da documentação. Veja quais (só caminhos e códigos, nunca dado pessoal) com `SELECT avisos FROM webhook_eventos WHERE id = <id>` e mande ao SM.
-- **Trilha de auditoria** (o que a equipe fez): não tem tela. PENDÊNCIA. Um admin logado abre https://rifa-videira-kids.madruga.workers.dev/api/admin/auditoria no mesmo navegador e vê o JSON: `campanha.salvar`, `hierarquia.importar`, `afiliado.salvar`...
-- **Pedidos suspeitos:** também sem tela (PENDÊNCIA). Logado, abra https://rifa-videira-kids.madruga.workers.dev/api/admin/pedidos/suspeitos. Esperado: `{"itens":[],"total":0}`. Se o pedido de teste aparecer, confira o preço do bilhete na Campanha: ele precisa ser igual ao da Rifei.
+- **Trilha de auditoria** (o que a equipe fez) [Admin]: tela **Trilha** no menu da coordenação (`/coordenacao/trilha`), do mais novo para o mais antigo, com "Carregar mais". Confira que aparecem o salvamento da campanha, a importação da hierarquia e os vínculos de afiliado.
+- **Pedidos suspeitos:** tela **Pedidos suspeitos** no menu da coordenação (`/coordenacao/pedidos-suspeitos`). Esperado: lista vazia. Se o pedido de teste aparecer, confira o preço do bilhete na Campanha: ele precisa ser igual ao da Rifei.
 
 ### 4.3 O que anotar
 
@@ -359,7 +359,7 @@ O que continua mostrando o teste: a Adesão (a célula fica "Já vendeu") e os t
 - **Rankings:** com valores, para a coordenação.
 - **Adesão:** a fila **Sem célula** deve ficar vazia. Código novo ali = venda de afiliado sem vínculo: vincule.
 - **Líderes, discipuladores e redes** acompanham pelo próprio link (`/minha`), sem valores em reais.
-- **Pedidos suspeitos** (mais de 200 bilhetes num pedido ou valor fora do preço): uma vez por semana, um coordenador logado abre https://rifa-videira-kids.madruga.workers.dev/api/admin/pedidos/suspeitos e confere na Rifei. Eles continuam contando; tirar um pedido é decisão do PO.
+- **Pedidos suspeitos** (mais de 200 bilhetes num pedido ou valor fora do preço): uma vez por semana, um coordenador abre a tela **Pedidos suspeitos** e confere na Rifei. Eles continuam contando; tirar um pedido é decisão do PO.
 
 ### 6.4 Conferência pelo CSV (RIFA-012, quando estiver no ar)
 
@@ -450,7 +450,7 @@ O que o sistema ainda não faz e o lançamento precisaria (ou faria melhor com):
 
 1. **Conferência por CSV (RIFA-012) fora da `main`.** Sem ela, a venda que o webhook perder não volta para o sistema. É a rede de segurança do webhook: deveria entrar antes de 23/11.
 2. **Tela de Pedidos (RIFA-003) em construção.** Não há lista de pedidos nem das entregas do webhook; hoje, só por SQL no D1.
-3. **Sem tela para a trilha de auditoria e para os pedidos suspeitos:** só o JSON da API, aberto no navegador logado.
+3. ~~Sem tela para a trilha de auditoria e para os pedidos suspeitos~~: resolvido na RIFA-024 (telas **Trilha** e **Pedidos suspeitos**).
 4. **Sem exclusão de pedido** (teste ou fraude). Decisão do PO.
 5. **Sem alerta de webhook parado:** ninguém é avisado; alguém precisa olhar (7.1).
 6. **Estorno ou cancelamento na Rifei não chega ao sistema** (só há os eventos novo, pago e expirado): pedido aprovado e depois estornado continua contando.
