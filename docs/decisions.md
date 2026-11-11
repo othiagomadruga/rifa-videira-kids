@@ -386,14 +386,25 @@ do passo com o token, e o que deixassem no disco rodava com ele.
   deles só conferem a instalação). Provado num diretório limpo só com o checkout e o artefato: o
   `wrangler deploy --dry-run` passa e as migrations `--remote` chegam à rede (token fictício, endereço morto). O
   wrangler executa o esbuild ao carregar; o workerd precisa estar instalado, mas não roda em nenhum dos dois (trocado
-  por um registrador que nunca foi chamado). Instalar só o `wrangler@4.156.1` resolveria as dependências dele fora
-  do lockfile: descartado.
-- **Ambiente `producao`:** o job declara `environment: producao`, então usa o segredo do ambiente, se existir, ou o
-  do repositório. Com o segredo só no ambiente e a regra "só a `main`", um workflow alterado noutra branch não lê o
-  token. Num repositório privado, isso exige GitHub Pro (no Free o GitHub ignora segredos e regras de ambiente, e
-  vale o segredo do repositório). Se o ambiente não existir, a primeira execução do job na `main` o cria, vazio.
-  Passo opcional do PO em `docs/lancamento.md` (1.2).
+  por um registrador que nunca foi chamado). Exceção: se a Cloudflare recusar o Worker por tempo de inicialização
+  (erro 10021), o wrangler sobe o workerd na máquina para medir a inicialização do `index.js`, dentro do isolamento
+  do workerd, que não recebe o ambiente do processo. Instalar só o `wrangler@4.156.1` resolveria as dependências
+  dele fora do lockfile: descartado.
+- **Sem ambiente do GitHub (revisão da RIFA-021):** o repositório é privado e o plano da conta do PO é
+  desconhecido. Pela documentação do GitHub ("Managing environments for deployment" e "Deployments and
+  environments"), no plano Free ambientes, segredos de ambiente e regras de branch só existem em repositório
+  público; o ambiente precisa existir antes de o workflow usá-lo, e criá-lo em repositório privado pede o Pro. O que
+  acontece com um job que declara um ambiente nesse caso não está documentado. Para a primeira publicação não
+  depender disso, o job não declara `environment:` e usa o segredo do repositório (que vale para todo job do
+  repositório). **Reforço com o GitHub Pro (opcional, depois do lançamento):** com o segredo só num ambiente
+  `producao` restrito à `main`, um workflow alterado noutra branch não lê o token. Ordem: o PO cria o ambiente
+  (**Settings → Environments → New environment** `producao`; **Deployment branches and tags → Selected branches
+  and tags →** `main`; **Environment secrets →** `CLOUDFLARE_API_TOKEN`); o SM põe `environment: producao` no job
+  `publicar`, troca a conferência do teste e faz o merge; o PO confere a publicação seguinte e só então apaga o
+  segredo do repositório.
 - **Sem o segredo**, o primeiro passo avisa ("publicação pulada") e todos os outros pulam: o workflow fica verde.
-- Travado em `src/worker/config-publicacao.test.ts` (ordem dos passos, token só no "Publicar", o `publicar` sem npm
-  ci com scripts, `npx`, build ou cache, o artefato do mesmo run em `dist/`, actions por SHA, o ambiente) e em
-  `scripts/conferir-artefato.test.mjs` (as adulterações recusadas).
+- Travado em `src/worker/config-publicacao.test.ts` (ordem dos passos, token só no "Publicar" e só com o id da
+  conta ao lado, o `publicar` sem npm ci com scripts, `npx`, build ou cache, nenhum passo escrevendo no
+  `$GITHUB_ENV`/`$GITHUB_PATH`, sem `defaults`, `shell`, `working-directory` ou `continue-on-error`, o artefato do
+  mesmo run em `dist/`, actions por SHA, sem `environment:`) e em `scripts/conferir-artefato.test.mjs` (as
+  adulterações recusadas).

@@ -63,10 +63,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Segredos do ambiente "producao" (se o PO o configurar, só para a main) ou, sem ele, os do repositório.
-    environment:
-      name: producao
-      url: https://rifa-videira-kids.madruga.workers.dev
+    # Sem `environment:` (revisão da RIFA-021, D18): o repositório é privado e, no plano Free do GitHub, ambientes
+    # não estão disponíveis; o segredo é o do repositório. Para ligar o ambiente "producao" (GitHub Pro), veja a D18.
     concurrency:
       group: deploy-producao
       cancel-in-progress: false
@@ -82,7 +80,7 @@ jobs:
           TEM_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         run: |
           if [ "$TEM_TOKEN" != "true" ]; then
-            echo "::notice::Segredo CLOUDFLARE_API_TOKEN não configurado (nem no ambiente producao, nem no repositório): publicação pulada."
+            echo "::notice::Segredo CLOUDFLARE_API_TOKEN não configurado no repositório: publicação pulada."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
@@ -125,7 +123,7 @@ jobs:
       - name: Publicar (migrations no D1 remoto, deploy do que já foi construído)
         if: steps.segredo.outputs.ok == 'true'
         env:
-          # Token de API da Cloudflare: segredo do ambiente producao ou do repositório (docs/lancamento.md, 1.2).
+          # Token de API da Cloudflare: segredo do repositório (docs/lancamento.md, 1.2).
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 4d8a1d1dae5b596e42e97dcf28292572
         # Não roda o Vite: o wrangler segue o .wrangler/deploy/config.json e publica dist/ como está (no_bundle).

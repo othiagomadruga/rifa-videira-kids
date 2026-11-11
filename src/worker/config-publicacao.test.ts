@@ -226,9 +226,12 @@ describe(".github/workflows/ci.yml", () => {
     expect(comToken.map((item) => [item.job, item.campos.name])).toEqual([
       ["publicar", PUBLICAR],
     ]);
-    expect(comToken[0]?.env.CLOUDFLARE_API_TOKEN).toBe(
-      "${{ secrets.CLOUDFLARE_API_TOKEN }}",
-    );
+    // Só o token e o id da conta: nada como NODE_OPTIONS, que faria o node do wrangler carregar um arquivo do
+    // artefato com o token no ambiente (revisão da RIFA-021).
+    expect(comToken[0]?.env).toEqual({
+      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+      CLOUDFLARE_ACCOUNT_ID: expect.stringMatching(/^[0-9a-f]{32}$/),
+    });
     // Nenhum env no nível do workflow (0 espaços) nem do job (4 espaços).
     expect(ci).not.toMatch(/^( {4})?env:/m);
     // Fora dos comentários, os segredos aparecem em duas linhas só: a do Publicar e a do passo que confere se
@@ -355,6 +358,29 @@ describe(".github/workflows/ci.yml", () => {
       expect(item.campos.if).toBe(SE_TEM_SEGREDO);
   });
 
+  it("nada no publicar muda o ambiente ou o diretório dos passos seguintes nem deixa uma conferência falhar em silêncio", () => {
+    // Revisão da RIFA-021: um NODE_OPTIONS ou um PATH gravado no $GITHUB_ENV/$GITHUB_PATH por um passo anterior
+    // chegaria ao "Publicar", com o token. O passo do segredo só escreve "ok" no $GITHUB_OUTPUT.
+    expect(publicar[0]?.run).toBe(
+      [
+        'if [ "$TEM_TOKEN" != "true" ]; then',
+        'echo "::notice::Segredo CLOUDFLARE_API_TOKEN não configurado no repositório: publicação pulada."',
+        'echo "ok=false" >> "$GITHUB_OUTPUT"',
+        "else",
+        'echo "ok=true" >> "$GITHUB_OUTPUT"',
+        "fi",
+        "",
+      ].join("\n"),
+    );
+    for (const { run } of publicar)
+      expect(run).not.toMatch(/GITHUB_(ENV|PATH)\b/);
+    // Nem no workflow, nem num job, nem num passo: outro shell ou outra pasta (por exemplo, rodar o wrangler de
+    // dentro do dist/) e continue-on-error (a conferência falharia e o job seguiria).
+    expect(ci).not.toMatch(
+      /^\s*(defaults|shell|working-directory|continue-on-error):/m,
+    );
+  });
+
   it("os checkouts não gravam o GITHUB_TOKEN no .git/config (persist-credentials: false)", () => {
     const checkouts = passos.filter((item) =>
       item.campos.uses?.startsWith("actions/checkout@"),
@@ -364,7 +390,7 @@ describe(".github/workflows/ci.yml", () => {
       expect(checkout.with["persist-credentials"]).toBe("false");
   });
 
-  it("o publicar mantém a D11: só nos pushes da main depois do ci, sem cancelar no meio, no ambiente producao, e confere /api/health", () => {
+  it("o publicar mantém a D11: só nos pushes da main depois do ci, sem cancelar no meio, sem ambiente do GitHub, e confere /api/health", () => {
     const job = textoDoJob("publicar");
     expect(job).toContain(
       "\n    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n",
@@ -372,9 +398,10 @@ describe(".github/workflows/ci.yml", () => {
     expect(job).toMatch(
       /\n {4}concurrency:\n {6}group: deploy-producao\n {6}cancel-in-progress: false\n/,
     );
-    // Segredo do ambiente "producao" (se o PO o criar, só para a main) ou, sem ele, o do repositório.
-    expect(job).toMatch(/\n {4}environment:\n {6}name: producao\n/);
-    expect(textoDoJob("ci")).not.toMatch(/\n {4}environment:/);
+    // Sem `environment:` (D18, revisão da RIFA-021): repositório privado e plano do GitHub desconhecido; no Free,
+    // ambientes não estão disponíveis em repositório privado. O segredo é o do repositório. Para ligar o ambiente
+    // "producao" com o GitHub Pro, siga a D18 e troque esta conferência.
+    expect(ci).not.toMatch(/^\s*environment:/m);
     expect(publicar.at(-1)?.campos.name).toBe(SAUDE);
     expect(publicar.at(-1)?.run).toContain(
       "curl -fsS https://rifa-videira-kids.madruga.workers.dev/api/health",
