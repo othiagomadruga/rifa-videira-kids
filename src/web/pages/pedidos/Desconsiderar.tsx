@@ -1,7 +1,13 @@
 // Desconsiderar pedido e desfazer (RIFA-028, D20; só admin, com a chave `pedidos.desconsiderar` ligada na
 // Campanha). O pedido sai de TODAS as contas e continua na lista, com o selo; desfazer o devolve às contas. Os
 // diálogos mandam o pedido à API e devolvem o pedido como a lista mostra (o selo e os totais mudam na hora).
-import { useRef, useState, type FormEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import { Link } from "react-router";
 import type {
   ItemPedido,
@@ -41,6 +47,26 @@ function mensagemDaFalha(erro: unknown): string {
   return mensagemDoErro(erro);
 }
 
+/** A falha da ação: o texto e se foi a chave desligada (aí, tentar de novo daria o mesmo 409). */
+type Falha = { texto: string; desligada: boolean };
+
+function falhaDe(erro: unknown): Falha {
+  return { texto: mensagemDaFalha(erro), desligada: ehAcaoDesligada(erro) };
+}
+
+/**
+ * Depois de uma falha, o foco fica no diálogo: o botão que o tinha estava desabilitado enquanto enviava. Com a chave
+ * desligada, vai para "Entendi" (a ação some); senão, para o botão da ação, para tentar de novo.
+ */
+function useFocoAposFalha(falha: Falha | null) {
+  const refEntendi = useRef<HTMLButtonElement>(null);
+  const refAcao = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (falha) (falha.desligada ? refEntendi : refAcao).current?.focus();
+  }, [falha]);
+  return { refEntendi, refAcao };
+}
+
 /** O 400 da API sobre a observação (o contrato confere o "@" e os 8 dígitos também lá). */
 function erroDaObservacaoNaApi(erro: unknown): string | null {
   if (!(erro instanceof ErroApi) || erro.status !== 400) return null;
@@ -58,7 +84,7 @@ type PropsAcao = {
   aoFechar: () => void;
   /** Deu certo: o pedido como a API devolveu. */
   aoConcluir: (pedido: ItemPedido) => void;
-  /** A API disse que a chave está desligada (409 `acao_desligada`). */
+  /** A API disse que a chave está desligada (409 `acao_desligada`): as ações saem da lista. */
   aoDesligada: () => void;
   /** Recebe o foco ao fechar (o botão que abriu troca de nome com o selo). */
   focoAoFechar: RefObject<HTMLElement | null>;
@@ -82,9 +108,10 @@ export function DialogoDesconsiderar({
     motivo?: string;
     observacao?: string;
   }>({});
-  const [falha, setFalha] = useState<string | null>(null);
+  const [falha, setFalha] = useState<Falha | null>(null);
   const [enviando, setEnviando] = useState(false);
   const emAndamento = useRef(false);
+  const { refEntendi, refAcao } = useFocoAposFalha(falha);
   const refMotivo = useRef<HTMLSelectElement>(null);
   const refObservacao = useRef<HTMLTextAreaElement>(null);
 
@@ -117,7 +144,7 @@ export function DialogoDesconsiderar({
         setErros({ observacao: daObservacao });
         refObservacao.current?.focus();
       } else {
-        setFalha(mensagemDaFalha(erro));
+        setFalha(falhaDe(erro));
       }
       if (ehAcaoDesligada(erro)) aoDesligada();
     } finally {
@@ -138,12 +165,24 @@ export function DialogoDesconsiderar({
       focoAoFechar={focoAoFechar}
       rodape={
         <>
-          <Button variante="secundario" onClick={aoFechar} disabled={enviando}>
-            Cancelar
+          <Button
+            ref={refEntendi}
+            variante="secundario"
+            onClick={aoFechar}
+            disabled={enviando}
+          >
+            {falha?.desligada ? "Entendi" : "Cancelar"}
           </Button>
-          <Button type="submit" variante="perigo" disabled={enviando}>
-            {enviando ? "Desconsiderando…" : "Desconsiderar"}
-          </Button>
+          {!falha?.desligada && (
+            <Button
+              ref={refAcao}
+              type="submit"
+              variante="perigo"
+              disabled={enviando}
+            >
+              {enviando ? "Desconsiderando…" : "Desconsiderar"}
+            </Button>
+          )}
         </>
       }
     >
@@ -186,7 +225,7 @@ export function DialogoDesconsiderar({
         />
         {falha && (
           <Aviso tom="perigo" titulo="Não foi possível desconsiderar">
-            <p>{falha}</p>
+            <p>{falha.texto}</p>
           </Aviso>
         )}
       </div>
@@ -201,9 +240,10 @@ export function DialogoDesfazer({
   aoDesligada,
   focoAoFechar,
 }: PropsAcao) {
-  const [falha, setFalha] = useState<string | null>(null);
+  const [falha, setFalha] = useState<Falha | null>(null);
   const [enviando, setEnviando] = useState(false);
   const emAndamento = useRef(false);
+  const { refEntendi, refAcao } = useFocoAposFalha(falha);
   const { desconsiderado } = pedido;
 
   async function confirmar() {
@@ -214,7 +254,7 @@ export function DialogoDesfazer({
     try {
       aoConcluir(await reconsiderarPedido(pedido.id));
     } catch (erro) {
-      setFalha(mensagemDaFalha(erro));
+      setFalha(falhaDe(erro));
       if (ehAcaoDesligada(erro)) aoDesligada();
     } finally {
       emAndamento.current = false;
@@ -234,12 +274,23 @@ export function DialogoDesfazer({
       focoAoFechar={focoAoFechar}
       rodape={
         <>
-          <Button variante="secundario" onClick={aoFechar} disabled={enviando}>
-            Cancelar
+          <Button
+            ref={refEntendi}
+            variante="secundario"
+            onClick={aoFechar}
+            disabled={enviando}
+          >
+            {falha?.desligada ? "Entendi" : "Cancelar"}
           </Button>
-          <Button disabled={enviando} onClick={() => void confirmar()}>
-            {enviando ? "Desfazendo…" : "Desfazer"}
-          </Button>
+          {!falha?.desligada && (
+            <Button
+              ref={refAcao}
+              disabled={enviando}
+              onClick={() => void confirmar()}
+            >
+              {enviando ? "Desfazendo…" : "Desfazer"}
+            </Button>
+          )}
         </>
       }
     >
@@ -256,7 +307,7 @@ export function DialogoDesfazer({
         )}
         {falha && (
           <Aviso tom="perigo" titulo="Não foi possível desfazer">
-            <p>{falha}</p>
+            <p>{falha.texto}</p>
           </Aviso>
         )}
       </div>

@@ -153,8 +153,24 @@ const anuncio = () =>
     .map((elemento) => elemento.textContent)
     .join(" | ");
 
+/**
+ * Como o navegador: um elemento dentro de `inert` (o resto da página com o diálogo aberto) não recebe o foco. O
+ * jsdom não implementa o `inert`, e sem isto um foco dado antes de o diálogo sair passava no teste e se perdia na
+ * tela de verdade.
+ */
+function respeitarInert() {
+  const focar = HTMLElement.prototype.focus;
+  vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+    this: HTMLElement,
+    opcoes?: FocusOptions,
+  ) {
+    if (!this.closest("[inert]")) focar.call(this, opcoes);
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("CA5: quem vê 'Remover'", () => {
@@ -209,6 +225,7 @@ describe("CA5: remover", () => {
 
   it("204: o órfão sai da fila, o aviso é anunciado e o foco vai para o próximo da fila", async () => {
     const { deletes } = simularApi();
+    respeitarInert();
     await abrir();
     acionar(
       within(regiaoSemCelula()).getByRole("button", {
@@ -255,9 +272,7 @@ describe("CA5: remover", () => {
     });
     expect(dialogo).toHaveTextContent("Ele está na Célula Ágape.");
 
-    fireEvent.click(
-      within(dialogo).getByRole("button", { name: "Remover afiliado" }),
-    );
+    acionar(within(dialogo).getByRole("button", { name: "Remover afiliado" }));
 
     const alerta = await within(dialogo).findByRole("alert");
     expect(alerta).toHaveTextContent(
@@ -275,12 +290,14 @@ describe("CA5: remover", () => {
       ["Pedido PED 2", "/coordenacao/pedidos?id=PED+2"],
     ]);
     expect(alerta).toHaveTextContent("E mais 1 pedido.");
-    // Tentar de novo daria o mesmo 409: só "Entendi".
+    // Tentar de novo daria o mesmo 409: só "Entendi", com o foco (o botão que o tinha saiu do diálogo).
     expect(
       within(dialogo).queryByRole("button", { name: "Remover afiliado" }),
     ).not.toBeInTheDocument();
     expect(deletes).toEqual([1001]);
-    fireEvent.click(within(dialogo).getByRole("button", { name: "Entendi" }));
+    const entendi = within(dialogo).getByRole("button", { name: "Entendi" });
+    await waitFor(() => expect(entendi).toHaveFocus());
+    fireEvent.click(entendi);
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(
       within(regiaoTodas()).getByRole("button", {
@@ -289,8 +306,41 @@ describe("CA5: remover", () => {
     ).toBeInTheDocument();
   });
 
+  it("outra falha: explica no diálogo e o foco vai para 'Remover afiliado', para tentar de novo", async () => {
+    simularApi();
+    const fetchDaApi = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) =>
+        init?.method === "DELETE"
+          ? Promise.reject(new TypeError("Failed to fetch"))
+          : fetchDaApi(url, init),
+      ),
+    );
+    await abrir();
+    acionar(
+      within(regiaoSemCelula()).getByRole("button", {
+        name: "Remover o afiliado 1044",
+      }),
+    );
+    const dialogo = screen.getByRole("alertdialog");
+    const remover = within(dialogo).getByRole("button", {
+      name: "Remover afiliado",
+    });
+
+    acionar(remover);
+    // Como o navegador, que tira o foco do botão quando ele fica desabilitado (enquanto remove).
+    act(() => remover.blur());
+
+    expect(
+      await within(dialogo).findByText("Não foi possível remover"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(remover).toHaveFocus());
+  });
+
   it("afiliado da célula, sem pedido que conte: 204, o aviso no cartão e o foco no título da célula", async () => {
     simularApi();
+    respeitarInert();
     await abrir();
     acionar(
       within(regiaoTodas()).getByRole("button", {

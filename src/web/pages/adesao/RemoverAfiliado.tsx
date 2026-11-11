@@ -2,7 +2,7 @@
 // afiliado sem pedido que conte (todos desconsiderados, ou nenhum); senão, 409 `afiliado_com_pedidos` com quantos e
 // quais pedidos ainda contam: o diálogo mostra a lista, cada um com o link para a busca na tela Pedidos, e diz para
 // desconsiderar antes.
-import { useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router";
 import { Aviso, Button, Dialogo } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
@@ -15,7 +15,8 @@ import { quantidade } from "./formatos";
 
 type Falha =
   | { tipo: "com_pedidos"; pedidos: PedidosQueContam }
-  | { tipo: "outra"; texto: string };
+  /** `tentarDeNovo`: false quando repetir não adianta (404: o afiliado já não existe). */
+  | { tipo: "outra"; texto: string; tentarDeNovo: boolean };
 
 type Props = {
   affiliateId: number;
@@ -38,6 +39,17 @@ export function DialogoRemoverAfiliado({
   const [removendo, setRemovendo] = useState(false);
   const [falha, setFalha] = useState<Falha | null>(null);
   const emAndamento = useRef(false);
+  const refEntendi = useRef<HTMLButtonElement>(null);
+  const refRemover = useRef<HTMLButtonElement>(null);
+
+  // Depois de uma falha, o foco fica no diálogo (o botão que o tinha estava desabilitado): no 409, em "Entendi"
+  // ("Remover afiliado" some: daria o mesmo 409) e, no 404, em "Cancelar"; nas outras, em "Remover afiliado", para
+  // tentar de novo.
+  useEffect(() => {
+    if (!falha) return;
+    const repetir = falha.tipo === "outra" && falha.tentarDeNovo;
+    (repetir ? refRemover : refEntendi).current?.focus();
+  }, [falha]);
 
   async function confirmar() {
     if (emAndamento.current) return;
@@ -51,13 +63,18 @@ export function DialogoRemoverAfiliado({
       setFalha(
         pedidos
           ? { tipo: "com_pedidos", pedidos }
-          : {
-              tipo: "outra",
-              texto:
-                erro instanceof ErroApi && erro.status === 404
-                  ? "Este afiliado não existe mais: a lista vai ser atualizada."
-                  : mensagemDoErro(erro),
-            },
+          : erro instanceof ErroApi && erro.status === 404
+            ? {
+                tipo: "outra",
+                texto:
+                  "Este afiliado não existe mais: a lista vai ser atualizada.",
+                tentarDeNovo: false,
+              }
+            : {
+                tipo: "outra",
+                texto: mensagemDoErro(erro),
+                tentarDeNovo: true,
+              },
       );
       emAndamento.current = false;
       setRemovendo(false);
@@ -78,11 +95,17 @@ export function DialogoRemoverAfiliado({
       focoAoFechar={focoAoFechar}
       rodape={
         <>
-          <Button variante="secundario" onClick={aoFechar} disabled={removendo}>
+          <Button
+            ref={refEntendi}
+            variante="secundario"
+            onClick={aoFechar}
+            disabled={removendo}
+          >
             {comPedidos ? "Entendi" : "Cancelar"}
           </Button>
           {!comPedidos && (
             <Button
+              ref={refRemover}
               variante="perigo"
               disabled={removendo}
               onClick={() => void confirmar()}

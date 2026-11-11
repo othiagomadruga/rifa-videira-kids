@@ -24,6 +24,7 @@ import {
   ROTA_PEDIDOS,
   ROTA_RECONSIDERAR,
   pedido,
+  respostaErro,
   simularApi,
 } from "./teste-apoio";
 
@@ -339,13 +340,51 @@ describe("CA3: desconsiderar e desfazer", () => {
         "A chave “Permitir desconsiderar pedidos” foi desligada na Campanha: ligue de novo para desconsiderar ou desfazer.",
       ),
     ).toBeInTheDocument();
-    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    // Tentar de novo daria o mesmo 409: fica só "Entendi", com o foco (o botão da ação some do diálogo).
+    expect(
+      within(dialogo).queryByRole("button", { name: "Desconsiderar" }),
+    ).not.toBeInTheDocument();
+    const entendi = within(dialogo).getByRole("button", { name: "Entendi" });
+    await waitFor(() => expect(entendi).toHaveFocus());
+    fireEvent.click(entendi);
     expect(
       await screen.findByText("Desconsiderar pedidos está desligado"),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Desconsiderar/ }),
     ).not.toBeInTheDocument();
+    // O botão que abriu o diálogo saiu com as ações: o foco volta ao id do pedido.
+    await waitFor(() =>
+      expect(document.getElementById(idDoPedido("PED-A"))).toHaveFocus(),
+    );
+    expect(api.envios).toHaveLength(1);
+  });
+
+  it("outra falha (ex.: sem conexão): explica no diálogo e o foco vai para o botão da ação, para tentar de novo", async () => {
+    const api = simularApi({ pedidos: pedidosDoTeste(), desconsiderar: true });
+    api.proxima(ROTA_RECONSIDERAR, () =>
+      respostaErro(500, "erro_interno", "Erro interno"),
+    );
+    abrir();
+    acionar(
+      await within(await linhaDo("PED-TESTE")).findByRole("button", {
+        name: "Desfazer a desconsideração do pedido PED-TESTE",
+      }),
+    );
+    const dialogo = screen.getByRole("alertdialog");
+
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Desfazer" }));
+
+    expect(
+      await within(dialogo).findByText("Não foi possível desfazer"),
+    ).toBeInTheDocument();
+    const desfazer = within(dialogo).getByRole("button", { name: "Desfazer" });
+    await waitFor(() => expect(desfazer).toHaveFocus());
+    fireEvent.click(desfazer);
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(api.envios).toHaveLength(2);
   });
 });
 

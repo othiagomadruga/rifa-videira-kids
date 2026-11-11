@@ -136,6 +136,12 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     );
   }
 
+  /** 409 `acao_desligada`: as ações saem da lista, e com elas o botão que abriu o diálogo; o foco volta ao id. */
+  function aoDesligarNaAcao(pedido: ItemPedido) {
+    refFocoAposAcao.current = document.getElementById(idDoPedido(pedido.id));
+    setChave("desligada");
+  }
+
   const acoes: AcoesDaTabela | null =
     admin && chave === "ligada"
       ? {
@@ -190,7 +196,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
           pedido={acao.pedido}
           aoFechar={() => setAcao(null)}
           aoConcluir={(depois) => aoConcluirAcao(acao.pedido, depois)}
-          aoDesligada={() => setChave("desligada")}
+          aoDesligada={() => aoDesligarNaAcao(acao.pedido)}
           focoAoFechar={refFocoAposAcao}
         />
       )}
@@ -199,7 +205,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
           pedido={acao.pedido}
           aoFechar={() => setAcao(null)}
           aoConcluir={(depois) => aoConcluirAcao(acao.pedido, depois)}
-          aoDesligada={() => setChave("desligada")}
+          aoDesligada={() => aoDesligarNaAcao(acao.pedido)}
           focoAoFechar={refFocoAposAcao}
         />
       )}

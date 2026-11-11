@@ -1,4 +1,11 @@
-import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Aviso, Button, Card } from "../../components/ui";
 import { formatarDataHora, formatarMoeda } from "../../lib/formatadores";
 import type { AfiliadoResumo, CelulaAdesao } from "./adesao-api";
@@ -88,8 +95,15 @@ export function SemCelula({
     }
   }
 
-  /** Remove o órfão (admin): o foco vai para o próximo da fila (ou para o título), como depois de vincular. */
-  async function remover(afiliado: AfiliadoResumo) {
+  /**
+   * Remove o órfão (admin): o foco vai para o próximo da fila (ou para o título), como depois de vincular. Quem dá
+   * o foco é o diálogo, ao sair (`focoAoFechar`): enquanto ele está aberto, o resto da página é `inert` e não
+   * recebe foco, e o efeito do aviso roda antes de o diálogo sair.
+   */
+  async function remover(
+    afiliado: AfiliadoResumo,
+    focoAoFechar: RefObject<HTMLElement | null>,
+  ) {
     if (!aoRemover) return;
     const posicao = orfaos.findIndex(
       (orfao) => orfao.affiliate_id === afiliado.affiliate_id,
@@ -97,6 +111,9 @@ export function SemCelula({
     const abaixo = orfaos[posicao + 1];
     const proximo = abaixo ?? orfaos[posicao - 1];
     focoPendente.current = { affiliateId: proximo?.affiliate_id ?? null };
+    focoAoFechar.current =
+      (proximo && botoes.current.get(proximo.affiliate_id)) ||
+      refTitulo.current;
     try {
       await aoRemover({
         affiliateId: afiliado.affiliate_id,
@@ -105,6 +122,7 @@ export function SemCelula({
       });
     } catch (falha) {
       focoPendente.current = null;
+      focoAoFechar.current = null;
       throw falha;
     }
   }
@@ -189,8 +207,13 @@ type PropsItem = {
     botao: HTMLButtonElement | null,
   ) => void;
   aoVincular: (afiliado: AfiliadoResumo, celula: CelulaAdesao) => Promise<void>;
-  /** Só para o admin: remover o afiliado de teste. */
-  aoRemover: ((afiliado: AfiliadoResumo) => Promise<void>) | null;
+  /** Só para o admin: remover o afiliado de teste (e onde o foco fica quando o diálogo sai). */
+  aoRemover:
+    | ((
+        afiliado: AfiliadoResumo,
+        focoAoFechar: RefObject<HTMLElement | null>,
+      ) => Promise<void>)
+    | null;
 };
 
 function ItemOrfao({
@@ -203,6 +226,8 @@ function ItemOrfao({
 }: PropsItem) {
   const [aberto, setAberto] = useState(false);
   const [removendo, setRemovendo] = useState(false);
+  // Depois de remover, este cartão sai da tela: o foco vai para o próximo da fila (veja `remover`).
+  const refFocoAposRemover = useRef<HTMLElement | null>(null);
   const refBotao = useRef<HTMLButtonElement | null>(null);
   const idPainel = useId();
   const { affiliate_id: codigo, vendas } = afiliado;
@@ -253,7 +278,10 @@ function ItemOrfao({
         <Button
           variante="discreto"
           larguraTotal
-          onClick={() => setRemovendo(true)}
+          onClick={() => {
+            refFocoAposRemover.current = null;
+            setRemovendo(true);
+          }}
         >
           Remover{" "}
           <span className="visualmente-oculto">o afiliado {codigo}</span>
@@ -263,7 +291,8 @@ function ItemOrfao({
         <DialogoRemoverAfiliado
           affiliateId={codigo}
           celulaNome={null}
-          aoRemover={() => aoRemover(afiliado)}
+          focoAoFechar={refFocoAposRemover}
+          aoRemover={() => aoRemover(afiliado, refFocoAposRemover)}
           aoFechar={() => setRemovendo(false)}
         />
       )}
