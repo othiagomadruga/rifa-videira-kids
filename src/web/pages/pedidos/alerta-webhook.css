@@ -30,3 +30,8 @@
   border-radius: var(--raio-pilula);
   background: var(--cor-sucesso);
 }
+
+/* A conferência seguinte falhou: o ponto deixa de ser verde (o texto diz o que houve). */
+.alerta-webhook-linha__ponto--falha {
+  background: var(--cor-alerta);
+}

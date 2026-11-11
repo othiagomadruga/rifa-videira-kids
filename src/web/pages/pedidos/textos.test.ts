@@ -174,7 +174,7 @@ describe("alerta: tempo e slug", () => {
       }),
     );
     expect(umErro.tipo === "aviso" && umErro.paragrafos[0]).toMatch(
-      /^1 entrega foi recusada por erro nas últimas 24 h\./,
+      /^Nas últimas 24 h, 1 entrega foi recusada por erro, contando qualquer slug \(também de outras campanhas da conta na Rifei\)\./,
     );
   });
 });

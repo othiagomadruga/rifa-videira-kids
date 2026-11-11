@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type {
   EntregaWebhook,
   RespostaEntregasWebhook,
@@ -82,6 +83,13 @@ export function EntregasWebhook({ filtros, aoMudar }: Props) {
     consulta,
     CONFIG,
   );
+  const filtroResultado = useRef<HTMLSelectElement>(null);
+
+  function verTodas() {
+    // O "Ver todas as entregas" some com a lista vazia: o foco vai para o filtro de resultado.
+    filtroResultado.current?.focus();
+    aoMudar({ resultado: null });
+  }
 
   return (
     <div className="pedidos">
@@ -97,6 +105,7 @@ export function EntregasWebhook({ filtros, aoMudar }: Props) {
       </p>
       <div className="pedidos-filtros">
         <Select
+          ref={filtroResultado}
           rotulo="Resultado"
           value={filtros.resultado ?? ""}
           onChange={(evento) =>
@@ -122,7 +131,7 @@ export function EntregasWebhook({ filtros, aoMudar }: Props) {
         mais={mais}
         aoCarregarMais={() => void carregarMais()}
         aoTentarDeNovo={tentarDeNovo}
-        aoLimpar={() => aoMudar({ resultado: null })}
+        aoLimpar={verTodas}
       />
     </div>
   );

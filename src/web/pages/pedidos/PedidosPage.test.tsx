@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import {
   ADMIN_DE_TESTE,
@@ -25,6 +25,7 @@ import {
   respostaErro,
   simularApi,
 } from "./teste-apoio";
+import { esquecerEstadoWebhook } from "./useEstadoWebhook";
 
 const CAMINHO = "/coordenacao/pedidos";
 
@@ -89,6 +90,11 @@ function acionar(elemento: HTMLElement) {
   act(() => elemento.focus());
   fireEvent.click(elemento);
 }
+
+beforeEach(() => {
+  // Cada teste começa como uma página recém-aberta (o estado do webhook fica guardado no módulo).
+  esquecerEstadoWebhook();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -484,9 +490,8 @@ describe("CA1: os filtros (status, célula ou só sem célula, busca pelo id) v�
       ["Aguardando pagamento", "4"],
       ["Expirados", "4"],
     ]);
-    expect(
-      screen.getByText(/Os totais seguem a célula e a busca escolhidas/),
-    ).toBeInTheDocument();
+    // Só o status escolhido: a nota dos totais não aparece (eles não dependem do status).
+    expect(screen.queryByText(/Os totais seguem/)).not.toBeInTheDocument();
     expect(anuncio()).toHaveTextContent("Lista atualizada: 4 pedidos.");
   });
 
@@ -528,6 +533,10 @@ describe("CA1: os filtros (status, célula ou só sem célula, busca pelo id) v�
         expect(celulas(linha)[3]).toBe("Célula Ficticia 10");
     });
     expect(roteador.state.location.search).toBe("?celula_id=2");
+    // Com célula escolhida, a nota explica que os totais seguem a célula.
+    expect(
+      screen.getByText(/Os totais seguem a célula e a busca escolhidas/),
+    ).toBeInTheDocument();
 
     fireEvent.change(campoCelula(), { target: { value: "sem_celula" } });
     await waitFor(() =>
@@ -565,6 +574,9 @@ describe("CA1: os filtros (status, célula ou só sem célula, busca pelo id) v�
       `${ROTA_PEDIDOS}?limite=50&id=PEDFIC0007`,
     );
     expect(roteador.state.location.search).toBe("?id=PEDFIC0007");
+    expect(
+      screen.getByText(/Os totais seguem a célula e a busca escolhidas/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("search")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
@@ -630,7 +642,7 @@ describe("CA1: os filtros (status, célula ou só sem célula, busca pelo id) v�
     ).toBeInTheDocument();
   });
 
-  it("nenhum pedido com os filtros: diz isso e 'Limpar filtros' volta à lista toda", async () => {
+  it("nenhum pedido com os filtros: diz isso e 'Limpar filtros' volta à lista toda, com o foco no primeiro filtro", async () => {
     simularApi({ pedidos: pedidosVariados(6) });
     const { roteador } = abrir(`${CAMINHO}?id=NAO-EXISTE`);
 
@@ -639,9 +651,11 @@ describe("CA1: os filtros (status, célula ou só sem célula, busca pelo id) v�
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+    acionar(screen.getByRole("button", { name: "Limpar filtros" }));
     expect(await linhas()).toHaveLength(6);
     expect(roteador.state.location.search).toBe("");
+    // O botão sumiu com a lista vazia: o foco foi para o primeiro filtro (não para o body).
+    await waitFor(() => expect(campoStatus()).toHaveFocus());
   });
 });
 

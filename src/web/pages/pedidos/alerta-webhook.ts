@@ -9,6 +9,7 @@ import type {
 } from "../../../shared/contracts";
 import type { ROTAS } from "../../../shared/contracts/api";
 import { api } from "../../lib/api";
+import { formatarHora } from "../../lib/formatadores";
 
 export const CAMINHO_ESTADO_WEBHOOK: (typeof ROTAS)["estadoWebhook"]["caminho"] =
   "/api/admin/webhook/estado";
@@ -36,12 +37,18 @@ export const ABA_ENTREGAS = "entregas";
 export const CAMINHO_TELA_PEDIDOS = "/coordenacao/pedidos";
 export const CAMINHO_CONFERENCIA = "/coordenacao/conferencia";
 
-/** As entregas da tela Pedidos com este resultado. */
-export function linkDasEntregas(resultado: ResultadoEventoWebhook): string {
-  const params = new URLSearchParams([
-    [PARAM_ABA, ABA_ENTREGAS],
-    ["resultado", resultado],
-  ]);
+/**
+ * As entregas da tela Pedidos com este resultado. Com `atuais` (a consulta da tela Pedidos aberta), troca só a aba e
+ * o resultado e mantém o resto: os filtros dos pedidos não mudam, e a primeira página deles (cara, por causa dos
+ * totais) não é pedida de novo.
+ */
+export function linkDasEntregas(
+  resultado: ResultadoEventoWebhook,
+  atuais: URLSearchParams | null = null,
+): string {
+  const params = new URLSearchParams(atuais ?? undefined);
+  params.set(PARAM_ABA, ABA_ENTREGAS);
+  params.set("resultado", resultado);
   return `${CAMINHO_TELA_PEDIDOS}?${params.toString()}`;
 }
 
@@ -119,20 +126,33 @@ function paragrafoDoSlug(estado: RespostaEstadoWebhook): string[] {
   ];
 }
 
-export function textoDoAlerta(estado: RespostaEstadoWebhook): TextoAlerta {
+/** A hora da consulta (verificado_em), no fuso da campanha: "12:00". */
+export function horaDaConferencia(estado: RespostaEstadoWebhook): string {
+  return formatarHora(estado.verificado_em);
+}
+
+/**
+ * O que mostrar por situação. `naTelaPedidos`: a consulta da tela Pedidos, quando o alerta está nela (o link das
+ * entregas com erro mantém os filtros dos pedidos); null na Visão geral.
+ */
+export function textoDoAlerta(
+  estado: RespostaEstadoWebhook,
+  naTelaPedidos: URLSearchParams | null = null,
+): TextoAlerta {
   switch (estado.situacao) {
     case "erros_recentes": {
+      // A contagem das 24 h é de qualquer slug (a situação só olha o slug da campanha ou sem slug).
       const erros = estado.ultimas_24h.erro_validacao;
       return {
         tipo: "aviso",
         tom: "perigo",
         titulo: "A Rifei mandou pedidos com erro nas últimas 24 h",
         paragrafos: [
-          `${erros > 0 ? `${plural(erros, "entrega foi recusada", "entregas foram recusadas")} por erro nas últimas 24 h. ` : ""}Pedido recusado não é gravado: veja quais foram e confira cada um na Rifei.`,
+          `${erros > 0 ? `Nas últimas 24 h, ${plural(erros, "entrega foi recusada", "entregas foram recusadas")} por erro, contando qualquer slug (também de outras campanhas da conta na Rifei). ` : ""}Pedido recusado não é gravado: veja quais foram e confira cada um na Rifei.`,
           ...paragrafoDoSlug(estado),
         ],
         link: {
-          para: linkDasEntregas("erro_validacao"),
+          para: linkDasEntregas("erro_validacao", naTelaPedidos),
           texto: "Ver as entregas com erro",
         },
       };
@@ -169,7 +189,7 @@ export function textoDoAlerta(estado: RespostaEstadoWebhook): TextoAlerta {
         ? { tipo: "nada" }
         : {
             tipo: "linha",
-            texto: `Última venda recebida ${haQuanto(estado.ultima_processada_em, estado.verificado_em)}.`,
+            texto: `Última venda recebida ${haQuanto(estado.ultima_processada_em, estado.verificado_em)}; conferido às ${horaDaConferencia(estado)}.`,
           };
   }
 }
