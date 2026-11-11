@@ -1,0 +1,211 @@
+// RIFA-025, CA5: o CSS da tela Pedidos e do alerta cabe em 390 px sem rolagem lateral, e cada um vem com quem o usa
+// (as abas, num pacote à parte; o alerta, no pacote inicial). Aqui, o que dá para provar lendo o CSS (o jsdom não
+// faz layout): só variáveis do tema, nenhuma largura fixa, nada que impeça a quebra de linha no celular, os textos
+// longos quebrando em qualquer ponto e o mesmo ponto de quebra da DataTable (48rem). A medida na tela de verdade
+// (390 px, sem rolagem lateral) está nas capturas do Playwright.
+import { describe, expect, it } from "vitest";
+
+/** O código da tela (sem os testes), para conferir quem importa o CSS. */
+const FONTES = import.meta.glob<string>(
+  ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+  { query: "?raw", import: "default", eager: true },
+);
+
+// O Vitest esvazia todo import de CSS (até com ?raw): o texto vem do disco, pelo fs do Node.
+type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
+const { process } = globalThis as unknown as {
+  process: { getBuiltinModule(nome: "node:fs"): ModuloFs };
+};
+// O caminho vai numa variável: com um texto fixo, o Vite trocaria o new URL(..., import.meta.url) pela URL do asset.
+const lerArquivo = (relativo: string) =>
+  process
+    .getBuiltinModule("node:fs")
+    .readFileSync(
+      decodeURIComponent(new URL(relativo, import.meta.url).pathname),
+      "utf8",
+    );
+const semComentarios = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+const ARQUIVOS = ["./pedidos.css", "./alerta-webhook.css"] as const;
+const CSS = Object.fromEntries(
+  ARQUIVOS.map((arquivo) => [arquivo, semComentarios(lerArquivo(arquivo))]),
+) as Record<(typeof ARQUIVOS)[number], string>;
+const TOKENS = lerArquivo("../../tema/tokens.css");
+
+type Declaracao = { propriedade: string; valor: string; blocos: string[] };
+
+/** As declarações, com os blocos em volta (ex.: "@media (min-width: 48rem)", ".pedidos-quando"). */
+function declaracoes(css: string): Declaracao[] {
+  const saida: Declaracao[] = [];
+  const blocos: string[] = [];
+  let trecho = "";
+  for (const caractere of css) {
+    if (caractere === "{") {
+      blocos.push(trecho.trim());
+      trecho = "";
+    } else if (caractere === ";" || caractere === "}") {
+      const achado = /^\s*([\w-]+)\s*:\s*([\s\S]+?)\s*$/.exec(trecho);
+      if (achado && blocos.length > 0)
+        saida.push({
+          propriedade: achado[1],
+          valor: achado[2],
+          blocos: [...blocos],
+        });
+      trecho = "";
+      if (caractere === "}") blocos.pop();
+    } else {
+      trecho += caractere;
+    }
+  }
+  return saida;
+}
+
+const naTabela = ({ blocos }: Declaracao) =>
+  blocos.includes("@media (min-width: 48rem)");
+
+/** O corpo da regra que tem só este seletor. */
+function regra(css: string, seletor: string): string {
+  const inicio = css.indexOf(`\n${seletor} {`);
+  expect(inicio, seletor).toBeGreaterThanOrEqual(0);
+  return css.slice(inicio, css.indexOf("}", inicio));
+}
+
+describe.each(ARQUIVOS)(
+  "CA5: sem rolagem lateral em 390 px (%s)",
+  (arquivo) => {
+    const css = CSS[arquivo];
+    const todas = declaracoes(css);
+
+    it("usa só variáveis do tema que existem (nenhuma cor nem medida solta)", () => {
+      const usadas = [...css.matchAll(/var\((--[\w-]+)\)/g)].map(([, n]) => n);
+      expect(usadas.length).toBeGreaterThan(3);
+      // As variáveis locais (--total-cor, --detalhe-cor) são definidas no próprio arquivo.
+      for (const nome of usadas)
+        expect(`${TOKENS}\n${css}`, nome).toContain(`${nome}:`);
+      expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
+    });
+
+    // Larguras: só relativas, variáveis do tema ou um ícone de até 2em (o "!" do selo).
+    it("nenhuma largura fixa nem medida em px (as bordas finas são a exceção); colunas de grade sempre com min(100%, ...)", () => {
+      for (const { propriedade, valor } of todas) {
+        if (/(^|-)width$/.test(propriedade)) {
+          expect(
+            /^(100%|0|none|\d+%|var\(--[\w-]+\)|1(\.\d+)?r?em)$/.test(valor),
+            `${propriedade}: ${valor}`,
+          ).toBe(true);
+        }
+        if (!/^border/.test(propriedade)) {
+          expect(/\d+px/.test(valor), `${propriedade}: ${valor}`).toBe(false);
+        }
+        if (propriedade === "grid-template-columns") {
+          expect(valor, valor).toMatch(/min\(100%,/);
+        }
+      }
+    });
+
+    it("no celular, nada deixa de quebrar a linha: white-space: nowrap só na tabela (a partir de 48rem)", () => {
+      for (const declaracao of todas.filter(
+        ({ propriedade, valor }) =>
+          propriedade === "white-space" && valor !== "normal",
+      ))
+        expect(naTabela(declaracao)).toBe(true);
+    });
+
+    it("o mesmo ponto de quebra da DataTable (cartões abaixo de 48rem): nenhum outro @media de largura", () => {
+      for (const [, media] of css.matchAll(/@media\s*([^{]+)\{/g)) {
+        expect(media.trim()).toMatch(
+          /^\(min-width: 48rem\)$|^\(prefers-reduced-motion: no-preference\)$/,
+        );
+      }
+    });
+  },
+);
+
+describe("CA5: textos longos (id do pedido, célula, slug, erro e avisos) quebram em qualquer ponto", () => {
+  const css = CSS["./pedidos.css"];
+
+  it("o bloco de cada célula quebra e encolhe; a largura percentual só existe na tabela", () => {
+    const celula = regra(css, ".pedidos-celula");
+    expect(celula).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(celula).toMatch(/min-width:\s*0/);
+    expect(regra(css, ".pedidos")).toMatch(/min-width:\s*0/);
+    for (const declaracao of declaracoes(css).filter(
+      ({ propriedade, valor }) =>
+        propriedade === "width" && /%$/.test(valor) && valor !== "100%",
+    ))
+      expect(naTabela(declaracao)).toBe(true);
+    // Todo bloco de célula das duas tabelas passa pela classe que quebra.
+    for (const arquivo of ["./ListaPedidos.tsx", "./EntregasWebhook.tsx"]) {
+      expect(FONTES[arquivo], arquivo).toMatch(/`pedidos-celula\$\{/);
+      expect(FONTES[arquivo], arquivo).not.toMatch(
+        /<DataTable[\s\S]*mostrarLegenda/,
+      );
+    }
+  });
+
+  it("erro e avisos ficam abaixo do rótulo no celular (não espremidos na metade da largura)", () => {
+    expect(regra(css, ".pedidos td:has(> .pedidos-texto-longo)")).toMatch(
+      /flex-direction:\s*column/,
+    );
+    expect(
+      regra(css, ".pedidos td:has(> .pedidos-texto-longo)::before"),
+    ).toMatch(/max-width:\s*none/);
+  });
+
+  it("o selo 'suspeito' segura o texto escondido dentro da caixa com rolagem e tem o alvo de toque", () => {
+    const selo = regra(css, ".pedidos-selo");
+    expect(selo).toMatch(/position:\s*relative/);
+    expect(selo).toMatch(/min-height:\s*var\(--alvo-toque\)/);
+  });
+
+  it("a região viva vazia do alerta sai do fluxo sem sumir da árvore de acessibilidade (sem display: none)", () => {
+    const vazia = regra(CSS["./alerta-webhook.css"], ".alerta-webhook:empty");
+    expect(vazia).toMatch(/position:\s*absolute/);
+    expect(vazia).not.toMatch(/display:\s*none/);
+  });
+});
+
+describe("pacotes: a tela carrega à parte; o alerta, no pacote inicial", () => {
+  it("só TelaPedidos (carregada com lazy) importa pedidos.css; ninguém importa TelaPedidos direto", () => {
+    const quemImporta = (css: string) =>
+      Object.entries(FONTES)
+        .filter(([, fonte]) => fonte.includes(`import "./${css}";`))
+        .map(([arquivo]) => arquivo);
+    expect(quemImporta("pedidos.css")).toEqual(["./TelaPedidos.tsx"]);
+    expect(quemImporta("alerta-webhook.css")).toEqual(["./AlertaWebhook.tsx"]);
+    expect(FONTES["./PedidosPage.tsx"]).toMatch(
+      /lazy\(\(\) =>\s*import\("\.\/TelaPedidos"\)/,
+    );
+    for (const [arquivo, fonte] of Object.entries(FONTES)) {
+      expect(fonte, arquivo).not.toMatch(/from "\.\/TelaPedidos"/);
+    }
+    const telas = lerArquivo("../coordenacao/telas.ts");
+    expect(telas).toContain('from "../pedidos/PedidosPage"');
+    expect(telas).not.toContain("TelaPedidos");
+  });
+
+  it("a Visão geral usa só o alerta (não puxa a tela Pedidos para o pacote inicial)", () => {
+    const visao = lerArquivo("../visao-geral/VisaoGeralPage.tsx");
+    expect(visao).toContain('from "../pedidos/AlertaWebhook"');
+    expect(visao).not.toMatch(/from "\.\.\/pedidos\/(?!AlertaWebhook")/);
+    // O alerta não importa nada da parte que vem à parte.
+    for (const arquivo of [
+      "./AlertaWebhook.tsx",
+      "./alerta-webhook.ts",
+      "./useEstadoWebhook.ts",
+    ]) {
+      expect(FONTES[arquivo], arquivo).not.toMatch(
+        /from "\.\/(TelaPedidos|ListaPedidos|EntregasWebhook|pedidos-api|textos|usePaginas)"/,
+      );
+    }
+  });
+
+  it("o contrato entra só por tipos (os valores poriam o zod no pacote do site)", () => {
+    for (const [arquivo, fonte] of Object.entries(FONTES)) {
+      for (const [importacao] of fonte.matchAll(
+        /import[^;]*from "[./]*shared\/contracts[^"]*";/g,
+      ))
+        expect(importacao, arquivo).toMatch(/^import type /);
+    }
+  });
+});

@@ -1,0 +1,331 @@
+/* Tela Pedidos (RIFA-025): as abas dos pedidos e das entregas do webhook, com os filtros, os totais por status, a
+   tabela (cartões no celular, abaixo de 48rem, como as outras) e o rodapé com a contagem e o "Carregar mais". Vem
+   junto com TelaPedidos (pacote à parte). Celular primeiro: nenhuma largura fixa, e os textos que podem ser longos
+   (id do pedido, nome da célula, slug, erro e avisos) quebram em vez de alargar a página. */
+.pedidos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.pedidos-explicacao {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  line-height: var(--altura-linha);
+}
+
+/* Filtros: um por linha no celular; lado a lado quando cabem. */
+.pedidos-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--espaco-3) var(--espaco-4);
+  min-width: 0;
+}
+
+.pedidos-filtros > .ui-campo {
+  flex: 1 1 12rem;
+}
+
+/* Um filtro sozinho (o resultado das entregas) não estica até a largura da página no computador. */
+.pedidos-filtros > .ui-campo:only-child {
+  flex: 0 1 20rem;
+}
+
+.pedidos-busca {
+  display: flex;
+  flex: 2 1 18rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-2) var(--espaco-3);
+  min-width: 0;
+}
+
+.pedidos-busca > .ui-campo {
+  flex: 1 1 12rem;
+}
+
+.pedidos-busca__botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+/* Totais por status: um cartão por status, com pedidos, bilhetes e valor. */
+.pedidos-totais {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.pedidos-totais__titulo {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+
+.pedidos-totais__nota {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.pedidos-totais__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--espaco-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pedidos-total {
+  --total-cor: var(--cor-neutro);
+
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-top: 4px solid var(--total-cor);
+  border-radius: var(--raio-3);
+  background: var(--cor-superficie);
+  box-shadow: var(--sombra-1);
+}
+
+.pedidos-total--approved {
+  --total-cor: var(--cor-sucesso);
+}
+
+.pedidos-total--in_process {
+  --total-cor: var(--cor-info);
+}
+
+.pedidos-total__status {
+  margin: 0;
+  font-size: var(--texto-md);
+  font-weight: var(--peso-forte);
+}
+
+.pedidos-total__numeros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--espaco-2) var(--espaco-5);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pedidos-total__numeros > div {
+  display: grid;
+  min-width: 0;
+}
+
+.pedidos-total__numeros dt {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-medio);
+}
+
+.pedidos-total__numeros dd {
+  margin: 0;
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.pedidos-total__principal {
+  font-size: var(--texto-xl);
+}
+
+/* O conteúdo de cada célula num bloco só: no celular, a célula vira "rótulo: valor". */
+.pedidos-celula {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* O id do pedido e o selo "suspeito" (um link para a tela Pedidos suspeitos). */
+.pedidos-pedido {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-2);
+}
+
+.pedidos-pedido__id {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* O selo tem a cara de um Badge de alerta, mas é um link com alvo de toque inteiro. O position segura o texto
+   escondido para o leitor de tela dentro da caixa com rolagem da tabela. */
+.pedidos-selo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+  color: var(--cor-alerta);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  text-decoration: none;
+}
+
+.pedidos-selo::before {
+  content: "!";
+  display: inline-grid;
+  place-items: center;
+  width: 1.25em;
+  height: 1.25em;
+  margin-right: var(--espaco-1);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-alerta);
+  color: var(--cor-sobre-primaria);
+  font-size: var(--texto-xs);
+}
+
+.pedidos-selo:hover {
+  text-decoration: underline;
+}
+
+.pedidos-quando__mudou {
+  display: block;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.pedidos-sem-celula,
+.pedidos-sem-ddd,
+.pedidos-suave {
+  color: var(--cor-texto-suave);
+}
+
+.pedidos-valor {
+  font-weight: var(--peso-forte);
+}
+
+.pedidos-slug {
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-sm);
+}
+
+/* Sem slug ("Não lido"): texto comum, não código. */
+.pedidos-slug > .pedidos-suave {
+  font-family: var(--fonte-base);
+  font-size: var(--texto-md);
+}
+
+.pedidos-seta {
+  color: var(--cor-texto-suave);
+}
+
+.pedidos-resultado {
+  display: grid;
+  justify-items: end;
+  gap: var(--espaco-1);
+}
+
+.pedidos-resultado__explicacao {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  line-height: var(--altura-linha);
+}
+
+/* Erro e avisos ficam abaixo do rótulo, alinhados à esquerda (no celular, ao lado do rótulo eles ficariam
+   espremidos na metade da largura). Na tabela, a célula volta a ser uma célula comum. */
+.pedidos td:has(> .pedidos-texto-longo) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espaco-1);
+  text-align: left;
+}
+
+.pedidos td:has(> .pedidos-texto-longo)::before {
+  max-width: none;
+}
+
+.pedidos-texto-longo {
+  display: grid;
+  gap: var(--espaco-2);
+  line-height: var(--altura-linha);
+}
+
+.pedidos-detalhes {
+  padding-left: var(--espaco-3);
+  border-left: 3px solid var(--detalhe-cor);
+}
+
+.pedidos-detalhes--erro {
+  --detalhe-cor: var(--cor-perigo);
+}
+
+.pedidos-detalhes--aviso {
+  --detalhe-cor: var(--cor-alerta);
+}
+
+.pedidos-detalhes__titulo {
+  margin: 0;
+  font-weight: var(--peso-forte);
+}
+
+.pedidos-detalhes ul {
+  margin: 0;
+  padding: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  list-style: none;
+}
+
+.pedidos-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.pedidos-rodape > .ui-aviso {
+  flex: 1 1 100%;
+}
+
+.pedidos-contagem {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* "Carregar mais" ocupado: continua focável (aria-disabled), mas parece desabilitado. */
+.pedidos-rodape button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+@media (min-width: 48rem) {
+  /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Aprovado" e o id do
+     pedido, que fica num bloco próprio dentro da célula, em "PEDTESTE00 / 70"). */
+  .pedidos-celula,
+  .pedidos-pedido__id {
+    overflow-wrap: break-word;
+  }
+
+  .pedidos-quando,
+  .pedidos-valor {
+    white-space: nowrap;
+  }
+
+  .pedidos-resultado {
+    justify-items: start;
+  }
+
+  /* Erro e avisos são o texto mais longo da linha: ficam com a maior parte da largura. */
+  .pedidos td:has(> .pedidos-texto-longo) {
+    width: 30%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Os itens que chegam com "Carregar mais" entram com fade e deslize curto. */
+  .pedidos-celula--nova {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
+  }
+}

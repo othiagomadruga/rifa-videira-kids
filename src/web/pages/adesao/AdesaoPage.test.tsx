@@ -901,8 +901,9 @@ describe("CA3/CA4: atualização automática", () => {
 
   it("ao sair da tela, a atualização automática para", async () => {
     await abrirTela();
-    fireEvent.click(screen.getByRole("link", { name: "Pedidos" }));
-    await screen.findByRole("heading", { level: 1, name: "Pedidos" });
+    // Uma tela que não consulta a API (a de Pedidos, desde a RIFA-025, consulta).
+    fireEvent.click(screen.getByRole("link", { name: "Conferência" }));
+    await screen.findByRole("heading", { level: 1, name: "Conferência" });
 
     await act(() => vi.advanceTimersByTimeAsync(3 * INTERVALO_ATUALIZACAO_MS));
 
