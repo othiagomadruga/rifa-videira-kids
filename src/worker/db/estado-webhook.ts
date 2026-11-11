@@ -45,7 +45,13 @@ export const RESULTADOS_DA_CAMPANHA = [
  * Os espaços que o `trim()` do JavaScript (o do zod, que o webhook aplica ao slug) tira das pontas: o trim do
  * SQLite sem segundo argumento só tira o espaço comum. Passado como o 2º argumento de `trim(slug, ?)`.
  */
-export const ESPACOS_DO_TRIM = "\t\n\v\f\r              " + "    　﻿";
+export const ESPACOS_DO_TRIM = [
+  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002,
+  0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028,
+  0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
+]
+  .map((codigo) => String.fromCharCode(codigo))
+  .join("");
 
 const lista = (valores: readonly string[]) =>
   valores.map((valor) => `'${valor}'`).join(", ");
