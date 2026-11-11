@@ -178,7 +178,8 @@ describe("CA1: confirmação e resposta da API", () => {
     expect(
       screen.queryByRole("button", { name: "Entrar" }),
     ).not.toBeInTheDocument();
-    expect(alerta.parentElement).toHaveFocus();
+    // O foco vem num efeito depois de a mensagem aparecer: pode chegar um pouco depois do findByRole.
+    await waitFor(() => expect(alerta.parentElement).toHaveFocus());
     expect(roteador.state.location.pathname).toBe("/acesso");
   });
 

@@ -462,7 +462,7 @@ describe("CA3: ativar e salvar", () => {
     expect(screen.getByText("Ativa")).toBeInTheDocument();
     expect(screen.queryByText("Não ativada")).toBeNull();
     expect(campo("Nome da campanha")).toHaveValue("Rifa de teste");
-    expect(botao("Salvar alterações")).toHaveFocus();
+    await waitFor(() => expect(botao("Salvar alterações")).toHaveFocus());
   });
 
   it("enquanto salva, o formulário fica travado: nada digitado se perde quando a resposta chega", async () => {
@@ -667,7 +667,7 @@ describe("CA3/CA4: erros em português perto do campo", () => {
     fireEvent.click(botao("Sim, ativar a campanha"));
 
     const resumo = await screen.findByRole("alert");
-    expect(resumo).toHaveFocus();
+    await waitFor(() => expect(resumo).toHaveFocus());
     expect(campo("Slug da campanha na Rifei")).toHaveAttribute(
       "aria-invalid",
       "true",

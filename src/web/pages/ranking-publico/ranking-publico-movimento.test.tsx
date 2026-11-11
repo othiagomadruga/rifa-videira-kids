@@ -3,7 +3,7 @@
 // mexe em nada, e a que muda a ordem faz quem trocou de lugar deslizar (FLIP) e o % contar até o valor novo.
 // Com prefers-reduced-motion: reduce, nada anima e o % já aparece final. O jsdom não faz layout: o lugar de cada
 // item é simulado (60 px por linha).
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { respostaRankingPublicoSchema } from "../../../shared/contracts/api";
 import type {
@@ -258,6 +258,8 @@ describe("CA4: ranking público com movimento", () => {
     expect(contando).toHaveLength(5);
     for (const quadro of contando)
       expect(quadro).toHaveAttribute("aria-hidden", "true");
+    // Cada contagem pede o primeiro quadro num efeito, que pode rodar um instante depois do findBy.
+    await waitFor(() => expect(quadros.pendentes()).toBe(5));
     act(() => quadros.quadro(0));
     act(() => quadros.quadro(DURACAO_CONTAGEM_MS));
     expect(document.querySelector(".mov-contagem")).toBeNull();
@@ -274,6 +276,7 @@ describe("CA4: ranking público com movimento", () => {
     simularApi(PRIMEIRA, PRIMEIRA, BETEL_PASSA);
     renderizarRota("/");
     await screen.findByText(/^Atualizado às/);
+    await waitFor(() => expect(quadros.pendentes()).toBe(5));
     act(() => quadros.quadro(0));
     act(() => quadros.quadro(DURACAO_CONTAGEM_MS));
     animate.mockClear();
