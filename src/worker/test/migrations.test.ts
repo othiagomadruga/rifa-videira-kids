@@ -1,12 +1,19 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
-// 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql e 0007_indices_pedidos_entregas.sql),
-// aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006 e a 0007 também são
-// aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o
-// que existia continua lá (RIFA-014, CA7; RIFA-025, CA5).
+// 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql e
+// 0008_regras_campanha.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A
+// 0006, a 0007 e a 0008 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados
+// com as migrações anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
+import {
+  ACESSO_PADRAO,
+  MENSAGENS_PADRAO,
+  PEDIDOS_PADRAO,
+} from "../../shared/contracts";
 import { buscarLinkValido, buscarUsuarioDaSessao } from "../db/acessos";
+import { montarCampanha, type CampanhaAtiva } from "../db/campanha";
+import { SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3 } from "../db/painel";
 
 const TABELAS = [
   "_meta",
@@ -58,11 +65,14 @@ describe("migrações: schema do D1", () => {
     const pessoal =
       /comprador|buyer|name|cpf|document|nascimento|birth|endereco|address|cep|zipcode|phone|telefone|email|observa|fbp|fbc/;
     // Contato do LÍDER de célula e e-mail de quem usa o sistema (usuarios, RIFA-007) são cadastro da
-    // equipe da igreja, não do comprador.
+    // equipe da igreja, não do comprador. A observação da desconsideração (0008, D20) é a nota curta do ADMIN
+    // sobre o pedido (teste, fraude, estorno), não um dado do comprador: o contrato recusa "@" e 8 dígitos
+    // seguidos (observacaoTemContato) e a tela pede para não escrever nome, telefone ou e-mail.
     const equipe = new Set([
       "celulas.lider_email",
       "celulas.lider_telefone",
       "usuarios.email",
+      "pedidos.desconsiderado_observacao",
     ]);
     const suspeitas = results
       .filter(
@@ -92,6 +102,8 @@ describe("migrações: schema do D1", () => {
         "pedidos_por_recuperacao",
         // 0007 (RIFA-025): a lista de pedidos da campanha com o cursor (db/lista-pedidos.ts).
         "pedidos_por_campanha_registro",
+        // 0008 (RIFA-028, D20): parcial (desconsiderado_em IS NOT NULL), para a lista com desconsiderado=true.
+        "pedidos_desconsiderados_por_registro",
       ],
       webhook_eventos: [
         "webhook_eventos_por_pedido",
@@ -490,9 +502,9 @@ async function fotografar(db: D1Database) {
 }
 
 // As migrações sobre dados que já existiam são um cenário em passos no mesmo D1 (DB_MIGRACAO): até a 0005 e os
-// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados. Por isso a ordem é a do arquivo, mesmo
-// com --sequence.shuffle: a 0006 tem de ser a última aplicada quando os testes dela rodam, e a cascata apaga
-// linhas que a comparação "continuam iguais" fotografou.
+// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados e a 0008 sobre mais outros. Por isso a
+// ordem é a do arquivo, mesmo com --sequence.shuffle: cada uma tem de ser a última aplicada quando os testes dela
+// rodam, e a cascata apaga linhas que a comparação "continuam iguais" fotografou.
 describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
   describe("0006 sobre dados que já existiam (CA7)", () => {
     const db = DB_MIGRACAO;
@@ -931,7 +943,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ),
       ]);
       antes = await fotografar0007(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0007: a 0008 é aplicada depois, sobre mais dados (describe "0008 sobre dados que já existiam").
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0008"),
+      );
     });
 
     it("a 0007 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -1016,6 +1032,373 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         "2026-11-24T12:59:00.000Z",
         "2026-11-24T13:00:01.000Z",
       ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0008 (RIFA-028, 029 e 032; D20): as regras do admin, aplicada sobre dados que já existiam
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0008 sobre dados que já existiam (RIFA-028, CA8)", () => {
+    const db = DB_MIGRACAO;
+    const SLUG_0008 = "campanha-antes-da-0008";
+    /** As colunas que a 0008 acrescenta em pedidos (null nos pedidos de antes: todos contam). */
+    const SEM_DESCONSIDERACAO = {
+      desconsiderado_em: null,
+      desconsiderado_motivo: null,
+      desconsiderado_observacao: null,
+    };
+    /** As vendas da campanha como o painel somava ANTES da 0008 (sem a coluna nova). */
+    const SOMAR_COMO_ANTES = `SELECT count(*) AS pedidos, sum(qtd_bilhetes) AS bilhetes,
+      sum(total_centavos) AS centavos FROM pedidos WHERE campanha_id = ?1 AND status = 'approved'`;
+    let campanhaId: number;
+    let antes: {
+      pedidos: Record<string, unknown>[];
+      view: Record<string, unknown>[];
+      somas: Record<string, unknown> | null;
+      campanha: Record<string, unknown> | null;
+    };
+
+    const fotografar0008 = async () => {
+      const [pedidos, view, campanha] = await db.batch([
+        db
+          .prepare("SELECT * FROM pedidos WHERE campanha_id = ?1 ORDER BY id")
+          .bind(campanhaId),
+        db
+          .prepare(
+            "SELECT * FROM vendas_aprovadas WHERE campanha_id = ?1 ORDER BY pedido_id",
+          )
+          .bind(campanhaId),
+        db.prepare("SELECT * FROM campanhas WHERE id = ?1").bind(campanhaId),
+      ]);
+      return {
+        pedidos: pedidos.results as Record<string, unknown>[],
+        view: view.results as Record<string, unknown>[],
+        somas: await db
+          .prepare(SOMAR_COMO_ANTES)
+          .bind(campanhaId)
+          .first<Record<string, unknown>>(),
+        campanha: (campanha.results[0] ?? null) as Record<
+          string,
+          unknown
+        > | null,
+      };
+    };
+
+    /** As vendas somadas pela consulta do painel de hoje (db/painel.ts), por afiliado e dia. */
+    const somarPeloPainel = async (id: number) => {
+      const { results } = await db
+        .prepare(SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3)
+        .bind(id)
+        .all<{ pedidos: number; bilhetes: number; centavos: number }>();
+      return results.reduce(
+        (soma, linha) => ({
+          pedidos: soma.pedidos + linha.pedidos,
+          bilhetes: soma.bilhetes + linha.bilhetes,
+          centavos: soma.centavos + linha.centavos,
+        }),
+        { pedidos: 0, bilhetes: 0, centavos: 0 },
+      );
+    };
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0007 (aqui vale também rodando este sozinho).
+      const ate0007 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0008",
+      );
+      expect(ate0007.map((migracao) => migracao.name)).not.toContain(
+        "0008_regras_campanha.sql",
+      );
+      await applyD1Migrations(db, ate0007);
+      // Uma campanha inativa própria (a do describe da 0007 é a ativa), com hierarquia própria, um afiliado
+      // vinculado e um órfão, e pedidos de todos os status (aprovados com e sem afiliado).
+      const campanha = await db
+        .prepare(
+          `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos, meta_unidade,
+           meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha Antes da 0008', ?1, 0, '2026-11-23', 2000, 'bilhetes', 'por_pessoa', 10,
+           'percentual_meta')
+         RETURNING id`,
+        )
+        .bind(SLUG_0008)
+        .first<{ id: number }>();
+      campanhaId = campanha!.id;
+      await db.batch([
+        db.prepare(
+          "INSERT INTO redes (id, nome, divisao) VALUES (80, 'Rede Antes da 0008', 'jovens')",
+        ),
+        db.prepare(
+          "INSERT INTO discipuladores (id, rede_id, nome) VALUES (800, 80, 'Discipulador Antes da 0008')",
+        ),
+        db.prepare(
+          `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
+           VALUES (8000, 800, 'Celula Antes da 0008', 7, 'Lider Antes da 0008')`,
+        ),
+        db.prepare(
+          `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em) VALUES
+           (8001, 8000, 'manual', '2026-11-20T12:00:00.000Z'),
+           (8002, NULL, 'webhook', NULL)`,
+        ),
+        db
+          .prepare(
+            `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+             registrado_em, atualizado_em) VALUES
+             ('ANTES-0008-1', ?1, 8001, 'approved', 2, 4000, '2026-11-24T13:00:00.000Z',
+               '2026-11-24T12:59:00.000Z', '2026-11-24T13:00:01.000Z'),
+             ('ANTES-0008-2', ?1, 8001, 'approved', 5, 10000, '2026-11-25T02:59:59.999Z',
+               '2026-11-25T02:59:00.000Z', '2026-11-25T03:00:00.000Z'),
+             ('ANTES-0008-3', ?1, 8002, 'approved', 1, 2000, '2026-11-26T15:00:00.000Z',
+               '2026-11-26T14:59:00.000Z', '2026-11-26T15:00:01.000Z'),
+             ('ANTES-0008-4', ?1, NULL, 'approved', 3, 6000, '2026-11-27T15:00:00.000Z',
+               '2026-11-27T14:59:00.000Z', '2026-11-27T15:00:01.000Z'),
+             ('ANTES-0008-5', ?1, 8001, 'in_process', 1, 2000, NULL,
+               '2026-11-28T14:00:00.000Z', '2026-11-28T14:00:00.000Z'),
+             ('ANTES-0008-6', ?1, NULL, 'expired', 4, 8000, NULL,
+               '2026-11-28T15:00:00.000Z', '2026-11-29T15:00:00.000Z')`,
+          )
+          .bind(campanhaId),
+      ]);
+      antes = await fotografar0008();
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0008 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0008_regras_campanha.sql",
+      );
+      expect(antes.pedidos).toHaveLength(6);
+      expect(antes.view).toHaveLength(4);
+      expect(antes.somas).toEqual({
+        pedidos: 4,
+        bilhetes: 11,
+        centavos: 22000,
+      });
+    });
+
+    it("nenhum dado muda: os pedidos ficam iguais, sem desconsideração, e a view e o painel contam o mesmo de antes", async () => {
+      const depois = await fotografar0008();
+      expect(depois.pedidos).toEqual(
+        antes.pedidos.map((pedido) => ({ ...pedido, ...SEM_DESCONSIDERACAO })),
+      );
+      expect(depois.view).toEqual(antes.view);
+      expect(depois.somas).toEqual(antes.somas);
+      // A consulta do painel (com o filtro novo) soma o mesmo que a de antes da 0008.
+      expect(await somarPeloPainel(campanhaId)).toEqual(antes.somas);
+    });
+
+    it("a campanha fica com os padrões: chave de desconsiderar desligada, acessos ligados e os modelos padrão", async () => {
+      const depois = await fotografar0008();
+      expect(depois.campanha).toEqual({
+        ...antes.campanha,
+        pedidos_desconsiderar: 0,
+        acesso_discipuladores: 1,
+        acesso_redes: 1,
+        mensagem_link_coordenacao: null,
+        mensagem_link_lider: null,
+        mensagem_link_discipulador: null,
+        mensagem_link_rede: null,
+      });
+      // Montada no contrato (a leitura de toda rota): os padrões de regras.ts.
+      const montada = montarCampanha({
+        ...(depois.campanha as unknown as Omit<CampanhaAtiva, "periodos">),
+        periodos: [
+          { ordem: 1, nome: "Período 1", dias: 10, percentual_bp: 10000 },
+        ],
+      });
+      expect({
+        pedidos: montada.pedidos,
+        acesso: montada.acesso,
+        mensagens: montada.mensagens,
+      }).toEqual({
+        pedidos: PEDIDOS_PADRAO,
+        acesso: ACESSO_PADRAO,
+        mensagens: MENSAGENS_PADRAO,
+      });
+    });
+
+    it("os CHECK: motivo sem data, observação sem desconsideração, motivo fora da lista, data fora do formato, chave fora de 0/1 e modelo vazio ou longo", async () => {
+      const recusar = (sql: string, ...valores: unknown[]) =>
+        expect(
+          db
+            .prepare(sql)
+            .bind(...valores)
+            .run(),
+        ).rejects.toThrow(/CHECK constraint failed/);
+      const pedido = "WHERE id = 'ANTES-0008-1'";
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_motivo = 'teste' ${pedido}`,
+      );
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z' ${pedido}`,
+      );
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_observacao = 'compra de teste' ${pedido}`,
+      );
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'erro' ${pedido}`,
+      );
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_em = '2026-12-01 12:00', desconsiderado_motivo = 'teste' ${pedido}`,
+      );
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste',
+           desconsiderado_observacao = ?1 ${pedido}`,
+        "x".repeat(141),
+      );
+      await recusar(
+        `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste',
+           desconsiderado_observacao = '' ${pedido}`,
+      );
+      const campanha = "WHERE id = ?1";
+      for (const coluna of [
+        "pedidos_desconsiderar",
+        "acesso_discipuladores",
+        "acesso_redes",
+      ])
+        await recusar(
+          `UPDATE campanhas SET ${coluna} = 2 ${campanha}`,
+          campanhaId,
+        );
+      for (const coluna of [
+        "mensagem_link_coordenacao",
+        "mensagem_link_lider",
+        "mensagem_link_discipulador",
+        "mensagem_link_rede",
+      ]) {
+        await recusar(
+          `UPDATE campanhas SET ${coluna} = '' ${campanha}`,
+          campanhaId,
+        );
+        await recusar(
+          `UPDATE campanhas SET ${coluna} = ?2 ${campanha}`,
+          campanhaId,
+          "x".repeat(1001),
+        );
+      }
+      // Os três juntos (a observação é opcional) passam; nada ficou gravado pelas recusas.
+      await db
+        .prepare(
+          `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'fraude',
+             desconsiderado_observacao = ?1 ${pedido}`,
+        )
+        .bind("x".repeat(140))
+        .run();
+      await db
+        .prepare(
+          `UPDATE pedidos SET desconsiderado_em = NULL, desconsiderado_motivo = NULL,
+             desconsiderado_observacao = NULL ${pedido}`,
+        )
+        .run();
+      expect(await fotografar0008()).toMatchObject({
+        pedidos: antes.pedidos.map((linha) => ({
+          ...linha,
+          ...SEM_DESCONSIDERACAO,
+        })),
+      });
+    });
+
+    it("o desconsiderado sai da view e do índice da 0003 recriado (o painel não o soma) e volta quando a desconsideração é desfeita", async () => {
+      const desconsiderar = (em: string | null, motivo: string | null) =>
+        db
+          .prepare(
+            `UPDATE pedidos SET desconsiderado_em = ?1, desconsiderado_motivo = ?2
+             WHERE id = 'ANTES-0008-2'`,
+          )
+          .bind(em, motivo)
+          .run();
+      const noIndice = async () =>
+        (
+          await db
+            .prepare(
+              `SELECT id FROM pedidos INDEXED BY pedidos_aprovados_por_afiliado_dia
+               WHERE campanha_id = ?1 AND status = 'approved' AND desconsiderado_em IS NULL ORDER BY id`,
+            )
+            .bind(campanhaId)
+            .all<{ id: string }>()
+        ).results.map((linha) => linha.id);
+      const naView = async () =>
+        (
+          await db
+            .prepare(
+              "SELECT pedido_id FROM vendas_aprovadas WHERE campanha_id = ?1 ORDER BY pedido_id",
+            )
+            .bind(campanhaId)
+            .all<{ pedido_id: string }>()
+        ).results.map((linha) => linha.pedido_id);
+      const todos = [
+        "ANTES-0008-1",
+        "ANTES-0008-2",
+        "ANTES-0008-3",
+        "ANTES-0008-4",
+      ];
+
+      await desconsiderar("2026-12-01T12:00:00.000Z", "teste");
+      const semEle = todos.filter((id) => id !== "ANTES-0008-2");
+      expect(await noIndice()).toEqual(semEle);
+      expect(await naView()).toEqual(semEle);
+      expect(await somarPeloPainel(campanhaId)).toEqual({
+        pedidos: 3,
+        bilhetes: 6,
+        centavos: 12000,
+      });
+
+      await desconsiderar(null, null);
+      expect(await noIndice()).toEqual(todos);
+      expect(await naView()).toEqual(todos);
+      expect(await somarPeloPainel(campanhaId)).toEqual(antes.somas);
+    });
+
+    it("os índices: o da 0003 recriado (desconsiderado_em por último, o WHERE novo) e o da lista dos desconsiderados", async () => {
+      const definicao = async (indice: string) =>
+        (
+          await db
+            .prepare(
+              "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?1",
+            )
+            .bind(indice)
+            .first<{ sql: string }>()
+        )?.sql.replace(/\s+/g, " ");
+      expect(await definicao("pedidos_aprovados_por_afiliado_dia")).toMatch(
+        /\( ?campanha_id, affiliate_id, date\(aprovado_em, '-180 minutes'\), aprovado_em, qtd_bilhetes, total_centavos, desconsiderado_em \) WHERE status = 'approved' AND desconsiderado_em IS NULL$/,
+      );
+      expect(await definicao("pedidos_desconsiderados_por_registro")).toMatch(
+        /ON pedidos \(campanha_id, registrado_em, id\) WHERE desconsiderado_em IS NOT NULL$/,
+      );
+      // O painel continua no índice de cobertura (sem voltar à tabela) no banco migrado.
+      const { results } = await db
+        .prepare(`EXPLAIN QUERY PLAN ${SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3}`)
+        .bind(campanhaId)
+        .all<{ detail: string }>();
+      expect(results.map((linha) => linha.detail)).toContain(
+        "SEARCH pedidos USING COVERING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)",
+      );
+    });
+
+    it("o afiliado com pedido não sai (FK RESTRICT); com os pedidos dele desconsiderados e sem afiliado, sai (RIFA-031)", async () => {
+      await expect(
+        db.prepare("DELETE FROM afiliados WHERE affiliate_id = 8002").run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      const [, , removido] = await db.batch([
+        db.prepare(
+          `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste'
+           WHERE affiliate_id = 8002`,
+        ),
+        db.prepare(
+          "UPDATE pedidos SET affiliate_id = NULL WHERE affiliate_id = 8002 AND desconsiderado_em IS NOT NULL",
+        ),
+        db.prepare("DELETE FROM afiliados WHERE affiliate_id = 8002"),
+      ]);
+      expect(removido.meta.changes).toBe(1);
+      expect(
+        await db
+          .prepare(
+            "SELECT affiliate_id, desconsiderado_motivo FROM pedidos WHERE id = 'ANTES-0008-3'",
+          )
+          .first(),
+      ).toEqual({ affiliate_id: null, desconsiderado_motivo: "teste" });
     });
   });
 });

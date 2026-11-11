@@ -20,6 +20,12 @@ import {
   montarCsv,
   semearConferencia,
 } from "../test/conferencia-apoio";
+import {
+  CONTAR_PAGOS_NO_PERIODO,
+  SOMAR_PAGOS,
+  SOMAR_PAGOS_NO_PERIODO,
+  SOMAR_POR_AFILIADO,
+} from "../db/reconciliacao";
 import { bancoQueConta } from "../test/painel-apoio";
 
 /**
@@ -242,5 +248,77 @@ describe("desempenho da conferência no workerd (CPU do Worker por requisição)
       `Conferência, um bilhete por linha: ${corpo.linhas.toLocaleString("pt-BR")} linhas, ${corpo.vezes.length.toLocaleString("pt-BR")} posições | /analisar Worker ${ms(analisar.worker)} ms (D1 ${ms(analisar.banco)} ms)`,
     );
     expect(analisar.worker).toBeLessThan(LIMITE_WORKER_MS);
+  });
+});
+
+describe("RIFA-028 (D20): as somas dos pagos que contam ficam no índice de cobertura da 0008", () => {
+  /** O período do arquivo (UTC) e o sem recorte (null nos dois), como `lerParaAgregado` e `lerParaPorPedido` ligam. */
+  const PERIODO = ["2026-11-24T03:00:00.000Z", "2026-12-01T03:00:00.000Z"];
+  const COBERTURA =
+    "SEARCH p USING COVERING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)";
+  let campanhaId: number;
+  let contam: number;
+
+  beforeAll(async () => {
+    await semearConferencia([]);
+    await semearPedidos(7_000);
+    // 1 de cada 100 desconsiderado pelo admin: fica fora das somas (e do índice).
+    await env.DB.prepare(
+      `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste'
+       WHERE CAST(substr(id, 3) AS INTEGER) % 100 = 7`,
+    ).run();
+    const linha = await env.DB.prepare(
+      `SELECT (SELECT id FROM campanhas WHERE ativa = 1) AS campanha,
+         (SELECT count(*) FROM pedidos WHERE status = 'approved' AND desconsiderado_em IS NULL) AS contam`,
+    ).first<{ campanha: number; contam: number }>();
+    campanhaId = linha!.campanha;
+    contam = linha!.contam;
+    expect(contam).toBe(6_930);
+  });
+
+  async function medirSoma(sql: string, valores: unknown[]) {
+    const plano = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .bind(...valores)
+      .all<{ detail: string }>();
+    const resultado = await env.DB.prepare(sql)
+      .bind(...valores)
+      .all<{ pedidos: number }>();
+    return {
+      plano: plano.results.map((linha) => linha.detail),
+      linhasLidas: resultado.meta.rows_read,
+      pedidos: resultado.results.reduce((soma, item) => soma + item.pedidos, 0),
+    };
+  }
+
+  it.each([
+    ["SOMAR_PAGOS", SOMAR_PAGOS, false],
+    ["SOMAR_POR_AFILIADO", SOMAR_POR_AFILIADO, true],
+    ["SOMAR_PAGOS_NO_PERIODO", SOMAR_PAGOS_NO_PERIODO, true],
+    ["CONTAR_PAGOS_NO_PERIODO", CONTAR_PAGOS_NO_PERIODO, true],
+  ] as const)(
+    "%s: só o índice de cobertura, sem B-tree temporária, 1 linha lida por pago que conta",
+    async (_nome, sql, comPeriodo) => {
+      for (const periodo of comPeriodo ? [[null, null], PERIODO] : [[]]) {
+        const { plano, linhasLidas, pedidos } = await medirSoma(sql, [
+          campanhaId,
+          ...periodo,
+        ]);
+        expect(plano).toEqual([COBERTURA]);
+        if (periodo[0] !== undefined && periodo[0] !== null) continue;
+        // Sem recorte: exatamente os pagos que contam, uma linha lida por pedido (medido: 6.930).
+        expect(pedidos).toBe(contam);
+        expect(linhasLidas).toBe(contam);
+      }
+    },
+  );
+
+  it("sem o filtro do desconsiderado, as somas saem do índice de cobertura (por isso PAGOS_DA_CAMPANHA o repete)", async () => {
+    const semFiltro = SOMAR_POR_AFILIADO.replace(
+      " AND p.desconsiderado_em IS NULL",
+      "",
+    );
+    expect(semFiltro).not.toBe(SOMAR_POR_AFILIADO);
+    const { plano } = await medirSoma(semFiltro, [campanhaId, null, null]);
+    expect(plano).not.toContain(COBERTURA);
   });
 });

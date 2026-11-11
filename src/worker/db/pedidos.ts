@@ -17,10 +17,13 @@ import { prepararRegistroEventoSePedidoIgual } from "./webhook-eventos";
 
 /**
  * Uma tentativa só falha se o pedido (status ou afiliado) mudou entre a leitura e a gravação. Na vida
- * de um pedido isso acontece no máximo 4 vezes: a criação, 2 transições (in_process → expired →
- * approved) e o preenchimento do afiliado tardio (de null para um id, uma vez só). A 5ª sempre grava.
+ * de um pedido isso acontece no máximo 6 vezes: a criação, 2 transições (in_process → expired →
+ * approved), o preenchimento do afiliado tardio (de null para um id), a remoção do afiliado de teste pelo
+ * admin (RIFA-031, D20: o pedido desconsiderado fica sem afiliado, de um id para null) e um evento depois que
+ * o preenche de novo (o afiliado tardio, outra vez). A 7ª sempre grava. A desconsideração (RIFA-028) não
+ * conta: não muda status nem afiliado, e o UPSERT abaixo nunca toca nas colunas dela.
  */
-const MAX_TENTATIVAS = 5;
+export const MAX_TENTATIVAS = 7;
 
 /** O que o processamento lê do pedido gravado: o status (guarda da transição, D4) e o afiliado (D7). */
 interface PedidoAtual {
@@ -73,7 +76,9 @@ interface GravacaoPedido {
  *   sobrescritos por valor não nulo (COALESCE), para um null tolerado nunca apagar um valor bom.
  *   ddd e pais andam juntos (CHECK: ddd só com país 55): vêm do evento quando ele traz o país.
  * Grava só se o pedido ainda está como foi lido (a mesma guarda do evento, no mesmo batch) e, no
- * conflito, só a partir de um estado que permite a transição (D4). `registrado_em` não muda.
+ * conflito, só a partir de um estado que permite a transição (D4). `registrado_em` não muda. A desconsideração
+ * do admin (`desconsiderado_em`, `_motivo` e `_observacao`, D20) nunca é escrita aqui: um evento que chega depois
+ * (ex.: o `paid_order` de um pedido de teste desconsiderado) muda o status, mas o pedido continua fora das contas.
  */
 function prepararGravacaoPedido(
   db: D1Database,

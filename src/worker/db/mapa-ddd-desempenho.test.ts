@@ -202,6 +202,57 @@ describe("a consulta desce pelo índice (status, aprovado_em) só na janela, sem
   );
 });
 
+describe("RIFA-028 (D20): com pedidos desconsiderados, o mesmo plano e nenhuma linha a mais", () => {
+  it("1 de cada 100 aprovados desconsiderado: o plano não muda, as linhas lidas não sobem e eles saem das somas", async () => {
+    const somar = async (janela: keyof typeof JANELAS) => {
+      const { sql, valores } = comandoMapaDdd(1, JANELAS[janela], undefined);
+      const { results } = await db
+        .prepare(sql)
+        .bind(...valores)
+        .all<{ pedidos: number }>();
+      return results.reduce((soma, linha) => soma + linha.pedidos, 0);
+    };
+    const antes = {
+      campanha: await medir("campanha"),
+      soma: await somar("campanha"),
+    };
+    const { meta } = await db
+      .prepare(
+        `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste'
+         WHERE status = 'approved' AND CAST(substr(id, 3) AS INTEGER) % 100 = 1`,
+      )
+      .run();
+    try {
+      expect(meta.changes).toBe(70);
+      const depois = await medir("campanha");
+      const naJanela = await db
+        .prepare(
+          `SELECT count(*) AS n FROM pedidos WHERE desconsiderado_em IS NOT NULL
+           AND aprovado_em >= ?1 AND aprovado_em < ?2`,
+        )
+        .bind(JANELAS.campanha.inicio, JANELAS.campanha.fim)
+        .first<{ n: number }>();
+
+      expect(depois.plano).toEqual(PLANO_SEM_DIVISAO);
+      expect(depois.plano.join("\n")).not.toContain(
+        "pedidos_aprovados_por_afiliado_dia",
+      );
+      // A coluna está na linha que a consulta já lê: nenhuma linha a mais (a B-tree recebe menos).
+      expect(depois.linhasLidas).toBeLessThanOrEqual(
+        antes.campanha.linhasLidas,
+      );
+      expect(await somar("campanha")).toBe(antes.soma - naJanela!.n);
+    } finally {
+      await db
+        .prepare(
+          `UPDATE pedidos SET desconsiderado_em = NULL, desconsiderado_motivo = NULL
+           WHERE desconsiderado_em IS NOT NULL`,
+        )
+        .run();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------------------------------
 // A requisição inteira: duas idas ao banco e as linhas lidas de todas
 // ---------------------------------------------------------------------------------------------------

@@ -19,11 +19,13 @@ import {
   type AfiliadoDoCorpo,
   type AvisoReconciliacao,
   type CorpoConferencia,
+  type Desconsideracao,
   type Divergencia,
   type GrupoDivergencia,
   type MotivoNaoRecuperado,
   type ObservacaoDivergencia,
   type OrigemPedido,
+  type PedidoDesconsideradoNaConferencia,
   type PedidoNoArquivo,
   type PedidoNoSistema,
   type PedidoRecuperado,
@@ -53,6 +55,8 @@ export interface PedidoGravado {
   /** `aprovado_em` em ms (o banco manda como número: a resposta do D1 fica menor). */
   aprovado_ms: number | null;
   origem: OrigemPedido;
+  /** A desconsideração do admin (D20); null = o pedido conta. */
+  desconsiderado: Desconsideracao | null;
 }
 
 export interface AfiliadoGravado {
@@ -724,7 +728,7 @@ export interface SistemaPorPedido {
   afiliados: readonly AfiliadoGravado[];
   /** Os pedidos do banco (de qualquer campanha) com os códigos do arquivo. */
   encontrados: ReadonlyMap<string, PedidoGravado>;
-  /** Pagos da campanha ativa no período do arquivo (todos, se o arquivo não tem datas). */
+  /** Pagos da campanha ativa no período do arquivo (todos, se o arquivo não tem datas), sem os desconsiderados. */
   pagosNoPeriodo: number;
 }
 
@@ -741,9 +745,14 @@ export function decidir(
 ): Decisoes {
   const noSistema = (id: string) => sistema.encontrados.get(id);
   const { campanha } = sistema;
+  // O mesmo conjunto de `pagosNoPeriodo` (CONTAR_PAGOS_NO_PERIODO): sem os desconsiderados (D20).
   let pagosNoPeriodoNoArquivo = 0;
   for (const gravado of sistema.encontrados.values()) {
-    if (gravado.campanha_id !== campanha.id || gravado.status !== "approved")
+    if (
+      gravado.campanha_id !== campanha.id ||
+      gravado.status !== "approved" ||
+      gravado.desconsiderado !== null
+    )
       continue;
     if (
       periodo !== null &&
@@ -786,6 +795,24 @@ function impedimentos(
   if (dataNoFuturo(pedido, calendario)) lista.push("data_no_futuro");
   if (!codigoConfere) lista.push("codigo_nao_confere");
   return lista;
+}
+
+function ladoDoArquivo(
+  pedido: PedidoDoArquivo,
+  qtd: number | null,
+  decidido: ValorDecidido,
+  afiliado: AfiliadoResolvido,
+  afiliados: Afiliados,
+): PedidoNoArquivo {
+  return {
+    status: pedido.status,
+    qtd_bilhetes: qtd,
+    total_centavos: decidido.centavos,
+    afiliado: afiliado.situacao,
+    affiliate_id: afiliado.affiliateId,
+    celula: afiliados.celula(afiliado.affiliateId),
+    data: pedido.dia,
+  };
 }
 
 function ladoDoSistema(
@@ -917,7 +944,7 @@ export interface EntradaPorPedido {
   corpo: CorpoConferencia;
   agrupamento: Agrupamento;
   sistema: SistemaPorPedido & {
-    /** Todos os pagos da campanha ativa no sistema. */
+    /** Todos os pagos da campanha ativa no sistema que contam (sem os desconsiderados, D20). */
     aprovados: TotaisVendas;
     ausentes: AusentesDoArquivo;
   };
@@ -941,6 +968,8 @@ export function analisarPorPedido(
   const grupos = new Map<TipoDivergencia, Divergencia[]>(
     TIPOS_DIVERGENCIA.map((tipo) => [tipo, []]),
   );
+  // Os do arquivo que o sistema tem desconsiderados (D20): à parte, nunca divergência nem "faltando".
+  const desconsiderados: PedidoDesconsideradoNaConferencia[] = [];
   const comDivergencia = new Set<string>();
   let conferem = 0;
   let inconsistentes = 0;
@@ -973,15 +1002,30 @@ export function analisarPorPedido(
     const afiliado = afiliados.doArquivo(pedido.afiliado);
     if (afiliado.situacao === "nao_reconhecido") afiliadosNaoReconhecidos++;
 
-    // Os tipos de divergência do pedido (null = nenhum): a lista só existe quando há o que mostrar.
-    let tipos: TipoDivergencia[] | null = null;
-    let observacoes: ObservacaoDivergencia[] = [];
+    // O lado do arquivo conta como sempre (é o que o arquivo tem), com ou sem a desconsideração no sistema.
     if (pedido.status === "aprovado") {
       aprovados++;
       if (qtd === null) aprovadosSemQuantidade++;
       else bilhetesAprovados += qtd;
       if (decidido.centavos === null) aprovadosSemValor++;
       else centavosAprovados += decidido.centavos;
+    }
+    // Desconsiderado no sistema (D20), de qualquer status: existe e, de propósito, não conta. Não é venda perdida,
+    // pagamento não registrado, não pago na Rifei nem diferença de valor, quantidade ou afiliado; nem "confere".
+    if (gravado?.desconsiderado) {
+      desconsiderados.push({
+        pedido_id: pedido.id,
+        arquivo: ladoDoArquivo(pedido, qtd, decidido, afiliado, afiliados),
+        sistema: ladoDoSistema(gravado, afiliados),
+        desconsiderado: gravado.desconsiderado,
+      });
+      continue;
+    }
+
+    // Os tipos de divergência do pedido (null = nenhum): a lista só existe quando há o que mostrar.
+    let tipos: TipoDivergencia[] | null = null;
+    let observacoes: ObservacaoDivergencia[] = [];
+    if (pedido.status === "aprovado") {
       if (!gravado) {
         tipos = ["venda_perdida"];
         observacoes = impedimentos(
@@ -1018,15 +1062,7 @@ export function analisarPorPedido(
     if (tipos === null) continue;
 
     comDivergencia.add(pedido.id);
-    const doArquivo: PedidoNoArquivo = {
-      status: pedido.status,
-      qtd_bilhetes: qtd,
-      total_centavos: decidido.centavos,
-      afiliado: afiliado.situacao,
-      affiliate_id: afiliado.affiliateId,
-      celula: afiliados.celula(afiliado.affiliateId),
-      data: pedido.dia,
-    };
+    const doArquivo = ladoDoArquivo(pedido, qtd, decidido, afiliado, afiliados);
     const doSistema = gravado ? ladoDoSistema(gravado, afiliados) : null;
     for (const tipo of tipos)
       grupos.get(tipo)!.push({
@@ -1109,6 +1145,16 @@ export function analisarPorPedido(
         ? grupoAusentes
         : montarGrupo(tipo, grupos.get(tipo)!, somaveis),
     ),
+    desconsiderados: {
+      quantidade: desconsiderados.length,
+      itens: desconsiderados
+        .sort(porCodigo)
+        .slice(0, LIMITE_ITENS_POR_DIVERGENCIA),
+      itens_omitidos: Math.max(
+        0,
+        desconsiderados.length - LIMITE_ITENS_POR_DIVERGENCIA,
+      ),
+    },
   };
 }
 

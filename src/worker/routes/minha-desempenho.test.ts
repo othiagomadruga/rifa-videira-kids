@@ -54,6 +54,15 @@ interface Trabalho {
 /** Linhas lidas no D1 por pedido aprovado: o orçamento do painel (painel-desempenho.test.ts). */
 const LIMITE_LINHAS_POR_PEDIDO = 1.5;
 /**
+ * As linhas lidas na requisição INTEIRA, exatas (`linhasLidasTotal` do bancoQueConta), medidas em 2026-11-11 (D20,
+ * OBRIGATÓRIO 5): a sessão (o líder 5, o discipulador 4 e a rede 3: a sessão, o usuário e o alvo com a
+ * hierarquia), a campanha ativa com os períodos (4) e o lote do painel com os dados da visão (8.991, igual para os
+ * três). Uma linha a mais (uma consulta nova, um plano que mudou, um índice que desviou o planejador) falha aqui.
+ */
+const LINHAS_DA_SESSAO = { lider: 5, discipulador: 4, rede: 3 } as const;
+const LINHAS_DA_CAMPANHA = 4;
+const LINHAS_DO_LOTE = 8_991;
+/**
  * O trabalho de uma visão neste cenário, medido em 2026-11-09 (dia 20, janela da Semana 3): o líder chama 1 resumo
  * (a célula) e 3 rankings (a janela, o geral e o da divisão); o discipulador, 1 + 3 resumos (as células dele) e 4
  * rankings (mais o das células na divisão); a rede, 1 + 3 + 9 resumos e 5 rankings (mais o dos discipuladores).
@@ -163,6 +172,8 @@ interface Medida {
   banco: number[];
   idas: number[];
   linhasLidas: number;
+  /** As linhas lidas na requisição INTEIRA (sessão, campanha e lote), em cada rodada. */
+  linhasLidasTotal: number[];
 }
 
 /** 1 rodada de aquecimento e RODADAS medidas da visão com a sessão dada. */
@@ -170,7 +181,13 @@ async function medir(
   app: ReturnType<typeof appDaVisao>,
   sessao: Record<string, string>,
 ): Promise<Medida> {
-  const medida: Medida = { worker: [], banco: [], idas: [], linhasLidas: 0 };
+  const medida: Medida = {
+    worker: [],
+    banco: [],
+    idas: [],
+    linhasLidas: 0,
+    linhasLidasTotal: [],
+  };
   for (let rodada = 0; rodada <= RODADAS; rodada++) {
     const { db, contagem } = bancoQueConta();
     const inicio = performance.now();
@@ -188,6 +205,7 @@ async function medir(
     medida.banco.push(contagem.ms);
     medida.idas.push(contagem.idas);
     medida.linhasLidas = Math.max(medida.linhasLidas, contagem.linhasLidas);
+    medida.linhasLidasTotal.push(contagem.linhasLidasTotal);
   }
   return medida;
 }
@@ -288,6 +306,11 @@ describe("CA8: CPU e idas ao D1 da visão individual", () => {
         papel,
         idas: [3],
       });
+      // Exatas, em toda rodada: a sessão, a campanha e o lote.
+      expect({ papel, linhas: [...new Set(medida.linhasLidasTotal)] }).toEqual({
+        papel,
+        linhas: [LINHAS_DA_SESSAO[papel] + LINHAS_DA_CAMPANHA + LINHAS_DO_LOTE],
+      });
       const porPedido = medida.linhasLidas / pedidos;
       expect({
         papel,
@@ -299,7 +322,7 @@ describe("CA8: CPU e idas ao D1 da visão individual", () => {
         ok: true,
       });
       linhas.push(
-        `${papel.padEnd(13)} Worker mediana ${ms(mediana(medida.worker))} ms, pior ${ms(Math.max(...medida.worker))} ms | D1 mediana ${ms(mediana(medida.banco))} ms | linhas lidas no D1 ${medida.linhasLidas.toLocaleString("pt-BR")} (${(medida.linhasLidas / pedidos).toFixed(2)} por pedido)`,
+        `${papel.padEnd(13)} Worker mediana ${ms(mediana(medida.worker))} ms, pior ${ms(Math.max(...medida.worker))} ms | D1 mediana ${ms(mediana(medida.banco))} ms | linhas lidas no D1 ${medida.linhasLidas.toLocaleString("pt-BR")} (${(medida.linhasLidas / pedidos).toFixed(2)} por pedido) | na requisição inteira ${JSON.stringify([...new Set(medida.linhasLidasTotal)])}`,
       );
     }
     console.log(
@@ -319,8 +342,13 @@ describe("CA8: CPU e idas ao D1 da visão individual", () => {
         papel,
         idas: [1],
       });
+      // Só a sessão, exata.
+      expect({ papel, linhas: [...new Set(medida.linhasLidasTotal)] }).toEqual({
+        papel,
+        linhas: [LINHAS_DA_SESSAO[papel]],
+      });
       linhas.push(
-        `${papel.padEnd(13)} Worker mediana ${ms(mediana(medida.worker))} ms, pior ${ms(Math.max(...medida.worker))} ms | D1 mediana ${ms(mediana(medida.banco))} ms (só a sessão)`,
+        `${papel.padEnd(13)} Worker mediana ${ms(mediana(medida.worker))} ms, pior ${ms(Math.max(...medida.worker))} ms | D1 mediana ${ms(mediana(medida.banco))} ms (só a sessão) | linhas lidas ${JSON.stringify([...new Set(medida.linhasLidasTotal)])}`,
       );
     }
     console.log(["CA8 com o cache da base:", ...linhas].join("\n"));

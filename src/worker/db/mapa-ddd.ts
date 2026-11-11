@@ -12,7 +12,10 @@
  *   (R6; texto UTC no mesmo formato: a ordem alfabética é a cronológica). Vale para qualquer fuso, com ou sem
  *   horário de verão, e é o mesmo conjunto que o painel separa por dia.
  * Com `divisao`, só as vendas cujo afiliado está numa célula da divisão (D7, a célula resolvida na leitura): as sem
- * afiliado e as de afiliado não vinculado ficam de fora, como no painel.
+ * afiliado e as de afiliado não vinculado ficam de fora, como no painel. O pedido desconsiderado pelo admin (D20) não
+ * conta, como no painel: a coluna está na linha que a consulta já lê (nenhuma linha a mais). O `+` de
+ * `+desconsiderado_em IS NULL` tira do planejador o índice parcial da 0003 recriado na 0008 (`status = 'approved' AND
+ * desconsiderado_em IS NULL`), que a consulta satisfaria e que não cobre país e DDD: como os outros `+` abaixo.
  *
  * Custo (D10; src/worker/db/mapa-ddd-desempenho.test.ts, com 7 mil pedidos): duas idas ao banco (a campanha e a
  * consulta agregada). A consulta desce pelo índice `pedidos_por_status_aprovacao (status, aprovado_em)` só na
@@ -72,7 +75,8 @@ export function comandoMapaDdd(
   const sql = `
   SELECT pais, ddd, count(*) AS pedidos, sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos
   FROM pedidos
-  WHERE status = 'approved' AND aprovado_em >= ?2 AND aprovado_em < ?3 AND +campanha_id = ?1${daDivisao}
+  WHERE status = 'approved' AND aprovado_em >= ?2 AND aprovado_em < ?3 AND +campanha_id = ?1
+    AND +desconsiderado_em IS NULL${daDivisao}
   GROUP BY pais, ddd`;
   return { sql, valores };
 }

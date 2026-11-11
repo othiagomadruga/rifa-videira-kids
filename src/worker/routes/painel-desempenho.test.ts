@@ -363,6 +363,50 @@ describe("CA5: desempenho com volume sintético", () => {
     await medir(pedidos);
   }, 60_000);
 
+  it("D20: o pedido desconsiderado sai do índice: cada um é EXATAMENTE uma linha lida a menos em cada rota (nenhuma a mais pelo filtro)", async () => {
+    await env.DB.prepare("DELETE FROM pedidos").run();
+    await semearPedidos(env.DB, campanhaId, 8);
+    /** Linhas lidas (o lote; a campanha é a mesma nas duas medidas) e os bilhetes do resumo da campanha. */
+    const medirRotas = async () => {
+      const medidas: Record<string, number> = {};
+      for (const rota of ROTAS_MEDIDAS) {
+        const { painel, publico } = montadoresQueContam();
+        const { db, contagem } = bancoQueConta();
+        const res = await appCom(painel, publico).request(
+          rota.caminho,
+          {},
+          { ...env, DB: db },
+        );
+        expect({ rota: rota.nome, status: res.status }).toEqual({
+          rota: rota.nome,
+          status: 200,
+        });
+        rota.schema.parse(await res.json());
+        medidas[rota.nome] = contagem.linhasLidas;
+      }
+      return medidas;
+    };
+    const antes = await medirRotas();
+
+    // 1 de cada 10 pedidos com afiliado: cada célula continua com venda em todo dia (os grupos não mudam).
+    const { meta } = await env.DB.prepare(
+      `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste'
+       WHERE id GLOB 'CARGA-*0' AND affiliate_id IS NOT NULL`,
+    ).run();
+    const desconsiderados = meta.changes;
+    expect(desconsiderados).toBeGreaterThan(600);
+    const depois = await medirRotas();
+
+    expect(depois).toEqual(
+      Object.fromEntries(
+        Object.entries(antes).map(([rota, linhas]) => [
+          rota,
+          linhas - desconsiderados,
+        ]),
+      ),
+    );
+  }, 60_000);
+
   it("300 pedidos por dia POR célula (259.200): o banco agrega, e o trabalho de cada rota é o mesmo", async () => {
     await env.DB.prepare("DELETE FROM pedidos").run();
     const pedidos = await semearPedidos(env.DB, campanhaId, 300);

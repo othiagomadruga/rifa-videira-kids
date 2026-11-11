@@ -3,10 +3,10 @@
 - Migration: [`migrations/0001_init.sql`](../migrations/0001_init.sql), aplicada depois de `0000_setup.sql` (tabela `_meta`, RIFA-001). O acesso da equipe (`0002_acessos.sql`) e os papéis da hierarquia (`0006_acesso_hierarquia.sql`, RIFA-014) estão na seção [`usuarios`, `links_acesso` e `sessoes`](#usuarios-links_acesso-e-sessoes-acesso-da-equipe).
 - Conferência pelo CSV da Rifei (RIFA-012): [`0004_conferencia.sql`](../migrations/0004_conferencia.sql), aditiva, com a tabela [`recuperacoes`](#recuperacoes-migração-0004-rifa-012) e as colunas `pedidos.origem` e `pedidos.recuperacao_id`. Não depende da 0005 à 0007 nem elas dela: aplicada antes ou depois delas, dá o mesmo schema (`src/worker/test/migracao-0004-depois.test.ts`).
 - Tipos e schemas espelho: `src/shared/contracts/dominio.ts`.
-- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006 e a 0007 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
-- Índices só de leitura: `0003_vendas_por_dia.sql` (painel) e `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts` e `src/worker/db/pedidos-webhook-desempenho.test.ts`).
+- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007 e a 0008 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
+- Índices só de leitura: `0003_vendas_por_dia.sql` (painel; recriado na 0008), `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025) e o da lista dos desconsiderados (0008), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts`, `src/worker/db/pedidos-webhook-desempenho.test.ts`, `src/worker/db/mapa-ddd-desempenho.test.ts`, `src/worker/routes/painel-desempenho.test.ts`, `src/worker/routes/minha-desempenho.test.ts` e `src/worker/routes/reconciliacao-desempenho.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
-- Regras do admin (Sprint 6, D20): o **plano** da migração `0008_regras_campanha.sql` está na [seção 9](#9-plano-da-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20). Ela é da tarefa -db, que a escreve junto com as consultas.
+- Regras do admin (Sprint 6, D20): [`0008_regras_campanha.sql`](../migrations/0008_regras_campanha.sql), aditiva, com as chaves e as mensagens em `campanhas`, a desconsideração em `pedidos`, o índice da 0003 recriado, o índice da lista dos desconsiderados e a view recriada. Como foi feita e por quê: [seção 9](#9-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20).
 
 ## 1. Visão geral
 
@@ -65,6 +65,9 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `ranking_criterio` | TEXT | `percentual_meta`, `bilhetes` ou `arrecadacao` |
 | `publico_mostra_percentual_meta` | INTEGER 0/1 | padrão 0: o público vê só posições |
 | `publico_limite_ranking` | INTEGER 1–100 ou NULL | padrão 3 (top 3); NULL mostra todas as posições |
+| `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |
+| `acesso_discipuladores`, `acesso_redes` | INTEGER 0/1 | padrão 1 (0008): as chaves `acesso.discipuladores` e `acesso.redes` |
+| `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 | o modelo de cada mensagem do WhatsApp (0008); NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar. Um modelo salvo igual ao padrão é gravado como NULL |
 | `criado_em`, `atualizado_em` | TEXT | instantes UTC |
 
 O fim da campanha não é guardado: é `data_inicio + soma dos dias dos períodos − 1`.
@@ -135,6 +138,11 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `registrado_em`, `atualizado_em` | TEXT (UTC) | nossos: primeira gravação e última alteração |
 | `origem` | TEXT, padrão `webhook` | `webhook` ou `conferencia` (migração 0004). Os pedidos anteriores à 0004 ficaram com `webhook` |
 | `recuperacao_id` | INTEGER FK → recuperacoes, NULL | a recuperação que gravou o pedido; preenchido **se e somente se** `origem = 'conferencia'` (CHECK) |
+| `desconsiderado_em` | TEXT (UTC) NULL | migração 0008 (RIFA-028, D20): o admin tirou o pedido de todas as contas; NULL = o pedido conta |
+| `desconsiderado_motivo` | TEXT NULL | `teste`, `fraude`, `estorno` ou `outro`; preenchido **se e somente se** `desconsiderado_em` (CHECK) |
+| `desconsiderado_observacao` | TEXT NULL, 1–140 | só com `desconsiderado_em` (CHECK); nota do admin, sem dado pessoal (o contrato recusa "@" e 8 dígitos seguidos) |
+
+**Desconsiderado** (RIFA-028, D20): sai de toda soma (painel, rankings, público, bumbo, `/minha`, mapa, adesão, totais do afiliado, totais da lista de pedidos e as somas da conferência), porque toda consulta que soma repete `desconsiderado_em IS NULL` (e o índice da 0003 e a view já não o têm); continua na lista de pedidos (com o selo e o filtro), na de suspeitos e na conferência, à parte. Quem desconsiderou fica na trilha (`auditoria`), não no pedido. O webhook nunca escreve nessas colunas: um evento que chega depois muda o status, mas o pedido continua desconsiderado.
 
 Pedido recuperado na conferência (`POST /api/admin/reconciliacao/recuperar`, RIFA-012): entra `approved`, com `qtd_bilhetes`, `total_centavos`, `affiliate_id` e `aprovado_em` vindos do CSV da Rifei (lido no navegador); `numeros`, `ddd`, `pais`, `criado_em` e os campos informativos ficam NULL (os números dos bilhetes e o telefone não saem do navegador). Conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um evento do webhook que chegue depois segue a máquina da seção 5 (um `paid_order` dá `duplicado`).
 
@@ -174,7 +182,7 @@ Auditoria de cada "Recuperar" da conferência pelo CSV que gravou pelo menos um 
 
 ### View `vendas_aprovadas`
 
-Pedidos `approved` com a hierarquia resolvida por `LEFT JOIN`: afiliado → célula → discipulador → rede. As colunas são `pedido_id`, `campanha_id`, `affiliate_id`, `qtd_bilhetes`, `total_centavos`, `aprovado_em`, `ddd`, `pais`, `celula_id`, `discipulador_id`, `rede_id` e `divisao`.
+Pedidos `approved` que contam (sem os desconsiderados, desde a 0008) com a hierarquia resolvida por `LEFT JOIN`: afiliado → célula → discipulador → rede. As colunas são `pedido_id`, `campanha_id`, `affiliate_id`, `qtd_bilhetes`, `total_centavos`, `aprovado_em`, `ddd`, `pais`, `celula_id`, `discipulador_id`, `rede_id` e `divisao`.
 
 - `celula_id` NULL = venda **sem célula** (sem afiliado ou afiliado não vinculado). Ela entra no total da campanha, mas não entra em nenhum ranking.
 - Vincular um afiliado muda o resultado da view na hora, sem alterar `pedidos` (D7).
@@ -207,7 +215,8 @@ Migrations `0002_acessos.sql` (RIFA-007) e `0006_acesso_hierarquia.sql` (RIFA-01
 |---|---|
 | `pedidos_por_status_aprovacao (status, aprovado_em)` | ritmo e ranking por janela de tempo: `status = 'approved' AND aprovado_em >= ? AND aprovado_em < ?` (validado com `EXPLAIN QUERY PLAN`, também através da view) |
 | `pedidos_por_afiliado_status (affiliate_id, status)` | totais por afiliado (`GET /api/admin/afiliados`), "sem afiliado" (`affiliate_id IS NULL`) e a FK de `afiliados` |
-| `pedidos_aprovados_por_afiliado_dia (campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos) WHERE status = 'approved'` (migração 0003) | painel, rankings, ranking público e bumbo (`src/worker/db/painel.ts`): vendas por afiliado e dia local de UTC−3 já na ordem do `GROUP BY`, sem a view, com 1 linha lida no D1 por pedido (pela view eram ~6). A consulta precisa usar a mesma expressão do dia, literal (`db/painel.test.ts` confere o plano) |
+| `pedidos_aprovados_por_afiliado_dia (campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos, desconsiderado_em) WHERE status = 'approved' AND desconsiderado_em IS NULL` (migração 0003, recriado na 0008) | painel, rankings, ranking público e bumbo (`src/worker/db/painel.ts`): vendas por afiliado e dia local de UTC−3 já na ordem do `GROUP BY`, sem a view, com 1 linha lida no D1 por pedido que conta (pela view eram ~6; o desconsiderado não está no índice). A consulta precisa usar a mesma expressão do dia, literal, e repetir `status = 'approved' AND desconsiderado_em IS NULL` (`db/painel.test.ts` confere o plano). Também serve às somas da conferência (`PAGOS_DA_CAMPANHA` em `db/reconciliacao.ts`, com o filtro repetido; `routes/reconciliacao-desempenho.test.ts`) |
+| `pedidos_desconsiderados_por_registro (campanha_id, registrado_em, id) WHERE desconsiderado_em IS NOT NULL` (migração 0008, parcial) | a lista de pedidos com `desconsiderado=true` sem filtro de célula: lê só os desconsiderados, na ordem da lista (~2 linhas por desconsiderado). Com `desconsiderado=false`, o índice da 0007, com `+desconsiderado_em IS NULL` (o `+` tira o índice parcial da 0003 do planejador) |
 | `afiliados_por_celula`, `celulas_por_discipulador`, `discipuladores_por_rede` | subir e descer a hierarquia, e as FKs |
 | `pedidos_por_campanha_registro (campanha_id, registrado_em, id)` (migração 0007, RIFA-025) | lista de pedidos da coordenação (`GET /api/admin/pedidos`, `src/worker/db/lista-pedidos.ts`): os pedidos da campanha do registrado mais novo para o mais antigo, com o cursor `(registrado_em, id)`, saem na ordem do índice e a leitura para no limite (~133 linhas lidas na 1ª página com 7 mil pedidos; sem ele, ~26 mil). **Ele desvia o planejador** em consultas que pioram com ele, e elas fogem dele de propósito: totais com `+campanha_id` (senão ~2 linhas por pedido), lista e totais por célula com `afiliados CROSS JOIN pedidos` (senão percorre a campanha inteira), sem célula com `affiliate_id IS NULL OR affiliate_id IN (afiliados sem célula)` |
 | `webhook_eventos_por_pedido`, `webhook_eventos_por_resultado (resultado, recebido_em)` | auditoria de um pedido; listar erros e ignorados recentes; no estado do webhook (`src/worker/db/estado-webhook.ts`), a contagem das últimas 24 h por resultado (com `resultado IN (...)`: sem ele, a contagem percorre o índice inteiro), os erros recentes e a última entrega de qualquer resultado por `MAX(recebido_em)` (com `ORDER BY ... LIMIT 1` o planejador ia para o índice da 0007 e lia ~34 mil linhas) |
@@ -270,12 +279,13 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 - O payload bruto do webhook nunca é gravado, só o redigido.
 - O CSV da conferência (RIFA-012), que traz dados pessoais, é lido no navegador e não vai para a API: ela recebe só as colunas mapeadas que não são pessoais. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, valor, afiliado e instante).
 
-## 9. Plano da migração `0008_regras_campanha.sql` (RIFA-028, 029 e 032; D20)
+## 9. Migração `0008_regras_campanha.sql` (RIFA-028, 029 e 032; D20)
 
-Só o plano: a migração é da tarefa -db e entra no MESMO merge que as consultas de `src/worker/db/` (item 3 do
-OBRIGATÓRIO da D20). Aditiva para os dados: nenhuma linha muda; os pedidos de antes contam como hoje e a campanha
-fica com os padrões. O SQL abaixo foi aplicado sobre a 0000 a 0007 (com a 0004 da RIFA-012), com dados, num SQLite local (3.53): os CHECK, a
-view e os planos se comportaram como descrito.
+Aplicada na tarefa -db (RIFA-028-db) no MESMO merge que as consultas de `src/worker/db/` (item 3 do OBRIGATÓRIO da D20).
+Aditiva para os dados: nenhuma linha muda; os pedidos de antes contam como hoje e a campanha fica com os padrões. O
+plano foi provado num SQLite local (3.53) na revisão do contrato e de novo no D1 local do workerd, sobre dados das
+migrações anteriores (`src/worker/test/migrations.test.ts`, "0008 sobre dados que já existiam"): os CHECK, a view, os
+índices, os planos e a remoção do afiliado se comportaram como descrito abaixo.
 
 **`campanhas`** (as chaves e as mensagens da D20):
 
@@ -287,7 +297,8 @@ view e os planos se comportaram como descrito.
 | `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 caracteres | o modelo de cada mensagem; NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar |
 
 Os marcadores do modelo são conferidos pelo contrato (o banco só confere o tamanho). No PUT, o grupo ausente mantém
-as colunas dele (`COALESCE` com o valor gravado, ou o padrão no primeiro PUT).
+as colunas dele (`COALESCE` com o valor gravado, ou o padrão no primeiro PUT); o grupo presente substitui o grupo
+inteiro, e um modelo igual ao padrão do contrato é gravado como NULL (`src/worker/db/campanha.ts`).
 
 **`pedidos`** (a desconsideração, RIFA-028; os três andam juntos):
 
@@ -364,7 +375,19 @@ WHERE p.status = 'approved' AND p.desconsiderado_em IS NULL;
 - **Remover afiliado** (RIFA-031): `pedidos.affiliate_id` é `ON DELETE RESTRICT` (0001), então o afiliado só sai
   depois de `UPDATE pedidos SET affiliate_id = NULL` nos pedidos desconsiderados dele, no mesmo lote (provado: o
   DELETE direto é recusado pela FK; depois do UPDATE, passa).
-- Teste da migração (`src/worker/test/migrations.test.ts`): aplicar a 0008 sobre dados das anteriores (pedidos
-  aprovados e uma campanha) e conferir que tudo continua contando, os padrões da campanha, os CHECK (motivo sem
-  data, observação sem desconsideração, motivo fora da lista, chave fora de 0/1), a view sem o desconsiderado e o
-  plano do painel.
+- **O `+` tira o índice parcial do planejador**: `+desconsiderado_em IS NULL` não satisfaz o WHERE do índice
+  (conferido no D1 local: com `INDEXED BY`, "no query solution"). O mapa (`db/mapa-ddd.ts`) e a lista com
+  `desconsiderado=false` usam o `+` para ficar nos índices de hoje ((status, aprovado_em) e o da 0007), como os outros
+  `+` de D16 e D17.
+- Teste da migração (`src/worker/test/migrations.test.ts`): a 0008 aplicada sobre dados das anteriores (pedidos de
+  todos os status, aprovados com e sem afiliado, e uma campanha) confere que tudo continua contando (a view e a
+  consulta do painel somam o mesmo de antes), os padrões da campanha (também montada no contrato), os CHECK (motivo
+  sem data, data sem motivo, observação sem desconsideração, vazia ou acima de 140, motivo fora da lista, data fora
+  do formato, chave fora de 0/1, modelo vazio ou acima de 1.000), a view e o índice sem o desconsiderado (e de volta
+  ao desfazer), as definições dos dois índices, o plano do painel e a remoção do afiliado depois do UPDATE.
+- Medido no D1 local com 7 mil pedidos (5,6 mil aprovados; o volume de `pedidos-webhook-desempenho.test.ts`), antes e
+  depois da 0008, sem nenhum desconsiderado: as mesmas linhas lidas em todas as consultas (painel 6.797; somas da
+  conferência 5.600 cada; mapa da campanha 10.679; lista 135 na 1ª página e totais 7.001; afiliados 16.945; adesão
+  28.854; suspeitos 14.702; conferência por pedido 64.627 e agregada 22.215). Com 70 desconsiderados (1%), cada um é
+  uma linha a menos no painel e nas somas (6.727 e 5.530) e na view (afiliados 16.805, adesão 28.504); a lista com
+  `desconsiderado=true` lê 154 linhas.

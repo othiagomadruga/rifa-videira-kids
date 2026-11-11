@@ -8,6 +8,10 @@
  * Worker montar); os pagos que o arquivo não tem, os totais e o modo sem código chegam já contados e somados
  * (GROUP BY).
  *
+ * Desconsiderados (RIFA-028, D20): ficam fora de tudo o que soma os pagos (PAGOS_DA_CAMPANHA: total do sistema,
+ * ausentes do arquivo, somas por afiliado e por dia) e entram, com a marca, na busca pelos códigos do arquivo
+ * (SELECIONAR_ENCONTRADOS), para a análise os mostrar à parte (nunca como "faltando").
+ *
  * Nada do arquivo chega aqui além dos códigos e, no "Recuperar", do pedido recuperado (código, quantidade,
  * valor, afiliado e instante) e, na auditoria, do SHA-256 do arquivo e dos nomes das colunas usadas (D1).
  *
@@ -28,6 +32,7 @@
 import {
   LIMITE_ITENS_POR_DIVERGENCIA,
   type AcaoAuditoria,
+  type MotivoDesconsideracao,
   type CampoReconciliacao,
   type ColunasDoCorpo,
   type ConsultaListaRecuperacoes,
@@ -57,13 +62,17 @@ const CODIGOS_POR_COMANDO = 8_000;
 /**
  * O pedido como tupla curta, na ordem de `tupla()`: status e origem como números (STATUS_DA_TUPLA e
  * ORIGENS_DA_TUPLA) e `aprovado_em` em ms (segundos do strftime mais os milissegundos do texto). Com 7 mil
- * pedidos, a resposta do D1 cai de ~520 KB para ~330 KB: menos JSON para o Worker ler.
+ * pedidos, a resposta do D1 cai de ~520 KB para ~330 KB: menos JSON para o Worker ler. O último item é a
+ * desconsideração do admin (D20): null no pedido que conta (5 bytes a mais por pedido) e, no desconsiderado,
+ * `[em, motivo, observação]` (o json_array interno mantém o subtipo JSON pelo CASE: vai como lista, não texto).
  */
 const COLUNAS_DO_PEDIDO = `json_array(p.id, p.campanha_id,
   CASE p.status WHEN 'approved' THEN 1 WHEN 'expired' THEN 2 ELSE 0 END,
   p.qtd_bilhetes, p.total_centavos, p.affiliate_id,
   CAST(strftime('%s', p.aprovado_em) AS INTEGER) * 1000 + CAST(substr(p.aprovado_em, 21, 3) AS INTEGER),
-  CASE p.origem WHEN 'conferencia' THEN 1 ELSE 0 END)`;
+  CASE p.origem WHEN 'conferencia' THEN 1 ELSE 0 END,
+  CASE WHEN p.desconsiderado_em IS NOT NULL
+    THEN json_array(p.desconsiderado_em, p.desconsiderado_motivo, p.desconsiderado_observacao) END)`;
 
 const STATUS_DA_TUPLA: readonly PedidoGravado["status"][] = [
   "in_process",
@@ -84,6 +93,7 @@ type TuplaDoPedido = [
   number | null,
   number | null,
   number,
+  [string, MotivoDesconsideracao, string | null] | null,
 ];
 
 const tupla = (linha: TuplaDoPedido): PedidoGravado => ({
@@ -95,6 +105,10 @@ const tupla = (linha: TuplaDoPedido): PedidoGravado => ({
   affiliate_id: linha[5],
   aprovado_ms: linha[6],
   origem: ORIGENS_DA_TUPLA[linha[7]],
+  desconsiderado:
+    linha[8] === null
+      ? null
+      : { em: linha[8][0], motivo: linha[8][1], observacao: linha[8][2] },
 });
 
 /** Os pedidos (de qualquer campanha) com os códigos do lote, como um texto JSON de tuplas. */
@@ -103,17 +117,24 @@ const SELECIONAR_ENCONTRADOS = `
   FROM json_each(?1) AS j
   JOIN pedidos AS p ON p.id = j.value`;
 
-const PAGOS_DA_CAMPANHA = "p.campanha_id = ?1 AND p.status = 'approved'";
+/**
+ * Os pagos da campanha que CONTAM (D20): sem os desconsiderados, para os totais do sistema baterem com o painel. O
+ * `desconsiderado_em IS NULL` repete o WHERE do índice parcial da 0008 (o da 0003 recriado): com ele, as somas
+ * leem só esse índice de cobertura; sem ele, iriam para o da 0007 (e o agrupamento por afiliado ganharia B-tree
+ * temporária). routes/reconciliacao-desempenho.test.ts trava os planos de SOMAR_PAGOS e SOMAR_POR_AFILIADO.
+ */
+const PAGOS_DA_CAMPANHA =
+  "p.campanha_id = ?1 AND p.status = 'approved' AND p.desconsiderado_em IS NULL";
 /** Com o período do arquivo em ?2 e ?3 (UTC, `[inicio, fim)`); null nos dois = sem recorte. */
 const NO_PERIODO =
   "(?2 IS NULL OR (p.aprovado_em >= ?2 AND p.aprovado_em < ?3))";
 const SOMAS = `count(*) AS pedidos, coalesce(sum(p.qtd_bilhetes), 0) AS bilhetes,
   coalesce(sum(p.total_centavos), 0) AS centavos`;
 
-const CONTAR_PAGOS_NO_PERIODO = `
+export const CONTAR_PAGOS_NO_PERIODO = `
   SELECT count(*) AS pedidos FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO}`;
 
-const SOMAR_PAGOS = `SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA}`;
+export const SOMAR_PAGOS = `SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA}`;
 
 /** Pagos da campanha que o arquivo não tem (?2: TODOS os códigos do arquivo, em JSON). */
 const FORA_DO_ARQUIVO = "p.id NOT IN (SELECT value FROM json_each(?2))";
@@ -249,10 +270,10 @@ export async function lerParaPorPedido(
   };
 }
 
-const SOMAR_PAGOS_NO_PERIODO = `
+export const SOMAR_PAGOS_NO_PERIODO = `
   SELECT ${SOMAS} FROM pedidos AS p WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO}`;
 
-const SOMAR_POR_AFILIADO = `
+export const SOMAR_POR_AFILIADO = `
   SELECT p.affiliate_id, ${SOMAS} FROM pedidos AS p
   WHERE ${PAGOS_DA_CAMPANHA} AND ${NO_PERIODO}
   GROUP BY p.affiliate_id`;
