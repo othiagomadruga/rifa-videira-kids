@@ -225,6 +225,9 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Item da hierarquia alterado",
       "Item da hierarquia removido",
       "Vendas recuperadas na conferência",
+      "Pedido desconsiderado",
+      "Pedido voltou a contar",
+      "Afiliado removido",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

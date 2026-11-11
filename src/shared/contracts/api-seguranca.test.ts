@@ -64,9 +64,10 @@ describe("GET /api/admin/pedidos/suspeitos", () => {
   });
 
   it("aceita a resposta do exemplo e recusa motivo fora da lista", () => {
+    // A resposta de hoje, sem a desconsideração (D20), sai com `desconsiderado: null`.
     expect(
       respostaPedidosSuspeitosSchema.parse({ itens: [suspeito], total: 1 }),
-    ).toEqual({ itens: [suspeito], total: 1 });
+    ).toEqual({ itens: [{ ...suspeito, desconsiderado: null }], total: 1 });
     expect(MOTIVOS_PEDIDO_SUSPEITO).toEqual([
       "quantidade_acima_do_teto",
       "total_acima_do_esperado",
@@ -110,11 +111,16 @@ describe("GET /api/admin/pedidos/suspeitos", () => {
         "celula_id",
         "celula_nome",
         "codigo",
+        // D20: a desconsideração do admin (motivo, observação curta e quando), sem quem fez.
+        "desconsiderado",
+        "em",
         "esperado_centavos",
         "itens",
         "marcado_em",
         "mensagem",
+        "motivo",
         "motivos",
+        "observacao",
         "ocorrencias",
         "pedido_id",
         "qtd_bilhetes",
@@ -160,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 13 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 16 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -178,6 +184,10 @@ describe("GET /api/admin/auditoria", () => {
       "hierarquia.remover",
       // RIFA-012 (D19): o "Recuperar" da conferência pelo CSV, quando grava.
       "conferencia.recuperar",
+      // Sprint 6 (D20): desconsiderar e reconsiderar pedido (RIFA-028) e remover afiliado (RIFA-031).
+      "pedido.desconsiderar",
+      "pedido.reconsiderar",
+      "afiliado.remover",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
     for (const acao of ACOES_AUDITORIA)

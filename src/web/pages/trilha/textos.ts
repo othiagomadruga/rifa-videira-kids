@@ -17,6 +17,10 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "link.revogar": "Link de acesso revogado",
   "acessos_hierarquia.gerar_links": "Links da hierarquia gerados",
   "conferencia.recuperar": "Vendas recuperadas na conferência",
+  // Sprint 6 (D20): as ações novas do contrato (a tela das regras vem na tarefa -web).
+  "pedido.desconsiderar": "Pedido desconsiderado",
+  "pedido.reconsiderar": "Pedido voltou a contar",
+  "afiliado.remover": "Afiliado removido",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */
