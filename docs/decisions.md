@@ -122,10 +122,10 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
     no `.git/config` ao alcance do `npm ci`, do build e do wrangler. Tudo conferido no texto do ci.yml e do
     package.json em `src/worker/config-publicacao.test.ts` (o projeto não tem parser de YAML; o leitor por linhas
     do teste foi conferido contra o PyYAML e recusa âncoras, aliases e fluxo).
-  - **Risco que continua (revisão da RIFA-019):** o token sai do ambiente do npm ci e do build, mas o job é o
-    mesmo: o que esses passos deixam no disco ou no `$GITHUB_ENV`/`$GITHUB_PATH` roda no "Publicar" com o
-    token. Exemplos conferidos na revisão: um `.npmrc` com `node-options=--require=<arquivo>` (o `npm run` passa
-    ao wrangler) e um `build.command` no `dist/rifa_videira_kids/wrangler.json` gerado (o `wrangler deploy` o
+  - **Risco que continua (revisão da RIFA-019; resolvido na RIFA-021, D18):** o token sai do ambiente do npm ci e
+    do build, mas o job é o mesmo: o que esses passos deixam no disco ou no `$GITHUB_ENV`/`$GITHUB_PATH` roda no
+    "Publicar" com o token. Exemplos conferidos na revisão: um `.npmrc` com `node-options=--require=<arquivo>`
+    (o `npm run` passa ao wrangler) e um `build.command` no `dist/rifa_videira_kids/wrangler.json` gerado (o `wrangler deploy` o
     executa); também um `node_modules/wrangler` alterado. Isolar de fato pede um job de publicação separado, que
     receba só o `dist/` como artefato e confira a configuração gerada. (A ordem "migrations antes de o deploy
     recusar a falta do build", apontada nesta revisão, foi resolvida com o `wrangler deploy --dry-run` na frente.)
@@ -351,3 +351,60 @@ A reunião lembrou que, em SA, "um mapa mostrava as vendas por DDD" e foi um "de
   baixaria para 1 por pedido aprovado da campanha (~5,6 mil), sem mudar o plano das vendas por dia do painel
   (conferido), ao custo de mais um índice a gravar e a travar nos testes de plano. Rota só da coordenação, sem
   cache e sem atualização automática: ficam os índices atuais; o índice é a saída se o uso crescer.
+
+## D18. Publicação num job separado, só com o build como artefato (RIFA-021, 2026-11-11)
+
+Fecha o risco que ficou na D11 (revisão da RIFA-019): no job `deploy`, o npm ci e o build rodavam no mesmo runner
+do passo com o token, e o que deixassem no disco rodava com ele.
+
+- **Dois jobs.** O `ci` (lint, typecheck, test, build) não tem segredo; depois do build roda
+  `node scripts/conferir-artefato.mjs` e guarda o `dist/` como artefato `build-producao` (`actions/upload-artifact`
+  v7.0.2, com os 2 arquivos ocultos do build, retenção de 1 dia e `overwrite` para o "Re-run all jobs"). O
+  `publicar` (só push na `main`, `needs: ci`, concorrência sem cancelar) não roda npm ci com scripts, `npx` nem o
+  build e não restaura cache: checkout sem credenciais (wrangler.jsonc, migrations, lockfile, o script), setup-node
+  sem cache, `npm ci --ignore-scripts`, download do artefato em `dist/` (`actions/download-artifact` v8.0.2) e a
+  mesma conferência, num passo sem o token. Só o "Publicar" recebe o token (`npm run deploy:publicar`: dry-run,
+  migrations, deploy); depois, o `/api/health`.
+- **Por que conferir o artefato:** o `wrangler deploy` segue o `dist/rifa_videira_kids/wrangler.json` gerado e
+  executa um `build.command` que esteja nele, até no `--dry-run` (provado na RIFA-021 com um artefato adulterado).
+  A conferência exige que esse arquivo seja o `wrangler.jsonc` do checkout lido pelo wrangler, com só as diferenças
+  do plugin (`main: index.js`, `no_bundle`, a regra de módulos ES, source maps, assets em `../client`, migrations
+  em `../../migrations`; sem `build`, `define` e `unsafe`). Qualquer outra diferença recusa: binding a mais, outro
+  banco, outra conta, rotas, containers. Recusa também `.dev.vars` e `.env` dentro do `dist/` (o plugin os copia
+  para o `vite preview`). O `.wrangler/deploy/config.json` não viaja: o script o escreve, com o conteúdo fixo que o
+  plugin grava. Se uma subida do wrangler e do plugin mudar o que o build gera, o job `ci` falha na conferência
+  ainda na branch: ajuste `configEsperada` junto.
+- **O artefato só escreve em `dist/`** (download com `path: dist`; o download-artifact v8 troca `..` nos caminhos
+  do zip). Um `.npmrc`, `package.json` ou `.env` (o wrangler carrega o `.env` da pasta onde roda) não chega à raiz.
+- **Integridade:** sem `github-token` nem `run-id`, o download só vê os artefatos do mesmo run, e confere o SHA-256
+  que o upload registrou (`digest-mismatch: error`, o padrão). É o que o job `ci` do mesmo commit guardou. Isso não
+  protege de um job `ci` comprometido (ele constrói o Worker de qualquer jeito); o que a separação garante é que o
+  token nunca está no runner do npm ci e do build, e que o artefato não faz o wrangler executar nada nem tocar outro
+  recurso da conta.
+- **Wrangler sem scripts de instalação:** `npm ci --ignore-scripts` instala as versões e os hashes do lockfile sem
+  rodar script nenhum; os binários do esbuild e do workerd vêm dos pacotes de plataforma do lockfile (os scripts
+  deles só conferem a instalação). Provado num diretório limpo só com o checkout e o artefato: o
+  `wrangler deploy --dry-run` passa e as migrations `--remote` chegam à rede (token fictício, endereço morto). O
+  wrangler executa o esbuild ao carregar; o workerd precisa estar instalado, mas não roda em nenhum dos dois (trocado
+  por um registrador que nunca foi chamado). Exceção: se a Cloudflare recusar o Worker por tempo de inicialização
+  (erro 10021), o wrangler sobe o workerd na máquina para medir a inicialização do `index.js`, dentro do isolamento
+  do workerd, que não recebe o ambiente do processo. Instalar só o `wrangler@4.156.1` resolveria as dependências
+  dele fora do lockfile: descartado.
+- **Sem ambiente do GitHub (revisão da RIFA-021):** o repositório é privado e o plano da conta do PO é
+  desconhecido. Pela documentação do GitHub ("Managing environments for deployment" e "Deployments and
+  environments"), no plano Free ambientes, segredos de ambiente e regras de branch só existem em repositório
+  público; o ambiente precisa existir antes de o workflow usá-lo, e criá-lo em repositório privado pede o Pro. O que
+  acontece com um job que declara um ambiente nesse caso não está documentado. Para a primeira publicação não
+  depender disso, o job não declara `environment:` e usa o segredo do repositório (que vale para todo job do
+  repositório). **Reforço com o GitHub Pro (opcional, depois do lançamento):** com o segredo só num ambiente
+  `producao` restrito à `main`, um workflow alterado noutra branch não lê o token. Ordem: o PO cria o ambiente
+  (**Settings → Environments → New environment** `producao`; **Deployment branches and tags → Selected branches
+  and tags →** `main`; **Environment secrets →** `CLOUDFLARE_API_TOKEN`); o SM põe `environment: producao` no job
+  `publicar`, troca a conferência do teste e faz o merge; o PO confere a publicação seguinte e só então apaga o
+  segredo do repositório.
+- **Sem o segredo**, o primeiro passo avisa ("publicação pulada") e todos os outros pulam: o workflow fica verde.
+- Travado em `src/worker/config-publicacao.test.ts` (ordem dos passos, token só no "Publicar" e só com o id da
+  conta ao lado, o `publicar` sem npm ci com scripts, `npx`, build ou cache, nenhum passo escrevendo no
+  `$GITHUB_ENV`/`$GITHUB_PATH`, sem `defaults`, `shell`, `working-directory` ou `continue-on-error`, o artefato do
+  mesmo run em `dist/`, actions por SHA, sem `environment:`) e em `scripts/conferir-artefato.test.mjs` (as
+  adulterações recusadas).

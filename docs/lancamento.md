@@ -43,7 +43,7 @@ Faça isto **só depois do bookmark do D1** (2.1): o token vai direto para o Git
 3. Em recursos da conta, deixe só a conta onde está o Worker `rifa-videira-kids`. Se a tela oferecer validade, uma data depois do fim da campanha (ex.: 31/01/2027) reduz o estrago de um vazamento.
 4. Copie o token **uma vez** e cole direto no GitHub (1.2). Não guarde em arquivo, e-mail ou WhatsApp. Se perder, gere outro.
 
-Onde fica: **só** no segredo `CLOUDFLARE_API_TOKEN` do repositório no GitHub. O id da conta Cloudflare não é segredo e já está no `.github/workflows/ci.yml`.
+Onde fica: **só** no segredo `CLOUDFLARE_API_TOKEN` do repositório no GitHub (1.2). O id da conta Cloudflare não é segredo e já está no `.github/workflows/ci.yml`.
 
 **c) Wrangler na sua máquina (para os comandos das seções 2 e 3).**
 
@@ -58,11 +58,13 @@ A sessão do Claude na nuvem também roda comandos D1 remotos (`CLAUDE.md`), ent
 
 ### 1.2 GitHub
 
-O CI publica na Cloudflare a cada push na `main`, depois dos testes (job **"publicar na Cloudflare"** do `ci.yml`). Sem o segredo, o job só avisa "Segredo CLOUDFLARE_API_TOKEN não configurado no repositório: publicação pulada".
+O CI publica na Cloudflare a cada push na `main`, depois dos testes. O job **"lint, typecheck, test, build"** constrói o site e o Worker sem segredo nenhum e guarda o build; o job **"publicar na Cloudflare"** recebe só esse build, confere e publica, e só o passo que publica recebe o token (`docs/decisions.md`, D18). Sem o segredo, o job de publicação só avisa "Segredo CLOUDFLARE_API_TOKEN não configurado no repositório: publicação pulada" e o CI fica verde.
 
 1. **Antes**, faça o bookmark do D1 (seção 2.1). Depois do segredo cadastrado, o próximo push na `main` já publica.
 2. No repositório: **Settings → Secrets and variables → Actions → New repository secret**.
 3. Nome: `CLOUDFLARE_API_TOKEN`. Valor: o token de 1.1 b. Salve.
+
+Funciona em qualquer plano do GitHub. **Reforço opcional, depois do lançamento e só com o GitHub Pro:** guardar o token num ambiente `producao` restrito à `main`, para que um workflow alterado noutra branch não consiga lê-lo. No plano Free, ambientes não existem em repositório privado. Se tiver o Pro e quiser, avise o SM: o passo a passo e a ordem (criar o ambiente, o SM ligar o ambiente no CI, só então apagar o segredo do repositório) estão na D18 do `docs/decisions.md`.
 
 Documentação oficial: **"Using secrets in GitHub Actions"** (GitHub Docs).
 
@@ -119,10 +121,10 @@ npx wrangler d1 migrations list DB --remote  # lista as migrações que ainda v�
 ### 2.2 Publicar
 
 1. **[SM]** Confira que a última execução do CI na `main` está verde.
-2. **[Thiago]** Com o bookmark anotado (2.1), crie o token (1.1 b) e cadastre direto no segredo `CLOUDFLARE_API_TOKEN` (1.2).
-3. **[SM]** Dispare a publicação com um push na `main` ou, sem nada novo para subir, no GitHub: **Actions** → a última execução da `main` → **Re-run jobs** → **Re-run all jobs**. Se o job de publicação ainda disser "publicação pulada", faça um push na `main` (o `ci.yml` não tem disparo manual).
+2. **[Thiago]** Com o bookmark anotado (2.1), crie o token (1.1 b) e cadastre direto no segredo `CLOUDFLARE_API_TOKEN` do repositório (1.2).
+3. **[SM]** Dispare a publicação com um push na `main` ou, sem nada novo para subir, no GitHub: **Actions** → a última execução da `main` → **Re-run jobs** → **Re-run all jobs**. Use **Re-run all jobs**: o build guardado pelo primeiro job vale só 1 dia, e o "all" o refaz. Se o job de publicação ainda disser "publicação pulada", faça um push na `main` (o `ci.yml` não tem disparo manual).
 
-O job de publicação constrói o site e o Worker (sem o token) e, no passo "Publicar" (`npm run deploy:publicar`), confere o que foi construído (`wrangler deploy --dry-run`), aplica as migrações no D1 remoto e publica. Depois consulta `/api/health` em produção até 6 vezes.
+O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist/`). O job de publicação instala as dependências sem rodar os scripts de instalação, baixa esse build, confere que a configuração gerada é a do `wrangler.jsonc` (`scripts/conferir-artefato.mjs`) e, só então, no passo "Publicar" (`npm run deploy:publicar`, o único com o token), confere o que foi construído (`wrangler deploy --dry-run`), aplica as migrações no D1 remoto e publica. Depois consulta `/api/health` em produção até 6 vezes.
 
 **A partir daqui, todo push na `main` publica.** Sugestão para a campanha: o SM só faz merge de correção, com a `main` verde e fora do horário do culto e dos picos de venda.
 
@@ -159,7 +161,7 @@ O job de publicação constrói o site e o Worker (sem o token) e, no passo "Pub
 
 ### 2.4 Se der errado
 
-- **O CI falhou antes de publicar:** nada foi ao ar. Isso inclui falha no build e no `wrangler deploy --dry-run` do passo "Publicar": as migrações nem rodaram. Corrija e faça outro push.
+- **O CI falhou antes de publicar:** nada foi ao ar. Isso inclui falha no build, nas conferências do build (passos "Conferir o build para a publicação" e "Conferir o build baixado") e no `wrangler deploy --dry-run` do passo "Publicar": as migrações nem rodaram. Corrija e faça outro push. Se a conferência acusar diferença sem ninguém ter mexido no `wrangler.jsonc`, chame o SM: pode ser uma versão nova do wrangler ou um build adulterado, e não se publica até entender.
 - **As migrações rodaram e a publicação falhou:** o banco ficou à frente do código. As migrações são aditivas; corrija e publique de novo.
 - **Voltar o banco ao ponto anotado** (apaga tudo o que foi gravado depois dele: pedidos, vínculos, acessos):
   ```sh
@@ -424,7 +426,7 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). **At
 - **Os links públicos** (`/` e `/telao`) não têm segredo: não há o que revogar.
 - **Vazou um token [Thiago]:**
   - `RIFEI_WEBHOOK_TOKEN`: gere outro e troque primeiro no Worker, depois na Rifei (3.2). As entregas entre os dois passos se perdem: confira pelo CSV (6.4).
-  - `CLOUDFLARE_API_TOKEN`: em **API Tokens** na Cloudflare, apague ou renove o token e cadastre o novo no GitHub (1.2).
+  - `CLOUDFLARE_API_TOKEN`: em **API Tokens** na Cloudflare, apague ou renove o token e cadastre o novo no segredo `CLOUDFLARE_API_TOKEN` do GitHub (1.2; no ambiente `producao`, se o reforço da D18 estiver ligado).
 
 ### 7.4 Um líder trocou (trocar acesso)
 
