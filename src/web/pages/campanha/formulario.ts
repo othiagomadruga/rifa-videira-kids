@@ -3,8 +3,13 @@
 // A validação é a do contrato (corpoSalvarCampanhaSchema), a mesma que a API aplica: aqui só se
 // lê o que foi digitado e se traduz cada problema para o campo certo.
 import {
+  ACESSO_PADRAO,
   FUSO_PADRAO,
+  LIMITE_CARACTERES_MENSAGEM,
+  MENSAGENS_PADRAO,
+  PEDIDOS_PADRAO,
   PUBLICO_PADRAO,
+  TIPOS_MENSAGEM,
   calcularCalendario,
   corpoSalvarCampanhaSchema,
   detalhesDeValidacao,
@@ -14,6 +19,7 @@ import {
   type DatasPeriodo,
   type DetalheValidacao,
   type RegraMeta,
+  type TipoMensagem,
   type UnidadeMeta,
 } from "../../../shared/contracts";
 import type { z } from "zod";
@@ -45,6 +51,12 @@ export type Formulario = {
   publico_mostra_percentual_meta: boolean;
   /** "" = todas as posições (null na API). */
   publico_limite_ranking: string;
+  /** Regras do admin (D20): desconsiderar pedido e o acesso de discipuladores e de redes. */
+  pedidos_desconsiderar: boolean;
+  acesso_discipuladores: boolean;
+  acesso_redes: boolean;
+  /** Os modelos das mensagens do link pessoal (RIFA-032), como digitados. */
+  mensagens: Record<TipoMensagem, string>;
 };
 
 /** Corpo do PUT já validado pelo contrato (espaços tirados, padrões aplicados). */
@@ -54,6 +66,9 @@ export type CorpoCampanha = z.output<typeof corpoSalvarCampanhaSchema>;
 export type ErrosFormulario = Record<string, string>;
 
 export const LIMITE_PERIODOS = 53;
+
+/** O botão "Usar o modelo de Santo André" (o resumo das regras leva a ele quando ainda não há períodos). */
+export const ID_MODELO_SANTO_ANDRE = "campanha-modelo-santo-andre";
 
 /** Campanha de referência de Santo André: 24 dias em 3 períodos de 10, 7 e 7 dias (35/25/45%). */
 export const MODELO_SANTO_ANDRE = [
@@ -102,6 +117,10 @@ export function formularioVazio(): Formulario {
     ranking_criterio: "",
     publico_mostra_percentual_meta: PUBLICO_PADRAO.mostra_percentual_meta,
     publico_limite_ranking: String(PUBLICO_PADRAO.limite_ranking),
+    pedidos_desconsiderar: PEDIDOS_PADRAO.desconsiderar,
+    acesso_discipuladores: ACESSO_PADRAO.discipuladores,
+    acesso_redes: ACESSO_PADRAO.redes,
+    mensagens: { ...MENSAGENS_PADRAO },
   };
 }
 
@@ -130,6 +149,10 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
       campanha.publico.limite_ranking === null
         ? ""
         : String(campanha.publico.limite_ranking),
+    pedidos_desconsiderar: campanha.pedidos.desconsiderar,
+    acesso_discipuladores: campanha.acesso.discipuladores,
+    acesso_redes: campanha.acesso.redes,
+    mensagens: { ...campanha.mensagens },
   };
 }
 
@@ -339,6 +362,13 @@ export function montarCorpo(formulario: Formulario): ResultadoMontagem {
           ? null
           : (lerInteiro(formulario.publico_limite_ranking) ?? -1),
     },
+    // Os três grupos vão sempre (D20): o grupo presente substitui o gravado.
+    pedidos: { desconsiderar: formulario.pedidos_desconsiderar },
+    acesso: {
+      discipuladores: formulario.acesso_discipuladores,
+      redes: formulario.acesso_redes,
+    },
+    mensagens: { ...formulario.mensagens },
   };
 
   const validacao = corpoSalvarCampanhaSchema.safeParse(corpo);
@@ -384,6 +414,15 @@ const MENSAGEM_DO_CAMPO: Record<string, string> = {
   "publico.mostra_percentual_meta": "Marque ou desmarque esta opção.",
   "publico.limite_ranking":
     "Use um número inteiro de 1 a 100, ou deixe em branco para mostrar todas.",
+  "pedidos.desconsiderar": "Marque ou desmarque esta opção.",
+  "acesso.discipuladores": "Marque ou desmarque esta opção.",
+  "acesso.redes": "Marque ou desmarque esta opção.",
+  ...Object.fromEntries(
+    TIPOS_MENSAGEM.map((tipo) => [
+      `mensagens.${tipo}`,
+      `Escreva a mensagem, com até ${formatarNumero(LIMITE_CARACTERES_MENSAGEM)} caracteres.`,
+    ]),
+  ),
 };
 
 /**
@@ -421,6 +460,14 @@ export function detalhesDoErro(detalhes: unknown): DetalheValidacao[] {
   );
 }
 
+/** O nome de cada mensagem do link pessoal (o rótulo do campo na tela). */
+export const ROTULO_MENSAGEM: Record<TipoMensagem, string> = {
+  link_coordenacao: "Mensagem do link da coordenação",
+  link_lider: "Mensagem do link do líder de célula",
+  link_discipulador: "Mensagem do link do discipulador",
+  link_rede: "Mensagem do link da rede",
+};
+
 const ROTULO_DO_CAMPO: Record<string, string> = {
   nome: "Nome da campanha",
   slug_rifei: "Slug da campanha na Rifei",
@@ -434,6 +481,12 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   "ranking.criterio": "Critério do ranking",
   "publico.mostra_percentual_meta": "Percentual da meta no ranking público",
   "publico.limite_ranking": "Posições no ranking público",
+  "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
+  "acesso.discipuladores": "Acesso dos discipuladores",
+  "acesso.redes": "Acesso das redes",
+  ...Object.fromEntries(
+    TIPOS_MENSAGEM.map((tipo) => [`mensagens.${tipo}`, ROTULO_MENSAGEM[tipo]]),
+  ),
 };
 
 const ROTULO_DO_PERIODO: Record<string, string> = {
@@ -456,6 +509,10 @@ const ORDEM_DOS_CAMPOS = [
   "ranking.criterio",
   "publico.mostra_percentual_meta",
   "publico.limite_ranking",
+  "pedidos.desconsiderar",
+  "acesso.discipuladores",
+  "acesso.redes",
+  ...TIPOS_MENSAGEM.map((tipo) => `mensagens.${tipo}`),
 ];
 const ORDEM_NO_PERIODO = ["nome", "dias", "percentual_bp"];
 

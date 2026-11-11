@@ -1,6 +1,11 @@
 // Conversões do formulário e mensagens de erro por campo.
 import { describe, expect, it } from "vitest";
 import {
+  ACESSO_PADRAO,
+  MENSAGENS_PADRAO,
+  PEDIDOS_PADRAO,
+} from "../../../shared/contracts";
+import {
   errosDosDetalhes,
   formularioVazio,
   lerInteiro,
@@ -116,6 +121,10 @@ describe("montarCorpo", () => {
         ],
         ranking: { criterio: "arrecadacao" },
         publico: { mostra_percentual_meta: false, limite_ranking: null },
+        // Regras do admin (D20): os três grupos vão sempre, com o que está no formulário.
+        pedidos: { ...PEDIDOS_PADRAO },
+        acesso: { ...ACESSO_PADRAO },
+        mensagens: { ...MENSAGENS_PADRAO },
       },
     });
   });
