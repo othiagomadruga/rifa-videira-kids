@@ -1776,8 +1776,12 @@ describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
     expect(respostaMapaDddSchema.safeParse(mapa).success).toBe(true);
     const invalidas: unknown[] = [
       { ...mapa, ufs: [{ ...mapa.ufs[0], uf: "XX" }] },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], uf: "XX" }] },
       { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "091" }] },
       { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 10_001 } },
+      { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 9999.5 } },
+      { ...mapa, exterior: { ...mapa.exterior, pedidos: -1 } },
+      { ...mapa, divisao: undefined },
       { ...mapa, ddds: [{ ...mapa.ddds[0], telefone: "+5591988887777" }] },
       { ...mapa, a_mais: 1 },
     ];

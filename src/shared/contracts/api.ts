@@ -813,7 +813,11 @@ export type RespostaRanking = z.infer<typeof respostaRankingSchema>;
 // ---------------------------------------------------------------------------------------------------
 
 export const consultaMapaDddSchema = z.object({
-  /** `campanha` (padrão) = do primeiro dia até hoje; `atual` = o período que contém hoje (como nos rankings). */
+  /**
+   * `campanha` (padrão) = do primeiro dia até hoje; `atual` = o período que contém hoje (como nos rankings).
+   * A venda conta pela mesma regra do painel (R6): aprovada, da campanha ativa, com o dia local de `aprovado_em`
+   * dentro da janela; a compra de teste de antes do início e a venda depois do fim não entram.
+   */
   periodo: z.enum(JANELAS_RANKING).default("campanha"),
   /** Só as vendas das células desta divisão (as vendas sem célula ficam de fora quando há divisão). */
   divisao: divisaoSchema.optional(),
@@ -825,7 +829,7 @@ const totaisMapaSchema = z.strictObject({
   pedidos: quantidadeSchema,
   bilhetes: quantidadeSchema,
   total_centavos: centavosSchema,
-  /** Pontos-base truncados; 0 quando o total não tem bilhete. */
+  /** Pontos-base truncados (a soma das partes pode ficar abaixo de 10000); 0 quando o total não tem bilhete. */
   parte_bilhetes_bp: percentualBpSchema.max(10_000),
 });
 
@@ -838,16 +842,16 @@ export const respostaMapaDddSchema = z.strictObject({
       uf: z.enum(UFS),
     }),
   ),
-  /** Os DDDs com venda (cada um da sua UF), na mesma ordem das UFs e, dentro delas, dos que mais venderam. */
+  /** Os DDDs com venda (cada um da sua UF), na mesma ordem das UFs e, dentro delas, dos que mais venderam (empate pelo DDD). */
   ddds: z.array(
     totaisMapaSchema.extend({
       ddd: dddSchema,
       uf: z.enum(UFS),
     }),
   ),
-  /** Compradores com telefone de outro país (código diferente de 55). */
+  /** Compradores com telefone de outro país (`pais` gravado e diferente de 55). */
   exterior: totaisMapaSchema,
-  /** Sem DDD gravado, ou com DDD fora da tabela da Anatel. */
+  /** Sem país (sem telefone ou fora do E.164: `pais` null), Brasil sem DDD, ou DDD fora da tabela da Anatel. */
   sem_ddd: totaisMapaSchema,
   /** Tudo o que entrou no recorte (= ufs + exterior + sem_ddd). */
   total: totaisMapaSchema,
