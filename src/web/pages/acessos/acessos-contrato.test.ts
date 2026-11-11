@@ -3,6 +3,7 @@
 // a consulta e o corpo que a tela monta para os acessos da hierarquia passam nos schemas das rotas.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ROTAS,
   FORMATO_TOKEN_ACESSO,
   LIMITE_ALVOS_POR_LOTE as LIMITE_DO_CONTRATO,
   PAPEIS,
@@ -29,6 +30,7 @@ import {
   gerarLinksHierarquia,
   listarAlvos,
 } from "./acessos-api";
+import { CAMINHO_CAMPANHA, CAMINHO_TELA_CAMPANHA } from "./regras";
 import { ALVO_DO_PAPEL, PAPEL_NO_PLURAL, RESPONSAVEL_DO_ALVO } from "./textos";
 
 afterEach(() => {
@@ -130,5 +132,32 @@ describe("cópias do contrato dos acessos da hierarquia (RIFA-014)", () => {
       ids: [100],
       revogar_anteriores: true,
     });
+  });
+});
+
+describe("as regras da campanha na tela Acessos (D20)", () => {
+  it("o caminho da campanha é o do contrato, e o aviso leva à tela Campanha", () => {
+    expect(ROTAS.obterCampanha).toMatchObject({
+      metodo: "GET",
+      caminho: CAMINHO_CAMPANHA,
+    });
+    expect(CAMINHO_TELA_CAMPANHA).toBe("/coordenacao/campanha");
+  });
+
+  it("do contrato, valores só dos módulos sem zod (regras.ts e calculos.ts); do resto, só tipos", () => {
+    const fontes = import.meta.glob<string>(
+      ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+      { query: "?raw", import: "default", eager: true },
+    );
+    expect(Object.keys(fontes)).toContain("./regras.ts");
+    for (const [arquivo, fonte] of Object.entries(fontes))
+      for (const [importacao, destino] of fonte.matchAll(
+        /^(?:import|export)\b[^;]*?from\s*"([^"]*shared\/contracts[^"]*)";/gm,
+      ))
+        expect(
+          /^(import|export) type /.test(importacao) ||
+            /shared\/contracts\/(regras|calculos)$/.test(destino),
+          `${arquivo}: ${importacao}`,
+        ).toBe(true);
   });
 });

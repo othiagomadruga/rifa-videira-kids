@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import type {
   ItemAcessoHierarquia,
   LinkAcesso,
@@ -29,12 +30,20 @@ import {
 import { DialogoDesativar, DialogoRevogar } from "./Dialogos";
 import { DialogoLinksGerados, DialogoTrocarAcesso } from "./DialogosHierarquia";
 import {
+  ACESSO_DO_PAPEL,
+  CAMINHO_TELA_CAMPANHA,
+  acessoLigado,
+  ehAcaoDesligada,
+  type RegrasDosAcessos,
+} from "./regras";
+import {
   ALVO_DO_PAPEL,
   PAPEL_NO_PLURAL,
   avisoDeOutraPessoa,
   mensagemAoGerarLinks,
   precisaDeLink,
   situacaoDoAcesso,
+  textoAcessoDesligado,
   textoDaSituacao,
   textoDosAparelhos,
 } from "./textos";
@@ -55,13 +64,22 @@ export const idBotaoNovoLink = (alvoId: number) =>
   `acessos-hierarquia-novo-${alvoId}`;
 export const idBotaoAtivoDoAlvo = (alvoId: number) =>
   `acessos-hierarquia-ativo-${alvoId}`;
+/** O aviso do acesso desligado: descreve os botões de gerar link, que ficam indisponíveis. */
+export const ID_AVISO_DESLIGADO = "acessos-hierarquia-desligado";
+
+type Props = {
+  /** As regras da campanha (D20): o acesso de cada papel e os modelos das mensagens. */
+  regras: RegrasDosAcessos;
+  /** Um 409 `acao_desligada` disse que o acesso do papel foi desligado (com a tela aberta). */
+  aoDesligar: (papel: PapelHierarquia) => void;
+};
 
 // Acessos de líderes, discipuladores e redes (só admin, RIFA-014): todos os alvos do papel escolhido, com a
 // pessoa que deve receber o link, o telefone (líder), a situação do acesso e os aparelhos conectados. Gera os
 // links de quem ainda não tem num lote só, um link novo por linha e "Trocar acesso" (revoga os anteriores:
 // o aparelho antigo sai). Os links aparecem uma vez só, num diálogo, com "Copiar mensagem" e "Abrir no
 // WhatsApp", e são esquecidos ao fechar. Desativar, reativar e revogar usam as rotas que a tela já tem.
-export function AcessosHierarquia() {
+export function AcessosHierarquia({ regras, aoDesligar }: Props) {
   const [papel, setPapel] = useState<PapelHierarquia>("lider");
   const [carga, setCarga] = useState<Carga>({
     papel,
@@ -120,13 +138,15 @@ export function AcessosHierarquia() {
   const erro = carga.papel === papel ? carga.erro : null;
   const semLink = dados?.filter(precisaDeLink) ?? [];
   const lote = semLink.slice(0, LIMITE_ALVOS_POR_LOTE);
+  // D20: com o acesso do papel desligado na Campanha, não se gera nem se manda link dele.
+  const ligado = acessoLigado(regras, papel);
 
   async function gerar(
     chave: Ocupado["chave"],
     ids: number[],
     oQue: string,
   ): Promise<void> {
-    if (acaoEmAndamento.current || ids.length === 0) return;
+    if (acaoEmAndamento.current || ids.length === 0 || !ligado) return;
     acaoEmAndamento.current = true;
     setOcupado({ chave, acao: "gerando" });
     try {
@@ -139,9 +159,10 @@ export function AcessosHierarquia() {
           : `${formatarNumero(itens.length)} links gerados.`,
       );
     } catch (falha) {
+      if (ehAcaoDesligada(falha)) aoDesligar(papel);
       avisar(
         "perigo",
-        `Não foi possível gerar ${oQue}: ${mensagemAoGerarLinks(falha)}`,
+        `Não foi possível gerar ${oQue}: ${mensagemAoGerarLinks(falha, papel)}`,
       );
     } finally {
       acaoEmAndamento.current = false;
@@ -246,6 +267,7 @@ export function AcessosHierarquia() {
         <AcoesDoAlvo
           item={item}
           ocupado={ocupado}
+          ligado={ligado}
           aoNovoLink={() =>
             void gerar(
               item.alvo.id,
@@ -295,13 +317,16 @@ export function AcessosHierarquia() {
                 "os links",
               )
             }
-            aria-disabled={lote.length === 0 || ocupado !== null || undefined}
+            aria-disabled={
+              lote.length === 0 || ocupado !== null || !ligado || undefined
+            }
+            aria-describedby={ligado ? undefined : ID_AVISO_DESLIGADO}
           >
             {ocupado?.chave === "lote"
               ? "Gerando…"
               : `Gerar links para quem ainda não tem (${formatarNumero(lote.length)})`}
           </Button>
-          {dados && (
+          {dados && ligado && (
             <p className="acessos-suave">
               {semLink.length === 0
                 ? "Todos os ativos já têm link válido."
@@ -312,6 +337,25 @@ export function AcessosHierarquia() {
           )}
         </div>
       </div>
+      {!ligado && papel !== "lider" && (
+        <div id={ID_AVISO_DESLIGADO}>
+          <Aviso
+            tom="alerta"
+            titulo={textoAcessoDesligado(papel)}
+            anuncio="nenhum"
+          >
+            <p>
+              Por enquanto,{" "}
+              {papel === "rede" ? "as redes" : "os discipuladores"} não entram
+              no sistema e não dá para gerar nem mandar links para{" "}
+              {papel === "rede" ? "elas" : "eles"}. Nada foi revogado: quando{" "}
+              {ACESSO_DO_PAPEL[papel]} for religado na{" "}
+              <Link to={CAMINHO_TELA_CAMPANHA}>tela Campanha</Link>, os links já
+              mandados voltam a valer.
+            </p>
+          </Aviso>
+        </div>
+      )}
       {/* Região viva fixa: anuncia o resultado de cada ação. */}
       <p className="visualmente-oculto" role="status">
         {resultado?.texto ?? ""}
@@ -363,6 +407,7 @@ export function AcessosHierarquia() {
       {gerados && (
         <DialogoLinksGerados
           itens={gerados}
+          mensagens={regras.mensagens}
           aoFechar={() => setGerados(null)}
         />
       )}
@@ -373,6 +418,7 @@ export function AcessosHierarquia() {
           aoFechar={() => setTroca(null)}
           aoConcluir={(itens) => aoTrocar(troca, itens)}
           aoDesatualizar={recarregar}
+          aoDesligada={() => aoDesligar(papel)}
         />
       )}
       {revogacao && revogacao.item.usuario && (
@@ -452,6 +498,7 @@ function Situacao({ item }: { item: ItemAcessoHierarquia }) {
 function AcoesDoAlvo({
   item,
   ocupado,
+  ligado,
   aoNovoLink,
   aoTrocar,
   aoRevogar,
@@ -460,6 +507,8 @@ function AcoesDoAlvo({
 }: {
   item: ItemAcessoHierarquia;
   ocupado: Ocupado | null;
+  /** O acesso do papel está ligado na Campanha (D20); desligado, gerar e trocar ficam indisponíveis. */
+  ligado: boolean;
   aoNovoLink: () => void;
   aoTrocar: () => void;
   aoRevogar: (link: LinkAcesso) => void;
@@ -479,14 +528,21 @@ function AcoesDoAlvo({
   const seDisponivel = (acao: () => void) => (): void => {
     if (ocupado === null) acao();
   };
+  // Gerar e trocar o link: também indisponíveis com o acesso do papel desligado (o aviso no topo explica).
+  const semLink = ocupada ?? (!ligado || undefined);
+  const seLigado = (acao: () => void) => (): void => {
+    if (ocupado === null && ligado) acao();
+  };
+  const descricaoSemLink = ligado ? undefined : ID_AVISO_DESLIGADO;
   return (
     <div className="acessos-acoes-linha">
       {situacao.tipo !== "desativado" && (
         <Button
           id={idBotaoNovoLink(alvo.id)}
           variante="secundario"
-          onClick={seDisponivel(aoNovoLink)}
-          aria-disabled={ocupada}
+          onClick={seLigado(aoNovoLink)}
+          aria-disabled={semLink}
+          aria-describedby={descricaoSemLink}
         >
           {acaoAqui === "gerando" ? "Gerando…" : "Novo link"}{" "}
           <span className="visualmente-oculto">para {alvo.nome}</span>
@@ -495,8 +551,9 @@ function AcoesDoAlvo({
       {situacao.tipo === "valido" && (
         <Button
           variante="secundario"
-          onClick={seDisponivel(aoTrocar)}
-          aria-disabled={ocupada}
+          onClick={seLigado(aoTrocar)}
+          aria-disabled={semLink}
+          aria-describedby={descricaoSemLink}
         >
           Trocar acesso{" "}
           <span className="visualmente-oculto">de {alvo.nome}</span>

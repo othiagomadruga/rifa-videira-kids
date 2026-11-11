@@ -7,6 +7,12 @@
 // respostas passam pelos schemas do contrato.
 import { vi } from "vitest";
 import {
+  ACESSO_PADRAO,
+  CHAVE_DE_ACESSO_DO_PAPEL,
+  MENSAGENS_PADRAO,
+  PUBLICO_PADRAO,
+  respostaCampanhaSchema,
+  type Campanha,
   consultaAcessosHierarquiaSchema,
   corpoGerarLinksHierarquiaSchema,
   linkAcessoCriadoSchema,
@@ -283,6 +289,29 @@ export function criarApiFalsa(
   const marcadas: { metodo: string; caminho: string; responder: Responder }[] =
     [];
   let proximoId = 1000;
+  /**
+   * As regras da campanha (D20) que GET /api/admin/campanha devolve; null = sem campanha (404, valem os padrões).
+   * Pode mudar com a tela aberta (ex.: desligar o acesso das redes antes de gerar).
+   */
+  const regras: {
+    campanha: Pick<Campanha, "acesso" | "mensagens"> | null;
+  } = { campanha: null };
+
+  /** 409 `acao_desligada` se o papel é discipulador ou rede e o acesso dele está desligado. */
+  function acessoDesligado(papel: PapelHierarquia): Response | null {
+    if (papel === "lider" || !regras.campanha) return null;
+    const chave = CHAVE_DE_ACESSO_DO_PAPEL[papel];
+    return regras.campanha.acesso[chave]
+      ? null
+      : respostaErro(
+          409,
+          "acao_desligada",
+          "O acesso está desligado na campanha",
+          {
+            chave: `acesso.${chave}`,
+          },
+        );
+  }
 
   /** O link como a criação devolve (com a URL) e como a lista mostra (sem ela). */
   function novoLink(): { criado: LinkAcessoCriado; listado: LinkAcesso } {
@@ -324,6 +353,8 @@ export function criarApiFalsa(
       return respostaErro(400, "requisicao_invalida", "Dados inválidos");
     }
     const { papel, ids, revogar_anteriores } = lido.data;
+    const desligado = acessoDesligado(papel);
+    if (desligado) return desligado;
     const itens = ids.map((id) =>
       alvos[papel].find((item) => item.alvo.id === id),
     );
@@ -385,6 +416,15 @@ export function criarApiFalsa(
     corpo,
     consulta,
   }: Chamada): Response {
+    if (caminho === "/api/admin/campanha" && metodo === "GET") {
+      return regras.campanha
+        ? respostaJson(campanhaFicticia(regras.campanha))
+        : respostaErro(
+            404,
+            "nao_encontrado",
+            "A campanha ainda não foi configurada",
+          );
+    }
     if (caminho === "/api/admin/acessos-hierarquia" && metodo === "GET") {
       const lida = consultaAcessosHierarquiaSchema.safeParse(
         Object.fromEntries(new URLSearchParams(consulta)),
@@ -439,6 +479,8 @@ export function criarApiFalsa(
       }
       const links = (pessoa ?? daHierarquia?.usuario)?.links ?? [];
       if (usuarioId[2] && metodo === "POST") {
+        const desligado = daHierarquia && acessoDesligado(daHierarquia.papel);
+        if (desligado) return desligado;
         const { criado, listado } = novoLink();
         links.unshift(listado);
         return respostaJson(
@@ -537,6 +579,7 @@ export function criarApiFalsa(
 
   return {
     fetch: fetchFalso,
+    regras,
     pessoas,
     alvos,
     chamadas,
@@ -558,3 +601,37 @@ export function criarApiFalsa(
 }
 
 export type ApiFalsa = ReturnType<typeof criarApiFalsa>;
+
+/** Uma campanha fictícia com as regras do admin dadas (o resto não importa à tela Acessos). */
+export function campanhaFicticia(
+  regras: Partial<Pick<Campanha, "acesso" | "mensagens">> = {},
+): Campanha {
+  return respostaCampanhaSchema.parse({
+    id: 1,
+    nome: "Rifa Ficticia",
+    slug_rifei: "rifa-ficticia",
+    fuso_horario: "America/Belem",
+    data_inicio: "2026-11-23",
+    data_fim: "2026-12-16",
+    preco_bilhete_centavos: 2000,
+    meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
+    periodos: [
+      {
+        ordem: 1,
+        nome: "Período 1",
+        dias: 24,
+        percentual_bp: 10000,
+        data_inicio: "2026-11-23",
+        data_fim: "2026-12-16",
+      },
+    ],
+    soma_percentuais_bp: 10000,
+    ranking: { criterio: "percentual_meta" },
+    publico: { ...PUBLICO_PADRAO },
+    pedidos: { desconsiderar: false },
+    acesso: { ...ACESSO_PADRAO, ...regras.acesso },
+    mensagens: { ...MENSAGENS_PADRAO, ...regras.mensagens },
+    criado_em: "2026-11-06T18:00:00.000Z",
+    atualizado_em: "2026-11-06T18:00:00.000Z",
+  });
+}
