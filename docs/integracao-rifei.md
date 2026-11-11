@@ -27,7 +27,7 @@ Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e
 
 O webhook é da **conta**, não da campanha. Por isso ele recebe pedidos de todas as campanhas da conta, e o sistema filtra pelo `slug` da campanha configurada (D5).
 
-1. Gerar um token forte, só para isso. Exemplo: `openssl rand -base64 32`.
+1. Gerar um token forte, só para isso. Exemplo: `openssl rand -hex 32` (só letras e números, sem `+`, `/` ou `=`; lançamento, seção 3.2).
 2. Guardar o token como segredo do Worker, sem versionar: `wrangler secret put RIFEI_WEBHOOK_TOKEN`. Para desenvolvimento local, ele vai no `.dev.vars`, que está no `.gitignore`.
 3. Na Rifei: menu do usuário → **Integrações** → seção **Outro** → **Adicionar** (webhook).
    - **URL**: `https://<domínio do Worker>/api/webhooks/rifei`. Com barra no fim também funciona (`CAMINHOS_WEBHOOK_RIFEI`). A URL precisa aceitar POST com corpo JSON.
@@ -219,7 +219,7 @@ Antes do primeiro dia de vendas, com uma campanha de teste, uma segunda conta co
 10. Se o slug muda quando a campanha é renomeada (o filtro D5 depende dele).
 11. O tempo de reserva até expirar (`expires_at − created_at`), que define o volume de `expired_order`.
 12. Se a Rifei manda um teste ao adicionar o webhook (o artigo do n8n fala em "teste de webhook") e o que ele contém. Se a Rifei recusar o webhook por causa da resposta do sistema, anote a mensagem e passe ao SM.
-13. Onde a Efí é adicionada (na conta ou em cada campanha) e os nomes dos campos do certificado e da chave Pix na janela "Adicionar Efí" (seção 12.2, passo E).
+13. Onde a Efí é adicionada (na conta ou em cada campanha) e o nome do campo da chave Pix na janela "Adicionar Efí" (seção 12.2, passo E).
 
 Os payloads reais capturados devem virar fixtures novas, com os dados pessoais trocados por fictícios antes do commit.
 
@@ -279,11 +279,11 @@ Outros casos:
 
 ## 12. Rifei e Efí: passo a passo para o PO
 
-Roteiro para o PO configurar a Rifei e a Efí de uma vez, quase tudo pelo celular. Só o certificado e a aplicação da Efí (12.2, passos B e C) pedem a plataforma web, no navegador.
+Roteiro para o PO configurar a Rifei e a Efí de uma vez, quase tudo pelo celular. A exceção é ligar a Efí (12.2, passos B, C e E): faça num computador, no navegador, com a Efí e o painel da Rifei ([app.rifei.com.br](https://app.rifei.com.br)) abertos em abas. Assim o certificado baixado em B vai direto para a Rifei em E, sem passar por WhatsApp ou e-mail.
 
 - Tudo foi conferido nas fontes oficiais em **11/11/2026**, e cada passo traz o link. Os nomes entre aspas são os da fonte.
 - **NÃO DOCUMENTADO** quer dizer que a fonte oficial não diz. Confira na tela ou pergunte ao suporte da Rifei (12.7).
-- Nenhuma credencial (Client Secret, certificado, token do webhook, senha) vai para este repositório, o DevMission ou o WhatsApp de grupo.
+- Nenhuma credencial (Client Secret, certificado, token do webhook, senha) vai para este repositório, o DevMission, o WhatsApp ou o e-mail.
 
 Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → campanha (12.1) → ligar a Efí (12.2 B a E) → webhook (12.4, depois do segredo do Worker) → afiliados (12.3) → compra de teste (lançamento, seção 4).
 
@@ -310,7 +310,7 @@ Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → 
 
 O artigo oficial da Rifei é [Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank). Ele pede uma conta Efí Pro ou Empresas, uma aplicação com permissões do Pix, um certificado e uma chave Pix. Abaixo, na ordem: A (conta), B (certificado), C (aplicação), D (chave Pix) e E (colar na Rifei). A Efí diz que a API Pix precisa de um certificado ativo, por isso aqui o certificado vem antes da aplicação ([Como criar uma nova aplicação](https://sejaefi.com.br/central-de-ajuda/api/como-criar-uma-nova-aplicacao-para-usar-a-api-pix)).
 
-**Que conta Efí serve.** A Rifei pede Efí Pro ou Efí Empresas ([Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank)). A conta pessoal "Efí Para você" não basta.
+**Que conta Efí serve.** A Rifei pede **Efí Pro ou Efí Empresas** ([Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank)). A conta pessoal "Efí Para você" não basta.
 
 - **Efí Pro:** conta de pessoa física (CPF), para quem vende sem CNPJ ([Efí Pro é PF ou PJ?](https://sejaefi.com.br/central-de-ajuda/efi-bank/efi-pro-e-uma-conta-digital-pf-ou-pj)).
 - **Efí Empresas:** conta de pessoa jurídica (CNPJ) ([Como abrir uma conta para empresas?](https://sejaefi.com.br/central-de-ajuda/efi-bank/como-abrir-uma-conta-para-empresas)).
@@ -338,14 +338,23 @@ Já tem "Efí Para você" (CPF)?
 
 1. Clique em "API" e, no menu lateral, em "Meus certificados". Escolha **Produção**.
 2. Clique em "Criar novo certificado", dê um nome, clique em "Criar certificado" e valide a operação.
-3. Clique em **"Baixar certificado"** na hora: é a **única chance** de baixar. Se perder o arquivo, crie outro (a Efí limita a 5 certificados ao mesmo tempo; apague os inativos se precisar).
+3. Clique em **"Baixar certificado"** na hora: é a **única chance** de baixar. A tela avisa: "Não é possível realizar este download em outro momento" (imagem do artigo da Rifei). Se perder o arquivo (`.p12`), crie outro: a Efí permite até 5 certificados por ambiente; apague os inativos se precisar.
+   - A mesma tela pede para "monitorar a data de expiração". A validade do certificado: NÃO DOCUMENTADO nas fontes lidas. Confira na Efí que ela passa do fim da campanha.
 
 **C. Criar a aplicação e copiar as chaves (plataforma web).** Fontes: [Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank), [Como criar uma nova aplicação](https://sejaefi.com.br/central-de-ajuda/api/como-criar-uma-nova-aplicacao-para-usar-a-api-pix) e [Como obter as chaves Client Id e Client Secret](https://sejaefi.com.br/central-de-ajuda/api/como-obter-chaves-client-id-e-client-secret-na-api).
 
 1. Clique em "API" → "Aplicações" → "Criar aplicação". O nome é livre, só para identificar.
-2. Nas permissões, abra "API Pix" e marque: Alterar cobranças, Consultar cobranças, Alterar Pix, Consultar Pix, Enviar Pix, Alterar Webhooks, Consultar Webhooks, Alterar Payloads, Consultar Payloads, Alterar Configurações da API, Consultar Configurações da API, Alterar cobranças com vencimento e Consultar cobranças com vencimento. A imagem do artigo da Rifei mostra esses itens marcados em Produção e em Homologação.
+2. Nas permissões, abra "API Pix" e marque estes 13 itens (a imagem do artigo da Rifei mostra todos marcados em Produção e em Homologação):
+   - Alterar cobranças e Consultar cobranças;
+   - Alterar Pix, Consultar Pix e Enviar Pix;
+   - Alterar Webhooks e Consultar Webhooks;
+   - Alterar Payloads e Consultar Payloads;
+   - Alterar Configurações da API e Consultar Configurações da API;
+   - Alterar cobranças com vencimento e Consultar cobranças com vencimento.
+
+   Na mesma imagem ficam desmarcados os de chaves aleatórias, saldo e relatórios.
 3. Clique em "Criar aplicação" e valide a operação.
-4. Abra a aplicação e, na aba **Produção**, copie a "Chave Client ID" e a "Chave Client Secret".
+4. Abra a aplicação e, na aba **Produção**, copie a "Chave Client ID" e a "Chave Client Secret", uma de cada vez, e **cole direto na Rifei** (passo E). Não salve em arquivo, nota ou print, e não mande por mensagem.
 
 **D. Criar a chave Pix.** Fonte: [Como cadastrar minhas chaves do Pix?](https://sejaefi.com.br/central-de-ajuda/pix/como-cadastrar-chaves-pix)
 
@@ -355,8 +364,14 @@ Já tem "Efí Para você" (CPF)?
 
 **E. Colar na Rifei.** Fonte: [Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank).
 
-1. No painel da Rifei, adicione a Efí como forma de pagamento. Onde fica: NÃO DOCUMENTADO. A Rifei só diz que as formas de pagamento são adicionadas no painel administrativo ([dúvidas frequentes](https://rifei.com.br/#faq)). A imagem do artigo mostra a janela "Adicionar Efí", com os campos "Chave Client ID" e "Chave Secret".
-2. Cole a Client ID e a Client Secret de Produção, envie o certificado baixado em B e informe a chave Pix de D. Os nomes dos campos do certificado e da chave: NÃO DOCUMENTADO.
+1. No painel da Rifei, adicione a Efí como forma de pagamento. Onde fica: NÃO DOCUMENTADO. A Rifei só diz que as formas de pagamento são adicionadas no painel administrativo ([dúvidas frequentes](https://rifei.com.br/#faq)). As imagens do artigo mostram a janela "Adicionar Efí".
+2. Preencha, com as chaves de **Produção** copiadas em C:
+   - "Chave Client ID": a Client ID;
+   - "Chave Secret": a Client Secret;
+   - "Certificado": o arquivo baixado em B ("Arraste a chave aqui ou clique para procurar", `.p12` de até 8 KB);
+   - a chave Pix de D. O nome deste campo: NÃO DOCUMENTADO.
+
+   Toque em "Adicionar".
 3. O artigo termina com "a sua campanha já estará configurada para receber pagamentos no seu Efí". A prova é a compra de teste (lançamento, seção 4).
 
 **Custos e cuidados**
@@ -401,7 +416,8 @@ O caminho do roteiro confere com [Como adicionar um webhook](https://rifei.com.b
 
 1. Ícone do usuário, no canto superior direito → "Integrações".
 2. Role até a seção "Outro" e toque em "Adicionar" no webhook.
-3. Preencha "URL", "Token" (opcional; vai como `Authorization: Bearer`) e "Eventos": "Novo pedido", "Pedido pago" e "Pedido expirado".
+3. Preencha "URL", "Token" e "Eventos": "Novo pedido", "Pedido pago" e "Pedido expirado".
+   - A Rifei chama o token de opcional (ele vai como `Authorization: Bearer`), mas **para o sistema ele é obrigatório**: sem ele, toda entrega recebe 401 e se perde (seção 2).
 4. Toque em "Adicionar".
 
 Os valores do sistema estão na seção 1 e no lançamento, seção 3.2. Duas observações:
@@ -423,7 +439,7 @@ As demais colunas ainda faltam (seção 9, item 9).
 **Na Rifei.** A Central de Ajuda não tem artigo sobre estorno, reembolso ou cancelamento de pedido. Os [Termos de uso](https://rifei.com.br/ajuda/outros/termos-de-uso) dizem:
 
 - a Rifei não tem obrigação de fazer reembolso, e "os Organizadores são os únicos responsáveis pela entrega dos itens e pela oferta de reembolsos" (itens 7.4 e 7.5);
-- pedido "pago" reservado há 7 dias ou mais fica bloqueado e não pode ser removido (item 5.7);
+- **pedido "pago" reservado há 7 dias ou mais fica bloqueado e não pode ser removido** (item 5.7);
 - depois do sorteio, ou com todos os bilhetes vendidos, não dá mais para editar nem remover pedidos (item 5.9).
 
 Como remover ou alterar um pedido no painel: NÃO DOCUMENTADO.
@@ -433,13 +449,13 @@ Como remover ou alterar um pedido no painel: NÃO DOCUMENTADO.
 - No app: "Menu" → "Extrato" → toque na transação → "Devolver valor" → informe o valor → "Continuar" → "Autorizar devolução" → confirme com a Assinatura Eletrônica.
 - Na web: "Menu" → "Extrato" → três pontinhos da transação → "Detalhar" → "Devolver valor recebido via Pix" → informe o valor → "Autorizar devolução" → confirme com o Autenticador Efí e a Assinatura Eletrônica.
 
-**No sistema.** A Rifei só avisa pedido novo, pago e expirado ([Referência do webhook](https://rifei.com.br/ajuda/webhook/referencia-do-webhook)). Estorno ou remoção na Rifei não chega ao sistema: use a ação "desconsiderar pedido" do sistema, quando ela estiver no ar.
+**No sistema.** A Rifei só avisa pedido novo, pago e expirado ([Referência do webhook](https://rifei.com.br/ajuda/webhook/referencia-do-webhook)). Estorno ou remoção na Rifei não chega ao sistema: use a ação "desconsiderar pedido" do sistema (RIFA-028), quando ela estiver no ar.
 
-Ordem: devolva na Efí → remova ou ajuste o pedido na Rifei, se der (antes de 7 dias) → desconsidere o pedido no sistema.
+Ordem: devolva na Efí → remova ou ajuste o pedido na Rifei, se der (**antes de 7 dias** da reserva) → desconsidere o pedido no sistema.
 
 ### 12.7 Perguntas prontas para o suporte da Rifei
 
-O suporte da Rifei atende pelo WhatsApp, de segunda a sábado ([Preços](https://rifei.com.br/precos); o link fica no topo de [rifei.com.br/ajuda](https://rifei.com.br/ajuda)). Mande de uma vez:
+O suporte da Rifei atende pelo WhatsApp, de segunda a sábado, das 9h às 21h (horário de Brasília) ([Preços](https://rifei.com.br/precos) e [rifei.com.br/ajuda](https://rifei.com.br/ajuda), onde o link fica no topo). Mande de uma vez:
 
 1. Onde, no painel, eu ligo os afiliados numa campanha e gero o link de convite de cada afiliado?
 2. Onde o afiliado acha o link dele para divulgar? Qual o formato desse link?
