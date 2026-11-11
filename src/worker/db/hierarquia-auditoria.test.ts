@@ -154,7 +154,7 @@ describe("PUT com outra gravação no meio", () => {
       ok: false,
       codigo: "em_uso",
       mensagem:
-        "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.",
+        "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: a lista foi atualizada; confira e tente de novo.",
     });
     const gravada = await env.DB.prepare(
       "SELECT qtd_pessoas FROM celulas WHERE id = ?1",
@@ -262,5 +262,39 @@ describe("DELETE com outra gravação no meio", () => {
         .bind(acessoId)
         .first(),
     ).toBeNull();
+  });
+
+  it("a referência que recusou o lote some antes da conferência: 409 em_uso com a lista atualizada, nada apagado nem registrado", async () => {
+    const afiliado = 990_271;
+    const { db, lotes } = bancoComConcorrente(async (lote) => {
+      // Lote 1 (o DELETE): outra gravação vincula um afiliado à célula, e a FK RESTRICT recusa.
+      // Lote 2 (a conferência do motivo): o afiliado já foi desvinculado.
+      if (lote === 1)
+        await env.DB.prepare(
+          "INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em) VALUES (?1, ?2, 'manual', ?3)",
+        )
+          .bind(afiliado, celula.id, new Date().toISOString())
+          .run();
+      else
+        await env.DB.prepare("DELETE FROM afiliados WHERE affiliate_id = ?1")
+          .bind(afiliado)
+          .run();
+    }, 2);
+
+    const resultado = await removerCelula(db, celula.id, autoria());
+
+    expect(lotes()).toBe(2);
+    expect(resultado).toEqual({
+      ok: false,
+      codigo: "em_uso",
+      mensagem:
+        "A exclusão foi recusada por uma referência que mudou enquanto isso: a lista foi atualizada; confira e tente de novo.",
+    });
+    expect(
+      await env.DB.prepare("SELECT id FROM celulas WHERE id = ?1")
+        .bind(celula.id)
+        .first(),
+    ).toEqual({ id: celula.id });
+    expect(await trilhaDo(`celula:${celula.id}`)).toEqual([]);
   });
 });

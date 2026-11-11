@@ -521,7 +521,7 @@ describe("CA2: editar e excluir", () => {
 
   it("409 em_uso ao salvar (outra gravação ao mesmo tempo) mostra a mensagem da API e recarrega as listas sozinha", async () => {
     const mensagem =
-      "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.";
+      "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: a lista foi atualizada; confira e tente de novo.";
     const api = criarApiFalsa();
     // Outra pessoa renomeou a célula Fé enquanto esta edição estava aberta.
     api.proxima("PUT", "/api/admin/celulas/101", () => {
@@ -697,7 +697,7 @@ describe("CA2: editar e excluir", () => {
       nome: "Célula Fé",
       caminho: "/api/admin/celulas/102",
       mensagem:
-        "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: atualize a página e tente de novo.",
+        "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: a lista foi atualizada; confira e tente de novo.",
       recarrega: true,
     },
     {
@@ -706,7 +706,7 @@ describe("CA2: editar e excluir", () => {
       nome: "Rede Jovem Norte",
       caminho: "/api/admin/redes/1",
       mensagem:
-        "A exclusão foi recusada por uma referência que mudou enquanto isso: atualize a página e tente de novo.",
+        "A exclusão foi recusada por uma referência que mudou enquanto isso: a lista foi atualizada; confira e tente de novo.",
       recarrega: true,
     },
   ] as const)(
