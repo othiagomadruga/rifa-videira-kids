@@ -1,0 +1,81 @@
+/* Tela Trilha (RIFA-024): a tabela da trilha de auditoria (cartões no celular, abaixo de 48rem, como as outras)
+   e o rodapé com a contagem e o "Carregar mais". Vem junto com TrilhaDeAuditoria (pacote à parte). Celular
+   primeiro: nenhuma largura fixa, e os textos que podem ser longos (resumo, nomes) quebram em vez de alargar
+   a página. */
+.trilha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+/* O conteúdo de cada célula num bloco só: no celular, a célula vira "rótulo: valor". */
+.trilha-celula {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.trilha-acao {
+  font-weight: var(--peso-medio);
+}
+
+/* O resumo fica abaixo do rótulo, alinhado à esquerda (no celular, ao lado do rótulo ele ficaria espremido na
+   metade da largura). Na tabela, a célula volta a ser uma célula comum. */
+.trilha td:has(> .trilha-texto-longo) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espaco-1);
+  text-align: left;
+}
+
+.trilha td:has(> .trilha-texto-longo)::before {
+  max-width: none;
+}
+
+.trilha-texto-longo {
+  line-height: var(--altura-linha);
+}
+
+.trilha-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.trilha-rodape > .ui-aviso {
+  flex: 1 1 100%;
+}
+
+.trilha-contagem {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* "Carregar mais" ocupado: continua focável (aria-disabled), mas parece desabilitado. */
+.trilha-rodape button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+@media (min-width: 48rem) {
+  /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Campanha"). */
+  .trilha-celula {
+    overflow-wrap: break-word;
+  }
+
+  .trilha-quando,
+  .trilha-alvo {
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Os registros que chegam com "Carregar mais" entram com fade e deslize curto. */
+  .trilha-celula--nova {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
+  }
+}

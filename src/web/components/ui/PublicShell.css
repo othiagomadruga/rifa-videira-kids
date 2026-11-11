@@ -1,14 +1,65 @@
+/*
+ * Telas abertas: topo branco com a faixa da marca, conteúdo sobre o fundo ambiente e, no pé da página, o
+ * selo do Kids. O rodapé fica no fim da janela quando o conteúdo é curto (nada pula quando ele chega).
+ */
 .ui-public-shell {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
 }
 
+/*
+ * Fundo ambiente: brilhos claros da marca atrás do conteúdo. A camada tem o tamanho da janela e corta o
+ * que passa dela (nenhuma rolagem lateral); os brilhos derivam devagar (32 s e 40 s, só transform).
+ */
+.ui-public-shell__ambiente {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 78% 18%,
+    var(--cor-ambiente-3),
+    transparent 42%
+  );
+}
+
+.ui-public-shell__ambiente::before,
+.ui-public-shell__ambiente::after {
+  content: "";
+  position: absolute;
+  width: 80vmax;
+  height: 80vmax;
+  border-radius: 50%;
+}
+
+.ui-public-shell__ambiente::before {
+  top: -34vmax;
+  left: -30vmax;
+  background: radial-gradient(closest-side, var(--cor-ambiente-1), transparent);
+}
+
+.ui-public-shell__ambiente::after {
+  right: -34vmax;
+  bottom: -38vmax;
+  background: radial-gradient(closest-side, var(--cor-ambiente-2), transparent);
+}
+
+/* Topo: a faixa do degradê da marca (4 px) em cima do branco. */
 .ui-public-shell__topo {
-  padding: var(--espaco-3) var(--margem-pagina);
-  background: var(--cor-superficie);
+  padding: calc(var(--espaco-3) + 4px) var(--margem-pagina) var(--espaco-3);
+  background:
+    var(--gradiente-marca) top / 100% 4px no-repeat,
+    var(--cor-superficie);
   border-bottom: 1px solid var(--cor-borda);
+}
+
+.ui-public-shell__topo .ui-marca {
+  --marca-altura: 2.5rem;
 }
 
 .ui-public-shell__limite {
@@ -19,11 +70,61 @@
 
 .ui-public-shell__conteudo {
   flex: 1;
-  padding: var(--espaco-5) var(--margem-pagina) var(--espaco-7);
+  padding: var(--espaco-5) var(--margem-pagina) var(--espaco-6);
 }
 
 .ui-public-shell__pagina {
   display: flex;
   flex-direction: column;
   gap: var(--espaco-5);
+}
+
+/* Rodapé: o selo do Kids, pequeno (40 px), com a frase da campanha. */
+.ui-public-shell__rodape {
+  padding: 0 var(--margem-pagina) var(--espaco-6);
+}
+
+.ui-public-shell__kids {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.ui-public-shell__selo-kids {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra-1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrada da tela (e de cada bloco que chega depois, como o conteúdo que carregou): fade e deslize curto. */
+  .ui-public-shell__pagina > * {
+    animation: ui-entrar var(--duracao-lenta) var(--curva-saida) backwards;
+  }
+
+  .ui-public-shell__pagina > :nth-child(2) {
+    animation-delay: 50ms;
+  }
+
+  .ui-public-shell__pagina > :nth-child(3) {
+    animation-delay: 100ms;
+  }
+
+  .ui-public-shell__pagina > :nth-child(n + 4) {
+    animation-delay: 150ms;
+  }
+
+  .ui-public-shell__ambiente::before {
+    animation: ui-deriva-a 32s ease-in-out infinite alternate;
+  }
+
+  .ui-public-shell__ambiente::after {
+    animation: ui-deriva-b 40s ease-in-out infinite alternate;
+  }
 }

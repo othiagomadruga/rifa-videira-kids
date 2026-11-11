@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { useRef, useState, type ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { StrictMode, useRef, useState, type ComponentProps } from "react";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { Button, Dialogo } from ".";
 
 type PropsDialogo = ComponentProps<typeof Dialogo>;
@@ -263,5 +263,96 @@ describe("Dialogo", () => {
     ).not.toBeInTheDocument();
     expect(fecharDeBaixo).not.toHaveBeenCalled();
     expect(deBaixo.parentElement).not.toHaveAttribute("inert");
+  });
+
+  // O React desmonta o de baixo antes do de cima quando os dois saem juntos (ex.: a tela muda com a
+  // confirmação aberta) e monta o de cima antes do de baixo quando os dois entram juntos.
+  describe("empilhados: a rolagem só volta quando o último fecha, em qualquer ordem", () => {
+    function Empilhados({ juntos }: { juntos: boolean }) {
+      const [deCima, setDeCima] = useState(juntos);
+      return (
+        <Dialogo aberto titulo="De baixo" aoFechar={() => {}}>
+          <button type="button" onClick={() => setDeCima(true)}>
+            Abrir o de cima
+          </button>
+          <Dialogo
+            aberto={deCima}
+            titulo="De cima"
+            aoFechar={() => setDeCima(false)}
+          >
+            <button type="button">Botão de cima</button>
+          </Dialogo>
+        </Dialogo>
+      );
+    }
+
+    it("abertos um depois do outro e desmontados juntos, a página volta a rolar", () => {
+      document.body.style.overflow = "auto";
+      onTestFinished(() => {
+        document.body.style.overflow = "";
+      });
+      const { unmount } = render(<Empilhados juntos={false} />);
+      fireEvent.click(screen.getByRole("button", { name: "Abrir o de cima" }));
+      expect(
+        screen.getByRole("dialog", { name: "De cima" }),
+      ).toBeInTheDocument();
+      expect(document.body.style.overflow).toBe("hidden");
+
+      unmount();
+
+      expect(document.body.style.overflow).toBe("auto");
+    });
+
+    it("abertos juntos, fechar o de cima não solta a rolagem do de baixo", () => {
+      const { unmount } = render(<Empilhados juntos />);
+
+      fireEvent.keyDown(screen.getByRole("button", { name: "Botão de cima" }), {
+        key: "Escape",
+      });
+
+      expect(
+        screen.getByRole("dialog", { name: "De baixo" }),
+      ).toBeInTheDocument();
+      expect(document.body.style.overflow).toBe("hidden");
+      unmount();
+      expect(document.body.style.overflow).toBe("");
+    });
+
+    it("no StrictMode (efeito duplo) e com estilo de antes no body: a trava compensa a barra e devolve o estilo uma vez só", () => {
+      document.body.style.overflow = "auto";
+      document.body.style.paddingRight = "4px";
+      // O jsdom não faz layout: uma barra de rolagem de 15 px.
+      Object.defineProperty(document.documentElement, "clientWidth", {
+        configurable: true,
+        value: window.innerWidth - 15,
+      });
+      onTestFinished(() => {
+        Reflect.deleteProperty(document.documentElement, "clientWidth");
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "";
+      });
+      const { unmount } = render(
+        <StrictMode>
+          <Empilhados juntos />
+        </StrictMode>,
+      );
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(document.body.style.paddingRight).toBe("15px");
+
+      fireEvent.keyDown(screen.getByRole("button", { name: "Botão de cima" }), {
+        key: "Escape",
+      });
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(document.body.style.paddingRight).toBe("15px");
+
+      fireEvent.click(screen.getByRole("button", { name: "Abrir o de cima" }));
+      expect(
+        screen.getByRole("dialog", { name: "De cima" }),
+      ).toBeInTheDocument();
+      unmount();
+
+      expect(document.body.style.overflow).toBe("auto");
+      expect(document.body.style.paddingRight).toBe("4px");
+    });
   });
 });

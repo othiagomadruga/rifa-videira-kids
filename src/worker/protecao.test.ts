@@ -8,6 +8,8 @@
 // d) os cabeçalhos de segurança saem em 200, 401, 403 e 404, e o webhook segue só com o Bearer;
 // e) o painel (RIFA-PAINEL) fica atrás do login e a visão pública fica aberta, sem nenhum valor, e só
 //    ela passa pelo cache de 30 s (relógio fixo: nada depende do dia em que o teste roda);
+// g) os papéis da hierarquia (RIFA-014, D12) levam 403 em toda rota de /api/admin e /api/painel, e todo
+//    caminho de /api/minha exige a sessão de um deles (sem sessão, 401; coordenação, 403);
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -24,8 +26,10 @@ import paidOrderAfiliado from "../../test/fixtures/rifei/paid_order.afiliado.jso
 import {
   JANELAS_RANKING,
   NIVEIS_RANKING,
+  PAPEIS_HIERARQUIA,
   ROTAS,
   ROTAS_ACESSO,
+  ROTAS_ACESSO_HIERARQUIA,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
   diasEntre,
@@ -40,16 +44,23 @@ import {
   respostaPedidosSuspeitosSchema,
   respostaRankingPublicoSchema,
   respostaRankingSchema,
+  respostaSessaoSchema,
+  respostaVisaoIndividualSchema,
   respostaWebhookRifeiSchema,
   somarDias,
   type CodigoErro,
   type Papel,
+  type PapelHierarquia,
 } from "../shared/contracts";
 import app from "./index";
 import { TTL_CACHE_PUBLICO_MS } from "./lib/cache-publico";
 import { CABECALHOS_SEGURANCA } from "./middleware/cabecalhos-seguranca";
 import { CACHE_PUBLICO } from "./routes/publico";
-import { ORIGEM, cabecalhosDeSessao } from "./test/acesso-teste";
+import {
+  ORIGEM,
+  cabecalhosDeSessao,
+  cabecalhosDeSessaoDaHierarquia,
+} from "./test/acesso-teste";
 import {
   CAMPOS_PUBLICOS,
   CAMPO_DE_VALOR,
@@ -90,7 +101,7 @@ interface RotaDaCoordenacao {
 
 /**
  * Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao, ou os `papeis` da rota quando ela é mais
- * restrita, como a auditoria) e ROTAS_ACESSO (papéis da própria rota).
+ * restrita, como a auditoria), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria rota).
  */
 const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
   ...Object.values(ROTAS)
@@ -101,7 +112,7 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
       papeis:
         "papeis" in rota ? rota.papeis : (["admin", "coordenacao"] as const),
     })),
-  ...Object.values(ROTAS_ACESSO)
+  ...[...Object.values(ROTAS_ACESSO), ...Object.values(ROTAS_ACESSO_HIERARQUIA)]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => {
       if (rota.papeis === null)
@@ -180,9 +191,14 @@ function rotasRegistradas(): { metodo: Metodo; caminho: string }[] {
 
 /** Grupo de cada rota do contrato, por "MÉTODO caminho" (sem a barra final do webhook). */
 const GRUPO_NO_CONTRATO = new Map(
-  [...Object.values(ROTAS), ...Object.values(ROTAS_ACESSO)].map(
-    (rota): [string, string] => [`${rota.metodo} ${rota.caminho}`, rota.grupo],
-  ),
+  [
+    ...Object.values(ROTAS),
+    ...Object.values(ROTAS_ACESSO),
+    ...Object.values(ROTAS_ACESSO_HIERARQUIA),
+  ].map((rota): [string, string] => [
+    `${rota.metodo} ${rota.caminho}`,
+    rota.grupo,
+  ]),
 );
 
 let coordenacao: Record<string, string>;
@@ -199,13 +215,14 @@ afterEach(() => {
 
 describe("a) toda rota da coordenação exige sessão", () => {
   it("o contrato tem as rotas esperadas da coordenação (o filtro não ficou vazio)", () => {
-    // 24 de ROTAS + 6 de ROTAS_ACESSO (5 só de admin e o GET /api/sessao) na Sprint 2.
-    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(30);
+    // 24 de ROTAS + 6 de ROTAS_ACESSO (5 só de admin e o GET /api/sessao) na Sprint 2; a auditoria (só admin)
+    // na Sprint 4; as 2 de ROTAS_ACESSO_HIERARQUIA (só admin) na Sprint 5.
+    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(33);
     expect(
       ROTAS_DA_COORDENACAO.filter(
         (rota) => !rota.papeis.includes("coordenacao"),
       ).length,
-    ).toBeGreaterThanOrEqual(5);
+    ).toBeGreaterThanOrEqual(8);
   });
 
   it.each(casos(ROTAS_DA_COORDENACAO))(
@@ -269,8 +286,9 @@ describe("a) toda rota da coordenação exige sessão", () => {
         chave,
         noContrato: true,
       });
-      if (grupo === "coordenacao") {
-        // Ex.: GET /api/sessao, protegida dentro do próprio sub-app.
+      if (grupo === "coordenacao" || grupo === "hierarquia") {
+        // Ex.: GET /api/sessao, protegida dentro do próprio sub-app, e GET /api/minha/visao (RIFA-014),
+        // protegida pelo login dos papéis da hierarquia em /api/minha/*.
         const res = await requisitar(rota.metodo, concreto(rota.caminho), {
           Origin: ORIGEM,
         });
@@ -734,14 +752,16 @@ describe("d) cabeçalhos de segurança e webhook da Rifei", () => {
   }
 
   it("webhook com o Bearer e SEM cookie: a fixture é processada (200), fora da sessão", async () => {
-    await env.DB.prepare(
-      `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
-         meta_unidade, meta_regra, meta_valor, ranking_criterio)
-       VALUES ('Campanha de teste', ?, 1, '2026-11-23', 2000, 'bilhetes', 'por_pessoa', 10,
-         'percentual_meta')`,
-    )
-      .bind(paidOrderAfiliado.slug)
-      .run();
+    // Só uma campanha fica ativa: a de outro bloco (o painel semeia a dele), se rodou antes, sai.
+    await env.DB.batch([
+      env.DB.prepare("UPDATE campanhas SET ativa = 0 WHERE ativa = 1"),
+      env.DB.prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
+           meta_unidade, meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha de teste', ?, 1, '2026-11-23', 2000, 'bilhetes', 'por_pessoa', 10,
+           'percentual_meta')`,
+      ).bind(paidOrderAfiliado.slug),
+    ]);
 
     const res = await enviarWebhook({
       Authorization: `Bearer ${env.RIFEI_WEBHOOK_TOKEN}`,
@@ -1125,6 +1145,183 @@ describe("f) RIFA-013b: pedidos suspeitos e auditoria atrás do login, teto do c
       "corpo_muito_grande",
     );
   });
+});
+
+describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/minha só para eles", () => {
+  /** Caminhos sob /api/minha, com rota e sem (todos exigem a sessão de um papel da hierarquia). */
+  const CAMINHOS_DA_MINHA = [
+    "/api/minha",
+    "/api/minha/",
+    "/api/minha/visao",
+    "/api/minha/visao?periodo=campanha",
+    "/api/minha/visao?periodo=invalido",
+    "/api/minha/visao/",
+    "/api/minha/qualquer",
+    "/api/minha/qualquer/coisa/funda",
+    "/api/minha//visao",
+    "/api/minha/../minha/visao",
+    "/api/qualquer/../minha/visao",
+    "/api/%6dinha/visao",
+  ];
+  const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
+
+  beforeAll(async () => {
+    // A hierarquia do painel (a célula 1, o discipulador 10 e a rede 1) e uma sessão de cada papel.
+    await semearCenario();
+    sessoes.lider = await cabecalhosDeSessaoDaHierarquia("lider", 1);
+    sessoes.discipulador = await cabecalhosDeSessaoDaHierarquia(
+      "discipulador",
+      10,
+    );
+    sessoes.rede = await cabecalhosDeSessaoDaHierarquia("rede", 1);
+  });
+
+  it("o contrato tem a rota da hierarquia, montada no app, e os papéis dela são os 3 da hierarquia", () => {
+    const daHierarquia = Object.values(ROTAS).filter(
+      (rota) => rota.grupo === "hierarquia",
+    );
+    expect(
+      daHierarquia.map((rota) => [
+        `${rota.metodo} ${rota.caminho}`,
+        rota.papeis,
+      ]),
+    ).toEqual([["GET /api/minha/visao", PAPEIS_HIERARQUIA]]);
+    expect(
+      rotasRegistradas().map((rota) => `${rota.metodo} ${rota.caminho}`),
+    ).toContain("GET /api/minha/visao");
+  });
+
+  it.each(PAPEIS_HIERARQUIA)(
+    "sessão de %s: 403 em TODA rota registrada sob /api/admin e /api/painel (inclusive fora do contrato) e nos caminhos sem rota",
+    async (papel) => {
+      const protegidas = rotasRegistradas().filter((rota) =>
+        eDaCoordenacao(rota.caminho),
+      );
+      expect(protegidas.length).toBeGreaterThanOrEqual(30);
+      for (const rota of [
+        ...protegidas,
+        ...ROTAS_DA_COORDENACAO.filter((daCoordenacao) =>
+          daCoordenacao.caminho.startsWith("/api/admin"),
+        ),
+        ...["/api/admin", "/api/admin/qualquer", "/api/painel/x/y"].flatMap(
+          (caminho) =>
+            (["GET", ...ESCRITAS] as const).map((metodo) => ({
+              metodo,
+              caminho,
+            })),
+        ),
+      ]) {
+        const res = await requisitar(
+          rota.metodo,
+          concreto(rota.caminho),
+          sessoes[papel],
+        );
+        expect({
+          papel,
+          rota: `${rota.metodo} ${rota.caminho}`,
+          status: res.status,
+        }).toEqual({
+          papel,
+          rota: `${rota.metodo} ${rota.caminho}`,
+          status: 403,
+        });
+        expect(erroApiSchema.parse(await res.json()).erro.codigo).toBe(
+          "proibido",
+        );
+      }
+    },
+  );
+
+  it.each(PAPEIS_HIERARQUIA)(
+    "sessão de %s: GET /api/sessao diz quem é, com o alvo; a visão responde 200",
+    async (papel) => {
+      const sessao = await requisitar("GET", "/api/sessao", sessoes[papel]);
+      expect(sessao.status).toBe(200);
+      const { usuario } = respostaSessaoSchema.parse(await sessao.json());
+      expect(usuario.papel).toBe(papel);
+      expect(usuario.alvo).toMatchObject({
+        id: { lider: 1, discipulador: 10, rede: 1 }[papel],
+      });
+      const visao = await requisitar("GET", "/api/minha/visao", sessoes[papel]);
+      expect(visao.status).toBe(200);
+      expect(visao.headers.get("Cache-Control")).toBe("no-store");
+      respostaVisaoIndividualSchema.parse(await visao.json());
+    },
+  );
+
+  it.each(CAMINHOS_DA_MINHA)(
+    "GET %s sem sessão: 401 (exista a rota ou não)",
+    async (caminho) => {
+      const res = await requisitar("GET", caminho);
+      await esperarErro(res, 401, "nao_autenticado");
+      esperarCabecalhosDeSeguranca(res);
+    },
+  );
+
+  it("toda rota registrada sob /api/minha dá 401 sem cookie, em todo método; escrita de outra origem, 403", async () => {
+    const daMinha = rotasRegistradas().filter((rota) =>
+      rota.caminho.startsWith("/api/minha"),
+    );
+    expect(daMinha.length).toBeGreaterThanOrEqual(1);
+    for (const rota of daMinha)
+      await esperarErro(
+        await requisitar(rota.metodo, concreto(rota.caminho), {
+          Origin: ORIGEM,
+        }),
+        401,
+        "nao_autenticado",
+      );
+    for (const metodo of ESCRITAS) {
+      await esperarErro(
+        await requisitar(metodo, "/api/minha/visao", { Origin: ORIGEM }),
+        401,
+        "nao_autenticado",
+      );
+      await esperarErro(
+        await requisitar(metodo, "/api/minha/visao", {
+          ...sessoes.lider,
+          Origin: ORIGEM_MALICIOSA,
+        }),
+        403,
+        "proibido",
+      );
+    }
+    for (const metodo of ["HEAD", "OPTIONS"]) {
+      const res = await exports.default.fetch(`${ORIGEM}/api/minha/visao`, {
+        method: metodo,
+      });
+      expect({ metodo, status: res.status }).toEqual({ metodo, status: 401 });
+    }
+  });
+
+  it.each(["admin", "coordenacao"] as const)(
+    "sessão de %s: 403 em /api/minha/* (a coordenação usa o painel)",
+    async (papel) => {
+      const sessao = papel === "admin" ? admin : coordenacao;
+      for (const caminho of CAMINHOS_DA_MINHA) {
+        const res = await requisitar("GET", caminho, sessao);
+        expect({ papel, caminho, status: res.status }).toEqual({
+          papel,
+          caminho,
+          status: 403,
+        });
+        expect(erroApiSchema.parse(await res.json()).erro.codigo).toBe(
+          "proibido",
+        );
+      }
+    },
+  );
+
+  it.each(["/api/minhax/visao", "/api/MINHA/visao", "/api/minh/visao"])(
+    "contraprova: %s fica fora do prefixo e não chega a rota nenhuma (404)",
+    async (caminho) => {
+      await esperarErro(
+        await requisitar("GET", caminho),
+        404,
+        "nao_encontrado",
+      );
+    },
+  );
 });
 
 describe("formato único de erro em todas as partes montadas", () => {

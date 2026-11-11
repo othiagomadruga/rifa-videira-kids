@@ -201,8 +201,11 @@ const mais = (a: Fracao, b: Fracao): Fracao =>
     ? { num: a.num + b.num, den: a.den }
     : { num: a.num * b.den + b.num * a.den, den: a.den * b.den };
 
-/** `parte ÷ todo` em pontos-base truncados; null quando o todo é zero. */
-function percentualBp(parte: Fracao, todo: Fracao): number | null {
+/**
+ * `parte ÷ todo` em pontos-base truncados; null quando o todo é zero. Exportada para a visão individual
+ * (RIFA-014: a curva em pontos-base da meta exata, com a mesma conta de percentual_meta_bp).
+ */
+export function percentualBp(parte: Fracao, todo: Fracao): number | null {
   if (todo.num === 0n) return null;
   return paraNumero((parte.num * todo.den * DEZ_MIL) / (parte.den * todo.num));
 }

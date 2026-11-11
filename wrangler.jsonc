@@ -41,10 +41,11 @@
       "simple": { "limit": 60, "period": 60 },
     },
     {
-      // Tentativas de login (POST /api/sessao).
+      // Tentativas de login (POST /api/sessao): 60 por minuto desde a D12 (na reunião dos líderes, dezenas de
+      // pessoas abrem o link ao mesmo tempo atrás do mesmo IP); eram 10.
       "name": "LIMITE_LOGIN",
       "namespace_id": "1002",
-      "simple": { "limit": 10, "period": 60 },
+      "simple": { "limit": 60, "period": 60 },
     },
   ],
 }

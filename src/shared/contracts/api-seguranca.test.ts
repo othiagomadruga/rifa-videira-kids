@@ -160,7 +160,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 10 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 13 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -172,7 +172,11 @@ describe("GET /api/admin/auditoria", () => {
       "link.revogar",
       // RIFA-014 (D12): lote de links da hierarquia.
       "acessos_hierarquia.gerar_links",
-      // RIFA-012 (D13): o "Recuperar" da conferência pelo CSV, quando grava.
+      // RIFA-018: o CRUD de redes, discipuladores e células.
+      "hierarquia.criar",
+      "hierarquia.atualizar",
+      "hierarquia.remover",
+      // RIFA-012 (D19): o "Recuperar" da conferência pelo CSV, quando grava.
       "conferencia.recuperar",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.

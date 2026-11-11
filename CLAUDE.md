@@ -15,6 +15,11 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   Travou: `status=blocked` + `blockedReason`. Decisões e notas: `add_quest_item`.
 - **Entregou:** `status=review` (nunca `done`: quem valida é o Thiago).
 - **Fim de sessão/sprint:** `log_progress` (1 a 2 frases + `nextSteps`); `update_retrato` se estiver velho (se a ferramenta não existir, atualize a descrição do projeto com `update_project`).
+- **Portal do cliente (empresa "Videira"), sem esperar pedido do Thiago:** o cliente vê só os PEDIDOS DO CLIENTE
+  (`list_client_requests` do projeto), não as missões internas. A cada avanço que o cliente perceba: `update_client_request`
+  com `update` (1 frase em português simples, sem jargão nem IDs) e `completeSteps`; entregue vai para `status=review`.
+  Entrega nova que o cliente perceba vira pedido (`create_client_request`, com `steps` e `dueDate`). O link do portal
+  é liberado só pelo Thiago, no app (tela Clientes).
 - **Time de agentes:** só o orquestrador (Scrum Master) escreve no DevMission; os subagentes devolvem no relatório o que registrar.
 - **Acesso:** MCP `devmission` (`claude mcp add --transport http devmission https://devmission.pages.dev/api/mcp --header "Authorization: Bearer <token>"`).
   O token é pessoal do Thiago e nunca entra no repositório nem no DevMission.
@@ -49,10 +54,12 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   Decisões e porquês em `docs/decisions.md`.
 - **Pastas:**
   - `src/worker/`: API. `index.ts` (app Hono e a ORDEM de montagem: cabeçalhos → health → sessão → login em
-    `/api/admin/*` e `/api/painel/*` → rotas; ver docs/acesso.md §6), `routes/` (uma rota por arquivo),
+    `/api/admin/*` e `/api/painel/*` (coordenação) e em `/api/minha/*` (líder, discipulador e rede, D12) → rotas;
+    ver docs/acesso.md §6), `routes/` (uma rota por arquivo),
     `middleware/` (sessão, CSRF, cabeçalhos de segurança), `db/` (acesso ao D1), `lib/` (erros, CSV, cripto),
     `worker-env.d.ts` (tipos dos bindings: binding novo no `wrangler.jsonc` é declarado aqui também).
-    `src/worker/protecao.test.ts` falha se alguma rota da coordenação ficar aberta: rota nova entra atrás do login.
+    `src/worker/protecao.test.ts` falha se alguma rota da coordenação ou da hierarquia ficar aberta, ou se um papel
+    entrar na área do outro: rota nova entra atrás do login.
   - `src/web/`: site. `main.tsx`, `App.tsx`, `rotas.tsx`, `lib/api.ts` (cliente da API), `pages/<tela>/` (uma pasta por tela, com as chamadas à API dela), `components/`. Convenções em `docs/frontend.md`.
   - `src/shared/contracts/`: contrato da API (tipos usados pelo Worker e pelo site). Só o SM altera.
   - `migrations/`: migrações D1 em SQL, numeradas (`0001_<nome>.sql`...). Migração aplicada não se edita: crie outra.
@@ -68,12 +75,18 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   - `npm run typecheck`: `tsc -b` no Worker, no site e nas configs.
   - `npm run build`: gera `dist/client` (site) e `dist/rifa_videira_kids` (Worker). `npm run preview` serve o build.
   - `npm run db:migrate:local`: aplica as migrações no D1 local (`.wrangler/state`).
-  - **Publicação:** automática pelo GitHub Actions a cada push na `main` (job `deploy` do ci.yml, depois dos testes),
-    com o segredo `CLOUDFLARE_API_TOKEN` do repositório. D1 de produção já criado (id real no `wrangler.jsonc`).
+  - **Publicação:** automática pelo GitHub Actions a cada push na `main` (job `publicar` do ci.yml, depois dos testes),
+    com o segredo `CLOUDFLARE_API_TOKEN` do repositório. O job `ci` (sem segredo) constrói e entrega só o `dist/` como
+    artefato; o `publicar` instala com `npm ci --ignore-scripts`, baixa o artefato, confere o `wrangler.json` gerado com
+    `scripts/conferir-artefato.mjs` e só o passo que roda `npm run deploy:publicar` recebe o token (`wrangler deploy
+    --dry-run`, que barra a falta do build antes das migrações; migrações no D1 remoto; `wrangler deploy` do artefato).
+    D11 e D18; travado em `src/worker/config-publicacao.test.ts`.
+    `npm run deploy` = `npm run build` + `npm run deploy:publicar`. D1 de produção já criado (id real no `wrangler.jsonc`).
     Da sessão de nuvem do Claude o upload dos assets falha (o proxy troca o JWT do upload), então não rode
     `npm run deploy` daqui; comandos D1 remotos funcionam. Segredos do Worker: `npx wrangler secret put <NOME>`.
   - Primeiro admin em produção: `npm run acesso:criar -- --nome "<nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev`.
+  - **Lançamento:** roteiro em `docs/lancamento.md` (contas do PO, 1ª publicação, configuração em produção, compra de teste, reunião dos líderes, dia a dia e contingência).
 - **Segredos locais:** copie `.dev.vars.example` para `.dev.vars` (ignorado pelo git) e troque os valores.
-- **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test e build (Node 22) em todo push e pull request, e publica na Cloudflare nos pushes da `main`.
+- **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test, build e a conferência do artefato (Node 22) em todo push e pull request, e publica na Cloudflare nos pushes da `main` (job `publicar`, D18).
 - **Dependências:** `wrangler`, `@cloudflare/vite-plugin` e `@cloudflare/vitest-plugin` têm versão fixa e sobem juntos.
   Vitest fica na 5.x e TypeScript na 6.0.x (limite do typescript-eslint). Veja `docs/decisions.md`.

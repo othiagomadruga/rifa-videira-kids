@@ -660,7 +660,7 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
         "Afiliado 1001 trocado para: Célula Canaã.",
       ),
     ).toBeVisible();
-    expect(tituloDaCelula("Célula Betel")).toHaveFocus();
+    await waitFor(() => expect(tituloDaCelula("Célula Betel")).toHaveFocus());
     expect(api.puts).toEqual([{ affiliateId: 1001, corpo: { celula_id: 3 } }]);
     // O afiliado (com os botões dele) mudou de cartão; na Betel fica só o aviso da troca.
     const botaoTrocar = { name: "Trocar a célula do afiliado 1001" };
@@ -703,7 +703,7 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
         "Afiliado 1002 desvinculado. Ele voltou para “Sem célula”.",
       ),
     ).toBeVisible();
-    expect(tituloDaCelula("Célula Canaã")).toHaveFocus();
+    await waitFor(() => expect(tituloDaCelula("Célula Canaã")).toHaveFocus());
     expect(api.puts).toEqual([
       { affiliateId: 1002, corpo: { celula_id: null } },
     ]);
@@ -735,7 +735,7 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
         "Código 5005 pré-cadastrado: Célula Débora. As vendas dele já vão contar para a célula.",
       ),
     ).toBeVisible();
-    expect(tituloDaCelula("Célula Débora")).toHaveFocus();
+    await waitFor(() => expect(tituloDaCelula("Célula Débora")).toHaveFocus());
     expect(api.puts).toEqual([{ affiliateId: 5005, corpo: { celula_id: 4 } }]);
     await waitFor(() =>
       expect(celulaNaLista("Célula Débora")).toHaveTextContent("Afiliado 5005"),
@@ -809,7 +809,7 @@ describe("CA4: vincular, trocar, desvincular e pré-cadastrar", () => {
         "Afiliado 1001 trocado para: Célula Ágape.",
       ),
     ).toBeVisible();
-    expect(tituloDaCelula("Célula Ágape")).toHaveFocus();
+    await waitFor(() => expect(tituloDaCelula("Célula Ágape")).toHaveFocus());
     expect(api.puts).toEqual([{ affiliateId: 1001, corpo: { celula_id: 1 } }]);
   });
 
@@ -901,8 +901,9 @@ describe("CA3/CA4: atualização automática", () => {
 
   it("ao sair da tela, a atualização automática para", async () => {
     await abrirTela();
-    fireEvent.click(screen.getByRole("link", { name: "Pedidos" }));
-    await screen.findByRole("heading", { level: 1, name: "Pedidos" });
+    // Uma tela que não consulta a API (a de Pedidos, desde a RIFA-025, consulta).
+    fireEvent.click(screen.getByRole("link", { name: "Conferência" }));
+    await screen.findByRole("heading", { level: 1, name: "Conferência" });
 
     await act(() => vi.advanceTimersByTimeAsync(3 * INTERVALO_ATUALIZACAO_MS));
 

@@ -500,7 +500,10 @@ describe("CA2: editar e excluir", () => {
     fireEvent.change(campos.getByLabelText("Nome da célula"), {
       target: { value: "célula fé " },
     });
-    fireEvent.click(campos.getByRole("button", { name: "Salvar" }));
+    // Como no navegador, o toque leva o foco ao Salvar: o campo só volta a ter o foco se a tela o levar.
+    const salvar = campos.getByRole("button", { name: "Salvar" });
+    act(() => salvar.focus());
+    fireEvent.click(salvar);
 
     const alerta = await campos.findByRole("alert");
     expect(alerta).toHaveTextContent("Não foi possível salvar");
@@ -512,7 +515,37 @@ describe("CA2: editar e excluir", () => {
     expect(nome).toHaveAccessibleDescription(
       "Já existe uma célula com esse nome.",
     );
-    expect(nome).toHaveFocus();
+    await waitFor(() => expect(nome).toHaveFocus());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("409 em_uso ao salvar (outra gravação ao mesmo tempo) mostra a mensagem da API e recarrega as listas sozinha", async () => {
+    const mensagem =
+      "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: a lista foi atualizada; confira e tente de novo.";
+    const api = criarApiFalsa();
+    // Outra pessoa renomeou a célula Fé enquanto esta edição estava aberta.
+    api.proxima("PUT", "/api/admin/celulas/101", () => {
+      const fe = api.dados.celulas.find((celula) => celula.id === 102);
+      if (fe) fe.nome = "Célula Fé e Graça";
+      return respostaErro(409, "em_uso", mensagem);
+    });
+    await abrirTela(api);
+    const { dialogo } = await abrirEdicaoDaCelula("Célula Esperança");
+    const campos = within(dialogo);
+
+    fireEvent.click(campos.getByRole("button", { name: "Salvar" }));
+
+    const alerta = await campos.findByRole("alert");
+    expect(alerta).toHaveTextContent("Não foi possível salvar");
+    expect(alerta).toHaveTextContent(mensagem);
+    expect(api.chamadasA("PUT", "/api/admin/celulas/101")).toHaveLength(1);
+    expect(campos.getByLabelText("Nome da célula")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+    await waitFor(() =>
+      expect(nomesDe("Células")).toContain("Célula Fé e Graça"),
+    );
+    expect(api.chamadasA("GET", "/api/admin/celulas")).toHaveLength(2);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
@@ -543,7 +576,7 @@ describe("CA2: editar e excluir", () => {
     expect(email).toHaveAccessibleDescription(
       "Confira o e-mail (ou deixe em branco).",
     );
-    expect(email).toHaveFocus();
+    await waitFor(() => expect(email).toHaveFocus());
   });
 
   it("exclui a célula depois de confirmar", async () => {
@@ -593,60 +626,145 @@ describe("CA2: editar e excluir", () => {
     expect(api.chamadasA("DELETE", "/api/admin/celulas/102")).toHaveLength(0);
   });
 
-  it("409 em_uso ao excluir a célula explica o vínculo com o afiliado", async () => {
+  /** Abre a aba, pede para excluir `nome` e confirma, com a API respondendo 409 `em_uso` com `mensagem`. */
+  async function excluirComEmUso(
+    aba: "Células" | "Discipuladores" | "Redes",
+    nome: string,
+    caminho: string,
+    mensagem: string,
+  ) {
     const api = criarApiFalsa();
-    api.proxima(
-      "DELETE",
-      "/api/admin/celulas/103",
-      respostaErro(
-        409,
-        "em_uso",
-        "A célula tem afiliados vinculados (1). Desvincule os afiliados antes de excluir a célula.",
-      ),
-    );
+    api.proxima("DELETE", caminho, respostaErro(409, "em_uso", mensagem));
     await abrirTela(api);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Excluir Célula Ágape" }),
-    );
+    if (aba !== "Células") {
+      fireEvent.click(screen.getByRole("tab", { name: aba }));
+    }
+    fireEvent.click(screen.getByRole("button", { name: `Excluir ${nome}` }));
     const confirmacao = screen.getByRole("alertdialog");
     fireEvent.click(
       within(confirmacao).getByRole("button", { name: "Excluir" }),
     );
-
     const alerta = await within(confirmacao).findByRole("alert");
-    expect(alerta).toHaveTextContent("Não foi possível excluir");
-    expect(alerta).toHaveTextContent(
-      "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Desvincule o afiliado antes de excluir a célula.",
+    return { api, alerta };
+  }
+
+  it("409 em_uso ao excluir a célula mostra o motivo que veio da API e mantém a célula", async () => {
+    const mensagem =
+      "A célula tem afiliados vinculados (1). Desvincule os afiliados antes de excluir a célula.";
+    const { api, alerta } = await excluirComEmUso(
+      "Células",
+      "Célula Ágape",
+      "/api/admin/celulas/103",
+      mensagem,
     );
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    expect(alerta).toHaveTextContent("Não foi possível excluir");
+    expect(alerta).toHaveTextContent(mensagem);
+    expect(alerta).not.toHaveTextContent("Não dá para excluir");
+    expect(api.chamadasA("DELETE", "/api/admin/celulas/103")).toHaveLength(1);
+    expect(
+      screen.getByRole("alertdialog", {
+        name: "Excluir a célula “Célula Ágape”?",
+      }),
+    ).toBeInTheDocument();
     expect(nomesDe("Células")).toContain("Célula Ágape");
   });
 
-  it("409 em_uso ao excluir a rede explica que ela ainda tem discipuladores", async () => {
-    const api = criarApiFalsa();
-    api.proxima(
-      "DELETE",
-      "/api/admin/redes/2",
-      respostaErro(409, "em_uso", "A rede tem discipuladores (1)."),
-    );
-    await abrirTela(api);
-    fireEvent.click(screen.getByRole("tab", { name: "Redes" }));
+  // Desde a RIFA-018 o 409 `em_uso` do DELETE também vem da trilha de auditoria e de corrida (outra gravação ao
+  // mesmo tempo): o texto fixo diria "tem afiliado vinculado" ou "tem discipuladores", o que não é verdade.
+  it.each([
+    {
+      caso: "a rede ainda tem discipuladores",
+      aba: "Redes",
+      nome: "Rede Adulta Sul",
+      caminho: "/api/admin/redes/2",
+      mensagem:
+        "A rede tem discipuladores (1). Exclua os discipuladores ou mova-os para outra rede antes de excluir a rede.",
+      recarrega: false,
+    },
+    {
+      caso: "a trilha de auditoria segura o acesso do discipulador",
+      aba: "Discipuladores",
+      nome: "Carla Discipuladora",
+      caminho: "/api/admin/discipuladores/13",
+      mensagem:
+        "O discipulador não pode ser excluído: o acesso dele aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
+      recarrega: false,
+    },
+    {
+      caso: "a célula mudou enquanto isso",
+      aba: "Células",
+      nome: "Célula Fé",
+      caminho: "/api/admin/celulas/102",
+      mensagem:
+        "A célula mudou enquanto isso (outra alteração ao mesmo tempo) e nada foi gravado: a lista foi atualizada; confira e tente de novo.",
+      recarrega: true,
+    },
+    {
+      caso: "uma referência mudou enquanto isso",
+      aba: "Redes",
+      nome: "Rede Jovem Norte",
+      caminho: "/api/admin/redes/1",
+      mensagem:
+        "A exclusão foi recusada por uma referência que mudou enquanto isso: a lista foi atualizada; confira e tente de novo.",
+      recarrega: true,
+    },
+  ] as const)(
+    "409 em_uso ao excluir mostra a mensagem da API, e não o texto fixo; só o de outra gravação ao mesmo tempo recarrega as listas: $caso",
+    async ({ aba, nome, caminho, mensagem, recarrega }) => {
+      const { api, alerta } = await excluirComEmUso(
+        aba,
+        nome,
+        caminho,
+        mensagem,
+      );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Excluir Rede Adulta Sul" }),
-    );
-    const confirmacao = screen.getByRole("alertdialog", {
-      name: "Excluir a rede “Rede Adulta Sul”?",
-    });
-    fireEvent.click(
-      within(confirmacao).getByRole("button", { name: "Excluir" }),
-    );
+      expect(alerta).toHaveTextContent(mensagem);
+      expect(alerta).not.toHaveTextContent("Não dá para excluir");
+      // Deixa rodar os efeitos da resposta (a recarga sai de um efeito) antes de contar as leituras.
+      await act(async () => {});
+      await waitFor(() =>
+        expect(api.chamadasA("GET", "/api/admin/redes")).toHaveLength(
+          recarrega ? 2 : 1,
+        ),
+      );
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    },
+  );
 
-    expect(await within(confirmacao).findByRole("alert")).toHaveTextContent(
-      "Não dá para excluir: a rede ainda tem discipuladores.",
-    );
-  });
+  it.each([
+    {
+      aba: "Células",
+      nome: "Célula Ágape",
+      caminho: "/api/admin/celulas/103",
+      mensagem: "",
+      reserva:
+        "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Desvincule o afiliado antes de excluir a célula.",
+    },
+    {
+      aba: "Discipuladores",
+      nome: "Carla Discipuladora",
+      caminho: "/api/admin/discipuladores/13",
+      mensagem: "   ",
+      reserva:
+        "Não dá para excluir: o discipulador ainda tem células. Mova as células para outro discipulador (botão Editar, na aba Células) ou exclua-as antes.",
+    },
+    {
+      aba: "Redes",
+      nome: "Rede Adulta Sul",
+      caminho: "/api/admin/redes/2",
+      mensagem: "",
+      reserva:
+        "Não dá para excluir: a rede ainda tem discipuladores. Mova os discipuladores para outra rede (botão Editar, na aba Discipuladores) ou exclua-os antes.",
+    },
+  ] as const)(
+    "409 em_uso sem mensagem da API usa o texto fixo ($aba)",
+    async ({ aba, nome, caminho, mensagem, reserva }) => {
+      const { alerta } = await excluirComEmUso(aba, nome, caminho, mensagem);
+
+      expect(alerta).toHaveTextContent(reserva);
+    },
+  );
 
   it("edita a rede (divisão e responsável) e o discipulador (rede)", async () => {
     const { api } = await abrirTela();

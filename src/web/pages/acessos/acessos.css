@@ -1,4 +1,21 @@
-/* Gestão dos acessos: um cartão por pessoa; no computador, cartões lado a lado. */
+/* Gestão dos acessos, em duas abas. Coordenação: um cartão por pessoa; no computador, cartões lado a lado.
+   A aba "Líderes, discipuladores e redes" tem o próprio CSS (acessos-hierarquia.css), que vem junto com ela
+   (pacote à parte); as classes dos diálogos e .acessos-suave, daqui, servem às duas. */
+.acessos-coordenacao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.acessos-coordenacao__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
 .acessos-lista {
   display: grid;
   gap: var(--espaco-4);

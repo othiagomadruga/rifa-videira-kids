@@ -45,9 +45,9 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 **Coordenação** (RIFA-007; contrato em `acesso.ts`, detalhes em [acesso.md](acesso.md)):
 
-- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
+- Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403).
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`) e a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -101,7 +101,7 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 
 | Rota | Limite | O que conta |
 |---|---|---|
-| `POST /api/sessao` | 10 por minuto | toda tentativa que passa da checagem de origem |
+| `POST /api/sessao` | 60 por minuto (desde a D12; eram 10) | toda tentativa que passa da checagem de origem |
 | `/api/publico/*` e `GET /api/health` | 60 por minuto, somados | só as que vão ao banco: no público, a resposta do cache de 30 s **não conta** (muita gente atrás do mesmo IP, como o Wi-Fi da igreja, não esbarra no limite); o health lê o banco toda vez |
 
 Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Control: no-store`, sem ler o banco. O contador é por data center da Cloudflare e aproximado ("permissivo"). Sem o binding, vale uma janela na memória de cada isolate.
@@ -226,6 +226,7 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
   - rede com discipuladores: `409 em_uso`;
   - discipulador com células: `409 em_uso`;
   - célula com afiliado vinculado: `409 em_uso` (desvincule antes).
+- **Trilha de auditoria** (RIFA-018): cada POST, PUT e DELETE que muda algo grava uma linha (`hierarquia.criar`, `hierarquia.atualizar`, `hierarquia.remover`; [GET /api/admin/auditoria](#get-apiadminauditoria-só-admin-sprint-4-rifa-013b)) no mesmo `db.batch` da gravação: recusado (400, 404, 409) ou sem mudança, nada fica. O PUT e o DELETE gravam só se a linha (e, no DELETE, o acesso do alvo) ainda é a que foi lida; se outra gravação a mudou no meio, leem de novo e refazem, até 3 vezes, e depois respondem `409 em_uso` ("A célula mudou enquanto isso..."), sem gravar nada.
 
 ### `POST /api/admin/hierarquia/importar` (`coordenacao`)
 
@@ -399,8 +400,11 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `campanha.salvar` | `PUT /api/admin/campanha` | `campanha:<id>` | criada (com o slug e o preço) ou os campos alterados; `slug_rifei` e `preco_bilhete_centavos` com o antes e o depois |
 | `afiliado.salvar` | `PUT /api/admin/afiliados/:affiliateId` | `afiliado:<affiliate_id>` | célula antes → depois (pelos ids); o rótulo só como "alterado"/"apagado" |
 | `hierarquia.importar` | `POST /api/admin/hierarquia/importar` aplicada | `hierarquia` | linhas e contagens de criados e atualizados (a simulação não registra) |
+| `hierarquia.criar` | `POST /api/admin/redes`, `/discipuladores` ou `/celulas` (RIFA-018) | `rede:<id>`, `discipulador:<id>` ou `celula:<id>` | o nome do item e a configuração: `Célula "Célula Ágape" criada (discipulador_id 3, qtd_pessoas 12)` |
+| `hierarquia.atualizar` | `PUT` do mesmo recurso (RIFA-018) | idem | só o que mudou, com o antes e o depois (`nome`, `divisao`, `rede_id`, `discipulador_id`, `qtd_pessoas`: a meta e o ranking mudam junto); os dados do líder e o responsável da rede só pelo nome do campo, como `informado`, `alterado` ou `apagado`: `Célula "Célula Ágape" alterada: qtd_pessoas (12 → 15), lider_telefone (apagado)`. O PUT igual ao gravado não registra |
+| `hierarquia.remover` | `DELETE` do mesmo recurso (RIFA-018) | idem | o nome do item, a configuração e o acesso da hierarquia que caiu junto (D12), pelo id do usuário: `Célula "Célula Ágape" removida (discipulador_id 3, qtd_pessoas 12); acesso do líder removido junto, usuário 15 (com os links e as sessões)` |
 | `usuario.criar` | `POST /api/admin/usuarios` | `usuario:<id>` | o papel (sem nome nem e-mail) |
-| `usuario.ativar` / `usuario.desativar` | `PATCH /api/admin/usuarios/:id` | `usuario:<id>` | reativado / desativado |
+| `usuario.ativar` / `usuario.desativar` | `PATCH /api/admin/usuarios/:id` que muda o estado (reativar quem está ativo ou desativar quem está desativado não registra) | `usuario:<id>` | reativado / desativado |
 | `link.criar` | `POST /api/admin/usuarios/:id/links` | `link:<id>` | o usuário do link |
 | `link.revogar` | `DELETE /api/admin/links/:id` | `link:<id>` | o usuário do link |
 | `conferencia.recuperar` | `POST /api/admin/reconciliacao/recuperar` que grava algum pedido (RIFA-012, D13) | `campanha:<id>` | o id da recuperação e quantos pedidos e bilhetes entraram (os códigos estão em `GET /api/admin/reconciliacao/recuperacoes`); a prévia, a recuperação recusada e a em que nada entrou não registram |
@@ -422,8 +426,10 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 ```
 
 - `proximo`: passe em `antes_de` para a página seguinte; `null` = não há mais.
-- O `resumo` **nunca tem dados pessoais**: só ids e configuração (nomes de pessoas, e-mails, telefones e o rótulo livre do afiliado ficam de fora). `usuario_nome` vem da tabela de usuários (o admin já vê os nomes na administração dos acessos).
-- **Erros**: 400 `requisicao_invalida` (consulta fora do schema), 401, 403 (`coordenacao`). O CRUD de redes, discipuladores e células não é registrado.
+- O `resumo` **nunca tem dados pessoais**: só ids e configuração (nomes de pessoas, e-mails, telefones e o rótulo livre do afiliado ficam de fora). O nome da rede, do discipulador e da célula entra (é o nome do item, não de uma pessoa da equipe). `usuario_nome` vem da tabela de usuários (o admin já vê os nomes na administração dos acessos).
+- **O que não muda nada não registra** (RIFA-018): o PUT da hierarquia igual ao gravado, reativar quem está ativo, desativar quem está desativado e revogar um link já revogado (`DELETE /api/admin/links/:id` de novo: 204, a data continua a da primeira revogação). O PUT da campanha e o do afiliado registram também o salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
+- **Ids que voltam** (D12): `usuarios.id` e os ids de redes, discipuladores e células não são AUTOINCREMENT, então o id de um item apagado pode voltar num item novo (o de maior id, apagado, é o que volta). Por isso o resumo da hierarquia sempre leva o nome do item, e a remoção diz o usuário do acesso que caiu junto e de qual alvo ele era: as linhas mais antigas com `usuario:<id>` (ou `celula:<id>`) falam do dono anterior do id, e a linha `hierarquia.remover` marca até quando.
+- **Erros**: 400 `requisicao_invalida` (consulta fora do schema), 401, 403 (`coordenacao`).
 
 ---
 
@@ -650,31 +656,138 @@ Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`;
 
 ### `GET /api/minha/visao?periodo=atual|campanha` (`hierarquia`)
 
-- Papéis `lider`, `discipulador` e `rede`. Sem sessão: 401. Sessão da coordenação: 403. Não aceita id de nada:
-  o alvo é o da sessão (`usuarios.celula_id`, `discipulador_id` ou `rede_id`).
+- Papéis `lider`, `discipulador` e `rede`. Sem sessão: 401 em todo caminho de `/api/minha/*`, exista a rota ou
+  não. Sessão da coordenação: 403. Não aceita id de nada: o alvo é o da sessão (`usuarios.celula_id`,
+  `discipulador_id` ou `rede_id`); id na consulta, nos cabeçalhos ou no corpo é ignorado (a consulta só tem
+  `periodo`; um POST não chega a rota nenhuma, 404).
 - Devolve o alvo, quem entrou, a referência da campanha, os números do alvo (hoje, período e campanha, mais os
   bilhetes vendidos), a curva em pontos-base da meta, a posição no ranking do nível (geral e na divisão, com o
   nome e a posição do vizinho de cima e do de baixo), os primeiros da divisão (como o ranking público) e, para
   discipulador e rede, os números da `equipe` (quem está abaixo). O líder recebe `afiliados_vinculados` da célula.
+- Os números são os do painel da coordenação para o mesmo escopo (`montarResumoPainel` e `montarRankingPainel`,
+  com as metas sobre todas as células); a curva usa a meta exata, então o ponto de hoje é o
+  `percentual_meta_bp` da campanha. Com meta em centavos, os bilhetes de hoje saem somados das vendas do dia.
+- `equipe`: do discipulador, as células dele por nome; da rede, os discipuladores dela por nome (inclusive os sem
+  células), cada um seguido das células dele por nome (ordem de português: "Célula 2" antes de "Célula 10").
+  `posicao_divisao` é a posição no ranking do nível do item, na divisão e na janela pedidas.
 - **Sem dinheiro em nenhum nível** (schemas estritos e regras cruzadas): com meta em centavos, as quantidades da
   meta saem null; no critério arrecadação, nenhuma distância. A distância até os vizinhos (`diferenca`) sai null
-  até o PO decidir (D12).
+  até o PO decidir (D12). A rota confere a resposta no schema estrito antes de sair: um campo a mais vira 500.
 - Alvo sem células (R8): `ranking.geral` e `ranking.divisao` null; na equipe, `posicao_divisao` null.
-- `periodo` escolhe a janela do ranking (padrão: o período atual). Sem cache compartilhado da resposta.
+- `periodo` escolhe a janela do ranking (padrão: o período atual); fora de `atual` e `campanha`, 400.
+- Sem campanha ativa: 404 `nao_encontrado`, como o painel.
+- Cache: a resposta é por pessoa e sai com `Cache-Control: no-store`, nunca guardada. Os dados de base (a
+  campanha, as células, as vendas por dia, os discipuladores, as redes e os afiliados por célula) ficam até 30 s
+  na memória do isolate, como as rotas abertas (D10). O alvo de quem pede vem da sessão, lido na hora: se a base
+  guardada não tem esse alvo, ou o tem noutra divisão (uma célula criada depois dela; a rede que trocou de divisão;
+  a célula ou o discipulador que foi para outra divisão), ela é lida de novo. Para as outras pessoas, cujo alvo não
+  mudou, a hierarquia (quem está em qual equipe, nomes, rankings) pode aparecer até 30 s atrasada. Por requisição:
+  a sessão e, sem a base guardada, a campanha e um lote no D1 (o orçamento do painel, ~1,3 linha lida por pedido).
 
 ### `GET /api/admin/acessos-hierarquia?papel=lider|discipulador|rede` (**só admin**)
 
 Todos os alvos do papel, com ou sem acesso: o alvo, quem deve receber o link (`pessoa_nome`, da hierarquia), o
-telefone do líder (só células) e o usuário do alvo (nome, ativo, sessões e links, sem token), ou null.
+telefone do líder (só células) e o usuário do alvo (nome, ativo, sessões e links, sem token), ou null. Ordem: pelo
+caminho na hierarquia (nome da rede, do discipulador e da célula, em ordem de português; empate, pelo id). Papel
+fora dos três da hierarquia: 400.
 
 ### `POST /api/admin/acessos-hierarquia/links` (**só admin**)
 
 `{ "papel", "ids": [...], "revogar_anteriores"?: false }` → **201** `{ "itens": [...] }`, um link NOVO por alvo,
 na ordem de `ids`, com a URL (a única vez em que ela aparece). Cria o usuário do alvo quando falta e atualiza o
-nome dele para o `pessoa_nome` atual. `revogar_anteriores: true` revoga os links válidos anteriores e encerra as
-sessões deles no mesmo lote. Tudo ou nada: 404 `nao_encontrado` se algum id não é alvo do papel, 409 `em_uso` se
-algum alvo tem usuário desativado (`detalhes`: `detalhesIdsRecusadosSchema`, `{ "ids": [...] }`). Uma linha na
-trilha de auditoria por chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes).
+nome dele para o `pessoa_nome` atual (sem ele, o nome do alvo). `revogar_anteriores: true` revoga os links válidos
+anteriores e encerra as sessões abertas por eles no mesmo lote. Tudo ou nada: 404 `nao_encontrado` se algum id não
+é alvo do papel, 409 `em_uso` se algum alvo tem usuário desativado (`detalhes`: `detalhesIdsRecusadosSchema`,
+`{ "ids": [...] }`, em ordem crescente; o 404 é conferido antes do 409). Uma linha na trilha de auditoria por
+chamada (ação `acessos_hierarquia.gerar_links`, alvo `papel:<papel>`, resumo sem nomes, como "Links novos para 2
+células (1 acesso criado); links anteriores revogados e as sessões deles encerradas. Ids: 3, 5"). Corpo fora do
+schema (ids repetidos, vazios, mais de 200, papel da coordenação, campo a mais): 400.
+
+## Mapa de vendas por DDD (Sprint 5, RIFA-015; docs/decisions.md D17)
+
+### `GET /api/painel/mapa-ddd?periodo=campanha|atual&divisao=jovens|adultos` (`coordenacao`)
+
+Pedidos aprovados da janela (padrão: a campanha até hoje), agrupados por UF e por DDD (tabela fixa em
+`src/shared/contracts/ddd.ts`), mais `exterior` (`pais` gravado e diferente de 55), `sem_ddd` (`pais` null, Brasil
+sem DDD ou DDD fora da tabela) e `total` (= ufs + exterior + sem_ddd). Cada recorte traz `pedidos_aprovados`, `bilhetes`,
+`total_centavos` e a parte dos bilhetes em pontos-base truncados (a soma pode ficar abaixo de 10000). A venda conta pela regra do
+painel (R6 de [regras-de-calculo.md](regras-de-calculo.md)): campanha ativa, dia local de `aprovado_em` dentro da
+janela (`janela`, a mesma dos rankings). Com `divisao`, só as vendas das células da divisão (as sem célula ficam de
+fora, como no painel). Só a coordenação; a versão aberta depende do PO.
+
+- **Janela**: do primeiro dia dela até hoje, no fuso da campanha (como o realizado do painel e dos rankings, os
+  dias depois de hoje não entram); antes do primeiro dia, nada conta. Sem venda no recorte: `ufs` e `ddds` vazios
+  e os recortes zerados, com parte 0.
+- **Custo no D1** (D10, D17; `src/worker/db/mapa-ddd-desempenho.test.ts`, com 7 mil pedidos): duas idas (a
+  campanha ativa e a consulta agregada), pelo índice `(status, aprovado_em)` só na janela, com o plano travado.
+  ~2 linhas lidas por pedido aprovado da janela (10.925 na campanha inteira, 3.939 numa semana); com divisão, ~1,5
+  (8.172 com jovens na campanha inteira, 2.796 com adultos numa semana).
+- **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404
+  `nao_encontrado` (sem campanha ativa).
+
+## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
+
+Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoal: do comprador, só o DDD.
+
+### `GET /api/admin/pedidos` (`coordenacao`)
+
+Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta: `limite` (1 a 200, padrão 50),
+`antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
+`sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
+afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes e `suspeito`.
+`totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a paginação e o filtro de
+status, só na primeira página (null quando a consulta traz `antes_de`). Sem campanha ativa: lista vazia e totais
+zerados.
+
+- **Ordem e cursor**: `registrado_em` decrescente e, no empate, `id` decrescente (comparação binária). O cursor é
+  o base64url (sem `=`) do JSON `[registrado_em, id]` do último item; a página seguinte começa logo depois dele,
+  sem repetir nem pular pedidos, mesmo que um pedido novo chegue ou um pedido mude de status entre as páginas
+  (`registrado_em` não muda). Cursor que a API não emitiu (texto qualquer, JSON fora da forma, instante sem
+  milissegundos, id vazio ou com mais de 128 caracteres, forma não canônica): 400 `requisicao_invalida`,
+  "Consulta inválida", com o detalhe `{ caminho: ["antes_de"], codigo: "cursor_invalido" }`.
+- **Sem célula**: sem afiliado ou com afiliado ainda não vinculado. **`id`**: exato (maiúsculas contam), sem os
+  espaços das pontas; só acha pedido da campanha ativa e respeita os outros filtros.
+- **Custo no D1** (D10, D16; `src/worker/db/pedidos-webhook-desempenho.test.ts`, com 7 mil pedidos): a página
+  lê ~135 linhas (~142 com o cursor); os totais sem filtro, ~1 por pedido (~7 mil), e por isso saem só na
+  primeira página. Com célula, ~3 linhas por pedido da célula; sem célula, ~2,5 por pedido sem célula.
+
+### `GET /api/admin/webhook/entregas` (`coordenacao`)
+
+Cada entrega autenticada do webhook, da mais nova para a mais antiga: quando chegou, evento, pedido, slug,
+resultado e transição de status. Do erro (só em `erro_validacao`) saem o código da recusa (`json_invalido`,
+`payload_invalido` ou `corpo_muito_grande`) e os problemas; dos avisos, a lista. Problemas e avisos saem reduzidos
+a campo (caminho do schema), código e ocorrências: a mensagem gravada não sai. Consulta: `limite`, `antes_de`
+(id), `resultado` e `pedido_id`.
+
+- **Ordem e cursor**: `id` decrescente; `proximo` é o id do último item (null quando não há mais). `pedido_id`:
+  exato, sem os espaços das pontas.
+- **Código da recusa**: `json_invalido` ou `corpo_muito_grande` quando o erro gravado é esse único problema, de
+  caminho vazio (é como o webhook grava as duas recusas do corpo); senão `payload_invalido`.
+- **Redução**: `campo` = as partes do caminho juntadas com `.`, com `*` nas posições de lista
+  (`numbers.*`, `buyer.email`; vazio quando o problema é do corpo inteiro). Uma parte que não tenha a forma de
+  um nome de campo vira `?`, e um código fora da forma do vocabulário (minúsculas, dígitos e `_`) vira
+  `codigo_desconhecido`: nada do que veio na entrega pode sair por ali. Itens com o mesmo campo e código somam
+  as `ocorrencias`. Erro gravado sem nenhum item aproveitável: um problema com o próprio código da recusa.
+- **Custo no D1**: ~51 linhas por página, com ou sem `resultado` e cursor (índice da migração 0007).
+
+### `GET /api/admin/webhook/estado` (`coordenacao`)
+
+`situacao` (na ordem de prioridade: `erros_recentes`, `sem_entregas_recentes`, `nunca_recebeu` ou `ok`; regra na
+D16), a última entrega, a última entrega da campanha, a última aprovação e a contagem das últimas 24 h por
+resultado.
+
+- **Limites exatos**: as últimas 24 h vão de `agora − 24 h` (inclusive) até agora. A janela do alerta é
+  `HORA_INICIO_ALERTA ≤ hora local < HORA_FIM_ALERTA` no fuso da campanha, nos dias de `data_inicio` a `data_fim`
+  (inclusive), e acende quando `agora − max(última entrega da campanha, hoje às HORA_INICIO_ALERTA)` passa de
+  `HORAS_SEM_ENTREGA_ALERTA` horas (às 12:00:00.000 em ponto do 1º dia sem nada, ainda não; 1 ms depois, sim).
+- **Slug do erro**: comparado sem os espaços das pontas que o `trim()` do JavaScript tira (os mesmos do slug
+  aceito pelo webhook, inclusive tabulação, quebra de linha e espaço não separável). Slug só de espaços conta
+  como ausente. Sem campanha ativa, só o erro sem slug acende `erros_recentes`.
+- `ultima_entrega_em` e `ultima_processada_em` são o maior `recebido_em`; `ultimo_aprovado_em`, o maior
+  `aprovado_em` dos pedidos aprovados da campanha ativa; `verificado_em`, o instante da consulta.
+- **Custo no D1**: duas idas (a campanha ativa e um lote), ~940 linhas lidas com ~1 mil entregas nas últimas
+  24 h (a contagem por resultado é quase tudo), também com o slug da campanha trocado depois de entregas
+  processadas (a última entrega da campanha sai do índice parcial da migração 0007).
 
 ---
 

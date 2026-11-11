@@ -231,9 +231,10 @@ describe("CA4: nome de quem está conectado, Sair e menu conforme o papel", () =
       await screen.findByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeInTheDocument();
     expect(roteador.state.location.pathname).toBe("/entrar");
-    expect(api.chamadas).toEqual([
-      { metodo: "POST", caminho: "/api/sessao/sair" },
-    ]);
+    // Da sessão, só o POST de sair (a tela Pedidos faz as chamadas dela, que não vêm ao caso).
+    expect(
+      api.chamadas.filter(({ caminho }) => caminho.startsWith("/api/sessao")),
+    ).toEqual([{ metodo: "POST", caminho: "/api/sessao/sair" }]);
     expect(
       screen.getByText("Você saiu do sistema neste aparelho."),
     ).toBeInTheDocument();
@@ -251,7 +252,8 @@ describe("CA4: nome de quem está conectado, Sair e menu conforme o papel", () =
 
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    // O aviso fica no painel do menu, junto do "Sair" (a tela pode ter os avisos dela).
+    expect(await within(painelDoMenu()).findByRole("alert")).toHaveTextContent(
       "Não foi possível sair: Não foi possível conectar à API.",
     );
     expect(roteador.state.location.pathname).toBe("/coordenacao/pedidos");

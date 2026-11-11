@@ -3,6 +3,7 @@ import {
   NOMES_DIVISAO,
   type ItemRankingPublico,
 } from "../../../shared/contracts/calculos";
+import { TextoContado } from "../../components/movimento";
 import {
   EmptyState,
   ErrorState,
@@ -15,6 +16,12 @@ import {
   formatarHora,
   formatarPercentual,
 } from "../../lib/formatadores";
+import {
+  ATRIBUTO_CHAVE,
+  chavesPorNome,
+  useListaAnimada,
+} from "../../lib/useListaAnimada";
+import { usePulsoDaMeta } from "../../lib/usePulsoDaMeta";
 import type { RankingDaDivisao, RankingPublico } from "./ranking-publico-api";
 import { formatarPosicao, textoDaFase, textoDaJanela } from "./textos";
 import { useRankingPublico } from "./useRankingPublico";
@@ -22,18 +29,25 @@ import "./ranking-publico.css";
 
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
 const POSICOES_EM_DESTAQUE = 3;
+/** 100% da meta, em pontos-base: a meta batida ganha o destaque de comemoração. */
+const META_BATIDA_BP = 10_000;
 
 // Tela pública (link do grupo de WhatsApp): o ranking das células por divisão, só com posições e nomes
 // (e o % da meta, quando a campanha permite). Nunca valores em dinheiro nem quantidades: a rota aberta não
 // os devolve e esta pasta não os formata (regra em docs/frontend.md, conferida em rotas.test.tsx e em
 // guarda-publico.test.ts). Atualiza sozinha a cada minuto e não chama nenhuma rota da coordenação.
+// Movimento (RIFA-020, sem prefers-reduced-motion): os itens entram em sequência, quem muda de posição
+// desliza para o lugar novo, o % conta até o valor e a meta batida pulsa de leve.
 export function RankingPublicoPage() {
   const { estado, tentarDeNovo } = useRankingPublico();
   return (
     <>
       <PageHeader titulo="Ranking da campanha" />
       {estado.tipo === "carregando" && (
-        <Loading texto="Carregando o ranking…" />
+        <div className="ranking-publico__carregando">
+          <Loading texto="Carregando o ranking…" />
+          <Esqueleto />
+        </div>
       )}
       {estado.tipo === "erro" && (
         <ErrorState
@@ -52,6 +66,28 @@ export function RankingPublicoPage() {
         <Ranking ranking={estado.ranking} falhou={estado.falha !== null} />
       )}
     </>
+  );
+}
+
+/** O desenho do que vai chegar (a fase e duas divisões), com o brilho do carregando. Só visual. */
+function Esqueleto() {
+  return (
+    <div className="ranking-publico__esqueleto" aria-hidden="true">
+      <div className="mov-esqueleto ranking-publico__esqueleto-fase" />
+      <div className="ranking-publico__divisoes">
+        {[0, 1].map((divisao) => (
+          <div key={divisao} className="ranking-publico__divisao">
+            <div className="mov-esqueleto ranking-publico__esqueleto-titulo" />
+            {[0, 1, 2].map((linha) => (
+              <div
+                key={linha}
+                className="mov-esqueleto ranking-publico__esqueleto-item"
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -122,6 +158,11 @@ function Ranking({ ranking, falhou }: PropsRanking) {
 
 function Divisao({ divisao, itens }: RankingDaDivisao) {
   const idTitulo = useId();
+  const comChaves = chavesPorNome(itens);
+  // A ordem das chaves muda quando alguém troca de lugar, entra ou sai: aí a lista anima.
+  const refLista = useListaAnimada<HTMLOListElement>(
+    comChaves.map(({ chave }) => chave).join("|"),
+  );
   return (
     <section className="ranking-publico__divisao" aria-labelledby={idTitulo}>
       <h3 id={idTitulo} className="ranking-publico__divisao-titulo">
@@ -133,9 +174,9 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
         </p>
       ) : (
         // role="list": com list-style none, o Safari deixaria de anunciar a lista.
-        <ol className="ranking-publico__lista" role="list">
-          {itens.map((item, indice) => (
-            <Item key={`${indice}-${item.nome}`} item={item} />
+        <ol ref={refLista} className="ranking-publico__lista" role="list">
+          {comChaves.map(({ chave, item }) => (
+            <Item key={chave} chave={chave} item={item} />
           ))}
         </ol>
       )}
@@ -143,11 +184,18 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   );
 }
 
-function Item({ item }: { item: ItemRankingPublico }) {
+function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
+  const metaBatida =
+    item.percentual_meta_bp !== undefined &&
+    item.percentual_meta_bp >= META_BATIDA_BP;
+  const refPercentual = usePulsoDaMeta<HTMLSpanElement>(metaBatida);
   return (
     <li
       className="ranking-publico__item"
+      {...{ [ATRIBUTO_CHAVE]: chave }}
       data-destaque={item.posicao <= POSICOES_EM_DESTAQUE ? "" : undefined}
+      data-primeiro={item.posicao === 1 ? "" : undefined}
+      data-meta-batida={metaBatida ? "" : undefined}
     >
       {/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */}
       <span className="ranking-publico__posicao">
@@ -157,8 +205,8 @@ function Item({ item }: { item: ItemRankingPublico }) {
       {item.percentual_meta_bp !== undefined && (
         <>
           {" "}
-          <span className="ranking-publico__percentual">
-            {formatarPercentual(item.percentual_meta_bp)}{" "}
+          <span ref={refPercentual} className="ranking-publico__percentual">
+            <TextoContado texto={formatarPercentual(item.percentual_meta_bp)} />{" "}
             <span className="visualmente-oculto">da meta</span>
           </span>
         </>

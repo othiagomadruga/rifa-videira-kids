@@ -103,6 +103,9 @@ export interface PedidoTeste {
   total_centavos: number;
   /** "outra" = de uma campanha inativa (não conta). Padrão: a ativa. */
   campanha?: "ativa" | "outra";
+  /** País e DDD do comprador (RIFA-015, mapa por DDD); padrão: null (sem telefone). */
+  pais?: string | null;
+  ddd?: string | null;
 }
 
 let sequencia = 0;
@@ -304,8 +307,8 @@ export async function semearPedidos(
       db
         .prepare(
           `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes,
-             total_centavos, aprovado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             total_centavos, aprovado_em, pais, ddd)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           pedido.id,
@@ -315,6 +318,8 @@ export async function semearPedidos(
           pedido.qtd_bilhetes,
           pedido.total_centavos,
           pedido.aprovado_em,
+          pedido.pais ?? null,
+          pedido.ddd ?? null,
         ),
     ),
   );

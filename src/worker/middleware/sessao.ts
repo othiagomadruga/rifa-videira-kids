@@ -2,9 +2,12 @@
  * Sessão da equipe (RIFA-007): cookie `__Host-sessao` → usuário em `c.var.usuario`, papéis e proteção
  * contra CSRF. Documentação: docs/acesso.md.
  *
- * Montagem no app (src/worker/index.ts), antes de qualquer rota de /api/admin/* e /api/painel/*:
+ * Montagem no app (src/worker/index.ts), antes de qualquer rota de /api/admin/*, /api/painel/* e /api/minha/*:
  *   app.use("/api/admin/*", exigirSessao(["admin", "coordenacao"]));
  *   app.use("/api/painel/*", exigirSessao(["admin", "coordenacao"]));
+ *   app.use("/api/minha/*", exigirSessao(["lider", "discipulador", "rede"]));
+ * Nos papéis da hierarquia (RIFA-014, D12), `c.var.usuario.alvo` traz o alvo (célula, discipulador ou rede),
+ * lido da hierarquia na hora: é dele, e só dele, que as rotas de /api/minha tiram o alvo.
  */
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";

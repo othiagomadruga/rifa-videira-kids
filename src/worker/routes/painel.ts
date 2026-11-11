@@ -2,12 +2,14 @@
  * Painel e ranking da coordenação (RIFA-PAINEL; docs/api.md, Sprint 3), do grupo `coordenacao`:
  * - GET /api/painel/resumo: meta do dia, ritmo do período e da campanha, projeção, curva e vendas de um
  *   escopo (campanha, divisão, rede, discipulador ou célula);
- * - GET /api/painel/ranking: todas as instâncias do nível, com valores, situação e vizinhos.
+ * - GET /api/painel/ranking: todas as instâncias do nível, com valores, situação e vizinhos;
+ * - GET /api/painel/mapa-ddd (RIFA-015, D17): as vendas da janela por UF e DDD do comprador, mais exterior e sem
+ *   DDD. Mesma janela e mesmo filtro de venda do painel (R6): db/mapa-ddd.ts lê, lib/mapa-ddd.ts monta.
  *
  * Caminhos e schemas vêm do contrato (`ROTAS`). Este sub-app NÃO autentica: o index.ts o monta sob
  * /api/painel, depois do login da coordenação (passo 4): `app.route(PREFIXO_PAINEL, painel)`.
- * A regra é toda de calculos.ts: a rota valida a consulta, lê o banco (db/painel.ts) e devolve o que o
- * montador entrega, como está. As respostas têm valores: saem com `Cache-Control: no-store` e nunca passam
+ * A regra do resumo e do ranking é toda de calculos.ts: a rota valida a consulta, lê o banco (db/painel.ts) e
+ * devolve o que o montador entrega, como está. As respostas têm valores: saem com `Cache-Control: no-store` e nunca passam
  * pelo cache das rotas abertas (lib/cache-publico.ts).
  */
 import { Hono } from "hono";
@@ -16,11 +18,13 @@ import {
   montarRankingPainel,
   montarResumoPainel,
 } from "../../shared/contracts";
+import { lerMapaDdd } from "../db/mapa-ddd";
 import {
   lerEntradaDoCalculo,
   relogioDoSistema,
   type Relogio,
 } from "../db/painel";
+import { montarMapaDdd } from "../lib/mapa-ddd";
 import { responderErro } from "../lib/respostas-erro";
 import { validarConsulta } from "../middleware/validacao";
 
@@ -39,8 +43,21 @@ function local<T extends `${typeof PREFIXO_PAINEL}/${string}`>(
   return caminho.slice(PREFIXO_PAINEL.length) as CaminhoLocal<T>;
 }
 
+/**
+ * Os montadores do contrato que o painel usa. Injetáveis, como os das rotas abertas (routes/publico.ts): o teste de
+ * desempenho (painel-desempenho.test.ts) conta o trabalho de cada requisição. Em produção, os de calculos.ts.
+ */
+export const MONTADORES_DO_PAINEL = Object.freeze({
+  montarResumoPainel,
+  montarRankingPainel,
+});
+export type MontadoresDoPainel = typeof MONTADORES_DO_PAINEL;
+
 /** O sub-app com o relógio dado (os testes fixam o instante; em produção, o do sistema). */
-export function criarPainel(relogio: Relogio = relogioDoSistema) {
+export function criarPainel(
+  relogio: Relogio = relogioDoSistema,
+  montadores: MontadoresDoPainel = MONTADORES_DO_PAINEL,
+) {
   const painel = new Hono<Ambiente>();
 
   // Valores da coordenação nunca ficam em cache (o login também marca no-store; aqui vale até no erro).
@@ -61,7 +78,7 @@ export function criarPainel(relogio: Relogio = relogioDoSistema) {
       if (!lido.ok)
         return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
       return c.json(
-        montarResumoPainel(
+        montadores.montarResumoPainel(
           lido.entrada,
           { escopo: lido.escopo, data: consulta.data },
           lido.agora,
@@ -80,7 +97,26 @@ export function criarPainel(relogio: Relogio = relogioDoSistema) {
       });
       if (!lido.ok)
         return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
-      return c.json(montarRankingPainel(lido.entrada, consulta, lido.agora));
+      return c.json(
+        montadores.montarRankingPainel(lido.entrada, consulta, lido.agora),
+      );
+    },
+  );
+
+  painel.get(
+    local(ROTAS.mapaDdd.caminho),
+    validarConsulta(ROTAS.mapaDdd.consulta),
+    async (c) => {
+      const consulta = c.req.valid("query");
+      const lido = await lerMapaDdd(c.env.DB, relogio, consulta);
+      if (!lido.ok) return responderErro(c, lido.codigo, lido.mensagem);
+      return c.json(
+        montarMapaDdd(lido.linhas, {
+          janela: lido.janela,
+          divisao: consulta.divisao,
+          agora: lido.agora,
+        }),
+      );
     },
   );
 

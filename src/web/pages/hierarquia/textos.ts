@@ -53,11 +53,26 @@ const TEXTOS: Record<
   celula: { uma: "uma célula", esta: "Esta célula", excluida: "excluída" },
 };
 
-/** Erros que pedem para recarregar as listas (o registro sumiu ou a referência não existe mais). */
+/**
+ * Trecho das mensagens do 409 `em_uso` de outra gravação ao mesmo tempo (RIFA-018): "A célula mudou enquanto
+ * isso (outra alteração ao mesmo tempo)..." e "A exclusão foi recusada por uma referência que mudou enquanto
+ * isso...". A API não manda outro sinal, então o site procura o texto (cópia de `src/worker/db/hierarquia.ts`,
+ * conferida por `hierarquia-contrato.test.ts`).
+ */
+export const TRECHO_MUDOU_ENQUANTO_ISSO = "mudou enquanto isso";
+
+/**
+ * Erros que pedem para recarregar as listas: o registro sumiu, a referência não existe mais ou outra gravação
+ * mudou o registro ao mesmo tempo (409 `em_uso` com "mudou enquanto isso"; os outros `em_uso`, como os
+ * dependentes, não mudam nada na lista).
+ */
 export function dadosDesatualizados(erro: unknown): boolean {
+  if (!(erro instanceof ErroApi)) return false;
   return (
-    erro instanceof ErroApi &&
-    (erro.codigo === "nao_encontrado" || erro.codigo === "referencia_invalida")
+    erro.codigo === "nao_encontrado" ||
+    erro.codigo === "referencia_invalida" ||
+    (erro.codigo === "em_uso" &&
+      erro.mensagem.includes(TRECHO_MUDOU_ENQUANTO_ISSO))
   );
 }
 
@@ -66,7 +81,10 @@ export function mensagemNomeRepetido(entidade: Entidade): string {
   return `Já existe ${TEXTOS[entidade].uma} com esse nome.`;
 }
 
-/** Mensagem de erro ao salvar (PUT). `nome` é o nome digitado. */
+/**
+ * Mensagem de erro ao salvar (PUT). `nome` é o nome digitado. Os outros códigos, como o 409 `em_uso` de outra
+ * gravação ao mesmo tempo ("mudou enquanto isso", RIFA-018), mostram a mensagem da API.
+ */
 export function mensagemAoSalvar(
   erro: unknown,
   entidade: Entidade,
@@ -88,6 +106,7 @@ export function mensagemAoSalvar(
   return mensagemDoErro(erro);
 }
 
+/** Reserva do 409 `em_uso` ao excluir, só para quando a API não manda a mensagem (o motivo mais comum). */
 const EM_USO: Record<Entidade, string> = {
   rede: "Não dá para excluir: a rede ainda tem discipuladores. Mova os discipuladores para outra rede (botão Editar, na aba Discipuladores) ou exclua-os antes.",
   discipulador:
@@ -96,10 +115,16 @@ const EM_USO: Record<Entidade, string> = {
     "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Desvincule o afiliado antes de excluir a célula.",
 };
 
-/** Mensagem de erro ao excluir (DELETE): 409 `em_uso` explica o vínculo que impede. */
+/**
+ * Mensagem de erro ao excluir (DELETE). No 409 `em_uso` vale a mensagem da API, que diz o motivo conferido no
+ * banco: os dependentes, a trilha de auditoria ou outra gravação ao mesmo tempo ("mudou enquanto isso",
+ * RIFA-018). O texto fixo de EM_USO só entra se a mensagem vier vazia.
+ */
 export function mensagemAoExcluir(erro: unknown, entidade: Entidade): string {
   if (erro instanceof ErroApi) {
-    if (erro.codigo === "em_uso") return EM_USO[entidade];
+    if (erro.codigo === "em_uso") {
+      return erro.mensagem.trim() === "" ? EM_USO[entidade] : erro.mensagem;
+    }
     if (erro.codigo === "nao_encontrado") {
       return `${TEXTOS[entidade].esta} já tinha sido ${TEXTOS[entidade].excluida}. A lista foi atualizada.`;
     }

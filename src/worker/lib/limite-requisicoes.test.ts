@@ -216,7 +216,7 @@ describe("limitarRequisicoes: 429 no formato único", () => {
     expect(await liberado.text()).toBe("ok");
   });
 
-  it("as regras batem com o pedido: 60/min nas idas ao banco do público e 10/min no login", () => {
+  it("as regras batem com o pedido: 60/min nas idas ao banco do público e 60/min no login (D12; eram 10)", () => {
     expect(LIMITE_PUBLICO).toEqual({
       binding: "LIMITE_PUBLICO",
       limite: 60,
@@ -224,7 +224,7 @@ describe("limitarRequisicoes: 429 no formato único", () => {
     });
     expect(LIMITE_LOGIN).toEqual({
       binding: "LIMITE_LOGIN",
-      limite: 10,
+      limite: 60,
       periodoSegundos: 60,
     });
   });

@@ -29,12 +29,15 @@
   list-style: none;
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
 }
 
 .ui-grafico__legenda-item {
   display: inline-flex;
   align-items: center;
   gap: var(--espaco-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ui-grafico__chave {

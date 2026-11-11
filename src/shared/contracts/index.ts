@@ -10,3 +10,4 @@ export * from "./conferencia";
 export * from "./acesso";
 export * from "./calendario";
 export * from "./calculos";
+export * from "./ddd";

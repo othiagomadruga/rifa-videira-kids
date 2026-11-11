@@ -21,11 +21,15 @@
   transform: none;
 }
 
+/* A faixa do degradê da marca (4 px) fica no alto da barra (do topo, no celular; da lateral, no computador). */
 .ui-app-shell__lateral {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--cor-superficie);
+  padding-top: 4px;
+  background:
+    var(--gradiente-marca) top / 100% 4px no-repeat,
+    var(--cor-superficie);
   border-bottom: 1px solid var(--cor-borda);
 }
 
@@ -42,6 +46,41 @@
   padding: var(--espaco-2) var(--margem-pagina);
 }
 
+/* No celular a marca divide a barra com o botão "Menu": logo e nome um pouco menores. */
+.ui-app-shell__topo .ui-marca {
+  --marca-altura: 1.75rem;
+
+  gap: var(--espaco-2);
+}
+
+.ui-app-shell__topo .ui-marca__textos {
+  padding-left: var(--espaco-2);
+  font-size: var(--texto-sm);
+}
+
+.ui-app-shell__topo .ui-marca__complemento {
+  font-size: var(--texto-xs);
+}
+
+/*
+ * Telas bem estreitas (menos de 360 px): logo, espaços e botão "Menu" mais compactos, para o nome da área
+ * ("Coordenação") caber inteiro numa linha, sem quebrar a palavra no meio.
+ */
+@media (max-width: 22.4375rem) {
+  .ui-app-shell__topo {
+    gap: var(--espaco-2);
+  }
+
+  .ui-app-shell__topo .ui-marca {
+    --marca-altura: 1.5rem;
+  }
+
+  .ui-app-shell__botao-menu {
+    gap: var(--espaco-1);
+    padding: 0 var(--espaco-3);
+  }
+}
+
 .ui-app-shell__botao-menu {
   flex: none;
   display: inline-flex;
@@ -54,10 +93,14 @@
   background: var(--cor-superficie);
   font-weight: var(--peso-forte);
   cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao);
 }
 
 .ui-app-shell__botao-menu:hover {
   background: var(--cor-superficie-2);
+  border-color: var(--cor-primaria);
 }
 
 /* Painel do menu: a navegação e, no fim, a conta. No celular, só aparece com o menu aberto. */
@@ -78,6 +121,7 @@
 }
 
 .ui-app-shell__link {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: var(--alvo-toque);
@@ -86,6 +130,9 @@
   color: var(--cor-texto);
   font-weight: var(--peso-medio);
   text-decoration: none;
+  transition:
+    background-color var(--transicao),
+    color var(--transicao);
 }
 
 .ui-app-shell__link:hover {
@@ -93,11 +140,22 @@
   color: var(--cor-texto);
 }
 
+/* Tela atual: fundo, peso e a barra do degradê forte da marca (>= 4,5:1 sobre o fundo): não só a cor. */
 .ui-app-shell__link[aria-current="page"] {
   background: var(--cor-primaria-suave);
   color: var(--cor-primaria-forte);
   font-weight: var(--peso-forte);
-  box-shadow: inset 3px 0 0 var(--cor-primaria);
+}
+
+.ui-app-shell__link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  top: var(--espaco-2);
+  bottom: var(--espaco-2);
+  left: 0;
+  width: 4px;
+  border-radius: var(--raio-pilula);
+  background: var(--gradiente-marca-forte);
 }
 
 /* Conta: quem está conectado e o botão "Sair". */
@@ -177,6 +235,25 @@
     padding: var(--espaco-5) var(--espaco-4) var(--espaco-4);
   }
 
+  /* Na barra lateral, o logo em cima e o nome embaixo. */
+  .ui-app-shell__topo .ui-marca {
+    --marca-altura: 2.75rem;
+
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--espaco-3);
+  }
+
+  .ui-app-shell__topo .ui-marca__textos {
+    padding-left: 0;
+    border-left: 0;
+    font-size: var(--texto-md);
+  }
+
+  .ui-app-shell__topo .ui-marca__complemento {
+    font-size: var(--texto-sm);
+  }
+
   .ui-app-shell__botao-menu {
     display: none;
   }
@@ -200,5 +277,51 @@
 
   .ui-app-shell__conteudo {
     padding-top: var(--espaco-6);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrada de cada tela (e de cada bloco que chega depois de carregar): fade e deslize curto, em sequência. */
+  .ui-app-shell__pagina > * {
+    animation: ui-entrar var(--duracao-lenta) var(--curva-saida) backwards;
+  }
+
+  .ui-app-shell__pagina > :nth-child(2) {
+    animation-delay: 40ms;
+  }
+
+  .ui-app-shell__pagina > :nth-child(3) {
+    animation-delay: 80ms;
+  }
+
+  .ui-app-shell__pagina > :nth-child(n + 4) {
+    animation-delay: 120ms;
+  }
+
+  /* O menu do celular desce ao abrir; a barra da tela atual cresce ao trocar de tela. */
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__painel {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida);
+  }
+
+  .ui-app-shell__link[aria-current="page"]::before {
+    animation: ui-indicador var(--duracao-media) var(--curva-saida) backwards;
+  }
+
+  .ui-app-shell__botao-menu:active {
+    transform: scale(0.97);
+  }
+
+  .ui-app-shell__botao-menu {
+    transition:
+      background-color var(--transicao),
+      border-color var(--transicao),
+      transform var(--duracao-rapida) var(--curva-saida);
+  }
+}
+
+@keyframes ui-indicador {
+  from {
+    opacity: 0;
+    transform: scaleY(0.2);
   }
 }

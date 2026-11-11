@@ -7,8 +7,11 @@ import { BumboPage } from "../bumbo/BumboPage";
 import { CampanhaPage } from "../campanha/CampanhaPage";
 import { ConferenciaPage } from "../conferencia/ConferenciaPage";
 import { HierarquiaPage } from "../hierarquia/HierarquiaPage";
+import { MapaPage } from "../mapa/MapaPage";
 import { PedidosPage } from "../pedidos/PedidosPage";
+import { PedidosSuspeitosPage } from "../pedidos-suspeitos/PedidosSuspeitosPage";
 import { RankingsPage } from "../rankings/RankingsPage";
+import { TrilhaPage } from "../trilha/TrilhaPage";
 import { VisaoGeralPage } from "../visao-geral/VisaoGeralPage";
 
 export type TelaCoordenacao = {
@@ -32,7 +35,14 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
   { segmento: "hierarquia", rotulo: "Hierarquia", Component: HierarquiaPage },
   { segmento: "adesao", rotulo: "Adesão", Component: AdesaoPage },
   { segmento: "pedidos", rotulo: "Pedidos", Component: PedidosPage },
+  {
+    segmento: "pedidos-suspeitos",
+    rotulo: "Pedidos suspeitos",
+    Component: PedidosSuspeitosPage,
+  },
   { segmento: "rankings", rotulo: "Rankings", Component: RankingsPage },
+  // Mapa de vendas por DDD (RIFA-015): GET /api/painel/mapa-ddd é de toda a coordenação.
+  { segmento: "mapa", rotulo: "Mapa", Component: MapaPage },
   { segmento: "bumbo", rotulo: "Bumbo", Component: BumboPage },
   {
     segmento: "conferencia",
@@ -43,6 +53,13 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
     segmento: "acessos",
     rotulo: "Acessos",
     Component: AcessosPage,
+    papeis: ["admin"],
+  },
+  // A trilha de auditoria: GET /api/admin/auditoria é só do admin (ROTAS.auditoria.papeis).
+  {
+    segmento: "trilha",
+    rotulo: "Trilha",
+    Component: TrilhaPage,
     papeis: ["admin"],
   },
 ];

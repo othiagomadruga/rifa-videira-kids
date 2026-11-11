@@ -1,8 +1,10 @@
-// Para onde voltar depois de entrar (guarda da coordenação → /entrar → link pessoal): só caminhos da
-// coordenação, uma vez só e por uma hora; e o `state` de /entrar, que vem do histórico, é conferido.
+// Para onde voltar depois de entrar (guarda da área → /entrar → link pessoal): só caminhos das áreas com
+// sessão (/coordenacao e /minha), uma vez só e por uma hora, e só na área do papel de quem entrou; e o
+// `state` de /entrar, que vem do histórico, é conferido.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   VALIDADE_DESTINO_MS,
+  destinoDoPapel,
   destinoSeguro,
   esquecerDestino,
   guardarDestino,
@@ -23,6 +25,8 @@ describe("destinoSeguro", () => {
     "/coordenacao/pedidos",
     "/coordenacao/acessos",
     "/coordenacao/pedidos?pagina=2&celula=10",
+    "/minha",
+    "/minha?periodo=campanha",
   ])("aceita %s", (caminho) => {
     expect(destinoSeguro(caminho)).toBe(caminho);
   });
@@ -43,6 +47,11 @@ describe("destinoSeguro", () => {
     "",
     "coordenacao",
     "/coordenacao#topo",
+    "/minhax",
+    "/minha//site-malicioso.example",
+    "/minha/../coordenacao",
+    "/minha#topo",
+    "https://site-malicioso.example/minha",
   ])("recusa %j", (caminho) => {
     expect(destinoSeguro(caminho)).toBeNull();
   });
@@ -106,11 +115,42 @@ describe("destino guardado", () => {
   });
 });
 
+describe("destinoDoPapel: o destino só vale na área do papel", () => {
+  it.each([
+    ["/coordenacao/pedidos", "admin", "/coordenacao/pedidos"],
+    ["/coordenacao/pedidos", "coordenacao", "/coordenacao/pedidos"],
+    ["/minha", "lider", "/minha"],
+    ["/minha?periodo=campanha", "rede", "/minha?periodo=campanha"],
+    // Da outra área: o início da área do papel.
+    ["/coordenacao/pedidos", "lider", "/minha"],
+    ["/coordenacao", "discipulador", "/minha"],
+    ["/minha", "coordenacao", "/coordenacao"],
+    ["/minha", "admin", "/coordenacao"],
+    // Sem destino ou fora das áreas: o início.
+    [null, "admin", "/coordenacao"],
+    [undefined, "rede", "/minha"],
+    ["//site-malicioso.example", "lider", "/minha"],
+    ["/entrar", "coordenacao", "/coordenacao"],
+  ] as const)("%j para %s vai a %s", (destino, papel, esperado) => {
+    expect(destinoDoPapel(destino, papel)).toBe(esperado);
+  });
+
+  it("o destino da visão individual é guardado e retirado como o da coordenação", () => {
+    guardarDestino("/minha");
+    expect(retirarDestino()).toBe("/minha");
+    expect(retirarDestino()).toBeNull();
+  });
+});
+
 describe("lerEstadoEntrar (state de /entrar, vindo do histórico)", () => {
   it("lê o destino e o motivo válidos", () => {
     expect(
       lerEstadoEntrar({ de: "/coordenacao/pedidos", motivo: "expirou" }),
     ).toEqual({ de: "/coordenacao/pedidos", motivo: "expirou" });
+    expect(lerEstadoEntrar({ de: "/minha", motivo: "sem_sessao" })).toEqual({
+      de: "/minha",
+      motivo: "sem_sessao",
+    });
     expect(lerEstadoEntrar({ motivo: "saiu" })).toEqual({ motivo: "saiu" });
   });
 

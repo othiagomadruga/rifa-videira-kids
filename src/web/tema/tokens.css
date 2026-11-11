@@ -1,8 +1,21 @@
 /*
- * Tokens do tema. Os componentes e as telas só usam estas variáveis: para trocar
- * a marca, mude os valores aqui (e o símbolo em components/ui/Marca.tsx).
- * Contraste conferido: texto >= 4.5:1 (AA) e bordas/foco >= 3:1 no tema claro;
- * texto >= 7:1 (AAA) no telão.
+ * Tokens do tema. Os componentes e as telas só usam estas variáveis.
+ *
+ * Marca: as cores da Videira vêm do logo (src/web/tema/marca/, amostradas com Pillow): marinho #1b203c
+ * (o nome "Videira"), verde-água #43bab8, azul #5983ba e roxo #5e297c (o degradê do símbolo). O amarelo
+ * do logo do Kids (#fcd44d) entra pouco, como comemoração: 1º lugar e meta batida.
+ *
+ * Contraste conferido (WCAG 2.x) e preso por tema/tokens.test.ts, que lê este arquivo:
+ * - tema claro, texto >= 4,5:1 (AA): texto 15,9:1 na superfície e 14,6:1 no fundo; texto suave 7,9:1 e
+ *   7,3:1; roxo (links, botão primário, branco sobre ele) 10,1:1; estados (texto sobre o fundo suave do
+ *   próprio estado) entre 5,6:1 e 8:1; marinho sobre o amarelo do Kids 11,1:1; branco sobre cada ponto do
+ *   degradê forte >= 5:1 (verde-água forte 5,0:1, azul forte 5,0:1, roxo 10,1:1);
+ * - tema claro, bordas e foco >= 3:1: borda forte 4,3:1 (3,9:1 no fundo), foco 5,1:1 (4,7:1 no fundo);
+ * - telão, texto >= 7:1 (AAA): branco 17,1:1 na superfície; texto suave 11,6:1; verde-água (títulos e
+ *   pódio) 9,4:1; marinho sobre o verde-água 10,4:1 e sobre o amarelo 13,3:1;
+ * - fundo ambiente: o centro de cada brilho (a cor mais forte) mantém as mesmas razões acima.
+ * O degradê da marca (verde-água, azul, roxo) é decorativo (faixas e destaques, sem texto em cima).
+ * Para texto branco em degradê, use --gradiente-marca-forte.
  *
  * Pontos de quebra (media queries não aceitam variáveis):
  * - 48rem (768 px): tabelas deixam de ser cartões empilhados;
@@ -11,28 +24,58 @@
 :root {
   color-scheme: light;
 
-  /* Superfícies e texto */
-  --cor-fundo: #f5f6f8;
-  --cor-superficie: #ffffff;
-  --cor-superficie-2: #eceef2;
-  --cor-borda: #dde1e7;
-  --cor-borda-forte: #7c8697;
-  --cor-texto: #18202b;
-  --cor-texto-suave: #4f5968;
+  /* Cores da marca (do logo; nas telas, use os papéis abaixo) */
+  --marca-marinho: #1b203c;
+  --marca-verde-agua: #43bab8;
+  --marca-azul: #5983ba;
+  --marca-roxo: #5e297c;
+  --marca-verde-agua-forte: #2c7a79;
+  --marca-azul-forte: #4671a9;
+  --kids-amarelo: #fcd44d;
 
-  /* Marca e ação */
-  --cor-primaria: #24476b;
-  --cor-primaria-forte: #1a3552;
-  --cor-primaria-suave: #e7eef6;
+  /* Degradês da marca: o decorativo (igual ao símbolo) e o forte (texto branco em cima, >= 5:1) */
+  --gradiente-marca: linear-gradient(
+    120deg,
+    var(--marca-verde-agua),
+    var(--marca-azul) 55%,
+    var(--marca-roxo)
+  );
+  --gradiente-marca-forte: linear-gradient(
+    120deg,
+    var(--marca-verde-agua-forte),
+    var(--marca-azul-forte) 55%,
+    var(--marca-roxo)
+  );
+
+  /* Superfícies e texto */
+  --cor-fundo: #f4f5fa;
+  --cor-superficie: #ffffff;
+  --cor-superficie-2: #eceef6;
+  --cor-borda: #dcdfeb;
+  --cor-borda-forte: #73789a;
+  --cor-texto: #1b203c;
+  --cor-texto-suave: #4b5069;
+
+  /* Marca e ação: o roxo da Videira */
+  --cor-primaria: #5e297c;
+  --cor-primaria-forte: #4a1f62;
+  --cor-primaria-suave: #f2ebf7;
   --cor-sobre-primaria: #ffffff;
   --cor-link: var(--cor-primaria);
-  --cor-foco: #1f63d6;
+  --cor-foco: #3f6fae;
+  /* Selo claro onde o logo da Videira fica em fundo escuro (o logo foi feito para fundo branco) */
+  --cor-selo-marca: #ffffff;
+
+  /* Comemoração (amarelo do Kids): 1º lugar e meta batida, sempre com texto marinho em cima */
+  --cor-comemoracao: var(--kids-amarelo);
+  --cor-comemoracao-suave: #fdf3cc;
+  --cor-sobre-comemoracao: #1b203c;
 
   /* Estados (texto sobre o fundo "suave" correspondente) */
-  --cor-neutro: #3c4552;
-  --cor-neutro-suave: #eceef2;
-  --cor-info: #1c4f9c;
-  --cor-info-suave: #e6eefb;
+  --cor-neutro: #41465e;
+  --cor-neutro-suave: #eceef6;
+  --cor-info: #2f5f99;
+  --cor-info-suave: #e8eff8;
   --cor-sucesso: #17633a;
   --cor-sucesso-suave: #e3f3e9;
   --cor-alerta: #7a4b00;
@@ -42,9 +85,17 @@
   --cor-perigo-forte: #b42318;
 
   /* Barra de progresso */
-  --cor-trilho: #dfe3ea;
+  --cor-trilho: #e2e4ee;
   --cor-progresso: var(--cor-primaria);
   --cor-progresso-completo: #1e7a46;
+  --gradiente-progresso: var(--gradiente-marca-forte);
+
+  /* Fundo ambiente das telas públicas: brilhos claros da marca, em movimento lento */
+  --cor-ambiente-1: #d3eeec;
+  --cor-ambiente-2: #e4daf2;
+  --cor-ambiente-3: #d6e3f4;
+  /* Brilho que passa pelo esqueleto do carregando */
+  --cor-brilho-esqueleto: rgb(255 255 255 / 0.75);
 
   /* Tipografia: fonte do sistema (sem fonte externa) */
   --fonte-base:
@@ -64,6 +115,7 @@
   --peso-medio: 500;
   --peso-forte: 600;
   --peso-negrito: 700;
+  --peso-extra: 800;
   --altura-linha: 1.5;
   --altura-linha-titulo: 1.2;
 
@@ -81,19 +133,31 @@
   --raio-1: 0.25rem;
   --raio-2: 0.5rem;
   --raio-3: 0.75rem;
+  --raio-4: 1rem;
   --raio-pilula: 999px;
 
-  /* Sombras */
-  --sombra-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.08);
-  --sombra-2: 0 4px 12px rgb(16 24 40 / 0.08), 0 2px 4px rgb(16 24 40 / 0.06);
-  --sombra-3: 0 12px 32px rgb(16 24 40 / 0.14);
+  /* Sombras (a de marca vai no botão primário e nos destaques, com o roxo da Videira) */
+  --sombra-1: 0 1px 2px rgb(27 32 60 / 0.06), 0 1px 3px rgb(27 32 60 / 0.08);
+  --sombra-2: 0 4px 12px rgb(27 32 60 / 0.08), 0 2px 4px rgb(27 32 60 / 0.06);
+  --sombra-3: 0 12px 32px rgb(27 32 60 / 0.14);
+  --sombra-marca: 0 6px 16px rgb(94 41 124 / 0.22);
 
   /* Foco visível */
   --foco-anel: 3px solid var(--cor-foco);
   --foco-distancia: 2px;
 
-  /* Movimento (zerado com prefers-reduced-motion em base.css) */
+  /*
+   * Movimento (regras em docs/frontend.md): durações curtas, só transform e opacity, e nada disso com
+   * prefers-reduced-motion (o CSS de movimento fica em @media (prefers-reduced-motion: no-preference) e o
+   * JS passa por lib/movimento.ts). Só o fundo ambiente e o brilho do carregando são lentos e contínuos.
+   */
   --transicao: 150ms ease-out;
+  --duracao-rapida: 150ms;
+  --duracao-media: 250ms;
+  --duracao-lenta: 400ms;
+  --curva-saida: cubic-bezier(0.22, 1, 0.36, 1);
+  --curva-suave: cubic-bezier(0.4, 0, 0.2, 1);
+  --deslize-entrada: 0.5rem;
 
   /* Medidas de layout */
   --largura-conteudo: 72rem;
@@ -110,46 +174,62 @@
 }
 
 /*
- * Telão (1920×1080, lido a ~8 m): fundo escuro, alto contraste e texto que cresce
- * com a tela. Aplique com data-tema="telao" no elemento raiz da tela.
+ * Telão (1920×1080, lido a ~8 m): fundo marinho da Videira, alto contraste (texto >= 7:1) e texto que
+ * cresce com a tela. Aplique com data-tema="telao" no elemento raiz da tela. O logo da Videira (marinho)
+ * vai sobre um selo claro (components/ui/Marca.css).
  */
 [data-tema="telao"] {
   color-scheme: dark;
 
-  --cor-fundo: #06080c;
-  --cor-superficie: #121821;
-  --cor-superficie-2: #1b2330;
-  --cor-borda: #2a3340;
-  --cor-borda-forte: #5b6676;
+  --cor-fundo: #0b0e22;
+  --cor-superficie: #151937;
+  --cor-superficie-2: #1e2346;
+  --cor-borda: #2b3058;
+  --cor-borda-forte: #6c72a3;
   --cor-texto: #ffffff;
-  --cor-texto-suave: #c8d0db;
+  --cor-texto-suave: #cfd3ea;
 
-  --cor-primaria: #ffd447;
-  --cor-primaria-forte: #ffe17a;
-  --cor-primaria-suave: #2b2611;
-  --cor-sobre-primaria: #06080c;
+  --cor-primaria: #5fd1ca;
+  --cor-primaria-forte: #93e4de;
+  --cor-primaria-suave: #123342;
+  --cor-sobre-primaria: #0b0e22;
   --cor-link: var(--cor-primaria);
-  --cor-foco: #7fb2ff;
+  --cor-foco: #8cc4ff;
 
-  --cor-neutro: #c8d0db;
-  --cor-neutro-suave: #1b2330;
+  --cor-comemoracao: var(--kids-amarelo);
+  --cor-comemoracao-suave: #3a3214;
+  --cor-sobre-comemoracao: #0b0e22;
+
+  --cor-neutro: #cfd3ea;
+  --cor-neutro-suave: #1e2346;
   --cor-info: #8cc4ff;
-  --cor-info-suave: #0f2236;
+  --cor-info-suave: #13234a;
   --cor-sucesso: #5fdc8f;
   --cor-sucesso-suave: #0e2a1a;
-  --cor-alerta: #ffd447;
-  --cor-alerta-suave: #2b2611;
-  --cor-perigo: #ff8a80;
+  --cor-alerta: #ffb766;
+  --cor-alerta-suave: #33240c;
+  --cor-perigo: #ff9e95;
   --cor-perigo-suave: #33130f;
-  --cor-perigo-forte: #ff8a80;
+  --cor-perigo-forte: #ff9e95;
 
-  --cor-trilho: #2a3340;
-  --cor-progresso: #ffd447;
+  --cor-trilho: #2b3058;
+  --cor-progresso: #5fd1ca;
   --cor-progresso-completo: #5fdc8f;
+  --gradiente-progresso: linear-gradient(
+    90deg,
+    var(--cor-primaria),
+    var(--cor-info)
+  );
+
+  --cor-ambiente-1: #0c2430;
+  --cor-ambiente-2: #1f1436;
+  --cor-ambiente-3: #102047;
+  --cor-brilho-esqueleto: rgb(255 255 255 / 0.07);
 
   --sombra-1: none;
   --sombra-2: none;
   --sombra-3: none;
+  --sombra-marca: none;
 
   /* Texto-base do telão: ~46 px em 1920×1080 (limitado também pela altura). */
   --telao-texto-base: clamp(1.25rem, min(2.4vw, 4.25vh), 4rem);

@@ -27,6 +27,19 @@ import {
   normalizarEspacos,
   respostaImportarHierarquiaSchema,
   consultaVisaoIndividualSchema,
+  consultaPedidosSchema,
+  consultaMapaDddSchema,
+  respostaMapaDddSchema,
+  consultaEntregasWebhookSchema,
+  respostaPedidosSchema,
+  respostaEntregasWebhookSchema,
+  respostaEstadoWebhookSchema,
+  PAGINA_PEDIDOS_MAXIMA,
+  PAGINA_ENTREGAS_MAXIMA,
+  SITUACOES_WEBHOOK,
+  HORA_INICIO_ALERTA,
+  HORA_FIM_ALERTA,
+  HORAS_SEM_ENTREGA_ALERTA,
   desempenhoIndividualSchema,
   pontoCurvaIndividualSchema,
   rankingIndividualSchema,
@@ -98,6 +111,12 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/admin/reconciliacao/recuperacoes",
         // Sprint 5 (RIFA-014): visão individual do líder, do discipulador e da rede.
         "GET /api/minha/visao",
+        // Sprint 5 (RIFA-025): pedidos, entregas do webhook e o estado do webhook.
+        "GET /api/admin/pedidos",
+        "GET /api/admin/webhook/entregas",
+        "GET /api/admin/webhook/estado",
+        // Sprint 5 (RIFA-015): mapa de vendas por DDD.
+        "GET /api/painel/mapa-ddd",
       ].sort(),
     );
   });
@@ -1312,5 +1331,527 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
         resposta,
         ok: false,
       });
+  });
+});
+
+describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenação, só leitura)", () => {
+  const PESSOAL =
+    /email|telefone|phone|document|cpf|endereco|address|zipcode|buyer|comprador|^name$|numeros|numbers|nascimento|birth|observation|fbp|fbc|payload/i;
+  const totais = { pedidos: 0, bilhetes: 0, total_centavos: 0 };
+  const pedido = {
+    id: "R-123",
+    status: "approved",
+    qtd_bilhetes: 3,
+    total_centavos: 6000,
+    affiliate_id: 7101,
+    celula_id: 101,
+    celula_nome: "Célula Ágape",
+    ddd: "91",
+    criado_em: "2026-11-25T14:00:00.000Z",
+    aprovado_em: "2026-11-25T14:05:00.000Z",
+    expirado_em: null,
+    registrado_em: "2026-11-25T14:00:01.000Z",
+    atualizado_em: "2026-11-25T14:05:01.000Z",
+    suspeito: false,
+  };
+  const entrega = {
+    id: 42,
+    recebido_em: "2026-11-25T14:05:01.000Z",
+    evento: "paid_order",
+    pedido_id: "R-123",
+    slug: "videira-kids",
+    resultado: "processado",
+    status_anterior: "in_process",
+    status_resultante: "approved",
+    erro: null,
+    avisos: [],
+  };
+
+  it("nenhuma resposta tem campo de dado pessoal do comprador", () => {
+    for (const schema of [
+      respostaPedidosSchema,
+      respostaEntregasWebhookSchema,
+      respostaEstadoWebhookSchema,
+    ])
+      expect(
+        nomesDeCampos(schema).filter((campo) => PESSOAL.test(campo)),
+      ).toEqual([]);
+  });
+
+  it("consulta de pedidos: padrão, limites, sem_celula como texto e celula_id junto com sem_celula recusado", () => {
+    expect(consultaPedidosSchema.parse({})).toEqual({ limite: 50 });
+    expect(
+      consultaPedidosSchema.parse({ sem_celula: "true", status: "approved" }),
+    ).toEqual({
+      limite: 50,
+      sem_celula: true,
+      status: "approved",
+    });
+    for (const consulta of [
+      { limite: "0" },
+      { limite: String(PAGINA_PEDIDOS_MAXIMA + 1) },
+      { status: "pago" },
+      { sem_celula: "sim" },
+      { celula_id: "3", sem_celula: "true" },
+      { antes_de: "" },
+    ])
+      expect({
+        consulta,
+        ok: consultaPedidosSchema.safeParse(consulta).success,
+      }).toEqual({
+        consulta,
+        ok: false,
+      });
+    expect(
+      consultaPedidosSchema.safeParse({ celula_id: "3", sem_celula: "false" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("respostas estritas: aceitam o formato e recusam campo a mais", () => {
+    const pedidos = {
+      itens: [pedido],
+      proximo: "opaco",
+      totais: {
+        in_process: totais,
+        approved: { pedidos: 1, bilhetes: 3, total_centavos: 6000 },
+        expired: totais,
+      },
+    };
+    expect(respostaPedidosSchema.safeParse(pedidos).success).toBe(true);
+    expect(
+      respostaPedidosSchema.safeParse({
+        ...pedidos,
+        itens: [{ ...pedido, comprador: "x" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [entrega],
+        proximo: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [{ ...entrega, payload: {} }],
+        proximo: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      consultaEntregasWebhookSchema.parse({ resultado: "erro_validacao" }),
+    ).toEqual({
+      limite: 50,
+      resultado: "erro_validacao",
+    });
+    const estado = {
+      situacao: "sem_entregas_recentes",
+      ultima_entrega_em: "2026-11-25T09:00:00.000Z",
+      ultima_processada_em: "2026-11-25T09:00:00.000Z",
+      ultimo_aprovado_em: "2026-11-25T08:59:00.000Z",
+      ultimas_24h: {
+        processado: 30,
+        duplicado: 2,
+        ignorado_outra_campanha: 0,
+        ignorado_transicao: 1,
+        erro_validacao: 0,
+      },
+      verificado_em: "2026-11-25T15:00:00.000Z",
+    };
+    expect(respostaEstadoWebhookSchema.safeParse(estado).success).toBe(true);
+    expect(
+      respostaEstadoWebhookSchema.safeParse({ ...estado, situacao: "parado" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("estritas em todos os níveis: campo a mais em qualquer objeto recusa a resposta", () => {
+    const pedidos = {
+      itens: [pedido],
+      proximo: null,
+      totais: { in_process: totais, approved: totais, expired: totais },
+    };
+    const estado = {
+      situacao: "ok",
+      ultima_entrega_em: null,
+      ultima_processada_em: null,
+      ultimo_aprovado_em: null,
+      ultimas_24h: {
+        processado: 0,
+        duplicado: 0,
+        ignorado_outra_campanha: 0,
+        ignorado_transicao: 0,
+        erro_validacao: 0,
+      },
+      verificado_em: "2026-11-25T15:00:00.000Z",
+    };
+    const extra = { a_mais: 1 };
+    const casos: [string, z.ZodType, unknown][] = [
+      ["pedidos", respostaPedidosSchema, { ...pedidos, ...extra }],
+      [
+        "pedidos.totais",
+        respostaPedidosSchema,
+        { ...pedidos, totais: { ...pedidos.totais, ...extra } },
+      ],
+      [
+        "pedidos.totais.approved",
+        respostaPedidosSchema,
+        {
+          ...pedidos,
+          totais: { ...pedidos.totais, approved: { ...totais, ...extra } },
+        },
+      ],
+      [
+        "entregas",
+        respostaEntregasWebhookSchema,
+        { itens: [entrega], proximo: null, ...extra },
+      ],
+      [
+        "entregas.erro",
+        respostaEntregasWebhookSchema,
+        {
+          itens: [
+            {
+              ...entrega,
+              resultado: "erro_validacao",
+              status_resultante: null,
+              erro: {
+                codigo: "json_invalido",
+                problemas: [
+                  { campo: "", codigo: "json_invalido", ocorrencias: 1 },
+                ],
+                ...extra,
+              },
+            },
+          ],
+          proximo: null,
+        },
+      ],
+      ["estado", respostaEstadoWebhookSchema, { ...estado, ...extra }],
+      [
+        "estado.ultimas_24h",
+        respostaEstadoWebhookSchema,
+        { ...estado, ultimas_24h: { ...estado.ultimas_24h, ...extra } },
+      ],
+    ];
+    expect(respostaPedidosSchema.safeParse(pedidos).success).toBe(true);
+    expect(respostaEstadoWebhookSchema.safeParse(estado).success).toBe(true);
+    for (const [nome, schema, corpo] of casos)
+      expect({ nome, ok: schema.safeParse(corpo).success }).toEqual({
+        nome,
+        ok: false,
+      });
+  });
+
+  it("pedidos: totais só na primeira página (null depois do cursor); entregas: erro e avisos reduzidos a campo, código e ocorrências", () => {
+    expect(
+      respostaPedidosSchema.safeParse({
+        itens: [pedido],
+        proximo: null,
+        totais: null,
+      }).success,
+    ).toBe(true);
+    const problema = { campo: "total", codigo: "invalid_type", ocorrencias: 1 };
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [
+          {
+            ...entrega,
+            resultado: "erro_validacao",
+            status_resultante: null,
+            erro: { codigo: "payload_invalido", problemas: [problema] },
+          },
+          {
+            ...entrega,
+            avisos: [
+              {
+                campo: "total",
+                codigo: "total_acima_do_esperado",
+                ocorrencias: 1,
+              },
+            ],
+          },
+        ],
+        proximo: null,
+      }).success,
+    ).toBe(true);
+    for (const erro of [
+      { codigo: "invalid_type", problemas: [problema] },
+      { codigo: "payload_invalido", problemas: [] },
+      {
+        codigo: "payload_invalido",
+        problemas: [{ ...problema, mensagem: "x" }],
+      },
+    ])
+      expect(
+        respostaEntregasWebhookSchema.safeParse({
+          itens: [{ ...entrega, resultado: "erro_validacao", erro }],
+          proximo: null,
+        }).success,
+      ).toBe(false);
+  });
+
+  it("entregas: do erro e dos avisos só sai o código, nunca o detalhe gravado (com a mensagem)", () => {
+    const detalhe = {
+      caminho: ["total"],
+      codigo: "invalid_type",
+      mensagem: "Invalid input: expected number, received string",
+      ocorrencias: 1,
+    };
+    for (const item of [
+      { ...entrega, avisos: [detalhe] },
+      {
+        ...entrega,
+        resultado: "erro_validacao",
+        status_resultante: null,
+        erro: [detalhe],
+      },
+      { ...entrega, erro: detalhe },
+    ])
+      expect(
+        respostaEntregasWebhookSchema.safeParse({
+          itens: [item],
+          proximo: null,
+        }).success,
+      ).toBe(false);
+    expect(nomesDeCampos(respostaEntregasWebhookSchema)).not.toContain(
+      "mensagem",
+    );
+  });
+
+  it("tipos: status, resultado e DDD do domínio; cursores no tipo certo", () => {
+    for (const item of [
+      { ...pedido, status: "pago" },
+      { ...pedido, ddd: "1" },
+      { ...pedido, ddd: "01" },
+      { ...pedido, ddd: "911" },
+      { ...pedido, celula_nome: "x".repeat(121) },
+    ])
+      expect(
+        respostaPedidosSchema.safeParse({
+          itens: [item],
+          proximo: null,
+          totais: { in_process: totais, approved: totais, expired: totais },
+        }).success,
+      ).toBe(false);
+    expect(
+      respostaPedidosSchema.safeParse({
+        itens: [],
+        proximo: 42,
+        totais: { in_process: totais, approved: totais, expired: totais },
+      }).success,
+    ).toBe(false);
+    for (const item of [
+      { ...entrega, resultado: "ok" },
+      { ...entrega, status_resultante: "pago" },
+    ])
+      expect(
+        respostaEntregasWebhookSchema.safeParse({
+          itens: [item],
+          proximo: null,
+        }).success,
+      ).toBe(false);
+    expect(
+      respostaEntregasWebhookSchema.safeParse({ itens: [], proximo: "42" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("entrega recusada antes de ler o corpo (json_invalido): evento, pedido e slug nulos", () => {
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [
+          {
+            ...entrega,
+            evento: null,
+            pedido_id: null,
+            slug: null,
+            resultado: "erro_validacao",
+            status_anterior: null,
+            status_resultante: null,
+            erro: {
+              codigo: "json_invalido",
+              problemas: [
+                { campo: "", codigo: "json_invalido", ocorrencias: 1 },
+              ],
+            },
+          },
+        ],
+        proximo: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("cursor de pedidos: cabe o pior caso de um id válido (128 caracteres de controle, ~1.068 em base64url)", () => {
+    const pior = btoa(
+      JSON.stringify(["2026-12-01T12:20:31.512Z", "\u0001".repeat(128)]),
+    )
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replace(/=+$/, "");
+    expect(pior.length).toBeGreaterThan(1000);
+    expect(consultaPedidosSchema.safeParse({ antes_de: pior }).success).toBe(
+      true,
+    );
+    expect(
+      respostaPedidosSchema.safeParse({
+        itens: [],
+        proximo: pior,
+        totais: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("alerta (D16): a ordem de SITUACOES_WEBHOOK é a prioridade, e a janela é decisão registrada", () => {
+    expect(SITUACOES_WEBHOOK).toEqual([
+      "erros_recentes",
+      "sem_entregas_recentes",
+      "nunca_recebeu",
+      "ok",
+    ]);
+    expect([
+      HORA_INICIO_ALERTA,
+      HORA_FIM_ALERTA,
+      HORAS_SEM_ENTREGA_ALERTA,
+    ]).toEqual([8, 22, 4]);
+  });
+
+  it("consulta de entregas: limites, cursor numérico positivo, resultado do domínio e pedido não vazio", () => {
+    // O teto da página é o custo máximo de uma leitura no D1 (D10): mudar é decisão, não acidente.
+    expect([PAGINA_PEDIDOS_MAXIMA, PAGINA_ENTREGAS_MAXIMA]).toEqual([200, 200]);
+    expect(consultaEntregasWebhookSchema.parse({ antes_de: "42" })).toEqual({
+      limite: 50,
+      antes_de: 42,
+    });
+    for (const consulta of [
+      { limite: "0" },
+      { limite: String(PAGINA_ENTREGAS_MAXIMA + 1) },
+      { antes_de: "0" },
+      { antes_de: "-3" },
+      { antes_de: "abc" },
+      { resultado: "ok" },
+      { pedido_id: "   " },
+    ])
+      expect({
+        consulta,
+        ok: consultaEntregasWebhookSchema.safeParse(consulta).success,
+      }).toEqual({ consulta, ok: false });
+  });
+});
+
+describe("RIFA-015 (D17): mapa de vendas por DDD (coordenação)", () => {
+  const totais = (bilhetes: number, parte: number) => ({
+    pedidos_aprovados: bilhetes,
+    bilhetes,
+    total_centavos: bilhetes * 2000,
+    parte_bilhetes_bp: parte,
+  });
+  const mapa = {
+    janela: {
+      tipo: "campanha",
+      ordem: null,
+      nome: "Campanha",
+      data_inicio: "2026-11-23",
+      data_fim: "2026-12-16",
+    },
+    divisao: null,
+    ufs: [{ ...totais(8, 8000), uf: "PA" }],
+    ddds: [
+      { ...totais(6, 6000), ddd: "91", uf: "PA" },
+      { ...totais(2, 2000), ddd: "94", uf: "PA" },
+    ],
+    exterior: totais(1, 1000),
+    sem_ddd: totais(1, 1000),
+    total: totais(10, 10000),
+    atualizado_em: "2026-11-25T15:00:00.000Z",
+  };
+
+  it("consulta: campanha por padrão, período e divisão opcionais", () => {
+    expect(consultaMapaDddSchema.parse({})).toEqual({ periodo: "campanha" });
+    expect(
+      consultaMapaDddSchema.parse({ periodo: "atual", divisao: "jovens" }),
+    ).toEqual({
+      periodo: "atual",
+      divisao: "jovens",
+    });
+    for (const consulta of [{ periodo: "semana" }, { divisao: "criancas" }])
+      expect(consultaMapaDddSchema.safeParse(consulta).success).toBe(false);
+  });
+
+  it("resposta estrita: UF da lista, DDD no formato gravado, parte até 10000 e nenhum dado do comprador", () => {
+    expect(respostaMapaDddSchema.safeParse(mapa).success).toBe(true);
+    const invalidas: unknown[] = [
+      { ...mapa, ufs: [{ ...mapa.ufs[0], uf: "XX" }] },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], uf: "XX" }] },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "091" }] },
+      { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 10_001 } },
+      { ...mapa, total: { ...mapa.total, parte_bilhetes_bp: 9999.5 } },
+      { ...mapa, exterior: { ...mapa.exterior, pedidos_aprovados: -1 } },
+      { ...mapa, divisao: undefined },
+      { ...mapa, ddds: [{ ...mapa.ddds[0], telefone: "+5591988887777" }] },
+      { ...mapa, a_mais: 1 },
+    ];
+    for (const resposta of invalidas)
+      expect({
+        resposta,
+        ok: respostaMapaDddSchema.safeParse(resposta).success,
+      }).toEqual({
+        resposta,
+        ok: false,
+      });
+    expect(
+      nomesDeCampos(respostaMapaDddSchema).filter((campo) =>
+        /telefone|phone|email|nome_comprador|buyer|documento|cpf/i.test(campo),
+      ),
+    ).toEqual([]);
+  });
+
+  it("invariantes: DDD da sua UF, UF = soma dos DDDs, total = ufs + exterior + sem_ddd, sem repetição", () => {
+    const quebradas: [string, unknown][] = [
+      [
+        "DDD de outra UF",
+        { ...mapa, ddds: [{ ...mapa.ddds[0], ddd: "11" }, mapa.ddds[1]] },
+      ],
+      [
+        "DDD de UF fora da lista",
+        {
+          ...mapa,
+          ufs: [{ ...mapa.ufs[0], ...totais(6, 6000) }],
+          ddds: [mapa.ddds[0], { ...mapa.ddds[1], ddd: "11", uf: "SP" }],
+        },
+      ],
+      [
+        "UF diferente da soma dos DDDs",
+        { ...mapa, ufs: [{ ...mapa.ufs[0], bilhetes: 7 }] },
+      ],
+      [
+        "total diferente da soma",
+        { ...mapa, total: { ...mapa.total, total_centavos: 19_999 } },
+      ],
+      [
+        "exterior a mais",
+        { ...mapa, exterior: { ...mapa.exterior, pedidos_aprovados: 2 } },
+      ],
+      ["UF repetida", { ...mapa, ufs: [mapa.ufs[0], mapa.ufs[0]] }],
+      ["DDD repetido", { ...mapa, ddds: [mapa.ddds[0], mapa.ddds[0]] }],
+    ];
+    for (const [caso, resposta] of quebradas)
+      expect({
+        caso,
+        ok: respostaMapaDddSchema.safeParse(resposta).success,
+      }).toEqual({
+        caso,
+        ok: false,
+      });
+    const vazio = totais(0, 0);
+    expect(
+      respostaMapaDddSchema.safeParse({
+        ...mapa,
+        ufs: [],
+        ddds: [],
+        exterior: vazio,
+        sem_ddd: vazio,
+        total: vazio,
+      }).success,
+    ).toBe(true);
   });
 });

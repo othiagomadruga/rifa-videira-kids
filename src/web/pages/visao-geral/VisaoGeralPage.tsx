@@ -10,6 +10,7 @@ import {
 } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
+import { AlertaWebhook } from "../pedidos/AlertaWebhook";
 import { AvisosVendas } from "./AvisosVendas";
 import { CartaoCampanha, CartaoHoje, CartaoPeriodo } from "./Cartoes";
 import { CurvaDaCampanha } from "./CurvaDaCampanha";
@@ -70,6 +71,8 @@ export function VisaoGeralPage() {
   return (
     <>
       <PageHeader titulo="Visão geral" />
+      {/* Alerta de webhook parado (RIFA-025): erros da Rifei, horas sem venda ou nenhuma venda ainda. */}
+      <AlertaWebhook />
       <div className="visao-controles">
         <FiltroEscopo
           escopo={escopo}
