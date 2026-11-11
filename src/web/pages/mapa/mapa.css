@@ -1,0 +1,479 @@
+/* Tela Mapa (RIFA-015, D17): filtros, o mapa em grade (cartograma) com o quadro e a legenda, e a lista por DDD
+   (cartões abaixo de 48rem, como as outras tabelas). Vem junto com MapaDeVendas (pacote à parte). Celular primeiro:
+   em 390 px a grade de 7 colunas ocupa a largura toda e cada quadrado fica com ~44 px; nenhuma largura fixa. */
+
+/* Escala da cor do mapa: um tom só (o roxo da Videira), do claro ao escuro, pela parte dos bilhetes. Faixas 1 a 3
+   com texto marinho e 4 e 5 com texto branco (contraste conferido por mapa-css.test.ts); sem venda, a superfície
+   com borda tracejada (a diferença não depende só da cor). */
+.mapa-tela {
+  --pilha-espaco: var(--espaco-4);
+  --mapa-faixa-1: color-mix(
+    in srgb,
+    var(--marca-roxo) 18%,
+    var(--cor-superficie)
+  );
+  --mapa-faixa-2: color-mix(
+    in srgb,
+    var(--marca-roxo) 38%,
+    var(--cor-superficie)
+  );
+  --mapa-faixa-3: color-mix(
+    in srgb,
+    var(--marca-roxo) 55%,
+    var(--cor-superficie)
+  );
+  --mapa-faixa-4: color-mix(
+    in srgb,
+    var(--marca-roxo) 80%,
+    var(--cor-superficie)
+  );
+  --mapa-faixa-5: var(--marca-roxo);
+  min-width: 0;
+}
+
+.mapa-tela [data-faixa="0"] {
+  --mapa-cor: var(--cor-superficie);
+  --mapa-tinta: var(--cor-texto-suave);
+}
+
+.mapa-tela [data-faixa="1"] {
+  --mapa-cor: var(--mapa-faixa-1);
+  --mapa-tinta: var(--cor-texto);
+}
+
+.mapa-tela [data-faixa="2"] {
+  --mapa-cor: var(--mapa-faixa-2);
+  --mapa-tinta: var(--cor-texto);
+}
+
+.mapa-tela [data-faixa="3"] {
+  --mapa-cor: var(--mapa-faixa-3);
+  --mapa-tinta: var(--cor-texto);
+}
+
+.mapa-tela [data-faixa="4"] {
+  --mapa-cor: var(--mapa-faixa-4);
+  --mapa-tinta: var(--cor-sobre-primaria);
+}
+
+.mapa-tela [data-faixa="5"] {
+  --mapa-cor: var(--mapa-faixa-5);
+  --mapa-tinta: var(--cor-sobre-primaria);
+}
+
+/* Filtros e "Atualizar": o botão desce para a linha de baixo quando não cabe. */
+.mapa-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.mapa-filtros {
+  flex: 1 1 18rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.mapa-atualizar {
+  flex: none;
+}
+
+.mapa-nota-divisao {
+  padding-left: var(--espaco-3);
+  border-left: 3px solid var(--cor-info);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.mapa-resumo {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.mapa-resumo__janela {
+  font-size: var(--texto-lg);
+}
+
+.mapa-resumo__total {
+  font-variant-numeric: tabular-nums;
+}
+
+.mapa-resumo__hora {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.mapa-valor {
+  font-weight: var(--peso-forte);
+}
+
+/* Seções: "Por estado" num cartão; "Por DDD" solta (a tabela já tem a moldura dela). */
+.mapa-secao {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.mapa-secao__titulo {
+  font-size: var(--texto-xl);
+}
+
+.mapa-secao__texto {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.mapa-brasil {
+  padding: var(--espaco-3);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+/* Mapa e legenda lado a lado quando cabem; no celular, a legenda desce. */
+.mapa-brasil__corpo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--espaco-5);
+}
+
+/* A grade: 7 colunas iguais (grade.ts), quadrados pela largura. A partir de 26rem a grade para de crescer. */
+.mapa-grade {
+  flex: 0 1 26rem;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+.mapa-grade [data-linha="0"] {
+  grid-row: 1;
+  --mapa-linha: 0;
+}
+
+.mapa-grade [data-linha="1"] {
+  grid-row: 2;
+  --mapa-linha: 1;
+}
+
+.mapa-grade [data-linha="2"] {
+  grid-row: 3;
+  --mapa-linha: 2;
+}
+
+.mapa-grade [data-linha="3"] {
+  grid-row: 4;
+  --mapa-linha: 3;
+}
+
+.mapa-grade [data-linha="4"] {
+  grid-row: 5;
+  --mapa-linha: 4;
+}
+
+.mapa-grade [data-linha="5"] {
+  grid-row: 6;
+  --mapa-linha: 5;
+}
+
+.mapa-grade [data-linha="6"] {
+  grid-row: 7;
+  --mapa-linha: 6;
+}
+
+.mapa-grade [data-linha="7"] {
+  grid-row: 8;
+  --mapa-linha: 7;
+}
+
+.mapa-grade [data-coluna="0"] {
+  grid-column: 1;
+}
+
+.mapa-grade [data-coluna="1"] {
+  grid-column: 2;
+}
+
+.mapa-grade [data-coluna="2"] {
+  grid-column: 3;
+}
+
+.mapa-grade [data-coluna="3"] {
+  grid-column: 4;
+}
+
+.mapa-grade [data-coluna="4"] {
+  grid-column: 5;
+}
+
+.mapa-grade [data-coluna="5"] {
+  grid-column: 6;
+}
+
+.mapa-grade [data-coluna="6"] {
+  grid-column: 7;
+}
+
+.mapa-uf {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--mapa-cor);
+  border-radius: var(--raio-2);
+  background: var(--mapa-cor);
+  color: var(--mapa-tinta);
+  font: inherit;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-negrito);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    box-shadow var(--transicao);
+}
+
+.mapa-uf[data-faixa="0"] {
+  border: 1px dashed var(--cor-borda-forte);
+}
+
+/* O estado que está no quadro: um anel marinho por fora (o foco do teclado tem o anel azul do tema). */
+.mapa-uf[data-ativa] {
+  box-shadow:
+    0 0 0 0.125rem var(--cor-superficie),
+    0 0 0 0.25rem var(--cor-texto);
+}
+
+/* O quadro ocupa o canto vazio da grade (linhas 5 a 8, colunas 1 a 3). contain: size: o conteúdo não estica as
+   linhas da grade (os quadrados continuam quadrados); se não couber, rola dentro dele. */
+.mapa-quadro {
+  grid-row: 5 / span 4;
+  grid-column: 1 / span 3;
+  contain: size;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--espaco-1);
+  padding: var(--espaco-2);
+  border-left: 0.375rem solid var(--mapa-cor);
+  border-radius: var(--raio-2);
+  background: var(--cor-fundo);
+  font-size: var(--texto-xs);
+  line-height: var(--altura-linha-titulo);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.mapa-quadro[data-faixa="0"] {
+  border-left-color: var(--cor-borda-forte);
+}
+
+.mapa-quadro__nome {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-negrito);
+}
+
+.mapa-quadro__parte strong {
+  display: block;
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-extra);
+}
+
+.mapa-quadro__linha {
+  color: var(--cor-texto-suave);
+}
+
+.mapa-quadro__linha.mapa-valor {
+  color: var(--cor-texto);
+}
+
+.mapa-brasil__lado {
+  flex: 1 1 16rem;
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.mapa-legenda {
+  display: grid;
+  gap: var(--espaco-2);
+}
+
+.mapa-legenda__titulo,
+.mapa-nota__titulo {
+  font-weight: var(--peso-forte);
+}
+
+.mapa-legenda__faixas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mapa-legenda__faixa {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  font-size: var(--texto-sm);
+}
+
+.mapa-legenda__amostra {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--mapa-cor);
+  border-radius: var(--raio-1);
+  background: var(--mapa-cor);
+}
+
+.mapa-legenda__amostra[data-faixa="0"] {
+  border: 1px dashed var(--cor-borda-forte);
+}
+
+.mapa-nota {
+  display: grid;
+  gap: var(--espaco-1);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.mapa-nota__titulo {
+  color: var(--cor-texto);
+}
+
+.mapa-nota__itens {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding-left: var(--espaco-4);
+}
+
+/* "Ver os estados em tabela": a mesma informação do mapa, em texto. */
+.mapa-detalhes {
+  padding-top: var(--espaco-2);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.mapa-detalhes > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+  color: var(--cor-link);
+  font-weight: var(--peso-forte);
+  cursor: pointer;
+}
+
+.mapa-detalhes > summary:hover {
+  color: var(--cor-primaria-forte);
+}
+
+.mapa-detalhes__conteudo {
+  position: relative;
+  display: grid;
+  gap: var(--espaco-3);
+  padding-top: var(--espaco-2);
+}
+
+.mapa-detalhes__sem-venda {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* O conteúdo de cada célula num bloco só: no celular, a célula vira "rótulo: valor". */
+.mapa-celula {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Top 3 por bilhetes: a posição numa pílula discreta, ao lado do DDD. */
+.mapa-top {
+  display: inline-block;
+  margin-left: var(--espaco-1);
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  vertical-align: middle;
+}
+
+/* Linhas de fechamento: exterior e sem DDD separadas dos DDDs; o total em destaque. */
+.mapa-ddds tbody tr:has(> td > [data-linha-tipo="total"]) {
+  background: var(--cor-superficie-2);
+}
+
+.mapa-ddds tr:has(> td > [data-linha-tipo="total"]) td {
+  font-weight: var(--peso-forte);
+}
+
+@media (min-width: 48rem) {
+  .mapa-brasil {
+    padding: var(--espaco-5);
+  }
+
+  /* Na tabela, a palavra só quebra se não couber. */
+  .mapa-celula {
+    overflow-wrap: break-word;
+  }
+
+  .mapa-valor {
+    white-space: nowrap;
+  }
+
+  .mapa-quadro {
+    gap: var(--espaco-2);
+    padding: var(--espaco-3);
+    font-size: var(--texto-sm);
+  }
+
+  .mapa-quadro__nome {
+    font-size: var(--texto-md);
+  }
+
+  .mapa-quadro__parte strong {
+    font-size: var(--texto-2xl);
+  }
+
+  .mapa-ddds tr:has(> td > [data-linha-tipo="exterior"]) td {
+    border-top: 2px solid var(--cor-borda);
+  }
+
+  .mapa-ddds tr:has(> td > [data-linha-tipo="total"]) td {
+    border-top: 2px solid var(--cor-borda-forte);
+    background: var(--cor-superficie-2);
+  }
+}
+
+/* Movimento (só sem a preferência por menos movimento): os quadrados entram em cascata, do norte para o sul, e
+   sobem 1 px no mouse. backwards (e não both): depois da entrada, a animação não segura o transform do mouse. */
+@media (prefers-reduced-motion: no-preference) {
+  .mapa-uf {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
+    animation-delay: calc(var(--mapa-linha, 0) * 35ms);
+    transition:
+      background-color var(--transicao),
+      box-shadow var(--transicao),
+      transform var(--duracao-rapida) var(--curva-saida);
+  }
+
+  .mapa-uf:hover {
+    transform: translateY(-0.0625rem);
+  }
+
+  .mapa-uf:active {
+    transform: scale(0.96);
+  }
+}
