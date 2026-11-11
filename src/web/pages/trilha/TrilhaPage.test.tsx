@@ -336,6 +336,65 @@ describe("RIFA-024: Carregar mais (cursor) e o foco", () => {
       `${ROTA_API}?limite=50&antes_de=21`,
     ]);
   });
+
+  it("uma página que repete um registro não o duplica; ação e alvo que o site não conhece aparecem como vieram", async () => {
+    const { pedidos } = simularTrilha([], {
+      0: () => respostaJson({ itens: [registro(5), registro(4)], proximo: 4 }),
+      // Fora do schema de propósito (uma ação nova): o registro não pode sumir.
+      1: () =>
+        respostaJson({
+          itens: [
+            registro(4),
+            registro(3, {
+              acao: "campanha.arquivar" as RegistroAuditoria["acao"],
+              alvo: "evento:9",
+            }),
+          ],
+          proximo: null,
+        }),
+    });
+    abrirComoAdmin();
+    expect(await linhas()).toHaveLength(2);
+
+    acionar(botaoCarregarMais());
+    await waitFor(async () => expect(await linhas()).toHaveLength(3));
+    const nova = (await linhas())[2];
+    expect(celulas(nova).slice(2, 4)).toEqual([
+      "campanha.arquivar",
+      "evento:9",
+    ]);
+    await waitFor(() =>
+      expect(
+        within(nova).getAllByRole("cell")[0].firstElementChild,
+      ).toHaveFocus(),
+    );
+    expect(anuncio()).toHaveTextContent(
+      "1 registro a mais na lista. Não há registros mais antigos.",
+    );
+    expect(pedidos).toEqual([
+      `${ROTA_API}?limite=50`,
+      `${ROTA_API}?limite=50&antes_de=4`,
+    ]);
+  });
+
+  it("a última página vem vazia: o botão some e o foco vai para a linha do fim", async () => {
+    simularTrilha([], {
+      0: () => respostaJson({ itens: [registro(2), registro(1)], proximo: 1 }),
+      1: () => respostaJson({ itens: [], proximo: null }),
+    });
+    abrirComoAdmin();
+    expect(await linhas()).toHaveLength(2);
+
+    acionar(botaoCarregarMais());
+    await waitFor(() =>
+      expect(
+        screen.getByText("2 registros; não há registros mais antigos."),
+      ).toHaveFocus(),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Carregar mais" }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("RIFA-024: estados da trilha", () => {

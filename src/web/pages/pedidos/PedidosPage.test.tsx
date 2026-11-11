@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import {
   ADMIN_DE_TESTE,
@@ -25,7 +25,6 @@ import {
   respostaErro,
   simularApi,
 } from "./teste-apoio";
-import { esquecerEstadoWebhook } from "./useEstadoWebhook";
 
 const CAMINHO = "/coordenacao/pedidos";
 
@@ -90,11 +89,6 @@ function acionar(elemento: HTMLElement) {
   act(() => elemento.focus());
   fireEvent.click(elemento);
 }
-
-beforeEach(() => {
-  // Cada teste começa como uma página recém-aberta (o estado do webhook fica guardado no módulo).
-  esquecerEstadoWebhook();
-});
 
 afterEach(() => {
   vi.unstubAllGlobals();

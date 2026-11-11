@@ -402,410 +402,417 @@ async function fotografar(db: D1Database) {
   );
 }
 
-describe("0006 sobre dados que já existiam (CA7)", () => {
-  const db = DB_MIGRACAO;
-  let antes: Awaited<ReturnType<typeof fotografar>>;
+// As migrações sobre dados que já existiam são um cenário em passos no mesmo D1 (DB_MIGRACAO): até a 0005 e os
+// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados. Por isso a ordem é a do arquivo, mesmo
+// com --sequence.shuffle: a 0006 tem de ser a última aplicada quando os testes dela rodam, e a cascata apaga
+// linhas que a comparação "continuam iguais" fotografou.
+describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
+  describe("0006 sobre dados que já existiam (CA7)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Awaited<ReturnType<typeof fotografar>>;
 
-  beforeAll(async () => {
-    const ate0005 = TEST_MIGRATIONS.filter(
-      (migracao) => migracao.name < "0006",
-    );
-    expect(ate0005.map((migracao) => migracao.name)).not.toContain(
-      "0006_acesso_hierarquia.sql",
-    );
-    const ate0006 = TEST_MIGRATIONS.filter(
-      (migracao) => migracao.name < "0007",
-    );
-    await applyD1Migrations(db, ate0005);
-    // Antes da 0006: a hierarquia, um afiliado, um admin e uma coordenadora (desativada), com links válidos,
-    // revogados e vencidos, sessões e a trilha de auditoria (que segura o admin com RESTRICT).
-    await db.batch([
-      db.prepare(
-        `INSERT INTO redes (id, nome, divisao) VALUES (1, 'Rede Antes da 0006', 'jovens'),
+    beforeAll(async () => {
+      const ate0005 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0006",
+      );
+      expect(ate0005.map((migracao) => migracao.name)).not.toContain(
+        "0006_acesso_hierarquia.sql",
+      );
+      const ate0006 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0007",
+      );
+      await applyD1Migrations(db, ate0005);
+      // Antes da 0006: a hierarquia, um afiliado, um admin e uma coordenadora (desativada), com links válidos,
+      // revogados e vencidos, sessões e a trilha de auditoria (que segura o admin com RESTRICT).
+      await db.batch([
+        db.prepare(
+          `INSERT INTO redes (id, nome, divisao) VALUES (1, 'Rede Antes da 0006', 'jovens'),
            (2, 'Rede Sem Discipuladores', 'adultos')`,
-      ),
-      db.prepare(
-        `INSERT INTO discipuladores (id, rede_id, nome) VALUES (10, 1, 'Discipulador Antes'),
+        ),
+        db.prepare(
+          `INSERT INTO discipuladores (id, rede_id, nome) VALUES (10, 1, 'Discipulador Antes'),
            (11, 1, 'Discipulador Sem Celulas')`,
-      ),
-      db.prepare(
-        `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome) VALUES
+        ),
+        db.prepare(
+          `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome) VALUES
            (100, 10, 'Celula Antes', 10, 'Lider Antes'),
            (101, 10, 'Celula Com Afiliado', 8, 'Lider Com Afiliado'),
            (102, 10, 'Celula Da Trilha', 6, 'Lider Da Trilha')`,
-      ),
-      db.prepare(
-        `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em)
+        ),
+        db.prepare(
+          `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em)
          VALUES (5001, 101, 'manual', '2026-11-01T12:00:00.000Z')`,
-      ),
-      db.prepare(
-        `INSERT INTO usuarios (id, nome, email, papel, ativo, criado_em) VALUES
+        ),
+        db.prepare(
+          `INSERT INTO usuarios (id, nome, email, papel, ativo, criado_em) VALUES
            (1, 'Admin Antes da 0006', 'admin@example.com', 'admin', 1, '2026-11-01T10:00:00.000Z'),
            (2, 'Coordenacao Antes da 0006', NULL, 'coordenacao', 0, '2026-11-02T10:00:00.000Z')`,
-      ),
-      db
-        .prepare(
-          `INSERT INTO links_acesso (id, usuario_id, token_hash, criado_em, expira_em, revogado_em, ultimo_uso_em)
+        ),
+        db
+          .prepare(
+            `INSERT INTO links_acesso (id, usuario_id, token_hash, criado_em, expira_em, revogado_em, ultimo_uso_em)
            VALUES (1, 1, ?1, '2026-11-01T10:00:00.000Z', '2026-12-16T10:00:00.000Z', NULL, '2026-11-04T09:00:00.000Z'),
                   (2, 1, ?2, '2026-11-01T11:00:00.000Z', '2026-12-16T11:00:00.000Z', '2026-11-03T08:00:00.000Z', NULL),
                   (3, 2, ?3, '2026-09-01T10:00:00.000Z', '2026-10-16T10:00:00.000Z', NULL, NULL)`,
-        )
-        .bind(hash("a"), hash("b"), hash("c")),
-      db
-        .prepare(
-          `INSERT INTO sessoes (id_hash, usuario_id, link_id, criado_em, expira_em, ultimo_uso_em)
+          )
+          .bind(hash("a"), hash("b"), hash("c")),
+        db
+          .prepare(
+            `INSERT INTO sessoes (id_hash, usuario_id, link_id, criado_em, expira_em, ultimo_uso_em)
            VALUES (?1, 1, 1, '2026-11-04T09:00:00.000Z', '2026-12-16T10:00:00.000Z', '2026-11-05T11:00:00.000Z')`,
-        )
-        .bind(hash("d")),
-      db.prepare(
-        `INSERT INTO auditoria (id, usuario_id, em, acao, alvo, resumo) VALUES
+          )
+          .bind(hash("d")),
+        db.prepare(
+          `INSERT INTO auditoria (id, usuario_id, em, acao, alvo, resumo) VALUES
            (1, 1, '2026-11-02T10:00:00.000Z', 'usuario.criar', 'usuario:2', 'Acesso criado com o papel coordenacao e um link'),
            (2, 1, '2026-11-03T08:00:00.000Z', 'link.revogar', 'link:2', 'Link do usuário 1 revogado')`,
-      ),
-    ]);
-    antes = await fotografar(db);
-    // Até a 0006: a 0007 é aplicada depois, sobre outros dados (describe "0007 sobre dados que já existiam").
-    await applyD1Migrations(db, ate0006);
-  });
+        ),
+      ]);
+      antes = await fotografar(db);
+      // Até a 0006: a 0007 é aplicada depois, sobre outros dados (describe "0007 sobre dados que já existiam").
+      await applyD1Migrations(db, ate0006);
+    });
 
-  it("a 0006 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
-    const { results } = await db
-      .prepare("SELECT name FROM d1_migrations ORDER BY id")
-      .all<{ name: string }>();
-    expect(results.map((linha) => linha.name).at(-1)).toBe(
-      "0006_acesso_hierarquia.sql",
-    );
-    expect(antes.usuarios).toHaveLength(2);
-    expect(antes.links_acesso).toHaveLength(3);
-    expect(antes.sessoes).toHaveLength(1);
-    expect(antes.auditoria).toHaveLength(2);
-  });
+    it("a 0006 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0006_acesso_hierarquia.sql",
+      );
+      expect(antes.usuarios).toHaveLength(2);
+      expect(antes.links_acesso).toHaveLength(3);
+      expect(antes.sessoes).toHaveLength(1);
+      expect(antes.auditoria).toHaveLength(2);
+    });
 
-  it("usuários, links, sessões, auditoria e hierarquia continuam iguais; o alvo dos antigos é nulo", async () => {
-    expect(await fotografar(db)).toEqual(antes);
-    const { results } = await db
-      .prepare(
-        "SELECT id, celula_id, discipulador_id, rede_id FROM usuarios ORDER BY id",
-      )
-      .all();
-    expect(results).toEqual([
-      { id: 1, celula_id: null, discipulador_id: null, rede_id: null },
-      { id: 2, celula_id: null, discipulador_id: null, rede_id: null },
-    ]);
-    // A tabela não foi recriada: as FKs que apontam para usuarios continuam, e nenhuma ficou órfã (o D1 não
-    // deixa rodar PRAGMA foreign_key_check).
-    const orfaos = await db
-      .prepare(
-        `SELECT (SELECT count(*) FROM links_acesso WHERE usuario_id NOT IN (SELECT id FROM usuarios))
+    it("usuários, links, sessões, auditoria e hierarquia continuam iguais; o alvo dos antigos é nulo", async () => {
+      expect(await fotografar(db)).toEqual(antes);
+      const { results } = await db
+        .prepare(
+          "SELECT id, celula_id, discipulador_id, rede_id FROM usuarios ORDER BY id",
+        )
+        .all();
+      expect(results).toEqual([
+        { id: 1, celula_id: null, discipulador_id: null, rede_id: null },
+        { id: 2, celula_id: null, discipulador_id: null, rede_id: null },
+      ]);
+      // A tabela não foi recriada: as FKs que apontam para usuarios continuam, e nenhuma ficou órfã (o D1 não
+      // deixa rodar PRAGMA foreign_key_check).
+      const orfaos = await db
+        .prepare(
+          `SELECT (SELECT count(*) FROM links_acesso WHERE usuario_id NOT IN (SELECT id FROM usuarios))
               + (SELECT count(*) FROM sessoes WHERE usuario_id NOT IN (SELECT id FROM usuarios))
               + (SELECT count(*) FROM auditoria WHERE usuario_id NOT IN (SELECT id FROM usuarios)) AS total`,
-      )
-      .first<{ total: number }>();
-    expect(orfaos).toEqual({ total: 0 });
-    // As referências a usuarios seguem no schema das tabelas filhas (o D1 não deixa ler pragma_foreign_key_list).
-    const { results: filhas } = await db
-      .prepare(
-        `SELECT name, sql FROM sqlite_master
+        )
+        .first<{ total: number }>();
+      expect(orfaos).toEqual({ total: 0 });
+      // As referências a usuarios seguem no schema das tabelas filhas (o D1 não deixa ler pragma_foreign_key_list).
+      const { results: filhas } = await db
+        .prepare(
+          `SELECT name, sql FROM sqlite_master
          WHERE type = 'table' AND name IN ('auditoria', 'links_acesso', 'sessoes') ORDER BY name`,
-      )
-      .all<{ name: string; sql: string }>();
-    expect(
-      filhas.map(({ name, sql }) => ({
-        name,
-        referencia:
-          /usuario_id\s+INTEGER NOT NULL REFERENCES usuarios \(id\) ON DELETE (\w+)/.exec(
-            sql,
-          )?.[1],
-      })),
-    ).toEqual([
-      { name: "auditoria", referencia: "RESTRICT" },
-      { name: "links_acesso", referencia: "CASCADE" },
-      { name: "sessoes", referencia: "CASCADE" },
-    ]);
-  });
-
-  it("o admin de antes continua entrando: o link e a sessão dele valem no banco migrado", async () => {
-    expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
-      linkId: 1,
-      usuario: { id: 1, nome: "Admin Antes da 0006", papel: "admin" },
-    });
-    expect(await buscarLinkValido(db, hash("b"), AGORA_DA_MIGRACAO)).toBeNull();
-    expect(
-      await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
-    ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
-  });
-
-  it("CHECK do papel: os 5 papéis, o alvo certo para cada um e nenhum alvo na coordenação", async () => {
-    const inserir = (colunas: string, valores: string) =>
-      db
-        .prepare(
-          `INSERT INTO usuarios (nome, ${colunas}) VALUES ('Teste da 0006', ${valores})`,
         )
-        .run();
-    const recusados: [string, string][] = [
-      ["papel", "'kids'"],
-      ["papel", "'lider'"],
-      ["papel, discipulador_id", "'lider', 10"],
-      ["papel, celula_id, rede_id", "'lider', 100, 1"],
-      ["papel, celula_id", "'discipulador', 100"],
-      ["papel, rede_id", "'discipulador', 1"],
-      ["papel", "'rede'"],
-      ["papel, celula_id", "'admin', 100"],
-      ["papel, rede_id", "'coordenacao', 1"],
-    ];
-    for (const [colunas, valores] of recusados)
-      await expect(inserir(colunas, valores)).rejects.toThrow(
-        /CHECK constraint failed/,
-      );
-    await expect(
-      db.prepare("UPDATE usuarios SET celula_id = 100 WHERE id = 1").run(),
-    ).rejects.toThrow(/CHECK constraint failed/);
-    await expect(
-      db.prepare("UPDATE usuarios SET papel = 'lider' WHERE id = 1").run(),
-    ).rejects.toThrow(/CHECK constraint failed/);
-
-    for (const [colunas, valores] of [
-      ["papel, celula_id", "'lider', 100"],
-      ["papel, discipulador_id", "'discipulador', 10"],
-      ["papel, rede_id", "'rede', 1"],
-    ])
-      await inserir(colunas, valores);
-    onTestFinished(async () => {
-      await db
-        .prepare("DELETE FROM usuarios WHERE nome = 'Teste da 0006'")
-        .run();
+        .all<{ name: string; sql: string }>();
+      expect(
+        filhas.map(({ name, sql }) => ({
+          name,
+          referencia:
+            /usuario_id\s+INTEGER NOT NULL REFERENCES usuarios \(id\) ON DELETE (\w+)/.exec(
+              sql,
+            )?.[1],
+        })),
+      ).toEqual([
+        { name: "auditoria", referencia: "RESTRICT" },
+        { name: "links_acesso", referencia: "CASCADE" },
+        { name: "sessoes", referencia: "CASCADE" },
+      ]);
     });
-    // A chave estrangeira do alvo vale: célula que não existe.
-    await expect(
-      db
-        .prepare(
-          "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Sem Alvo', 'lider', 999)",
-        )
-        .run(),
-    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
-  });
 
-  it("gatilhos: papel NULL é recusado ao inserir e ao atualizar, com a mensagem do NOT NULL", async () => {
-    await expect(
-      db.prepare("INSERT INTO usuarios (nome) VALUES ('Sem Papel')").run(),
-    ).rejects.toThrow(/NOT NULL constraint failed: usuarios\.papel/);
-    await expect(
-      db
-        .prepare(
-          "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Sem Papel', NULL, 100)",
-        )
-        .run(),
-    ).rejects.toThrow(/NOT NULL constraint failed: usuarios\.papel/);
-    await expect(
-      db.prepare("UPDATE usuarios SET papel = NULL WHERE id = 2").run(),
-    ).rejects.toThrow(/NOT NULL constraint failed: usuarios\.papel/);
-    const { results } = await db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'usuarios' ORDER BY name",
-      )
-      .all<{ name: string }>();
-    expect(results.map((linha) => linha.name)).toEqual([
-      "usuarios_papel_obrigatorio_ao_atualizar",
-      "usuarios_papel_obrigatorio_ao_inserir",
-    ]);
-    expect(
-      await db.prepare("SELECT papel FROM usuarios WHERE id = 2").first(),
-    ).toEqual({ papel: "coordenacao" });
-  });
-
-  it("um usuário por alvo: o segundo da mesma célula, do mesmo discipulador ou da mesma rede é recusado", async () => {
-    await db.batch([
-      db.prepare(
-        "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Unico da Celula', 'lider', 100)",
-      ),
-      db.prepare(
-        "INSERT INTO usuarios (nome, papel, discipulador_id) VALUES ('Unico do Discipulador', 'discipulador', 10)",
-      ),
-      db.prepare(
-        "INSERT INTO usuarios (nome, papel, rede_id) VALUES ('Unico da Rede', 'rede', 1)",
-      ),
-    ]);
-    onTestFinished(async () => {
-      await db.prepare("DELETE FROM usuarios WHERE nome LIKE 'Unico%'").run();
+    it("o admin de antes continua entrando: o link e a sessão dele valem no banco migrado", async () => {
+      expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
+        linkId: 1,
+        usuario: { id: 1, nome: "Admin Antes da 0006", papel: "admin" },
+      });
+      expect(
+        await buscarLinkValido(db, hash("b"), AGORA_DA_MIGRACAO),
+      ).toBeNull();
+      expect(
+        await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
+      ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
     });
-    for (const [coluna, papel, id] of [
-      ["celula_id", "lider", 100],
-      ["discipulador_id", "discipulador", 10],
-      ["rede_id", "rede", 1],
-    ] as const)
+
+    it("CHECK do papel: os 5 papéis, o alvo certo para cada um e nenhum alvo na coordenação", async () => {
+      const inserir = (colunas: string, valores: string) =>
+        db
+          .prepare(
+            `INSERT INTO usuarios (nome, ${colunas}) VALUES ('Teste da 0006', ${valores})`,
+          )
+          .run();
+      const recusados: [string, string][] = [
+        ["papel", "'kids'"],
+        ["papel", "'lider'"],
+        ["papel, discipulador_id", "'lider', 10"],
+        ["papel, celula_id, rede_id", "'lider', 100, 1"],
+        ["papel, celula_id", "'discipulador', 100"],
+        ["papel, rede_id", "'discipulador', 1"],
+        ["papel", "'rede'"],
+        ["papel, celula_id", "'admin', 100"],
+        ["papel, rede_id", "'coordenacao', 1"],
+      ];
+      for (const [colunas, valores] of recusados)
+        await expect(inserir(colunas, valores)).rejects.toThrow(
+          /CHECK constraint failed/,
+        );
+      await expect(
+        db.prepare("UPDATE usuarios SET celula_id = 100 WHERE id = 1").run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+      await expect(
+        db.prepare("UPDATE usuarios SET papel = 'lider' WHERE id = 1").run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+
+      for (const [colunas, valores] of [
+        ["papel, celula_id", "'lider', 100"],
+        ["papel, discipulador_id", "'discipulador', 10"],
+        ["papel, rede_id", "'rede', 1"],
+      ])
+        await inserir(colunas, valores);
+      onTestFinished(async () => {
+        await db
+          .prepare("DELETE FROM usuarios WHERE nome = 'Teste da 0006'")
+          .run();
+      });
+      // A chave estrangeira do alvo vale: célula que não existe.
       await expect(
         db
           .prepare(
-            `INSERT INTO usuarios (nome, papel, ${coluna}) VALUES ('Segundo', ?1, ?2)`,
+            "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Sem Alvo', 'lider', 999)",
+          )
+          .run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+    });
+
+    it("gatilhos: papel NULL é recusado ao inserir e ao atualizar, com a mensagem do NOT NULL", async () => {
+      await expect(
+        db.prepare("INSERT INTO usuarios (nome) VALUES ('Sem Papel')").run(),
+      ).rejects.toThrow(/NOT NULL constraint failed: usuarios\.papel/);
+      await expect(
+        db
+          .prepare(
+            "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Sem Papel', NULL, 100)",
+          )
+          .run(),
+      ).rejects.toThrow(/NOT NULL constraint failed: usuarios\.papel/);
+      await expect(
+        db.prepare("UPDATE usuarios SET papel = NULL WHERE id = 2").run(),
+      ).rejects.toThrow(/NOT NULL constraint failed: usuarios\.papel/);
+      const { results } = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'usuarios' ORDER BY name",
+        )
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toEqual([
+        "usuarios_papel_obrigatorio_ao_atualizar",
+        "usuarios_papel_obrigatorio_ao_inserir",
+      ]);
+      expect(
+        await db.prepare("SELECT papel FROM usuarios WHERE id = 2").first(),
+      ).toEqual({ papel: "coordenacao" });
+    });
+
+    it("um usuário por alvo: o segundo da mesma célula, do mesmo discipulador ou da mesma rede é recusado", async () => {
+      await db.batch([
+        db.prepare(
+          "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Unico da Celula', 'lider', 100)",
+        ),
+        db.prepare(
+          "INSERT INTO usuarios (nome, papel, discipulador_id) VALUES ('Unico do Discipulador', 'discipulador', 10)",
+        ),
+        db.prepare(
+          "INSERT INTO usuarios (nome, papel, rede_id) VALUES ('Unico da Rede', 'rede', 1)",
+        ),
+      ]);
+      onTestFinished(async () => {
+        await db.prepare("DELETE FROM usuarios WHERE nome LIKE 'Unico%'").run();
+      });
+      for (const [coluna, papel, id] of [
+        ["celula_id", "lider", 100],
+        ["discipulador_id", "discipulador", 10],
+        ["rede_id", "rede", 1],
+      ] as const)
+        await expect(
+          db
+            .prepare(
+              `INSERT INTO usuarios (nome, papel, ${coluna}) VALUES ('Segundo', ?1, ?2)`,
+            )
+            .bind(papel, id)
+            .run(),
+        ).rejects.toThrow(/UNIQUE constraint failed/);
+    });
+
+    it("cascata: apagar a célula, o discipulador ou a rede apaga o usuário do alvo, os links e as sessões dele", async () => {
+      const criarAcesso = async (
+        coluna: string,
+        papel: string,
+        id: number,
+        letras: [string, string],
+      ) => {
+        const usuario = await db
+          .prepare(
+            `INSERT INTO usuarios (nome, papel, ${coluna}) VALUES ('Acesso em Cascata', ?1, ?2) RETURNING id`,
           )
           .bind(papel, id)
-          .run(),
-      ).rejects.toThrow(/UNIQUE constraint failed/);
-  });
+          .first<{ id: number }>();
+        const link = await db
+          .prepare(
+            `INSERT INTO links_acesso (usuario_id, token_hash, expira_em)
+           VALUES (?1, ?2, '2026-12-16T10:00:00.000Z') RETURNING id`,
+          )
+          .bind(usuario!.id, hash(letras[0]))
+          .first<{ id: number }>();
+        await db
+          .prepare(
+            `INSERT INTO sessoes (id_hash, usuario_id, link_id, expira_em)
+           VALUES (?1, ?2, ?3, '2026-12-16T10:00:00.000Z')`,
+          )
+          .bind(hash(letras[1]), usuario!.id, link!.id)
+          .run();
+        return usuario!.id;
+      };
+      const restos = async (usuarioId: number) =>
+        (
+          await db.batch<{ total: number }>([
+            db
+              .prepare("SELECT count(*) AS total FROM usuarios WHERE id = ?1")
+              .bind(usuarioId),
+            db
+              .prepare(
+                "SELECT count(*) AS total FROM links_acesso WHERE usuario_id = ?1",
+              )
+              .bind(usuarioId),
+            db
+              .prepare(
+                "SELECT count(*) AS total FROM sessoes WHERE usuario_id = ?1",
+              )
+              .bind(usuarioId),
+          ])
+        ).map((resultado) => resultado.results[0].total);
 
-  it("cascata: apagar a célula, o discipulador ou a rede apaga o usuário do alvo, os links e as sessões dele", async () => {
-    const criarAcesso = async (
-      coluna: string,
-      papel: string,
-      id: number,
-      letras: [string, string],
-    ) => {
+      const lider = await criarAcesso("celula_id", "lider", 100, ["e", "1"]);
+      const discipulador = await criarAcesso(
+        "discipulador_id",
+        "discipulador",
+        11,
+        ["f", "2"],
+      );
+      const rede = await criarAcesso("rede_id", "rede", 2, ["9", "3"]);
+      for (const id of [lider, discipulador, rede])
+        expect(await restos(id)).toEqual([1, 1, 1]);
+
+      await db.prepare("DELETE FROM celulas WHERE id = 100").run();
+      await db.prepare("DELETE FROM discipuladores WHERE id = 11").run();
+      await db.prepare("DELETE FROM redes WHERE id = 2").run();
+      for (const id of [lider, discipulador, rede])
+        expect(await restos(id)).toEqual([0, 0, 0]);
+      // O resto não foi junto.
+      expect((await fotografar(db)).usuarios).toEqual(antes.usuarios);
+    });
+
+    it("a trilha de auditoria continua segurando quem fez (RESTRICT), inclusive na cascata do alvo", async () => {
+      await expect(
+        db.prepare("DELETE FROM usuarios WHERE id = 1").run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      // Um usuário da hierarquia que aparecesse como autor na trilha seguraria a exclusão do alvo dele.
       const usuario = await db
         .prepare(
-          `INSERT INTO usuarios (nome, papel, ${coluna}) VALUES ('Acesso em Cascata', ?1, ?2) RETURNING id`,
+          "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Lider Da Trilha', 'lider', 102) RETURNING id",
         )
-        .bind(papel, id)
-        .first<{ id: number }>();
-      const link = await db
-        .prepare(
-          `INSERT INTO links_acesso (usuario_id, token_hash, expira_em)
-           VALUES (?1, ?2, '2026-12-16T10:00:00.000Z') RETURNING id`,
-        )
-        .bind(usuario!.id, hash(letras[0]))
         .first<{ id: number }>();
       await db
         .prepare(
-          `INSERT INTO sessoes (id_hash, usuario_id, link_id, expira_em)
-           VALUES (?1, ?2, ?3, '2026-12-16T10:00:00.000Z')`,
-        )
-        .bind(hash(letras[1]), usuario!.id, link!.id)
-        .run();
-      return usuario!.id;
-    };
-    const restos = async (usuarioId: number) =>
-      (
-        await db.batch<{ total: number }>([
-          db
-            .prepare("SELECT count(*) AS total FROM usuarios WHERE id = ?1")
-            .bind(usuarioId),
-          db
-            .prepare(
-              "SELECT count(*) AS total FROM links_acesso WHERE usuario_id = ?1",
-            )
-            .bind(usuarioId),
-          db
-            .prepare(
-              "SELECT count(*) AS total FROM sessoes WHERE usuario_id = ?1",
-            )
-            .bind(usuarioId),
-        ])
-      ).map((resultado) => resultado.results[0].total);
-
-    const lider = await criarAcesso("celula_id", "lider", 100, ["e", "1"]);
-    const discipulador = await criarAcesso(
-      "discipulador_id",
-      "discipulador",
-      11,
-      ["f", "2"],
-    );
-    const rede = await criarAcesso("rede_id", "rede", 2, ["9", "3"]);
-    for (const id of [lider, discipulador, rede])
-      expect(await restos(id)).toEqual([1, 1, 1]);
-
-    await db.prepare("DELETE FROM celulas WHERE id = 100").run();
-    await db.prepare("DELETE FROM discipuladores WHERE id = 11").run();
-    await db.prepare("DELETE FROM redes WHERE id = 2").run();
-    for (const id of [lider, discipulador, rede])
-      expect(await restos(id)).toEqual([0, 0, 0]);
-    // O resto não foi junto.
-    expect((await fotografar(db)).usuarios).toEqual(antes.usuarios);
-  });
-
-  it("a trilha de auditoria continua segurando quem fez (RESTRICT), inclusive na cascata do alvo", async () => {
-    await expect(
-      db.prepare("DELETE FROM usuarios WHERE id = 1").run(),
-    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
-    // Um usuário da hierarquia que aparecesse como autor na trilha seguraria a exclusão do alvo dele.
-    const usuario = await db
-      .prepare(
-        "INSERT INTO usuarios (nome, papel, celula_id) VALUES ('Lider Da Trilha', 'lider', 102) RETURNING id",
-      )
-      .first<{ id: number }>();
-    await db
-      .prepare(
-        `INSERT INTO auditoria (usuario_id, em, acao, alvo, resumo)
+          `INSERT INTO auditoria (usuario_id, em, acao, alvo, resumo)
          VALUES (?1, '2026-11-05T10:00:00.000Z', 'link.criar', 'link:1', 'Registro de teste')`,
-      )
-      .bind(usuario!.id)
-      .run();
-    await expect(
-      db.prepare("DELETE FROM celulas WHERE id = 102").run(),
-    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
-    expect(
-      await db.prepare("SELECT id FROM celulas WHERE id = 102").first(),
-    ).toEqual({ id: 102 });
+        )
+        .bind(usuario!.id)
+        .run();
+      await expect(
+        db.prepare("DELETE FROM celulas WHERE id = 102").run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      expect(
+        await db.prepare("SELECT id FROM celulas WHERE id = 102").first(),
+      ).toEqual({ id: 102 });
+    });
   });
-});
 
-// ---------------------------------------------------------------------------------------------------
-// 0007 (RIFA-025, D16): dois índices, aplicados sobre pedidos e entregas que já existiam (CA5)
-// ---------------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------------
+  // 0007 (RIFA-025, D16): dois índices, aplicados sobre pedidos e entregas que já existiam (CA5)
+  // ---------------------------------------------------------------------------------------------------
 
-/** O que já existia antes da 0007 (a ordem pela chave). */
-const FOTOS_0007 = {
-  pedidos: "SELECT * FROM pedidos ORDER BY id",
-  pedidos_suspeitos: "SELECT * FROM pedidos_suspeitos ORDER BY pedido_id",
-  webhook_eventos: "SELECT * FROM webhook_eventos ORDER BY id",
-  afiliados: "SELECT * FROM afiliados ORDER BY affiliate_id",
-} as const;
+  /** O que já existia antes da 0007 (a ordem pela chave). */
+  const FOTOS_0007 = {
+    pedidos: "SELECT * FROM pedidos ORDER BY id",
+    pedidos_suspeitos: "SELECT * FROM pedidos_suspeitos ORDER BY pedido_id",
+    webhook_eventos: "SELECT * FROM webhook_eventos ORDER BY id",
+    afiliados: "SELECT * FROM afiliados ORDER BY affiliate_id",
+  } as const;
 
-async function fotografar0007(db: D1Database) {
-  const resultados = await db.batch(
-    Object.values(FOTOS_0007).map((sql) => db.prepare(sql)),
-  );
-  return Object.fromEntries(
-    Object.keys(FOTOS_0007).map((nome, indice) => [
-      nome,
-      resultados[indice].results,
-    ]),
-  );
-}
-
-describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
-  const db = DB_MIGRACAO;
-  let antes: Awaited<ReturnType<typeof fotografar0007>>;
-  let campanhaId: number;
-
-  beforeAll(async () => {
-    // Idempotente: o describe da 0006 já aplicou até ela (aqui vale também rodando este describe sozinho).
-    const ate0006 = TEST_MIGRATIONS.filter(
-      (migracao) => migracao.name < "0007",
+  async function fotografar0007(db: D1Database) {
+    const resultados = await db.batch(
+      Object.values(FOTOS_0007).map((sql) => db.prepare(sql)),
     );
-    expect(ate0006.map((migracao) => migracao.name)).not.toContain(
-      "0007_indices_pedidos_entregas.sql",
+    return Object.fromEntries(
+      Object.keys(FOTOS_0007).map((nome, indice) => [
+        nome,
+        resultados[indice].results,
+      ]),
     );
-    await applyD1Migrations(db, ate0006);
-    const campanha = await db
-      .prepare(
-        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos, meta_unidade,
+  }
+
+  describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Awaited<ReturnType<typeof fotografar0007>>;
+    let campanhaId: number;
+
+    beforeAll(async () => {
+      // Idempotente: o describe da 0006 já aplicou até ela (aqui vale também rodando este describe sozinho).
+      const ate0006 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0007",
+      );
+      expect(ate0006.map((migracao) => migracao.name)).not.toContain(
+        "0007_indices_pedidos_entregas.sql",
+      );
+      await applyD1Migrations(db, ate0006);
+      const campanha = await db
+        .prepare(
+          `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos, meta_unidade,
            meta_regra, meta_valor, ranking_criterio)
          VALUES ('Campanha Antes da 0007', 'campanha-antes-da-0007', 1, '2026-11-23', 2000, 'bilhetes',
            'por_pessoa', 10, 'percentual_meta')
          RETURNING id`,
-      )
-      .first<{ id: number }>();
-    campanhaId = campanha!.id;
-    // Hierarquia própria (ids que o describe da 0006 não usa), um afiliado vinculado e um órfão, três pedidos
-    // (um suspeito) e as entregas deles, inclusive um erro e um aviso.
-    await db.batch([
-      db.prepare(
-        "INSERT INTO redes (id, nome, divisao) VALUES (70, 'Rede Antes da 0007', 'adultos')",
-      ),
-      db.prepare(
-        "INSERT INTO discipuladores (id, rede_id, nome) VALUES (700, 70, 'Discipulador Antes da 0007')",
-      ),
-      db.prepare(
-        `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
+        )
+        .first<{ id: number }>();
+      campanhaId = campanha!.id;
+      // Hierarquia própria (ids que o describe da 0006 não usa), um afiliado vinculado e um órfão, três pedidos
+      // (um suspeito) e as entregas deles, inclusive um erro e um aviso.
+      await db.batch([
+        db.prepare(
+          "INSERT INTO redes (id, nome, divisao) VALUES (70, 'Rede Antes da 0007', 'adultos')",
+        ),
+        db.prepare(
+          "INSERT INTO discipuladores (id, rede_id, nome) VALUES (700, 70, 'Discipulador Antes da 0007')",
+        ),
+        db.prepare(
+          `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
          VALUES (7000, 700, 'Celula Antes da 0007', 9, 'Lider Antes da 0007')`,
-      ),
-      db.prepare(
-        `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em) VALUES
+        ),
+        db.prepare(
+          `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em) VALUES
            (7001, 7000, 'manual', '2026-11-20T12:00:00.000Z'),
            (7002, NULL, 'webhook', NULL)`,
-      ),
-      db
-        .prepare(
-          `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+        ),
+        db
+          .prepare(
+            `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
              registrado_em, atualizado_em) VALUES
              ('ANTES-0007-1', ?1, 7001, 'approved', 2, 4000, '2026-11-24T13:00:00.000Z',
                '2026-11-24T12:59:00.000Z', '2026-11-24T13:00:01.000Z'),
@@ -813,16 +820,16 @@ describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
                '2026-11-24T14:00:00.000Z', '2026-11-24T14:00:00.000Z'),
              ('ANTES-0007-3', ?1, NULL, 'expired', 3, 6000, NULL,
                '2026-11-24T15:00:00.000Z', '2026-11-25T15:00:00.000Z')`,
-        )
-        .bind(campanhaId),
-      db.prepare(
-        `INSERT INTO pedidos_suspeitos (pedido_id, qtd_bilhetes, total_centavos, esperado_centavos, motivos, marcado_em)
+          )
+          .bind(campanhaId),
+        db.prepare(
+          `INSERT INTO pedidos_suspeitos (pedido_id, qtd_bilhetes, total_centavos, esperado_centavos, motivos, marcado_em)
          VALUES ('ANTES-0007-1', 2, 4000, 4000,
            '[{"caminho":["numbers_count"],"codigo":"bilhetes_acima_do_teto","mensagem":"x","ocorrencias":1}]',
            '2026-11-24T13:00:01.000Z')`,
-      ),
-      db.prepare(
-        `INSERT INTO webhook_eventos (recebido_em, evento, pedido_id, slug, resultado, status_anterior,
+        ),
+        db.prepare(
+          `INSERT INTO webhook_eventos (recebido_em, evento, pedido_id, slug, resultado, status_anterior,
            status_resultante, payload_redigido, erro, avisos) VALUES
            ('2026-11-24T12:59:00.000Z', 'new_order', 'ANTES-0007-1', 'campanha-antes-da-0007', 'processado',
              NULL, 'in_process', '{}', NULL, NULL),
@@ -831,93 +838,94 @@ describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
              '[{"caminho":["subtotal"],"codigo":"invalid_type","mensagem":"x","ocorrencias":1}]'),
            ('2026-11-24T13:30:00.000Z', NULL, NULL, NULL, 'erro_validacao', NULL, NULL, NULL,
              '[{"caminho":[],"codigo":"json_invalido","mensagem":"x","ocorrencias":1}]', NULL)`,
-      ),
-    ]);
-    antes = await fotografar0007(db);
-    await applyD1Migrations(db, TEST_MIGRATIONS);
-  });
+        ),
+      ]);
+      antes = await fotografar0007(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
 
-  it("a 0007 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
-    const { results } = await db
-      .prepare("SELECT name FROM d1_migrations ORDER BY id")
-      .all<{ name: string }>();
-    expect(results.map((linha) => linha.name).at(-1)).toBe(
-      "0007_indices_pedidos_entregas.sql",
-    );
-    expect(antes.pedidos).toHaveLength(3);
-    expect(antes.pedidos_suspeitos).toHaveLength(1);
-    expect(antes.webhook_eventos).toHaveLength(3);
-  });
+    it("a 0007 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0007_indices_pedidos_entregas.sql",
+      );
+      expect(antes.pedidos).toHaveLength(3);
+      expect(antes.pedidos_suspeitos).toHaveLength(1);
+      expect(antes.webhook_eventos).toHaveLength(3);
+    });
 
-  it("nenhum dado muda: pedidos, suspeitos, entregas e afiliados continuam iguais", async () => {
-    expect(await fotografar0007(db)).toEqual(antes);
-  });
+    it("nenhum dado muda: pedidos, suspeitos, entregas e afiliados continuam iguais", async () => {
+      expect(await fotografar0007(db)).toEqual(antes);
+    });
 
-  it("os três índices existem, com as colunas na ordem, e cobrem as linhas que já existiam", async () => {
-    const colunas = async (indice: string) =>
-      (
-        await db
-          .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
-          .bind(indice)
-          .all<{ name: string }>()
-      ).results.map((linha) => linha.name);
-    expect(await colunas("pedidos_por_campanha_registro")).toEqual([
-      "campanha_id",
-      "registrado_em",
-      "id",
-    ]);
-    expect(await colunas("webhook_eventos_por_resultado_id")).toEqual([
-      "resultado",
-      "id",
-    ]);
-    expect(await colunas("webhook_eventos_da_campanha_por_slug")).toEqual([
-      "slug",
-      "recebido_em",
-    ]);
-    // Parcial: só as entregas da campanha (D16), com o WHERE que a consulta repete.
-    const parcial = await db
-      .prepare(
-        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'webhook_eventos_da_campanha_por_slug'",
-      )
-      .first<{ sql: string }>();
-    expect(parcial?.sql).toMatch(
-      /WHERE resultado IN \('processado', 'duplicado', 'ignorado_transicao'\)$/,
-    );
-    // Lidas pelo índice (INDEXED BY obriga), as linhas antigas estão todas lá, na ordem da lista.
-    const { results: pedidos } = await db
-      .prepare(
-        `SELECT id FROM pedidos INDEXED BY pedidos_por_campanha_registro
+    it("os três índices existem, com as colunas na ordem, e cobrem as linhas que já existiam", async () => {
+      const colunas = async (indice: string) =>
+        (
+          await db
+            .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
+            .bind(indice)
+            .all<{ name: string }>()
+        ).results.map((linha) => linha.name);
+      expect(await colunas("pedidos_por_campanha_registro")).toEqual([
+        "campanha_id",
+        "registrado_em",
+        "id",
+      ]);
+      expect(await colunas("webhook_eventos_por_resultado_id")).toEqual([
+        "resultado",
+        "id",
+      ]);
+      expect(await colunas("webhook_eventos_da_campanha_por_slug")).toEqual([
+        "slug",
+        "recebido_em",
+      ]);
+      // Parcial: só as entregas da campanha (D16), com o WHERE que a consulta repete.
+      const parcial = await db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'webhook_eventos_da_campanha_por_slug'",
+        )
+        .first<{ sql: string }>();
+      expect(parcial?.sql).toMatch(
+        /WHERE resultado IN \('processado', 'duplicado', 'ignorado_transicao'\)$/,
+      );
+      // Lidas pelo índice (INDEXED BY obriga), as linhas antigas estão todas lá, na ordem da lista.
+      const { results: pedidos } = await db
+        .prepare(
+          `SELECT id FROM pedidos INDEXED BY pedidos_por_campanha_registro
          WHERE campanha_id = ?1 ORDER BY registrado_em DESC, id DESC`,
-      )
-      .bind(campanhaId)
-      .all<{ id: string }>();
-    expect(pedidos.map((linha) => linha.id)).toEqual([
-      "ANTES-0007-3",
-      "ANTES-0007-2",
-      "ANTES-0007-1",
-    ]);
-    const { results: entregas } = await db
-      .prepare(
-        `SELECT resultado, count(*) AS n FROM webhook_eventos INDEXED BY webhook_eventos_por_resultado_id
+        )
+        .bind(campanhaId)
+        .all<{ id: string }>();
+      expect(pedidos.map((linha) => linha.id)).toEqual([
+        "ANTES-0007-3",
+        "ANTES-0007-2",
+        "ANTES-0007-1",
+      ]);
+      const { results: entregas } = await db
+        .prepare(
+          `SELECT resultado, count(*) AS n FROM webhook_eventos INDEXED BY webhook_eventos_por_resultado_id
          WHERE resultado IN ('processado', 'erro_validacao') GROUP BY resultado ORDER BY resultado`,
-      )
-      .all<{ resultado: string; n: number }>();
-    expect(entregas).toEqual([
-      { resultado: "erro_validacao", n: 1 },
-      { resultado: "processado", n: 2 },
-    ]);
-    // As duas entregas processadas antigas estão no índice parcial; o erro (fora do WHERE dele), não.
-    const { results: daCampanha } = await db
-      .prepare(
-        `SELECT recebido_em FROM webhook_eventos INDEXED BY webhook_eventos_da_campanha_por_slug
+        )
+        .all<{ resultado: string; n: number }>();
+      expect(entregas).toEqual([
+        { resultado: "erro_validacao", n: 1 },
+        { resultado: "processado", n: 2 },
+      ]);
+      // As duas entregas processadas antigas estão no índice parcial; o erro (fora do WHERE dele), não.
+      const { results: daCampanha } = await db
+        .prepare(
+          `SELECT recebido_em FROM webhook_eventos INDEXED BY webhook_eventos_da_campanha_por_slug
          WHERE resultado IN ('processado', 'duplicado', 'ignorado_transicao') AND slug = ?1
          ORDER BY recebido_em`,
-      )
-      .bind("campanha-antes-da-0007")
-      .all<{ recebido_em: string }>();
-    expect(daCampanha.map((linha) => linha.recebido_em)).toEqual([
-      "2026-11-24T12:59:00.000Z",
-      "2026-11-24T13:00:01.000Z",
-    ]);
+        )
+        .bind("campanha-antes-da-0007")
+        .all<{ recebido_em: string }>();
+      expect(daCampanha.map((linha) => linha.recebido_em)).toEqual([
+        "2026-11-24T12:59:00.000Z",
+        "2026-11-24T13:00:01.000Z",
+      ]);
+    });
   });
 });

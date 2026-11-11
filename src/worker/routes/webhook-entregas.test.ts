@@ -4,7 +4,7 @@
 // telefone nos campos inválidos de um payload recusado e de um aceito com avisos. Toda resposta 200 passa pelo
 // schema ESTRITO do contrato.
 import { env, exports } from "cloudflare:workers";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import newOrderAfiliado from "../../../test/fixtures/rifei/new_order.afiliado.json";
 import paidOrderAfiliado from "../../../test/fixtures/rifei/paid_order.afiliado.json";
 import paidOrderOutraCampanha from "../../../test/fixtures/rifei/paid_order.outra_campanha.json";
@@ -354,6 +354,12 @@ describe("cursor e filtros", () => {
 
 describe("gravações fora do formato atual também saem reduzidas, sem quebrar o contrato", () => {
   it("posição numérica, parte estranha no caminho, código fora da forma, sem ocorrências e lista vazia", async () => {
+    // As entregas gravadas aqui saem no fim: os outros testes contam as do beforeAll, em qualquer ordem.
+    onTestFinished(async () => {
+      await db
+        .prepare("DELETE FROM webhook_eventos WHERE pedido_id = 'PED-FORMATO'")
+        .run();
+    });
     const inserir = (
       resultado: string,
       erro: string | null,

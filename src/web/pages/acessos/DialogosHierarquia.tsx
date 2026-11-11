@@ -131,20 +131,12 @@ export function DialogoLinksGerados({
     () => new Set(),
   );
   const [confirmando, setConfirmando] = useState(false);
-  const [fecharDepois, setFecharDepois] = useState(false);
   const [primeiro] = itens;
   const pendentes = itens.filter((item) => !entregues.has(item.link.id));
   const titulo =
     itens.length === 1 && primeiro
       ? `Link de acesso: ${primeiro.alvo.nome}`
       : `${itens.length} links de acesso gerados`;
-
-  // "Fechar mesmo assim": a confirmação sai da tela primeiro e este diálogo fecha no quadro seguinte, para
-  // cada um desfazer o próprio isolamento na ordem certa (fechando os dois juntos, a página ficaria sem
-  // rolagem).
-  useEffect(() => {
-    if (fecharDepois && !confirmando) aoFechar();
-  }, [fecharDepois, confirmando, aoFechar]);
 
   function pedirParaFechar() {
     if (pendentes.length === 0) aoFechar();
@@ -227,11 +219,12 @@ export function DialogoLinksGerados({
               >
                 Voltar aos links
               </Button>
+              {/* Os dois diálogos saem juntos: a trava da rolagem do Dialogo é contada entre eles. */}
               <Button
                 variante="perigo"
                 onClick={() => {
-                  setFecharDepois(true);
                   setConfirmando(false);
+                  aoFechar();
                 }}
               >
                 Fechar mesmo assim

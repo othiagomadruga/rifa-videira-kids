@@ -75,7 +75,7 @@ type Configuracao<C extends string> = {
   rotulos: Record<C, string>;
   /** Texto de cada campo quando a API o recusa (400). */
   errosDaApi: Record<C, string>;
-  /** Chamado quando o registro ou a referência não existe mais (404, referencia_invalida). */
+  /** Chamado quando o registro ou a referência não existe mais (404, referencia_invalida) ou mudou ao mesmo tempo (409). */
   aoDesatualizar: () => void;
 };
 
