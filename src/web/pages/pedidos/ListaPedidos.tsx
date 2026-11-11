@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import { Link } from "react-router";
 import type { ItemPedido, RespostaPedidos } from "../../../shared/contracts";
 import {
@@ -87,6 +93,13 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     CONFIG,
   );
   const celulas = useCelulas();
+  const primeiroFiltro = useRef<HTMLSelectElement>(null);
+
+  function limparFiltros() {
+    // O "Limpar filtros" some com a lista vazia: o foco vai para o primeiro filtro, pronto para outra escolha.
+    primeiroFiltro.current?.focus();
+    aoMudar(SEM_FILTROS);
+  }
 
   return (
     <div className="pedidos">
@@ -94,14 +107,19 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
       <p className="visualmente-oculto" role="status">
         {anuncio}
       </p>
-      <Filtros filtros={filtros} celulas={celulas} aoMudar={aoMudar} />
+      <Filtros
+        filtros={filtros}
+        celulas={celulas}
+        aoMudar={aoMudar}
+        primeiroFiltro={primeiroFiltro}
+      />
       <Conteudo
         estado={estado}
         filtros={filtros}
         mais={mais}
         aoCarregarMais={() => void carregarMais()}
         aoTentarDeNovo={tentarDeNovo}
-        aoLimpar={() => aoMudar(SEM_FILTROS)}
+        aoLimpar={limparFiltros}
       />
     </div>
   );
@@ -175,10 +193,13 @@ function Filtros({
   filtros,
   celulas,
   aoMudar,
+  primeiroFiltro,
 }: {
   filtros: FiltrosPedidos;
   celulas: EstadoCelulas;
   aoMudar: (filtros: FiltrosPedidos) => void;
+  /** O campo Status: recebe o foco depois de "Limpar filtros". */
+  primeiroFiltro: RefObject<HTMLSelectElement | null>;
 }) {
   const grupos = celulas.tipo === "ok" ? celulasPorRede(celulas.celulas) : [];
   const celulaAtual = filtros.celula;
@@ -194,6 +215,7 @@ function Filtros({
   return (
     <div className="pedidos-filtros">
       <Select
+        ref={primeiroFiltro}
         rotulo="Status"
         value={filtros.status ?? ""}
         onChange={(evento) =>
@@ -341,7 +363,10 @@ function Conteudo({
   return (
     <>
       {primeira.totais && (
-        <Totais totais={primeira.totais} comFiltro={comFiltro} />
+        <Totais
+          totais={primeira.totais}
+          celulaOuBusca={filtros.celula.tipo !== "todas" || filtros.id !== null}
+        />
       )}
       {itens.length === 0 ? (
         comFiltro ? (
@@ -401,10 +426,11 @@ const ORDEM_TOTAIS = ["approved", "in_process", "expired"] as const;
 
 function Totais({
   totais,
-  comFiltro,
+  celulaOuBusca,
 }: {
   totais: NonNullable<RespostaPedidos["totais"]>;
-  comFiltro: boolean;
+  /** Há célula (ou "só os sem célula") ou busca escolhida: os totais seguem esses filtros. */
+  celulaOuBusca: boolean;
 }) {
   return (
     <section className="pedidos-totais" aria-labelledby="pedidos-totais-titulo">
@@ -413,7 +439,7 @@ function Totais({
       </h2>
       <p className="pedidos-totais__nota">
         Só os aprovados contam nas vendas.
-        {comFiltro &&
+        {celulaOuBusca &&
           " Os totais seguem a célula e a busca escolhidas, com todos os status."}
       </p>
       <ul className="pedidos-totais__lista">

@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderizarRota } from "../../test/renderizar";
 import {
   ROTA_ENTREGAS,
@@ -19,6 +19,7 @@ import {
   respostaErro,
   simularApi,
 } from "./teste-apoio";
+import { esquecerEstadoWebhook } from "./useEstadoWebhook";
 
 const CAMINHO = "/coordenacao/pedidos?aba=entregas";
 
@@ -53,6 +54,11 @@ function acionar(elemento: HTMLElement) {
   act(() => elemento.focus());
   fireEvent.click(elemento);
 }
+
+beforeEach(() => {
+  // Cada teste começa como uma página recém-aberta (o estado do webhook fica guardado no módulo).
+  esquecerEstadoWebhook();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -249,7 +255,7 @@ describe("CA2: entregas com o resultado em português e o erro e os avisos legí
     expect(texto).not.toMatch(/@|\(\d{2}\)\s?\d|\d{3}\.\d{3}\.\d{3}-\d{2}/);
   });
 
-  it("filtro por resultado: vai para a consulta e para a URL; sem nenhuma, 'Ver todas as entregas' volta", async () => {
+  it("filtro por resultado: vai para a consulta e para a URL; sem nenhuma, 'Ver todas as entregas' volta, com o foco no filtro", async () => {
     const api = simularApi({ entregas: ENTREGAS_VARIADAS });
     const { roteador } = renderizarRota(CAMINHO);
     await tabela();
@@ -286,11 +292,11 @@ describe("CA2: entregas com o resultado em português e o erro e os avisos legí
     expect(
       await screen.findByText("Nenhuma entrega com este resultado."),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ver todas as entregas" }),
-    );
+    acionar(screen.getByRole("button", { name: "Ver todas as entregas" }));
     expect(await linhas()).toHaveLength(7);
     expect(roteador.state.location.search).toBe("?aba=entregas");
+    // O botão sumiu com a lista vazia: o foco foi para o filtro de resultado.
+    await waitFor(() => expect(campoResultado()).toHaveFocus());
   });
 
   it("Carregar mais pelo cursor (id): acrescenta no fim sem repetir nem pular, leva o foco à primeira entrega nova e o botão some no fim", async () => {

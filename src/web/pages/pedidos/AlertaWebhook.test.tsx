@@ -10,12 +10,17 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RespostaEstadoWebhook } from "../../../shared/contracts";
-import { renderizarRota, respostaJson } from "../../test/renderizar";
+import {
+  ADMIN_DE_TESTE,
+  renderizarRota,
+  respostaJson,
+} from "../../test/renderizar";
 import {
   CENARIOS,
   simularApi as simularPainel,
 } from "../visao-geral/teste-apoio";
 import { INTERVALO_ESTADO_MS } from "./alerta-webhook";
+import { esquecerEstadoWebhook } from "./useEstadoWebhook";
 import {
   BASE_MS,
   ROTA_ESTADO,
@@ -33,6 +38,8 @@ const minutosAntes = (minutos: number) =>
 const zerado = estado("ok").ultimas_24h;
 
 beforeEach(() => {
+  // Cada teste começa como uma página recém-aberta (o estado fica guardado no módulo entre as telas).
+  esquecerEstadoWebhook();
   // Só os temporizadores: as promessas e o agendador do React continuam reais.
   vi.useFakeTimers({
     shouldAdvanceTime: true,
@@ -87,7 +94,7 @@ const CASOS: Caso[] = [
     }),
     titulo: "A Rifei mandou pedidos com erro nas últimas 24 h",
     textos: [
-      "3 entregas foram recusadas por erro nas últimas 24 h. Pedido recusado não é gravado: veja quais foram e confira cada um na Rifei.",
+      "Nas últimas 24 h, 3 entregas foram recusadas por erro, contando qualquer slug (também de outras campanhas da conta na Rifei). Pedido recusado não é gravado: veja quais foram e confira cada um na Rifei.",
     ],
     link: [
       "Ver as entregas com erro",
@@ -217,7 +224,9 @@ describe("CA3: o texto certo em cada situação, na tela Pedidos e na Visão ger
     });
     renderizarRota("/coordenacao/pedidos");
 
-    const linha = await screen.findByText("Última venda recebida há 12 min.");
+    const linha = await screen.findByText(
+      "Última venda recebida há 12 min; conferido às 12:00.",
+    );
     expect(regiao()).toBeEmptyDOMElement();
     expect(regiao()).not.toContainElement(linha);
     expect(document.querySelector(".ui-aviso")).toBeNull();
@@ -238,7 +247,9 @@ describe("CA3: o texto certo em cada situação, na tela Pedidos e na Visão ger
     renderizarRota("/coordenacao/pedidos");
 
     expect(
-      await screen.findByText(`Última venda recebida ${texto}.`),
+      await screen.findByText(
+        `Última venda recebida ${texto}; conferido às 12:00.`,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -301,7 +312,9 @@ describe("CA3/CA5: região viva fixa e atualização a cada 5 min com a aba vis�
   it("consulta de novo a cada 5 min com a aba visível (o aviso muda na mesma região); com a aba oculta, para; ao voltar, nunca antes de 5 min desde a última", async () => {
     const api = simularApi();
     renderizarRota("/coordenacao/pedidos");
-    await screen.findByText("Última venda recebida há 12 min.");
+    await screen.findByText(
+      "Última venda recebida há 12 min; conferido às 12:00.",
+    );
     expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(1);
 
     api.dados.estado = estado("sem_entregas_recentes", {
@@ -316,7 +329,9 @@ describe("CA3/CA5: região viva fixa e atualização a cada 5 min com a aba vis�
       await within(regiao()).findByText("Nenhuma venda chegou há 4 horas"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Última venda recebida há 12 min."),
+      screen.queryByText(
+        "Última venda recebida há 12 min; conferido às 12:00.",
+      ),
     ).not.toBeInTheDocument();
 
     // Sai da aba e volta antes de completar 5 min desde a última consulta: espera o resto (cada consulta custa
@@ -379,7 +394,9 @@ describe("CA3: erro ao consultar o estado não quebra a tela", () => {
 
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS));
     expect(
-      await screen.findByText("Última venda recebida há 12 min."),
+      await screen.findByText(
+        "Última venda recebida há 12 min; conferido às 12:00.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Não foi possível conferir agora/),
@@ -403,6 +420,47 @@ describe("CA3: erro ao consultar o estado não quebra a tela", () => {
     expect(
       screen.queryByText(/Não foi possível conferir agora/),
     ).not.toBeInTheDocument();
+    // Fora da região viva, a linha discreta diz de quando é o aviso e que a conferência seguinte falhou.
+    const linha = await screen.findByText(
+      "Este aviso é da conferência das 12:00; a seguinte falhou e o sistema tenta de novo em alguns minutos.",
+    );
+    expect(regiao()).not.toContainElement(linha);
+  });
+
+  it("ok: a linha diz a hora da conferência e, se as consultas seguintes falham, diz isso também; a próxima que dá certo volta ao normal", async () => {
+    const api = simularApi();
+    renderizarRota("/coordenacao/pedidos");
+    const ok = "Última venda recebida há 12 min; conferido às 12:00.";
+    expect(await screen.findByText(ok)).toBeInTheDocument();
+
+    for (const rodada of [2, 3]) {
+      api.proxima(ROTA_ESTADO, () =>
+        respostaErro(500, "erro_interno", "Erro interno."),
+      );
+      await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS));
+      await waitFor(() =>
+        expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(rodada),
+      );
+      expect(
+        await screen.findByText(
+          `${ok} A conferência seguinte falhou; o sistema tenta de novo em alguns minutos.`,
+        ),
+      ).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(regiao()).toBeEmptyDOMElement();
+
+    api.dados.estado = estado("ok", {
+      ultima_processada_em: minutosAntes(2),
+      verificado_em: new Date(BASE_MS + 15 * 60_000).toISOString(),
+    });
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS));
+    expect(
+      await screen.findByText(
+        "Última venda recebida há 17 min; conferido às 12:15.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/falhou/)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -426,4 +484,140 @@ describe("CA3: erro ao consultar o estado não quebra a tela", () => {
       expect(screen.queryByRole("alert")).toBeNull();
     },
   );
+});
+
+describe("RIFA-025-web-b: o link do alerta não recarrega os pedidos; o estado vale 5 min entre as telas", () => {
+  it("na tela Pedidos com filtros, o link mantém a consulta e troca só a aba e o resultado: a 1ª página dos pedidos não é pedida de novo", async () => {
+    const api = simularApi({
+      estado: CASOS[0].estado,
+      pedidos: pedidosVariados(12),
+    });
+    const { roteador } = renderizarRota(
+      "/coordenacao/pedidos?status=approved&celula_id=2&resultado=duplicado",
+    );
+    await screen.findByRole("table", {
+      name: "Pedidos, do mais recente para o mais antigo",
+    });
+    const link = await within(regiao()).findByRole("link", {
+      name: "Ver as entregas com erro",
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      "/coordenacao/pedidos?status=approved&celula_id=2&resultado=erro_validacao&aba=entregas",
+    );
+
+    fireEvent.click(link);
+
+    expect(roteador.state.location.search).toBe(
+      "?status=approved&celula_id=2&resultado=erro_validacao&aba=entregas",
+    );
+    await waitFor(() =>
+      expect(api.pedidosA("/api/admin/webhook/entregas")).toEqual([
+        "/api/admin/webhook/entregas?limite=50&resultado=erro_validacao",
+      ]),
+    );
+    expect(api.pedidosA("/api/admin/pedidos")).toEqual([
+      "/api/admin/pedidos?limite=50&status=approved&celula_id=2",
+    ]);
+    // Voltar para a aba Pedidos: os filtros continuam e nada é pedido de novo.
+    fireEvent.click(screen.getByRole("tab", { name: "Pedidos" }));
+    expect(screen.getByRole("combobox", { name: "Status" })).toHaveValue(
+      "approved",
+    );
+    expect(api.pedidosA("/api/admin/pedidos")).toHaveLength(1);
+  });
+
+  it("na Visão geral, o link vai para as entregas com erro sem levar a consulta do painel", async () => {
+    simularPainel(CENARIOS.emDia);
+    simularApi({ estado: CASOS[0].estado, repassar: true });
+    renderizarRota("/coordenacao?escopo=celula&id=3");
+
+    expect(
+      await within(regiao()).findByRole("link", {
+        name: "Ver as entregas com erro",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/coordenacao/pedidos?aba=entregas&resultado=erro_validacao",
+    );
+  });
+
+  it("ir e voltar entre a Visão geral e a Pedidos reaproveita o estado (o aviso aparece na hora, sem consultar); depois de 5 min, consulta", async () => {
+    const api = simularApi({ estado: CASOS[0].estado });
+    const { roteador } = renderizarRota("/coordenacao/pedidos");
+    await within(regiao()).findByText(CASOS[0].titulo);
+    expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(1);
+
+    await act(() => roteador.navigate("/coordenacao"));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Visão geral" }),
+    ).toBeInTheDocument();
+    // O aviso já está na tela, sem esperar resposta nenhuma.
+    expect(within(regiao()).getByText(CASOS[0].titulo)).toBeInTheDocument();
+    await act(() => roteador.navigate("/coordenacao/pedidos"));
+    expect(within(regiao()).getByText(CASOS[0].titulo)).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(1);
+
+    // Completa os 5 min desde a consulta: a tela aberta consulta de novo.
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS - 60_000));
+    await waitFor(() => expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(2));
+  });
+
+  it("voltar a uma tela com o alerta depois de 5 min fora dela consulta na hora", async () => {
+    const api = simularApi({ estado: estado("nunca_recebeu") });
+    const { roteador } = renderizarRota("/coordenacao/pedidos");
+    await within(regiao()).findByText("Ainda não chegou nenhuma venda");
+
+    await act(() => roteador.navigate("/coordenacao/conferencia"));
+    await act(() => vi.advanceTimersByTimeAsync(2 * INTERVALO_ESTADO_MS));
+    expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(1);
+
+    await act(() => roteador.navigate("/coordenacao"));
+    // Mostra o guardado enquanto a consulta nova não chega.
+    expect(
+      within(regiao()).getByText("Ainda não chegou nenhuma venda"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(2));
+  });
+
+  it("depois de Sair, outra pessoa que entra no mesmo documento não vê o estado guardado: consulta de novo", async () => {
+    const consultas: string[] = [];
+    let liberar: () => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
+        const { pathname } = new URL(String(entrada), "http://localhost");
+        const metodo = init?.method ?? "GET";
+        if (pathname === ROTA_ESTADO) {
+          consultas.push(pathname);
+          // A consulta da segunda pessoa fica presa: dá para ver a tela antes da resposta.
+          if (consultas.length > 1)
+            await new Promise<void>((resolver) => (liberar = resolver));
+          return respostaJson(estado("nunca_recebeu"));
+        }
+        if (metodo === "POST" && pathname === "/api/sessao/sair")
+          return new Response(null, { status: 204 });
+        if (metodo === "POST" && pathname === "/api/sessao")
+          return respostaJson({ usuario: ADMIN_DE_TESTE });
+        return respostaErro(404, "nao_encontrado", "Rota não encontrada");
+      }),
+    );
+    const { roteador } = renderizarRota("/coordenacao/pedidos");
+    await within(regiao()).findByText("Ainda não chegou nenhuma venda");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+    await screen.findByRole("heading", { level: 1, name: "Entrar" });
+    // Outra pessoa (admin) entra pelo link pessoal no mesmo documento, sem recarregar a página.
+    await act(() => roteador.navigate(`/acesso/${"T".repeat(43)}`));
+    fireEvent.click(await screen.findByRole("button", { name: "Entrar" }));
+    await screen.findByRole("heading", { level: 1, name: "Visão geral" });
+
+    await waitFor(() => expect(consultas).toHaveLength(2));
+    expect(regiao()).toBeEmptyDOMElement();
+    await act(async () => liberar());
+    expect(
+      await within(regiao()).findByText("Ainda não chegou nenhuma venda"),
+    ).toBeInTheDocument();
+  });
 });
