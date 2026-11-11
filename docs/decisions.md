@@ -309,7 +309,11 @@ entregas do webhook (só por SQL no D1) e que ninguém ficava sabendo se o webho
   desde o mais recente entre a última entrega da campanha e as 8h de hoje (sem falso alarme toda manhã; cobre o
   "nunca recebeu" depois do início); `nunca_recebeu` fora disso; `ok`. "Entrega da campanha" = slug da campanha
   ativa e resultado processado, duplicado ou ignorado_transicao. Entrega recusada por token (401/503) não é
-  gravada: token errado aparece como `nunca_recebeu`, e o site diz para conferir URL, token e slug na Rifei. Com
+  gravada: token errado aparece como `nunca_recebeu` antes do início, à noite e nas primeiras 4 h do dia, e como
+  `sem_entregas_recentes` durante o dia da campanha; nos dois casos o site manda conferir URL, token e slug na Rifei.
+  A janela é `HORA_INICIO_ALERTA ≤ hora local < HORA_FIM_ALERTA`; o slug do erro é comparado com `trim`. Limitação
+  aceita: um webhook que pare depois das 18h só acende o alerta no dia seguinte às 12h (é o preço de não ter falso
+  alarme toda manhã). Com
   `ignorado_outra_campanha` nas 24 h e nada da campanha, o site sugere conferir o slug. SUPOSIÇÃO do SM: 4 h de dia
   sem venda numa campanha de 36 células merece olhar; constantes no contrato.
 - **Erro e avisos das entregas** saem reduzidos a campo (caminho do schema, nunca texto da entrada), código

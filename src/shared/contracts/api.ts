@@ -1395,12 +1395,15 @@ export const SITUACOES_WEBHOOK = [
  */
 export const respostaEstadoWebhookSchema = z.strictObject({
   /**
-   * - erros_recentes: algum erro_validacao nas últimas 24 h com slug ausente ou igual ao da campanha ativa;
-   * - sem_entregas_recentes: a data local está dentro da campanha, a hora local está entre HORA_INICIO_ALERTA e
+   * - erros_recentes: algum erro_validacao nas últimas 24 h com slug ausente ou, sem os espaços das pontas (trim),
+   *   igual ao da campanha ativa;
+   * - sem_entregas_recentes: a data local está dentro da campanha, HORA_INICIO_ALERTA ≤ hora local <
    *   HORA_FIM_ALERTA, e passaram mais de HORAS_SEM_ENTREGA_ALERTA horas desde o mais recente entre a última
    *   entrega da campanha e as HORA_INICIO_ALERTA de hoje (cobre o "nunca recebeu" depois do início);
    * - nunca_recebeu: nenhuma entrega da campanha até agora, fora do caso anterior (inclusive sem campanha ativa).
-   *   ATENÇÃO: entrega recusada por token (401/503) não é gravada, então token errado também aparece aqui;
+   *   ATENÇÃO: entrega recusada por token (401/503) não é gravada: token errado aparece aqui antes do início, à
+   *   noite e nas primeiras horas do dia, e como sem_entregas_recentes durante o dia da campanha; nos dois casos o
+   *   site manda conferir URL, token e slug na Rifei;
    * - ok: nenhum dos casos.
    */
   situacao: z.enum(SITUACOES_WEBHOOK),
