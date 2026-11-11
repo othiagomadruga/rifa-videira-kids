@@ -765,3 +765,69 @@ puras) e `api.ts` (schemas e o catálogo `ROTAS_TOKEN_WEBHOOK`); testes em `toke
 9. **Docs** (feitos neste contrato): lançamento 3.1, 3.2, o resumo do topo e as seções que citavam o segredo;
    integracao-rifei.md; api.md; acesso.md; modelo-de-dados.md. Se o -web der outro nome à tela ("Acessos → Webhook da
    Rifei" é a SUPOSIÇÃO), o SM acerta os docs no mesmo merge.
+
+## D22. Volta do site para a versão anterior pelo celular (RIFA-035, 2026-11-11)
+
+O PO não tem Node nem wrangler e acompanha pelo celular; a volta do código (`npx wrangler rollback`) só dava pelo
+terminal, e a publicação só acontecia por push na `main`.
+
+- **Workflow manual** `.github/workflows/voltar-versao.yml` ("Voltar o site para a versão anterior"): só
+  `workflow_dispatch`, com `motivo` (obrigatório) e `versao` (opcional; vazio = a anterior à que está no ar). No
+  padrão da D18: o job só roda a partir da `main` (`if: github.ref == 'refs/heads/main'`; de outra branch, é pulado),
+  `permissions: contents: read`, as mesmas actions fixadas por SHA, checkout sem credenciais, setup-node sem cache,
+  `npm ci --ignore-scripts` e o token só no passo da volta (com o id da conta e as entradas `MOTIVO` e `VERSAO`,
+  que vão pelo `env` e nunca escritas no script: o texto digitado não vira comando). Sem o segredo, avisa ("volta
+  da versão pulada") e fica verde. Depois da volta, confere `/api/health` como o `publicar`. O job usa o mesmo grupo
+  de concorrência do `publicar` (`deploy-producao`, sem cancelar no meio): uma volta e uma publicação nunca rodam
+  juntas. Roteiro: lancamento.md, 2.4 e 7.2.
+- **Por que não o `wrangler rollback`:** no CI (sem terminal) o wrangler 4.156.1 responde "sim" sozinho a toda
+  pergunta, com ou sem `--yes` (o `--yes` só aceita os padrões; a pergunta dos segredos não olha para ele), e a de
+  "os segredos mudaram desde aquela versão; continuar?" vira um segundo pedido com `?force=true`: volta com os
+  segredos de antes, e o webhook pode parar ou voltar ao token antigo (o cuidado da 2.4). Provado na RIFA-035 com o
+  wrangler do projeto contra uma API fictícia em 127.0.0.1, e travado em `scripts/voltar-versao.test.mjs` (se uma
+  subida do wrangler mudar isso, o teste falha: reveja esta decisão). O workflow roda `node scripts/voltar-versao.mjs`,
+  que lista as publicações (`wrangler deployments list --json`), escolhe a anterior pela mesma regra do rollback (a
+  versão com 100% da publicação mais recente antes da atual) ou a do id, e roda
+  `wrangler versions deploy <id>@100% --message=<motivo> --yes`: a mesma publicação (a versão com todo o tráfego, o
+  motivo como mensagem), sem nunca mandar o `?force=true`. Com segredos trocados, a Cloudflare recusa (código
+  10220), nada muda no site, e o script termina com erro explicando como rodar de novo com o id de uma versão
+  publicada depois da troca do segredo. O `versions deploy` também reaplica as configurações não versionadas do
+  `wrangler.jsonc` (`observability`), as mesmas que o `wrangler deploy` aplica.
+- **O script** (`scripts/voltar-versao.mjs`) confere as entradas antes de chamar o wrangler (motivo numa linha, até
+  120 caracteres, como o rollback pede; versão vazia ou um id de versão), passa o motivo como `--message=<motivo>`
+  (um motivo que comece com "-" não vira opção) e escreve no log e no resumo da execução (a página do run, legível
+  no celular) a lista das publicações recentes, com data, id, origem e mensagem, sem o e-mail de quem publicou.
+  Antes da primeira publicação, ou com uma publicação só, termina com erro: não há versão anterior.
+- **Publicar de novo sem commit:** o `ci.yml` ganhou `workflow_dispatch` (sem entradas). Na `main`, **Run workflow**
+  refaz o build e a publicação, como um push; noutra branch, só o job `ci`. O `publicar` passa a rodar em
+  `(push || workflow_dispatch) && main`; o resto da D18 não muda (token só no "Publicar"). Por quê: o "Re-run all
+  jobs" continua valendo, mas pede achar a última execução da `main` e escolher o "all" (o "failed" baixaria um
+  artefato vencido), e o roteiro mandava um commit vazio quando a publicação ainda saía "pulada". Não abre superfície
+  nova: um push em qualquer branch já roda o `ci.yml` daquela branch, com o segredo do repositório ao alcance.
+- **Travas** em `src/worker/config-publicacao.test.ts`: os workflows da pasta são só o `ci.yml` e o
+  `voltar-versao.yml` (um novo falha até ganhar as travas dele); em todos, actions por SHA, nenhum
+  `pull_request_target` nem `workflow_run`, permissão só de leitura no topo, nenhum `${{ }}` dentro de um `run`,
+  checkouts sem credenciais, nada no `$GITHUB_ENV`/`$GITHUB_PATH`, sem `defaults`, `shell`, `working-directory`,
+  `continue-on-error` ou `environment:`; o token só em dois passos (o "Publicar" e a volta); no `voltar-versao.yml`,
+  só o disparo manual com as duas entradas, o job só da `main` e no grupo `deploy-producao`, a ordem dos passos, o
+  `npm ci --ignore-scripts`, nada de `npx`, `npm run`, build ou cache, o script no lugar do rollback e o
+  `/api/health` no fim; no `ci.yml`, os gatilhos (`push`, `pull_request`, `workflow_dispatch`) e o `if` do
+  `publicar`. Cada trava foi provada com uma mutação do YAML (o teste falha) e o leitor por linhas conferido contra
+  o PyYAML.
+- **Riscos que continuam:** como na D18, o segredo é do repositório: um workflow alterado noutra branch pode lê-lo
+  (o `if` da `main` só impede rodar o workflow oficial de outra branch). Com o GitHub Pro e o ambiente `producao` da
+  D18, o job `voltar` também recebe `environment: producao` (junto com o `publicar`, trocando as travas). O banco não
+  volta: uma versão antiga roda sobre o esquema novo (as migrações são aditivas), e voltar para antes da RIFA-039
+  tem o cuidado da D21. Uma volta na fila do grupo `deploy-producao` é substituída por uma publicação que chegue
+  depois dela (o GitHub guarda só a última pendente do grupo), e vice-versa: o run aparece como cancelado.
+- **Teste de tempo da conferência (item extra):** `src/worker/routes/reconciliacao-desempenho.test.ts` trava o
+  Worker em 30 ms (contra a regressão grosseira da D19, ler o CSV no Worker: ~300 ms com 7 mil pedidos), mas o
+  relógio do workerd é de parede, e com a máquina carregada a gravação, medida uma vez só, chegou a 53 ms. Agora as
+  três rotas (análise, simulação e gravação; a gravação desfaz o que gravou entre as rodadas, fora da medida) têm 1
+  rodada de aquecimento e 7 medidas, e a trava vale para a MELHOR delas: a carga só acrescenta tempo, e uma regressão
+  de verdade aparece em todas as medidas. A mediana continua no log. Medido na RIFA-035 (7 mil pedidos): sozinho, a
+  melhor fica em 8 a 9 ms (mediana de 10 a 12); com duas suítes completas rodando juntas (load ~12 em 4 núcleos), de
+  7 a 13 ms (mediana até 17). Só com 12 laços ocupando a CPU por cima disso (load ~19) a melhor passou de 30 ms
+  (33 a 37) em parte das rodadas: ali o relógio de parede não separa o Worker da disputa pelos núcleos. Os outros
+  `*-desempenho.test.ts` não mudam: o do painel e o da visão individual só registram o tempo no log (as travas
+  deles são de trabalho e de linhas lidas), e o do mapa por DDD e o dos pedidos e do webhook medem `rows_read`.
