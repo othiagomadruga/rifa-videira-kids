@@ -4,6 +4,14 @@
 // passa pelo schema da rota e toda resposta pelo schema do contrato. Dados fictícios, sem nenhum dado pessoal.
 import { vi } from "vitest";
 import {
+  ACESSO_PADRAO,
+  MENSAGENS_PADRAO,
+  PUBLICO_PADRAO,
+  corpoDesconsiderarPedidoSchema,
+  corpoReconsiderarPedidoSchema,
+  detalhesDeValidacao,
+  itemPedidoSchema,
+  respostaCampanhaSchema,
   consultaEntregasWebhookSchema,
   consultaPedidosSchema,
   respostaEntregasWebhookSchema,
@@ -23,6 +31,12 @@ export const ROTA_PEDIDOS = "/api/admin/pedidos";
 export const ROTA_ENTREGAS = "/api/admin/webhook/entregas";
 export const ROTA_ESTADO = "/api/admin/webhook/estado";
 export const ROTA_CELULAS = "/api/admin/celulas";
+export const ROTA_CAMPANHA = "/api/admin/campanha";
+export const ROTA_DESCONSIDERAR = "/api/admin/pedidos/desconsiderar";
+export const ROTA_RECONSIDERAR = "/api/admin/pedidos/reconsiderar";
+
+/** O instante que a API falsa grava ao desconsiderar (25/11/2026 às 13:00 em Belém). */
+export const DESCONSIDERADO_EM = "2026-11-25T16:00:00.000Z";
 
 type CelulaFicticia = Pick<Celula, "id" | "nome" | "rede_id" | "rede_nome">;
 
@@ -190,10 +204,12 @@ const maisNovoPrimeiro = (a: ItemPedido, b: ItemPedido) =>
 const depoisDoCursor = (item: ItemPedido, [em, id]: [string, string]) =>
   item.registrado_em < em || (item.registrado_em === em && item.id < id);
 
+/** Os totais por status contam só os pedidos que contam (os desconsiderados ficam fora, D20). */
 function totaisDe(itens: ItemPedido[]): NonNullable<RespostaPedidos["totais"]> {
   const zero = () => ({ pedidos: 0, bilhetes: 0, total_centavos: 0 });
   const totais = { in_process: zero(), approved: zero(), expired: zero() };
   for (const item of itens) {
+    if (item.desconsiderado !== null) continue;
     totais[item.status].pedidos += 1;
     totais[item.status].bilhetes += item.qtd_bilhetes;
     totais[item.status].total_centavos += item.total_centavos;
@@ -208,6 +224,11 @@ export type DadosApi = {
   entregas?: EntregaWebhook[];
   estado?: RespostaEstadoWebhook;
   celulas?: CelulaFicticia[];
+  /**
+   * A chave `pedidos.desconsiderar` da campanha (D20) que GET /api/admin/campanha devolve; sem ela, a campanha
+   * responde 404 (ainda não configurada).
+   */
+  desconsiderar?: boolean;
   /** Responde só o estado do webhook e repassa o resto ao fetch que já estava trocado (ex.: a API da Visão geral). */
   repassar?: boolean;
 };
@@ -235,6 +256,8 @@ export function simularApi(dados: DadosApi = {}) {
       ...dados,
     },
     chamadas: [] as string[],
+    /** Os corpos dos POST, na ordem: [caminho, corpo]. */
+    envios: [] as [string, unknown][],
     proxima(rota: string, responder: Responder) {
       especiais.set(rota, [...(especiais.get(rota) ?? []), responder]);
     },
@@ -253,17 +276,39 @@ export function simularApi(dados: DadosApi = {}) {
       // Com `repassar`, só o estado do webhook é daqui (o resto é da API que já estava trocada).
       const conhecida = dados.repassar
         ? [ROTA_ESTADO]
-        : [ROTA_PEDIDOS, ROTA_ENTREGAS, ROTA_ESTADO, ROTA_CELULAS];
+        : [
+            ROTA_PEDIDOS,
+            ROTA_ENTREGAS,
+            ROTA_ESTADO,
+            ROTA_CELULAS,
+            ROTA_CAMPANHA,
+            ROTA_DESCONSIDERAR,
+            ROTA_RECONSIDERAR,
+          ];
       if (!conhecida.includes(rota)) {
         if (dados.repassar) return anterior(entrada, init);
         api.chamadas.push(`${rota}${url.search}`);
         return respostaErro(404, "nao_encontrado", "Rota não encontrada");
       }
       api.chamadas.push(`${rota}${url.search}`);
+      const corpo: unknown =
+        typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      if (init?.method === "POST") api.envios.push([rota, corpo]);
       const especial = especiais.get(rota)?.shift();
       if (especial) return especial(url);
       const consulta = Object.fromEntries(url.searchParams);
       switch (rota) {
+        case ROTA_CAMPANHA:
+          return api.dados.desconsiderar === undefined
+            ? respostaErro(
+                404,
+                "nao_encontrado",
+                "A campanha ainda não foi configurada",
+              )
+            : respostaJson(campanhaCom(api.dados.desconsiderar));
+        case ROTA_DESCONSIDERAR:
+        case ROTA_RECONSIDERAR:
+          return responderAcao(api.dados, rota, corpo);
         case ROTA_PEDIDOS:
           return respostaJson(responderPedidos(api.dados.pedidos, consulta));
         case ROTA_ENTREGAS:
@@ -289,8 +334,15 @@ function responderPedidos(
   todos: ItemPedido[],
   consulta: Record<string, string>,
 ): RespostaPedidos {
-  const { limite, antes_de, status, celula_id, sem_celula, id } =
-    consultaPedidosSchema.parse(consulta);
+  const {
+    limite,
+    antes_de,
+    status,
+    celula_id,
+    sem_celula,
+    id,
+    desconsiderado,
+  } = consultaPedidosSchema.parse(consulta);
   // Os totais usam os mesmos filtros, menos o status e a paginação.
   const filtrados = [...todos]
     .sort(maisNovoPrimeiro)
@@ -304,6 +356,8 @@ function responderPedidos(
   const restantes = filtrados.filter(
     (item) =>
       (status === undefined || item.status === status) &&
+      (desconsiderado === undefined ||
+        (item.desconsiderado !== null) === desconsiderado) &&
       (cursor === null || depoisDoCursor(item, cursor)),
   );
   const itens = restantes.slice(0, limite);
@@ -334,4 +388,90 @@ function responderEntregas(
     itens,
     proximo: restantes.length > limite ? itens[itens.length - 1].id : null,
   });
+}
+
+/** Uma campanha fictícia com a chave `pedidos.desconsiderar` (o resto não importa à tela Pedidos). */
+function campanhaCom(desconsiderar: boolean) {
+  return respostaCampanhaSchema.parse({
+    id: 1,
+    nome: "Rifa Ficticia",
+    slug_rifei: "rifa-ficticia",
+    fuso_horario: "America/Belem",
+    data_inicio: "2026-11-23",
+    data_fim: "2026-12-16",
+    preco_bilhete_centavos: 2000,
+    meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
+    periodos: [
+      {
+        ordem: 1,
+        nome: "Período 1",
+        dias: 24,
+        percentual_bp: 10000,
+        data_inicio: "2026-11-23",
+        data_fim: "2026-12-16",
+      },
+    ],
+    soma_percentuais_bp: 10000,
+    ranking: { criterio: "percentual_meta" },
+    publico: { ...PUBLICO_PADRAO },
+    pedidos: { desconsiderar },
+    acesso: { ...ACESSO_PADRAO },
+    mensagens: { ...MENSAGENS_PADRAO },
+    criado_em: "2026-11-06T18:00:00.000Z",
+    atualizado_em: "2026-11-06T18:00:00.000Z",
+  });
+}
+
+/**
+ * POST desconsiderar e reconsiderar como a API (D20): 400 do corpo, 409 `acao_desligada` com a chave desligada,
+ * 404 do pedido que não está na lista; repetir devolve o pedido como está. Muda `dados.pedidos` no lugar.
+ */
+function responderAcao(
+  dados: { pedidos: ItemPedido[]; desconsiderar?: boolean },
+  rota: string,
+  corpo: unknown,
+): Response {
+  const desconsiderar = rota === ROTA_DESCONSIDERAR;
+  const lido = desconsiderar
+    ? corpoDesconsiderarPedidoSchema.safeParse(corpo)
+    : corpoReconsiderarPedidoSchema.safeParse(corpo);
+  if (!lido.success)
+    return respostaJson(
+      {
+        erro: {
+          codigo: "requisicao_invalida",
+          mensagem: "Corpo inválido",
+          detalhes: detalhesDeValidacao(lido.error),
+        },
+      },
+      400,
+    );
+  if (dados.desconsiderar !== true)
+    return respostaJson(
+      {
+        erro: {
+          codigo: "acao_desligada",
+          mensagem: "A ação está desligada na campanha",
+          detalhes: { chave: "pedidos.desconsiderar" },
+        },
+      },
+      409,
+    );
+  const indice = dados.pedidos.findIndex(
+    (item) => item.id === lido.data.pedido_id,
+  );
+  if (indice < 0)
+    return respostaErro(404, "nao_encontrado", "Pedido não encontrado");
+  const atual = dados.pedidos[indice];
+  let novo: ItemPedido = atual;
+  if (!desconsiderar) novo = { ...atual, desconsiderado: null };
+  else if (atual.desconsiderado === null) {
+    const { motivo, observacao } = corpoDesconsiderarPedidoSchema.parse(corpo);
+    novo = {
+      ...atual,
+      desconsiderado: { motivo, observacao, em: DESCONSIDERADO_EM },
+    };
+  }
+  dados.pedidos = dados.pedidos.map((item, i) => (i === indice ? novo : item));
+  return respostaJson(itemPedidoSchema.parse(novo));
 }

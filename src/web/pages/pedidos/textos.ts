@@ -5,6 +5,8 @@
 import type {
   EntregaWebhook,
   ItemPedido,
+  MotivoDesconsideracao,
+  RespostaPedidos,
   ResultadoEventoWebhook,
   StatusPedido,
 } from "../../../shared/contracts";
@@ -200,4 +202,52 @@ export function entregas(quantidade: number): string {
   return quantidade === 1
     ? "1 entrega"
     : `${formatarNumero(quantidade)} entregas`;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Desconsiderar pedido (RIFA-028, D20)
+// ---------------------------------------------------------------------------------------------------
+
+/** O motivo, como opção do formulário. */
+export const ROTULO_MOTIVO: Record<MotivoDesconsideracao, string> = {
+  teste: "Teste",
+  fraude: "Fraude",
+  estorno: "Estorno",
+  outro: "Outro",
+};
+
+/** O selo do pedido desconsiderado: "Desconsiderado (teste)". */
+export function seloDesconsiderado(motivo: MotivoDesconsideracao): string {
+  return `Desconsiderado (${ROTULO_MOTIVO[motivo].toLowerCase()})`;
+}
+
+/** A marca do pedido que entrou pela conferência pelo CSV (`origem`, D16 e D19). */
+export const MARCA_RECUPERADO = "Recuperado na conferência";
+
+type Totais = NonNullable<RespostaPedidos["totais"]>;
+
+/**
+ * Os totais depois de desconsiderar ou desfazer um pedido da lista, sem pedir a primeira página de novo (ela custa
+ * milhares de linhas do D1): o pedido sai do status em que estava, se contava, e entra no status que tem agora, se
+ * voltou a contar. Ele está na lista, então segue os filtros de célula e de busca dos totais.
+ */
+export function totaisDepoisDe(
+  totais: Totais,
+  antes: ItemPedido,
+  depois: ItemPedido,
+): Totais {
+  const novos: Totais = {
+    in_process: { ...totais.in_process },
+    approved: { ...totais.approved },
+    expired: { ...totais.expired },
+  };
+  const somar = (pedido: ItemPedido, sinal: 1 | -1) => {
+    const total = novos[pedido.status];
+    total.pedidos += sinal;
+    total.bilhetes += sinal * pedido.qtd_bilhetes;
+    total.total_centavos += sinal * pedido.total_centavos;
+  };
+  if (antes.desconsiderado === null) somar(antes, -1);
+  if (depois.desconsiderado === null) somar(depois, 1);
+  return novos;
 }

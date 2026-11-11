@@ -2,19 +2,28 @@
 // - GET /api/admin/pedidos: pedidos da campanha ativa, do registrado mais novo para o mais antigo, com os totais
 //   por status só na primeira página e o cursor opaco (`antes_de` = o `proximo` da página anterior);
 // - GET /api/admin/webhook/entregas: cada entrega do webhook, da mais nova para a mais antiga (cursor numérico);
-// - GET /api/admin/celulas: as células da hierarquia, para as opções do filtro de célula.
+// - GET /api/admin/celulas: as células da hierarquia, para as opções do filtro de célula;
+// - POST /api/admin/pedidos/desconsiderar e .../reconsiderar (só admin, D20): tirar o pedido de todas as contas e
+//   desfazer, com a chave `pedidos.desconsiderar` da campanha (GET /api/admin/campanha) ligada.
 //
 // Do contrato vêm só os TIPOS: os valores de src/shared/contracts poriam o zod no pacote do site (veja
 // lib/api.ts). Caminhos, tamanhos de página, status e resultados são cópias, conferidas pelo tipo e por
 // pedidos-contrato.test.ts.
 import type {
+  Campanha,
   Celula,
+  CorpoDesconsiderarPedido,
+  ItemPedido,
+  MotivoDesconsideracao,
   RespostaEntregasWebhook,
   RespostaPedidos,
   ResultadoEventoWebhook,
   StatusPedido,
 } from "../../../shared/contracts";
-import type { ROTAS } from "../../../shared/contracts/api";
+import type {
+  ROTAS,
+  ROTAS_REGRAS_CAMPANHA,
+} from "../../../shared/contracts/api";
 import { ErroApi, api } from "../../lib/api";
 
 export const CAMINHO_PEDIDOS: (typeof ROTAS)["listarPedidos"]["caminho"] =
@@ -23,6 +32,12 @@ export const CAMINHO_ENTREGAS: (typeof ROTAS)["entregasWebhook"]["caminho"] =
   "/api/admin/webhook/entregas";
 export const CAMINHO_CELULAS: (typeof ROTAS)["listarCelulas"]["caminho"] =
   "/api/admin/celulas";
+export const CAMINHO_CAMPANHA: (typeof ROTAS)["obterCampanha"]["caminho"] =
+  "/api/admin/campanha";
+export const CAMINHO_DESCONSIDERAR: (typeof ROTAS_REGRAS_CAMPANHA)["desconsiderarPedido"]["caminho"] =
+  "/api/admin/pedidos/desconsiderar";
+export const CAMINHO_RECONSIDERAR: (typeof ROTAS_REGRAS_CAMPANHA)["reconsiderarPedido"]["caminho"] =
+  "/api/admin/pedidos/reconsiderar";
 
 /** PAGINA_PEDIDOS_PADRAO do contrato: pedidos por página. */
 export const PEDIDOS_POR_PAGINA = 50;
@@ -48,6 +63,25 @@ export const RESULTADOS_ENTREGA = [
 /** Tamanho máximo do id do pedido na busca (o `id` de consultaPedidosSchema). */
 export const TAMANHO_MAXIMO_ID = 128;
 
+/** MOTIVOS_DESCONSIDERACAO do contrato (regras.ts), na mesma ordem. */
+export const MOTIVOS_DESCONSIDERACAO = [
+  "teste",
+  "fraude",
+  "estorno",
+  "outro",
+] as const satisfies readonly MotivoDesconsideracao[];
+
+/** LIMITE_OBSERVACAO_DESCONSIDERACAO do contrato: caracteres da observação. */
+export const LIMITE_OBSERVACAO = 140;
+
+/**
+ * `observacaoTemContato` do contrato (regras.ts): um "@" (e-mail) ou 8 dígitos seguidos, depois de tirar espaços,
+ * pontos, traços, barras e parênteses (telefone, CPF, cartão). A API recusa com 400; a tela avisa antes.
+ */
+export function observacaoTemContato(texto: string): boolean {
+  return texto.includes("@") || /\d{8}/.test(texto.replace(/[\s.()/-]/g, ""));
+}
+
 /** Filtros da lista de pedidos (a célula é uma célula, "só sem célula" ou todas). */
 export type FiltrosPedidos = {
   status: StatusPedido | null;
@@ -55,12 +89,15 @@ export type FiltrosPedidos = {
     { tipo: "todas" } | { tipo: "sem_celula" } | { tipo: "id"; id: number };
   /** Busca exata pelo id do pedido na Rifei. */
   id: string | null;
+  /** D20: true = só os desconsiderados; false = só os que contam; null = todos. */
+  desconsiderado: boolean | null;
 };
 
 export const SEM_FILTROS: FiltrosPedidos = {
   status: null,
   celula: { tipo: "todas" },
   id: null,
+  desconsiderado: null,
 };
 
 /** Filtro da lista de entregas. */
@@ -93,10 +130,17 @@ export function filtrosDosPedidos(params: URLSearchParams): FiltrosPedidos {
       : params.get("sem_celula") === "true"
         ? { tipo: "sem_celula" }
         : { tipo: "todas" };
+  const desconsiderado = params.get("desconsiderado");
   return {
     status: ehStatus(status) ? status : null,
     celula,
     id: idDaBusca(params.get("id")),
+    desconsiderado:
+      desconsiderado === "true"
+        ? true
+        : desconsiderado === "false"
+          ? false
+          : null,
   };
 }
 
@@ -114,6 +158,8 @@ export function paramsDosPedidos(filtros: FiltrosPedidos): [string, string][] {
     params.push(["celula_id", String(filtros.celula.id)]);
   if (filtros.celula.tipo === "sem_celula") params.push(["sem_celula", "true"]);
   if (filtros.id) params.push(["id", filtros.id]);
+  if (filtros.desconsiderado !== null)
+    params.push(["desconsiderado", String(filtros.desconsiderado)]);
   return params;
 }
 
@@ -187,6 +233,43 @@ export async function carregarCelulas(
     opcoes,
   );
   return itens;
+}
+
+/**
+ * A chave `pedidos.desconsiderar` da campanha ativa (D20): ligada, o admin desconsidera e desfaz. Sem campanha
+ * (404), vale o padrão: desligada.
+ */
+export async function carregarDesconsiderarLigado(
+  opcoes: Opcoes = {},
+): Promise<boolean> {
+  try {
+    const campanha = await api.get<Campanha>(CAMINHO_CAMPANHA, opcoes);
+    return campanha.pedidos?.desconsiderar === true;
+  } catch (erro) {
+    if (erro instanceof ErroApi && erro.status === 404) return false;
+    throw erro;
+  }
+}
+
+/** Tira o pedido de todas as contas (só admin, com a chave ligada): 200 com o pedido como a lista mostra. */
+export function desconsiderarPedido(
+  corpo: CorpoDesconsiderarPedido,
+): Promise<ItemPedido> {
+  return api.post<ItemPedido>(CAMINHO_DESCONSIDERAR, corpo);
+}
+
+/** Desfaz: o pedido volta a contar. 200 com o pedido como a lista mostra (`desconsiderado: null`). */
+export function reconsiderarPedido(pedidoId: string): Promise<ItemPedido> {
+  return api.post<ItemPedido>(CAMINHO_RECONSIDERAR, { pedido_id: pedidoId });
+}
+
+/** 409 `acao_desligada`: a chave da campanha foi desligada (ex.: por outra pessoa, com a tela aberta). */
+export function ehAcaoDesligada(erro: unknown): boolean {
+  return (
+    erro instanceof ErroApi &&
+    erro.status === 409 &&
+    erro.codigo === "acao_desligada"
+  );
 }
 
 /**

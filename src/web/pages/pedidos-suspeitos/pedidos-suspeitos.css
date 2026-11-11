@@ -60,6 +60,31 @@
   font-size: var(--texto-sm);
 }
 
+/* D20: o pedido que o admin já desconsiderou (fora de todas as contas), como o selo da tela Pedidos. */
+.suspeitos-pedido {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-2);
+}
+
+.suspeitos-pedido__id {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.suspeitos-desconsiderado {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--espaco-1) var(--espaco-2);
+  border: 1px solid var(--cor-perigo);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-perigo-suave);
+  color: var(--cor-perigo);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+}
+
 .suspeitos-valor {
   font-weight: var(--peso-forte);
 }
@@ -72,6 +97,31 @@
 
   /* A data e o valor não quebram no meio; "Marcado em" pode ir para a linha de cima. */
   .suspeitos time,
+  /* D20: o pedido que o admin já desconsiderou (fora de todas as contas), como o selo da tela Pedidos. */
+.suspeitos-pedido {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espaco-1) var(--espaco-2);
+  }
+
+  .suspeitos-pedido__id {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .suspeitos-desconsiderado {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--espaco-1) var(--espaco-2);
+    border: 1px solid var(--cor-perigo);
+    border-radius: var(--raio-pilula);
+    background: var(--cor-perigo-suave);
+    color: var(--cor-perigo);
+    font-size: var(--texto-xs);
+    font-weight: var(--peso-forte);
+  }
+
   .suspeitos-valor {
     white-space: nowrap;
   }

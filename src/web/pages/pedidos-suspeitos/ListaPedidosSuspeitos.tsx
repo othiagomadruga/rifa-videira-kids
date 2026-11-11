@@ -21,7 +21,12 @@ import {
   carregarPedidosSuspeitos,
   ehSemPermissao,
 } from "./pedidos-suspeitos-api";
-import { pedidosMarcados, textoDaCelula, textoDoMotivo } from "./textos";
+import {
+  pedidosMarcados,
+  seloDesconsiderado,
+  textoDaCelula,
+  textoDoMotivo,
+} from "./textos";
 import "./pedidos-suspeitos.css";
 
 type Carga =
@@ -35,7 +40,14 @@ const COLUNAS: ColunaTabela<PedidoSuspeito>[] = [
     titulo: "Pedido",
     principal: true,
     celula: (pedido) => (
-      <span className="suspeitos-celula">{pedido.pedido_id}</span>
+      <span className="suspeitos-celula suspeitos-pedido">
+        <span className="suspeitos-pedido__id">{pedido.pedido_id}</span>
+        {pedido.desconsiderado && (
+          <span className="suspeitos-desconsiderado">
+            {seloDesconsiderado(pedido.desconsiderado.motivo)}
+          </span>
+        )}
+      </span>
     ),
   },
   {

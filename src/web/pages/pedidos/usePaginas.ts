@@ -181,11 +181,35 @@ export function usePaginas<Item, Cursor, P extends Pagina<Item, Cursor>>(
     }
   }
 
+  /**
+   * Troca um item da lista pelo que a API devolveu depois de uma ação (ex.: desconsiderar), no mesmo lugar, e
+   * ajusta a primeira página (os totais), sem pedir nada de novo.
+   */
+  const substituirItem = useCallback(
+    (novo: Item, mudarPrimeira?: (primeira: P) => P) => {
+      setEstado((anterior) =>
+        anterior.tipo !== "ok"
+          ? anterior
+          : {
+              ...anterior,
+              itens: anterior.itens.map((item) =>
+                config.idDoItem(item) === config.idDoItem(novo) ? novo : item,
+              ),
+              primeira: mudarPrimeira
+                ? mudarPrimeira(anterior.primeira)
+                : anterior.primeira,
+            },
+      );
+    },
+    [config],
+  );
+
   return {
     estado: atual,
     mais: maisAtual,
     anuncio,
     carregarMais,
     tentarDeNovo,
+    substituirItem,
   };
 }
