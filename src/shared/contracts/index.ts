@@ -12,3 +12,4 @@ export * from "./calendario";
 export * from "./calculos";
 export * from "./ddd";
 export * from "./regras";
+export * from "./token-webhook";

@@ -18,7 +18,7 @@ Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e
 | D3 | O pedido é identificado pelo `id` da Rifei. Toda entrega é registrada com o payload redigido, e o processamento é idempotente. | `pedidos.id` (PK), `webhook_eventos`, resultado `duplicado` |
 | D4 | Estados: `in_process` → `approved` \| `expired`; `expired` → `approved`; `approved` é terminal. Fora de ordem cria o pedido direto no estado certo. Só `approved` é venda. | `decidirTransicaoPedido`, `TRANSICOES_PERMITIDAS`; CHECK de `status` |
 | D5 | `slug` diferente do configurado: evento registrado como ignorado, resposta 200 | `campanhas.slug_rifei`; resultado `ignorado_outra_campanha` |
-| D6 | `Authorization: Bearer` comparado em tempo constante com `RIFEI_WEBHOOK_TOKEN`. Inválido ou ausente: 401. Segredo não configurado: 503. | `SEGREDO_WEBHOOK_RIFEI`; grupo `rifei_bearer`; códigos `nao_autenticado` e `nao_configurado` |
+| D6 | `Authorization: Bearer` comparado em tempo constante com o token gerado pela tela da coordenação (RIFA-039, `docs/decisions.md` D21; no banco, só o SHA-256) ou, só sem ele, com o segredo `RIFEI_WEBHOOK_TOKEN`. Inválido ou ausente: 401. Nenhum dos dois: 503. | `ROTAS_TOKEN_WEBHOOK`, `credencialVigenteDoWebhook` e `SEGREDO_WEBHOOK_RIFEI`; grupo `rifei_bearer`; códigos `nao_autenticado` e `nao_configurado` |
 | D7 | `affiliate_id` → afiliado → célula. Afiliado desconhecido entra como não vinculado (fila de órfãos); venda sem afiliado fica em "sem afiliado". A célula é resolvida por JOIN na leitura. | tabela `afiliados` (`celula_id` NULL), view `vendas_aprovadas` |
 | D8 | Fuso da campanha `America/Belem` para dia e semana | `campanhas.fuso_horario` (padrão), `FUSO_PADRAO`; instantes guardados em UTC |
 | D9 | 200 depois de gravar; payload sem o essencial (`event`, `id`, `slug`, `numbers_count`, `total`): 400, registrado com erro; o resto é tolerado com avisos (RIFA-002b); falha de banco: 500 | `analisarPayloadRifei`; resultado `erro_validacao`; `webhook_eventos.avisos`; códigos `json_invalido`, `payload_invalido` e `erro_interno` |
@@ -27,22 +27,23 @@ Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e
 
 O webhook é da **conta**, não da campanha. Por isso ele recebe pedidos de todas as campanhas da conta, e o sistema filtra pelo `slug` da campanha configurada (D5).
 
-1. Gerar um token forte, só para isso. Exemplo: `openssl rand -hex 32` (só letras e números, sem `+`, `/` ou `=`; lançamento, seção 3.2).
-2. Guardar o token como segredo do Worker, sem versionar: `wrangler secret put RIFEI_WEBHOOK_TOKEN`. Para desenvolvimento local, ele vai no `.dev.vars`, que está no `.gitignore`.
+1. Gerar o token pela tela da coordenação (só admin; RIFA-039, `docs/decisions.md` D21): **Acessos → Webhook da Rifei → Gerar token do webhook** (`POST /api/admin/webhook/token`). São 32 bytes aleatórios em hex (64 caracteres, só letras e números), mostrados **uma vez**, com **Copiar**; no banco fica só o SHA-256. Gerar de novo invalida o anterior na hora.
+2. Alternativa, sem a tela: gerar um token forte (`openssl rand -hex 32`) e guardá-lo como segredo do Worker, sem versionar: `wrangler secret put RIFEI_WEBHOOK_TOKEN` (lançamento, seção 3.2). **O token da tela tem prioridade**: com ele, o segredo não vale. Para desenvolvimento local, o segredo vai no `.dev.vars`, que está no `.gitignore`.
 3. Na Rifei: menu do usuário → **Integrações** → seção **Outro** → **Adicionar** (webhook).
    - **URL**: `https://<domínio do Worker>/api/webhooks/rifei`. Com barra no fim também funciona (`CAMINHOS_WEBHOOK_RIFEI`). A URL precisa aceitar POST com corpo JSON.
-   - **Token**: o mesmo do passo 1. A Rifei manda `Authorization: Bearer <token>`.
+   - **Token**: o do passo 1 (ou o da alternativa do passo 2). A Rifei manda `Authorization: Bearer <token>`.
    - **Eventos**: marcar os três, "Novo pedido", "Pedido pago" e "Pedido expirado".
 4. No sistema, configurar a campanha (`PUT /api/admin/campanha`) com `slug_rifei` igual ao slug da campanha na Rifei, que é o identificador que aparece no link da campanha (seção 12.1).
 5. Conferir com um pedido de teste: a entrega aparece em `webhook_eventos` com `resultado = 'processado'`.
 
-Para trocar o token, faça a mudança nos dois lados em sequência: primeiro o segredo do Worker, depois a Rifei. Entre um passo e outro, as entregas recebem 401 e não são gravadas; a conferência pelo CSV (seção 10) recupera o que se perder.
+Para trocar o token, faça a mudança nos dois lados em sequência: primeiro no sistema (gerar de novo na tela, com confirmação, ou o segredo do Worker na alternativa), depois na Rifei. Entre um passo e outro, as entregas recebem 401 e não são gravadas; a conferência pelo CSV (seção 10) recupera o que se perder.
 
 ## 2. Autenticação (D6)
 
-- O Worker compara o header `Authorization: Bearer <token>` com o segredo `RIFEI_WEBHOOK_TOKEN` usando **comparação em tempo constante**.
-- Se o header estiver ausente ou errado, a resposta é **401** `nao_autenticado` e nada é gravado.
-- Se o segredo não estiver configurado no Worker, a resposta é **503** `nao_configurado` e nada é gravado. É uma falha fechada: sem segredo, o Worker nunca aceita entregas.
+- O Worker lê a linha do token gerado pela tela (1 linha do D1 por requisição, sem cache; D21) e decide a credencial que vale: **o token da tela, se existe**; senão, o segredo `RIFEI_WEBHOOK_TOKEN`.
+- Compara o header `Authorization: Bearer <token>` com ela usando **comparação em tempo constante**: o SHA-256 do Bearer contra o hash gravado, ou o Bearer contra o segredo.
+- Se o header estiver ausente ou errado, a resposta é **401** `nao_autenticado` e nada é gravado. Com o token da tela, o segredo do Worker também leva 401.
+- Se não houver nenhum dos dois (nem token da tela nem segredo), a resposta é **503** `nao_configurado` e nada é gravado. É uma falha fechada: sem credencial, o Worker nunca aceita entregas.
 - A Rifei não documenta assinatura HMAC. O token estático é a única proteção, por isso ele deve ser forte e trafegar só por HTTPS.
 
 ## 3. Payload
@@ -112,7 +113,7 @@ O payload bruto **só existe na memória da requisição**. O que se grava, e ta
 
 A ordem importa:
 
-1. Segredo `RIFEI_WEBHOOK_TOKEN` ausente: **503** `nao_configurado` e nada é gravado (D6).
+1. Nenhuma credencial (nem o token gerado pela tela nem o segredo `RIFEI_WEBHOOK_TOKEN`): **503** `nao_configurado` e nada é gravado (D6, D21). A leitura do token da tela é a única ida ao banco antes da autenticação (1 linha).
 2. `Authorization` ausente ou inválido: **401** `nao_autenticado` e nada é gravado (D6).
    - Depois da autenticação: corpo acima de 1 MiB (`LIMITE_CORPO_WEBHOOK_BYTES`) grava um evento `erro_validacao` sem payload, com o problema `corpo_muito_grande`, e responde **413** `corpo_muito_grande`. Um pedido real ocupa poucos KB.
 3. Corpo que não é JSON: grava um evento `erro_validacao` e responde **400** `json_invalido` (D9). A mensagem do problema é fixa: a do `JSON.parse` traz um trecho do corpo e nunca é gravada, devolvida nem logada (D1).
@@ -328,7 +329,8 @@ Roteiro, na ordem, com a campanha do passo 3 (conferido em 06/11/2026):
 Outros casos:
 
 - Token errado: `curl -i -X POST http://localhost:5173/api/webhooks/rifei -H "Authorization: Bearer errado" -d '{}'` responde 401 `nao_autenticado` e não grava nada.
-- Sem segredo (`RIFEI_WEBHOOK_TOKEN=` vazio no `.dev.vars` e o `npm run dev` reiniciado): 503 `nao_configurado`.
+- Sem segredo (`RIFEI_WEBHOOK_TOKEN=` vazio no `.dev.vars` e o `npm run dev` reiniciado) e sem token gerado pela tela: 503 `nao_configurado`.
+- Token gerado pela tela no D1 local (RIFA-039, D21): ele passa a valer e o do `.dev.vars` (o do simulador) leva 401. Para voltar ao do `.dev.vars`: `npx wrangler d1 execute DB --local --command "DELETE FROM token_webhook"`.
 - Corpo que não é JSON (ex.: um arquivo truncado): 400 `json_invalido`, registrado como `erro_validacao` sem nenhum trecho do corpo.
 - Corpo acima de 1 MiB (ex.: `head -c 1100000 /dev/zero | tr '\0' x > /tmp/grande.json` e o simulador com esse arquivo): 413 `corpo_muito_grande`, registrado como `erro_validacao` sem payload. Sem o token certo, o mesmo corpo dá 401 e nada é gravado.
 - Para recomeçar do zero: `npx wrangler d1 execute DB --local --command "DELETE FROM webhook_eventos; DELETE FROM pedidos; DELETE FROM afiliados"`.
@@ -341,7 +343,7 @@ Roteiro para o PO configurar a Rifei e a Efí de uma vez, quase tudo pelo celula
 - **NÃO DOCUMENTADO** quer dizer que a fonte oficial não diz. Confira na tela ou pergunte ao suporte da Rifei (12.7).
 - Nenhuma credencial (Client Secret, certificado, token do webhook, senha) vai para este repositório, o DevMission, o WhatsApp ou o e-mail.
 
-Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → campanha (12.1) → ligar a Efí (12.2 B a E) → webhook (12.4, depois do segredo do Worker) → afiliados (12.3) → compra de teste (lançamento, seção 4).
+Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → campanha (12.1) → ligar a Efí (12.2 B a E) → webhook (12.4, com o token gerado pela tela) → afiliados (12.3) → compra de teste (lançamento, seção 4).
 
 ### 12.1 Criar a campanha na Rifei e achar o slug
 

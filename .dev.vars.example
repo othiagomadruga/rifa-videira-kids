@@ -2,5 +2,6 @@
 # Copie para .dev.vars (ignorado pelo git) e troque os valores; nunca versione o .dev.vars.
 # Em produção, cadastre cada segredo com: npx wrangler secret put <NOME>
 
-# Token que autentica o webhook de pedidos da Rifei.
+# Token que autentica o webhook de pedidos da Rifei. Vale só enquanto não houver token gerado pela tela
+# da coordenação no D1 local (o da tela tem prioridade: docs/decisions.md, D21).
 RIFEI_WEBHOOK_TOKEN=troque-me

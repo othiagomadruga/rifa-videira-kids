@@ -20,8 +20,8 @@ Desde a RIFA-014 (docs/decisions.md, D12), os líderes de célula, os discipulad
 
 | Papel | Alvo | Acesso |
 |---|---|---|
-| `admin` | nenhum | tudo de `coordenacao` e também usuários e links (`/api/admin/usuarios`, `/api/admin/links`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, RIFA-014), a trilha de auditoria (`GET /api/admin/auditoria`, RIFA-013b) e as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, `ROTAS_REGRAS_CAMPANHA`, D20) |
-| `coordenacao` | nenhum | `/api/admin/*` e `/api/painel/*` (campanha, hierarquia, vínculos, painel), menos usuários, links, acessos da hierarquia, trilha e as ações das regras da campanha |
+| `admin` | nenhum | tudo de `coordenacao` e também usuários e links (`/api/admin/usuarios`, `/api/admin/links`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, RIFA-014), a trilha de auditoria (`GET /api/admin/auditoria`, RIFA-013b), as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, `ROTAS_TOKEN_WEBHOOK`, D21) |
+| `coordenacao` | nenhum | `/api/admin/*` e `/api/painel/*` (campanha, hierarquia, vínculos, painel), menos usuários, links, acessos da hierarquia, trilha, as ações das regras da campanha e o token do webhook (as entregas e o estado do webhook, sim) |
 | `lider` | a célula | só `/api/minha/*` (a visão individual da célula); 403 em `/api/admin/*` e `/api/painel/*` |
 | `discipulador` | o discipulador | só `/api/minha/*` (o discipulador e as células dele); 403 na coordenação. Com `acesso.discipuladores` desligado na campanha (D20): 403 `acesso_desligado` no `POST /api/sessao` e em todo `/api/minha/*` |
 | `rede` | a rede | só `/api/minha/*` (a rede, os discipuladores e as células dela); 403 na coordenação. Com `acesso.redes` desligado na campanha (D20): 403 `acesso_desligado` no `POST /api/sessao` e em todo `/api/minha/*` |
@@ -44,6 +44,8 @@ Erros no formato único (`docs/api.md`, seção "Erros").
 | `DELETE /api/admin/links/:id` | admin | **204** (de novo: 204, mantém a data da primeira revogação), link de qualquer papel | 400, 401, 403, 404, 409 `em_uso` (nenhum admin ativo ficaria com link válido) |
 | `GET /api/admin/acessos-hierarquia?papel=` | admin | **200** `{ itens }`: todos os alvos do papel, com o usuário de cada um (seção 9) | 400, 401, 403 |
 | `POST /api/admin/acessos-hierarquia/links` `{ papel, ids, revogar_anteriores? }` | admin | **201** `{ itens }`: um link novo por alvo, com a URL (seção 9) | 400, 401, 403, 404 e 409 (com `detalhes.ids`); 409 `acao_desligada` (papel com o acesso desligado na campanha, D20) |
+| `GET /api/admin/webhook/token` | admin | **200** o estado do token do webhook da Rifei: qual credencial vale (`tela`, `segredo` ou nenhuma), desde quando, o último uso e a URL para a Rifei; **nunca o token** ([api.md](api.md#token-do-webhook-da-rifei-rifa-039-docsdecisionsmd-d21)) | 401, 403 |
+| `POST /api/admin/webhook/token` `{ substituir? }` | admin | **201** `{ token, estado }`: o token aparece só aqui, uma vez (no banco, só o SHA-256). Gerar de novo invalida o anterior na hora | 400, 401, 403, 409 `em_uso` (já há credencial vigente e o corpo não traz `substituir: true`; `detalhes.vigente`) |
 | `GET /api/minha/visao` | `lider`, `discipulador`, `rede` | **200** a visão individual do alvo da sessão ([api.md](api.md#visão-individual-e-acessos-da-hierarquia-sprint-5-rifa-014-docsdecisionsmd-d12)) | 400 (`periodo` fora do schema), 401, 403 (coordenação), 403 `acesso_desligado` (discipulador ou rede com o acesso do papel desligado na campanha, D20; em todo `/api/minha/*`), 404 (sem campanha) |
 
 Usuário na administração (`usuarioSchema`):
@@ -88,6 +90,7 @@ Usuário na administração (`usuarioSchema`):
 - **Sessão parada** (RIFA-013b): sem uso há **mais de 7 dias** (`INATIVIDADE_MAXIMA_SESSAO_DIAS`, em `src/worker/db/acessos.ts`), a sessão deixa de valer, mesmo dentro dos 45 dias: um cookie esquecido num aparelho emprestado não vale semanas. Exatamente 7 dias ainda vale; como o `ultimo_uso_em` é regravado no máximo uma vez por minuto, o prazo real pode ser até um minuto menor. O link pessoal continua abrindo uma sessão nova, e a administração não conta a sessão parada em `sessoes_ativas`.
 - **Cookie inválido** (sessão inexistente, vencida, parada ou de usuário desativado): 401, e a resposta expira o cookie.
 - **Tentativas de login** (RIFA-013b; 60 desde a D12, eram 10): no máximo 60 por minuto por IP (binding de Rate Limiting do Workers; `src/worker/lib/limite-requisicoes.ts`), contadas depois da checagem de origem; acima, 429 `muitas_requisicoes`. Com 256 bits, adivinhar um token nunca dependeu do limite: ele barra o abuso (cada tentativa lê o D1) e deixa passar a reunião dos líderes, em que dezenas de pessoas abrem o link ao mesmo tempo atrás do mesmo IP. O corpo do `POST /api/sessao` passa de 4 KiB? 413, sem ler o resto.
+- **Token do webhook da Rifei** (RIFA-039, D21): é um segredo como o token do link (256 bits, só o SHA-256 no banco, mostrado uma vez), mas não abre sessão: só autentica o `POST /api/webhooks/rifei`. Gerado pelo admin na tela, colado direto na Rifei. Com ele, o segredo do Worker `RIFEI_WEBHOOK_TOKEN` deixa de valer (o da tela tem prioridade). Hex de 64 caracteres, não base64url como o link: só letras e números, para o formulário da Rifei.
 - **Trilha de auditoria** (RIFA-013b): criar pessoa, gerar link, desativar, reativar e revogar ficam registrados com quem fez (`GET /api/admin/auditoria`, só admin), no mesmo lote da ação e sem o nome nem o e-mail da pessoa no resumo. O que não muda nada não registra (RIFA-018): reativar quem está ativo, desativar quem está desativado e revogar um link já revogado respondem como sempre (200 e 204), sem linha na trilha.
 
 ### O que o site (front) deve fazer
@@ -129,6 +132,7 @@ Ele não será mostrado de novo. Mande só para a própria pessoa: quem tiver o 
 - O nome aceita letras (com acento), números, espaço, ponto, hífen e apóstrofo, até 120 caracteres, e começa por letra. Qualquer outro caractere é recusado antes de montar o SQL. Os apóstrofos são dobrados no SQL (`D'Arc` vira `'D''Arc'`).
 - `--remote`, `--local` e `--help` não aceitam valor: `--remote=false` é erro, e não liga o D1 remoto. Opção desconhecida (inclusive `--senha=x` ou `--Remote`), valor solto (`--remote false`) e `--local` com `--remote` também são erro.
 - Códigos de saída: 0 (ok), 1 (o D1 não gravou: migrações não aplicadas, wrangler sem login...), 2 (uso errado).
+- **Em produção** ([lancamento.md, 3.1](lancamento.md#31-primeiro-admin-sm-depois-thiago)): o SM roda o comando com `--remote` da sessão dele e manda o link ao primeiro admin, que entra, gera um link novo para si, entra pelo novo e só então revoga o primeiro (o link passou pelo chat). O PO não precisa de Node.
 
 ## 6. Montagem no app (`src/worker/index.ts`)
 
@@ -137,7 +141,7 @@ O Hono roda middlewares e rotas na ordem em que foram registrados. Um middleware
 1. `cabecalhosSeguranca` em primeiro lugar, logo depois de `new Hono()`: vale para toda resposta, inclusive 401, 403, 404 e 500;
 2. as rotas de sessão, abertas;
 3. `exigirSessao(["admin", "coordenacao"])` em `/api/admin/*` e `/api/painel/*`, **antes** de qualquer rota desses prefixos (hierarquia, campanha, painel...), e logo depois dele o teto do corpo das escritas (`limitarCorpoDaCoordenacao`, RIFA-013b): sem sessão, o corpo nem é lido; e `exigirSessao(["lider", "discipulador", "rede"])` em `/api/minha/*` (RIFA-014), antes da rota da visão: sem sessão, 401 em todo caminho do prefixo, exista a rota ou não; coordenação, 403. Os papéis vão escritos no `index.ts` de propósito: um papel novo não ganha acesso sozinho;
-4. as rotas de usuários e links, os acessos da hierarquia e a trilha de auditoria (só admin; os sub-apps também exigem);
+4. as rotas de usuários e links, os acessos da hierarquia e a trilha de auditoria (só admin; os sub-apps também exigem). O token do webhook (RIFA-039, D21) é só admin no handler de cada rota, nunca num `use` de `/api/admin/webhook/*`, onde as entregas e o estado são da coordenação;
 5. as demais rotas, inclusive a visão individual (`/api/minha`), que também exige os papéis da hierarquia no próprio sub-app.
 
 ```ts

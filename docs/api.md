@@ -12,6 +12,7 @@ O contrato executável está em `src/shared/contracts/`:
 | `calendario.ts` | calendário da campanha: datas dos períodos, data final, fase e normalização dos percentuais |
 | `calculos.ts` | regras de cálculo (metas, curva, ritmo, projeção, ranking, bumbo) e as funções que montam as respostas do painel e das rotas abertas ([regras-de-calculo.md](regras-de-calculo.md)) |
 | `regras.ts` | regras do admin (Sprint 6, D20), sem zod: motivos da desconsideração, padrões das chaves, a chave de acesso de cada papel e os modelos das mensagens do WhatsApp com `preencherMensagem` |
+| `token-webhook.ts` | token do webhook gerado pela tela (RIFA-039, D21), sem zod: formato do token, as credenciais e as regras `credencialVigenteDoWebhook` e `ultimoUsoDoWebhook` (os schemas e `ROTAS_TOKEN_WEBHOOK` ficam em `api.ts`) |
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
@@ -37,7 +38,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 
 | Grupo | Rotas | Mecanismo | Falhas |
 |---|---|---|---|
-| `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <RIFEI_WEBHOOK_TOKEN>`, comparado em tempo constante (D6). Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; segredo não configurado: `503 nao_configurado` |
+| `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <token>`, comparado em tempo constante (D6) com o token gerado pela tela da coordenação (RIFA-039, D21; no banco, só o SHA-256) ou, **só sem ele**, com o segredo do Worker `RIFEI_WEBHOOK_TOKEN`. Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; nenhum dos dois configurado: `503 nao_configurado` |
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
 | `hierarquia` | `/api/minha/*` (RIFA-014, D12) | a mesma sessão, aberta pelo link pessoal de um `lider`, `discipulador` ou `rede`; o alvo (célula, discipulador ou rede) vem **só da sessão** | `401 nao_autenticado`: sem sessão; `403 proibido`: sessão da coordenação. **Nunca devolve dinheiro** |
 | `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** |
@@ -48,7 +49,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 - Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. Link válido de `discipulador` ou `rede` com o acesso do papel desligado na campanha (`acesso.discipuladores` ou `acesso.redes`, D20): 403 `acesso_desligado`, sem criar a sessão. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`) e as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`) as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, em `ROTAS_TOKEN_WEBHOOK`, D21); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -75,14 +76,14 @@ Toda resposta que não é 2xx tem este corpo:
 | `proibido` | 403 | autenticado, sem permissão; ou escrita de outra origem (CSRF) |
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
-| `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin |
+| `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin; gerar o token do webhook com uma credencial vigente sem `substituir: true` (D21; `detalhes` = `{ "vigente": "tela" \| "segredo" }`, `detalhesTokenWebhookEmUsoSchema`) |
 | `acao_desligada` | 409 | a chave da campanha que libera a ação está desligada (D20): desconsiderar ou reconsiderar pedido com `pedidos.desconsiderar` desligada; gerar link de discipulador ou rede com o acesso do papel desligado. `detalhes` = `{ "chave": "pedidos.desconsiderar" \| "acesso.discipuladores" \| "acesso.redes" }` (`detalhesAcaoDesligadaSchema`) |
 | `acesso_desligado` | 403 | discipulador ou rede com o acesso do papel desligado na campanha (D20): no `POST /api/sessao` (link válido) e em todo `/api/minha/*`. `detalhes` = `{ "papel": "discipulador" \| "rede" }` (`detalhesAcessoDesligadoSchema`) |
 | `afiliado_com_pedidos` | 409 | remover afiliado que tem pedido que conta (D20). `detalhes` = `{ "pedidos_que_contam": 3, "pedidos": ["PED1", "PED2", "PED3"] }` (até 20 ids; `detalhesAfiliadoComPedidosSchema`) |
 | `corpo_muito_grande` | 413 | corpo acima do limite (abaixo): do webhook (1 MiB, `LIMITE_CORPO_WEBHOOK_BYTES`), do `POST /api/sessao` (4 KiB), das escritas da coordenação (1 MiB) ou da conferência (1 MiB, `LIMITE_CORPO_CONFERENCIA_BYTES`) |
 | `muitas_requisicoes` | 429 | passou do limite de requisições por IP (abaixo), com `Retry-After` em segundos |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
-| `nao_configurado` | 503 | segredo do webhook ausente |
+| `nao_configurado` | 503 | webhook sem credencial: nem token gerado pela tela nem o segredo `RIFEI_WEBHOOK_TOKEN` (D21) |
 | `banco_indisponivel` | 503 | health sem banco |
 
 O mapa código → HTTP fica em `STATUS_HTTP_DO_ERRO`. Para montar o corpo, use `criarErroApi()`; para converter um erro do zod em `detalhes`, use `detalhesDeValidacao()`.
@@ -118,12 +119,13 @@ Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Contro
 
 - **200**: `{ "ok": true, "db": "ok", "latenciaMs": 3 }` (`respostaHealthSchema`). É o formato que o esqueleto (RIFA-001) já serve e o site já lê; por isso `latenciaMs` fica em camelCase.
 - **503** `banco_indisponivel`: o banco não respondeu.
-- Não revela configuração, como a existência do segredo do webhook.
+- Não revela configuração, como a existência do segredo ou do token do webhook.
 
 ### `POST /api/webhooks/rifei` (`rifei_bearer`)
 
 - Recebe o payload oficial da Rifei e o analisa com `analisarPayloadRifei` (RIFA-002b). Só recusa (400) quando falta o que torna o pedido gravável: `event` reconhecido, `id`, `slug`, `numbers_count` e `total`. O resto é tolerado: ausente ou com tipo errado vira null, e a diferença fica em `webhook_eventos.avisos`. Motivo: a Rifei não reenvia, e um 400 é venda perdida.
 - O passo a passo completo está em [integracao-rifei.md](integracao-rifei.md#5-processamento-de-cada-entrega).
+- **Autenticação** (D21): antes de tudo, lê a linha do token da tela (1 linha do D1 por requisição, autenticada ou não; sem cache). Com o token da tela, só ele vale; sem ele, o segredo `RIFEI_WEBHOOK_TOKEN`; sem nenhum dos dois, 503. O Bearer é comparado em tempo constante (o SHA-256 dele contra o hash gravado, ou contra o segredo como antes).
 - O corpo é validado **dentro do handler**, com `analisarPayloadRifei`, e não por middleware: o erro precisa ser gravado antes da resposta 400, e os avisos precisam chegar ao evento.
 - Caminho com ou sem barra no fim (`CAMINHOS_WEBHOOK_RIFEI`).
 - **Limite de tamanho do corpo: 1 MiB** (`LIMITE_CORPO_WEBHOOK_BYTES`), conferido **depois** da autenticação. Acima disso, a resposta é **413** `corpo_muito_grande`, e o evento é gravado como `erro_validacao`, sem payload.
@@ -136,7 +138,7 @@ Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Contro
 | **400** `json_invalido` / `payload_invalido` | erro; `detalhes` = `{ "evento_id": 124, "problemas": [...] }` | sim, como `erro_validacao` (sem dado pessoal) |
 | **413** `corpo_muito_grande` | erro; `detalhes` = `{ "evento_id": 125, "problemas": [...] }` | sim, como `erro_validacao`, sem payload |
 | **401** `nao_autenticado` | erro | não |
-| **503** `nao_configurado` | erro | não |
+| **503** `nao_configurado` (nem token da tela nem segredo do Worker, D21) | erro | não |
 | **500** `erro_interno` | erro | não (falhou ao gravar) |
 
 - `ignorado_outra_campanha`: o `slug` é diferente do `slug_rifei` da campanha ativa, ou não há campanha ativa (D5).
@@ -430,6 +432,7 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `pedido.desconsiderar` | `POST /api/admin/pedidos/desconsiderar` (D20) | `pedido:<id>` (só `pedido` se não couber em 64 caracteres: `alvoDoPedidoNaAuditoria`) | o id do pedido em JSON, o status, os bilhetes, a célula (pelo id) e o motivo; da observação, só "observação informada" |
 | `pedido.reconsiderar` | `POST /api/admin/pedidos/reconsiderar` (D20) | idem | o id, o motivo que tinha e quando fora desconsiderado |
 | `afiliado.remover` | `DELETE /api/admin/afiliados/:affiliateId` (D20) | `afiliado:<affiliate_id>` | a célula que ele tinha (pelo id) e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se couberem) |
+| `webhook.gerar_token` | `POST /api/admin/webhook/token` (D21) | `webhook` | o que deixou de valer: nada, o segredo do Worker ou o token anterior (com o `gerado_em` dele); **nunca o token nem o hash**. O 409 não registra |
 
 - **Consulta** (`consultaAuditoriaSchema`): `limite` (1 a 200, padrão 50) e `antes_de` (cursor: o `proximo` da página anterior).
 - **200** (`respostaAuditoriaSchema`): do mais novo para o mais antigo.
@@ -870,6 +873,67 @@ Remove um afiliado de teste, vinculado ou não. **204**.
 - **Erros**: primeiro o login (401; 403 da coordenação, só no DELETE: o `PUT` do mesmo caminho continua da
   coordenação); depois 400 (`:affiliateId` não é inteiro positivo), 404 `nao_encontrado` (o afiliado não existe) e
   409 `afiliado_com_pedidos`.
+
+---
+
+## Token do webhook da Rifei (RIFA-039; docs/decisions.md D21)
+
+Rotas **só de admin**, no catálogo `ROTAS_TOKEN_WEBHOOK` de `api.ts` (à parte de `ROTAS` até a API montá-las, como
+`ROTAS_REGRAS_CAMPANHA`). O admin gera o token no site e cola direto na Rifei (menu do usuário → Integrações → Outro
+→ Adicionar), sem Node nem wrangler. O "só admin" vale só para estas duas: as entregas e o estado do webhook
+(`/api/admin/webhook/entregas` e `/estado`) continuam da coordenação.
+
+**Qual credencial vale** (`credencialVigenteDoWebhook`): **o token da tela tem prioridade**. Com ele, só ele vale e o
+segredo do Worker `RIFEI_WEBHOOK_TOKEN` é ignorado; sem ele, vale o segredo (como antes); sem nenhum dos dois, o
+webhook responde 503 `nao_configurado`. Gerar de novo substitui o anterior, que para de valer na requisição seguinte
+em todos os servidores (o webhook não guarda o token em cache).
+
+### `GET /api/admin/webhook/token` (**só admin**)
+
+**200** (`estadoTokenWebhookSchema`, estrito; **nunca traz o token nem o hash**):
+
+```json
+{
+  "vigente": "tela", "gerado_em": "2026-11-12T10:00:00.000Z", "ultimo_uso_em": "2026-11-12T10:05:00.000Z",
+  "segredo_configurado": false, "url": "https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei"
+}
+```
+
+- `vigente`: `tela`, `segredo` ou null (nenhuma credencial: o webhook responde 503). O schema confere a coerência:
+  `tela` se e somente se há `gerado_em`; `segredo` só com `segredo_configurado`.
+- `gerado_em`: quando o token da tela foi gerado (null sem ele).
+- `ultimo_uso_em` (`ultimoUsoDoWebhook`): a última entrega autenticada (`webhook_eventos`, qualquer resultado,
+  inclusive as recusadas pelo corpo; 401, 503 e 500 não são gravados). Com o token da tela, só a recebida em ou
+  depois de `gerado_em`: null quer dizer que a Rifei ainda não mandou nada com o token novo (foi colado? houve
+  pedido?). Com o segredo, a última entrega. Calculado na leitura: o webhook não escreve nada a mais.
+- `segredo_configurado`: o segredo `RIFEI_WEBHOOK_TOKEN` existe no Worker (não vazio). Com o token da tela, ele não
+  vale; a tela pode dizer isso.
+- `url`: para colar no campo "URL" do webhook na Rifei, com a origem da requisição (como as URLs dos links de acesso).
+- **Custo no D1**: a linha do token (1) e a última entrega (~8 linhas, `ULTIMA_ENTREGA` de `db/estado-webhook.ts`).
+- **Erros**: 401, 403 (`coordenacao` e os papéis da hierarquia).
+
+### `POST /api/admin/webhook/token` (**só admin**)
+
+- **Corpo** (`corpoGerarTokenWebhookSchema`): `{}` ou `{ "substituir": true }` (padrão false; outro campo dá 400).
+- **201** (`respostaGerarTokenWebhookSchema`): a **única** vez em que o token aparece.
+
+```json
+{
+  "token": "<64 caracteres hex>",
+  "estado": { "vigente": "tela", "gerado_em": "2026-11-12T10:00:00.000Z", "ultimo_uso_em": null,
+              "segredo_configurado": false, "url": "https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei" }
+}
+```
+
+- O token tem 32 bytes aleatórios em hex minúsculo (`FORMATO_TOKEN_WEBHOOK`, 64 caracteres, só letras e números). No
+  banco fica só o SHA-256 (`token_webhook`, migração 0009). O site mostra uma vez, com "Copiar", e não guarda.
+- **Com credencial vigente** (o token da tela ou o segredo do Worker) e sem `substituir: true`: **409 `em_uso`** com
+  `{ "vigente": "tela" | "segredo" }` (`detalhesTokenWebhookEmUsoSchema`), e nada muda. A tela pede a confirmação:
+  o anterior para de valer na hora, e as entregas recebem 401 (e se perdem) até o token novo ser colado na Rifei.
+  Também é a resposta quando outra aba gerou um token no meio. Sem credencial vigente, `substituir` não importa.
+- **Erros**: primeiro o login (401 sem sessão; 403 da coordenação, da hierarquia e de outra origem); depois 400
+  `requisicao_invalida` (corpo) e 409 `em_uso`.
+- Trilha: `webhook.gerar_token`, no mesmo lote da gravação, sem o token nem o hash.
 
 ---
 

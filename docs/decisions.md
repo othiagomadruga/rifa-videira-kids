@@ -614,3 +614,136 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
    (`problemasDoModelo` não vazio) dá lugar ao padrão do tipo, para nunca mandar mensagem sem o link. Afiliados:
    "Remover" (só admin) com o 409 explicado e os ids. /minha e a página de acesso: a mensagem do 403
    `acesso_desligado`. Trilha: o tipo de alvo `pedido`.
+
+## D21. Token do webhook gerado pela tela da coordenação (RIFA-039; contrato, 2026-11-11)
+
+O token do webhook da Rifei era só o segredo do Worker `RIFEI_WEBHOOK_TOKEN` (D6 da integração), gravado com
+`npx wrangler secret put` na máquina do PO. O PO não tem Node nem wrangler e quer fazer tudo pelo site, e o token
+precisa ir da tela direto para a Rifei (menu do usuário → Integrações → Outro → Adicionar), sem passar por chat,
+e-mail ou WhatsApp. Contrato em `src/shared/contracts/token-webhook.ts` (sem zod: formato, credenciais e as regras
+puras) e `api.ts` (schemas e o catálogo `ROTAS_TOKEN_WEBHOOK`); testes em `token-webhook.test.ts`.
+
+- **Desenho.** Duas rotas **só de admin**, no catálogo à parte `ROTAS_TOKEN_WEBHOOK` (como `ROTAS_REGRAS_CAMPANHA`,
+  D20, até a -api montá-las):
+  - `GET /api/admin/webhook/token`: o estado (`estadoTokenWebhookSchema`, estrito): `vigente` (`tela`, `segredo` ou
+    null), `gerado_em`, `ultimo_uso_em`, `segredo_configurado` e a `url` para colar na Rifei (origem da requisição
+    + `/api/webhooks/rifei`, como as URLs dos links). **Nunca o token nem o hash.**
+  - `POST /api/admin/webhook/token { substituir? }`: gera um token novo e responde **201** `{ token, estado }`, a
+    única vez em que o token aparece. Com credencial vigente (o token da tela ou o segredo do Worker) e sem
+    `substituir: true`: **409 `em_uso`** com `{ "vigente" }` e nada muda; a tela pede a confirmação ("as vendas
+    param até o token novo ser colado na Rifei") e repete com `substituir: true`. Uma aba antiga ou um duplo clique
+    não derruba o webhook sem confirmação. Nenhum código de erro novo.
+- **Token**: 32 bytes de `crypto.getRandomValues` (256 bits) em hex minúsculo, 64 caracteres
+  (`FORMATO_TOKEN_WEBHOOK`): só letras e números, como o `openssl rand -hex 32` que o roteiro já usava (nada de `+`,
+  `/`, `=`, `-` ou `_` que o formulário da Rifei corte ou que o toque longo do celular pare de selecionar). Por isso
+  não é o `gerarSegredo()` dos links (base64url).
+- **Banco**: tabela de uma linha `token_webhook` (migração `0009_token_webhook.sql`; plano em
+  [modelo-de-dados.md, seção 10](modelo-de-dados.md#10-plano-da-migração-0009_token_webhooksql-rifa-039-d21)) com o
+  **SHA-256 em hex** do token e `gerado_em`. É o padrão dos links e das sessões (D8, acesso.md seção 4). HMAC não:
+  com 256 bits aleatórios, o SHA-256 já não deixa quem lê o banco montar o token, e a chave do HMAC seria outro
+  segredo do Worker, o `wrangler secret put` que a tarefa quer evitar. Gerar de novo substitui a linha (UPSERT): o
+  anterior para de valer na requisição seguinte, em todos os servidores (sem cache, abaixo). Quem gerou fica na
+  trilha. Limitação: o token e o hash têm o mesmo formato (64 hex), então o CHECK da coluna não distingue um do
+  outro; a varredura das tabelas atrás do token é obrigatória (abaixo).
+- **Segurança**:
+  - o token só sai na resposta 201 (com `Cache-Control: no-store`, como toda resposta autenticada). Nunca no GET, na
+    trilha, no banco (só o hash), em log (`console.*`), em mensagem de erro, na URL ou no `detalhes` de um erro. Se
+    a gravação falha, a resposta é 500 e o token é descartado sem ter sido mostrado;
+  - o webhook compara **em tempo constante**: o SHA-256 do Bearer contra o hash gravado, com
+    `crypto.subtle.timingSafeEqual` sobre resumos de tamanho fixo (como `lib/tempo-constante.ts`). Nunca `===` nem
+    `WHERE token_hash = ?`: a leitura é pela chave (`WHERE id = 1`), a mesma para qualquer token, e lê sempre 1 linha;
+  - o site mostra o token uma vez, com "Copiar", e não o guarda (nada de localStorage, sessionStorage, URL ou
+    histórico); ao sair da tela ou gerar outro, ele some da memória;
+  - login, papel e CSRF como toda escrita de `/api/admin/*` (D8, D9).
+- **Compatibilidade: o token da tela tem prioridade.** Com token da tela, só ele vale e o `RIFEI_WEBHOOK_TOKEN` é
+  ignorado; sem token da tela, vale o segredo (como hoje); sem nenhum dos dois, **503 `nao_configurado`** (antes:
+  sem o segredo). Regra executável: `credencialVigenteDoWebhook` (com `segredoDoWorkerConfigurado`: o segredo vazio
+  ou só de espaço não conta, como antes). Por quê:
+  - uma credencial por vez: "gerar de novo invalida o anterior" vale também para o segredo do Worker, que o PO não
+    consegue apagar sem o wrangler. Um segredo que vazou é neutralizado pela tela. "Aceitar qualquer um" deixaria o
+    segredo antigo valendo para sempre ao lado do token da tela;
+  - o modelo para o PO é simples: vale o último gerado;
+  - custo aceito: gerar o PRIMEIRO token na tela, com o segredo configurado, também para as vendas até o token novo
+    ser colado na Rifei. Por isso o 409 vale também para `vigente: "segredo"`.
+  - Voltar para o segredo do Worker depois de usar a tela: o SM apaga a linha no D1 remoto
+    (`DELETE FROM token_webhook`), fora da API e sem trilha. É contingência, não fluxo.
+- **Orçamento do D1 (D10)**: o webhook passa a ler **1 linha por requisição** (a de `token_webhook`, pela chave;
+  `rows_read` 1 com a tabela vazia ou não, medido no D1 local do workerd), autenticada ou não, e nenhuma escrita a
+  mais. Antes: 0 linhas no 401 e no 503. A requisição sem Bearer também lê, porque o 503 depende de haver token na
+  tela; uma enxurrada de 401 custa 1 linha cada, limitada pela cota de requisições do Workers (D11).
+- **Cache no isolate: considerado e recusado.** A campanha deve ter de 20 a 30 mil entregas (7 mil pedidos × 2 a 4
+  eventos), ~1 por minuto em média, contra 5 milhões de linhas lidas por dia no plano Free: o cache economizaria
+  quase nada. E traria uma janela (o TTL) em que o token antigo ainda vale nos outros isolates depois de gerar o
+  novo, e em que o "último uso" pode mostrar uma entrega do token antigo como se fosse do novo. Sem cache, a
+  invalidação é imediata em todo servidor. Se um dia precisar (ex.: enxurrada de 401): TTL de 30 s; o isolate que
+  gera zera o próprio cache; a divergência entre o Bearer e o hash em cache força uma releitura (o token novo entra
+  na hora); nos outros isolates o anterior vale por até 30 s; e o último uso passa a contar só a partir de
+  `gerado_em` + 30 s.
+- **Último uso, sem escrita no webhook.** O GET calcula na leitura com a última entrega autenticada
+  (`ULTIMA_ENTREGA` de `db/estado-webhook.ts`, ~8 linhas lidas com 3 mil entregas, medido): com o token da tela, a
+  última entrega recebida em ou depois de `gerado_em` (antes disso, null: "ainda não usado"); com o segredo, a
+  última entrega (`ultimoUsoDoWebhook`). Toda entrega autenticada vira uma linha de `webhook_eventos` (D3), inclusive
+  as recusadas pelo corpo (400 e 413); 401, 503 e 500 não. Gravar `ultimo_uso_em` numa coluna custaria uma escrita
+  e mais uma linha lida no webhook. Sem cache e com a prioridade da tela, depois de `gerado_em` só o token da tela
+  autentica. Fica só a corrida de milissegundos de uma entrega que leu a linha antes da troca e gravou o
+  `recebido_em` depois dela.
+- **Trilha** (D11): `webhook.gerar_token`, alvo `webhook` (`ALVO_AUDITORIA_TOKEN_WEBHOOK`), no MESMO `db.batch` da
+  gravação, com o registro antes e a mesma condição. O resumo diz o que deixou de valer ("não havia credencial", "o
+  segredo do Worker deixou de valer" ou "o token anterior, gerado em <instante>, deixou de valer") e nunca traz o
+  token nem o hash. O 409 não registra.
+- **Primeiro admin** (só docs, lançamento 3.1): o SM cria o primeiro admin pela sessão
+  (`npm run acesso:criar -- ... --remote`) e manda o link ao Thiago. Ele abre, gera um link novo para si, abre o
+  novo e só então revoga o primeiro, que passou pelo chat. Com o token pela tela, o lançamento não pede Node na
+  máquina do PO; o wrangler fica como alternativa.
+- **Riscos que continuam**:
+  - entre gerar e colar na Rifei, as entregas recebem 401, não são gravadas e se perdem (a conferência pelo CSV
+    recupera, lançamento 6.4). A tela avisa antes de confirmar;
+  - a resposta 201 se perde (a rede caiu no meio): o token novo já vale e ninguém o viu. A tela mostra "gerado em …,
+    ainda não usado"; gere de novo;
+  - **rollback do código** para uma versão de antes da RIFA-039: ela só conhece o segredo do Worker. Com só o token
+    da tela, o webhook passa a responder 503 (ou 401, com um segredo antigo) até voltar a versão nova (lançamento
+    2.4);
+  - **Time Travel do D1** para antes de uma geração: a linha volta ao que era (sem token, ou o anterior). Gere de novo
+    e cole na Rifei (lançamento 2.4);
+  - token errado na Rifei continua sem registro (401 não é gravado; D16): o alerta mostra "nenhuma venda". A tela
+    do token ajuda: `ultimo_uso_em` null depois de colar e de uma compra quer dizer token errado ou não colado.
+
+### OBRIGATÓRIO NA IMPLEMENTAÇÃO
+
+1. **Migração `0009_token_webhook.sql`** (-db), como no plano de modelo-de-dados.md, seção 10, entrando na `main`
+   DEPOIS da `0008_regras_campanha.sql` da RIFA-028 (o número é reservado). Teste em `src/worker/test/migrations.test.ts`:
+   a 0009 sobre dados das anteriores; o CHECK de uma linha só (`id = 1`), do hash (64 hex minúsculos) e do instante.
+2. **Webhook** (`routes/webhook-rifei.ts`, -api), nesta ordem: (a) ler `SELECT token_hash FROM token_webhook WHERE
+   id = 1` (1 linha); (b) `credencialVigenteDoWebhook({ tokenDaTela, segredoConfigurado:
+   segredoDoWorkerConfigurado(c.env.RIFEI_WEBHOOK_TOKEN) })`; (c) null: 503 `nao_configurado`, nada gravado;
+   (d) o Bearer como hoje; (e) `tela`: SHA-256 do Bearer contra o hash em tempo constante; `segredo`: o
+   `textosIguaisEmTempoConstante` de hoje; (f) diferente ou ausente: 401 com `WWW-Authenticate: Bearer`. O resto do
+   fluxo não muda. Sem cache, sem escrita nova e sem o token em log.
+3. **Testes do webhook** (-api): com o token da tela, ele passa e o segredo do Worker leva 401; sem o token da tela,
+   o segredo passa (os testes de hoje continuam valendo sem mudar: a tabela começa vazia); sem nenhum dos dois, 503;
+   o token anterior leva 401 logo depois de gerar outro (sem cache); 1 linha lida a mais por requisição
+   (`meta.rows_read`), na autenticada, no 401 e no 503, e nenhuma escrita a mais.
+4. **Rotas** (-api), num sub-app novo ou no `routes/webhook-coordenacao.ts`, sob `/api/admin` (passo 4 do
+   `index.ts`). O "só admin" fica no HANDLER das duas rotas, nunca num `use` de `/api/admin/webhook/*` (as entregas e
+   o estado continuam da coordenação). `ROTAS_TOKEN_WEBHOOK` entra no `src/worker/protecao.test.ts` no mesmo merge:
+   401 sem cookie, 403 da coordenação e da hierarquia, 403 no POST de outra origem.
+5. **POST** (-api): ler a linha (1 linha) para decidir o 409 e o `vigente` do detalhe; gerar o token
+   (`BYTES_TOKEN_WEBHOOK` em hex) e o `sha256Hex` (`lib/cripto.ts`); um `db.batch` com o registro na trilha e a
+   gravação sob a MESMA condição: sem `substituir`, `INSERT ... WHERE NOT EXISTS` na trilha e `INSERT ... ON CONFLICT
+   (id) DO NOTHING` no token (`changes` 0: 409, outra aba gerou no meio); com `substituir`, o resumo lê o `gerado_em`
+   anterior por subconsulta e o token vai por UPSERT. O segredo do Worker sem `substituir` dá 409 antes do lote.
+   Responder 201 com `respostaGerarTokenWebhookSchema`.
+6. **GET** (-api): a linha (1) e `ULTIMA_ENTREGA` (~8 linhas), com `ultimoUsoDoWebhook`, e a `url` pela origem da
+   requisição com `CAMINHOS_WEBHOOK_RIFEI[0]`. A resposta passa pelo `estadoTokenWebhookSchema` (estrito).
+7. **Varredura** (-db/-api), como a de `db/acessos.test.ts`: depois de gerar, nenhuma coluna de nenhuma tabela tem o
+   token (o hash sim, só em `token_webhook`); a trilha tem a linha, sem o token e sem o hash; a resposta do GET e a
+   da trilha não têm o token.
+8. **Site** (-web), só admin: o estado (credencial vigente, desde quando, último uso, a URL com "Copiar") e o botão
+   "Gerar token do webhook". Com credencial vigente, a confirmação explica que o anterior para de valer na hora e
+   que as vendas param até colar o novo na Rifei (com o segredo do Worker, o mesmo aviso). O token aparece uma vez,
+   com "Copiar", ao lado do passo a passo da Rifei (Integrações → Outro → Adicionar; URL, Token e os três eventos);
+   não vai para storage, URL nem log, e some ao sair da tela. 409 `em_uso` (outra aba): recarrega o estado e pede a
+   confirmação. Na Trilha, o rótulo do alvo `webhook` (o da ação já está no contrato).
+9. **Docs** (feitos neste contrato): lançamento 3.1, 3.2, o resumo do topo e as seções que citavam o segredo;
+   integracao-rifei.md; api.md; acesso.md; modelo-de-dados.md. Se o -web der outro nome à tela ("Acessos → Webhook da
+   Rifei" é a SUPOSIÇÃO), o SM acerta os docs no mesmo merge.
