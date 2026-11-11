@@ -1,7 +1,8 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
-// 0005_auditoria.sql e 0006_acesso_hierarquia.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
-// testes, dentro do workerd. A 0006 também é aplicada num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE
-// dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7).
+// 0005_auditoria.sql, 0006_acesso_hierarquia.sql e 0007_indices_pedidos_entregas.sql), aplicado pelo setup
+// apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006 e a 0007 também são aplicadas num D1 à
+// parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua
+// lá (RIFA-014, CA7; RIFA-025, CA5).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -85,10 +86,16 @@ describe("migrações: schema do D1", () => {
         "pedidos_por_status_aprovacao",
         // 0003: parcial (approved) e com o dia de UTC−3, para a leitura do painel (db/painel.ts).
         "pedidos_aprovados_por_afiliado_dia",
+        // 0007 (RIFA-025): a lista de pedidos da campanha com o cursor (db/lista-pedidos.ts).
+        "pedidos_por_campanha_registro",
       ],
       webhook_eventos: [
         "webhook_eventos_por_pedido",
         "webhook_eventos_por_resultado",
+        // 0007 (RIFA-025): as entregas de um resultado pelo id (db/entregas-webhook.ts) e, parcial, as entregas
+        // da campanha por slug (última entrega da campanha, db/estado-webhook.ts).
+        "webhook_eventos_por_resultado_id",
+        "webhook_eventos_da_campanha_por_slug",
       ],
       links_acesso: ["links_acesso_por_usuario"],
       sessoes: [
@@ -406,6 +413,9 @@ describe("0006 sobre dados que já existiam (CA7)", () => {
     expect(ate0005.map((migracao) => migracao.name)).not.toContain(
       "0006_acesso_hierarquia.sql",
     );
+    const ate0006 = TEST_MIGRATIONS.filter(
+      (migracao) => migracao.name < "0007",
+    );
     await applyD1Migrations(db, ate0005);
     // Antes da 0006: a hierarquia, um afiliado, um admin e uma coordenadora (desativada), com links válidos,
     // revogados e vencidos, sessões e a trilha de auditoria (que segura o admin com RESTRICT).
@@ -454,7 +464,8 @@ describe("0006 sobre dados que já existiam (CA7)", () => {
       ),
     ]);
     antes = await fotografar(db);
-    await applyD1Migrations(db, TEST_MIGRATIONS);
+    // Até a 0006: a 0007 é aplicada depois, sobre outros dados (describe "0007 sobre dados que já existiam").
+    await applyD1Migrations(db, ate0006);
   });
 
   it("a 0006 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -723,5 +734,190 @@ describe("0006 sobre dados que já existiam (CA7)", () => {
     expect(
       await db.prepare("SELECT id FROM celulas WHERE id = 102").first(),
     ).toEqual({ id: 102 });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 0007 (RIFA-025, D16): dois índices, aplicados sobre pedidos e entregas que já existiam (CA5)
+// ---------------------------------------------------------------------------------------------------
+
+/** O que já existia antes da 0007 (a ordem pela chave). */
+const FOTOS_0007 = {
+  pedidos: "SELECT * FROM pedidos ORDER BY id",
+  pedidos_suspeitos: "SELECT * FROM pedidos_suspeitos ORDER BY pedido_id",
+  webhook_eventos: "SELECT * FROM webhook_eventos ORDER BY id",
+  afiliados: "SELECT * FROM afiliados ORDER BY affiliate_id",
+} as const;
+
+async function fotografar0007(db: D1Database) {
+  const resultados = await db.batch(
+    Object.values(FOTOS_0007).map((sql) => db.prepare(sql)),
+  );
+  return Object.fromEntries(
+    Object.keys(FOTOS_0007).map((nome, indice) => [
+      nome,
+      resultados[indice].results,
+    ]),
+  );
+}
+
+describe("0007 sobre dados que já existiam (RIFA-025, CA5)", () => {
+  const db = DB_MIGRACAO;
+  let antes: Awaited<ReturnType<typeof fotografar0007>>;
+  let campanhaId: number;
+
+  beforeAll(async () => {
+    // Idempotente: o describe da 0006 já aplicou até ela (aqui vale também rodando este describe sozinho).
+    const ate0006 = TEST_MIGRATIONS.filter(
+      (migracao) => migracao.name < "0007",
+    );
+    expect(ate0006.map((migracao) => migracao.name)).not.toContain(
+      "0007_indices_pedidos_entregas.sql",
+    );
+    await applyD1Migrations(db, ate0006);
+    const campanha = await db
+      .prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos, meta_unidade,
+           meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha Antes da 0007', 'campanha-antes-da-0007', 1, '2026-11-23', 2000, 'bilhetes',
+           'por_pessoa', 10, 'percentual_meta')
+         RETURNING id`,
+      )
+      .first<{ id: number }>();
+    campanhaId = campanha!.id;
+    // Hierarquia própria (ids que o describe da 0006 não usa), um afiliado vinculado e um órfão, três pedidos
+    // (um suspeito) e as entregas deles, inclusive um erro e um aviso.
+    await db.batch([
+      db.prepare(
+        "INSERT INTO redes (id, nome, divisao) VALUES (70, 'Rede Antes da 0007', 'adultos')",
+      ),
+      db.prepare(
+        "INSERT INTO discipuladores (id, rede_id, nome) VALUES (700, 70, 'Discipulador Antes da 0007')",
+      ),
+      db.prepare(
+        `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
+         VALUES (7000, 700, 'Celula Antes da 0007', 9, 'Lider Antes da 0007')`,
+      ),
+      db.prepare(
+        `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em) VALUES
+           (7001, 7000, 'manual', '2026-11-20T12:00:00.000Z'),
+           (7002, NULL, 'webhook', NULL)`,
+      ),
+      db
+        .prepare(
+          `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+             registrado_em, atualizado_em) VALUES
+             ('ANTES-0007-1', ?1, 7001, 'approved', 2, 4000, '2026-11-24T13:00:00.000Z',
+               '2026-11-24T12:59:00.000Z', '2026-11-24T13:00:01.000Z'),
+             ('ANTES-0007-2', ?1, 7002, 'in_process', 1, 2000, NULL,
+               '2026-11-24T14:00:00.000Z', '2026-11-24T14:00:00.000Z'),
+             ('ANTES-0007-3', ?1, NULL, 'expired', 3, 6000, NULL,
+               '2026-11-24T15:00:00.000Z', '2026-11-25T15:00:00.000Z')`,
+        )
+        .bind(campanhaId),
+      db.prepare(
+        `INSERT INTO pedidos_suspeitos (pedido_id, qtd_bilhetes, total_centavos, esperado_centavos, motivos, marcado_em)
+         VALUES ('ANTES-0007-1', 2, 4000, 4000,
+           '[{"caminho":["numbers_count"],"codigo":"bilhetes_acima_do_teto","mensagem":"x","ocorrencias":1}]',
+           '2026-11-24T13:00:01.000Z')`,
+      ),
+      db.prepare(
+        `INSERT INTO webhook_eventos (recebido_em, evento, pedido_id, slug, resultado, status_anterior,
+           status_resultante, payload_redigido, erro, avisos) VALUES
+           ('2026-11-24T12:59:00.000Z', 'new_order', 'ANTES-0007-1', 'campanha-antes-da-0007', 'processado',
+             NULL, 'in_process', '{}', NULL, NULL),
+           ('2026-11-24T13:00:01.000Z', 'paid_order', 'ANTES-0007-1', 'campanha-antes-da-0007', 'processado',
+             'in_process', 'approved', '{}', NULL,
+             '[{"caminho":["subtotal"],"codigo":"invalid_type","mensagem":"x","ocorrencias":1}]'),
+           ('2026-11-24T13:30:00.000Z', NULL, NULL, NULL, 'erro_validacao', NULL, NULL, NULL,
+             '[{"caminho":[],"codigo":"json_invalido","mensagem":"x","ocorrencias":1}]', NULL)`,
+      ),
+    ]);
+    antes = await fotografar0007(db);
+    await applyD1Migrations(db, TEST_MIGRATIONS);
+  });
+
+  it("a 0007 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+    const { results } = await db
+      .prepare("SELECT name FROM d1_migrations ORDER BY id")
+      .all<{ name: string }>();
+    expect(results.map((linha) => linha.name).at(-1)).toBe(
+      "0007_indices_pedidos_entregas.sql",
+    );
+    expect(antes.pedidos).toHaveLength(3);
+    expect(antes.pedidos_suspeitos).toHaveLength(1);
+    expect(antes.webhook_eventos).toHaveLength(3);
+  });
+
+  it("nenhum dado muda: pedidos, suspeitos, entregas e afiliados continuam iguais", async () => {
+    expect(await fotografar0007(db)).toEqual(antes);
+  });
+
+  it("os três índices existem, com as colunas na ordem, e cobrem as linhas que já existiam", async () => {
+    const colunas = async (indice: string) =>
+      (
+        await db
+          .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
+          .bind(indice)
+          .all<{ name: string }>()
+      ).results.map((linha) => linha.name);
+    expect(await colunas("pedidos_por_campanha_registro")).toEqual([
+      "campanha_id",
+      "registrado_em",
+      "id",
+    ]);
+    expect(await colunas("webhook_eventos_por_resultado_id")).toEqual([
+      "resultado",
+      "id",
+    ]);
+    expect(await colunas("webhook_eventos_da_campanha_por_slug")).toEqual([
+      "slug",
+      "recebido_em",
+    ]);
+    // Parcial: só as entregas da campanha (D16), com o WHERE que a consulta repete.
+    const parcial = await db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'webhook_eventos_da_campanha_por_slug'",
+      )
+      .first<{ sql: string }>();
+    expect(parcial?.sql).toMatch(
+      /WHERE resultado IN \('processado', 'duplicado', 'ignorado_transicao'\)$/,
+    );
+    // Lidas pelo índice (INDEXED BY obriga), as linhas antigas estão todas lá, na ordem da lista.
+    const { results: pedidos } = await db
+      .prepare(
+        `SELECT id FROM pedidos INDEXED BY pedidos_por_campanha_registro
+         WHERE campanha_id = ?1 ORDER BY registrado_em DESC, id DESC`,
+      )
+      .bind(campanhaId)
+      .all<{ id: string }>();
+    expect(pedidos.map((linha) => linha.id)).toEqual([
+      "ANTES-0007-3",
+      "ANTES-0007-2",
+      "ANTES-0007-1",
+    ]);
+    const { results: entregas } = await db
+      .prepare(
+        `SELECT resultado, count(*) AS n FROM webhook_eventos INDEXED BY webhook_eventos_por_resultado_id
+         WHERE resultado IN ('processado', 'erro_validacao') GROUP BY resultado ORDER BY resultado`,
+      )
+      .all<{ resultado: string; n: number }>();
+    expect(entregas).toEqual([
+      { resultado: "erro_validacao", n: 1 },
+      { resultado: "processado", n: 2 },
+    ]);
+    // As duas entregas processadas antigas estão no índice parcial; o erro (fora do WHERE dele), não.
+    const { results: daCampanha } = await db
+      .prepare(
+        `SELECT recebido_em FROM webhook_eventos INDEXED BY webhook_eventos_da_campanha_por_slug
+         WHERE resultado IN ('processado', 'duplicado', 'ignorado_transicao') AND slug = ?1
+         ORDER BY recebido_em`,
+      )
+      .bind("campanha-antes-da-0007")
+      .all<{ recebido_em: string }>();
+    expect(daCampanha.map((linha) => linha.recebido_em)).toEqual([
+      "2026-11-24T12:59:00.000Z",
+      "2026-11-24T13:00:01.000Z",
+    ]);
   });
 });

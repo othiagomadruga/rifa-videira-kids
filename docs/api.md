@@ -716,6 +716,18 @@ afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD,
 status, só na primeira página (null quando a consulta traz `antes_de`). Sem campanha ativa: lista vazia e totais
 zerados.
 
+- **Ordem e cursor**: `registrado_em` decrescente e, no empate, `id` decrescente (comparação binária). O cursor é
+  o base64url (sem `=`) do JSON `[registrado_em, id]` do último item; a página seguinte começa logo depois dele,
+  sem repetir nem pular pedidos, mesmo que um pedido novo chegue ou um pedido mude de status entre as páginas
+  (`registrado_em` não muda). Cursor que a API não emitiu (texto qualquer, JSON fora da forma, instante sem
+  milissegundos, id vazio ou com mais de 128 caracteres, forma não canônica): 400 `requisicao_invalida`,
+  "Consulta inválida", com o detalhe `{ caminho: ["antes_de"], codigo: "cursor_invalido" }`.
+- **Sem célula**: sem afiliado ou com afiliado ainda não vinculado. **`id`**: exato (maiúsculas contam), sem os
+  espaços das pontas; só acha pedido da campanha ativa e respeita os outros filtros.
+- **Custo no D1** (D10, D16; `src/worker/db/pedidos-webhook-desempenho.test.ts`, com 7 mil pedidos): a página
+  lê ~135 linhas (~142 com o cursor); os totais sem filtro, ~1 por pedido (~7 mil), e por isso saem só na
+  primeira página. Com célula, ~3 linhas por pedido da célula; sem célula, ~2,5 por pedido sem célula.
+
 ### `GET /api/admin/webhook/entregas` (`coordenacao`)
 
 Cada entrega autenticada do webhook, da mais nova para a mais antiga: quando chegou, evento, pedido, slug,
@@ -724,11 +736,35 @@ resultado e transição de status. Do erro (só em `erro_validacao`) saem o cód
 a campo (caminho do schema), código e ocorrências: a mensagem gravada não sai. Consulta: `limite`, `antes_de`
 (id), `resultado` e `pedido_id`.
 
+- **Ordem e cursor**: `id` decrescente; `proximo` é o id do último item (null quando não há mais). `pedido_id`:
+  exato, sem os espaços das pontas.
+- **Código da recusa**: `json_invalido` ou `corpo_muito_grande` quando o erro gravado é esse único problema, de
+  caminho vazio (é como o webhook grava as duas recusas do corpo); senão `payload_invalido`.
+- **Redução**: `campo` = as partes do caminho juntadas com `.`, com `*` nas posições de lista
+  (`numbers.*`, `buyer.email`; vazio quando o problema é do corpo inteiro). Uma parte que não tenha a forma de
+  um nome de campo vira `?`, e um código fora da forma do vocabulário (minúsculas, dígitos e `_`) vira
+  `codigo_desconhecido`: nada do que veio na entrega pode sair por ali. Itens com o mesmo campo e código somam
+  as `ocorrencias`. Erro gravado sem nenhum item aproveitável: um problema com o próprio código da recusa.
+- **Custo no D1**: ~51 linhas por página, com ou sem `resultado` e cursor (índice da migração 0007).
+
 ### `GET /api/admin/webhook/estado` (`coordenacao`)
 
 `situacao` (na ordem de prioridade: `erros_recentes`, `sem_entregas_recentes`, `nunca_recebeu` ou `ok`; regra na
 D16), a última entrega, a última entrega da campanha, a última aprovação e a contagem das últimas 24 h por
 resultado.
+
+- **Limites exatos**: as últimas 24 h vão de `agora − 24 h` (inclusive) até agora. A janela do alerta é
+  `HORA_INICIO_ALERTA ≤ hora local < HORA_FIM_ALERTA` no fuso da campanha, nos dias de `data_inicio` a `data_fim`
+  (inclusive), e acende quando `agora − max(última entrega da campanha, hoje às HORA_INICIO_ALERTA)` passa de
+  `HORAS_SEM_ENTREGA_ALERTA` horas (às 12:00:00.000 em ponto do 1º dia sem nada, ainda não; 1 ms depois, sim).
+- **Slug do erro**: comparado sem os espaços das pontas que o `trim()` do JavaScript tira (os mesmos do slug
+  aceito pelo webhook, inclusive tabulação, quebra de linha e espaço não separável). Slug só de espaços conta
+  como ausente. Sem campanha ativa, só o erro sem slug acende `erros_recentes`.
+- `ultima_entrega_em` e `ultima_processada_em` são o maior `recebido_em`; `ultimo_aprovado_em`, o maior
+  `aprovado_em` dos pedidos aprovados da campanha ativa; `verificado_em`, o instante da consulta.
+- **Custo no D1**: duas idas (a campanha ativa e um lote), ~940 linhas lidas com ~1 mil entregas nas últimas
+  24 h (a contagem por resultado é quase tudo), também com o slug da campanha trocado depois de entregas
+  processadas (a última entrega da campanha sai do índice parcial da migração 0007).
 
 ## Rotas RASCUNHO (Sprint 4)
 

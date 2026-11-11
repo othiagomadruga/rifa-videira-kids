@@ -1,0 +1,284 @@
+/**
+ * Lista de pedidos da coordenação (RIFA-025, D16; docs/api.md, GET /api/admin/pedidos): os pedidos da campanha
+ * ativa, do registrado mais novo para o mais antigo (empate pelo id), com a célula resolvida pelo afiliado na
+ * leitura (D7), `suspeito` (pedidos_suspeitos, D11), totais por status e cursor opaco. Só lê; nada do comprador
+ * além do DDD (D1).
+ *
+ * Custo (o D1 cobra por linha lida, D10). Uma ida ao banco: a página e, só na primeira, os totais, no mesmo
+ * db.batch (uma transação: os totais batem com a lista). A campanha ativa entra como subconsulta. Cada forma de
+ * filtro tem a sua consulta, porque o índice da migração 0007 (`pedidos_por_campanha_registro`) atrai o
+ * planejador também onde ele piora a leitura; os desvios abaixo são de propósito e os planos ficam travados
+ * por teste (db/pedidos-webhook-desempenho.test.ts):
+ * - sem filtro de célula: a página desce pelo índice da 0007 a partir do cursor e para no limite;
+ * - por célula: `afiliados CROSS JOIN pedidos` (os afiliados da célula, depois os pedidos de cada um pelo índice
+ *   por afiliado) e `+p.campanha_id`; pela campanha, o planejador percorria todos os pedidos dela;
+ * - sem célula: `affiliate_id IS NULL OR affiliate_id IN (afiliados sem célula)`, que vira um MULTI-INDEX OR
+ *   sobre o índice por afiliado; o LEFT JOIN com `a.celula_id IS NULL` percorria a campanha;
+ * - pelo id: a chave primária, com os demais filtros conferidos na linha;
+ * - totais: `+p.campanha_id`, para o planejador NÃO usar o índice da 0007 (lido por ele, cada pedido custa duas
+ *   linhas: o índice e a tabela).
+ */
+import type {
+  ConsultaPedidos,
+  ItemPedido,
+  RespostaPedidos,
+  StatusPedido,
+} from "../../shared/contracts";
+import { STATUS_PEDIDO, instanteSchema } from "../../shared/contracts";
+
+/** Posição na lista: o último item da página anterior. */
+export interface CursorPedidos {
+  registrado_em: string;
+  id: string;
+}
+
+/** Filtros da lista (os da consulta, menos a paginação). */
+export type FiltrosPedidos = Pick<
+  ConsultaPedidos,
+  "status" | "celula_id" | "sem_celula" | "id"
+>;
+
+/** Um comando SQL montado: o texto (só trechos constantes do código) e os valores, sempre por bind. */
+export interface ComandoSql {
+  sql: string;
+  valores: unknown[];
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Cursor opaco: base64url (sem "=") do JSON [registrado_em, id]
+// ---------------------------------------------------------------------------------------------------
+
+const BASE64URL = /^[A-Za-z0-9_-]+$/;
+/** O id do pedido tem de 1 a 128 caracteres (CHECK de pedidos.id; o length do SQLite conta code points). */
+const TAMANHO_MAXIMO_ID = 128;
+
+function bytesParaBase64url(bytes: Uint8Array): string {
+  let binario = "";
+  for (const byte of bytes) binario += String.fromCharCode(byte);
+  return btoa(binario)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+/** O `proximo` da resposta. */
+export function codificarCursorPedidos(cursor: CursorPedidos): string {
+  return bytesParaBase64url(
+    new TextEncoder().encode(JSON.stringify([cursor.registrado_em, cursor.id])),
+  );
+}
+
+/**
+ * O cursor recebido em `antes_de`, ou null se não é um cursor que esta API emitiu: base64url, JSON com um
+ * instante e um id válidos e, por fim, a mesma forma canônica (codificar de novo dá o mesmo texto).
+ */
+export function decodificarCursorPedidos(texto: string): CursorPedidos | null {
+  if (!BASE64URL.test(texto)) return null;
+  let valor: unknown;
+  try {
+    const binario = atob(texto.replaceAll("-", "+").replaceAll("_", "/"));
+    const bytes = Uint8Array.from(binario, (letra) => letra.charCodeAt(0));
+    valor = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes),
+    );
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(valor) || valor.length !== 2) return null;
+  const [registradoEm, id] = valor as unknown[];
+  if (
+    typeof registradoEm !== "string" ||
+    !instanteSchema.safeParse(registradoEm).success ||
+    typeof id !== "string" ||
+    id.length === 0 ||
+    [...id].length > TAMANHO_MAXIMO_ID
+  )
+    return null;
+  const cursor = { registrado_em: registradoEm, id };
+  return codificarCursorPedidos(cursor) === texto ? cursor : null;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Consultas
+// ---------------------------------------------------------------------------------------------------
+
+const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
+
+const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p.affiliate_id, a.celula_id,
+    c.nome AS celula_nome, p.ddd, p.criado_em, p.aprovado_em, p.expirado_em, p.registrado_em, p.atualizado_em,
+    EXISTS (SELECT 1 FROM pedidos_suspeitos AS s WHERE s.pedido_id = p.id) AS suspeito`;
+
+const PEDIDOS_COM_AFILIADO = `pedidos AS p
+    LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id`;
+
+/** Afiliados sem célula: o pedido deles (ou sem afiliado) é "sem célula" (D7). */
+const SEM_CELULA = `(p.affiliate_id IS NULL OR p.affiliate_id IN (
+      SELECT affiliate_id FROM afiliados WHERE celula_id IS NULL))`;
+
+/** FROM e condições da forma de filtro (célula, sem célula, id), compartilhados pela lista e pelos totais. */
+function origem(
+  filtros: FiltrosPedidos,
+  comCelulas: boolean,
+): ComandoSql & {
+  condicoes: string[];
+} {
+  const celulas = comCelulas
+    ? "\n    LEFT JOIN celulas AS c ON c.id = a.celula_id"
+    : "";
+  const valores: unknown[] = [];
+  const valor = (dado: unknown) => {
+    valores.push(dado);
+    return `?${valores.length}`;
+  };
+  if (filtros.id !== undefined) {
+    const condicoes = [
+      `p.id = ${valor(filtros.id)}`,
+      `+p.campanha_id = ${ID_DA_ATIVA}`,
+    ];
+    if (filtros.celula_id !== undefined)
+      condicoes.push(`a.celula_id = ${valor(filtros.celula_id)}`);
+    else if (filtros.sem_celula === true) condicoes.push("a.celula_id IS NULL");
+    return {
+      sql: `${PEDIDOS_COM_AFILIADO}${celulas}`,
+      valores,
+      condicoes,
+    };
+  }
+  if (filtros.celula_id !== undefined)
+    return {
+      sql: `afiliados AS a
+    CROSS JOIN pedidos AS p ON p.affiliate_id = a.affiliate_id${celulas}`,
+      valores,
+      condicoes: [
+        `a.celula_id = ${valor(filtros.celula_id)}`,
+        `+p.campanha_id = ${ID_DA_ATIVA}`,
+      ],
+    };
+  if (filtros.sem_celula === true)
+    return {
+      sql: `${PEDIDOS_COM_AFILIADO}${celulas}`,
+      valores,
+      condicoes: [`+p.campanha_id = ${ID_DA_ATIVA}`, SEM_CELULA],
+    };
+  return {
+    sql: `${PEDIDOS_COM_AFILIADO}${celulas}`,
+    valores,
+    condicoes: [`p.campanha_id = ${ID_DA_ATIVA}`],
+  };
+}
+
+/**
+ * A página: `limite + 1` linhas (a a mais só diz se há próxima), a partir do cursor. A comparação de linha
+ * `(registrado_em, id) < (?, ?)` é a mesma ordem do ORDER BY: nenhuma linha se repete nem fica de fora entre
+ * as páginas.
+ */
+export function comandoListaPedidos(
+  filtros: FiltrosPedidos,
+  cursor: CursorPedidos | null,
+  limite: number,
+): ComandoSql {
+  const base = origem(filtros, true);
+  const valores = [...base.valores];
+  const valor = (dado: unknown) => {
+    valores.push(dado);
+    return `?${valores.length}`;
+  };
+  const condicoes = [...base.condicoes];
+  if (filtros.status !== undefined)
+    condicoes.push(`p.status = ${valor(filtros.status)}`);
+  if (cursor !== null)
+    condicoes.push(
+      `(p.registrado_em, p.id) < (${valor(cursor.registrado_em)}, ${valor(cursor.id)})`,
+    );
+  const sql = `SELECT ${COLUNAS_ITEM}
+  FROM ${base.sql}
+  WHERE ${condicoes.join("\n    AND ")}
+  ORDER BY p.registrado_em DESC, p.id DESC
+  LIMIT ${valor(limite + 1)}`;
+  return { sql, valores };
+}
+
+/** Totais por status com os mesmos filtros de célula, sem célula e id (sem o de status nem a paginação). */
+export function comandoTotaisPedidos(filtros: FiltrosPedidos): ComandoSql {
+  const comAfiliado = filtros.id !== undefined;
+  const base = origem(filtros, false);
+  // Sem o id, a forma "sem célula" e a "sem filtro" não precisam do afiliado: só a tabela de pedidos.
+  const de =
+    comAfiliado || filtros.celula_id !== undefined ? base.sql : "pedidos AS p";
+  const sql = `SELECT p.status, count(*) AS pedidos, sum(p.qtd_bilhetes) AS bilhetes,
+    sum(p.total_centavos) AS total_centavos
+  FROM ${de}
+  WHERE ${base.condicoes.map(semIndiceDaCampanha).join("\n    AND ")}
+  GROUP BY p.status`;
+  return { sql, valores: base.valores };
+}
+
+/** Nos totais, a campanha nunca escolhe o índice (troca `p.campanha_id =` por `+p.campanha_id =`). */
+function semIndiceDaCampanha(condicao: string): string {
+  return condicao.startsWith("p.campanha_id = ") ? `+${condicao}` : condicao;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Leitura
+// ---------------------------------------------------------------------------------------------------
+
+interface LinhaPedido extends Omit<ItemPedido, "suspeito"> {
+  suspeito: number;
+}
+
+interface LinhaTotal {
+  status: StatusPedido;
+  pedidos: number;
+  bilhetes: number;
+  total_centavos: number;
+}
+
+type Totais = NonNullable<RespostaPedidos["totais"]>;
+
+function totaisZerados(): Totais {
+  const zerado = () => ({ pedidos: 0, bilhetes: 0, total_centavos: 0 });
+  return { in_process: zerado(), approved: zerado(), expired: zerado() };
+}
+
+/**
+ * Uma página da lista. `cursor` já decodificado (a rota responde 400 ao cursor inválido); com ele, `totais`
+ * sai null (D16: poupa uma leitura do D1 por "carregar mais"). Sem campanha ativa, a subconsulta da campanha dá
+ * NULL: lista vazia e totais zerados.
+ */
+export async function listarPedidos(
+  db: D1Database,
+  consulta: ConsultaPedidos,
+  cursor: CursorPedidos | null,
+): Promise<RespostaPedidos> {
+  const lista = comandoListaPedidos(consulta, cursor, consulta.limite);
+  const comandos = [db.prepare(lista.sql).bind(...lista.valores)];
+  if (cursor === null) {
+    const totais = comandoTotaisPedidos(consulta);
+    comandos.push(db.prepare(totais.sql).bind(...totais.valores));
+  }
+  const [linhas, linhasTotais] = await db.batch(comandos);
+  const resultados = linhas.results as LinhaPedido[];
+  const itens = resultados
+    .slice(0, consulta.limite)
+    .map((linha) => ({ ...linha, suspeito: linha.suspeito === 1 }));
+  const ultimo = itens.at(-1);
+  let totais: RespostaPedidos["totais"] = null;
+  if (linhasTotais !== undefined) {
+    totais = totaisZerados();
+    for (const linha of linhasTotais.results as LinhaTotal[])
+      if (STATUS_PEDIDO.includes(linha.status))
+        totais[linha.status] = {
+          pedidos: linha.pedidos,
+          bilhetes: linha.bilhetes,
+          total_centavos: linha.total_centavos,
+        };
+  }
+  return {
+    itens,
+    proximo:
+      resultados.length > consulta.limite && ultimo !== undefined
+        ? codificarCursorPedidos(ultimo)
+        : null,
+    totais,
+  };
+}
