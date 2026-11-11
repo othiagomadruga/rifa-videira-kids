@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import type { ItemPedido, RespostaPedidos } from "../../../shared/contracts";
 import {
@@ -239,9 +239,7 @@ function Filtros({
           </optgroup>
         ))}
       </Select>
-      {/* A chave recomeça o campo quando a busca aplicada muda por fora (ex.: "Limpar filtros"). */}
       <BuscaPorId
-        key={filtros.id ?? ""}
         aplicada={filtros.id}
         aoBuscar={(id) => aoMudar({ ...filtros, id })}
       />
@@ -257,15 +255,30 @@ function BuscaPorId({
   aoBuscar: (id: string | null) => void;
 }) {
   const [texto, setTexto] = useState(aplicada ?? "");
+  // A busca aplicada mudou (o Buscar, "Limpar filtros", o "voltar"): o campo mostra a nova. Sem recriar o campo
+  // (uma `key` o recriava), o foco fica onde estava: no Buscar, ou no campo depois do Enter.
+  const [aplicadaAntes, setAplicadaAntes] = useState(aplicada);
+  if (aplicada !== aplicadaAntes) {
+    setAplicadaAntes(aplicada);
+    setTexto(aplicada ?? "");
+  }
+  const campo = useRef<HTMLInputElement>(null);
 
   function buscar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     aoBuscar(idDaBusca(texto));
   }
 
+  function limpar() {
+    // O "Limpar busca" some com a busca: o foco vai para o campo, vazio, pronto para outra.
+    campo.current?.focus();
+    aoBuscar(null);
+  }
+
   return (
     <form className="pedidos-busca" role="search" onSubmit={buscar}>
       <Input
+        ref={campo}
         rotulo="Buscar pelo id do pedido"
         dica="O id completo, como aparece na Rifei."
         value={texto}
@@ -279,7 +292,7 @@ function BuscaPorId({
           Buscar
         </Button>
         {aplicada !== null && (
-          <Button variante="discreto" onClick={() => aoBuscar(null)}>
+          <Button variante="discreto" onClick={limpar}>
             Limpar busca
           </Button>
         )}

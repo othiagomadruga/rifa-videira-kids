@@ -113,6 +113,9 @@ export const TEXTO_DO_CODIGO: Record<string, string> = {
   total_abaixo_do_esperado:
     "total abaixo de bilhetes × preço do bilhete, além do desconto aceito",
   fracao_de_centavo: "fração de centavo arredondada",
+  // o webhook (worker/db/pedidos.ts): o evento trouxe outro afiliado para um pedido que já existia
+  afiliado_alterado:
+    "afiliado diferente do que estava no pedido (vale o deste evento)",
   // recusa da rota (problema único, sem campo) e o corte da lista gravada
   json_invalido: "o corpo não era um JSON válido",
   corpo_muito_grande: "o corpo passou do tamanho máximo",

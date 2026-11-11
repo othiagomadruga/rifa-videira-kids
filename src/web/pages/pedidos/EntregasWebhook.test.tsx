@@ -97,6 +97,7 @@ const ENTREGAS_VARIADAS = [
   entrega(6, {
     avisos: [
       { campo: "total", codigo: "total_abaixo_do_esperado", ocorrencias: 1 },
+      { campo: "affiliate_id", codigo: "afiliado_alterado", ocorrencias: 1 },
     ],
   }),
   entrega(5, {
@@ -179,7 +180,7 @@ describe("CA2: entregas com o resultado em português e o erro e os avisos legí
     expect(todas[3].slice(4)).toEqual([
       "Processada",
       "Aguardando pagamento → para Aprovado",
-      "Aviso | total: total abaixo de bilhetes × preço do bilhete, além do desconto aceito",
+      "Avisos | total: total abaixo de bilhetes × preço do bilhete, além do desconto aceito | affiliate_id: afiliado diferente do que estava no pedido (vale o deste evento)",
     ]);
     expect(todas[4].slice(4)).toEqual([
       "Repetida | O pedido já estava neste status.",
@@ -235,6 +236,7 @@ describe("CA2: entregas com o resultado em português e o erro e os avisos legí
       "too_big",
       "fracao_de_centavo",
       "total_abaixo_do_esperado",
+      "afiliado_alterado",
       "itens_omitidos",
       "in_process",
       "approved",

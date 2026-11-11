@@ -250,12 +250,15 @@ describe("todo valor do contrato tem texto em português", () => {
     ).toBe(RESULTADOS_EVENTO_WEBHOOK.length);
   });
 
-  it("os códigos de problema: todos os do zod, os motivos da D11, os da recusa, a fração de centavo e o corte da lista", () => {
+  it("os códigos de problema: todos os do zod, os motivos da D11, os da recusa, a fração de centavo, o afiliado trocado e o corte da lista", () => {
     for (const codigo of [
       ...Object.keys(CODIGOS_ZOD),
       ...MOTIVOS_PEDIDO_SUSPEITO,
       ...CODIGOS_RECUSA_WEBHOOK,
       "fracao_de_centavo",
+      // O aviso que o webhook grava quando o evento traz outro afiliado para um pedido existente
+      // (worker/db/pedidos.ts).
+      "afiliado_alterado",
       "itens_omitidos",
     ]) {
       expect(TEXTO_DO_CODIGO, codigo).toHaveProperty(codigo);

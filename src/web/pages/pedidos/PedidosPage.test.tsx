@@ -573,6 +573,32 @@ describe("CA1: os filtros (status, célula ou só sem célula, busca pelo id) v�
     expect(campoBusca()).toHaveValue("");
   });
 
+  it("busca pelo id: o foco não se perde (fica no Buscar; 'Limpar busca', que some, leva ao campo) e 'Limpar filtros' esvazia o campo", async () => {
+    simularApi({ pedidos: pedidosVariados(12) });
+    abrir();
+    await tabela();
+
+    fireEvent.change(campoBusca(), { target: { value: "PEDFIC0007" } });
+    acionar(screen.getByRole("button", { name: "Buscar" }));
+    await waitFor(async () => expect(await linhas()).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Buscar" })).toHaveFocus();
+    expect(campoBusca()).toHaveValue("PEDFIC0007");
+
+    acionar(screen.getByRole("button", { name: "Limpar busca" }));
+    await waitFor(async () => expect(await linhas()).toHaveLength(12));
+    expect(campoBusca()).toHaveFocus();
+    expect(campoBusca()).toHaveValue("");
+
+    // Uma busca sem resultado e "Limpar filtros" (fora do campo): o campo volta vazio.
+    fireEvent.change(campoBusca(), { target: { value: "NAO-EXISTE" } });
+    fireEvent.submit(screen.getByRole("search"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Limpar filtros" }),
+    );
+    await waitFor(async () => expect(await linhas()).toHaveLength(12));
+    expect(campoBusca()).toHaveValue("");
+  });
+
   it("os filtros da URL valem ao abrir (o 'voltar' e o recarregar mantêm a tela); fora do contrato, são ignorados", async () => {
     const api = simularApi({ pedidos: pedidosVariados(24) });
     abrir(`${CAMINHO}?status=expired&celula_id=3&id=%20&sem_celula=talvez`);

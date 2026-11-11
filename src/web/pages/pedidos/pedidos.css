@@ -301,8 +301,10 @@
 }
 
 @media (min-width: 48rem) {
-  /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Aprovado"). */
-  .pedidos-celula {
+  /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Aprovado" e o id do
+     pedido, que fica num bloco próprio dentro da célula, em "PEDTESTE00 / 70"). */
+  .pedidos-celula,
+  .pedidos-pedido__id {
     overflow-wrap: break-word;
   }
 
