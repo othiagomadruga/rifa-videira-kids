@@ -15,6 +15,11 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   Travou: `status=blocked` + `blockedReason`. Decisões e notas: `add_quest_item`.
 - **Entregou:** `status=review` (nunca `done`: quem valida é o Thiago).
 - **Fim de sessão/sprint:** `log_progress` (1 a 2 frases + `nextSteps`); `update_retrato` se estiver velho (se a ferramenta não existir, atualize a descrição do projeto com `update_project`).
+- **Portal do cliente (empresa "Videira"), sem esperar pedido do Thiago:** o cliente vê só os PEDIDOS DO CLIENTE
+  (`list_client_requests` do projeto), não as missões internas. A cada avanço que o cliente perceba: `update_client_request`
+  com `update` (1 frase em português simples, sem jargão nem IDs) e `completeSteps`; entregue vai para `status=review`.
+  Entrega nova que o cliente perceba vira pedido (`create_client_request`, com `steps` e `dueDate`). O link do portal
+  é liberado só pelo Thiago, no app (tela Clientes).
 - **Time de agentes:** só o orquestrador (Scrum Master) escreve no DevMission; os subagentes devolvem no relatório o que registrar.
 - **Acesso:** MCP `devmission` (`claude mcp add --transport http devmission https://devmission.pages.dev/api/mcp --header "Authorization: Bearer <token>"`).
   O token é pessoal do Thiago e nunca entra no repositório nem no DevMission.
