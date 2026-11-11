@@ -8,7 +8,9 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
+import { useUsuarioConectado } from "../../lib/sessao";
 import {
+  removerAfiliado,
   salvarVinculo,
   type AfiliadoResumo,
   type PainelAdesao,
@@ -20,7 +22,11 @@ import { SemCelula } from "./SemCelula";
 import { TodasAsCelulas } from "./TodasAsCelulas";
 import { INTERVALO_ATUALIZACAO_MS, usePainelAdesao } from "./usePainelAdesao";
 import { useTelaLarga } from "./useTelaLarga";
-import type { AoSalvarVinculo, AvisoDeSucesso } from "./vinculo";
+import type {
+  AoRemoverAfiliado,
+  AoSalvarVinculo,
+  AvisoDeSucesso,
+} from "./vinculo";
 import "./adesao.css";
 
 const SEGUNDOS_ENTRE_ATUALIZACOES = INTERVALO_ATUALIZACAO_MS / 1000;
@@ -55,6 +61,32 @@ export function AdesaoPage() {
   // Último vínculo salvo: aparece perto de onde a pessoa estava e é anunciado pela região viva abaixo.
   const [aviso, setAviso] = useState<AvisoDeSucesso | null>(null);
   const [vinculadosAgora, setVinculadosAgora] = useState<VinculadoAgora[]>([]);
+  // Remover afiliado de teste (RIFA-031): só o admin.
+  const admin = useUsuarioConectado().papel === "admin";
+
+  /** O afiliado saiu da fila nesta tela: some na hora, até a próxima consulta. */
+  function tirarDaFila(affiliateId: number) {
+    const em = Date.now();
+    const obtidoEm = estado.tipo === "ok" ? estado.painel.obtidoEm : 0;
+    // Os de antes da última consulta já não escondem nada: saem da lista.
+    setVinculadosAgora((lista) => [
+      ...lista.filter(
+        (item) => item.affiliateId !== affiliateId && item.em > obtidoEm,
+      ),
+      { affiliateId, em },
+    ]);
+  }
+
+  const aoRemover: AoRemoverAfiliado = async ({
+    affiliateId,
+    sucesso,
+    local,
+  }) => {
+    await removerAfiliado(affiliateId);
+    tirarDaFila(affiliateId);
+    setAviso({ texto: sucesso, local });
+    atualizarAgora();
+  };
 
   const aoSalvar: AoSalvarVinculo = async ({
     affiliateId,
@@ -63,17 +95,7 @@ export function AdesaoPage() {
     local,
   }) => {
     await salvarVinculo(affiliateId, celulaId);
-    if (celulaId !== null) {
-      const em = Date.now();
-      const obtidoEm = estado.tipo === "ok" ? estado.painel.obtidoEm : 0;
-      // Os de antes da última consulta já não escondem nada: saem da lista.
-      setVinculadosAgora((lista) => [
-        ...lista.filter(
-          (item) => item.affiliateId !== affiliateId && item.em > obtidoEm,
-        ),
-        { affiliateId, em },
-      ]);
-    }
+    if (celulaId !== null) tirarDaFila(affiliateId);
     setAviso({ texto: sucesso, local });
     atualizarAgora();
   };
@@ -122,6 +144,7 @@ export function AdesaoPage() {
             telaLarga={telaLarga}
             aviso={aviso}
             aoSalvar={aoSalvar}
+            aoRemover={admin ? aoRemover : null}
           />
         </>
       )}
@@ -136,12 +159,21 @@ type PropsPainel = {
   telaLarga: boolean;
   aviso: AvisoDeSucesso | null;
   aoSalvar: AoSalvarVinculo;
+  /** Só para o admin: remover afiliado de teste. */
+  aoRemover: AoRemoverAfiliado | null;
 };
 
 // As seções seguem a mesma ordem no celular e no computador (resumo, "Sem célula", "Quem falta" e todas
 // as células): a fila de órfãos fica logo abaixo do resumo, e nada muda de lugar a cada atualização (mover
 // uma seção no DOM tiraria o foco de quem está nela).
-function Painel({ painel, orfaos, telaLarga, aviso, aoSalvar }: PropsPainel) {
+function Painel({
+  painel,
+  orfaos,
+  telaLarga,
+  aviso,
+  aoSalvar,
+  aoRemover,
+}: PropsPainel) {
   const { adesao, obtidoEm } = painel;
   const semCelula = (
     <SemCelula
@@ -150,6 +182,7 @@ function Painel({ painel, orfaos, telaLarga, aviso, aoSalvar }: PropsPainel) {
       agora={obtidoEm}
       aviso={aviso}
       aoSalvar={aoSalvar}
+      aoRemover={aoRemover}
     />
   );
 
@@ -187,6 +220,7 @@ function Painel({ painel, orfaos, telaLarga, aviso, aoSalvar }: PropsPainel) {
         orfaos={orfaos}
         aviso={aviso}
         aoSalvar={aoSalvar}
+        aoRemover={aoRemover}
       />
     </>
   );

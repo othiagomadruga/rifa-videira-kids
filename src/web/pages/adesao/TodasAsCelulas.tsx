@@ -12,6 +12,7 @@ import { mensagemDoErro } from "../../lib/api";
 import { formatarDataHora } from "../../lib/formatadores";
 import type { AfiliadoResumo, CelulaAdesao } from "./adesao-api";
 import { EscolherCelula } from "./EscolherCelula";
+import { DialogoRemoverAfiliado } from "./RemoverAfiliado";
 import {
   celulaCombina,
   lerCodigoAfiliado,
@@ -21,6 +22,7 @@ import {
 } from "./formatos";
 import {
   avisoDaCelula,
+  type AoRemoverAfiliado,
   type AoSalvarVinculo,
   type AvisoDeSucesso,
   type LocalDoAviso,
@@ -32,7 +34,13 @@ type Props = {
   /** Último vínculo salvo: aparece no cartão da célula onde foi feito. */
   aviso: AvisoDeSucesso | null;
   aoSalvar: AoSalvarVinculo;
+  /** Só para o admin (RIFA-031): remover afiliado de teste. */
+  aoRemover: AoRemoverAfiliado | null;
 };
+
+/** O título do cartão da célula: recebe o foco depois de salvar ou remover um afiliado dela. */
+const idTituloDaCelula = (celulaId: number) =>
+  `adesao-celula-${celulaId}-titulo`;
 
 const SITUACOES: Record<SituacaoCelula, { rotulo: string; tom: TomBadge }> = {
   sem_afiliado: { rotulo: "Sem afiliado", tom: "alerta" },
@@ -42,7 +50,13 @@ const SITUACOES: Record<SituacaoCelula, { rotulo: string; tom: TomBadge }> = {
 
 // Todas as células, com a situação de cada uma. Aqui a coordenação também informa o código de afiliado
 // que o líder já sabe (pré-cadastro), troca um afiliado de célula ou desvincula.
-export function TodasAsCelulas({ celulas, orfaos, aviso, aoSalvar }: Props) {
+export function TodasAsCelulas({
+  celulas,
+  orfaos,
+  aviso,
+  aoSalvar,
+  aoRemover,
+}: Props) {
   const [busca, setBusca] = useState("");
   const filtradas = celulas.filter((celula) => celulaCombina(celula, busca));
   const idTitulo = useId();
@@ -75,6 +89,7 @@ export function TodasAsCelulas({ celulas, orfaos, aviso, aoSalvar }: Props) {
                     orfaos={orfaos}
                     aviso={aviso}
                     aoSalvar={aoSalvar}
+                    aoRemover={aoRemover}
                   />
                 </li>
               ))}
@@ -104,6 +119,7 @@ function CartaoCelula({
   orfaos,
   aviso,
   aoSalvar,
+  aoRemover,
 }: PropsCartao) {
   const situacao = SITUACOES[situacaoDaCelula(celula)];
   const refTitulo = useRef<HTMLHeadingElement>(null);
@@ -121,6 +137,7 @@ function CartaoCelula({
       <div className="adesao-item__cabecalho">
         <h3
           ref={refTitulo}
+          id={idTituloDaCelula(celula.celula_id)}
           tabIndex={-1}
           className="adesao-item__titulo adesao-alvo-foco"
         >
@@ -148,7 +165,11 @@ function CartaoCelula({
         <ul className="adesao-afiliados">
           {celula.afiliados.map((codigo) => (
             <li key={codigo}>
-              <AfiliadoDaCelula codigo={codigo} {...acao} />
+              <AfiliadoDaCelula
+                codigo={codigo}
+                aoRemover={aoRemover}
+                {...acao}
+              />
             </li>
           ))}
         </ul>
@@ -169,8 +190,12 @@ function AfiliadoDaCelula({
   aoSalvar,
   local,
   aoConcluir,
-}: PropsAcao & { codigo: number }) {
+  aoRemover,
+}: PropsAcao & { codigo: number; aoRemover: AoRemoverAfiliado | null }) {
   const [acao, setAcao] = useState<"trocar" | "desvincular" | null>(null);
+  const [removendo, setRemovendo] = useState(false);
+  // Depois de remover, o afiliado sai do cartão: o foco vai para o título dele.
+  const refFocoAposRemover = useRef<HTMLElement | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const refTrocar = useRef<HTMLButtonElement>(null);
@@ -238,8 +263,39 @@ function AfiliadoDaCelula({
             Desvincular{" "}
             <span className="visualmente-oculto">o afiliado {codigo}</span>
           </Button>
+          {aoRemover && (
+            <Button
+              variante="secundario"
+              onClick={() => {
+                refFocoAposRemover.current = null;
+                setRemovendo(true);
+              }}
+            >
+              Remover{" "}
+              <span className="visualmente-oculto">o afiliado {codigo}</span>
+            </Button>
+          )}
         </div>
       </div>
+      {removendo && aoRemover && (
+        <DialogoRemoverAfiliado
+          affiliateId={codigo}
+          celulaNome={celula.celula_nome}
+          focoAoFechar={refFocoAposRemover}
+          aoRemover={async () => {
+            await aoRemover({
+              affiliateId: codigo,
+              sucesso: `Afiliado ${codigo} removido de ${celula.celula_nome}.`,
+              local,
+            });
+            refFocoAposRemover.current = document.getElementById(
+              idTituloDaCelula(celula.celula_id),
+            );
+            setRemovendo(false);
+          }}
+          aoFechar={() => setRemovendo(false)}
+        />
+      )}
       {acao === "trocar" && (
         <EscolherCelula
           celulas={celulas}

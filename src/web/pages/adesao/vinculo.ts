@@ -26,6 +26,16 @@ export type AoSalvarVinculo = (pedido: {
   local: LocalDoAviso;
 }) => Promise<void>;
 
+/**
+ * Remove o afiliado de teste (só admin; RIFA-031) e, se der certo, mostra `sucesso` em `local`. Se falhar, lança o
+ * erro (ErroApi: o 409 `afiliado_com_pedidos` traz os pedidos que ainda contam), para o diálogo mostrar.
+ */
+export type AoRemoverAfiliado = (pedido: {
+  affiliateId: number;
+  sucesso: string;
+  local: LocalDoAviso;
+}) => Promise<void>;
+
 /** Texto do aviso, se ele é da seção "Sem célula". */
 export function avisoDaFila(aviso: AvisoDeSucesso | null): string | null {
   return aviso?.local.secao === "sem-celula" ? aviso.texto : null;
