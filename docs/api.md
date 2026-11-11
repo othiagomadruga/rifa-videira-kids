@@ -711,20 +711,24 @@ Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoa
 Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta: `limite` (1 a 200, padrão 50),
 `antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
 `sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
-afiliado, a célula resolvida na leitura (D7), DDD, os instantes e `suspeito`. `totais` traz pedidos,
-bilhetes e centavos por status com os mesmos filtros, menos a paginação e o filtro de status. Sem campanha
-ativa: lista vazia e totais zerados.
+afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes e `suspeito`.
+`totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a paginação e o filtro de
+status, só na primeira página (null quando a consulta traz `antes_de`). Sem campanha ativa: lista vazia e totais
+zerados.
 
 ### `GET /api/admin/webhook/entregas` (`coordenacao`)
 
-Cada entrega autenticada do webhook, da mais nova para a mais antiga: quando chegou, evento, pedido,
-resultado, transição de status e só os códigos do erro e dos avisos. Consulta: `limite`, `antes_de` (id),
-`resultado` e `pedido_id`.
+Cada entrega autenticada do webhook, da mais nova para a mais antiga: quando chegou, evento, pedido, slug,
+resultado e transição de status. Do erro (só em `erro_validacao`) saem o código da recusa (`json_invalido`,
+`payload_invalido` ou `corpo_muito_grande`) e os problemas; dos avisos, a lista. Problemas e avisos saem reduzidos
+a campo (caminho do schema), código e ocorrências: a mensagem gravada não sai. Consulta: `limite`, `antes_de`
+(id), `resultado` e `pedido_id`.
 
 ### `GET /api/admin/webhook/estado` (`coordenacao`)
 
-`situacao` (`ok`, `nunca_recebeu`, `erros_recentes` ou `sem_entregas_recentes`; regra na D16), a última entrega,
-a última processada da campanha, a última aprovação e a contagem das últimas 24 h por resultado.
+`situacao` (na ordem de prioridade: `erros_recentes`, `sem_entregas_recentes`, `nunca_recebeu` ou `ok`; regra na
+D16), a última entrega, a última entrega da campanha, a última aprovação e a contagem das últimas 24 h por
+resultado.
 
 ## Rotas RASCUNHO (Sprint 4)
 

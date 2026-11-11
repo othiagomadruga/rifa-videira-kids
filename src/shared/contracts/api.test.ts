@@ -34,6 +34,10 @@ import {
   respostaEstadoWebhookSchema,
   PAGINA_PEDIDOS_MAXIMA,
   PAGINA_ENTREGAS_MAXIMA,
+  SITUACOES_WEBHOOK,
+  HORA_INICIO_ALERTA,
+  HORA_FIM_ALERTA,
+  HORAS_SEM_ENTREGA_ALERTA,
   desempenhoIndividualSchema,
   pontoCurvaIndividualSchema,
   rankingIndividualSchema,
@@ -1492,6 +1496,27 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
         respostaEntregasWebhookSchema,
         { itens: [entrega], proximo: null, ...extra },
       ],
+      [
+        "entregas.erro",
+        respostaEntregasWebhookSchema,
+        {
+          itens: [
+            {
+              ...entrega,
+              resultado: "erro_validacao",
+              status_resultante: null,
+              erro: {
+                codigo: "json_invalido",
+                problemas: [
+                  { campo: "", codigo: "json_invalido", ocorrencias: 1 },
+                ],
+                ...extra,
+              },
+            },
+          ],
+          proximo: null,
+        },
+      ],
       ["estado", respostaEstadoWebhookSchema, { ...estado, ...extra }],
       [
         "estado.ultimas_24h",
@@ -1590,6 +1615,7 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
       { ...pedido, ddd: "1" },
       { ...pedido, ddd: "01" },
       { ...pedido, ddd: "911" },
+      { ...pedido, celula_nome: "x".repeat(121) },
     ])
       expect(
         respostaPedidosSchema.safeParse({
@@ -1619,6 +1645,65 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
       respostaEntregasWebhookSchema.safeParse({ itens: [], proximo: "42" })
         .success,
     ).toBe(false);
+  });
+
+  it("entrega recusada antes de ler o corpo (json_invalido): evento, pedido e slug nulos", () => {
+    expect(
+      respostaEntregasWebhookSchema.safeParse({
+        itens: [
+          {
+            ...entrega,
+            evento: null,
+            pedido_id: null,
+            slug: null,
+            resultado: "erro_validacao",
+            status_anterior: null,
+            status_resultante: null,
+            erro: {
+              codigo: "json_invalido",
+              problemas: [
+                { campo: "", codigo: "json_invalido", ocorrencias: 1 },
+              ],
+            },
+          },
+        ],
+        proximo: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("cursor de pedidos: cabe o pior caso de um id válido (128 caracteres de controle, ~1.068 em base64url)", () => {
+    const pior = btoa(
+      JSON.stringify(["2026-12-01T12:20:31.512Z", "\u0001".repeat(128)]),
+    )
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replace(/=+$/, "");
+    expect(pior.length).toBeGreaterThan(1000);
+    expect(consultaPedidosSchema.safeParse({ antes_de: pior }).success).toBe(
+      true,
+    );
+    expect(
+      respostaPedidosSchema.safeParse({
+        itens: [],
+        proximo: pior,
+        totais: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("alerta (D16): a ordem de SITUACOES_WEBHOOK é a prioridade, e a janela é decisão registrada", () => {
+    expect(SITUACOES_WEBHOOK).toEqual([
+      "erros_recentes",
+      "sem_entregas_recentes",
+      "nunca_recebeu",
+      "ok",
+    ]);
+    expect([
+      HORA_INICIO_ALERTA,
+      HORA_FIM_ALERTA,
+      HORAS_SEM_ENTREGA_ALERTA,
+    ]).toEqual([8, 22, 4]);
   });
 
   it("consulta de entregas: limites, cursor numérico positivo, resultado do domínio e pedido não vazio", () => {
