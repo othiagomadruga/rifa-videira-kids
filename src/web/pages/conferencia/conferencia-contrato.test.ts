@@ -4,6 +4,7 @@
 // importações do código da tela e do leitor.
 import { describe, expect, it } from "vitest";
 import {
+  MOTIVOS_DESCONSIDERACAO,
   CAMPOS_RECONCILIACAO,
   MOTIVOS_NAO_RECUPERADO,
   OBSERVACOES_DIVERGENCIA,
@@ -17,6 +18,7 @@ import { CAMINHOS } from "./conferencia-api";
 import {
   CAMPOS,
   DIVERGENCIAS,
+  MOTIVO_DESCONSIDERACAO,
   MOTIVOS,
   OBSERVACOES,
   ORIGEM_DA_DATA,
@@ -66,6 +68,9 @@ describe("a tela da conferência e o contrato", () => {
     expect(Object.keys(OBSERVACOES)).toEqual([...OBSERVACOES_DIVERGENCIA]);
     expect(Object.keys(MOTIVOS)).toEqual([...MOTIVOS_NAO_RECUPERADO]);
     expect(Object.keys(ORIGEM_DA_DATA)).toEqual([...ORIGENS_DATA_RECUPERADA]);
+    expect(Object.keys(MOTIVO_DESCONSIDERACAO)).toEqual([
+      ...MOTIVOS_DESCONSIDERACAO,
+    ]);
   });
 
   it("a tela vem num pacote à parte: a página (no pacote principal) só tem o cabeçalho e o import() do resto", () => {

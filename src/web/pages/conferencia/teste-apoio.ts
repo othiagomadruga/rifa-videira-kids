@@ -256,6 +256,47 @@ export const ANALISE_SEM_DIFERENCA: RespostaAnalisePorPedido =
     divergencias: TIPOS.map((tipo) => grupo(tipo, [])),
   });
 
+/**
+ * D20: o arquivo traz um pedido que o admin desconsiderou (a compra de teste da reunião). Ele vai para o grupo à
+ * parte `desconsiderados` e não entra em nenhuma diferença nem nos totais do sistema: o resto confere.
+ */
+export const ANALISE_COM_DESCONSIDERADOS: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_SEM_DIFERENCA,
+    desconsiderados: {
+      quantidade: 1,
+      itens: [
+        {
+          pedido_id: "R-0300",
+          arquivo: {
+            status: "aprovado",
+            qtd_bilhetes: 1,
+            total_centavos: 2000,
+            afiliado: "reconhecido",
+            affiliate_id: 101,
+            celula: ATAPE,
+            data: "2026-11-24",
+          },
+          sistema: {
+            status: "approved",
+            qtd_bilhetes: 1,
+            total_centavos: 2000,
+            affiliate_id: 101,
+            celula: ATAPE,
+            aprovado_em: "2026-11-24T22:00:00.000Z",
+            origem: "webhook",
+          },
+          desconsiderado: {
+            motivo: "teste",
+            observacao: "compra de teste na reunião",
+            em: "2026-11-24T23:00:00.000Z",
+          },
+        },
+      ],
+      itens_omitidos: 0,
+    },
+  });
+
 /** A coluna escolhida como código não confere (B3): nada pode ser recuperado. */
 export const ANALISE_TRAVADA: RespostaAnalisePorPedido =
   respostaAnalisePorPedidoSchema.parse({

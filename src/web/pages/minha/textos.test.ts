@@ -383,7 +383,7 @@ describe("ranking", () => {
 
   it("frases no lugar da posição: incentivo antes da 1ª venda e alvo sem células", () => {
     expect(fraseSemVendas("celula", REFERENCIAS.antes)).toBe(
-      "As vendas começam em 23/11/2026: a primeira venda já coloca a sua célula na disputa. Compartilhe o link de vendas da célula com amigos e familiares!",
+      "As vendas começam em 23/11/2026: a primeira venda já coloca a sua célula na disputa. Compartilhe o seu link de afiliado com amigos e familiares!",
     );
     expect(fraseSemVendas("discipulador", DURANTE)).toBe(
       "Falta só a primeira venda para você entrar na disputa. Anime os líderes das suas células!",

@@ -183,6 +183,56 @@ describe("CA1: confirmação e resposta da API", () => {
     expect(roteador.state.location.pathname).toBe("/acesso");
   });
 
+  it.each([
+    [
+      "discipulador",
+      "A coordenação desligou o acesso de discipuladores por enquanto.",
+    ],
+    ["rede", "A coordenação desligou o acesso de redes por enquanto."],
+  ])(
+    "403 acesso_desligado (%s): o texto da coordenação, sem tratar como link inválido (o Entrar continua)",
+    async (papel, texto) => {
+      let tentativas = 0;
+      const { chamadas } = simularApi(() => {
+        tentativas += 1;
+        return tentativas === 1
+          ? respostaJson(
+              {
+                erro: {
+                  codigo: "acesso_desligado",
+                  mensagem: "O acesso deste papel está desligado na campanha",
+                  detalhes: { papel },
+                },
+              },
+              403,
+            )
+          : respostaJson({ usuario: USUARIO });
+      });
+      const { roteador } = renderizarRota(`/acesso/${TOKEN}`, {
+        usuario: null,
+      });
+
+      fireEvent.click(botaoEntrar());
+
+      const alerta = await screen.findByRole("alert");
+      expect(alerta).toHaveTextContent(texto);
+      expect(alerta).toHaveTextContent(
+        "O seu link continua valendo: quando a coordenação ligar o acesso de novo, toque em Entrar.",
+      );
+      expect(alerta).not.toHaveTextContent(/não vale mais|incompleto/);
+      await waitFor(() => expect(alerta.parentElement).toHaveFocus());
+      // Quando a chave volta, o mesmo link entra.
+      fireEvent.click(botaoEntrar());
+      await waitFor(() =>
+        expect(roteador.state.location.pathname).toBe("/coordenacao"),
+      );
+      expect(daSessao(chamadas).map((chamada) => chamada.corpo)).toEqual([
+        { token: TOKEN },
+        { token: TOKEN },
+      ]);
+    },
+  );
+
   it("sem conexão: avisa e deixa tentar de novo com o mesmo token (que segue só na memória)", async () => {
     let tentativas = 0;
     const { chamadas } = simularApi(() => {
