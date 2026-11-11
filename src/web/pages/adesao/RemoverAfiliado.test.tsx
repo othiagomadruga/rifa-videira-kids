@@ -253,7 +253,7 @@ describe("CA5: remover", () => {
     const dialogo = screen.getByRole("alertdialog", {
       name: "Remover o afiliado 1001?",
     });
-    expect(dialogo).toHaveTextContent("Ele está vinculado a Célula Ágape.");
+    expect(dialogo).toHaveTextContent("Ele está na Célula Ágape.");
 
     fireEvent.click(
       within(dialogo).getByRole("button", { name: "Remover afiliado" }),

@@ -195,7 +195,7 @@
   display: inline-flex;
   align-items: center;
   padding: var(--espaco-1) var(--espaco-2);
-  border-radius: var(--raio-pilula);
+  border-radius: var(--raio-2);
   font-size: var(--texto-xs);
   font-weight: var(--peso-forte);
   overflow-wrap: anywhere;
@@ -217,6 +217,7 @@
   flex-basis: 100%;
   color: var(--cor-texto-suave);
   font-size: var(--texto-sm);
+  font-weight: var(--peso-normal);
   overflow-wrap: anywhere;
 }
 
@@ -351,6 +352,11 @@
   .pedidos-quando,
   .pedidos-valor {
     white-space: nowrap;
+  }
+
+  /* "Aprovado em ..." quebra a linha: com a coluna das ações do admin (D20), a tabela cabe em 1366 px. */
+  .pedidos-quando__mudou {
+    white-space: normal;
   }
 
   .pedidos-resultado {

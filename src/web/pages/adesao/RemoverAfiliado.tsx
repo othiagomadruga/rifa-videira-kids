@@ -96,7 +96,7 @@ export function DialogoRemoverAfiliado({
       <div className="adesao-remover">
         <p>
           {celulaNome
-            ? `Ele está vinculado a ${celulaNome}. `
+            ? `Ele está na ${celulaNome}. `
             : "Ele está sem célula. "}
           Só dá para remover se nenhum pedido dele conta. Se a Rifei mandar
           outra venda com este código, ele volta como sem célula.

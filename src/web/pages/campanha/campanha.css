@@ -359,11 +359,10 @@
   border-top: 1px solid var(--cor-borda);
 }
 
+/* O que falta preencher: um traço de alerta à esquerda (o selo "Falta preencher" diz o mesmo sem a cor). */
 .campanha-regra[data-falta] {
-  padding-right: var(--espaco-2);
-  padding-left: var(--espaco-2);
-  border-radius: var(--raio-1);
-  background: var(--cor-alerta-suave);
+  padding-left: var(--espaco-3);
+  border-left: 4px solid var(--cor-alerta);
 }
 
 .campanha-regra__nome {

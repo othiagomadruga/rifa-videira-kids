@@ -14,7 +14,7 @@ export function CampanhaPage() {
     <>
       <PageHeader
         titulo="Campanha"
-        descricao="Nome, slug da Rifei, datas e períodos, preço, meta e o que o público vê."
+        descricao="Nome, slug da Rifei, datas e períodos, preço, meta, o que o público vê, as regras de pedidos e acessos e as mensagens do link pessoal."
       />
       <Suspense fallback={<Loading texto="Carregando a campanha…" />}>
         <ConfiguracaoCampanha />
