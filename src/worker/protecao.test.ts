@@ -655,14 +655,16 @@ describe("d) cabeçalhos de segurança e webhook da Rifei", () => {
   }
 
   it("webhook com o Bearer e SEM cookie: a fixture é processada (200), fora da sessão", async () => {
-    await env.DB.prepare(
-      `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
-         meta_unidade, meta_regra, meta_valor, ranking_criterio)
-       VALUES ('Campanha de teste', ?, 1, '2026-11-23', 2000, 'bilhetes', 'por_pessoa', 10,
-         'percentual_meta')`,
-    )
-      .bind(paidOrderAfiliado.slug)
-      .run();
+    // Só uma campanha fica ativa: a de outro bloco (o painel semeia a dele), se rodou antes, sai.
+    await env.DB.batch([
+      env.DB.prepare("UPDATE campanhas SET ativa = 0 WHERE ativa = 1"),
+      env.DB.prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
+           meta_unidade, meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha de teste', ?, 1, '2026-11-23', 2000, 'bilhetes', 'por_pessoa', 10,
+           'percentual_meta')`,
+      ).bind(paidOrderAfiliado.slug),
+    ]);
 
     const res = await enviarWebhook({
       Authorization: `Bearer ${env.RIFEI_WEBHOOK_TOKEN}`,
