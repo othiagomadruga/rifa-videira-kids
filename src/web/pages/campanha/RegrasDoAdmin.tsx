@@ -230,6 +230,7 @@ function EditorMensagem({
   aoVoltarAoPadrao: () => void;
 }) {
   const idPrevia = useId();
+  const idContagem = useId();
   const problemas = problemasDaMensagem(tipo, texto);
   const ehPadrao = texto === MENSAGENS_PADRAO[tipo];
   const previa = preencherMensagem(texto, {
@@ -259,7 +260,7 @@ function EditorMensagem({
         onChange={(evento) => aoAlterar(evento.target.value)}
       />
       <div className="campanha-mensagem__rodape">
-        <p className="campanha-texto-suave">
+        <p id={idContagem} className="campanha-texto-suave">
           {formatarNumero(texto.trim().length)} de{" "}
           {formatarNumero(LIMITE_CARACTERES_MENSAGEM)} caracteres
           {ehPadrao ? " · é o texto padrão" : ""}
@@ -267,6 +268,8 @@ function EditorMensagem({
         <Button
           variante="discreto"
           aria-disabled={ehPadrao || undefined}
+          // Indisponível: a contagem ao lado diz por quê ("é o texto padrão").
+          aria-describedby={ehPadrao ? idContagem : undefined}
           onClick={() => {
             if (!ehPadrao) voltar();
           }}

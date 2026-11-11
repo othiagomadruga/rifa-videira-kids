@@ -131,6 +131,19 @@ describe("CA1: as chaves da campanha", () => {
   });
 });
 
+describe("o link para uma chave (aviso da tela Pedidos)", () => {
+  it("abre a Campanha com o foco no campo do endereço (#campanha-pedidos-desconsiderar)", async () => {
+    simularApi({ campanha: CONFIGURADA });
+
+    renderizarRota("/coordenacao/campanha#campanha-pedidos-desconsiderar");
+
+    const chave = await screen.findByRole("checkbox", {
+      name: "Permitir desconsiderar pedidos",
+    });
+    await waitFor(() => expect(chave).toHaveFocus());
+  });
+});
+
 describe("CA1: as mensagens do link pessoal", () => {
   it("cada modelo salvo aparece no campo, com a pré-visualização já preenchida (nomes e link de exemplo)", async () => {
     const modeloLider =
@@ -191,6 +204,10 @@ describe("CA1: as mensagens do link pessoal", () => {
     expect(campo).toHaveValue(MENSAGENS_PADRAO.link_coordenacao);
     expect(campo).toHaveFocus();
     expect(voltar).toHaveAttribute("aria-disabled", "true");
+    // Indisponível com a explicação: a contagem ao lado diz que já é o texto padrão.
+    expect(voltar).toHaveAccessibleDescription(
+      "115 de 1.000 caracteres · é o texto padrão",
+    );
     expect(
       screen.getAllByText(/de 1\.000 caracteres · é o texto padrão/),
     ).toHaveLength(4);

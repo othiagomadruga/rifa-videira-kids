@@ -394,7 +394,7 @@ function Filtros({
           })
         }
       >
-        <option value="todos">Com os desconsiderados</option>
+        <option value="todos">Todos os pedidos</option>
         <option value="sem">Só os que contam</option>
         <option value="so">Só os desconsiderados</option>
       </Select>

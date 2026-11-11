@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -6,6 +7,7 @@ import {
   type Ref,
 } from "react";
 import { flushSync } from "react-dom";
+import { useLocation } from "react-router";
 import {
   CRITERIOS_RANKING,
   MENSAGENS_PADRAO,
@@ -78,6 +80,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
   const [avisoModelo, setAvisoModelo] = useState<string | null>(null);
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const { hash } = useLocation();
   const refResumoErros = useRef<HTMLDivElement>(null);
   const refVoltar = useRef<HTMLButtonElement>(null);
   const refSalvar = useRef<HTMLButtonElement>(null);
@@ -96,6 +99,12 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
     }
     return `campanha-${chave.replaceAll(".", "-")}`;
   }
+
+  // Um link para um campo (ex.: "#campanha-pedidos-desconsiderar", do aviso da tela Pedidos) leva o foco a ele: o
+  // navegador não faz isso sozinho, porque o formulário só aparece depois de a campanha carregar.
+  useEffect(() => {
+    if (hash.length > 1) document.getElementById(hash.slice(1))?.focus();
+  }, [hash]);
 
   /** Qualquer edição fecha a confirmação e as mensagens, e tira os erros dos campos mexidos. */
   function aposEditar(saiDosErros: (chave: string) => boolean) {

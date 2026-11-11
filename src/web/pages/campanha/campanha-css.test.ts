@@ -47,6 +47,15 @@ describe("CA8: o CSS da Campanha em 390 px", () => {
     }
   });
 
+  it("'Voltar ao texto padrão' indisponível (aria-disabled) parece desabilitado", () => {
+    const regra =
+      /\.campanha-mensagem__rodape button\[aria-disabled="true"\]\s*\{([^}]*)\}/.exec(
+        CSS,
+      )?.[1] ?? "";
+    expect(regra).toMatch(/opacity:\s*0\.55/);
+    expect(regra).toMatch(/cursor:\s*not-allowed/);
+  });
+
   it("a pré-visualização mantém as quebras do modelo e quebra o link em qualquer ponto", () => {
     const regra = /\.campanha-previa__texto\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
     expect(regra).toMatch(/white-space:\s*pre-wrap/);
