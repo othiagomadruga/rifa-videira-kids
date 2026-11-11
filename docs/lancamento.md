@@ -8,13 +8,13 @@ Siga de cima para baixo. Cada passo leva à seção com os detalhes.
 
 1. **Abrir a conta Efí, já.** Efí Pro (CPF) ou Efí Empresas (CNPJ), pelo app. A Efí não publica o prazo da análise. Antes, decida quem é o titular. → [1.4](#14-conta-efí) e [1.5](#15-decisões-do-po)
 2. **Assinar o Workers Paid** na Cloudflare. A conferência pelo CSV exige. → [1.1 a](#11-cloudflare)
-3. **Token da Cloudflare no GitHub.** Antes de salvar, avise o SM: ele anota o ponto de volta do banco (bookmark). → [2.1](#21-antes-bookmark-do-time-travel-do-d1-thiago-ou-sm), [1.1 b](#11-cloudflare) e [1.2](#12-github)
-4. **Avisar o SM que o token está salvo.** Ele publica e confere o site. Depois, com ele, crie o primeiro admin e o segredo do webhook. → [2.2](#22-publicar), [3.1](#31-primeiro-admin-thiago) e [3.2](#32-segredo-do-webhook-e-webhook-na-rifei-thiago)
+3. **Token da Cloudflare no GitHub.** Antes de criar o token, peça ao SM o ponto de volta do banco (bookmark) e espere ele dizer que anotou: com o token no GitHub, qualquer mudança na `main` já publica. → [2.1](#21-antes-bookmark-do-time-travel-do-d1-thiago-ou-sm), [1.1 b](#11-cloudflare) e [1.2](#12-github)
+4. **Avisar o SM que o token está salvo.** Ele publica e confere o site. Depois, na sua máquina, crie o primeiro admin. → [2.2](#22-publicar), [1.1 c](#11-cloudflare) e [3.1](#31-primeiro-admin-thiago)
 5. **Campanha na Rifei.** Escolha o plano pelo preço do bilhete, pague a taxa de liberação e anote o slug. → [1.3](#13-rifei)
 6. **Afiliados na Rifei.** Mande já as perguntas prontas ao suporte da Rifei. Com as respostas, ligue os afiliados e prepare os convites dos líderes. → [1.3](#13-rifei)
 7. **Efí na Rifei**, quando a Efí aprovar a conta. Faça num computador. → [1.4](#14-conta-efí)
-8. **Webhook na Rifei**, com a URL e o token do passo 4. → [3.2](#32-segredo-do-webhook-e-webhook-na-rifei-thiago)
-9. **Preencher a Campanha no site** e ativar: datas, preço, meta, ranking e o que o público vê. → [1.5](#15-decisões-do-po) e [3.3](#33-campanha-admin-com-as-decisões-do-po)
+8. **Segredo e webhook na Rifei, de uma vez**, na sua máquina: gere o token, grave no Worker e cole na Rifei, com a URL e os três eventos. → [3.2](#32-segredo-do-webhook-e-webhook-na-rifei-thiago)
+9. **Preencher a Campanha no site** e ativar: nome, slug da Rifei, datas, preço, meta, ranking e o que o público vê. → [1.5](#15-decisões-do-po) e [3.3](#33-campanha-admin-com-as-decisões-do-po)
 10. **Planilha das 36 células** (a coordenação pode fazer). → [3.4](#34-planilha-das-36-células-coordenação)
 11. **Compra de teste** de 1 bilhete, antes de 23/11. → [4](#4-compra-de-teste-de-ponta-a-ponta)
 12. **Reunião dos líderes**: antes, os convites de afiliado e os links pessoais. → [5](#5-reunião-de-cadastro-dos-líderes)
@@ -27,7 +27,7 @@ Depois da largada, o dia a dia é da coordenação (seção 6). Se algo cair: se
 - **PENDÊNCIA** marca o que o sistema ainda não faz e o lançamento precisaria. A lista completa está no fim.
 - **NÃO DOCUMENTADO** quer dizer que a fonte oficial (Rifei ou Efí) não diz. Confira na tela ou pergunte ao suporte.
 - O passo a passo da Rifei e da Efí, com os links oficiais, está em [integracao-rifei.md, seção 12](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Aqui fica o resumo.
-- Nenhum segredo vai neste documento, no git, no DevMission ou no WhatsApp de grupo. Aqui só se diz **onde** cada credencial fica.
+- **Credenciais** (o token da Cloudflare, o token do webhook, a Client Secret e o certificado da Efí e o seu link de admin) não passam por chat (nem o do SM), e-mail ou WhatsApp, e não vão para este documento, o git ou o DevMission. Aqui só se diz **onde** cada uma fica. Se uma delas passar por algum desses lugares, troque (3.1 e 7.3). Os links pessoais da equipe e dos líderes vão só no WhatsApp privado da própria pessoa (3.1 e 5.1), nunca em grupo.
 
 ## Ordem geral
 
@@ -63,7 +63,7 @@ Faça isto **só depois do bookmark do D1** (2.1): o token vai direto para o Git
 1. No painel da Cloudflare, procure por **"API Tokens"** no seu perfil (**My Profile**) e use **Create Token**. Documentação oficial: **"Create API token"** (Cloudflare Fundamentals) e **"Running Wrangler in CI/CD"** (Workers).
 2. Comece pelo modelo **"Edit Cloudflare Workers"**. Confira se a lista de permissões tem **D1** com **Edit**; se não tiver, acrescente (a publicação aplica as migrações no D1).
 3. Em recursos da conta, deixe só a conta onde está o Worker `rifa-videira-kids`. Se a tela oferecer validade, uma data depois do fim da campanha (ex.: 31/01/2027) reduz o estrago de um vazamento.
-4. Copie o token **uma vez** e cole direto no GitHub (1.2). Não guarde em arquivo, e-mail ou WhatsApp. Se perder, gere outro.
+4. Copie o token **uma vez** e cole direto no GitHub (1.2). Não guarde em arquivo, e-mail, WhatsApp ou chat. Se perder, gere outro.
 
 Onde fica: **só** no segredo `CLOUDFLARE_API_TOKEN` do repositório no GitHub (1.2). O id da conta Cloudflare não é segredo e já está no `.github/workflows/ci.yml`.
 
@@ -82,7 +82,7 @@ A sessão do Claude na nuvem também roda comandos D1 remotos (`CLAUDE.md`), ent
 
 O CI publica na Cloudflare a cada push na `main`, depois dos testes. O job **"lint, typecheck, test, build"** constrói o site e o Worker sem segredo nenhum e guarda o build; o job **"publicar na Cloudflare"** recebe só esse build, confere e publica, e só o passo que publica recebe o token (`docs/decisions.md`, D18). Sem o segredo, o job de publicação só avisa "Segredo CLOUDFLARE_API_TOKEN não configurado no repositório: publicação pulada" e o CI fica verde.
 
-1. **Antes**, peça ao SM o bookmark do D1 (seção 2.1). Depois do segredo cadastrado, o próximo push na `main` já publica.
+1. **Antes**, peça ao SM o bookmark do D1 (seção 2.1) e espere ele confirmar que anotou. Depois do segredo cadastrado, o próximo push na `main` já publica.
 2. No repositório: **Settings → Secrets and variables → Actions → New repository secret**.
 3. Nome: `CLOUDFLARE_API_TOKEN`. Valor: o token de 1.1 b. Salve.
 
@@ -109,7 +109,7 @@ A Rifei faz a venda, o pagamento e o sorteio. O sistema só recebe os pedidos pe
 
 **Afiliados** ([12.3](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes)): cada líder de célula vira afiliado da campanha. É pelo código de afiliado que a venda chega à célula.
 
-- Na Rifei, o cadastro de afiliado é **só por convite**: o organizador manda o convite, o líder se cadastra com o e-mail e entra pela **"Área de afiliados"** (menu da página da campanha).
+- Na Rifei, o afiliado se cadastra **por convite**: o organizador manda o convite, o líder se cadastra com o e-mail e entra pela **"Área de afiliados"** (menu da página da campanha). É o que mostra a conta de demonstração da Rifei; se dá para liberar o cadastro sem convite: NÃO DOCUMENTADO.
 - A Central de Ajuda da Rifei não tem artigo sobre afiliados. Onde ligar os afiliados, onde gerar o convite, o formato do link de afiliado e onde ver o código de cada afiliado: NÃO DOCUMENTADO.
 - Por isso, **mande já as perguntas prontas da [12.7](integracao-rifei.md#127-perguntas-prontas-para-o-suporte-da-rifei)** ao suporte da Rifei (WhatsApp, de segunda a sábado, das 9h às 21h de Brasília). Passe as respostas ao SM.
 - Os convites vão para os líderes antes da reunião (5.1, item 4).
@@ -160,7 +160,7 @@ Hoje fora da tela Campanha: **links para discipuladores e redes**. O admin decid
 
 - [ ] **Titular da conta Efí:** Efí Pro (CPF) ou Efí Empresas (CNPJ), e em nome de quem. Os Termos da Rifei falam em receber "em contas de sua titularidade": o caminho seguro é o mesmo titular da conta da Rifei (1.4).
 - [ ] **Plano da Rifei:** pelo preço e pela quantidade de bilhetes (1.3).
-- [ ] **Compra de teste:** manter o bilhete (o dinheiro fica para a causa e o bilhete vale no sorteio) ou estornar (4.4).
+- [ ] **Compra de teste:** manter o bilhete (o dinheiro fica para a causa e o bilhete vale no sorteio) ou estornar (4.4). <!-- RIFA-028 -->
 - [ ] **Autorização do sorteio:** o FAQ da Rifei ("Preciso de autorização para fazer uma campanha?", em [rifei.com.br](https://rifei.com.br/#faq), lido em 11/11/2026) avisa que as regras variam conforme o lugar e que é essencial conferir as normas antes de começar. No Brasil, ele cita a SECAP e o pedido pelo Sistema de Controle de Promoção Comercial (SCPC). A Rifei diz que a plataforma não pede essas autorizações: ficam com o organizador. Aqui só se registra o aviso; não é parecer jurídico.
 - [x] **Workers Paid:** sim (a conferência por CSV exige: 1.1 a).
 
@@ -253,7 +253,7 @@ npm run acesso:criar -- --nome "<seu nome>" --papel admin --remote --origem http
 - O link `https://rifa-videira-kids.madruga.workers.dev/acesso/<token>` aparece **uma vez só**. Abra no navegador e toque em **Entrar**: você cai na área `/coordenacao`.
 - O link vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho, como o seu celular). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
 - O script só aceita `--nome`, `--papel` (`admin` ou `coordenacao`), `--remote`, `--local` e `--origem` (`docs/acesso.md`, seção 5). Não existe opção de e-mail.
-- **Sem a sua máquina pronta:** o SM pode rodar o mesmo comando da sessão dele e te passar o link. Nesse caso, e sempre que o link aparecer em qualquer lugar além do seu terminal: entre uma vez, gere um link novo para você em **Acessos → Coordenação** (no seu cartão, **Gerar link novo**) e use **Revogar link** no primeiro.
+- **Sem a sua máquina pronta:** o SM pode rodar o mesmo comando da sessão dele e te passar o link. Nesse caso, e sempre que o link aparecer em qualquer lugar além do seu terminal: entre uma vez, gere um link novo para você em **Acessos → Coordenação** (no seu cartão, **Gerar link novo**), copie, abra numa aba nova e toque em **Entrar**. Só então, já dentro pelo link novo, use **Revogar link** no primeiro: revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez.
 
 Depois, no site **[Admin]**: **Acessos → Coordenação → Nova pessoa** (nome, e-mail opcional, papel). O link aparece uma vez, com **Copiar link** e **Enviar pelo WhatsApp**: mande só para a própria pessoa.
 
@@ -282,7 +282,7 @@ Onde fica o token: **só** no segredo do Worker (Cloudflare) e no webhook da Rif
 
 ### 3.3 Campanha [Admin, com as decisões do PO]
 
-No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5):
+No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5): <!-- RIFA-028 --> <!-- RIFA-029 -->
 
 - **Identificação:** "Nome da campanha" e **Slug da campanha na Rifei** (o fim do link da campanha, 1.3).
 - **Datas e períodos:** "Data de início" `23/11/2026`, "Fuso horário" `America/Belem` e os períodos (o botão **Usar o modelo de Santo André** preenche 10/7/7 dias com 35/25/45%).
@@ -352,7 +352,7 @@ Responda à lista "O que confirmar com uma campanha de teste" de [integracao-rif
 
 ### 4.4 O pedido de teste depois
 
-**Fazer o teste antes de 23/11 resolve quase tudo.** Venda aprovada antes do 1º dia fica fora de meta, realizado, ranking, bumbo, telão e visão do líder; só aparece no aviso "antes do início" da Visão geral (`docs/regras-de-calculo.md`, S8). O que continua mostrando o teste: a lista de **Pedidos**, a **Adesão** (a célula fica "Já vendeu") e os totais do afiliado. Não atrapalha a campanha.
+**Fazer o teste antes de 23/11 resolve quase tudo.** Venda aprovada antes do 1º dia fica fora de meta, realizado, ranking, bumbo, telão e visão do líder; só aparece no aviso "antes do início" da Visão geral (`docs/regras-de-calculo.md`, S8). O que continua mostrando o teste: a lista de **Pedidos**, a **Adesão** (a célula fica "Já vendeu") e os totais do afiliado. Não atrapalha a campanha. <!-- RIFA-028 -->
 
 O bilhete comprado é de verdade e entra no sorteio. Decisão do PO (1.5): manter (o dinheiro foi para a causa) ou estornar.
 
@@ -471,7 +471,7 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). O av
 O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 
 - **"A Rifei mandou pedidos com erro nas últimas 24 h":** o botão **Ver as entregas com erro** abre as entregas recusadas. Confira cada pedido na Rifei.
-- **"Nenhuma venda chegou há N horas":** durante a campanha, das 8h às 22h, depois de 4 horas sem venda. O botão **Abrir a Conferência** leva à conferência pelo CSV (6.4).
+- **"Nenhuma venda chegou há N horas"** (ou **"até agora"**, se nenhuma chegou desde o início): durante a campanha, das 8h às 22h, depois de 4 horas sem venda. O botão **Abrir a Conferência** leva à conferência pelo CSV (6.4).
 - **"Ainda não chegou nenhuma venda":** nenhuma entrega da campanha até agora.
 - Tudo certo: só uma linha discreta, "Última venda recebida há …".
 - Limites: um webhook que pare depois das 18h só acende o alerta no dia seguinte, ao meio-dia. Entrega recusada por token errado não fica gravada: o alerta mostra como se nenhuma venda tivesse chegado.
