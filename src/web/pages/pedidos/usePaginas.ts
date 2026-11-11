@@ -20,6 +20,8 @@ export type ConfigPaginas<Item, Cursor, P extends Pagina<Item, Cursor>> = {
   anunciarMais: (novos: number, fim: boolean) => string;
   /** O anúncio da primeira página depois de trocar o filtro (na carga inicial, nada). */
   anunciarPrimeira: (pagina: P) => string;
+  /** A falha do "Carregar mais" diz que o cursor não vale mais: a lista recomeça da primeira página. */
+  cursorInvalido: (erro: unknown) => boolean;
 };
 
 export type EstadoPaginas<Item, Cursor, P> =
@@ -41,7 +43,9 @@ type ComConsulta<T> = T & { consulta: string };
  * Lista por páginas com cursor, como a Trilha: a primeira página carrega ao abrir e de novo quando a consulta
  * (os filtros, em texto) muda; "Carregar mais" pede a seguinte com o `proximo` da anterior, acrescenta no fim sem
  * repetir nenhum item, leva o foco ao primeiro item novo e anuncia numa região viva (`anuncio`). Trocar a
- * consulta cancela o que estiver em andamento; ao sair da tela, também.
+ * consulta cancela o que estiver em andamento; ao sair da tela, também. Nada se recarrega sozinho (a primeira
+ * página dos pedidos é cara, por causa dos totais): só ao abrir, ao trocar o filtro, no "Tentar de novo" e quando
+ * o cursor não vale mais (aí a lista recomeça da primeira página).
  */
 export function usePaginas<Item, Cursor, P extends Pagina<Item, Cursor>>(
   consulta: string,
@@ -62,6 +66,8 @@ export function usePaginas<Item, Cursor, P extends Pagina<Item, Cursor>>(
   const focoPendente = useRef<string | null>(null);
   // A primeira carga da tela não é anunciada; as cargas depois de trocar o filtro, sim.
   const jaCarregou = useRef(false);
+  // A lista recomeçou da primeira página porque o cursor não valia mais (o foco vai para o primeiro item).
+  const recomecou = useRef(false);
 
   useEffect(() => {
     // A consulta mudou: o "Carregar mais" da anterior não vale mais.
@@ -80,7 +86,18 @@ export function usePaginas<Item, Cursor, P extends Pagina<Item, Cursor>>(
           proximo: pagina.proximo,
           inicioDaUltima: null,
         });
-        if (jaCarregou.current) setAnuncio(config.anunciarPrimeira(pagina));
+        if (recomecou.current) {
+          recomecou.current = false;
+          focoPendente.current =
+            pagina.itens.length > 0
+              ? config.idDoFoco(pagina.itens[0])
+              : config.idDoFim;
+          setAnuncio(
+            "A lista recomeçou do início: o ponto da página seguinte não valia mais.",
+          );
+        } else if (jaCarregou.current) {
+          setAnuncio(config.anunciarPrimeira(pagina));
+        }
         jaCarregou.current = true;
       },
       (erro: unknown) => {
@@ -146,8 +163,16 @@ export function usePaginas<Item, Cursor, P extends Pagina<Item, Cursor>>(
       setMais({ consulta, carregando: false, erro: null });
       setAnuncio(config.anunciarMais(novos.length, pagina.proximo === null));
     } catch (erro) {
-      if (!controle.signal.aborted)
-        setMais({ consulta, carregando: false, erro });
+      if (controle.signal.aborted) return;
+      if (config.cursorInvalido(erro)) {
+        // O cursor não vale mais (ex.: mudou numa publicação): recomeça da primeira página, uma vez.
+        recomecou.current = true;
+        setMais({ consulta, carregando: false, erro: null });
+        setEstado({ consulta, tipo: "carregando" });
+        setTentativa((n) => n + 1);
+        return;
+      }
+      setMais({ consulta, carregando: false, erro });
     } finally {
       if (controleMais.current === controle) {
         controleMais.current = null;

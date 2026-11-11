@@ -36,7 +36,14 @@ beforeEach(() => {
   // Só os temporizadores: as promessas e o agendador do React continuam reais.
   vi.useFakeTimers({
     shouldAdvanceTime: true,
-    toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+    // Date também: o alerta confere quanto tempo passou desde a última consulta ao voltar para a aba.
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+    ],
   });
 });
 
@@ -291,7 +298,7 @@ describe("CA3/CA5: região viva fixa e atualização a cada 5 min com a aba vis�
     expect(within(regiao()).queryByRole("alert")).toBeNull();
   });
 
-  it("consulta de novo a cada 5 min com a aba visível (o aviso muda na mesma região), para com a aba oculta e volta na hora", async () => {
+  it("consulta de novo a cada 5 min com a aba visível (o aviso muda na mesma região); com a aba oculta, para; ao voltar, nunca antes de 5 min desde a última", async () => {
     const api = simularApi();
     renderizarRota("/coordenacao/pedidos");
     await screen.findByText("Última venda recebida há 12 min.");
@@ -312,12 +319,40 @@ describe("CA3/CA5: região viva fixa e atualização a cada 5 min com a aba vis�
       screen.queryByText("Última venda recebida há 12 min."),
     ).not.toBeInTheDocument();
 
+    // Sai da aba e volta antes de completar 5 min desde a última consulta: espera o resto (cada consulta custa
+    // centenas de linhas do D1).
+    definirVisibilidade("hidden");
+    await act(() => vi.advanceTimersByTimeAsync(2 * 60_000));
+    definirVisibilidade("visible");
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(2);
+    await act(() => vi.advanceTimersByTimeAsync(2 * 60_000));
+    await waitFor(() => expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(3));
+
+    // Oculta por mais que o intervalo: nada enquanto oculta e, ao voltar, consulta na hora.
     definirVisibilidade("hidden");
     await act(() => vi.advanceTimersByTimeAsync(4 * INTERVALO_ESTADO_MS));
-    expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(2);
-
+    expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(3);
     definirVisibilidade("visible");
-    await waitFor(() => expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(3));
+    await waitFor(() => expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(4));
+  });
+
+  it("a primeira página dos pedidos (cara, por causa dos totais) não se recarrega sozinha: só o estado do webhook se atualiza", async () => {
+    const api = simularApi({ pedidos: pedidosVariados(3) });
+    renderizarRota("/coordenacao/pedidos");
+    await screen.findByRole("table", {
+      name: "Pedidos, do mais recente para o mais antigo",
+    });
+
+    // Meia hora com a aba visível: uma consulta ao estado a cada 5 min (cada uma agenda a seguinte ao terminar).
+    for (let rodada = 2; rodada <= 7; rodada++) {
+      await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS));
+      await waitFor(() =>
+        expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(rodada),
+      );
+    }
+    expect(api.pedidosA("/api/admin/pedidos")).toHaveLength(1);
+    expect(api.pedidosA("/api/admin/celulas")).toHaveLength(1);
   });
 });
 

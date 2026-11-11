@@ -294,6 +294,90 @@ describe("CA1: a lista de pedidos", () => {
     );
   });
 
+  it.each([
+    [
+      "cursor_invalido (docs/api.md)",
+      {
+        caminho: ["antes_de"],
+        codigo: "cursor_invalido",
+        mensagem:
+          "Cursor inválido: use o valor de `proximo` da página anterior",
+      },
+    ],
+    [
+      "outro problema no antes_de",
+      { caminho: ["antes_de"], codigo: "too_big", mensagem: "Muito grande" },
+    ],
+  ])(
+    "cursor que não vale mais (400, %s): recomeça da primeira página, sem erro na tela, com o foco no primeiro pedido",
+    async (_caso, detalhe) => {
+      const api = simularApi({ pedidos: pedidosVariados(120) });
+      abrir();
+      expect(await linhas()).toHaveLength(50);
+      acionar(botaoCarregarMais());
+      await waitFor(async () => expect(await linhas()).toHaveLength(100));
+      api.proxima(ROTA_PEDIDOS, () =>
+        respostaJson(
+          {
+            erro: {
+              codigo: "requisicao_invalida",
+              mensagem: "Consulta inválida",
+              detalhes: [detalhe],
+            },
+          },
+          400,
+        ),
+      );
+
+      acionar(botaoCarregarMais());
+
+      await waitFor(() => expect(api.pedidosA(ROTA_PEDIDOS)).toHaveLength(4));
+      await waitFor(async () => expect(await linhas()).toHaveLength(50));
+      const pedidos = api.pedidosA(ROTA_PEDIDOS);
+      expect(pedidos[2]).toMatch(/antes_de=/);
+      expect(pedidos[3]).toBe(`${ROTA_PEDIDOS}?limite=50`);
+      expect(celulas((await linhas())[0])[0]).toBe(idDoPedidoFicticio(120));
+      await waitFor(() =>
+        expect(screen.getByText(idDoPedidoFicticio(120))).toHaveFocus(),
+      );
+      expect(anuncio()).toHaveTextContent(
+        "A lista recomeçou do início: o ponto da página seguinte não valia mais.",
+      );
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      // Dali em diante, o Carregar mais segue normal.
+      acionar(botaoCarregarMais());
+      await waitFor(async () => expect(await linhas()).toHaveLength(100));
+    },
+  );
+
+  it("outro 400 no Carregar mais (sem ser do cursor) aparece como erro e não recarrega a primeira página", async () => {
+    const api = simularApi({ pedidos: pedidosVariados(70) });
+    abrir();
+    await tabela();
+    api.proxima(ROTA_PEDIDOS, () =>
+      respostaJson(
+        {
+          erro: {
+            codigo: "requisicao_invalida",
+            mensagem: "Consulta inválida",
+            detalhes: [
+              { caminho: ["status"], codigo: "invalid_value", mensagem: "x" },
+            ],
+          },
+        },
+        400,
+      ),
+    );
+
+    acionar(botaoCarregarMais());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível carregar mais pedidos",
+    );
+    expect(await linhas()).toHaveLength(50);
+    expect(api.pedidosA(ROTA_PEDIDOS)).toHaveLength(2);
+  });
+
   it("uma página que repete um pedido já na lista não o mostra duas vezes", async () => {
     const todos = pedidosVariados(60);
     const api = simularApi({ pedidos: todos });

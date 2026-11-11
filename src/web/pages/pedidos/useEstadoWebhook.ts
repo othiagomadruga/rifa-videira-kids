@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RespostaEstadoWebhook } from "../../../shared/contracts";
 import { INTERVALO_ESTADO_MS, carregarEstadoWebhook } from "./alerta-webhook";
 
@@ -15,8 +15,10 @@ function abaVisivel(): boolean {
 
 /**
  * O estado do webhook (GET /api/admin/webhook/estado), consultado ao abrir e de novo a cada INTERVALO_ESTADO_MS
- * (contados do fim da consulta anterior) enquanto a aba está visível; com a aba oculta, para, e ao voltar consulta
- * na hora. Uma falha não apaga o último estado: a tela continua de pé e a próxima rodada tenta de novo.
+ * (contados do fim da consulta anterior), só com a aba visível. Cada consulta custa centenas de linhas do D1, então
+ * nunca vem antes da hora: com a aba oculta, para; ao voltar, consulta na hora só se o intervalo já passou desde a
+ * última, senão espera o resto. Uma falha não apaga o último estado: a tela continua de pé e a próxima rodada tenta
+ * de novo.
  */
 export function useEstadoWebhook(): CargaEstadoWebhook {
   const [carga, setCarga] = useState<CargaEstadoWebhook>({
@@ -24,14 +26,15 @@ export function useEstadoWebhook(): CargaEstadoWebhook {
     falha: null,
   });
   const [visivel, setVisivel] = useState(abaVisivel);
-  // Cada rodada é uma consulta: muda no temporizador e ao voltar para a aba.
+  // Cada rodada é uma consulta devida: muda quando o temporizador dispara.
   const [rodada, setRodada] = useState(0);
+  // Quando terminou a última consulta (Date.now()) e se o temporizador já disse que a próxima é devida.
+  const ultimaConsulta = useRef<number | null>(null);
+  const devida = useRef(false);
 
   useEffect(() => {
     function aoMudarVisibilidade() {
-      const agoraVisivel = abaVisivel();
-      setVisivel(agoraVisivel);
-      if (agoraVisivel) setRodada((n) => n + 1);
+      setVisivel(abaVisivel());
     }
     document.addEventListener("visibilitychange", aoMudarVisibilidade);
     return () =>
@@ -40,22 +43,38 @@ export function useEstadoWebhook(): CargaEstadoWebhook {
 
   useEffect(() => {
     if (!visivel) return;
-    const controle = new AbortController();
     let proxima: ReturnType<typeof setTimeout> | undefined;
-    const agendar = () => {
-      proxima = setTimeout(() => setRodada((n) => n + 1), INTERVALO_ESTADO_MS);
+    const agendar = (espera: number) => {
+      proxima = setTimeout(() => {
+        devida.current = true;
+        setRodada((n) => n + 1);
+      }, espera);
     };
 
+    const ultima = ultimaConsulta.current;
+    const passou = ultima === null ? Infinity : Date.now() - ultima;
+    if (!devida.current && passou < INTERVALO_ESTADO_MS) {
+      // Voltou para a aba antes de completar o intervalo: espera o resto.
+      agendar(INTERVALO_ESTADO_MS - passou);
+      return () => clearTimeout(proxima);
+    }
+
+    devida.current = false;
+    const controle = new AbortController();
+    const concluir = () => {
+      ultimaConsulta.current = Date.now();
+      agendar(INTERVALO_ESTADO_MS);
+    };
     carregarEstadoWebhook({ signal: controle.signal }).then(
       (estado) => {
         if (controle.signal.aborted) return;
         setCarga({ estado, falha: null });
-        agendar();
+        concluir();
       },
       (erro: unknown) => {
         if (controle.signal.aborted) return;
         setCarga((anterior) => ({ ...anterior, falha: erro }));
-        agendar();
+        concluir();
       },
     );
 

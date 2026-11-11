@@ -26,6 +26,7 @@ import {
   TAMANHO_MAXIMO_ID,
   carregarCelulas,
   carregarPedidos,
+  ehCursorInvalido,
   ehSemPermissao,
   filtrosDosPedidos,
   idDaBusca,
@@ -68,6 +69,7 @@ const CONFIG: ConfigPaginas<ItemPedido, string, RespostaPedidos> = {
     itens.length === 0
       ? "Lista atualizada: nenhum pedido com estes filtros."
       : `Lista atualizada: ${pedidos(itens.length)}${proximo === null ? "" : " e há mais"}.`,
+  cursorInvalido: ehCursorInvalido,
 };
 
 type Props = {

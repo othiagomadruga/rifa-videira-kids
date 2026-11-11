@@ -189,6 +189,32 @@ export async function carregarCelulas(
   return itens;
 }
 
+/**
+ * Código do detalhe do 400 `requisicao_invalida` quando o cursor dos pedidos não vale mais (docs/api.md). Não está
+ * no contrato (é um código de detalhe da rota): por isso a tela aceita também qualquer problema no `antes_de`.
+ */
+export const CODIGO_CURSOR_INVALIDO = "cursor_invalido";
+
+/**
+ * 400 por causa do cursor (`antes_de`): ele não vale mais (ex.: o formato mudou numa publicação). A lista recomeça
+ * da primeira página.
+ */
+export function ehCursorInvalido(erro: unknown): boolean {
+  if (!(erro instanceof ErroApi) || erro.status !== 400) return false;
+  const detalhes: unknown[] = Array.isArray(erro.detalhes) ? erro.detalhes : [];
+  return detalhes.some((detalhe) => {
+    if (typeof detalhe !== "object" || detalhe === null) return false;
+    const { codigo, caminho } = detalhe as {
+      codigo?: unknown;
+      caminho?: unknown;
+    };
+    return (
+      codigo === CODIGO_CURSOR_INVALIDO ||
+      (Array.isArray(caminho) && caminho[0] === "antes_de")
+    );
+  });
+}
+
 /** 403: a sessão não tem permissão (ex.: o papel mudou com a tela aberta). */
 export function ehSemPermissao(erro: unknown): boolean {
   return erro instanceof ErroApi && erro.status === 403;

@@ -23,6 +23,7 @@ import {
 import {
   RESULTADOS_ENTREGA,
   carregarEntregas,
+  ehCursorInvalido,
   ehSemPermissao,
   filtrosDasEntregas,
   paramsDasEntregas,
@@ -64,6 +65,7 @@ const CONFIG: ConfigPaginas<EntregaWebhook, number, RespostaEntregasWebhook> = {
     itens.length === 0
       ? "Lista atualizada: nenhuma entrega com este resultado."
       : `Lista atualizada: ${entregas(itens.length)}${proximo === null ? "" : " e há mais"}.`,
+  cursorInvalido: ehCursorInvalido,
 };
 
 type Props = {
