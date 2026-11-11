@@ -1,8 +1,8 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
-// 0005_auditoria.sql, 0006_acesso_hierarquia.sql e 0007_indices_pedidos_entregas.sql), aplicado pelo setup
-// apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006 e a 0007 também são aplicadas num D1 à
-// parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua
-// lá (RIFA-014, CA7; RIFA-025, CA5).
+// 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql e 0007_indices_pedidos_entregas.sql),
+// aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006 e a 0007 também são
+// aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o
+// que existia continua lá (RIFA-014, CA7; RIFA-025, CA5).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -21,6 +21,8 @@ const TABELAS = [
   "pedidos",
   // 0005 (RIFA-013b): pedidos aprovados marcados como implausíveis.
   "pedidos_suspeitos",
+  // 0004 (RIFA-012): auditoria do "Recuperar" da conferência pelo CSV.
+  "recuperacoes",
   "redes",
   "sessoes",
   "usuarios",
@@ -86,6 +88,8 @@ describe("migrações: schema do D1", () => {
         "pedidos_por_status_aprovacao",
         // 0003: parcial (approved) e com o dia de UTC−3, para a leitura do painel (db/painel.ts).
         "pedidos_aprovados_por_afiliado_dia",
+        // 0004 (RIFA-012): parcial (origem = 'conferencia'), para a lista das recuperações.
+        "pedidos_por_recuperacao",
         // 0007 (RIFA-025): a lista de pedidos da campanha com o cursor (db/lista-pedidos.ts).
         "pedidos_por_campanha_registro",
       ],
@@ -106,6 +110,8 @@ describe("migrações: schema do D1", () => {
       // 0005 (RIFA-013b).
       auditoria: ["auditoria_por_usuario"],
       pedidos_suspeitos: ["pedidos_suspeitos_por_marcacao"],
+      // 0004 (RIFA-012).
+      recuperacoes: ["recuperacoes_por_campanha"],
       // 0006 (RIFA-014): no máximo um usuário por alvo.
       usuarios: [
         "usuarios_um_por_celula",
@@ -166,6 +172,87 @@ describe("migrações: schema do D1", () => {
       "SELECT count(*) AS n FROM afiliados WHERE affiliate_id IS NULL OR affiliate_id <= 0",
     ).first<{ n: number }>();
     expect(fantasmas).toEqual({ n: 0 });
+  });
+
+  it("0004 (RIFA-012): origem e recuperacao_id andam juntos; recuperacoes confere o SHA-256, o mapeamento e as contagens", async () => {
+    const db = env.DB;
+    const campanha = await db
+      .prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
+           meta_unidade, meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha de teste (0004)', 'teste-migracao-0004', 0, '2026-11-23', 2000,
+           'bilhetes', 'por_pessoa', 10, 'percentual_meta')
+         RETURNING id`,
+      )
+      .first<{ id: number }>();
+    const usuario = await db
+      .prepare(
+        "INSERT INTO usuarios (nome, papel) VALUES ('Pessoa de teste (0004)', 'coordenacao') RETURNING id",
+      )
+      .first<{ id: number }>();
+    const recuperacao = (sha256: string, mapeamento: string, solicitados = 1) =>
+      db
+        .prepare(
+          `INSERT INTO recuperacoes (campanha_id, usuario_id, executado_em, pedidos_solicitados,
+             linhas_arquivo, arquivo_sha256, mapeamento)
+           VALUES (?1, ?2, '2026-12-01T12:00:00.000Z', ?3, 10, ?4, ?5)
+           RETURNING id`,
+        )
+        .bind(campanha!.id, usuario!.id, solicitados, sha256, mapeamento);
+    const pedido = (id: string, origem: string, recuperacaoId: number | null) =>
+      db
+        .prepare(
+          `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+             origem, recuperacao_id)
+           VALUES (?1, ?2, 'approved', 1, 2000, '2026-12-01T12:00:00.000Z', ?3, ?4)`,
+        )
+        .bind(id, campanha!.id, origem, recuperacaoId);
+    const sha = "a".repeat(64);
+    const criada = await recuperacao(sha, '{"pedido_id":"Pedido"}').first<{
+      id: number;
+    }>();
+    onTestFinished(async () => {
+      await db.batch([
+        db.prepare("DELETE FROM pedidos WHERE id LIKE 'TESTE-0004-%'"),
+        db.prepare("DELETE FROM recuperacoes WHERE id = ?").bind(criada!.id),
+        db.prepare("DELETE FROM usuarios WHERE id = ?").bind(usuario!.id),
+        db.prepare("DELETE FROM campanhas WHERE id = ?").bind(campanha!.id),
+      ]);
+    });
+
+    // recuperacoes: SHA-256 em hex minúsculo, mapeamento objeto JSON e pelo menos um pedido solicitado.
+    for (const [sha256, mapeamento, solicitados] of [
+      ["A".repeat(64), "{}", 1],
+      ["a".repeat(63), "{}", 1],
+      [sha, "[]", 1],
+      [sha, "nao json", 1],
+      [sha, "{}", 0],
+    ] as const)
+      await expect(
+        recuperacao(sha256, mapeamento, solicitados).run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+
+    // pedidos: 'conferencia' exige a recuperação, e só ele a tem; outra origem não existe.
+    for (const [origem, recuperacaoId] of [
+      ["conferencia", null],
+      ["webhook", criada!.id],
+      ["planilha", null],
+    ] as const)
+      await expect(
+        pedido("TESTE-0004-X", origem, recuperacaoId).run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+    await expect(
+      pedido("TESTE-0004-X", "conferencia", 999_999).run(),
+    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+    await pedido("TESTE-0004-1", "conferencia", criada!.id).run();
+    await pedido("TESTE-0004-2", "webhook", null).run();
+    // A recuperação com pedido não pode ser apagada (ON DELETE RESTRICT).
+    await expect(
+      db
+        .prepare("DELETE FROM recuperacoes WHERE id = ?")
+        .bind(criada!.id)
+        .run(),
+    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
   });
 
   it("webhook_eventos: avisos é lista JSON não vazia, só em evento aceito", async () => {
@@ -503,7 +590,8 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         .prepare(
           `SELECT (SELECT count(*) FROM links_acesso WHERE usuario_id NOT IN (SELECT id FROM usuarios))
               + (SELECT count(*) FROM sessoes WHERE usuario_id NOT IN (SELECT id FROM usuarios))
-              + (SELECT count(*) FROM auditoria WHERE usuario_id NOT IN (SELECT id FROM usuarios)) AS total`,
+              + (SELECT count(*) FROM auditoria WHERE usuario_id NOT IN (SELECT id FROM usuarios))
+              + (SELECT count(*) FROM recuperacoes WHERE usuario_id NOT IN (SELECT id FROM usuarios)) AS total`,
         )
         .first<{ total: number }>();
       expect(orfaos).toEqual({ total: 0 });
@@ -511,7 +599,7 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       const { results: filhas } = await db
         .prepare(
           `SELECT name, sql FROM sqlite_master
-         WHERE type = 'table' AND name IN ('auditoria', 'links_acesso', 'sessoes') ORDER BY name`,
+         WHERE type = 'table' AND name IN ('auditoria', 'links_acesso', 'recuperacoes', 'sessoes') ORDER BY name`,
         )
         .all<{ name: string; sql: string }>();
       expect(
@@ -525,6 +613,8 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       ).toEqual([
         { name: "auditoria", referencia: "RESTRICT" },
         { name: "links_acesso", referencia: "CASCADE" },
+        // 0004 (RIFA-012): quem fez cada "Recuperar".
+        { name: "recuperacoes", referencia: "RESTRICT" },
         { name: "sessoes", referencia: "CASCADE" },
       ]);
     });

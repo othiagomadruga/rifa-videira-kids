@@ -29,7 +29,7 @@ Cada etapa depende da anterior. As datas são sugestão; quem decide é o PO.
 
 ### 1.1 Cloudflare
 
-**a) Plano Workers Paid (recomendado).** No plano gratuito, cada requisição tem 10 ms de CPU, o Worker atende até 100 mil requisições por dia e o D1 lê até 5 milhões de linhas por dia. As medições do projeto mostram que isso estoura: a primeira visão do líder em cada servidor leva de 24 a 28 ms (`docs/decisions.md`, D14), a conferência por CSV (RIFA-012, ainda fora da `main`) leva de 18 a 22 ms, e o ranking aberto nos celulares e no telão consome a cota do D1 (D10). No gratuito, o que estoura é recusado pela Cloudflare (erro 1102 ou limite diário).
+**a) Plano Workers Paid (decisão do PO; a conferência por CSV exige).** No plano gratuito, cada requisição tem 10 ms de CPU, o Worker atende até 100 mil requisições por dia e o D1 lê até 5 milhões de linhas por dia. As medições do projeto mostram que isso estoura: a primeira visão do líder em cada servidor leva de 24 a 28 ms (`docs/decisions.md`, D14), a conferência por CSV (RIFA-012) leva de 18 a 22 ms e por isso **exige o Workers Paid** (D19), e o ranking aberto nos celulares e no telão consome a cota do D1 (D10). No gratuito, o que estoura é recusado pela Cloudflare (erro 1102 ou limite diário).
 
 - Onde: no painel da Cloudflare, procure por **"Workers Paid"** (fica nos planos de **Workers & Pages**). Documentação oficial: página **"Workers pricing"** (preço de referência: US$ 5 por mês; confira antes de assinar).
 - O plano vale para a conta; não precisa mudar nada no código.
@@ -95,7 +95,7 @@ Confirme e passe para o SM registrar no DevMission:
 - [ ] **Percentuais por período:** o modelo 35/25/45 soma 105%; o sistema normaliza, mas o PO confirma (P3).
 - [ ] **Critério do ranking:** % da meta, bilhetes ou arrecadação (P4).
 - [ ] **O público vê:** o % da meta de cada célula (sim/não) e quantas posições.
-- [ ] **Workers Paid:** sim/não.
+- [x] **Workers Paid:** sim (decisão do PO; a conferência por CSV exige: 1.1 a).
 - [ ] **Conta Efí:** em nome de quem.
 - [ ] **Compra de teste:** manter o bilhete (vale no sorteio) ou pedir estorno (seção 4.4).
 - [ ] **Links para discipuladores e redes:** mandar ou só para os líderes.
@@ -151,7 +151,7 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
    curl -sS -o /dev/null -w "%{http_code}\n" https://rifa-videira-kids.madruga.workers.dev/api/admin/campanha
    # esperado: 401
    ```
-5. **Migrações aplicadas:** `npx wrangler d1 migrations list DB --remote` não deve listar nenhuma pendente. O log do passo "Publicar" no GitHub também mostra as que rodaram. Se a conferência por CSV (RIFA-012) entrar depois, a migração `0004` dela vai rodar depois da `0006` (o wrangler aplica, por nome, as que faltam); isso já está previsto nas migrações.
+5. **Migrações aplicadas:** `npx wrangler d1 migrations list DB --remote` não deve listar nenhuma pendente. O log do passo "Publicar" no GitHub também mostra as que rodaram. A migração `0004` (conferência por CSV, RIFA-012) entrou na `main` depois da `0005` à `0007`: num banco que já tenha essas, o wrangler aplica a `0004` por último (aplica, por nome, as que faltam), com o mesmo resultado (`src/worker/test/migracao-0004-depois.test.ts`).
 6. **Webhook fechado:** antes do segredo do webhook (3.2), ele recusa tudo:
    ```sh
    curl -sS -X POST https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei \
@@ -363,15 +363,15 @@ O que continua mostrando o teste: a Adesão (a célula fica "Já vendeu") e os t
 - **Líderes, discipuladores e redes** acompanham pelo próprio link (`/minha`), sem valores em reais.
 - **Pedidos suspeitos** (mais de 200 bilhetes num pedido ou valor fora do preço): uma vez por semana, um coordenador abre a tela **Pedidos suspeitos** e confere na Rifei. Eles continuam contando; tirar um pedido é decisão do PO.
 
-### 6.4 Conferência pelo CSV (RIFA-012, quando estiver no ar)
+### 6.4 Conferência pelo CSV (RIFA-012; exige o Workers Paid)
 
-A RIFA-012 ainda não está na `main`: hoje a tela **Conferência** mostra "em construção". **Quando estiver no ar**:
+A conferência **exige o Workers Paid** (1.1 a): no plano gratuito, a análise de uma campanha cheia passa do limite de CPU por requisição e a Cloudflare pode recusá-la (erro 1102).
 
 1. Na Rifei: pedidos da campanha → **⋮** → **Exportar Pedidos**.
 2. **Coordenação → Conferência:** escolha o arquivo como a Rifei baixou (sem abrir e salvar no Excel). O arquivo é lido no navegador e os dados pessoais não saem dele.
 3. Confira o mapeamento das colunas, leia as diferenças e use **Recuperar** para as vendas pagas na Rifei que não chegaram pelo webhook. Elas passam a contar no painel, nos rankings e no bumbo.
 
-Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). **Até a RIFA-012 entrar, venda perdida pelo webhook não tem como ser recuperada no sistema** (PENDÊNCIA); dá só para comparar à mão o total pago na Rifei com a Visão geral.
+Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). O aviso de webhook parado (na **Visão geral** e em **Pedidos**) leva direto para cá (**Abrir a Conferência**).
 
 ### 6.5 Se algo cair: onde olhar e quem chamar
 
@@ -407,13 +407,13 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). **At
    - Muitos `ignorado_outra_campanha` (alguns são normais: outras campanhas da mesma conta da Rifei): o slug mudou (renomear a campanha na Rifei pode mudar o slug) ou a campanha do sistema não está ativa. Corrija o slug em **Campanha**.
    - O teste de 2.3 item 6 responde `nao_configurado`: o segredo sumiu do Worker. Refaça 3.2.
    - Os logs mostram erro 1102 ou limite diário: o plano gratuito estourou. Assine o Workers Paid (1.1 a).
-3. Recupere as vendas perdidas pela conferência por CSV (6.4), **quando estiver no ar**.
+3. Recupere as vendas perdidas pela conferência por CSV (6.4).
 
 ### 7.2 O site caiu
 
 1. Confira 6.5: `/status`, a última publicação no GitHub e o status da Cloudflare.
 2. Se começou depois de uma publicação: `npx wrangler rollback -m "<motivo>"` volta o código para a versão anterior (veja as versões com `npx wrangler deployments list` e os cuidados em 2.4). Depois, o SM corrige na `main`.
-3. Se um dado estragado derrubou o sistema: volte o banco com o Time Travel (2.4) para um instante antes do problema. **Tudo gravado depois se perde**: recupere as vendas pela conferência (6.4), quando estiver no ar, e refaça as revogações de link desse intervalo. Antes de qualquer mudança arriscada no meio da campanha (importação grande, migração nova), anote um bookmark novo (2.1).
+3. Se um dado estragado derrubou o sistema: volte o banco com o Time Travel (2.4) para um instante antes do problema. **Tudo gravado depois se perde**: recupere as vendas pela conferência (6.4) e refaça as revogações de link desse intervalo. Antes de qualquer mudança arriscada no meio da campanha (importação grande, migração nova), anote um bookmark novo (2.1).
 4. Avise os líderes no grupo que as vendas pela Rifei continuam normais.
 
 ### 7.3 Um link pessoal vazou (revogar) [Admin]
@@ -450,7 +450,7 @@ Tudo é recalculado na leitura, para a campanha inteira, e cada mudança fica na
 
 O que o sistema ainda não faz e o lançamento precisaria (ou faria melhor com):
 
-1. **Conferência por CSV (RIFA-012) fora da `main`.** Sem ela, a venda que o webhook perder não volta para o sistema. É a rede de segurança do webhook: deveria entrar antes de 23/11.
+1. ~~Conferência por CSV (RIFA-012) fora da `main`~~: resolvido na RIFA-012 (tela **Conferência**, 6.4). Exige o Workers Paid (1.1 a).
 2. **Tela de Pedidos (RIFA-003) em construção.** Não há lista de pedidos nem das entregas do webhook; hoje, só por SQL no D1.
 3. ~~Sem tela para a trilha de auditoria e para os pedidos suspeitos~~: resolvido na RIFA-024 (telas **Trilha** e **Pedidos suspeitos**).
 4. **Sem exclusão de pedido** (teste ou fraude). Decisão do PO.

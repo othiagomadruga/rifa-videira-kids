@@ -45,6 +45,7 @@ import {
   rankingIndividualSchema,
   respostaVisaoIndividualSchema,
   vizinhoIndividualSchema,
+  type SituacaoRota,
 } from "./api";
 import { PAPEIS_HIERARQUIA } from "./acesso";
 import {
@@ -76,7 +77,7 @@ function nomesDeCampos(schema: z.ZodType): string[] {
 }
 
 describe("CA3: catálogo de rotas", () => {
-  it("traz todas as rotas detalhadas das Sprints 1–3", () => {
+  it("traz todas as rotas detalhadas das Sprints 1–4", () => {
     const detalhadas = rotas
       .filter(([, rota]) => rota.situacao === "detalhada")
       .map(([, rota]) => `${rota.metodo} ${rota.caminho}`);
@@ -104,6 +105,10 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/painel/ranking",
         "GET /api/publico/ranking",
         "GET /api/publico/bumbo",
+        // Sprint 4 (RIFA-012): conferência pelo CSV da Rifei.
+        "POST /api/admin/reconciliacao/analisar",
+        "POST /api/admin/reconciliacao/recuperar",
+        "GET /api/admin/reconciliacao/recuperacoes",
         // Sprint 5 (RIFA-014): visão individual do líder, do discipulador e da rede.
         "GET /api/minha/visao",
         // Sprint 5 (RIFA-025): pedidos, entregas do webhook e o estado do webhook.
@@ -116,11 +121,11 @@ describe("CA3: catálogo de rotas", () => {
     );
   });
 
-  it("marca como rascunho só a reconciliação (Sprint 4)", () => {
+  it("nenhuma rota fica em rascunho (a reconciliação da Sprint 4 foi detalhada na RIFA-012)", () => {
     const rascunhos = rotas
-      .filter(([, rota]) => rota.situacao === "rascunho")
+      .filter(([, rota]) => (rota.situacao as SituacaoRota) === "rascunho")
       .map(([, rota]) => `${rota.metodo} ${rota.caminho}`);
-    expect(rascunhos).toEqual(["POST /api/admin/reconciliacao"]);
+    expect(rascunhos).toEqual([]);
   });
 
   it("o grupo de autorização de cada rota bate com o prefixo do caminho", () => {

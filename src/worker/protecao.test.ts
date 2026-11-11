@@ -39,6 +39,7 @@ import {
   respostaAuditoriaSchema,
   respostaBumboSchema,
   respostaListaAfiliadosSchema,
+  respostaListaRecuperacoesSchema,
   respostaPainelResumoSchema,
   respostaPedidosSuspeitosSchema,
   respostaRankingPublicoSchema,
@@ -416,6 +417,102 @@ describe("a) toda rota da coordenação exige sessão", () => {
       respostaAdesaoSchema.parse(await adesao.json()).resumo
         .afiliados_nao_vinculados,
     ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("conferência pelo CSV (RIFA-012) está montada atrás do login: sem cookie 401, de outra origem 403, com sessão responde", async () => {
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    const rotas = [
+      ROTAS.analisarReconciliacao,
+      ROTAS.recuperarReconciliacao,
+      ROTAS.listarRecuperacoes,
+    ];
+    for (const rota of rotas)
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    // O corpo compacto que o navegador manda (o CSV fica nele): nem o 401 nem o 403 o leem.
+    const analise = {
+      colunas: {
+        pedido_id: "Pedido",
+        status: "Status",
+        qtd_bilhetes: "Quantidade",
+        bilhetes: null,
+        valor: "Valor",
+        afiliado: null,
+        data: null,
+      },
+      linhas: 1,
+      arquivo_sha256: "0".repeat(64),
+      vezes: [1],
+      pedido_id: ["R-PROTECAO"],
+      status: ["aprovado"],
+      qtd_bilhetes: [1],
+      valor: [2000],
+    };
+    const corpos: Record<string, string | undefined> = {
+      [ROTAS.analisarReconciliacao.caminho]: JSON.stringify(analise),
+      [ROTAS.recuperarReconciliacao.caminho]: JSON.stringify({
+        ...analise,
+        pedidos: ["R-PROTECAO"],
+      }),
+    };
+    const recuperacoes = async () =>
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS total FROM recuperacoes",
+        ).first<{ total: number }>()
+      )?.total;
+
+    for (const rota of rotas) {
+      const corpo = corpos[rota.caminho];
+      const semCookie = await requisitar(
+        rota.metodo,
+        rota.caminho,
+        { Origin: ORIGEM },
+        corpo,
+      );
+      const texto = await semCookie.text();
+      expect({ rota: rota.caminho, status: semCookie.status }).toEqual({
+        rota: rota.caminho,
+        status: 401,
+      });
+      expect(texto).not.toContain("R-PROTECAO");
+      if (rota.metodo === "POST")
+        await esperarErro(
+          await requisitar(
+            "POST",
+            rota.caminho,
+            { ...coordenacao, Origin: ORIGEM_MALICIOSA },
+            corpo,
+          ),
+          403,
+          "proibido",
+        );
+    }
+    expect(await recuperacoes()).toBe(0);
+
+    // Com a sessão de coordenacao: passa do login (aqui ainda não há campanha ativa: 404 no formato
+    // único) e a lista de recuperações responde no contrato.
+    for (const rota of rotas.filter((item) => item.metodo === "POST")) {
+      const res = await requisitar(
+        "POST",
+        rota.caminho,
+        coordenacao,
+        corpos[rota.caminho],
+      );
+      await esperarQuePassou(res);
+    }
+    const lista = await requisitar(
+      "GET",
+      ROTAS.listarRecuperacoes.caminho,
+      coordenacao,
+    );
+    expect(lista.status).toBe(200);
+    expect(lista.headers.get("Cache-Control")).toBe("no-store");
+    expect(
+      respostaListaRecuperacoesSchema.parse(await lista.json()).itens,
+    ).toEqual([]);
+    expect(await recuperacoes()).toBe(0);
   });
 });
 

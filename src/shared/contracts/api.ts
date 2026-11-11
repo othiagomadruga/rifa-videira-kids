@@ -2,8 +2,8 @@
  * Contrato HTTP da API v1: schemas de parâmetros, consulta, corpo e resposta de cada rota, e o catálogo
  * `ROTAS`. Documentação: docs/api.md.
  *
- * - Rotas "detalhadas" (Sprints 1–3) estão fechadas. Rotas "rascunho" (Sprint 4) podem mudar quando
- *   forem implementadas; só o SM altera o contrato.
+ * - Rotas "detalhadas" (Sprints 1–4) estão fechadas. Uma rota "rascunho" pode mudar quando for
+ *   implementada (hoje não há nenhuma); só o SM altera o contrato.
  * - Erros: sempre o formato de ./erros (`{ erro: { codigo, mensagem, detalhes? } }`).
  * - O webhook valida o corpo dentro do handler (precisa registrar `erro_validacao` antes de responder 400);
  *   as demais rotas podem usar @hono/zod-validator com um hook que devolve `requisicao_invalida`.
@@ -31,6 +31,23 @@ import {
   resultadoEventoWebhookSchema,
   statusPedidoSchema,
 } from "./dominio";
+import {
+  AFILIADOS_AGREGADO,
+  CODIGOS_AVISO_RECONCILIACAO,
+  FORMATO_ID_PEDIDO_RECONCILIACAO,
+  LIMITE_ITENS_POR_DIVERGENCIA,
+  MOTIVOS_NAO_RECUPERADO,
+  OBSERVACOES_DIVERGENCIA,
+  ORIGENS_DATA_RECUPERADA,
+  ORIGENS_PEDIDO,
+  SITUACOES_AFILIADO_ARQUIVO,
+  STATUS_ARQUIVO_RECONCILIACAO,
+  TIPOS_DIVERGENCIA,
+  validarCorpoConferencia,
+  validarCorpoRecuperacao,
+  type CorpoConferencia,
+  type CorpoRecuperacao,
+} from "./conferencia";
 import { detalheResumidoSchema } from "./erros";
 import { UF_DO_DDD, UFS } from "./ddd";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
@@ -181,7 +198,7 @@ export const LIMITE_LINHAS_CSV_HIERARQUIA = 2000;
 export const LIMITE_CARACTERES_CSV_HIERARQUIA = 1_000_000;
 
 /**
- * `detalhes` do erro 400 `csv_invalido` (importação da hierarquia e, depois, a reconciliação): o
+ * `detalhes` do erro 400 `csv_invalido` (importação da hierarquia; a conferência lê o CSV no navegador): o
  * arquivo não pôde nem ser lido linha a linha. A tela mostra a `mensagem`; `motivo` é para quem
  * precisa tratar cada caso. `linha` conta o cabeçalho como linha 1.
  */
@@ -478,7 +495,10 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - hierarquia.criar, hierarquia.atualizar e hierarquia.remover: POST, PUT e DELETE de /api/admin/redes,
  *   /discipuladores e /celulas (RIFA-018), alvo `<rede|discipulador|celula>:<id>`; resumo com o nome do item,
  *   o antes e o depois do que mudou (os dados do líder e o responsável da rede só pelo nome do campo) e, na
- *   remoção, o acesso da hierarquia que caiu junto (o id do usuário).
+ *   remoção, o acesso da hierarquia que caiu junto (o id do usuário);
+ * - conferencia.recuperar: POST /api/admin/reconciliacao/recuperar quando grava algum pedido (RIFA-012, D19;
+ *   não na prévia nem quando nada entrou), alvo `campanha:<id>`, resumo sem dados pessoais (o id da
+ *   recuperação, quantos pedidos e bilhetes entraram; os códigos estão em GET .../recuperacoes).
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -496,6 +516,7 @@ export const ACOES_AUDITORIA = [
   "hierarquia.criar",
   "hierarquia.atualizar",
   "hierarquia.remover",
+  "conferencia.recuperar",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -1540,42 +1561,343 @@ export const respostaEstadoWebhookSchema = z.strictObject({
 export type RespostaEstadoWebhook = z.infer<typeof respostaEstadoWebhookSchema>;
 
 // ---------------------------------------------------------------------------------------------------
-// RASCUNHO: POST /api/admin/reconciliacao (CSV "Exportar Pedidos" da Rifei → divergências)
-// O CSV traz dados pessoais: é lido só em memória e nada dele é gravado nem devolvido além do abaixo.
+// Conferência pelo CSV "Exportar Pedidos" da Rifei (RIFA-012): POST /api/admin/reconciliacao/analisar,
+// POST /api/admin/reconciliacao/recuperar e GET /api/admin/reconciliacao/recuperacoes.
+//
+// O navegador lê o CSV, reconhece e mapeia as colunas (src/shared/conferencia) e manda à API só as colunas
+// mapeadas que não são de dado pessoal, já normalizadas: o corpo compacto de ./conferencia, conferido pelo
+// validador leve de lá (sem zod item a item: a CPU do Worker é curta). As listas e os limites também estão
+// em ./conferencia, sem zod, para o site usar. Documentação: docs/api.md e docs/integracao-rifei.md (10).
 // ---------------------------------------------------------------------------------------------------
 
-export const corpoReconciliacaoSchema = z.object({
-  csv: z.string().min(1).max(10_000_000),
-});
+/** Corpo compacto da análise; o validador de ./conferencia confere cada posição e diz o problema. */
+export const corpoAnalisarReconciliacaoSchema = z.custom<CorpoConferencia>(
+  (valor) => validarCorpoConferencia(valor).ok,
+  { message: "Corpo da conferência inválido" },
+);
 
-export const TIPOS_DIVERGENCIA = [
-  "ausente_no_sistema",
-  "ausente_no_csv",
-  "status_divergente",
-  "valor_divergente",
-  "afiliado_divergente",
-] as const;
+/**
+ * "Recuperar": o corpo da análise (com a coluna do código) mais `pedidos` (1 a 500 códigos) e `simular`
+ * (true = prévia, nada é gravado). Grava como aprovados (origem `conferencia`) os pedidos escolhidos, com
+ * os dados do arquivo; pedido que já existe nunca é sobrescrito; atômico e idempotente.
+ */
+export const corpoRecuperarReconciliacaoSchema = z.custom<CorpoRecuperacao>(
+  (valor) => validarCorpoRecuperacao(valor).ok,
+  { message: "Corpo do Recuperar inválido" },
+);
 
-const ladoReconciliacaoSchema = z.object({
-  status: z.string().nullable(),
-  total_centavos: centavosSchema.nullable(),
+/** Um código de pedido do arquivo (FORMATO_ID_PEDIDO_RECONCILIACAO). */
+export const idPedidoReconciliacaoSchema = z
+  .string()
+  .regex(FORMATO_ID_PEDIDO_RECONCILIACAO, {
+    message: "Código de pedido inválido",
+  });
+
+/** A célula do afiliado (null = sem afiliado, afiliado não vinculado ou não reconhecido). */
+const celulaReconciliacaoSchema = z
+  .strictObject({ id: idSchema, nome: z.string().min(1).max(120) })
+  .nullable();
+
+/** O pedido como o arquivo o traz (as linhas do mesmo código juntas). */
+export const pedidoNoArquivoSchema = z.strictObject({
+  /** `aprovado` também quando o arquivo não tem a coluna de status (aviso `sem_coluna_status`). */
+  status: z.enum(STATUS_ARQUIVO_RECONCILIACAO),
+  /** null: sem a coluna ou ilegível. */
   qtd_bilhetes: z.number().int().nonnegative().nullable(),
+  /** null: sem a coluna, ilegível ou ambíguo (pedido em várias linhas: observação `valor_ambiguo`). */
+  total_centavos: centavosSchema.nullable(),
+  afiliado: z.enum(SITUACOES_AFILIADO_ARQUIVO),
+  /** Só com `afiliado` = reconhecido. */
   affiliate_id: affiliateIdSchema.nullable(),
+  celula: celulaReconciliacaoSchema,
+  /** Dia (no fuso da campanha) da coluna da data; null sem a coluna ou ilegível. */
+  data: dataLocalSchema.nullable(),
+});
+export type PedidoNoArquivo = z.infer<typeof pedidoNoArquivoSchema>;
+
+/** O pedido como está gravado (campanha ativa). */
+export const pedidoNoSistemaSchema = z.strictObject({
+  status: statusPedidoSchema,
+  qtd_bilhetes: z.number().int().nonnegative(),
+  total_centavos: centavosSchema,
+  affiliate_id: affiliateIdSchema.nullable(),
+  celula: celulaReconciliacaoSchema,
+  aprovado_em: instanteSchema.nullable(),
+  origem: z.enum(ORIGENS_PEDIDO),
+});
+export type PedidoNoSistema = z.infer<typeof pedidoNoSistemaSchema>;
+
+export const divergenciaSchema = z.strictObject({
+  pedido_id: z.string().min(1).max(128),
+  /** null em ausente_no_arquivo. */
+  arquivo: pedidoNoArquivoSchema.nullable(),
+  /** null em venda_perdida. */
+  sistema: pedidoNoSistemaSchema.nullable(),
+  /** Só em venda_perdida, e só sem observação: o arquivo tem o que a gravação precisa. */
+  recuperavel: z.boolean(),
+  observacoes: z.array(z.enum(OBSERVACOES_DIVERGENCIA)),
+});
+export type Divergencia = z.infer<typeof divergenciaSchema>;
+
+/**
+ * Soma do lado do arquivo, só com o que é legível: quantidade desconhecida não vira 0 bilhete, nem valor
+ * desconhecido R$ 0. Sem a coluna, a soma é null; `sem_quantidade` e `sem_valor` contam os pedidos sem
+ * quantidade (ilegível ou vazia) e sem valor (ilegível, vazio ou ambíguo), que `bilhetes` e
+ * `total_centavos` não incluem (0 sem a coluna).
+ */
+const somaArquivoSchema = z.strictObject({
+  bilhetes: z.number().int().nonnegative().nullable(),
+  sem_quantidade: z.number().int().nonnegative(),
+  total_centavos: centavosSchema.nullable(),
+  sem_valor: z.number().int().nonnegative(),
 });
 
-export const divergenciaSchema = z.object({
+/** Soma do lado do sistema (o gravado sempre tem quantidade e valor). */
+const somaSistemaSchema = z.strictObject({
+  bilhetes: z.number().int().nonnegative(),
+  total_centavos: centavosSchema,
+});
+
+export const grupoDivergenciaSchema = z.strictObject({
   tipo: z.enum(TIPOS_DIVERGENCIA),
-  pedido_id: z.string().min(1),
-  sistema: ladoReconciliacaoSchema.nullable(),
-  csv: ladoReconciliacaoSchema.nullable(),
+  /** Pedidos deste tipo (todos, mesmo os que passam do limite da lista). */
+  quantidade: z.number().int().nonnegative(),
+  arquivo: somaArquivoSchema,
+  sistema: somaSistemaSchema,
+  /** Os primeiros LIMITE_ITENS_POR_DIVERGENCIA, em ordem de código. */
+  itens: z.array(divergenciaSchema).max(LIMITE_ITENS_POR_DIVERGENCIA),
+  itens_omitidos: z.number().int().nonnegative(),
+});
+export type GrupoDivergencia = z.infer<typeof grupoDivergenciaSchema>;
+
+/** Um aviso (tipo AvisoReconciliacao, de ./conferencia). */
+export const avisoReconciliacaoSchema = z.strictObject({
+  codigo: z.enum(CODIGOS_AVISO_RECONCILIACAO),
+  mensagem: z.string().min(1),
+  quantidade: z.number().int().positive().nullable(),
 });
 
-export const respostaReconciliacaoSchema = z.object({
-  linhas_lidas: z.number().int().nonnegative(),
-  pedidos_no_csv: z.number().int().nonnegative(),
-  pedidos_no_sistema: z.number().int().nonnegative(),
-  divergencias: z.array(divergenciaSchema),
+/** O que a API viu no corpo. */
+export const arquivoLidoSchema = z.strictObject({
+  /** Linhas de dados do arquivo. */
+  linhas: z.number().int().nonnegative(),
+  /** Linhas sem código (vazio ou ilegível) no modo por pedido: ficam de fora. */
+  linhas_ignoradas: z.number().int().nonnegative(),
+  /** O mesmo código em várias linhas, ou uma linha por bilhete (opção "Um bilhete por linha"). */
+  um_bilhete_por_linha: z.boolean(),
+  /** Dias (no fuso da campanha) que a coluna da data cobre; null sem datas. */
+  data_inicio: dataLocalSchema.nullable(),
+  data_fim: dataLocalSchema.nullable(),
 });
+
+/** Totais pagos no arquivo: null quando o arquivo não permite contar. */
+export const totaisArquivoSchema = z.strictObject({
+  pedidos_aprovados: z.number().int().nonnegative().nullable(),
+  /** Soma das quantidades legíveis; null sem a coluna da quantidade (e sem a dos números). */
+  bilhetes: z.number().int().nonnegative().nullable(),
+  /**
+   * Pedidos pagos (no modo agregado, linhas pagas) sem quantidade legível, que `bilhetes` não inclui:
+   * quantidade desconhecida não vira 0 bilhete (a tela mostra "N bilhetes (+M sem quantidade)"). 0 sem a
+   * coluna.
+   */
+  sem_quantidade: z.number().int().nonnegative(),
+  /** Soma dos valores legíveis; null sem a coluna do valor. */
+  total_centavos: centavosSchema.nullable(),
+  /**
+   * Pedidos pagos (no modo agregado, linhas pagas) sem valor legível ou com valor ambíguo, que
+   * `total_centavos` não inclui: valor desconhecido não vira R$ 0 (a tela mostra "R$ X (+N sem valor)").
+   * 0 sem a coluna do valor.
+   */
+  sem_valor: z.number().int().nonnegative(),
+});
+export type TotaisArquivo = z.infer<typeof totaisArquivoSchema>;
+
+const comumAnaliseReconciliacao = {
+  arquivo: arquivoLidoSchema,
+  /** Avisos da comparação (os do arquivo, como colunas ou células ilegíveis, a tela monta sozinha). */
+  avisos: z.array(avisoReconciliacaoSchema),
+  conferido_em: instanteSchema,
+};
+
+/**
+ * A coluna escolhida como código confere com o sistema? `confere: false` quando, com pelo menos
+ * MINIMO_CODIGOS_PARA_CONFERIR (5) pagos no arquivo, menos da metade existe no sistema (em qualquer
+ * campanha), a não ser que os pagos do sistema no período do arquivo (também pelo menos 5) estejam na
+ * maioria no arquivo: provavelmente é outra coluna. Aí nada pode ser recuperado (aviso
+ * `codigo_nao_confere`; o "Recuperar" responde 400) até a coordenação trocar a coluna.
+ */
+export const codigoDoPedidoSchema = z.strictObject({
+  confere: z.boolean(),
+  pagos_no_arquivo: z.number().int().nonnegative(),
+  encontrados: z.number().int().nonnegative(),
+});
+
+/** Modo por pedido: o corpo traz a coluna do código. */
+export const respostaAnalisePorPedidoSchema = z.strictObject({
+  modo: z.literal("por_pedido"),
+  ...comumAnaliseReconciliacao,
+  codigo: codigoDoPedidoSchema,
+  resumo: z.strictObject({
+    /** Códigos distintos e válidos no arquivo. */
+    pedidos_no_arquivo: z.number().int().nonnegative(),
+    aprovados_no_arquivo: totaisArquivoSchema,
+    /** Todos os pagos da campanha ativa no sistema. */
+    aprovados_no_sistema: totaisVendasSchema,
+    /** Pagos nos dois lados, sem nenhuma diferença. */
+    conferem: z.number().int().nonnegative(),
+    /**
+     * Pedidos com alguma divergência (cada um conta uma vez), sem os pagos do sistema de dias que o
+     * arquivo não cobre: esses ficam à parte, em `ausentes_fora_do_periodo`.
+     */
+    com_divergencia: z.number().int().nonnegative(),
+    /** Pagos no sistema e ausentes no arquivo de dias que ele não cobre (listados em ausente_no_arquivo). */
+    ausentes_fora_do_periodo: z.number().int().nonnegative(),
+  }),
+  /** Os sete tipos, sempre nesta ordem (TIPOS_DIVERGENCIA), mesmo os sem pedido. */
+  divergencias: z.array(grupoDivergenciaSchema),
+});
+export type RespostaAnalisePorPedido = z.infer<
+  typeof respostaAnalisePorPedidoSchema
+>;
+
+/** Uma linha da comparação por totais: o que o arquivo não permite contar fica null e não é comparado. */
+const comparacaoTotaisSchema = {
+  arquivo: totaisArquivoSchema,
+  sistema: totaisVendasSchema,
+  /**
+   * Os totais que o arquivo permite contar são iguais aos do sistema. Com pedido pago sem quantidade ou
+   * sem valor (`arquivo.sem_quantidade` ou `arquivo.sem_valor` > 0), os bilhetes ou o valor não conferem:
+   * o total do arquivo é desconhecido.
+   */
+  confere: z.boolean(),
+};
+
+/** Modo agregado: sem a coluna do código, compara os totais pagos (por afiliado e por dia). */
+export const respostaAnaliseAgregadaSchema = z.strictObject({
+  modo: z.literal("agregado"),
+  ...comumAnaliseReconciliacao,
+  /** Com datas no arquivo, o sistema conta só os pagos desses dias; null = tudo. */
+  recorte: z
+    .strictObject({ data_inicio: dataLocalSchema, data_fim: dataLocalSchema })
+    .nullable(),
+  total: z.strictObject(comparacaoTotaisSchema),
+  /** Diferentes primeiro; null sem a coluna do afiliado. */
+  por_afiliado: z
+    .array(
+      z.strictObject({
+        afiliado: z.enum(AFILIADOS_AGREGADO),
+        affiliate_id: affiliateIdSchema.nullable(),
+        celula: celulaReconciliacaoSchema,
+        ...comparacaoTotaisSchema,
+      }),
+    )
+    .nullable(),
+  /** Em ordem de data; null sem a coluna da data. */
+  por_dia: z
+    .array(z.strictObject({ data: dataLocalSchema, ...comparacaoTotaisSchema }))
+    .nullable(),
+});
+export type RespostaAnaliseAgregada = z.infer<
+  typeof respostaAnaliseAgregadaSchema
+>;
+
+export const respostaAnaliseReconciliacaoSchema = z.discriminatedUnion("modo", [
+  respostaAnalisePorPedidoSchema,
+  respostaAnaliseAgregadaSchema,
+]);
+export type RespostaAnaliseReconciliacao = z.infer<
+  typeof respostaAnaliseReconciliacaoSchema
+>;
+
+export const pedidoRecuperadoSchema = z.strictObject({
+  pedido_id: z.string().min(1).max(128),
+  qtd_bilhetes: z.number().int().positive(),
+  total_centavos: centavosSchema,
+  /** `nao_reconhecido` grava sem afiliado (a venda entra em "sem afiliado"). */
+  afiliado: z.enum(SITUACOES_AFILIADO_ARQUIVO),
+  affiliate_id: affiliateIdSchema.nullable(),
+  celula: celulaReconciliacaoSchema,
+  aprovado_em: instanteSchema,
+  origem_data: z.enum(ORIGENS_DATA_RECUPERADA),
+});
+export type PedidoRecuperado = z.infer<typeof pedidoRecuperadoSchema>;
+
+export const respostaRecuperarReconciliacaoSchema = z.strictObject({
+  simulado: z.boolean(),
+  /** true quando gravou pelo menos um pedido. */
+  aplicado: z.boolean(),
+  /** A linha da auditoria (GET .../recuperacoes); null na simulação ou se nada foi gravado. */
+  recuperacao_id: idSchema.nullable(),
+  /** Gravados (ou, na simulação, os que seriam gravados), na ordem pedida. */
+  recuperados: z.array(pedidoRecuperadoSchema),
+  nao_recuperados: z.array(
+    z.strictObject({
+      pedido_id: z.string().min(1).max(128),
+      motivo: z.enum(MOTIVOS_NAO_RECUPERADO),
+    }),
+  ),
+  /** Soma dos recuperados. */
+  totais: totaisVendasSchema,
+  avisos: z.array(avisoReconciliacaoSchema),
+});
+export type RespostaRecuperarReconciliacao = z.infer<
+  typeof respostaRecuperarReconciliacaoSchema
+>;
+
+/** Uma recuperação feita (auditoria): quem, quando, quantos e de qual arquivo. */
+export const recuperacaoSchema = z.strictObject({
+  id: idSchema,
+  executado_em: instanteSchema,
+  usuario: z.strictObject({ id: idSchema, nome: z.string().min(1).max(120) }),
+  pedidos_solicitados: z.number().int().positive(),
+  pedidos_recuperados: z.number().int().positive(),
+  bilhetes: z.number().int().nonnegative(),
+  total_centavos: centavosSchema,
+  linhas_arquivo: z.number().int().nonnegative(),
+  /** SHA-256 do texto do arquivo (calculado no navegador): identifica o arquivo sem o conteúdo. */
+  arquivo_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  /** Nome da coluna do arquivo usada em cada campo (null = sem a coluna). */
+  colunas: z.strictObject({
+    pedido_id: z.string().min(1).nullable(),
+    status: z.string().min(1).nullable(),
+    qtd_bilhetes: z.string().min(1).nullable(),
+    bilhetes: z.string().min(1).nullable(),
+    valor: z.string().min(1).nullable(),
+    afiliado: z.string().min(1).nullable(),
+    data: z.string().min(1).nullable(),
+  }),
+  /** Códigos dos pedidos gravados, em ordem. */
+  pedidos: z.array(z.string().min(1).max(128)),
+});
+export type Recuperacao = z.infer<typeof recuperacaoSchema>;
+
+/**
+ * Página do histórico, como a auditoria (`?limite=50&antes_de=<id>`): `limite` de 1 a
+ * PAGINA_AUDITORIA_MAXIMA (padrão PAGINA_AUDITORIA_PADRAO, 50).
+ */
+export const consultaListaRecuperacoesSchema = z.object({
+  limite: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PAGINA_AUDITORIA_MAXIMA)
+    .default(PAGINA_AUDITORIA_PADRAO),
+  /** Cursor: só recuperações com id menor que este (o `proximo` da página anterior). */
+  antes_de: z.coerce.number().int().positive().optional(),
+});
+export type ConsultaListaRecuperacoes = z.output<
+  typeof consultaListaRecuperacoesSchema
+>;
+
+/** As recuperações da campanha ativa (nenhuma sem campanha ativa), a mais recente primeiro. */
+export const respostaListaRecuperacoesSchema = z.object({
+  itens: z.array(recuperacaoSchema),
+  /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
+  proximo: idSchema.nullable(),
+});
+export type RespostaListaRecuperacoes = z.infer<
+  typeof respostaListaRecuperacoesSchema
+>;
 
 // ---------------------------------------------------------------------------------------------------
 // Catálogo de rotas
@@ -1878,13 +2200,29 @@ export const ROTAS = {
     situacao: "detalhada",
     sucesso: { status: 200, corpo: respostaEstadoWebhookSchema },
   },
-  reconciliacao: {
+  analisarReconciliacao: {
     metodo: "POST",
-    caminho: "/api/admin/reconciliacao",
+    caminho: "/api/admin/reconciliacao/analisar",
     grupo: "coordenacao",
-    situacao: "rascunho",
-    corpo: corpoReconciliacaoSchema,
-    sucesso: { status: 200, corpo: respostaReconciliacaoSchema },
+    situacao: "detalhada",
+    corpo: corpoAnalisarReconciliacaoSchema,
+    sucesso: { status: 200, corpo: respostaAnaliseReconciliacaoSchema },
+  },
+  recuperarReconciliacao: {
+    metodo: "POST",
+    caminho: "/api/admin/reconciliacao/recuperar",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    corpo: corpoRecuperarReconciliacaoSchema,
+    sucesso: { status: 200, corpo: respostaRecuperarReconciliacaoSchema },
+  },
+  listarRecuperacoes: {
+    metodo: "GET",
+    caminho: "/api/admin/reconciliacao/recuperacoes",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    consulta: consultaListaRecuperacoesSchema,
+    sucesso: { status: 200, corpo: respostaListaRecuperacoesSchema },
   },
 } as const satisfies Record<string, DefinicaoRota>;
 

@@ -6,6 +6,7 @@ export * from "./erros";
 export * from "./rifei";
 export * from "./dominio";
 export * from "./api";
+export * from "./conferencia";
 export * from "./acesso";
 export * from "./calendario";
 export * from "./calculos";

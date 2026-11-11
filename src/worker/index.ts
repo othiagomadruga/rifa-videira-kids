@@ -27,6 +27,7 @@ import {
   pedidosSuspeitos,
 } from "./routes/pedidos-suspeitos";
 import { PREFIXO_PUBLICO, publico } from "./routes/publico";
+import { PREFIXO_RECONCILIACAO, reconciliacao } from "./routes/reconciliacao";
 import {
   PREFIXO_WEBHOOK_COORDENACAO,
   webhookCoordenacao,
@@ -89,6 +90,8 @@ app.route(PREFIXO_PEDIDOS, pedidos);
 app.route(PREFIXO_WEBHOOK_COORDENACAO, webhookCoordenacao);
 // Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
+// Conferência pelo CSV da Rifei (RIFA-012): análise, "Recuperar" e auditoria sob /api/admin (passo 4).
+app.route(PREFIXO_RECONCILIACAO, reconciliacao);
 // Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.
 app.route(PREFIXO_PAINEL, painel);
 // Visão pública (RIFA-PAINEL): ranking e bumbo sob /api/publico, ABERTOS (fora dos prefixos do

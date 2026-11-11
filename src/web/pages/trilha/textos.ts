@@ -16,6 +16,7 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "link.criar": "Link de acesso gerado",
   "link.revogar": "Link de acesso revogado",
   "acessos_hierarquia.gerar_links": "Links da hierarquia gerados",
+  "conferencia.recuperar": "Vendas recuperadas na conferência",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */

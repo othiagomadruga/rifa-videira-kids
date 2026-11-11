@@ -12,16 +12,13 @@ import {
   respostaJson,
 } from "./test/renderizar";
 
-// Rotas planejadas: caminho, título (h1) e a tarefa que vai construir a tela. As telas da coordenação
-// abrem com a sessão de teste (papel coordenacao) do renderizarRota.
-const TELAS = [
-  // /entrar, /acesso e /coordenacao/acessos (RIFA-007), /coordenacao/campanha (RIFA-004),
-  // /coordenacao/hierarquia (RIFA-005), /coordenacao/adesao (RIFA-006), /telao e /coordenacao/bumbo
-  // (RIFA-011) já são telas de verdade: ver pages/entrar, pages/acesso, pages/acessos, pages/campanha,
-  // pages/hierarquia, pages/adesao, pages/telao e pages/bumbo. /coordenacao/pedidos (RIFA-025): pages/pedidos.
-  // /coordenacao/mapa (RIFA-015): pages/mapa.
-  ["/coordenacao/conferencia", "Conferência", "RIFA-012"],
-] as const;
+// Rotas planejadas: toda tela da coordenação já é tela de verdade. /entrar, /acesso e /coordenacao/acessos
+// (RIFA-007), /coordenacao/campanha (RIFA-004), /coordenacao/hierarquia (RIFA-005), /coordenacao/adesao
+// (RIFA-006), /telao e /coordenacao/bumbo (RIFA-011), /coordenacao/pedidos (RIFA-025), /coordenacao/mapa
+// (RIFA-015) e /coordenacao/conferencia (RIFA-012): ver pages/entrar, pages/acesso, pages/acessos,
+// pages/campanha, pages/hierarquia, pages/adesao, pages/telao, pages/bumbo, pages/pedidos, pages/mapa e
+// pages/conferencia. Tela nova que nasça só como casca (components/EmConstrucao) volta a ter o teste do
+// título e do aviso "Em construção (<tarefa>)" aqui.
 
 // Menu da coordenação (papel coordenacao): texto do link e para onde leva (o título da tela é o mesmo texto).
 const MENU_COORDENACAO = [
@@ -52,17 +49,6 @@ describe("CA1: cada rota mostra a tela certa", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  it.each(TELAS)(
-    "%s mostra o título %s e o aviso da %s",
-    (caminho, titulo, tarefa) => {
-      renderizarRota(caminho);
-
-      expect(tituloDaPagina(titulo)).toBeInTheDocument();
-      expect(screen.getByText(`Em construção (${tarefa})`)).toBeInTheDocument();
-      expect(document.title).toBe(`${titulo} · Rifa Videira Kids`);
-    },
-  );
 
   it("/status mostra a página de status da API", async () => {
     vi.stubGlobal(
