@@ -10,7 +10,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RespostaEstadoWebhook } from "../../../shared/contracts";
-import { renderizarRota, respostaJson } from "../../test/renderizar";
+import {
+  ADMIN_DE_TESTE,
+  renderizarRota,
+  respostaJson,
+} from "../../test/renderizar";
 import {
   CENARIOS,
   simularApi as simularPainel,
@@ -575,5 +579,45 @@ describe("RIFA-025-web-b: o link do alerta não recarrega os pedidos; o estado v
       within(regiao()).getByText("Ainda não chegou nenhuma venda"),
     ).toBeInTheDocument();
     await waitFor(() => expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(2));
+  });
+
+  it("depois de Sair, outra pessoa que entra no mesmo documento não vê o estado guardado: consulta de novo", async () => {
+    const consultas: string[] = [];
+    let liberar: () => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
+        const { pathname } = new URL(String(entrada), "http://localhost");
+        const metodo = init?.method ?? "GET";
+        if (pathname === ROTA_ESTADO) {
+          consultas.push(pathname);
+          // A consulta da segunda pessoa fica presa: dá para ver a tela antes da resposta.
+          if (consultas.length > 1)
+            await new Promise<void>((resolver) => (liberar = resolver));
+          return respostaJson(estado("nunca_recebeu"));
+        }
+        if (metodo === "POST" && pathname === "/api/sessao/sair")
+          return new Response(null, { status: 204 });
+        if (metodo === "POST" && pathname === "/api/sessao")
+          return respostaJson({ usuario: ADMIN_DE_TESTE });
+        return respostaErro(404, "nao_encontrado", "Rota não encontrada");
+      }),
+    );
+    const { roteador } = renderizarRota("/coordenacao/pedidos");
+    await within(regiao()).findByText("Ainda não chegou nenhuma venda");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+    await screen.findByRole("heading", { level: 1, name: "Entrar" });
+    // Outra pessoa (admin) entra pelo link pessoal no mesmo documento, sem recarregar a página.
+    await act(() => roteador.navigate(`/acesso/${"T".repeat(43)}`));
+    fireEvent.click(await screen.findByRole("button", { name: "Entrar" }));
+    await screen.findByRole("heading", { level: 1, name: "Visão geral" });
+
+    await waitFor(() => expect(consultas).toHaveLength(2));
+    expect(regiao()).toBeEmptyDOMElement();
+    await act(async () => liberar());
+    expect(
+      await within(regiao()).findByText("Ainda não chegou nenhuma venda"),
+    ).toBeInTheDocument();
   });
 });

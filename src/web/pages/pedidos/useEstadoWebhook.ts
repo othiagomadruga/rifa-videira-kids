@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RespostaEstadoWebhook } from "../../../shared/contracts";
+import { useSessao } from "../../lib/sessao";
 import { INTERVALO_ESTADO_MS, carregarEstadoWebhook } from "./alerta-webhook";
 
 export type CargaEstadoWebhook = {
@@ -13,19 +14,31 @@ const NADA: CargaEstadoWebhook = { estado: null, falha: null };
 
 /**
  * O que a última consulta deixou, guardado no módulo: sobrevive a sair e voltar da tela (Visão geral ↔ Pedidos),
- * para a outra tela mostrar o alerta na hora e não consultar de novo antes de INTERVALO_ESTADO_MS.
+ * para a outra tela mostrar o alerta na hora e não consultar de novo antes de INTERVALO_ESTADO_MS. Vale só para
+ * quem estava conectado (`usuarioId`): depois de "Sair", outra pessoa que entre no mesmo documento começa do zero.
  */
-let guardado: { carga: CargaEstadoWebhook; consultadoEm: number } | null = null;
+let guardado: {
+  carga: CargaEstadoWebhook;
+  consultadoEm: number;
+  usuarioId: number | null;
+} | null = null;
 
 /** Esquece o estado guardado: cada teste começa como uma página recém-aberta. */
 export function esquecerEstadoWebhook(): void {
   guardado = null;
 }
 
-function guardar(carga: CargaEstadoWebhook): CargaEstadoWebhook {
-  guardado = { carga, consultadoEm: Date.now() };
+function guardar(
+  carga: CargaEstadoWebhook,
+  usuarioId: number | null,
+): CargaEstadoWebhook {
+  guardado = { carga, consultadoEm: Date.now(), usuarioId };
   return carga;
 }
+
+/** O guardado, se é de quem está conectado agora. */
+const guardadoDe = (usuarioId: number | null) =>
+  guardado?.usuarioId === usuarioId ? guardado : null;
 
 function abaVisivel(): boolean {
   return document.visibilityState !== "hidden";
@@ -39,14 +52,18 @@ function abaVisivel(): boolean {
  * falha não apaga o último estado: a tela continua de pé e a próxima rodada tenta de novo.
  */
 export function useEstadoWebhook(): CargaEstadoWebhook {
+  const { estado: sessao } = useSessao();
+  const usuarioId = sessao.situacao === "conectada" ? sessao.usuario.id : null;
   const [carga, setCarga] = useState<CargaEstadoWebhook>(
-    () => guardado?.carga ?? NADA,
+    () => guardadoDe(usuarioId)?.carga ?? NADA,
   );
   const [visivel, setVisivel] = useState(abaVisivel);
   // Cada rodada é uma consulta devida: muda quando o temporizador dispara.
   const [rodada, setRodada] = useState(0);
   // Quando terminou a última consulta (Date.now()) e se o temporizador já disse que a próxima é devida.
-  const ultimaConsulta = useRef<number | null>(guardado?.consultadoEm ?? null);
+  const ultimaConsulta = useRef<number | null>(
+    guardadoDe(usuarioId)?.consultadoEm ?? null,
+  );
   const devida = useRef(false);
 
   useEffect(() => {
@@ -79,7 +96,7 @@ export function useEstadoWebhook(): CargaEstadoWebhook {
     devida.current = false;
     const controle = new AbortController();
     const concluir = (nova: CargaEstadoWebhook) => {
-      setCarga(guardar(nova));
+      setCarga(guardar(nova, usuarioId));
       ultimaConsulta.current = Date.now();
       agendar(INTERVALO_ESTADO_MS);
     };
@@ -90,7 +107,10 @@ export function useEstadoWebhook(): CargaEstadoWebhook {
       (erro: unknown) => {
         // O último estado que chegou continua (o guardado é o mesmo que está na tela).
         if (!controle.signal.aborted)
-          concluir({ estado: guardado?.carga.estado ?? null, falha: erro });
+          concluir({
+            estado: guardadoDe(usuarioId)?.carga.estado ?? null,
+            falha: erro,
+          });
       },
     );
 
@@ -98,7 +118,7 @@ export function useEstadoWebhook(): CargaEstadoWebhook {
       controle.abort();
       clearTimeout(proxima);
     };
-  }, [rodada, visivel]);
+  }, [rodada, visivel, usuarioId]);
 
   return carga;
 }
