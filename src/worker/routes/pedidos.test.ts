@@ -210,8 +210,9 @@ describe("ordem e campos", () => {
       registrado_em: "2026-11-24T15:00:00.000Z",
       atualizado_em: "2026-11-24T15:01:00.000Z",
       suspeito: true,
-      // D20: o padrão do contrato até a API ler a desconsideração (migração 0008).
+      // D20: os padrões do contrato até a API ler a desconsideração (migração 0008) e a origem.
       desconsiderado: null,
+      origem: "webhook",
     });
     // Sem afiliado e afiliado órfão: sem célula.
     expect(porId.get("P-04")).toMatchObject({

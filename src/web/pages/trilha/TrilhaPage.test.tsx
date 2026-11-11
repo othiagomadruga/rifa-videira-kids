@@ -224,6 +224,7 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Item da hierarquia criado",
       "Item da hierarquia alterado",
       "Item da hierarquia removido",
+      "Vendas recuperadas na conferência",
       "Pedido desconsiderado",
       "Pedido voltou a contar",
       "Afiliado removido",

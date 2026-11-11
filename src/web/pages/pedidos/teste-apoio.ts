@@ -96,6 +96,7 @@ export function pedido(
     atualizado_em: registrado,
     suspeito: false,
     desconsiderado: null,
+    origem: "webhook",
     ...parcial,
   };
 }

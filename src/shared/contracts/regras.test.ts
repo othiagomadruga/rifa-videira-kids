@@ -15,6 +15,7 @@ import {
   desconsideracaoSchema,
   detalhesAcaoDesligadaSchema,
   detalhesAfiliadoComPedidosSchema,
+  grupoDesconsideradosSchema,
   itemPedidoSchema,
   pedidoSuspeitoSchema,
   respostaPedidosSchema,
@@ -493,6 +494,16 @@ describe("RIFA-028: desconsiderar e reconsiderar pedido", () => {
     ).toEqual(fraude);
   });
 
+  it("lista de pedidos: a origem do pedido (webhook ou conferência); a resposta de hoje, sem o campo, sai como webhook", () => {
+    expect(itemPedidoSchema.parse(itemDeHoje).origem).toBe("webhook");
+    expect(
+      itemPedidoSchema.parse({ ...itemDeHoje, origem: "conferencia" }).origem,
+    ).toBe("conferencia");
+    expect(aceita(itemPedidoSchema, { ...itemDeHoje, origem: "manual" })).toBe(
+      false,
+    );
+  });
+
   it("lista de pedidos: filtro desconsiderado=true|false; outro valor é 400", () => {
     expect(consultaPedidosSchema.parse({ desconsiderado: "true" })).toEqual({
       limite: 50,
@@ -689,5 +700,40 @@ describe("D20: erros e trilha", () => {
     const cabe = "x".repeat(LIMITE_ALVO_AUDITORIA - "pedido:".length);
     expect(alvoDoPedidoNaAuditoria(cabe)).toBe(`pedido:${cabe}`);
     expect(alvoDoPedidoNaAuditoria(`${cabe}x`)).toBe("pedido");
+  });
+});
+
+describe("D20: a conferência pelo CSV (RIFA-012) e o pedido desconsiderado", () => {
+  it("o desconsiderado vai para um grupo à parte, com o lado do arquivo, o do sistema e a desconsideração", () => {
+    const item = {
+      pedido_id: "PEDTESTE0001",
+      arquivo: {
+        status: "aprovado",
+        qtd_bilhetes: 2,
+        total_centavos: 4000,
+        afiliado: "reconhecido",
+        affiliate_id: 1001,
+        celula: { id: 1, nome: "Célula Ficticia 01" },
+        data: "2026-11-24",
+      },
+      sistema: {
+        status: "approved",
+        qtd_bilhetes: 2,
+        total_centavos: 4000,
+        affiliate_id: 1001,
+        celula: { id: 1, nome: "Célula Ficticia 01" },
+        aprovado_em: AGORA,
+        origem: "webhook",
+      },
+      desconsiderado: { motivo: "teste", observacao: null, em: AGORA },
+    };
+    const grupo = { quantidade: 1, itens: [item], itens_omitidos: 0 };
+    expect(grupoDesconsideradosSchema.parse(grupo)).toEqual(grupo);
+    expect(
+      aceita(grupoDesconsideradosSchema, {
+        ...grupo,
+        itens: [{ ...item, desconsiderado: null }],
+      }),
+    ).toBe(false);
   });
 });

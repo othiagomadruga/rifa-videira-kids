@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 15 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 16 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -182,6 +182,8 @@ describe("GET /api/admin/auditoria", () => {
       "hierarquia.criar",
       "hierarquia.atualizar",
       "hierarquia.remover",
+      // RIFA-012 (D19): o "Recuperar" da conferência pelo CSV, quando grava.
+      "conferencia.recuperar",
       // Sprint 6 (D20): desconsiderar e reconsiderar pedido (RIFA-028) e remover afiliado (RIFA-031).
       "pedido.desconsiderar",
       "pedido.reconsiderar",

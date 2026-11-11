@@ -1,8 +1,9 @@
 # Modelo de dados (Cloudflare D1)
 
 - Migration: [`migrations/0001_init.sql`](../migrations/0001_init.sql), aplicada depois de `0000_setup.sql` (tabela `_meta`, RIFA-001). O acesso da equipe (`0002_acessos.sql`) e os papéis da hierarquia (`0006_acesso_hierarquia.sql`, RIFA-014) estão na seção [`usuarios`, `links_acesso` e `sessoes`](#usuarios-links_acesso-e-sessoes-acesso-da-equipe).
+- Conferência pelo CSV da Rifei (RIFA-012): [`0004_conferencia.sql`](../migrations/0004_conferencia.sql), aditiva, com a tabela [`recuperacoes`](#recuperacoes-migração-0004-rifa-012) e as colunas `pedidos.origem` e `pedidos.recuperacao_id`. Não depende da 0005 à 0007 nem elas dela: aplicada antes ou depois delas, dá o mesmo schema (`src/worker/test/migracao-0004-depois.test.ts`).
 - Tipos e schemas espelho: `src/shared/contracts/dominio.ts`.
-- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006 e a 0007 aplicadas sobre dados que já existiam).
+- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006 e a 0007 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
 - Índices só de leitura: `0003_vendas_por_dia.sql` (painel) e `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts` e `src/worker/db/pedidos-webhook-desempenho.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
 - Regras do admin (Sprint 6, D20): o **plano** da migração `0008_regras_campanha.sql` está na [seção 9](#9-plano-da-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20). Ela é da tarefa -db, que a escreve junto com as consultas.
@@ -18,6 +19,8 @@ erDiagram
   celulas |o--o{ afiliados : "vinculados (celula_id nulo = órfão)"
   afiliados |o--o{ pedidos : "vendeu (affiliate_id nulo = sem afiliado)"
   webhook_eventos }o..o| pedidos : "pedido_id (sem FK)"
+  campanhas ||--o{ recuperacoes : "conferência (0004)"
+  recuperacoes |o--o{ pedidos : "recuperou (recuperacao_id nulo = veio do webhook)"
   celulas |o--o| usuarios : "acesso do líder (celula_id)"
   discipuladores |o--o| usuarios : "acesso do discipulador"
   redes |o--o| usuarios : "acesso da rede"
@@ -130,6 +133,10 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `aprovado_em` | TEXT (UTC) NULL | `approved_at`; obrigatório quando `approved` (CHECK). Se a Rifei mandar null, vale o instante do recebimento |
 | `expirado_em` | TEXT (UTC) NULL | `expired_at` |
 | `registrado_em`, `atualizado_em` | TEXT (UTC) | nossos: primeira gravação e última alteração |
+| `origem` | TEXT, padrão `webhook` | `webhook` ou `conferencia` (migração 0004). Os pedidos anteriores à 0004 ficaram com `webhook` |
+| `recuperacao_id` | INTEGER FK → recuperacoes, NULL | a recuperação que gravou o pedido; preenchido **se e somente se** `origem = 'conferencia'` (CHECK) |
+
+Pedido recuperado na conferência (`POST /api/admin/reconciliacao/recuperar`, RIFA-012): entra `approved`, com `qtd_bilhetes`, `total_centavos`, `affiliate_id` e `aprovado_em` vindos do CSV da Rifei (lido no navegador); `numeros`, `ddd`, `pais`, `criado_em` e os campos informativos ficam NULL (os números dos bilhetes e o telefone não saem do navegador). Conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um evento do webhook que chegue depois segue a máquina da seção 5 (um `paid_order` dá `duplicado`).
 
 ### `webhook_eventos` (D3)
 
@@ -148,6 +155,22 @@ Uma linha por entrega **autenticada**, inclusive duplicadas e inválidas. Entreg
 | `avisos` | TEXT (JSON) NULL | lista **não vazia** das diferenças do payload aceito em relação à doc (RIFA-002b): itens `{ caminho, codigo, mensagem, ocorrencias }`, agrupados por caminho sem índice, no máximo 50 mais um item final `itens_omitidos`, sem valores. CHECK: `json_type = 'array'` e pelo menos 1 item. NULL quando não há aviso (nunca `[]`); nunca em `erro_validacao` |
 
 `pedido_id` não tem FK, porque eventos ignorados ou inválidos não geram pedido. Como o payload redigido fica guardado, dá para **reprocessar** eventos depois (por exemplo, os `ignorado_outra_campanha` recebidos antes de a campanha ser configurada).
+
+### `recuperacoes` (migração 0004, RIFA-012)
+
+Auditoria de cada "Recuperar" da conferência pelo CSV que gravou pelo menos um pedido (a gravação, num único `db.batch`, apaga a linha no mesmo lote se nada entrou). Código: `src/worker/db/reconciliacao.ts`; rotas em [api.md](api.md#conferência-pelo-csv-da-rifei-sprint-4-rifa-012).
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `id` | INTEGER PK | os pedidos gravados apontam para ele em `pedidos.recuperacao_id` |
+| `campanha_id` | INTEGER FK → campanhas | campanha ativa no momento |
+| `usuario_id` | INTEGER FK → usuarios (RESTRICT) | quem recuperou: admin ou coordenação, que não têm alvo na hierarquia e por isso nunca são apagados, só desativados |
+| `executado_em` | TEXT (UTC) | |
+| `pedidos_solicitados` | INTEGER ≥ 1 | códigos distintos pedidos pela coordenação |
+| `pedidos_recuperados`, `bilhetes`, `total_centavos` | INTEGER ≥ 0 | contados dos pedidos que de fato entraram (os que já existiam ficam de fora) |
+| `linhas_arquivo` | INTEGER ≥ 0 | linhas de dados do CSV |
+| `arquivo_sha256` | TEXT (64 hex) | SHA-256 do texto do arquivo: identifica o arquivo usado sem guardar o conteúdo |
+| `mapeamento` | TEXT (JSON objeto) | o **nome** da coluna do arquivo usada em cada campo (`{"pedido_id": "Pedido", "valor": null, ...}`); colunas de dado pessoal nunca podem ser usadas |
 
 ### View `vendas_aprovadas`
 
@@ -174,7 +197,7 @@ Migrations `0002_acessos.sql` (RIFA-007) e `0006_acesso_hierarquia.sql` (RIFA-01
 
 - **Um usuário por alvo**: índices únicos parciais `usuarios_um_por_celula`, `usuarios_um_por_discipulador` e `usuarios_um_por_rede` (`WHERE <coluna> IS NOT NULL`). Também servem à cascata (achar o usuário do alvo apagado).
 - **Papel obrigatório**: os gatilhos `usuarios_papel_obrigatorio_ao_inserir` e `usuarios_papel_obrigatorio_ao_atualizar` recusam papel NULL com a mesma mensagem do NOT NULL do SQLite (`NOT NULL constraint failed: usuarios.papel`). O `ALTER TABLE ADD COLUMN` não aceita NOT NULL sem um valor padrão, e um padrão daria um papel a quem não tem.
-- **Cascata e auditoria**: apagar a célula, o discipulador ou a rede apaga o usuário do alvo e, com ele, os links e as sessões. A `auditoria` (0005) segura com `RESTRICT` o usuário que aparece como autor de uma ação: nesse caso o alvo não pode ser apagado (a API diz o motivo; acesso.md, seção 9). A remoção que passa fica na trilha (`hierarquia.remover`, RIFA-018), com o id do usuário que caiu junto.
+- **Cascata e auditoria**: apagar a célula, o discipulador ou a rede apaga o usuário do alvo e, com ele, os links e as sessões. A `auditoria` (0005) segura com `RESTRICT` o usuário que aparece como autor de uma ação: nesse caso o alvo não pode ser apagado (a API diz o motivo; acesso.md, seção 9). As `recuperacoes` (0004) também seguram o autor com `RESTRICT`, mas só admin e coordenação recuperam, e esses não têm alvo. A remoção que passa fica na trilha (`hierarquia.remover`, RIFA-018), com o id do usuário que caiu junto.
 - **Como a 0006 foi feita, sem recriar a tabela**: recriar (o jeito de trocar um CHECK no SQLite) faria o DROP da tabela antiga apagar em cascata os links e as sessões e esbarraria no RESTRICT da auditoria (o `PRAGMA defer_foreign_keys` não segura ações de cascata). Por isso, coluna a coluna: (1) `celula_id`, `discipulador_id` e `rede_id` com `ADD COLUMN ... REFERENCES ... ON DELETE CASCADE`, sem CHECK; (2) `papel_novo` com o CHECK dos 5 papéis e da coerência com o alvo (nas linhas antigas ele começa NULL, e o CHECK com NULL não reprova); (3) `UPDATE` copiando o papel; (4) `DROP COLUMN papel`; (5) `RENAME COLUMN papel_novo TO papel` (o CHECK passa a citar `papel`); (6) os gatilhos, criados depois do DROP e do RENAME (um gatilho que cita a coluna barra o DROP COLUMN); (7) os índices únicos. A coluna `papel` ficou por último na tabela (as consultas sempre nomeiam as colunas). Uma troca futura de papel repete a técnica, com os dois gatilhos apagados antes do DROP e recriados depois.
 - `src/worker/test/migrations.test.ts` aplica a 0006 num D1 à parte (`DB_MIGRACAO`, só dos testes) sobre usuários, links, sessões e auditoria gravados com as migrações anteriores e confere que tudo continua lá, além do CHECK, dos gatilhos, da cascata e da unicidade.
 
@@ -190,6 +213,7 @@ Migrations `0002_acessos.sql` (RIFA-007) e `0006_acesso_hierarquia.sql` (RIFA-01
 | `webhook_eventos_por_pedido`, `webhook_eventos_por_resultado (resultado, recebido_em)` | auditoria de um pedido; listar erros e ignorados recentes; no estado do webhook (`src/worker/db/estado-webhook.ts`), a contagem das últimas 24 h por resultado (com `resultado IN (...)`: sem ele, a contagem percorre o índice inteiro), os erros recentes e a última entrega de qualquer resultado por `MAX(recebido_em)` (com `ORDER BY ... LIMIT 1` o planejador ia para o índice da 0007 e lia ~34 mil linhas) |
 | `webhook_eventos_por_resultado_id (resultado, id)` (migração 0007, RIFA-025) | entregas de um resultado da mais nova para a mais antiga, pelo id, com o cursor (`GET /api/admin/webhook/entregas`, `src/worker/db/entregas-webhook.ts`): ~51 linhas lidas por página, sem B-tree temporária (sem ele, ~800 a ~21 mil) |
 | `webhook_eventos_da_campanha_por_slug (slug, recebido_em) WHERE resultado IN ('processado', 'duplicado', 'ignorado_transicao')` (migração 0007, parcial, RIFA-025) | a última entrega da campanha no estado do webhook (`MAX(recebido_em)` no slug da ativa, D16): 0 ou 1 linha lida. A consulta repete o MESMO `resultado IN (...)` do índice, senão o planejador não o usa. Pelo índice `(resultado, recebido_em)`, com o slug trocado depois de entregas processadas, o MAX percorria todas as entregas do slug antigo (~17,6 mil linhas por chamada) |
+| `recuperacoes_por_campanha (campanha_id, executado_em)` e `pedidos_por_recuperacao (recuperacao_id) WHERE recuperacao_id IS NOT NULL` (migração 0004) | auditoria da conferência: as recuperações e os pedidos que cada uma gravou; a FK de `pedidos.recuperacao_id` |
 | `campanhas_uma_ativa` (parcial, único) | garantir uma única campanha ativa |
 
 Exemplo, ranking de células da campanha `?1` no período, com `[início, fim)` já convertido para UTC (`?2`, `?3`):
@@ -244,13 +268,13 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 
 - Do comprador: nome, e-mail, documento (CPF), data de nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. Ficam só `ddd` e `pais`.
 - O payload bruto do webhook nunca é gravado, só o redigido.
-- O CSV da reconciliação, que traz dados pessoais, é processado em memória e descartado.
+- O CSV da conferência (RIFA-012), que traz dados pessoais, é lido no navegador e não vai para a API: ela recebe só as colunas mapeadas que não são pessoais. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, valor, afiliado e instante).
 
 ## 9. Plano da migração `0008_regras_campanha.sql` (RIFA-028, 029 e 032; D20)
 
 Só o plano: a migração é da tarefa -db e entra no MESMO merge que as consultas de `src/worker/db/` (item 3 do
 OBRIGATÓRIO da D20). Aditiva para os dados: nenhuma linha muda; os pedidos de antes contam como hoje e a campanha
-fica com os padrões. O SQL abaixo foi aplicado sobre a 0000 a 0007, com dados, num SQLite local (3.53): os CHECK, a
+fica com os padrões. O SQL abaixo foi aplicado sobre a 0000 a 0007 (com a 0004 da RIFA-012), com dados, num SQLite local (3.53): os CHECK, a
 view e os planos se comportaram como descrito.
 
 **`campanhas`** (as chaves e as mensagens da D20):
@@ -336,4 +360,3 @@ WHERE p.status = 'approved' AND p.desconsiderado_em IS NULL;
   aprovados e uma campanha) e conferir que tudo continua contando, os padrões da campanha, os CHECK (motivo sem
   data, observação sem desconsideração, motivo fora da lista, chave fora de 0/1), a view sem o desconsiderado e o
   plano do painel.
-

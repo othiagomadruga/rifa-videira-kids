@@ -15,6 +15,7 @@ import {
   corpoSalvarAfiliadoSchema,
   respostaAdesaoSchema,
   respostaListaAfiliadosSchema,
+  respostaListaRecuperacoesSchema,
   type AfiliadoResumo,
 } from "../../../shared/contracts";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
@@ -97,7 +98,10 @@ function cenarioDaReuniao(): EstadoApi {
 
 const SEM_VENDAS = { pedidos_aprovados: 0, bilhetes: 0, total_centavos: 0 };
 
-/** fetch simulado com estado: GET /api/admin/adesao, GET ?vinculado=false e PUT do afiliado. */
+/**
+ * fetch simulado com estado: GET /api/admin/adesao, GET ?vinculado=false e PUT do afiliado. Também responde, vazia,
+ * a lista de recuperações da Conferência (RIFA-012), a tela para onde o teste "ao sair da tela" navega.
+ */
 function simularApi(inicial: EstadoApi) {
   const estado = structuredClone(inicial);
   const puts: { affiliateId: number; corpo: unknown }[] = [];
@@ -150,6 +154,10 @@ function simularApi(inicial: EstadoApi) {
           }),
         );
       }
+      if (metodo === "GET" && url === "/api/admin/reconciliacao/recuperacoes")
+        return respostaJson(
+          respostaListaRecuperacoesSchema.parse({ itens: [], proximo: null }),
+        );
       const put = /^\/api\/admin\/afiliados\/(\d+)$/.exec(url);
       if (metodo === "PUT" && put) {
         const affiliateId = Number(put[1]);
@@ -901,9 +909,10 @@ describe("CA3/CA4: atualização automática", () => {
 
   it("ao sair da tela, a atualização automática para", async () => {
     await abrirTela();
-    // Uma tela que não consulta a API (a de Pedidos, desde a RIFA-025, consulta).
+    // A Conferência (RIFA-012) consulta só as recuperações dela; a contagem abaixo é a da Adesão.
     fireEvent.click(screen.getByRole("link", { name: "Conferência" }));
     await screen.findByRole("heading", { level: 1, name: "Conferência" });
+    await screen.findByText("Nenhuma venda recuperada ainda.");
 
     await act(() => vi.advanceTimersByTimeAsync(3 * INTERVALO_ATUALIZACAO_MS));
 

@@ -14,8 +14,9 @@ export default defineConfig({
           cloudflareTest(async () => ({
             wrangler: { configPath: "./wrangler.jsonc" },
             miniflare: {
-              // D1 só dos testes, vazio no início de cada arquivo: a migração 0006 aplicada sobre dados gravados
-              // com as migrações anteriores (src/worker/test/migrations.test.ts). Soma-se ao DB do wrangler.jsonc.
+              // D1 só dos testes, vazio no início de cada arquivo: a 0006 e a 0007 aplicadas sobre dados gravados
+              // com as migrações anteriores (src/worker/test/migrations.test.ts) e a 0004 aplicada depois da 0007
+              // (src/worker/test/migracao-0004-depois.test.ts). Soma-se ao DB do wrangler.jsonc.
               d1Databases: ["DB_MIGRACAO"],
               bindings: {
                 TEST_MIGRATIONS: await readD1Migrations(pastaMigracoes),

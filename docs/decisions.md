@@ -133,7 +133,7 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   `POST /api/sessao` e 1 MiB nos POST/PUT/PATCH da coordenação, depois do login (sem sessão, o corpo nem é lido);
   acima, 413 `corpo_muito_grande`. As importações de CSV têm o teto delas na própria rota: a da hierarquia
   (3 × o limite de caracteres + 1 MB, respondendo como arquivo grande) e a conferência da RIFA-012, sob
-  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela.
+  `/api/admin/reconciliacao/*`, que lê o corpo bruto com o teto dela (1 MiB, o corpo compacto: D19).
 - **Sessão parada há mais de 7 dias** deixa de valer, mesmo dentro dos 45 dias (`ultimo_uso_em`, já gravado no
   máximo uma vez por minuto). O link pessoal continua abrindo uma sessão nova; a administração não conta a sessão
   parada como ativa, e cada login a apaga.
@@ -214,7 +214,7 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
 
 ## D14. Visão individual: base em cache e montador enxuto (RIFA-014-api, 2026-11-09)
 
-(A D13 é da RIFA-012, a conferência por CSV, que entra na `main` pela branch dela.) Decisões técnicas da
+(A D13 ficou sem decisão: a da RIFA-012, a conferência por CSV, entrou na `main` como D19.) Decisões técnicas da
 implementação da D12 (o contrato não mudou; só `percentualBp` passou a ser exportada de
 `calculos.ts`, sem mudar o comportamento, para a curva usar a mesma conta do percentual da meta).
 
@@ -324,7 +324,7 @@ entregas do webhook (só por SQL no D1) e que ninguém ficava sabendo se o webho
   `EXPLAIN QUERY PLAN` e `rows_read` como em `painel.test.ts`, porque o índice novo desvia o planejador (totais com
   `+campanha_id`, totais e lista por célula com `afiliados CROSS JOIN pedidos`, última entrega por `MAX(recebido_em)`,
   contagem de 24 h com `resultado IN (...)`). Totais só na primeira página. O campo `origem` (webhook ou
-  conferência) entra junto com a RIFA-012, por quem chegar por último na main.
+  conferência) entra pelo contrato da RIFA-028 (D20), depois da RIFA-012 na main.
 - Fica para decisão do PO: gravar o instante do último 401 do webhook (seria uma escrita sem autenticação).
 
 ## D17. Mapa de vendas por DDD (RIFA-015, 2026-11-11)
@@ -409,9 +409,36 @@ do passo com o token, e o que deixassem no disco rodava com ele.
   mesmo run em `dist/`, actions por SHA, sem `environment:`) e em `scripts/conferir-artefato.test.mjs` (as
   adulterações recusadas).
 
+## D19. Conferência pelo CSV: o arquivo é lido no navegador (RIFA-012, ciclo 2, 2026-11-07)
+
+- Ler o CSV no Worker gastava de 50 a 375 ms de CPU por requisição (1 a 7 mil pedidos; 95% em datas, com um
+  `Intl.DateTimeFormat` por célula), e o plano Workers Free dá 10 ms (erro 1102). Decisão do SM: o navegador lê
+  o arquivo, detecta e mapeia as colunas (`src/shared/conferencia/`, sem zod) e manda à API só as colunas
+  mapeadas que não são de dado pessoal, já normalizadas, numa lista por campo, com as linhas iguais juntadas
+  (`vezes`): o corpo compacto de `src/shared/contracts/conferencia.ts`, conferido por um validador leve (laços
+  simples, sem zod item a item). Ganho extra: nome, e-mail e telefone nem saem do navegador.
+- O Worker não usa o Intl por linha; o banco devolve só os pedidos com os códigos do arquivo (um texto JSON por
+  lote, tuplas curtas) e os ausentes e totais já somados. CPU medida na revisão no workerd, com o app completo e
+  o login, com 7 mil pedidos: 18 a 22 ms na 1ª requisição do isolate e 9 a 10 ms nas seguintes; no teto aceito
+  (1 MiB), de 15 a 75 ms.
+- **A conferência exige o Workers Paid** (decisão do PO, 2026-11-11). Os números acima passam dos 10 ms do plano
+  Free; entre o plano pago e levar também a análise ao navegador, o PO escolheu o plano. No Paid, o limite de CPU
+  por requisição é de segundos (30 s por padrão na documentação "Workers limits"; confira). Roteiro:
+  lancamento.md, 1.1 a. O teste de desempenho
+  (`src/worker/routes/reconciliacao-desempenho.test.ts`) mede só as rotas, sem o login, e continua aceitando até
+  30 ms: não é o limite do plano, é a trava contra regressão grosseira (ler o CSV no Worker voltaria às centenas de
+  ms; com 7 mil pedidos, o teste mede de 8 a 11 ms).
+- O corpo vai até 1 MiB (`LIMITE_CORPO_CONFERENCIA_BYTES`, ~15 mil pedidos); a rota lê o corpo uma vez só, de
+  uma vez quando há `Content-Length` (o teto geral leria em pedaços de 4 KB: ~2,5 ms a mais para ~430 KB), por
+  isso continua fora do teto geral, com o mesmo número.
+- Regra do valor de um pedido em várias linhas e trava do código que não bate: integracao-rifei.md, seção 10.
+- O "Recuperar" muda os números da campanha, então entra na trilha de auditoria da D11 (decisão do SM): ação
+  `conferencia.recuperar`, alvo `campanha:<id>`, no mesmo `db.batch` da gravação e só quando algum pedido entra;
+  o resumo traz o id da recuperação e quantos pedidos e bilhetes entraram (nada do arquivo).
+
 ## D20. Regras do admin na campanha: desconsiderar pedido, acesso da hierarquia, remover afiliado e mensagens (RIFA-028, 029, 031 e 032; contrato, 2026-11-11)
 
-(A D19 é da RIFA-012, a conferência pelo CSV.) O PO pediu: "Todas essas decisões quero configuráveis na conta do
+O PO pediu: "Todas essas decisões quero configuráveis na conta do
 admin, para ativar ou desativar ou aplicar o valor correspondente." Datas, preço, meta, percentuais, critério do
 ranking e o que o público vê já estavam na Campanha; faltavam as quatro regras abaixo. Contrato em
 `src/shared/contracts/` (`regras.ts`, sem zod; `dominio.ts`; `api.ts`; `acesso.ts`; `erros.ts`), testes em
@@ -471,6 +498,10 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
   (PedidosPage, textos e EntregasWebhook); falta o PO dizer o texto novo.
 - **Trilha** (0005): ações `pedido.desconsiderar`, `pedido.reconsiderar` e `afiliado.remover`. Alvo `pedido:<id>`
   (`alvoDoPedidoNaAuditoria`; só `pedido` quando não cabe nos 64 caracteres do alvo) e `afiliado:<id>`.
+- **Conferência pelo CSV (RIFA-012, D19)**: o pedido do arquivo que o sistema tem desconsiderado aparece como
+  desconsiderado, num grupo à parte (`desconsiderados` na análise por pedido), nunca como "faltando" nem como
+  divergência; os totais do sistema contam só o que conta. A lista de pedidos ganha também o campo `origem`
+  (`webhook` ou `conferencia`), que a D16 deixou para quando a RIFA-012 estivesse na main.
 - **Catálogo à parte**, `ROTAS_REGRAS_CAMPANHA` (como `ROTAS_ACESSO_HIERARQUIA` na RIFA-014): o
   `src/worker/protecao.test.ts` percorre `ROTAS` e exige o 403 da coordenação nas rotas só de admin, que uma rota
   ainda não montada não dá (404). Por isso as três rotas não estão em `ROTAS` nesta tarefa.
@@ -545,8 +576,11 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
    desconsiderado vem com a marca e **aparece como desconsiderado, nunca como "faltando"**: não é `venda_perdida`
    (ele existe), não é `pagamento_nao_registrado`, `nao_pago_na_rifei` (um estorno já desconsiderado está
    resolvido), `ausente_no_arquivo` (uma compra de teste fora do arquivo) nem diferença de valor, quantidade ou
-   afiliado: vai para um grupo à parte, com o id, o motivo e o status no arquivo. O "Recuperar" nunca o grava de
-   novo nem o reativa (`ja_existe`). A forma do grupo no contrato da conferência entra com a RIFA-012 na main.
+   afiliado: vai para o grupo à parte `desconsiderados` da análise por pedido (`grupoDesconsideradosSchema`, com o
+   lado do arquivo, o do sistema e a desconsideração; `.optional()` só até a -api montá-lo, depois sempre
+   presente). Os desconsiderados do sistema que não estão no arquivo não aparecem (não contam nem há o que
+   conferir). O "Recuperar" nunca o grava de novo nem o reativa (`ja_existe`). Na consulta, o desconsiderado sai
+   de `PAGOS_DA_CAMPANHA` e entra na busca pelos ids do arquivo com as três colunas na tupla curta.
 8. **Proteção** (`src/worker/protecao.test.ts`): `ROTAS_REGRAS_CAMPANHA` entra no teste no mesmo merge que monta as
    rotas (401 sem cookie, 403 da coordenação, passa com admin). Com a chave desligada, o discipulador e a rede levam
    403 `acesso_desligado` em todo `/api/minha/*` (inclusive caminho sem rota) e no `POST /api/sessao`; o líder não
