@@ -26,7 +26,9 @@ type Estado =
 
 // Confirmação do "Recuperar": ao abrir, pede à API a prévia (simular: true), que já confere o banco de
 // agora (um pedido que chegou pelo webhook depois da conferência aparece como "já está no sistema"). Só o
-// botão "Gravar" grava, num lote só e sem sobrescrever nada.
+// botão "Gravar" grava, num lote só e sem sobrescrever nada. Gravando, Cancelar e Gravar ficam indisponíveis com
+// aria-disabled (RIFA-045), não disabled: o foco fica no botão (dentro do diálogo), o Tab continua passando por eles
+// com a dica e o clique, o Esc e o × são ignorados até a gravação terminar.
 export function DialogoRecuperar({
   corpo,
   pedidos,
@@ -99,15 +101,22 @@ export function DialogoRecuperar({
           >
             <Button
               variante="secundario"
-              disabled={gravando}
-              onClick={aoFechar}
+              className="conferencia-dialogo-botao"
+              aria-disabled={gravando || undefined}
+              onClick={() => {
+                if (!gravando) aoFechar();
+              }}
             >
               {aGravar > 0 ? "Cancelar" : "Fechar"}
             </Button>
           </ComDica>
           {aGravar > 0 && (
             <ComDica texto={gravando ? DICAS.gravando : DICAS.gravar}>
-              <Button disabled={gravando} onClick={() => void gravar()}>
+              <Button
+                className="conferencia-dialogo-botao"
+                aria-disabled={gravando || undefined}
+                onClick={() => void gravar()}
+              >
                 {gravando
                   ? "Gravando…"
                   : `Gravar ${plural(aGravar, "venda", "vendas")}`}

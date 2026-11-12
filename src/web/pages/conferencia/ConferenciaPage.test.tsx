@@ -2,8 +2,24 @@
 // (teste-apoio.ts): escolher o arquivo (lido NO NAVEGADOR), ver e ajustar o mapeamento detectado, conferir,
 // ler o resumo e as diferenças por tipo (com a explicação), marcar e recuperar com confirmação, e as
 // recuperações feitas. Os corpos enviados à API são varridos atrás dos dados pessoais do arquivo.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { dicaDe } from "../../test/dicas";
+import {
+  ativarPeloTeclado,
+  chegarPeloTab,
+  conferirIndisponivel,
+  esperarDisponivel,
+  esperarIndisponivel,
+  lerCss,
+  tab,
+} from "../../test/indisponivel";
 import { renderizarRota } from "../../test/renderizar";
 import {
   ANALISE_AGREGADA,
@@ -23,7 +39,9 @@ import {
   criarApiFalsa,
   respostaErro,
   type ApiFalsa,
+  type Chamada,
 } from "./teste-apoio";
+import { DICAS } from "./textos";
 
 const CAMINHO = "/coordenacao/conferencia";
 const ROTULO_ARQUIVO = "Arquivo exportado da Rifei (CSV)";
@@ -198,7 +216,7 @@ describe("CA4: a tela da conferência", () => {
         "Ignoradas por terem dados pessoais (não saem do seu computador): Nome, E-mail.",
       ),
     ).toBeInTheDocument();
-    expect(botao("Conferir com estas colunas")).toBeDisabled();
+    esperarIndisponivel(botao("Conferir com estas colunas"));
 
     // O resultado recebe o foco e o leitor de tela ouve o resumo.
     const titulo = screen.getByText("Resultado da conferência");
@@ -283,7 +301,7 @@ describe("CA4: a tela da conferência", () => {
     expect(
       within(perdidas).getByText(/afiliado não reconhecido/),
     ).toBeInTheDocument();
-    expect(botao("Recuperar 3 vendas")).toBeEnabled();
+    esperarDisponivel(botao("Recuperar 3 vendas"));
   });
 
   it("trocar uma coluna e conferir de novo manda só as colunas escolhidas; desfazer volta ao detectado", async () => {
@@ -300,7 +318,7 @@ describe("CA4: a tela da conferência", () => {
     ).toBeInTheDocument();
     fireEvent.click(botao("Desfazer as trocas"));
     expect(screen.getByLabelText("Afiliado")).toHaveValue("6");
-    expect(botao("Conferir com estas colunas")).toBeDisabled();
+    esperarIndisponivel(botao("Conferir com estas colunas"));
 
     fireEvent.change(screen.getByLabelText("Afiliado"), {
       target: { value: "" },
@@ -317,7 +335,7 @@ describe("CA4: a tela da conferência", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Afiliado")).toHaveValue(""),
     );
-    expect(botao("Conferir com estas colunas")).toBeDisabled();
+    esperarIndisponivel(botao("Conferir com estas colunas"));
     // O fuso da campanha foi pedido uma vez só.
     expect(api.de("/campanha")).toHaveLength(1);
   });
@@ -501,9 +519,9 @@ describe("CA4: a tela da conferência", () => {
       await within(dialogo).findByText("Nada foi gravado"),
     ).toBeInTheDocument();
     expect(within(dialogo).getByText("Erro interno")).toBeInTheDocument();
-    expect(
+    esperarDisponivel(
       within(dialogo).getByRole("button", { name: "Gravar 2 vendas" }),
-    ).toBeEnabled();
+    );
   });
 
   it("modo por totais (sem o código): tabelas por afiliado e por dia, e nada para recuperar", async () => {
@@ -646,7 +664,7 @@ describe("CA4: as travas da revisão (código que não bate e valor ambíguo)", 
         "Nada pode ser recuperado enquanto a coluna do código do pedido não conferir com o sistema.",
       ),
     ).toBeInTheDocument();
-    expect(botao("Recuperar")).toBeDisabled();
+    esperarIndisponivel(botao("Recuperar"));
     expect(
       screen.getAllByRole("status").map((item) => item.textContent),
     ).toContain(
@@ -786,5 +804,214 @@ describe("CA4: problemas do arquivo", () => {
     expect(guardado).not.toContain(NOME_FICTICIO);
     expect(guardado).not.toContain("R-0101");
     esperarCorposSemDadoPessoal(api);
+  });
+});
+
+// RIFA-045 (correção): os botões indisponíveis da Conferência ficam com aria-disabled, não disabled. Pelo teclado, eles
+// continuam no Tab e a dica diz por quê (com o disabled, o foco nunca chegava, e no diálogo do Recuperar o foco caía
+// fora dele durante a gravação); o clique, o Enter e o espaço não fazem nada; a cara continua a do disabled.
+describe("RIFA-045: os indisponíveis da Conferência, pelo teclado", () => {
+  /** A cara de indisponível vem do conferencia.css (o Button.css só a dá ao disabled). */
+  const CSS = [
+    lerCss("components/ui/Button.css"),
+    lerCss("pages/conferencia/conferencia.css"),
+  ];
+
+  /** Foca e clica, como o Enter faz no navegador (o jsdom não foca no clique). */
+  function acionar(elemento: HTMLElement) {
+    act(() => elemento.focus());
+    fireEvent.click(elemento);
+  }
+
+  /** Segura as respostas de `quais` chamadas até `liberar()` (a chamada já fica registrada). */
+  function trava(quais: (chamada: Chamada) => boolean) {
+    let liberar = () => {};
+    const promessa = new Promise<void>((resolver) => {
+      liberar = resolver;
+    });
+    return {
+      segurar: (chamada: Chamada) => (quais(chamada) ? promessa : undefined),
+      liberar: () => liberar(),
+    };
+  }
+
+  /** Espera o foco que vai para o resultado quando a conferência chega (é de um efeito). */
+  async function esperarFocoNoResultado() {
+    const titulo = screen.getByText("Resultado da conferência");
+    await waitFor(() => expect(titulo).toHaveFocus());
+  }
+
+  it("'Conferir com estas colunas', sem troca e conferindo: no Tab, com o motivo, e não confere de novo", async () => {
+    let analises = 0;
+    // A primeira conferência (ao escolher o arquivo) responde na hora; a segunda fica presa.
+    const analisar = trava(
+      ({ caminho }) => caminho.endsWith("/analisar") && ++analises > 1,
+    );
+    const api = await abrir(criarApiFalsa({ segurar: analisar.segurar }));
+    await escolher();
+    await esperarFocoNoResultado();
+    const conferir = botao("Conferir com estas colunas");
+
+    await conferirIndisponivel(conferir, {
+      dica: DICAS.conferirSemTroca,
+      semEfeito: () => expect(api.de("/analisar")).toHaveLength(1),
+      css: CSS,
+    });
+
+    fireEvent.change(screen.getByLabelText("Afiliado"), {
+      target: { value: "" },
+    });
+    esperarDisponivel(conferir);
+    acionar(conferir);
+    expect(conferir).toHaveTextContent("Conferindo…");
+    await conferirIndisponivel(conferir, {
+      dica: DICAS.conferindo,
+      semEfeito: () => expect(api.de("/analisar")).toHaveLength(2),
+      css: CSS,
+    });
+    analisar.liberar();
+    await waitFor(() =>
+      expect(conferir).toHaveTextContent("Conferir com estas colunas"),
+    );
+    expect(api.de("/analisar")).toHaveLength(2);
+  });
+
+  it("'Recuperar' sem nada marcado: no Tab, com o motivo, e não abre a confirmação", async () => {
+    const api = await abrir();
+    await escolher();
+    await esperarFocoNoResultado();
+    fireEvent.click(botao("Desmarcar todas"));
+    const recuperar = botao("Recuperar");
+    expect(recuperar).toHaveAccessibleDescription(
+      "Marque as vendas que quer recuperar.",
+    );
+
+    await conferirIndisponivel(recuperar, {
+      dica: DICAS.recuperarIndisponivel,
+      semEfeito: () => {
+        expect(screen.queryByRole("alertdialog")).toBeNull();
+        expect(api.de("/recuperar")).toEqual([]);
+      },
+      css: CSS,
+    });
+    // O motivo continua na descrição, antes da dica aberta pelo teclado.
+    expect(recuperar).toHaveAccessibleDescription(
+      `Marque as vendas que quer recuperar. ${DICAS.recuperarIndisponivel}`,
+    );
+  });
+
+  it("'Carregar mais' carregando: o foco fica nele, com o motivo, e a página não é pedida de novo", async () => {
+    let paginas = 0;
+    // A primeira página responde na hora; a segunda ("Carregar mais") fica presa.
+    const pagina = trava(
+      ({ caminho }) => caminho.endsWith("/recuperacoes") && ++paginas > 1,
+    );
+    const api = await abrir(
+      criarApiFalsa({
+        recuperacoes: (antesDe) =>
+          antesDe === null
+            ? { itens: RECUPERACOES, proximo: 7 }
+            : { itens: [], proximo: null },
+        segurar: pagina.segurar,
+      }),
+    );
+    const carregarMais = await screen.findByRole("button", {
+      name: "Carregar mais",
+    });
+
+    acionar(carregarMais);
+    expect(carregarMais).toHaveTextContent("Carregando…");
+    await conferirIndisponivel(carregarMais, {
+      dica: DICAS.carregando,
+      semEfeito: () => expect(api.de("/recuperacoes")).toHaveLength(2),
+      css: CSS,
+    });
+    pagina.liberar();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /^(Carregar mais|Carregando…)$/ }),
+      ).toBeNull(),
+    );
+    expect(api.de("/recuperacoes")).toHaveLength(2);
+  });
+
+  it("diálogo do Recuperar, gravando: o foco não sai do diálogo, Cancelar e Gravar não fazem nada e o Esc não fecha", async () => {
+    const gravacao = trava(
+      ({ caminho, corpo }) =>
+        caminho.endsWith("/recuperar") &&
+        !(corpo as { simular: boolean }).simular,
+    );
+    const api = await abrir(criarApiFalsa({ segurar: gravacao.segurar }));
+    await escolher();
+    await esperarFocoNoResultado();
+    acionar(botao("Recuperar 3 vendas"));
+    const dialogo = await screen.findByRole("alertdialog", {
+      name: "Recuperar 3 vendas?",
+    });
+    const gravar = await within(dialogo).findByRole("button", {
+      name: "Gravar 2 vendas",
+    });
+    const cancelar = within(dialogo).getByRole("button", { name: "Cancelar" });
+    const fechar = within(dialogo).getByRole("button", { name: "Fechar" });
+    const gravacoes = () =>
+      api
+        .de("/recuperar")
+        .filter((chamada) => !(chamada.corpo as { simular: boolean }).simular);
+    /** Nada mudou: o diálogo continua aberto, com uma gravação só. */
+    const semEfeito = () => {
+      expect(screen.getByRole("alertdialog")).toBe(dialogo);
+      expect(gravacoes()).toHaveLength(1);
+    };
+
+    // Pelo teclado: Tab até o Gravar e Enter. O foco fica no botão (com o disabled, caía no <body>, fora do diálogo).
+    chegarPeloTab(gravar);
+    ativarPeloTeclado(gravar, "Enter");
+    expect(gravar).toHaveTextContent("Gravando…");
+    expect(gravacoes()).toHaveLength(1);
+    expect(gravar).toHaveFocus();
+    esperarIndisponivel(gravar);
+    esperarIndisponivel(cancelar);
+
+    // Tab e Shift+Tab dão a volta só dentro do diálogo e passam pelos dois indisponíveis: ×, Cancelar, Gravar.
+    expect([tab(), tab(), tab(), tab(true), tab(true), tab(true)]).toEqual([
+      fechar,
+      cancelar,
+      gravar,
+      cancelar,
+      fechar,
+      gravar,
+    ]);
+
+    await conferirIndisponivel(cancelar, {
+      dica: DICAS.gravando,
+      semEfeito,
+      css: CSS,
+    });
+    await conferirIndisponivel(gravar, {
+      dica: DICAS.gravando,
+      semEfeito,
+      css: CSS,
+    });
+
+    // Esc: com a dica aberta (pelo Tab), o primeiro fecha só a dica; o seguinte pede para fechar o diálogo, que
+    // ignora enquanto grava. O foco continua no Gravar. O × também é ignorado.
+    chegarPeloTab(gravar);
+    expect(dicaDe(gravar)).toHaveTextContent(DICAS.gravando);
+    fireEvent.keyDown(gravar, { key: "Escape" });
+    expect(dicaDe(gravar)).toBeNull();
+    semEfeito();
+    expect(gravar).toHaveFocus();
+    fireEvent.keyDown(gravar, { key: "Escape" });
+    semEfeito();
+    expect(gravar).toHaveFocus();
+    acionar(fechar);
+    semEfeito();
+    expect(dialogo).toContainElement(document.activeElement as HTMLElement);
+
+    // A gravação termina: o diálogo fecha e a tela mostra o resultado.
+    gravacao.liberar();
+    expect(await screen.findByText("2 vendas recuperadas")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(gravacoes()).toHaveLength(1);
   });
 });

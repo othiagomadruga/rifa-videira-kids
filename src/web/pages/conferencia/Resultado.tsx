@@ -437,6 +437,10 @@ function VendasPerdidas({
     .map((item) => item.pedido_id);
   const marcadas = recuperaveis.filter((codigo) => selecionados.has(codigo));
   const demais = marcadas.length > LIMITE_PEDIDOS_RECUPERAR;
+  // Nada marcado ou demais: o Recuperar fica indisponível com aria-disabled (RIFA-045), no Tab e com a dica; a frase
+  // acima dele diz por quê e o clique é barrado aqui. As caixas que não dá para marcar podem ficar disabled: o motivo
+  // já está escrito na tela.
+  const recuperarIndisponivel = marcadas.length === 0 || demais;
 
   let dica: string;
   if (!codigoConfere)
@@ -530,15 +534,17 @@ function VendasPerdidas({
       <div className="conferencia-acoes">
         <ComDica
           texto={
-            marcadas.length === 0 || demais
+            recuperarIndisponivel
               ? DICAS.recuperarIndisponivel
               : DICAS.recuperar
           }
         >
           <Button
-            disabled={marcadas.length === 0 || demais}
+            aria-disabled={recuperarIndisponivel || undefined}
             aria-describedby={idDica}
-            onClick={aoRecuperar}
+            onClick={() => {
+              if (!recuperarIndisponivel) aoRecuperar();
+            }}
           >
             {marcadas.length === 0
               ? "Recuperar"

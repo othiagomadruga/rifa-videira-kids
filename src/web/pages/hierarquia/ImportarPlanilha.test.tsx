@@ -1,9 +1,22 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   COLUNAS_CSV_HIERARQUIA,
   linhaCsvHierarquiaSchema,
 } from "../../../shared/contracts";
+import {
+  caraDeIndisponivel,
+  conferirIndisponivel,
+  esperarDisponivel,
+  esperarIndisponivel,
+  lerCss,
+} from "../../test/indisponivel";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import { LIMITE_ERROS_NA_TELA } from "./ImportarPlanilha";
 import {
@@ -13,6 +26,7 @@ import {
   respostaErro,
   type ApiFalsa,
 } from "./teste-apoio";
+import { DICAS } from "./textos";
 
 const IMPORTAR = "/api/admin/hierarquia/importar";
 const CABECALHO = COLUNAS_CSV_HIERARQUIA.join(";");
@@ -104,11 +118,11 @@ describe("CA3: modelo da planilha", () => {
 });
 
 describe("CA3: importação em 2 passos", () => {
-  it("antes de conferir, Conferir e Importar ficam desabilitados", async () => {
+  it("antes de conferir, Conferir e Importar ficam indisponíveis", async () => {
     await abrirImportacao();
 
-    expect(botao("Conferir")).toBeDisabled();
-    expect(botao("Importar")).toBeDisabled();
+    esperarIndisponivel(botao("Conferir"));
+    esperarIndisponivel(botao("Importar"));
     expect(botao("Importar")).toHaveAccessibleDescription(
       "Primeiro confira a planilha.",
     );
@@ -129,7 +143,7 @@ describe("CA3: importação em 2 passos", () => {
     const alerta = screen.getByRole("alert");
     expect(alerta).toHaveTextContent("O arquivo não está em UTF-8");
     expect(alerta).toHaveTextContent(/salve como CSV UTF-8/i);
-    expect(botao("Conferir")).toBeDisabled();
+    esperarIndisponivel(botao("Conferir"));
     expect(api.chamadasA("POST", IMPORTAR)).toHaveLength(0);
   });
 
@@ -139,11 +153,11 @@ describe("CA3: importação em 2 passos", () => {
     await escolherArquivo(arquivoCsv(" \r\n", "vazio.csv"));
 
     expect(screen.getByRole("alert")).toHaveTextContent("O arquivo está vazio");
-    expect(botao("Conferir")).toBeDisabled();
+    esperarIndisponivel(botao("Conferir"));
     expect(api.chamadasA("POST", IMPORTAR)).toHaveLength(0);
   });
 
-  it("Conferir chama a importação com simular=true e mostra o relatório com os erros; Importar continua desabilitado", async () => {
+  it("Conferir chama a importação com simular=true e mostra o relatório com os erros; Importar continua indisponível", async () => {
     const api = criarApiFalsa();
     api.proxima(
       "POST",
@@ -216,7 +230,7 @@ describe("CA3: importação em 2 passos", () => {
         'A célula "Célula Nova" já aparece na linha 2 com dados diferentes (qtd_pessoas)',
       ],
     ]);
-    expect(botao("Importar")).toBeDisabled();
+    esperarIndisponivel(botao("Importar"));
     expect(botao("Importar")).toHaveAccessibleDescription(
       "Corrija os erros da planilha e confira de novo.",
     );
@@ -250,7 +264,7 @@ describe("CA3: importação em 2 passos", () => {
     expect(
       await screen.findByText("Nenhum erro encontrado"),
     ).toBeInTheDocument();
-    expect(botao("Importar")).toBeEnabled();
+    esperarDisponivel(botao("Importar"));
     const leiturasAntes = api.chamadasA("GET", "/api/admin/celulas").length;
 
     fireEvent.click(botao("Importar"));
@@ -274,7 +288,7 @@ describe("CA3: importação em 2 passos", () => {
       ["Células", "1", "0", "0"],
     ]);
     // Não dá para importar duas vezes a mesma conferência.
-    expect(botao("Importar")).toBeDisabled();
+    esperarIndisponivel(botao("Importar"));
     await waitFor(() =>
       expect(api.chamadasA("GET", "/api/admin/celulas").length).toBe(
         leiturasAntes + 1,
@@ -315,10 +329,10 @@ describe("CA3: importação em 2 passos", () => {
       "Faltam colunas obrigatórias no cabeçalho (linha 1): qtd_pessoas",
     );
     await waitFor(() => expect(alerta.parentElement).toHaveFocus());
-    expect(botao("Importar")).toBeDisabled();
+    esperarIndisponivel(botao("Importar"));
   });
 
-  it("escolher outro arquivo recomeça: o relatório some e Importar desabilita", async () => {
+  it("escolher outro arquivo recomeça: o relatório some e Importar fica indisponível", async () => {
     const api = criarApiFalsa();
     api.proxima(
       "POST",
@@ -329,15 +343,15 @@ describe("CA3: importação em 2 passos", () => {
     await escolherArquivo(arquivoCsv(CSV, "primeiro.csv"));
     fireEvent.click(botao("Conferir"));
     await screen.findByRole("region", { name: "Resultado da conferência" });
-    expect(botao("Importar")).toBeEnabled();
+    esperarDisponivel(botao("Importar"));
 
     await escolherArquivo(arquivoCsv(CSV, "segundo.csv"));
 
     expect(
       screen.queryByRole("region", { name: "Resultado da conferência" }),
     ).not.toBeInTheDocument();
-    expect(botao("Importar")).toBeDisabled();
-    expect(botao("Conferir")).toBeEnabled();
+    esperarIndisponivel(botao("Importar"));
+    esperarDisponivel(botao("Conferir"));
   });
 
   it(`mostra no máximo ${LIMITE_ERROS_NA_TELA} erros e diz quantos são`, async () => {
@@ -368,5 +382,142 @@ describe("CA3: importação em 2 passos", () => {
         `Mostrando os primeiros ${LIMITE_ERROS_NA_TELA} de ${LIMITE_ERROS_NA_TELA + 5} erros.`,
       ),
     ).toBeInTheDocument();
+  });
+});
+
+// RIFA-045 (correção): Conferir e Importar indisponíveis ficam com aria-disabled, não disabled. Pelo teclado, eles
+// continuam no Tab e a dica diz por quê (com o disabled, o foco nunca chegava e a dica só abria com o mouse); o clique,
+// o Enter e o espaço não fazem nada; a cara continua a do disabled.
+describe("RIFA-045: Conferir e Importar indisponíveis, pelo teclado", () => {
+  /** A cara de indisponível vem do hierarquia.css (o Button.css só a dá ao disabled). */
+  const CSS = [
+    lerCss("components/ui/Button.css"),
+    lerCss("pages/hierarquia/hierarquia.css"),
+  ];
+
+  /** Foca e clica, como o Enter faz no navegador (o jsdom não foca no clique). */
+  function acionar(elemento: HTMLElement) {
+    act(() => elemento.focus());
+    fireEvent.click(elemento);
+  }
+
+  /** Uma resposta da API falsa que só chega com `liberar()`. */
+  function respostaSegura(resposta: Response) {
+    let liberar = () => {};
+    const responder = () =>
+      new Promise<Response>((resolver) => {
+        liberar = () => resolver(resposta);
+      });
+    return { responder, liberar: () => liberar() };
+  }
+
+  it("sem arquivo: os dois recebem o foco pelo Tab, mostram por quê e não chamam a API (clique, Enter, espaço)", async () => {
+    const api = await abrirImportacao();
+    const semChamar = () =>
+      expect(api.chamadasA("POST", IMPORTAR)).toHaveLength(0);
+
+    await conferirIndisponivel(botao("Conferir"), {
+      dica: DICAS.conferirIndisponivel,
+      semEfeito: semChamar,
+      css: CSS,
+    });
+    const importar = botao("Importar");
+    await conferirIndisponivel(importar, {
+      dica: DICAS.importar,
+      semEfeito: semChamar,
+      css: CSS,
+    });
+    // O motivo continua na descrição, antes da dica aberta pelo teclado.
+    expect(importar).toHaveAccessibleDescription(
+      `Primeiro confira a planilha. ${DICAS.importar}`,
+    );
+  });
+
+  it("conferência com erros: Importar não grava, nem pelo teclado", async () => {
+    const api = criarApiFalsa();
+    api.proxima(
+      "POST",
+      IMPORTAR,
+      respostaJson(
+        relatorio({
+          simulado: true,
+          total_linhas: 2,
+          erros: [
+            { linha: 2, coluna: "qtd_pessoas", mensagem: "Use um número" },
+          ],
+        }),
+      ),
+    );
+    await abrirImportacao(api);
+    await escolherArquivo(arquivoCsv(CSV));
+    fireEvent.click(botao("Conferir"));
+    const resultado = await screen.findByRole("region", {
+      name: "Resultado da conferência",
+    });
+    await waitFor(() => expect(resultado).toHaveFocus());
+
+    await conferirIndisponivel(botao("Importar"), {
+      dica: DICAS.importar,
+      semEfeito: () =>
+        expect(api.chamadasA("POST", IMPORTAR).map((c) => c.corpo)).toEqual([
+          { csv: CSV, simular: true },
+        ]),
+      css: CSS,
+    });
+  });
+
+  it("conferindo e importando: o botão fica com o foco, diz por quê e não manda de novo", async () => {
+    const api = criarApiFalsa();
+    const contagem = {
+      total_linhas: 1,
+      criados: { redes: 0, discipuladores: 0, celulas: 1 },
+      inalterados: { redes: 1, discipuladores: 1, celulas: 0 },
+    };
+    const conferencia = respostaSegura(
+      respostaJson(relatorio({ ...contagem, simulado: true })),
+    );
+    const importacao = respostaSegura(
+      respostaJson(relatorio({ ...contagem, simulado: false, aplicado: true })),
+    );
+    api.proxima("POST", IMPORTAR, conferencia.responder);
+    api.proxima("POST", IMPORTAR, importacao.responder);
+    const simulares = () =>
+      api
+        .chamadasA("POST", IMPORTAR)
+        .map((chamada) => (chamada.corpo as { simular: boolean }).simular);
+    await abrirImportacao(api);
+    await escolherArquivo(arquivoCsv(CSV));
+
+    const conferir = botao("Conferir");
+    acionar(conferir);
+    expect(conferir).toHaveTextContent("Conferindo…");
+    await conferirIndisponivel(conferir, {
+      dica: DICAS.conferirIndisponivel,
+      semEfeito: () => expect(simulares()).toEqual([true]),
+      css: CSS,
+    });
+    conferencia.liberar();
+    const resultado = await screen.findByRole("region", {
+      name: "Resultado da conferência",
+    });
+    await waitFor(() => expect(resultado).toHaveFocus());
+    esperarDisponivel(conferir);
+    expect(caraDeIndisponivel(conferir, ...CSS)).toBeNull();
+
+    const importar = botao("Importar");
+    esperarDisponivel(importar);
+    expect(caraDeIndisponivel(importar, ...CSS)).toBeNull();
+    acionar(importar);
+    expect(importar).toHaveTextContent("Importando…");
+    await conferirIndisponivel(importar, {
+      dica: DICAS.importar,
+      semEfeito: () => expect(simulares()).toEqual([true, false]),
+      css: CSS,
+    });
+    importacao.liberar();
+    expect(
+      await screen.findByRole("region", { name: "Resultado da importação" }),
+    ).toBeInTheDocument();
+    expect(simulares()).toEqual([true, false]);
   });
 });
