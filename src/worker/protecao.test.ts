@@ -33,6 +33,7 @@ import {
   ROTAS_ACESSO,
   ROTAS_ACESSO_HIERARQUIA,
   ROTAS_REGRAS_CAMPANHA,
+  ROTAS_RELATORIO,
   ROTAS_TOKEN_WEBHOOK,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
@@ -107,13 +108,17 @@ interface RotaDaCoordenacao {
 /**
  * Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao, ou os `papeis` da rota quando ela é mais
  * restrita, como a auditoria e as regras da campanha), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria
- * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin) e ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin).
+ * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin) e
+ * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação). O relatório entra aqui já no contrato: sem `papeis`, ele passa
+ * nos três testes mesmo antes de montado (sem cookie, o login do prefixo dá 401; com sessão, o 404 do caminho sem rota
+ * "passa"), e a -api, no merge que monta a rota, confere que ela está registrada no app (teste abaixo).
  */
 const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
   ...[
     ...Object.values(ROTAS),
     ...Object.values(ROTAS_REGRAS_CAMPANHA),
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
+    ...Object.values(ROTAS_RELATORIO),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -207,6 +212,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_ACESSO_HIERARQUIA),
     ...Object.values(ROTAS_REGRAS_CAMPANHA),
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
+    ...Object.values(ROTAS_RELATORIO),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -229,8 +235,9 @@ describe("a) toda rota da coordenação exige sessão", () => {
   it("o contrato tem as rotas esperadas da coordenação (o filtro não ficou vazio)", () => {
     // 24 de ROTAS + 6 de ROTAS_ACESSO (5 só de admin e o GET /api/sessao) na Sprint 2; a auditoria (só admin)
     // na Sprint 4; as 2 de ROTAS_ACESSO_HIERARQUIA (só admin) na Sprint 5; as 3 de ROTAS_REGRAS_CAMPANHA (só
-    // admin) na Sprint 6; as 2 de ROTAS_TOKEN_WEBHOOK (só admin) na RIFA-039.
-    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(38);
+    // admin) na Sprint 6; as 2 de ROTAS_TOKEN_WEBHOOK (só admin) na RIFA-039; a de ROTAS_RELATORIO (admin e
+    // coordenação) na RIFA-038.
+    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(39);
     expect(
       ROTAS_DA_COORDENACAO.filter(
         (rota) => !rota.papeis.includes("coordenacao"),
@@ -252,6 +259,15 @@ describe("a) toda rota da coordenação exige sessão", () => {
       ).toEqual(["admin"]);
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
     }
+    // O relatório (D23) está no filtro, para admin e coordenação. "Montado no app" entra com a -api (RIFA-038-api):
+    // expect(registradas).toContain("GET /api/painel/relatorio").
+    expect(
+      ROTAS_DA_COORDENACAO.find(
+        (item) =>
+          item.metodo === "GET" &&
+          item.caminho === ROTAS_RELATORIO.baixarRelatorio.caminho,
+      )?.papeis,
+    ).toEqual(["admin", "coordenacao"]);
   });
 
   it.each(casos(ROTAS_DA_COORDENACAO))(

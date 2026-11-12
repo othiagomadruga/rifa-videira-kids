@@ -57,6 +57,7 @@ import {
   MOTIVOS_DESCONSIDERACAO,
   observacaoTemContato,
 } from "./regras";
+import { BOM_UTF8, TIPOS_RELATORIO, TIPO_CONTEUDO_CSV } from "./relatorio";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
 import {
   CREDENCIAIS_WEBHOOK,
@@ -2115,6 +2116,11 @@ export interface DefinicaoRota {
   readonly sucesso: {
     readonly status: 200 | 201 | 204;
     readonly corpo: z.ZodType | null;
+    /**
+     * Content-Type do corpo quando ele não é JSON: o relatório em CSV (RIFA-038, D23; ROTAS_RELATORIO). Ausente =
+     * JSON. Os erros continuam em JSON, no formato único.
+     */
+    readonly tipoConteudo?: typeof TIPO_CONTEUDO_CSV;
   };
   /**
    * Papéis aceitos quando a rota é mais restrita que o grupo (ex.: `["admin"]` na auditoria). Ausente =
@@ -2639,3 +2645,53 @@ export const ROTAS_TOKEN_WEBHOOK = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRotaTokenWebhook = keyof typeof ROTAS_TOKEN_WEBHOOK;
+
+// ---------------------------------------------------------------------------------------------------
+// Relatório da campanha para baixar (RIFA-038, D23; admin e coordenação): GET /api/painel/relatorio?tipo=..., em CSV.
+// Tipos, colunas, formato dos números e o arquivo em ./relatorio (sem zod, para o site).
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Consulta do relatório. `tipo` é obrigatório (sem padrão): totais, celulas, discipuladores, redes, periodos, dias ou
+ * ddd. Não há `data`: o relatório é sempre o retrato de agora (hoje no fuso da campanha), como as rotas abertas; um
+ * `data` na URL é ignorado, como qualquer outro parâmetro desconhecido.
+ */
+export const consultaRelatorioSchema = z.object({
+  tipo: z.enum(TIPOS_RELATORIO),
+});
+export type ConsultaRelatorio = z.output<typeof consultaRelatorioSchema>;
+
+/**
+ * Corpo da resposta 200: o texto do CSV (`montarCsvRelatorio` de ./relatorio), que sempre começa pelo BOM do UTF-8.
+ * Não é JSON: `Content-Type: text/csv; charset=utf-8` (`tipoConteudo` do catálogo).
+ */
+export const respostaRelatorioCsvSchema = z.string().startsWith(BOM_UTF8);
+
+/**
+ * Relatório da campanha (RIFA-038, D23). Catálogo à parte de ROTAS até a -api montar a rota, como
+ * ROTAS_REGRAS_CAMPANHA: o protecao.test.ts já o percorre (401 sem sessão, a coordenação e o admin passam, a
+ * hierarquia leva 403 pelo prefixo), e a -api, no merge que monta a rota, confere que ela está registrada no app.
+ *
+ * Do grupo `coordenacao`, sem `papeis` (admin e coordenação, como o painel e o mapa): tem R$, por isso nunca é aberta
+ * nem da hierarquia. Sob /api/painel, montada no sub-app do painel (routes/painel.ts), que já marca `no-store`.
+ *
+ * 200: o CSV de `tipo` com os cabeçalhos de `cabecalhosDoRelatorio` (Content-Type, Content-Disposition com o nome
+ * `rifa-videira-kids-<tipo>-<data>.csv` e `Cache-Control: no-store`). Erros em JSON: 400 `requisicao_invalida`
+ * (tipo ausente ou fora da lista), 401, 403 (papéis da hierarquia) e 404 `nao_encontrado` (sem campanha ativa).
+ */
+export const ROTAS_RELATORIO = {
+  baixarRelatorio: {
+    metodo: "GET",
+    caminho: "/api/painel/relatorio",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    consulta: consultaRelatorioSchema,
+    sucesso: {
+      status: 200,
+      corpo: respostaRelatorioCsvSchema,
+      tipoConteudo: TIPO_CONTEUDO_CSV,
+    },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaRelatorio = keyof typeof ROTAS_RELATORIO;

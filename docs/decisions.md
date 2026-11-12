@@ -882,3 +882,177 @@ terminal, e a publicação só acontecia por push na `main`.
   (33 a 37) em parte das rodadas: ali o relógio de parede não separa o Worker da disputa pelos núcleos. Os outros
   `*-desempenho.test.ts` não mudam: o do painel e o da visão individual só registram o tempo no log (as travas
   deles são de trabalho e de linhas lidas), e o do mapa por DDD e o dos pedidos e do webhook medem `rows_read`.
+
+## D23. Relatório da campanha para baixar, em CSV (RIFA-038; contrato, 2026-11-12)
+
+No fim da campanha (e a qualquer momento durante ela), a coordenação quer baixar um relatório para guardar, prestar
+contas e mostrar o resultado: por célula, por discipulador e por rede, por período e por dia, os totais da campanha
+e, se fosse barato, o mapa por DDD. Contrato em `src/shared/contracts/relatorio.ts` (sem zod: tipos, colunas, formato
+dos números, proteção contra fórmula, o arquivo, o nome e os cabeçalhos) e `api.ts` (`consultaRelatorioSchema`,
+`respostaRelatorioCsvSchema` e o catálogo `ROTAS_RELATORIO`); testes em `relatorio.test.ts`.
+
+- **Formato: CSV feito para o Excel em português.** UTF-8 **com BOM**, **`;`** entre as colunas, **vírgula** decimal,
+  fim de linha **CRLF** (também depois da última linha) e aspas só quando precisa (`;`, aspas, quebra de linha ou
+  espaço nas pontas; aspas internas dobradas). Por quê:
+  - o Excel em português abre o CSV com dois cliques pelo separador de lista do Windows, que lá é `;` (a vírgula é o
+    decimal); sem o BOM, ele lê o arquivo como Windows-1252 e quebra os acentos ("CÃ©lula"). É o formato do modelo
+    da planilha da hierarquia (`public/modelos/hierarquia-modelo.csv`), que a coordenação já usou;
+  - no Google Planilhas: Arquivo → Importar → Fazer upload, separador "Detectar automaticamente"; numa planilha com
+    a localidade Brasil (o padrão de uma conta em português), `1234,56` vira número. No Excel em inglês: Dados → De
+    Texto/CSV, escolhendo `;`;
+  - sem a linha `sep=;`: o Google Planilhas a mostraria como dado e, com ela, o Excel deixa de olhar o BOM;
+  - XLSX ou ZIP pediriam dependência nova; um arquivo só, com seções, quebraria o filtro e a ordenação da planilha
+    (colunas diferentes na mesma folha).
+- **Números** (executáveis em `relatorio.ts`): quantidades só com os dígitos, sem separador de milhar (`1234`); R$ em
+  reais com vírgula e sempre 2 casas, sem "R$" e sem milhar (`1234,56`; o título da coluna diz "(R$)"), montados
+  por texto a partir dos centavos, sem float (D2); percentuais a partir dos pontos-base já truncados (R11), com 2
+  casas e sem "%" (`38,61`; acima da meta passa de 100; sem meta, a célula fica vazia); a meta na unidade da
+  campanha, com o título "Meta (bilhetes)" ou "Meta (R$)"; datas em `AAAA-MM-DD` (sem ambiguidade de dia e mês em
+  nenhum idioma; as planilhas em português as reconhecem como data e mostram 23/11/2026). Sem separador de milhar
+  porque `1.234` vira 1,234 numa planilha em inglês, e `1234` é número em qualquer uma. Negativo, fração ou data
+  fora do formato é erro de programação (`RangeError`): o relatório não tem número negativo.
+- **Uma rota, um arquivo por tipo**: `GET /api/painel/relatorio?tipo=totais|celulas|discipuladores|redes|periodos|dias|ddd`.
+  `tipo` é obrigatório (400 sem ele). **Sem `data`**: o relatório é sempre o retrato de agora (hoje no fuso da
+  campanha); depois do fim, é o resultado final. Os tipos, as colunas (chaves, títulos e ordem) e os textos fixos
+  são constantes exportadas: `TIPOS_RELATORIO`, `COLUNAS_RELATORIO`, `TITULOS_COLUNAS_RELATORIO`,
+  `cabecalhoDoRelatorio(tipo, unidade)`, `TEXTO_FASE_RELATORIO`, `TEXTO_CRITERIO_RELATORIO`,
+  `LINHA_EXTERIOR_RELATORIO` e `LINHA_SEM_DDD_RELATORIO`.
+- **Proteção contra injeção de fórmula.** Os nomes da campanha e da hierarquia são digitados ou importados pela
+  coordenação (`nomeSchema` só corta os espaços): uma célula chamada `=HYPERLINK("https://site.example";"clique")`
+  seria executada por quem abrisse o arquivo. Toda célula do arquivo passa por `celulaCsv`, dentro de
+  `montarCsvRelatorio`: texto que começa com `=`, `+`, `-` ou `@` (ou as formas de largura total ＝ ＋ － ＠), mesmo
+  depois de espaços, ou com tabulação ou retorno de carro, ganha um apóstrofo na frente, e a planilha o mostra como
+  texto (o apóstrofo pode aparecer na célula: é o preço). É a mesma família de sinais que a conferência trata como
+  fórmula ao LER o CSV da Rifei (`pareceFormula`, D19), mais estrita: o `-` seguido de número também conta, porque
+  os números do arquivo saem dos formatadores (só dígitos e vírgula) e nunca começam com sinal. Como a proteção vale
+  para toda célula, inclusive as numéricas (que ela nunca muda, testado), a rota não tem como esquecê-la. O `|` do
+  DDE (`=cmd|' /C calc'!A0`, `@SUM(1+1)*cmd|...`) só é executado numa célula que já começa como fórmula, e essas a
+  proteção pega; sozinho ou no meio do texto, nem o Excel nem o Google Planilhas o executam, então ele não muda
+  (testado). Um nome que já começa com apóstrofo também não muda.
+- **Papéis**: grupo `coordenacao`, **sem `papeis`** (admin e coordenação, como o painel e o mapa), sob `/api/painel`:
+  tem R$, então nunca é aberta nem da hierarquia (403 pelo login do prefixo, D12).
+- **Cabeçalhos** (`cabecalhosDoRelatorio(tipo, data)`): `Content-Type: text/csv; charset=utf-8`,
+  `Content-Disposition: attachment; filename="rifa-videira-kids-<tipo>-<data>.csv"` (data de referência = hoje no
+  fuso da campanha; só ASCII, sem `filename*`) e `Cache-Control: no-store`. Os de segurança (com `nosniff`) vêm do
+  middleware de sempre. Os erros continuam em JSON, no formato único.
+- **Catálogo à parte**, `ROTAS_RELATORIO`, como o `ROTAS_REGRAS_CAMPANHA` (a `main` continua verde sem a rota). Desta
+  vez ele já entra no `ROTAS_DA_COORDENACAO` do `src/worker/protecao.test.ts` com o contrato: sem `papeis`, os três
+  testes passam antes da montagem (sem cookie, 401 do login do prefixo; com sessão, o 404 do caminho sem rota
+  "passa") e passam depois dela. A -api acrescenta a conferência de que a rota está registrada no app.
+  `DefinicaoRota.sucesso` ganhou `tipoConteudo` (opcional; ausente = JSON): o corpo 200 é o texto do CSV
+  (`respostaRelatorioCsvSchema`, que exige o BOM).
+
+**Colunas e a fonte de cada uma.** Tudo vem das leituras e dos montadores que o painel e o mapa já usam, com o
+mesmo `agora` (uma chamada ao relógio). `lido` = `lerEntradaDoCalculo(db, relogio)` (escopo campanha, sem `data`).
+
+| Tipo | Linhas | Colunas, na ordem (fonte) |
+|---|---|---|
+| `totais` | uma | Do `resumo = montarResumoPainel(lido.entrada, { escopo: lido.escopo }, lido.agora)`: Campanha (`resumo.escopo.nome`), Data de referência (`resumo.referencia.data`), Situação da campanha (`TEXTO_FASE_RELATORIO[resumo.referencia.fase]`), Início e Fim (`resumo.referencia.data_inicio` e `data_fim`), Meta (`resumo.campanha.meta`, na `resumo.unidade`), Pedidos aprovados, Bilhetes e Arrecadação (`resumo.vendas`: na janela até hoje, com as sem célula), % da meta (`resumo.campanha.percentual_meta_bp`), Pedidos, Bilhetes e Arrecadação sem célula (`resumo.vendas_sem_celula`), Pedidos, Bilhetes e Arrecadação fora das datas da campanha (`resumo.vendas_fora_da_janela`: antes do início + depois do fim), Pedidos desconsiderados (a contagem abaixo). Fora do resumo (o `campanha` dele é o ritmo, sem o critério): Critério do ranking (`TEXTO_CRITERIO_RELATORIO[lido.entrada.campanha.ranking.criterio]`) |
+| `celulas` | uma por célula | Divisão (`NOMES_DIVISAO[item.divisao]`), Rede (`item.rede.nome`), Discipulador (`item.discipulador.nome`), Célula (`item.nome`), Líder (`lider_nome`, consulta abaixo), Meta (`item.meta`), Pedidos aprovados, Bilhetes e Arrecadação (`item.vendas`), % da meta (`item.percentual_meta_bp`), Posição na divisão (`item.posicao`) |
+| `discipuladores` | uma por discipulador com célula | as mesmas, sem Célula e Líder; Rede = `item.rede.nome`, Discipulador = `item.nome` |
+| `redes` | uma por rede com célula | as mesmas, sem Discipulador; Rede = `item.nome` |
+| `periodos` | uma por período já começado (`data_inicio` ≤ hoje) | Período (nome), Início e Fim (as datas de `calcularCalendario`, mesmo com o período em andamento), Pedidos aprovados, Bilhetes e Arrecadação: soma de `lido.entrada.vendas` (todas as células e as sem célula) de `data_inicio` até `min(data_fim, hoje)` |
+| `dias` | uma por dia, do 1º até `min(último dia, hoje)` (hoje, parcial; dia sem venda, zerado) | Data, Dia da campanha (1 = 1º dia), Período (o nome do que contém o dia), Pedidos aprovados, Bilhetes e Arrecadação do dia |
+| `ddd` | uma por DDD com venda, na ordem do mapa, mais "Exterior" e "Sem DDD" (DDD vazio; sempre, mesmo zeradas) | UF, DDD, Pedidos aprovados (`pedidos_aprovados`), Bilhetes, Arrecadação (`total_centavos`) e % dos bilhetes (`parte_bilhetes_bp`). De `lerMapaDdd(db, relogio, { periodo: "campanha" })` e `montarMapaDdd` sem divisão: o mesmo que `/api/painel/mapa-ddd?periodo=campanha`. A data do nome do arquivo é o `hojeNoFuso(fuso, agora)` que `lerMapaDdd` já calcula: ela passa a devolvê-lo (`hoje`), sem ida a mais. O cabeçalho do `ddd` não tem meta: `cabecalhoDoRelatorio("ddd", unidade)` sai igual com qualquer unidade |
+
+- Célula, discipulador e rede: para cada divisão em `ORDEM_DIVISOES` (jovens, depois adultos),
+  `montarRankingPainel(lido.entrada, { nivel, divisao, periodo: "campanha" }, lido.agora)`, uma linha por item, na
+  ordem do ranking. A posição é a do ranking DA DIVISÃO, na janela da campanha inteira (do 1º dia até hoje), pelo
+  critério configurado (que está nos totais); empates dividem a posição (1, 1, 3) e, no critério % da meta, quem
+  está sem meta vai para o fim (R8). Entram todas as instâncias, inclusive as que não venderam; discipulador ou
+  rede sem nenhuma célula não aparece (R8).
+- **Pedidos desconsiderados** (só nos totais): `SELECT count(*) FROM pedidos WHERE campanha_id = ? AND
+  desconsiderado_em IS NOT NULL`, de qualquer status. Só o número: nem ids, nem motivo, nem quem desconsiderou.
+- **Líder** (só em `celulas`): `SELECT id, lider_nome FROM celulas`. Só o nome, como na hierarquia; nunca
+  `lider_telefone` nem `lider_email`.
+- **As contas fecham** (e a -api testa): a soma dos períodos = a soma dos dias = os totais; a soma das células + as sem
+  célula = os totais; a soma das células de um discipulador e de uma rede = a linha dele; a soma do `ddd` (com
+  Exterior e Sem DDD) = os totais (pedidos, bilhetes e R$).
+
+**Orçamento do D1 (D10)**, com o volume de `painel-desempenho.test.ts` (6.939 pedidos aprovados, 36 células, 24 dias:
+o painel lê 8.876 linhas, 1,28 por pedido aprovado) e o de `mapa-ddd-desempenho.test.ts` (D17):
+
+| Tipo | Leitura | Linhas lidas por download (ordem de grandeza) |
+|---|---|---|
+| `totais` | `lerEntradaDoCalculo` + a contagem dos desconsiderados, no mesmo lote | ~9 mil (~1,3 por pedido aprovado) + ~1 por desconsiderado (índice parcial de cobertura `pedidos_desconsiderados_por_registro`, 0008) |
+| `celulas` | `lerEntradaDoCalculo` + os líderes, no mesmo lote | ~9 mil + ~36 (uma por célula) |
+| `discipuladores`, `redes`, `periodos`, `dias` | `lerEntradaDoCalculo` | ~9 mil |
+| `ddd` | `lerMapaDdd` (campanha inteira) | ~11 mil (~2 por pedido aprovado; 10.925 medido na D17) |
+
+Duas idas ao D1 por download em todos os tipos (a campanha ativa e um lote), sem N+1, sem cache e sem atualização
+automática: só quando alguém aperta o botão. Baixar os 7 tipos custa ~65 mil linhas, ~1,3% dos 5 milhões diários do
+plano Free. Nenhum índice novo. CPU: `celulas`, `discipuladores` e `redes` chamam o montador do ranking duas vezes
+(uma por divisão; ~2 a 4 ms cada, medido no painel), dentro do plano Paid que a conferência já exige (D19).
+
+**Na tela.** Visão geral (`/coordenacao`), num cartão "Relatório da campanha" no fim da página, para admin e
+coordenação: um seletor "O que baixar" com os 7 tipos, na ordem de `TIPOS_RELATORIO` (rótulos sugeridos: "Totais da
+campanha", "Por célula", "Por discipulador", "Por rede", "Por período", "Por dia", "Por DDD"), e o botão "Baixar
+relatório". Por quê a Visão geral: é a tela de entrada da coordenação e a do resultado da campanha; os Rankings
+mostram uma janela (a semana ou a campanha) e um nível por vez, e o relatório não segue esses filtros.
+
+### OBRIGATÓRIO NA IMPLEMENTAÇÃO
+
+1. **Exclusão do desconsiderado (D20).** Os pedidos vêm SÓ das leituras que já excluem o desconsiderado
+   (`selecionarVendasPorDia` e `SELECIONAR_VENDAS` de `db/painel.ts`, por `lerEntradaDoCalculo`; `comandoMapaDdd` de
+   `db/mapa-ddd.ts`, por `lerMapaDdd`). Nenhuma consulta nova soma pedidos; a única que lê desconsiderados é a
+   contagem, e só conta. Teste: um pedido aprovado e desconsiderado, de uma célula e com DDD, não aparece em nenhum
+   dos 7 tipos (célula, discipulador, rede, período, dia, DDD e totais) e entra em "Pedidos desconsiderados";
+   reconsiderado, volta a todos.
+2. **Nada pessoal.** Do comprador, só o DDD agregado (o banco não tem mais nada, D1); da hierarquia, só os nomes
+   (`lider_nome`, nunca `lider_telefone` nem `lider_email`; o `SELECT` lê só `id, lider_nome`); nenhum id de pedido,
+   `affiliate_id`, nome de usuário ou de quem desconsiderou. Teste de varredura: com telefone e e-mail nos líderes e
+   ids de pedido e de afiliado reconhecíveis no banco, nenhum dos 7 arquivos contém nenhum deles.
+3. **Proteção de fórmula.** O arquivo sai SÓ de `montarCsvRelatorio(cabecalhoDoRelatorio(tipo, unidade), linhas)` e
+   os números SÓ dos formatadores (`formatarInteiroCsv`, `formatarCentavosCsv`, `formatarPercentualBpCsv`,
+   `formatarMetaCsv` e `formatarDataCsv`); nada de juntar texto à mão nem de `String(numero)`. Teste: campanha,
+   rede, discipulador, célula e líder com nomes `=1+1`, `+Vida`, `-x` e `@x` saem com o apóstrofo, e um nome com `;`
+   e aspas sai entre aspas, lido de volta igual por `lerCsv` (`src/shared/csv.ts`).
+4. **Orçamento (D10).** Duas idas ao D1 por download em todos os tipos: os comandos a mais (líderes, contagem) vão no
+   lote de `lerEntradaDoCalculo` (`comandosExtras`, como a visão individual). Hoje `comandosExtras` não recebe o id
+   da campanha: passe-o (`(db, campanhaId) => ...`, mudança pequena) ou use a subconsulta da campanha ativa (índice
+   `campanhas_uma_ativa`), o que der o plano certo. Travar, como em `painel-desempenho.test.ts` e
+   `mapa-ddd-desempenho.test.ts`, as idas e as linhas lidas (`meta.rows_read`) por tipo, com o volume sintético
+   (~1,3 por pedido aprovado nos seis tipos do painel; ~2 no `ddd`), e o plano da contagem com `EXPLAIN QUERY PLAN`
+   (`COVERING INDEX pedidos_desconsiderados_por_registro`). Nenhum índice novo e nenhum plano do painel muda.
+5. **Proteção** (`src/worker/protecao.test.ts`): `ROTAS_RELATORIO` já está em `ROTAS_DA_COORDENACAO` (este
+   contrato). No merge que monta a rota, a -api acrescenta, no primeiro teste da seção a), que `GET
+   /api/painel/relatorio` está registrada no app; a hierarquia leva 403 pelo prefixo, como hoje.
+6. **Rota** (-api): no sub-app do painel (`routes/painel.ts`, `local(ROTAS_RELATORIO.baixarRelatorio.caminho)`, com
+   `validarConsulta`), que já marca `no-store` inclusive nos erros. 200 com o CSV e TODOS os cabeçalhos de
+   `cabecalhosDoRelatorio(tipo, referencia.data)` (`c.body(csv, 200, cabecalhos)`); 400 `requisicao_invalida` sem
+   `tipo` ou fora da lista; 404 `nao_encontrado` sem campanha ativa (antes de montar qualquer coisa). As linhas
+   de cada tipo, pela tabela acima, num módulo puro (`lib/relatorio.ts`) testado sem banco, e as contas que fecham
+   (acima) testadas com o cenário do painel (`src/worker/test/painel-apoio.ts`).
+7. **Site** (-web): o cartão da Visão geral (acima). O download por `fetch` (mesma origem, com o cookie) → `Blob` →
+   link temporário com `download` = o nome do `Content-Disposition` (sem ele, `rifa-videira-kids-<tipo>.csv`) e
+   `URL.revokeObjectURL` depois; o `lib/api.ts` ganha uma função para arquivo com o mesmo tratamento de erro e de
+   401 do `requisitarJson`. Erros no formato único: 404 "A campanha ainda não foi configurada"; 401 leva à sessão,
+   como hoje. Um download por vez (o botão fica desabilitado enquanto baixa). Tipos e nome do arquivo vêm de
+   `src/shared/contracts/relatorio` (sem zod), nunca do index; o caminho da rota é uma cópia conferida pelo teste de
+   contrato da pasta, como nas outras telas (docs/frontend.md). Conferir no navegador de verdade (`npm run dev`,
+   também no celular) que o arquivo baixa com o nome certo e abre no Excel e no Google Planilhas com acentos,
+   colunas e números certos. Docs: a Visão geral em `docs/frontend.md`.
+
+**Suposições** (decisões do contrato, simples e reversíveis):
+
+1. CSV `;` com BOM, vírgula decimal e datas `AAAA-MM-DD` (acima); nada de XLSX.
+2. Sem `data`: sempre o retrato de agora; um relatório "do fim de um dia passado" fica para quando pedirem (`data`
+   opcional, como no painel, é compatível).
+3. A posição é a do ranking da divisão na campanha inteira até hoje, pelo critério configurado; não a da semana.
+4. "Pedidos desconsiderados" conta os de todos os status da campanha ativa, sem separar por motivo.
+5. Colunas além das pedidas: "Pedidos aprovados" em todos os tipos e, nos totais, as vendas sem célula e as fora das
+   datas da campanha (as mesmas do painel), para as contas fecharem com a Rifei e entre os arquivos.
+6. Períodos e dias só até hoje (o de hoje, parcial); os futuros não aparecem zerados.
+7. O mapa por DDD entra (`ddd`): reaproveita a consulta do mapa (D17), ~11 mil linhas por download.
+8. Os totais vêm numa linha só, com as colunas como os outros tipos (não numa lista "Item; Valor").
+9. O apóstrofo da proteção pode aparecer na célula de um nome que começa com `+`, `-`, `=` ou `@` (ex.: "+Vida").
+
+**Perguntas ao PO** (com a opção que o contrato assumiu, reversível):
+
+1. O CSV abre com dois cliques no Excel em português e pelo menu Importar no Google Planilhas. Serve, ou precisa de
+   um arquivo do Excel (.xlsx), que pede uma biblioteca nova? (Assumido: CSV.)
+2. A "Posição na divisão" vale a campanha inteira, pelo critério configurado. Querem também a posição da semana?
+   (Assumido: só a da campanha.)
+3. Os pedidos desconsiderados aparecem só como um número. Querem separados por motivo (teste, fraude, estorno,
+   outro)? (Assumido: só o total.)
+4. Na planilha por rede, incluir o nome do responsável (pastor)? (Assumido: não, só o que foi pedido.)
