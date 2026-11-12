@@ -1,3 +1,5 @@
+// Primeiro de tudo: o zod sem eval, antes de o contrato criar os schemas (RIFA-044).
+import "./zod-sem-eval";
 import { useEffect, useState } from "react";
 import type { Campanha } from "../../../shared/contracts";
 import { ErrorState, Loading } from "../../components/ui";
