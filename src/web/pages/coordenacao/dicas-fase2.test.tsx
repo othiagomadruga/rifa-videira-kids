@@ -383,7 +383,12 @@ describe("Conferência", () => {
       }),
     );
     await escolher();
-    acionar(botao(/^Recuperar \d+ vendas?$/));
+    // O título do resultado recebe o foco num efeito: espera, senão ele chega depois e vira quem abriu o diálogo.
+    await waitFor(() =>
+      expect(screen.getByText("Resultado da conferência")).toHaveFocus(),
+    );
+    const recuperar = botao(/^Recuperar \d+ vendas?$/);
+    acionar(recuperar);
     const dialogo = await screen.findByRole("alertdialog", {
       name: /^Recuperar/,
     });
@@ -393,6 +398,9 @@ describe("Conferência", () => {
     fireEvent.click(within(dialogo).getByRole("button", { name: /^Gravar/ }));
     await screen.findByText(/vendas? recuperadas?$/);
     expect(botao("Fechar aviso")).toBeInTheDocument();
+    // O `inert` do resto da página sai num efeito do Dialogo, que também devolve o foco a quem o abriu e pode rodar
+    // depois de o findBy voltar: sob carga, a varredura via a página toda inert e não contava nenhum controle.
+    await waitFor(() => expect(recuperar).toHaveFocus());
     conferirDicas(20);
   });
 });
