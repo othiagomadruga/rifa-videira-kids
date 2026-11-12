@@ -29,8 +29,11 @@
   align-self: stretch;
 }
 
+/* A URL e o token cabem numa linha no computador e em duas no celular: onde o navegador sabe ajustar o campo ao
+   texto (field-sizing), ele fica do tamanho do texto; nos outros, valem as linhas (rows) do campo. */
 .acessos-webhook__campo .acessos-url {
-  min-height: 0;
+  min-height: var(--alvo-toque);
+  field-sizing: content;
 }
 
 .acessos-webhook__acao {

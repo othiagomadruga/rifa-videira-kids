@@ -254,16 +254,21 @@ describe("CA3: a geração direta mostra o token uma vez", () => {
       within(painel()).getByRole("button", { name: "Copiar token" }),
     );
     await waitFor(() => expect(copiar).toHaveBeenCalledWith(token));
-    expect(anuncio()).toBe(
-      "Token copiado. Cole no campo Token do webhook na Rifei.",
+    // O anúncio vem de um estado mudado depois da área de transferência responder: espera (docs/frontend.md).
+    await waitFor(() =>
+      expect(anuncio()).toBe(
+        "Token copiado. Cole no campo Token do webhook na Rifei.",
+      ),
     );
 
     fireEvent.click(
       within(painel()).getByRole("button", { name: "Copiar URL" }),
     );
     await waitFor(() => expect(copiar).toHaveBeenLastCalledWith(URL_WEBHOOK));
-    expect(anuncio()).toBe(
-      "URL copiada. Cole no campo URL do webhook na Rifei.",
+    await waitFor(() =>
+      expect(anuncio()).toBe(
+        "URL copiada. Cole no campo URL do webhook na Rifei.",
+      ),
     );
   });
 
@@ -287,7 +292,9 @@ describe("CA3: a geração direta mostra o token uma vez", () => {
         selecionado.selectionEnd,
       ),
     ).toBe(token);
-    expect(anuncio()).toMatch(/o token ficou selecionado no campo/);
+    await waitFor(() =>
+      expect(anuncio()).toMatch(/o token ficou selecionado no campo/),
+    );
   });
 
   it("nada vai para o storage, a URL, o histórico, o título ou o log; ao sair e voltar, o token não está mais lá", async () => {
@@ -439,6 +446,27 @@ describe("CA4: com credencial vigente, a confirmação e depois substituir: true
     ]);
   });
 
+  it("a situação de um GET que saiu antes da geração não troca a situação nova pela velha", async () => {
+    const { api } = await abrirAba(criarApiWebhook(CENARIOS.nenhum));
+    api.credenciais.geradoEm = "2026-11-12T13:30:00.000Z";
+    const liberarGet = api.segurar("GET");
+
+    acionar(botaoGerar());
+    const confirmacao = await screen.findByRole("alertdialog");
+    await waitFor(() => expect(api.chamadasAoToken("GET")).toHaveLength(2));
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Gerar token novo" }),
+    );
+    await within(painel()).findByLabelText("Token do webhook");
+    expect(dado("Gerado em")).toBe("12/11/2026 10:31");
+
+    liberarGet();
+    await act(async () => {});
+
+    expect(dado("Gerado em")).toBe("12/11/2026 10:31");
+    expect(dado("Último uso")).toBe("ainda não usado");
+  });
+
   it("cancelar não gera: nenhum POST, o diálogo fecha e o foco volta ao botão", async () => {
     const { api } = await abrirAba(criarApiWebhook(CENARIOS.tela));
     const botao = botaoGerar();
@@ -508,7 +536,7 @@ describe("CA4: com credencial vigente, a confirmação e depois substituir: true
 describe("CA5: um POST por vez", () => {
   it("duplo clique no botão: um POST só; o botão fica indisponível (e focado) enquanto gera", async () => {
     const { api } = await abrirAba(criarApiWebhook(CENARIOS.nenhum));
-    const liberar = api.segurarPosts();
+    const liberar = api.segurar("POST");
     const botao = botaoGerar();
 
     acionar(botao);
@@ -531,7 +559,7 @@ describe("CA5: um POST por vez", () => {
 
   it("duplo clique na confirmação: um POST com substituir só; a confirmação fica indisponível enquanto gera", async () => {
     const { api } = await abrirAba(criarApiWebhook(CENARIOS.tela));
-    const liberar = api.segurarPosts();
+    const liberar = api.segurar("POST");
 
     acionar(botaoGerar());
     const confirmacao = screen.getByRole("alertdialog");
@@ -567,15 +595,17 @@ describe("CA5: um POST por vez", () => {
 
   it("sair da tela com o POST em andamento: a resposta que chega depois não aparece", async () => {
     const { api, roteador } = await abrirAba(criarApiWebhook(CENARIOS.nenhum));
-    const liberar = api.segurarPosts();
+    const liberar = api.segurar("POST");
     acionar(botaoGerar());
     await waitFor(() => expect(api.chamadasAoToken("POST")).toHaveLength(1));
 
     await act(() => roteador.navigate("/coordenacao/trilha"));
     liberar();
-    await act(async () => {});
+    // A API gera o token e a resposta chega com a tela já fechada.
+    await act(() => new Promise((resolver) => setTimeout(resolver, 30)));
+    expect(api.tokens).toHaveLength(1);
 
-    expect(document.body.innerHTML).not.toContain(api.tokens[0] ?? "x");
+    expect(document.body.innerHTML).not.toContain(api.tokens[0]);
     expect(screen.queryByLabelText("Token do webhook")).not.toBeInTheDocument();
   });
 });

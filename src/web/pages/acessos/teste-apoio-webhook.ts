@@ -55,8 +55,11 @@ export function criarApiWebhook(inicial: Credenciais = CENARIOS.nenhum) {
   const chamadas: Chamada[] = [];
   /** Os tokens que o POST devolveu (cada um só na resposta que o criou). */
   const tokens: string[] = [];
-  /** Os POSTs seguram a resposta até `liberar()` (para conferir o que a tela faz enquanto espera). */
-  let segurar: Promise<void> | null = null;
+  /**
+   * As chamadas seguram a resposta até `liberar()` (para conferir o que a tela faz enquanto espera). O GET lê o
+   * estado antes de esperar, como a API que leu o banco e demorou a responder.
+   */
+  const seguradas = new Map<string, Promise<void>>();
   /** Respostas marcadas para a próxima chamada ao token, por método (uma vez só). */
   const marcadas = new Map<string, () => Response>();
 
@@ -123,9 +126,13 @@ export function criarApiWebhook(inicial: Credenciais = CENARIOS.nenhum) {
         marcadas.delete(chamada.metodo);
         return marcada();
       }
-      if (chamada.metodo === "GET") return respostaJson(estado());
+      if (chamada.metodo === "GET") {
+        const lido = estado();
+        await seguradas.get("GET");
+        return respostaJson(lido);
+      }
       if (chamada.metodo === "POST") {
-        if (segurar) await segurar;
+        await seguradas.get("POST");
         return gerar(chamada.corpo);
       }
       return respostaErro(404, "nao_encontrado", "Rota não encontrada");
@@ -151,15 +158,18 @@ export function criarApiWebhook(inicial: Credenciais = CENARIOS.nenhum) {
         return resposta;
       });
     },
-    /** Os POSTs ao token esperam até `liberar()`; devolve a função que libera. */
-    segurarPosts(): () => void {
+    /** As chamadas ao token com este método esperam até `liberar()`; devolve a função que libera. */
+    segurar(metodo: "GET" | "POST" = "POST"): () => void {
       let liberar = () => {};
-      segurar = new Promise<void>((resolver) => {
-        liberar = () => {
-          segurar = null;
-          resolver();
-        };
-      });
+      seguradas.set(
+        metodo,
+        new Promise<void>((resolver) => {
+          liberar = () => {
+            seguradas.delete(metodo);
+            resolver();
+          };
+        }),
+      );
       return () => liberar();
     },
   };

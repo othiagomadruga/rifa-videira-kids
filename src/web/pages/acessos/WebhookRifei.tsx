@@ -83,6 +83,8 @@ export function WebhookRifei() {
   const saida = useRef<AbortController | null>(null);
   const refToken = useRef<HTMLTextAreaElement>(null);
   const refUrl = useRef<HTMLTextAreaElement>(null);
+  // Quantos tokens esta aba gerou: um GET que saiu antes de uma geração não troca o estado novo pelo velho.
+  const geracoes = useRef(0);
 
   useEffect(() => {
     const controle = new AbortController();
@@ -92,10 +94,13 @@ export function WebhookRifei() {
 
   useEffect(() => {
     const controle = new AbortController();
+    const antes = geracoes.current;
     obterEstadoToken({ signal: controle.signal }).then(
-      (estado) => setCarga({ estado, erro: null }),
+      (estado) => {
+        if (geracoes.current === antes) setCarga({ estado, erro: null });
+      },
       (erro: unknown) => {
-        if (!controle.signal.aborted)
+        if (!controle.signal.aborted && geracoes.current === antes)
           setCarga((atual) => ({ estado: atual.estado, erro }));
       },
     );
@@ -134,6 +139,7 @@ export function WebhookRifei() {
     try {
       const resposta = await gerarTokenWebhook(substituir, { signal: sinal });
       if (sinal?.aborted) return;
+      geracoes.current += 1;
       setCarga({ estado: resposta.estado, erro: null });
       setMostrado((atual) => ({
         token: resposta.token,
