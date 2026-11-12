@@ -1,5 +1,5 @@
 // Textos da tela Visão geral (sem React): unidade da meta, fase e dia, situação, meta do dia, ritmo,
-// projeção, totais dos avisos e a descrição do gráfico. Números, dinheiro, percentuais e datas sempre
+// projeção, totais dos avisos, a descrição do gráfico e os tipos do relatório para baixar (RIFA-038). Números, dinheiro, percentuais e datas sempre
 // pelos formatadores (lib/formatadores); as regras e os números vêm prontos da API (calculos.ts).
 import type {
   EscopoPainel,
@@ -11,6 +11,7 @@ import type {
   TotaisVendas,
   UnidadeMeta,
 } from "../../../shared/contracts/calculos";
+import type { TipoRelatorio } from "../../../shared/contracts/relatorio";
 import type { TomSituacao } from "../../components/ui";
 import {
   formatarData,
@@ -355,3 +356,46 @@ export function descricaoDaCurva(resumo: RespostaPainelResumo): string {
       return `${base} Resultado final: ${quantidade(campanha.realizado, unidade)}.`;
   }
 }
+
+/**
+ * Relatório da campanha (RIFA-038, D23): o nome e uma linha que explica cada tipo, em linguagem simples. A ordem
+ * da tela é a de TIPOS_RELATORIO (contrato); um tipo novo no contrato falha aqui no typecheck.
+ */
+export const TEXTOS_TIPO_RELATORIO = {
+  totais: {
+    rotulo: "Totais da campanha",
+    descricao:
+      "Uma linha com o resultado geral: meta, bilhetes, arrecadação e % da meta.",
+  },
+  celulas: {
+    rotulo: "Por célula",
+    descricao:
+      "Cada célula com rede, discipulador, líder, vendas, % da meta e posição na divisão.",
+  },
+  discipuladores: {
+    rotulo: "Por discipulador",
+    descricao:
+      "Cada discipulador com a soma das células dele, % da meta e posição na divisão.",
+  },
+  redes: {
+    rotulo: "Por rede",
+    descricao:
+      "Cada rede com a soma das células dela, % da meta e posição na divisão.",
+  },
+  periodos: {
+    rotulo: "Por período",
+    descricao: "Bilhetes e arrecadação de cada período que já começou.",
+  },
+  dias: {
+    rotulo: "Por dia",
+    descricao: "Bilhetes e arrecadação de cada dia, do primeiro até hoje.",
+  },
+  ddd: {
+    rotulo: "Por DDD",
+    descricao:
+      "Vendas pelo DDD do telefone de quem comprou, como no Mapa (sem dado pessoal).",
+  },
+} as const satisfies Record<
+  TipoRelatorio,
+  { rotulo: string; descricao: string }
+>;

@@ -1,12 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { espiarDownloads } from "../test/download";
 import { respostaJson } from "../test/renderizar";
 import {
   aoReceber401,
   api,
+  baixarArquivo,
   CODIGOS_CLIENTE,
   ErroApi,
+  LIBERAR_ARQUIVO_DEPOIS_MS,
   mensagemDoErro,
   requisitarJson,
+  TAMANHO_MAXIMO_NOME_ARQUIVO,
   TEMPO_LIMITE_PADRAO_MS,
 } from "./api";
 
@@ -304,5 +308,310 @@ describe("mensagemDoErro", () => {
     expect(mensagemDoErro(new Error("stack interna"))).toBe(
       "Ocorreu um erro inesperado. Tente de novo.",
     );
+  });
+});
+
+describe("cliente da API: arquivo para baixar (baixarArquivo, RIFA-038)", () => {
+  const CSV = "\uFEFFCélula;Bilhetes\r\nÁgape;12\r\n";
+  const NOME = "rifa-videira-kids-celulas-2026-12-04.csv";
+  const arquivo = (disposicao: string | null, corpo = CSV) =>
+    new Response(corpo, {
+      status: 200,
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        ...(disposicao === null ? {} : { "content-disposition": disposicao }),
+      },
+    });
+
+  let downloads: ReturnType<typeof espiarDownloads> | null = null;
+  const espiar = () => (downloads = espiarDownloads());
+  // Relógio falso em todos: a liberação do object URL (60 s) nunca fica pendente no relógio de verdade depois do
+  // teste (o useRealTimers do afterEach a descarta).
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    downloads?.desfazer();
+    downloads = null;
+  });
+
+  it("GET na mesma origem, com o cookie: o Blob vira um link com o nome do Content-Disposition, clicado e removido; o arquivo chega inteiro, com o BOM", async () => {
+    const espiao = espiar();
+    const fetchMock = simularFetch(async () =>
+      arquivo(`attachment; filename="${NOME}"`),
+    );
+
+    await expect(
+      baixarArquivo("/api/painel/relatorio?tipo=celulas", {
+        nomeReserva: "reserva.csv",
+      }),
+    ).resolves.toBe(NOME);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/painel/relatorio?tipo=celulas");
+    expect(init).toMatchObject({ method: "GET", credentials: "same-origin" });
+    expect(init?.body).toBeUndefined();
+    expect(espiao.cliques).toEqual([
+      {
+        endereco: "blob:http://localhost:3000/arquivo-1",
+        nome: NOME,
+        naPagina: true,
+      },
+    ]);
+    expect(await espiao.texto()).toBe(CSV);
+    // O link sai da página na hora; o endereço do arquivo só é liberado depois.
+    expect(document.querySelector("a")).toBeNull();
+    expect(espiao.liberados).toEqual([]);
+  });
+
+  it("o arquivo baixado tem os bytes da resposta, um por um: o BOM (EF BB BF) no começo e os acentos em UTF-8 (o corpo nunca passa por texto, que tiraria o BOM e o Excel quebraria os acentos)", async () => {
+    const espiao = espiar();
+    // Como o Worker manda: os bytes UTF-8 do CSV, com o BOM.
+    const enviados = new TextEncoder().encode(CSV);
+    expect([...enviados.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    simularFetch(
+      async () =>
+        new Response(enviados.slice(), {
+          status: 200,
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": `attachment; filename="${NOME}"`,
+          },
+        }),
+    );
+
+    await baixarArquivo("/api/x", { nomeReserva: "reserva.csv" });
+
+    const baixados = await espiao.bytes();
+    expect([...baixados.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect([...baixados]).toEqual([...enviados]);
+    // "Célula": o "é" chega como C3 A9 (UTF-8), não como um byte só.
+    expect([...baixados.slice(3, 6)]).toEqual([0x43, 0xc3, 0xa9]);
+  });
+
+  it(`libera o object URL ${LIBERAR_ARQUIVO_DEPOIS_MS / 1000} s depois do clique (o navegador lê o arquivo depois)`, async () => {
+    const espiao = espiar();
+    simularFetch(async () => arquivo(`attachment; filename="${NOME}"`));
+
+    await baixarArquivo("/api/x", { nomeReserva: "reserva.csv" });
+    await vi.advanceTimersByTimeAsync(LIBERAR_ARQUIVO_DEPOIS_MS - 1);
+    expect(espiao.liberados).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(espiao.liberados).toEqual([espiao.cliques[0].endereco]);
+  });
+
+  it.each([
+    ["sem o cabeçalho", null, "reserva.csv"],
+    ["sem filename", "attachment", "reserva.csv"],
+    ["com filename vazio", 'attachment; filename=""', "reserva.csv"],
+    ["filename sem aspas", `attachment; filename=${NOME}`, NOME],
+    [
+      "filename* (UTF-8) antes do filename",
+      `attachment; filename="relatorio.csv"; filename*=UTF-8''relat%C3%B3rio%20final.csv`,
+      "relatório final.csv",
+    ],
+    [
+      "filename* inválido: fica o filename",
+      `attachment; filename*=UTF-8''%E0%A4%A; filename="${NOME}"`,
+      NOME,
+    ],
+  ])("nome do arquivo %s: %s", async (_caso, disposicao, esperado) => {
+    const espiao = espiar();
+    simularFetch(async () => arquivo(disposicao));
+
+    await expect(
+      baixarArquivo("/api/x", { nomeReserva: "reserva.csv" }),
+    ).resolves.toBe(esperado);
+    expect(espiao.cliques.map((clique) => clique.nome)).toEqual([esperado]);
+  });
+
+  it.each([
+    [
+      "com pasta e ..: só o último trecho",
+      'attachment; filename="../../relatorio.csv"',
+      "relatorio.csv",
+    ],
+    [
+      "filename* com / codificada",
+      `attachment; filename*=UTF-8''..%2F..%2Fpasta%2Frelat%C3%B3rio.csv`,
+      "relatório.csv",
+    ],
+    [
+      "filename* com \\ do Windows",
+      `attachment; filename*=UTF-8''C%3A%5CUsers%5Cx%5C..%5Crelatorio.csv`,
+      "relatorio.csv",
+    ],
+    ["só ..: o de reserva", 'attachment; filename=".."', "reserva.csv"],
+    [
+      "filename* do qual nada sobra: fica o filename",
+      `attachment; filename*=UTF-8''..%2F..; filename="${NOME}"`,
+      NOME,
+    ],
+    ["oculto (ponto na frente)", 'attachment; filename=".bashrc"', "bashrc"],
+    [
+      "com o U+202E, que inverte o texto e disfarça a extensão",
+      `attachment; filename*=UTF-8''relatorio%E2%80%AEvsc.exe`,
+      "relatoriovsc.exe",
+    ],
+    [
+      "com caracteres de controle (nulo, quebra de linha, tabulação)",
+      `attachment; filename*=UTF-8''rela%00t%0D%0Aorio%09.csv`,
+      "relatorio.csv",
+    ],
+    [
+      "com os caracteres que o Windows recusa",
+      'attachment; filename="a<b>c:d|e?f*g\\".csv"',
+      "a_b_c_d_e_f_g_.csv",
+    ],
+    [
+      "com espaços e pontos sobrando",
+      'attachment; filename="  relatorio   final.csv. . "',
+      "relatorio final.csv",
+    ],
+    [
+      "comprido demais: corta e mantém a extensão",
+      `attachment; filename="${"a".repeat(300)}.csv"`,
+      `${"a".repeat(TAMANHO_MAXIMO_NOME_ARQUIVO - 4)}.csv`,
+    ],
+  ])("nome do arquivo saneado, %s: %s", async (_caso, disposicao, esperado) => {
+    const espiao = espiar();
+    simularFetch(async () => arquivo(disposicao));
+
+    await expect(
+      baixarArquivo("/api/x", { nomeReserva: "reserva.csv" }),
+    ).resolves.toBe(esperado);
+    expect(espiao.cliques.map((clique) => clique.nome)).toEqual([esperado]);
+    expect(esperado.length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_ARQUIVO);
+  });
+
+  it("erros como no requisitarJson: o formato da API, ERRO_HTTP fora dele e SEM_CONEXAO; nada é baixado", async () => {
+    const espiao = espiar();
+    simularFetch(async () =>
+      respostaJson(
+        {
+          erro: {
+            codigo: "nao_encontrado",
+            mensagem: "Nenhuma campanha ativa",
+          },
+        },
+        404,
+      ),
+    );
+    const semCampanha = await capturarErro(
+      baixarArquivo("/api/x", { nomeReserva: "r.csv" }),
+    );
+    expect(semCampanha).toBeInstanceOf(ErroApi);
+    expect(semCampanha).toMatchObject({
+      codigo: "nao_encontrado",
+      mensagem: "Nenhuma campanha ativa",
+      status: 404,
+    });
+
+    simularFetch(
+      async () => new Response("<html>falhou</html>", { status: 502 }),
+    );
+    await expect(
+      baixarArquivo("/api/x", { nomeReserva: "r.csv" }),
+    ).rejects.toMatchObject({ codigo: CODIGOS_CLIENTE.erroHttp, status: 502 });
+
+    simularFetch(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    await expect(
+      baixarArquivo("/api/x", { nomeReserva: "r.csv" }),
+    ).rejects.toMatchObject({
+      codigo: CODIGOS_CLIENTE.semConexao,
+      status: null,
+    });
+
+    expect(espiao.criar).not.toHaveBeenCalled();
+    expect(espiao.cliques).toEqual([]);
+  });
+
+  it("o 401 avisa os ouvintes (a sessão leva para /entrar) antes de falhar", async () => {
+    espiar();
+    simularFetch(async () =>
+      respostaJson(
+        { erro: { codigo: "nao_autenticado", mensagem: "Sem sessão" } },
+        401,
+      ),
+    );
+    const ouvinte = vi.fn();
+    const desligar = aoReceber401(ouvinte);
+    try {
+      await expect(
+        baixarArquivo("/api/painel/relatorio?tipo=totais", {
+          nomeReserva: "r.csv",
+        }),
+      ).rejects.toMatchObject({ status: 401, codigo: "nao_autenticado" });
+    } finally {
+      desligar();
+    }
+    expect(ouvinte).toHaveBeenCalledExactlyOnceWith(
+      "/api/painel/relatorio?tipo=totais",
+    );
+  });
+
+  it("tempo limite e cancelamento: TEMPO_ESGOTADO e CANCELADA, sem baixar nada", async () => {
+    const espiao = espiar();
+    simularFetchQueNaoResponde();
+    const lenta = baixarArquivo("/api/x", {
+      nomeReserva: "r.csv",
+      tempoLimiteMs: 2_000,
+    });
+    const verificacao = expect(lenta).rejects.toMatchObject({
+      codigo: CODIGOS_CLIENTE.tempoEsgotado,
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    await verificacao;
+
+    const controle = new AbortController();
+    const cancelada = baixarArquivo("/api/x", {
+      nomeReserva: "r.csv",
+      signal: controle.signal,
+    });
+    controle.abort();
+    await expect(cancelada).rejects.toMatchObject({
+      codigo: CODIGOS_CLIENTE.cancelada,
+    });
+
+    expect(espiao.cliques).toEqual([]);
+  });
+
+  it("cancelada depois de a resposta chegar, mas antes do clique: não baixa", async () => {
+    const espiao = espiar();
+    const controle = new AbortController();
+    simularFetch(async () => {
+      const resposta = arquivo(`attachment; filename="${NOME}"`);
+      // A tela sai enquanto o corpo é lido.
+      const lerBlob = resposta.blob.bind(resposta);
+      resposta.blob = async () => {
+        const blob = await lerBlob();
+        controle.abort();
+        return blob;
+      };
+      return resposta;
+    });
+
+    await expect(
+      baixarArquivo("/api/x", {
+        nomeReserva: "r.csv",
+        signal: controle.signal,
+      }),
+    ).rejects.toMatchObject({ codigo: CODIGOS_CLIENTE.cancelada });
+    expect(espiao.criar).not.toHaveBeenCalled();
+    expect(espiao.cliques).toEqual([]);
+  });
+
+  it("recusa caminhos de outra origem sem chamar o fetch", async () => {
+    espiar();
+    const fetchMock = simularFetch(async () => arquivo(null));
+    await expect(
+      baixarArquivo("https://outro.example/relatorio.csv", {
+        nomeReserva: "r.csv",
+      }),
+    ).rejects.toBeInstanceOf(TypeError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

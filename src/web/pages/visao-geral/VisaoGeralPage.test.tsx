@@ -195,7 +195,7 @@ describe("CA2: cartões Hoje, Campanha e período", () => {
       semana.getByText("Ritmo do período: 73% do esperado até ontem."),
     ).toBeInTheDocument();
 
-    // Os cartões seguem a ordem da leitura: hoje, a campanha e o período.
+    // Os cartões seguem a ordem da leitura: hoje, a campanha e o período; o relatório para baixar no fim (RIFA-038).
     expect(
       screen
         .getAllByRole("heading", { level: 2 })
@@ -207,6 +207,7 @@ describe("CA2: cartões Hoje, Campanha e período", () => {
       "Semana 2",
       "Para conferir",
       "Curva: esperado × realizado",
+      "Relatório da campanha",
     ]);
   });
 
