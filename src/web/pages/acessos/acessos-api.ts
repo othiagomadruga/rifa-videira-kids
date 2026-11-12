@@ -11,7 +11,8 @@ import type {
   PapelHierarquia,
   Usuario,
 } from "../../../shared/contracts";
-import { api } from "../../lib/api";
+import { ErroApi, api } from "../../lib/api";
+import { CAMINHOS_SESSAO } from "../../lib/sessao";
 
 /** ROTAS_ACESSO: listarUsuarios e criarUsuario (.caminho); atualizarUsuario e criarLink ficam abaixo deles. */
 export const CAMINHOS = {
@@ -72,6 +73,21 @@ export function definirAtivo(usuarioId: number, ativo: boolean) {
 /** Revoga e encerra as sessões abertas pelo link; 409 `em_uso` se for o último link válido de admin. */
 export async function revogarLink(linkId: number): Promise<void> {
   await api.delete(`${CAMINHOS.links}/${linkId}`);
+}
+
+/**
+ * A sessão deste aparelho continua? GET /api/sessao: 200 sim, 401 não (outra falha lança; o 401 desta rota não
+ * derruba a sessão do site). RIFA-043: depois de revogar o link marcado "Este aparelho", que é a marca da lista
+ * carregada: outra aba pode ter entrado por outro link depois dela (lançamento 3.1, o link novo numa aba nova).
+ */
+export async function sessaoContinua(): Promise<boolean> {
+  try {
+    await api.get(CAMINHOS_SESSAO.sessao);
+    return true;
+  } catch (erro) {
+    if (erro instanceof ErroApi && erro.status === 401) return false;
+    throw erro;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------

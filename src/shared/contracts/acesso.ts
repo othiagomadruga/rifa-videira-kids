@@ -156,6 +156,12 @@ export const linkAcessoSchema = z.object({
   /** Última vez que o link abriu uma sessão. */
   ultimo_uso_em: instanteSchema.nullable(),
   situacao: z.enum(SITUACOES_LINK),
+  /**
+   * RIFA-043: true só no link que abriu a sessão de quem fez a requisição ("este aparelho"): revogá-lo derruba essa
+   * sessão. Calculado pela API em cada resposta (`sessoes.link_id`, migração 0002). false nos demais, no link
+   * recém-criado (ainda não abriu sessão) e na lista da hierarquia (nenhum link dela abre sessão da coordenação).
+   */
+  desta_sessao: z.boolean(),
 });
 export type LinkAcesso = z.infer<typeof linkAcessoSchema>;
 

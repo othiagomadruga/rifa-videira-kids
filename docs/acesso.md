@@ -56,12 +56,14 @@ Usuário na administração (`usuarioSchema`):
   "criado_em": "2026-11-06T18:00:00.000Z", "sessoes_ativas": 1,
   "links": [
     { "id": 7, "criado_em": "2026-11-06T18:00:00.000Z", "expira_em": "2026-12-21T18:00:00.000Z",
-      "revogado_em": null, "ultimo_uso_em": "2026-11-06T18:05:12.345Z", "situacao": "valido" }
+      "revogado_em": null, "ultimo_uso_em": "2026-11-06T18:05:12.345Z", "situacao": "valido",
+      "desta_sessao": true }
   ]
 }
 ```
 
 - `situacao`: `valido`, `expirado` ou `revogado`. `links` vem do mais novo para o mais antigo.
+- `desta_sessao` (RIFA-043): `true` só no link que abriu a sessão de quem fez a requisição (`sessoes.link_id`), calculado pela API em cada resposta (`GET /api/admin/usuarios` e o `PATCH`); `false` nos demais, no link recém-criado e na lista da hierarquia. A tela marca esse link como "Este aparelho" e, ao revogá-lo, avisa que a sessão cai: no primeiro acesso (`docs/lancamento.md` 3.1), quem acabou de entrar pelo link novo vê o novo marcado e revoga o outro.
 - Na criação, `link` traz também `"url": "https://<site>/acesso/<token>"`. A origem da URL é a da requisição do admin.
 - **Desativar** (`ativo: false`) apaga todas as sessões da pessoa e os links param de abrir sessão. **Reativar** não traz as sessões de volta; os links ainda dentro da validade voltam a funcionar.
 - **Ninguém desativa o próprio acesso**, e o **último admin ativo** não pode ser desativado: 409 `em_uso`, nada muda. A condição fica no próprio `UPDATE`, então dois admins desativando um ao outro ao mesmo tempo não deixam a equipe sem admin. Não há troca de papel na API (o `PATCH` só aceita `ativo`), então também não há como rebaixar o último admin.

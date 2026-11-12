@@ -6,7 +6,8 @@
  *   cria pessoas da coordenação (o schema recusa os papéis da hierarquia, que nascem pelos links em lote de
  *   routes/acessos-hierarquia.ts, RIFA-014);
  * - GET /api/admin/usuarios → 200 { itens }: as pessoas da coordenação, com os links (sem token) e as sessões
- *   ativas (a hierarquia tem a lista própria, em GET /api/admin/acessos-hierarquia);
+ *   ativas (a hierarquia tem a lista própria, em GET /api/admin/acessos-hierarquia). O link que abriu a sessão de
+ *   quem pede sai com `desta_sessao` true (RIFA-043: "este aparelho"; revogá-lo derruba essa sessão);
  * - PATCH /api/admin/usuarios/:id { ativo } → 200 usuário (de qualquer papel; na hierarquia, com o alvo):
  *   desativar encerra as sessões dele; 409 `em_uso` ao desativar a si mesmo ou o último admin ativo (não há
  *   troca de papel, então não há como rebaixá-lo);
@@ -44,6 +45,7 @@ import { responderErro } from "../lib/respostas-erro";
 import {
   autoriaDaSessao,
   exigirSessao,
+  linkDaSessao,
   type AmbienteSessao,
 } from "../middleware/sessao";
 import { validarJson, validarParametros } from "../middleware/validacao";
@@ -94,7 +96,13 @@ adminUsuarios.post(
 
 adminUsuarios.get("/usuarios", async (c) =>
   c.json(
-    { itens: await listarUsuarios(c.env.DB, new Date().toISOString()) },
+    {
+      itens: await listarUsuarios(
+        c.env.DB,
+        new Date().toISOString(),
+        linkDaSessao(c),
+      ),
+    },
     200,
   ),
 );
@@ -123,7 +131,12 @@ adminUsuarios.patch(
         c,
         "Este é o último admin ativo: crie ou reative outro admin antes de desativá-lo",
       );
-    const usuario = await buscarUsuario(c.env.DB, id, new Date().toISOString());
+    const usuario = await buscarUsuario(
+      c.env.DB,
+      id,
+      new Date().toISOString(),
+      linkDaSessao(c),
+    );
     return usuario === null
       ? respostaUsuarioNaoEncontrado(c)
       : c.json(usuario, 200);

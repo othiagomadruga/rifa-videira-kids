@@ -10,7 +10,13 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_DE_TESTE, renderizarRota } from "../../test/renderizar";
 import { MENSAGENS_EM_USO, mensagemWhatsApp } from "./textos";
-import { criarApiFalsa, respostaErro, type ApiFalsa } from "./teste-apoio";
+import {
+  criarApiFalsa,
+  link,
+  pessoasExemplo,
+  respostaErro,
+  type ApiFalsa,
+} from "./teste-apoio";
 
 const CAMINHO = "/coordenacao/acessos";
 
@@ -437,6 +443,237 @@ describe("CA5: gerar link novo e revogar link", () => {
     expect(api.chamadasA("DELETE", "/api/admin/links/1")).toHaveLength(1);
     expect(api.pessoas[0].links[0].situacao).toBe("valido");
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+});
+
+// RIFA-043 (ensaio geral): no primeiro acesso (lançamento 3.1), o admin gera um link novo, entra por ele e revoga o
+// primeiro. A lista vem do mais novo para o mais antigo, e no ensaio o link errado (o desta sessão) foi revogado.
+describe("RIFA-043: o link deste aparelho no cartão", () => {
+  /** O admin conectado com dois links válidos: o novo (pelo qual esta sessão entrou) e o primeiro, do SM. */
+  function apiComDoisLinks() {
+    const pessoas = pessoasExemplo();
+    pessoas[0].links = [
+      link(10, { criado_em: "2026-11-11T12:00:00.000Z", desta_sessao: true }),
+      link(1, { ultimo_uso_em: "2026-11-10T22:05:00.000Z" }),
+    ];
+    pessoas[0].sessoes_ativas = 2;
+    return criarApiFalsa(pessoas);
+  }
+
+  it("marca 'Este aparelho' só no link pelo qual a sessão entrou, e o botão dele diz que é o deste aparelho", async () => {
+    await abrirTela(apiComDoisLinks());
+    const links = within(cartao("Admin de Teste")).getAllByRole("listitem");
+
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveTextContent(
+      "Este aparelhoVocê entrou por este link neste aparelho.",
+    );
+    expect(links[0]).toHaveTextContent("Criado em 11/11/2026 09:00");
+    expect(links[1]).not.toHaveTextContent("Este aparelho");
+    expect(links[1]).not.toHaveTextContent("Você entrou por este link");
+    expect(
+      within(links[0]).getByRole("button", {
+        name: "Revogar link de Admin de Teste criado em 11/11/2026 09:00, o deste aparelho",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(links[1]).getByRole("button", {
+        name: "Revogar link de Admin de Teste criado em 10/11/2026 19:00",
+      }),
+    ).toBeInTheDocument();
+    // Nos cartões das outras pessoas, nada é deste aparelho.
+    expect(cartao("Felipe Coordenador")).not.toHaveTextContent("Este aparelho");
+  });
+
+  it("revogar o link deste aparelho pede uma confirmação que explica que a sessão cai; Cancelar não revoga", async () => {
+    const { api } = await abrirTela(apiComDoisLinks());
+
+    acionar(
+      within(cartao("Admin de Teste")).getByRole("button", {
+        name: /, o deste aparelho$/,
+      }),
+    );
+    const confirmacao = screen.getByRole("alertdialog", {
+      name: "Revogar o link deste aparelho?",
+    });
+    expect(confirmacao).toHaveAccessibleDescription(
+      "Link de Admin de Teste criado em 11/11/2026 09:00. Você entrou por este link neste aparelho: ao revogar, você sai do sistema aqui.",
+    );
+    expect(confirmacao).toHaveTextContent(
+      "Você vai sair do sistema neste aparelho",
+    );
+    expect(confirmacao).toHaveTextContent(
+      "entre primeiro pelo link novo e revogue este de lá",
+    );
+    expect(
+      within(confirmacao).getByRole("button", { name: "Cancelar" }),
+    ).toHaveFocus();
+    expect(
+      within(confirmacao).getByRole("button", { name: "Revogar e sair" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Cancelar" }),
+    );
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(api.chamadasA("DELETE", "/api/admin/links/10")).toHaveLength(0);
+    expect(api.pessoas[0].links[0].situacao).toBe("valido");
+  });
+
+  it("o outro link (o primeiro, do SM) tem a confirmação de sempre e é revogado sem tirar ninguém daqui", async () => {
+    const { api, roteador } = await abrirTela(apiComDoisLinks());
+
+    acionar(
+      within(cartao("Admin de Teste")).getByRole("button", {
+        name: "Revogar link de Admin de Teste criado em 10/11/2026 19:00",
+      }),
+    );
+    const confirmacao = screen.getByRole("alertdialog", {
+      name: "Revogar este link?",
+    });
+    expect(confirmacao).not.toHaveTextContent("Você vai sair do sistema");
+    fireEvent.click(
+      within(confirmacao).getByRole("button", { name: "Revogar link" }),
+    );
+
+    await waitFor(() =>
+      expect(dado("Admin de Teste", "Links válidos")).toBe("1"),
+    );
+    expect(api.chamadasA("DELETE", "/api/admin/links/1")).toHaveLength(1);
+    expect(api.chamadasA("POST", "/api/sessao/sair")).toHaveLength(0);
+    expect(roteador.state.location.pathname).toBe(CAMINHO);
+    expect(anuncio()).toHaveTextContent("Link de Admin de Teste revogado.");
+  });
+
+  it("confirmado, o link deste aparelho é revogado e a tela leva a 'Você saiu do sistema neste aparelho'", async () => {
+    const { api, roteador } = await abrirTela(apiComDoisLinks());
+
+    acionar(
+      within(cartao("Admin de Teste")).getByRole("button", {
+        name: /, o deste aparelho$/,
+      }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", {
+          name: "Revogar o link deste aparelho?",
+        }),
+      ).getByRole("button", { name: "Revogar e sair" }),
+    );
+
+    expect(
+      await screen.findByText("Você saiu do sistema neste aparelho."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Sua sessão terminou.")).not.toBeInTheDocument();
+    expect(roteador.state.location.pathname).toBe("/entrar");
+    expect(api.chamadasA("DELETE", "/api/admin/links/10")).toHaveLength(1);
+    // Antes de sair, conferiu que a sessão caiu mesmo (401 em GET /api/sessao).
+    expect(api.chamadasA("GET", "/api/sessao")).toHaveLength(1);
+    expect(api.chamadasA("POST", "/api/sessao/sair")).toHaveLength(1);
+    expect(api.pessoas[0].links[0].situacao).toBe("revogado");
+    expect(api.pessoas[0].links[1].situacao).toBe("valido");
+  });
+
+  it("a marca é a da lista carregada: se outra aba entrou por outro link e a sessão continua, revogar não tira ninguém daqui", async () => {
+    // Esta aba carregou a lista com a sessão do link 10; depois, outra aba (no mesmo navegador) entrou pelo link 1.
+    // Revogar o 10 não derruba a sessão do aparelho, que agora é a do link 1.
+    const api = apiComDoisLinks();
+    api.proxima("DELETE", "/api/admin/links/10", () => {
+      const [dez, um] = api.pessoas[0].links;
+      Object.assign(dez, {
+        situacao: "revogado",
+        revogado_em: "2026-11-11T13:00:00.000Z",
+        desta_sessao: false,
+      });
+      um.desta_sessao = true;
+      return new Response(null, { status: 204 });
+    });
+    const { roteador } = await abrirTela(api);
+
+    acionar(
+      within(cartao("Admin de Teste")).getByRole("button", {
+        name: /, o deste aparelho$/,
+      }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", {
+          name: "Revogar o link deste aparelho?",
+        }),
+      ).getByRole("button", { name: "Revogar e sair" }),
+    );
+
+    await waitFor(() =>
+      expect(dado("Admin de Teste", "Links válidos")).toBe("1"),
+    );
+    expect(api.chamadasA("GET", "/api/sessao")).toHaveLength(1);
+    expect(api.chamadasA("POST", "/api/sessao/sair")).toHaveLength(0);
+    expect(roteador.state.location.pathname).toBe(CAMINHO);
+    expect(anuncio()).toHaveTextContent("Link de Admin de Teste revogado.");
+    // A lista nova marca o link pelo qual a sessão do aparelho entrou.
+    const [unico] = within(cartao("Admin de Teste")).getAllByRole("listitem");
+    expect(unico).toHaveTextContent("Este aparelho");
+    expect(unico).toHaveTextContent("Criado em 10/11/2026 19:00");
+  });
+
+  it("de volta à aba, a lista é pedida de novo e a marca acompanha a sessão do aparelho", async () => {
+    const api = apiComDoisLinks();
+    const { roteador } = await abrirTela(api);
+    const pedidas = () => api.chamadasA("GET", "/api/admin/usuarios").length;
+    const antes = pedidas();
+    // Noutra aba, o admin entrou pelo link 1: a sessão do aparelho passou a ser a dele.
+    const [dez, um] = api.pessoas[0].links;
+    dez.desta_sessao = false;
+    um.desta_sessao = true;
+    const visibilidade = vi.spyOn(document, "visibilityState", "get");
+
+    visibilidade.mockReturnValue("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(pedidas()).toBe(antes);
+
+    visibilidade.mockReturnValue("visible");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(() =>
+      expect(
+        within(cartao("Admin de Teste")).getAllByRole("listitem")[1],
+      ).toHaveTextContent("Este aparelho"),
+    );
+    expect(pedidas()).toBe(antes + 1);
+    expect(
+      within(cartao("Admin de Teste")).getAllByRole("listitem")[0],
+    ).not.toHaveTextContent("Este aparelho");
+    expect(roteador.state.location.pathname).toBe(CAMINHO);
+    visibilidade.mockRestore();
+  });
+
+  it("se nem o sair responder, a recarga da lista (401) leva à tela de entrar", async () => {
+    const api = apiComDoisLinks();
+    api.proxima("POST", "/api/sessao/sair", () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const { roteador } = await abrirTela(api);
+
+    acionar(
+      within(cartao("Admin de Teste")).getByRole("button", {
+        name: /, o deste aparelho$/,
+      }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", {
+          name: "Revogar o link deste aparelho?",
+        }),
+      ).getByRole("button", { name: "Revogar e sair" }),
+    );
+
+    expect(await screen.findByText("Sua sessão terminou.")).toBeInTheDocument();
+    expect(roteador.state.location.pathname).toBe("/entrar");
   });
 });
 

@@ -264,7 +264,8 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
 2. **[Thiago]** Abra o link no navegador e toque em **Entrar**: você cai na área `/coordenacao`. Então, nesta ordem:
    1. **Acessos → Coordenação** → no seu cartão, **Gerar link novo** → **Copiar link**;
    2. abra o link novo numa aba nova e toque em **Entrar**;
-   3. só então, já dentro pelo link novo, use **Revogar link** no primeiro, o que veio do SM. **No seu cartão, ele é o de baixo:** a lista vem do mais novo para o mais antigo, e o de cima é o link novo, com o qual você acabou de entrar. Confira pelo "Criado em" (o do SM é o mais antigo). Revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez: por isso ele vem antes. O sistema também não deixa revogar o último link válido de admin.
+   3. só então, já dentro pelo link novo, use **Revogar link** no primeiro, o que veio do SM. **No seu cartão, ele é o de baixo:** a lista vem do mais novo para o mais antigo, e o de cima é o link novo, com o qual você acabou de entrar: ele vem marcado **Este aparelho** ("Você entrou por este link neste aparelho"). Confira pelo "Criado em" (o do SM é o mais antigo). Revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez: por isso ele vem antes. O sistema também não deixa revogar o último link válido de admin.
+      - Tocou em **Revogar link** no de cima? Ele pede uma confirmação própria, **"Revogar o link deste aparelho?"**, que avisa que você sai do sistema aqui, com o botão **Revogar e sair**: toque em **Cancelar** e revogue o de baixo.
       - Revogou o de cima por engano? A sessão cai e o link novo para de valer. Abra de novo o link do SM (ele ainda vale) e recomece do item 1.
 3. Guarde o link novo só para você (ex.: no gerenciador de senhas). Ele vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho, como o seu celular). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
 
@@ -322,7 +323,7 @@ Cuidados:
 - **Sem campanha ativa, ou com o slug errado, o webhook ignora os pedidos** (a entrega aparece como "Outra campanha" em **Pedidos → Entregas do webhook**) e o código do afiliado não aparece na Adesão. Trocar o slug depois pede confirmação.
 - O preço do bilhete também serve para marcar pedidos estranhos (seção 4.2): com um preço diferente do da Rifei, pedidos normais podem cair na lista de suspeitos.
 - Os números são recalculados na leitura: mudar meta, preço, períodos ou percentuais depois muda os números da campanha inteira, inclusive dos dias que passaram. Combine com o PO antes.
-- Cada salvamento fica na trilha de auditoria (`campanha.salvar`, com o slug e o preço de antes e de depois, as regras que mudaram e o nome da mensagem alterada). O primeiro, que ativa a campanha, registra só "Campanha criada" com o slug e o preço: as regras e as mensagens daquele momento não aparecem nele.
+- Cada salvamento fica na trilha de auditoria (`campanha.salvar`, com o slug e o preço de antes e de depois, as regras que mudaram e o nome da mensagem alterada). O primeiro, que ativa a campanha, registra "Campanha criada" com o slug, o preço, as três chaves (desconsiderar pedidos, acesso dos discipuladores e acesso das redes, cada uma ligada ou desligada) e o nome das mensagens editadas, sem o texto delas.
 
 ### 3.4 Planilha das 36 células [Coordenação]
 
@@ -370,7 +371,7 @@ O roteiro da reunião está na seção 5. Regra de ouro: **não use "Desvincular
   - **Outra campanha:** o slug do sistema não é o da Rifei (3.3).
   - Nenhuma entrega: o webhook não chegou (URL, token ou eventos na Rifei; seção 7.1).
   - Algo na coluna **Erro e avisos:** a Rifei mandou um campo diferente da documentação. A tela mostra só o campo e o código, nunca dado pessoal: mande um print ao SM.
-- **Alerta do webhook** (topo da Visão geral e de Pedidos): depois do teste, mostra só a linha "Última venda recebida há …" (7.1). Ele consulta o sistema a cada 5 minutos: com a tela aberta desde antes do teste, pode continuar mostrando "Ainda não chegou nenhuma venda" por até 5 minutos. Recarregue a página para ver na hora.
+- **Alerta do webhook** (topo da Visão geral e de Pedidos): depois do teste, mostra só a linha "Última entrega da Rifei há …" (7.1). Ele consulta o sistema a cada 5 minutos: com a tela aberta desde antes do teste, pode continuar mostrando "Ainda não chegou nenhuma venda" por até 5 minutos. Recarregue a página para ver na hora.
 - **Trilha de auditoria** (o que a equipe fez) [Admin]: tela **Trilha** no menu da coordenação (`/coordenacao/trilha`), do mais novo para o mais antigo, com "Carregar mais". Confira que aparecem o salvamento da campanha, a importação da hierarquia e os vínculos de afiliado.
 - **Pedidos suspeitos:** tela **Pedidos suspeitos** no menu da coordenação (`/coordenacao/pedidos-suspeitos`). Esperado: lista vazia. Se o pedido de teste aparecer, confira o preço do bilhete na Campanha: ele precisa ser igual ao da Rifei.
 
@@ -507,7 +508,7 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 - **"A Rifei mandou pedidos com erro nas últimas 24 h":** o botão **Ver as entregas com erro** abre as entregas recusadas. Confira cada pedido na Rifei.
 - **"Nenhuma venda chegou há N horas"** (ou **"até agora"**, se nenhuma chegou desde o início): durante a campanha, das 8h às 22h, depois de 4 horas sem venda. O botão **Abrir a Conferência** leva à conferência pelo CSV (6.4).
 - **"Ainda não chegou nenhuma venda":** nenhuma entrega da campanha até agora.
-- Tudo certo: só uma linha discreta, "Última venda recebida há …".
+- Tudo certo: só uma linha discreta, "Última entrega da Rifei há …". Ela conta qualquer entrega da campanha (pedido novo, pago ou expirado), não só as vendas.
 - Limites: um webhook que pare depois das 18h só acende o alerta no dia seguinte, ao meio-dia. Entrega recusada por token errado não fica gravada: o alerta mostra como se nenhuma venda tivesse chegado.
 
 1. **Veja as entregas [Coordenação]:** **Pedidos** → aba **Entregas do webhook** (a mais recente no topo; filtre por **Resultado**). Sem acesso ao site, o SM consulta o mesmo no D1 (tabela `webhook_eventos`).

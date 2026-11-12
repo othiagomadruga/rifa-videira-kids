@@ -14,8 +14,13 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
-import { useUsuarioConectado } from "../../lib/sessao";
-import { definirAtivo, gerarLink, listarPessoas } from "./acessos-api";
+import { useSessao, useUsuarioConectado } from "../../lib/sessao";
+import {
+  definirAtivo,
+  gerarLink,
+  listarPessoas,
+  sessaoContinua,
+} from "./acessos-api";
 import {
   DialogoDesativar,
   DialogoLink,
@@ -112,6 +117,7 @@ export function AcessosPage() {
 // Pessoas da coordenação (admin e coordenação): um cartão por pessoa, com os links e as ações.
 function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
   const eu = useUsuarioConectado();
+  const { sair } = useSessao();
   const [carga, setCarga] = useState<Carga>({ dados: null, erro: null });
   const [versao, setVersao] = useState(0);
   const [criando, setCriando] = useState(false);
@@ -140,6 +146,20 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
     );
     return () => controle.abort();
   }, [versao]);
+
+  // RIFA-043: de volta a esta aba, a lista é pedida de novo. A marca "Este aparelho" é a da sessão no momento da
+  // leitura: no primeiro acesso (lançamento 3.1), o admin entra pelo link novo numa aba nova e, de volta à primeira,
+  // ela mostraria ainda o link antigo como o deste aparelho.
+  useEffect(() => {
+    function aoMudarVisibilidade() {
+      if (document.visibilityState === "visible") {
+        setVersao((atual) => atual + 1);
+      }
+    }
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
+    return () =>
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
+  }, []);
 
   function recarregar() {
     setVersao((atual) => atual + 1);
@@ -205,11 +225,30 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
     setRevogacao({ pessoa, link });
   }
 
-  function aoRevogar(pessoa: Usuario) {
+  function aoRevogar(pessoa: Usuario, link: LinkAcesso) {
     refFocoAposRevogar.current =
       document.getElementById(idBotaoGerar(pessoa.id)) ??
       document.getElementById(idBotaoAtivo(pessoa.id));
     setRevogacao(null);
+    if (!link.desta_sessao) {
+      revogado(pessoa);
+      return;
+    }
+    // RIFA-043: o link deste aparelho caiu e levou a sessão junto. Sai de vez (a tela de entrar diz "Você saiu do
+    // sistema neste aparelho"), em vez de esperar o 401 da recarga ("Sua sessão terminou"). Antes, confere se a
+    // sessão caiu mesmo: a marca é da lista carregada, e outra aba pode ter entrado por outro link depois dela; aí a
+    // sessão do aparelho é a do outro link, continua, e "Sair" a derrubaria sem motivo. Se o sair não responder, ou
+    // a conferência falhar, a recarga decide (401 leva à tela de entrar).
+    sessaoContinua().then(
+      (continua) => {
+        if (continua) revogado(pessoa);
+        else sair().catch(recarregar);
+      },
+      () => revogado(pessoa),
+    );
+  }
+
+  function revogado(pessoa: Usuario) {
     avisar("sucesso", `Link de ${pessoa.nome} revogado.`);
     recarregar();
   }
@@ -306,7 +345,7 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
           pessoa={revogacao.pessoa}
           link={revogacao.link}
           aoFechar={() => setRevogacao(null)}
-          aoConcluir={() => aoRevogar(revogacao.pessoa)}
+          aoConcluir={() => aoRevogar(revogacao.pessoa, revogacao.link)}
           aoDesatualizar={recarregar}
           focoAoFechar={refFocoAposRevogar}
         />

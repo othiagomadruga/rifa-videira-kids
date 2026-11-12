@@ -6,6 +6,7 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import {
+  MENSAGENS_PADRAO,
   respostaAuditoriaSchema,
   type RegistroAuditoria,
 } from "../../shared/contracts";
@@ -97,7 +98,8 @@ describe("campanha (PUT /api/admin/campanha)", () => {
         ),
         acao: "campanha.salvar",
         alvo: `campanha:${id}`,
-        resumo: `Campanha criada: slug_rifei "${DADOS_CAMPANHA.slug_rifei}", preco_bilhete_centavos 2000`,
+        // RIFA-043: também como as regras do admin nasceram (a coordenação não manda os grupos: os padrões).
+        resumo: `Campanha criada: slug_rifei "${DADOS_CAMPANHA.slug_rifei}", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado`,
       },
     ]);
 
@@ -129,6 +131,46 @@ describe("campanha (PUT /api/admin/campanha)", () => {
     expect(igual.registros.map((linha) => linha.resumo)).toEqual([
       "Configuração salva sem mudanças",
     ]);
+  });
+
+  it("RIFA-043: o primeiro salvamento (o que ativa a campanha) registra as regras e o nome das mensagens editadas, sem o texto", async () => {
+    // Recomeça sem campanha ativa: o PUT a seguir é o primeiro.
+    await env.DB.batch([
+      env.DB.prepare(
+        "DELETE FROM campanha_periodos WHERE campanha_id IN (SELECT id FROM campanhas WHERE ativa = 1)",
+      ),
+      env.DB.prepare("DELETE FROM campanhas WHERE ativa = 1"),
+    ]);
+    const modeloLider = "Oi, Maria Ficticia! O link da célula {alvo}: {link}";
+
+    const criada = await comTrilha(() =>
+      requisitar("PUT", "/api/admin/campanha", admin, {
+        ...DADOS_CAMPANHA,
+        slug_rifei: "slug-rifa-043",
+        pedidos: { desconsiderar: true },
+        acesso: { discipuladores: true, redes: false },
+        mensagens: {
+          ...MENSAGENS_PADRAO,
+          link_lider: modeloLider,
+        },
+      }),
+    );
+
+    expect(criada.res.status).toBe(200);
+    const { id } = (await criada.res.json()) as { id: number };
+    expect(criada.registros).toEqual([
+      expect.objectContaining({
+        usuario_id: adminId,
+        acao: "campanha.salvar",
+        alvo: `campanha:${id}`,
+        // Mesmo formato dos salvamentos seguintes ("acesso.redes: ligado → desligado"), sem o antes. As mensagens
+        // iguais ao padrão não entram.
+        resumo:
+          'Campanha criada: slug_rifei "slug-rifa-043", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: ligado, acesso.redes: desligado, mensagens.link_lider',
+      }),
+    ]);
+    // O texto do modelo (que pode ter um nome) não vai para a trilha.
+    expect(criada.registros[0].resumo).not.toContain("Maria");
   });
 
   it("gravação recusada não registra: 409 (slug de outra campanha) e 400 (fora do schema)", async () => {

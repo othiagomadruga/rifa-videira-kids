@@ -238,17 +238,53 @@ export function semGruposDoAdmin(dados: DadosCampanha): DadosCampanha {
   return resto;
 }
 
+/** Uma chave das regras do admin na trilha ("ligado" ou "desligado"). */
+const ligado = (valor: boolean) => (valor ? "ligado" : "desligado");
+
+/**
+ * O resumo do primeiro salvamento, o que cria e ativa a campanha: o slug e o preço e, desde a RIFA-043, como nasceram
+ * as regras do admin (D20), no formato dos salvamentos seguintes sem o antes: cada chave com o valor gravado (o do
+ * corpo ou, com o grupo ausente, o padrão, que é o que o INSERT grava) e, das mensagens, só o nome de cada modelo
+ * diferente do padrão (o texto não vai para a trilha). Sem dado pessoal.
+ */
+function resumirCriacaoDaCampanha(depois: DadosCampanha): string {
+  const chaves: [string, boolean][] = [
+    [
+      "pedidos.desconsiderar",
+      depois.pedidos?.desconsiderar ?? PEDIDOS_PADRAO.desconsiderar,
+    ],
+    [
+      "acesso.discipuladores",
+      depois.acesso?.discipuladores ?? ACESSO_PADRAO.discipuladores,
+    ],
+    ["acesso.redes", depois.acesso?.redes ?? ACESSO_PADRAO.redes],
+  ];
+  const { mensagens } = depois;
+  const editadas =
+    mensagens === undefined
+      ? []
+      : TIPOS_MENSAGEM.filter(
+          (tipo) => mensagens[tipo] !== MENSAGENS_PADRAO[tipo],
+        );
+  return [
+    `Campanha criada: slug_rifei ${JSON.stringify(depois.slug_rifei)}`,
+    `preco_bilhete_centavos ${depois.preco_bilhete_centavos}`,
+    ...chaves.map(([nome, valor]) => `${nome}: ${ligado(valor)}`),
+    ...editadas.map((tipo) => `mensagens.${tipo}`),
+  ].join(", ");
+}
+
 /**
  * O que um PUT muda, para a trilha de auditoria (sem dados pessoais: a campanha é só configuração). O slug
  * e o preço saem com o antes e o depois: o slug decide quais vendas contam (D5) e o preço é a base da
- * plausibilidade do webhook; os demais campos saem só pelo nome.
+ * plausibilidade do webhook; os demais campos saem só pelo nome. O primeiro PUT (sem `antes`) sai como
+ * resumirCriacaoDaCampanha.
  */
 export function resumirMudancaDaCampanha(
   antes: CampanhaAtiva | null,
   depois: DadosCampanha,
 ): string {
-  if (antes === null)
-    return `Campanha criada: slug_rifei ${JSON.stringify(depois.slug_rifei)}, preco_bilhete_centavos ${depois.preco_bilhete_centavos}`;
+  if (antes === null) return resumirCriacaoDaCampanha(depois);
   const alterados: string[] = [];
   if (antes.nome !== depois.nome) alterados.push("nome");
   if (antes.slug_rifei !== depois.slug_rifei)
@@ -284,7 +320,6 @@ export function resumirMudancaDaCampanha(
     alterados.push("publico");
   // Regras do admin (D20): cada chave que mudou com o antes e o depois; das mensagens, só o nome do modelo. Grupo
   // ausente no corpo mantém o gravado: não muda nada.
-  const ligado = (valor: boolean) => (valor ? "ligado" : "desligado");
   const chaves: [string, number, boolean | undefined][] = [
     [
       "pedidos.desconsiderar",

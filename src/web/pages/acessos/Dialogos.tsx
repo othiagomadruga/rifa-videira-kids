@@ -374,12 +374,22 @@ export function DialogoRevogar({
     mensagemAoRevogar,
     props,
   );
+  // RIFA-043: o link pelo qual esta sessão entrou. Revogá-lo derruba a sessão deste aparelho (no primeiro acesso,
+  // lançamento 3.1, o admin revoga o link do SM e não o novo, pelo qual acabou de entrar).
+  const desteAparelho = link.desta_sessao;
+  const criado = `Link de ${pessoa.nome} criado em ${formatarDataHora(link.criado_em)}.`;
   return (
     <Dialogo
       aberto
       papel="alertdialog"
-      titulo="Revogar este link?"
-      descricao={`Link de ${pessoa.nome} criado em ${formatarDataHora(link.criado_em)}.`}
+      titulo={
+        desteAparelho ? "Revogar o link deste aparelho?" : "Revogar este link?"
+      }
+      descricao={
+        desteAparelho
+          ? `${criado} Você entrou por este link neste aparelho: ao revogar, você sai do sistema aqui.`
+          : criado
+      }
       aoFechar={() => {
         if (!executando) props.aoFechar();
       }}
@@ -394,16 +404,35 @@ export function DialogoRevogar({
             disabled={executando}
             onClick={() => void confirmar()}
           >
-            {executando ? "Revogando…" : "Revogar link"}
+            {executando
+              ? "Revogando…"
+              : desteAparelho
+                ? "Revogar e sair"
+                : "Revogar link"}
           </Button>
         </>
       }
     >
       <div className="acessos-formulario">
-        <p>
-          O link para de funcionar e quem entrou com ele sai do sistema. Os
-          outros links de {primeiroNome(pessoa.nome)} continuam valendo.
-        </p>
+        {desteAparelho ? (
+          <Aviso
+            tom="alerta"
+            anuncio="nenhum"
+            titulo="Você vai sair do sistema neste aparelho"
+          >
+            <p>
+              A sua sessão aqui foi aberta por este link e cai junto com ele.
+              Para voltar, você vai precisar de outro link válido seu. Se a
+              ideia é trocar de link, entre primeiro pelo link novo e revogue
+              este de lá.
+            </p>
+          </Aviso>
+        ) : (
+          <p>
+            O link para de funcionar e quem entrou com ele sai do sistema. Os
+            outros links de {primeiroNome(pessoa.nome)} continuam valendo.
+          </p>
+        )}
         {erro && (
           <Aviso tom="perigo" titulo="Não foi possível revogar">
             <p>{erro}</p>

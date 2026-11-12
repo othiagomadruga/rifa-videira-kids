@@ -168,6 +168,8 @@ describe("CA4: criação de usuário e de link", () => {
         revogado_em: null,
         ultimo_uso_em: null,
         situacao: "valido",
+        // RIFA-043: o link recém-criado não abriu a sessão de quem criou.
+        desta_sessao: false,
       },
     ]);
     // Validade padrão: 45 dias.
@@ -218,6 +220,7 @@ describe("CA4: criação de usuário e de link", () => {
       expect(Object.keys(link).sort()).toEqual(
         [
           "criado_em",
+          "desta_sessao",
           "expira_em",
           "id",
           "revogado_em",
@@ -388,6 +391,134 @@ describe("CA4: revogar link", () => {
 
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual(erro("nao_encontrado"));
+  });
+});
+
+// RIFA-043 (ensaio geral): no primeiro acesso (lançamento 3.1), o admin gera um link novo, entra por ele e revoga o
+// primeiro. A lista mostra o mais novo primeiro, e no ensaio o link errado foi revogado: a API passa a dizer qual link
+// abriu a sessão de quem pede (`desta_sessao`, calculado de `sessoes.link_id`).
+describe('RIFA-043: o link desta sessão ("este aparelho")', () => {
+  /** Os links do usuário `id` na lista, como a sessão `sessao` os vê. */
+  async function linksVistosPor(sessao: string, id: number) {
+    const res = await chamar(app, "GET", "/api/admin/usuarios", { sessao });
+    expect(res.status).toBe(200);
+    const usuario = respostaListaUsuariosSchema
+      .parse(await res.json())
+      .itens.find((item) => item.id === id);
+    expect(usuario).toBeDefined();
+    return usuario!.links.map(({ id: linkId, desta_sessao }) => ({
+      id: linkId,
+      desta_sessao,
+    }));
+  }
+
+  it("a lista marca só o link que abriu a sessão de quem pede; cada aparelho vê o seu", async () => {
+    // O primeiro admin (o link do SM, lançamento 3.1) entra; gera um link novo e entra por ele noutra aba.
+    const primeiro = await sessaoDe(app, "admin");
+    const resNovo = await chamar(
+      app,
+      "POST",
+      `/api/admin/usuarios/${primeiro.usuarioId}/links`,
+      { sessao: primeiro.sessao },
+    );
+    expect(resNovo.status).toBe(201);
+    const novo = respostaCriarLinkSchema.parse(await resNovo.json()).link;
+    // O link recém-criado ainda não abriu sessão nenhuma.
+    expect(novo.desta_sessao).toBe(false);
+    const sessaoNova = await entrar(app, tokenDaUrl(novo.url));
+
+    // Do mais novo para o mais antigo, como a tela mostra.
+    expect(await linksVistosPor(sessaoNova, primeiro.usuarioId)).toEqual([
+      { id: novo.id, desta_sessao: true },
+      { id: primeiro.linkId, desta_sessao: false },
+    ]);
+    expect(await linksVistosPor(primeiro.sessao, primeiro.usuarioId)).toEqual([
+      { id: novo.id, desta_sessao: false },
+      { id: primeiro.linkId, desta_sessao: true },
+    ]);
+    // Outro admin vê os mesmos links sem nenhuma marca (não entrou por eles).
+    expect(await linksVistosPor(admin, primeiro.usuarioId)).toEqual([
+      { id: novo.id, desta_sessao: false },
+      { id: primeiro.linkId, desta_sessao: false },
+    ]);
+    // Na lista inteira, só um link é o desta sessão.
+    const tudo = respostaListaUsuariosSchema.parse(
+      await (
+        await chamar(app, "GET", "/api/admin/usuarios", {
+          sessao: sessaoNova,
+        })
+      ).json(),
+    );
+    expect(
+      tudo.itens
+        .flatMap((usuario) => usuario.links)
+        .filter((link) => link.desta_sessao)
+        .map((link) => link.id),
+    ).toEqual([novo.id]);
+  });
+
+  it("o PATCH devolve o usuário com a mesma marca; a lista da hierarquia nunca marca", async () => {
+    const eu = await sessaoDe(app, "admin");
+
+    const res = await chamar(
+      app,
+      "PATCH",
+      `/api/admin/usuarios/${eu.usuarioId}`,
+      {
+        corpo: { ativo: true },
+        sessao: eu.sessao,
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const usuario = usuarioSchema.parse(await res.json());
+    expect(usuario.links).toEqual([
+      expect.objectContaining({ id: eu.linkId, desta_sessao: true }),
+    ]);
+
+    await semearCenario();
+    await criarAcessoDaHierarquiaNoBanco("lider", 1);
+    const hierarquia = await chamar(
+      app,
+      "GET",
+      `${ROTAS_ACESSO_HIERARQUIA.listarAcessosHierarquia.caminho}?papel=lider`,
+      { sessao: eu.sessao },
+    );
+    expect(hierarquia.status).toBe(200);
+    const links = (
+      (await hierarquia.json()) as {
+        itens: { usuario: { links: { desta_sessao: boolean }[] } | null }[];
+      }
+    ).itens.flatMap((item) => item.usuario?.links ?? []);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((link) => link.desta_sessao === false)).toBe(true);
+  });
+
+  it("revogar o link desta sessão derruba a própria sessão (o que a tela avisa); a do outro link continua", async () => {
+    const primeiro = await sessaoDe(app, "admin");
+    const novo = respostaCriarLinkSchema.parse(
+      await (
+        await chamar(
+          app,
+          "POST",
+          `/api/admin/usuarios/${primeiro.usuarioId}/links`,
+          { sessao: primeiro.sessao },
+        )
+      ).json(),
+    ).link;
+    const sessaoNova = await entrar(app, tokenDaUrl(novo.url));
+
+    const res = await chamar(app, "DELETE", `/api/admin/links/${novo.id}`, {
+      sessao: sessaoNova,
+    });
+
+    expect(res.status).toBe(204);
+    expect(await sessaoValida(sessaoNova)).toBe(false);
+    expect(await sessaoValida(primeiro.sessao)).toBe(true);
+    expect(await linksVistosPor(primeiro.sessao, primeiro.usuarioId)).toEqual([
+      { id: novo.id, desta_sessao: false },
+      { id: primeiro.linkId, desta_sessao: true },
+    ]);
   });
 });
 
