@@ -59,7 +59,7 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
   // Cada arquivo escolhido é uma tentativa: respostas de uma tentativa antiga são ignoradas.
   const tentativa = useRef(0);
   const controle = useRef<AbortController | null>(null);
-  // O resultado que acabou de chegar recebe o foco (o botão que o pediu fica desabilitado).
+  // O resultado que acabou de chegar recebe o foco (o botão que o pediu fica indisponível).
   const focarDepois = useRef<"conferencia" | "importacao" | "falha" | null>(
     null,
   );
@@ -136,6 +136,8 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
     conferencia.erros.length === 0 &&
     conferencia.total_linhas > 0;
   const podeImportar = conferidaSemErros && ocupado === null;
+  // Conferir e Importar indisponíveis ficam com aria-disabled (RIFA-045): continuam no Tab e a dica diz por quê; o
+  // clique (e o Enter e o espaço) é barrado aqui. O seletor de arquivo pode ficar disabled: o motivo está à vista.
 
   let dicaImportar: string;
   if (ocupado === "importando") dicaImportar = "Importando a planilha…";
@@ -240,8 +242,10 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
               >
                 <Button
                   variante="secundario"
-                  disabled={!podeConferir}
-                  onClick={() => void enviar("conferir")}
+                  aria-disabled={!podeConferir || undefined}
+                  onClick={() => {
+                    if (podeConferir) void enviar("conferir");
+                  }}
                 >
                   {ocupado === "conferindo" ? "Conferindo…" : "Conferir"}
                 </Button>
@@ -269,9 +273,11 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
             <div>
               <ComDica texto={DICAS.importar}>
                 <Button
-                  disabled={!podeImportar}
+                  aria-disabled={!podeImportar || undefined}
                   aria-describedby={idDicaImportar}
-                  onClick={() => void enviar("importar")}
+                  onClick={() => {
+                    if (podeImportar) void enviar("importar");
+                  }}
                 >
                   {ocupado === "importando" ? "Importando…" : "Importar"}
                 </Button>

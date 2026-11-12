@@ -550,6 +550,11 @@ type Respostas = {
   recuperacoes?: (
     antesDe: string | null,
   ) => Recuperacao[] | { itens: Recuperacao[]; proximo: number | null };
+  /**
+   * Segura a resposta de uma chamada (já registrada) até a promessa devolvida terminar; undefined responde na hora.
+   * Ex.: para ver o botão ocupado ("Gravando…", "Carregando…").
+   */
+  segurar?: (chamada: Chamada) => Promise<void> | undefined;
 };
 
 /** API falsa da tela: responde por rota e guarda as chamadas. */
@@ -565,6 +570,8 @@ export function criarApiFalsa(respostas: Respostas = {}) {
       const corpo: unknown =
         typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
       chamadas.push({ metodo, caminho, corpo });
+      const espera = respostas.segurar?.({ metodo, caminho, corpo });
+      if (espera) await espera;
       const responder = (valor: object | Response) =>
         valor instanceof Response ? valor : respostaJson(valor);
       if (caminho === "/api/admin/campanha") {

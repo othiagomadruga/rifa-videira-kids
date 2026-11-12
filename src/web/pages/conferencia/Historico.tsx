@@ -146,13 +146,16 @@ export function Historico({ versao }: { versao: number }) {
           />
           {proximo !== null && (
             <div className="conferencia-acoes">
+              {/* Carregando: indisponível com aria-disabled (RIFA-045), no Tab e com a dica; o clique é barrado. */}
               <ComDica
                 texto={carregandoMais ? DICAS.carregando : DICAS.carregarMais}
               >
                 <Button
                   variante="secundario"
-                  disabled={carregandoMais}
-                  onClick={() => void carregarMais(proximo)}
+                  aria-disabled={carregandoMais || undefined}
+                  onClick={() => {
+                    if (!carregandoMais) void carregarMais(proximo);
+                  }}
                 >
                   {carregandoMais ? "Carregando…" : "Carregar mais"}
                 </Button>
