@@ -8,7 +8,7 @@ A importação cadastra de uma vez as redes, os discipuladores e as células, co
 1. Baixe o modelo [`docs/modelos/hierarquia-modelo.csv`](modelos/hierarquia-modelo.csv).
 2. Abra no Google Planilhas ou no Excel, apague as 2 linhas de exemplo e preencha **uma linha por célula**.
 3. Exporte em **CSV UTF-8** (passo a passo abaixo).
-4. Importe o arquivo na área da coordenação: primeiro **simulando** (confere tudo e não grava nada), depois de verdade.
+4. Importe o arquivo na área da coordenação (**Hierarquia** → aba **Importar planilha**): primeiro **Conferir** (confere tudo e não grava nada), depois **Importar**.
 
 ## A planilha: uma linha por célula
 
@@ -59,10 +59,10 @@ Regras do arquivo:
 
 ## Importar
 
-Envie o arquivo pela importação da hierarquia, na área da coordenação.
+Envie o arquivo em **Coordenação → Hierarquia →** aba **Importar planilha**: **Escolher arquivo**, **Conferir** e **Importar**.
 
-- **Simule primeiro.** A simulação valida o arquivo inteiro e mostra quantas redes, discipuladores e células seriam criados, atualizados ou ficariam iguais, com os erros de cada linha. Nada é gravado.
-- Sem erros, importe de verdade: o resultado é o mesmo da simulação, agora gravado.
+- **Confira primeiro** (botão **Conferir**). A conferência valida o arquivo inteiro e mostra quantas redes, discipuladores e células seriam criados, atualizados ou ficariam iguais, com os erros de cada linha. Nada é gravado.
+- Sem erros, toque em **Importar**: o resultado é o mesmo da conferência, agora gravado.
 - **Avisos** não impedem a importação (colunas ignoradas e linhas repetidas iguais), mas leia antes de importar: uma coluna ignorada não entra no sistema.
 - Para quem integra pela API: `POST /api/admin/hierarquia/importar` com `{ "csv": "<conteúdo do arquivo>", "simular": true }`. O formato da resposta está em [api.md](api.md#post-apiadminhierarquiaimportar-coordenacao).
 
@@ -105,7 +105,7 @@ Alguns problemas impedem a leitura do arquivo inteiro (resposta `csv_invalido`, 
 
 ## Avisos
 
-Avisos não impedem a importação. Eles aparecem na simulação e no resultado, com o número da linha (o cabeçalho é a linha 1).
+Avisos não impedem a importação. Eles aparecem na conferência e no resultado, com o número da linha (o cabeçalho é a linha 1).
 
 | Aviso | O que fazer |
 |---|---|
