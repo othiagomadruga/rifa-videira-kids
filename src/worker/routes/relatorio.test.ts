@@ -367,6 +367,74 @@ describe("CA2: as contas fecham entre os arquivos (cenário do painel com telefo
   );
 });
 
+describe("CA2: as contas fecham também nas bordas (revisão), em Belém e num fuso de outro deslocamento", () => {
+  // Uma célula sem afiliado e sem venda (no Discipulador Davi, que não tinha célula: ele e ela passam a aparecer
+  // zerados); vendas sem célula antes do início, na Semana 3 e depois do fim; Brasil sem DDD e com DDD fora da
+  // tabela; uma venda mais tarde no dia de hoje (depois do "agora") e outra no dia seguinte (relógio adiantado).
+  const BORDAS: PedidoTeste[] = [
+    { ...aprovado(null, "2026-11-21T15:00:00.000Z", 2), pais: "55", ddd: "91" },
+    { ...aprovado(900, meioDia(16), 3), pais: "55", ddd: "23" },
+    { ...aprovado(null, "2026-12-15T15:00:00.000Z", 4), pais: "55", ddd: null },
+    { ...aprovado(103, `${dia(9)}T23:00:00.000Z`, 5), pais: "55", ddd: "94" },
+    { ...aprovado(104, meioDia(10), 6), pais: "1", ddd: null },
+  ];
+
+  /** Os aprovados que contam na campanha ativa, direto do banco (sem as leituras do painel e do mapa). */
+  async function noBanco(): Promise<Totais> {
+    const linha = await env.DB.prepare(
+      `SELECT count(*) AS pedidos, sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos
+       FROM pedidos JOIN campanhas AS c ON c.id = pedidos.campanha_id
+       WHERE c.ativa = 1 AND status = 'approved' AND desconsiderado_em IS NULL`,
+    ).first<Totais>();
+    return linha!;
+  }
+
+  it.each(["America/Belem", "America/Manaus"])(
+    "%s: véspera, dia 9, dia 16 e depois do fim; depois do fim, totais + fora das datas = o banco",
+    async (fuso) => {
+      await semearCenario({
+        pedidos: [...PEDIDOS_COM_TELEFONE, ...BORDAS],
+        campanha: campanhaEntradaSchema.parse({
+          ...DADOS_CAMPANHA,
+          fuso_horario: fuso,
+        }),
+      });
+      await env.DB.prepare(
+        `INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
+         VALUES (6, 40, 'Célula Filadélfia', 8, 'Líder da Célula Filadélfia')`,
+      ).run();
+      for (const instante of [
+        "2026-11-22T15:00:00.000Z",
+        AGORA.toISOString(),
+        "2026-12-08T15:00:00.000Z",
+        "2026-12-20T15:00:00.000Z",
+      ]) {
+        agora = new Date(instante);
+        const arquivos = await baixarTodos();
+        const totais = conferirContas(arquivos);
+        const filadelfia = registros("celulas", arquivos.celulas).find(
+          (linha) => linha.celula === "Célula Filadélfia",
+        );
+        expect(filadelfia && vendas(filadelfia)).toEqual(ZERO);
+        expect(
+          registros("discipuladores", arquivos.discipuladores).map(
+            (linha) => linha.discipulador,
+          ),
+        ).toContain("Discipulador Davi");
+        if (instante.startsWith("2026-12-20")) {
+          const [linha] = registros("totais", arquivos.totais);
+          const fora: Totais = {
+            pedidos: inteiro(linha.pedidos_fora_das_datas),
+            bilhetes: inteiro(linha.bilhetes_fora_das_datas),
+            centavos: centavos(linha.arrecadacao_fora_das_datas),
+          };
+          expect(somar([totais, fora])).toEqual(await noBanco());
+        }
+      }
+    },
+  );
+});
+
 // ---------------------------------------------------------------------------------------------------
 // CA3: o desconsiderado
 // ---------------------------------------------------------------------------------------------------
