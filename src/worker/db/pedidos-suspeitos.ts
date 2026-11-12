@@ -5,6 +5,7 @@
  */
 import {
   LIMITE_PEDIDOS_SUSPEITOS,
+  type MotivoDesconsideracao,
   type PedidoSuspeito,
   type RespostaPedidosSuspeitos,
 } from "../../shared/contracts";
@@ -53,14 +54,22 @@ export function prepararMarcacaoSuspeito(
     );
 }
 
-interface LinhaSuspeito extends Omit<PedidoSuspeito, "motivos"> {
+interface LinhaSuspeito extends Omit<
+  PedidoSuspeito,
+  "motivos" | "desconsiderado"
+> {
   motivos: string;
+  desconsiderado_em: string | null;
+  desconsiderado_motivo: MotivoDesconsideracao | null;
+  desconsiderado_observacao: string | null;
 }
 
 /**
  * Os pedidos marcados da campanha ativa, o mais recente primeiro (no máximo LIMITE_PEDIDOS_SUSPEITOS), com
  * a célula atual do afiliado (D7: o pedido conta para ela) e o total de marcados. Lê só as linhas
- * marcadas (e as suas junções), nunca a tabela de pedidos inteira.
+ * marcadas (e as suas junções), nunca a tabela de pedidos inteira. O pedido que o admin desconsiderou (D20)
+ * continua na lista e no total, com `desconsiderado` (a revisão terminou); as colunas estão na linha de pedidos
+ * que o JOIN já lê.
  */
 export async function listarPedidosSuspeitos(
   db: D1Database,
@@ -71,7 +80,8 @@ export async function listarPedidosSuspeitos(
       .prepare(
         `SELECT s.pedido_id, p.affiliate_id, a.celula_id, c.nome AS celula_nome,
                 s.qtd_bilhetes, s.total_centavos, s.esperado_centavos, s.motivos,
-                p.aprovado_em, s.marcado_em
+                p.aprovado_em, s.marcado_em, p.desconsiderado_em, p.desconsiderado_motivo,
+                p.desconsiderado_observacao
          FROM pedidos_suspeitos AS s
          JOIN pedidos AS p ON p.id = s.pedido_id
          LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
@@ -88,10 +98,19 @@ export async function listarPedidosSuspeitos(
     ),
   ]);
   return {
-    itens: (itens.results as LinhaSuspeito[]).map((linha) => ({
-      ...linha,
-      motivos: JSON.parse(linha.motivos) as PedidoSuspeito["motivos"],
-    })),
+    itens: (itens.results as LinhaSuspeito[]).map(
+      ({
+        desconsiderado_em: em,
+        desconsiderado_motivo: motivo,
+        desconsiderado_observacao: observacao,
+        ...linha
+      }) => ({
+        ...linha,
+        motivos: JSON.parse(linha.motivos) as PedidoSuspeito["motivos"],
+        desconsiderado:
+          em === null || motivo === null ? null : { motivo, observacao, em },
+      }),
+    ),
     total: (contagem.results[0] as { total: number } | undefined)?.total ?? 0,
   };
 }

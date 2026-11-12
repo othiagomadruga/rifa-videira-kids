@@ -8,9 +8,9 @@
  * 2. um `db.batch` com TODAS as células e a hierarquia (com `qtd_pessoas`; a meta proporcional reparte o
  *    total entre todas), as vendas aprovadas agrupadas por célula e dia local e, no resumo de rede,
  *    discipulador ou célula, o nome e a divisão do escopo.
- * As vendas são os pedidos `approved` da campanha, de QUALQUER data, com a célula resolvida pelo afiliado
- * na leitura (D7) e `celula_id` null para as sem célula (sem afiliado ou afiliado não vinculado): o mesmo
- * conjunto da view `vendas_aprovadas`. São no máximo (células + 1) × dias com venda linhas, e os
+ * As vendas são os pedidos `approved` da campanha que contam (sem os desconsiderados pelo admin, D20), de
+ * QUALQUER data, com a célula resolvida pelo afiliado na leitura (D7) e `celula_id` null para as sem célula (sem
+ * afiliado ou afiliado não vinculado): o mesmo conjunto da view `vendas_aprovadas`. São no máximo (células + 1) × dias com venda linhas, e os
  * montadores separam a janela da campanha, as vendas sem célula e as de fora da janela.
  *
  * Custo (o D1 cobra por linha lida). Cada requisição percorre os pedidos aprovados da campanha; o Worker
@@ -77,6 +77,9 @@ const SELECIONAR_CELULAS = `
 /**
  * Vendas aprovadas da campanha por célula e dia local. Primeiro agrupa os pedidos por afiliado e dia
  * (`diaLocal` é a expressão do dia), depois resolve a célula pelo afiliado (D7) nas linhas já agrupadas.
+ * O pedido desconsiderado (D20) não conta: `desconsiderado_em IS NULL` repete o WHERE do índice parcial da
+ * migração 0008 (o da 0003 recriado), sem o qual o SQLite não o usa (o plano cairia no índice da 0007, com
+ * B-tree temporária). painel.test.ts trava o plano.
  */
 const selecionarVendasPorDia = (diaLocal: string) => `
   SELECT a.celula_id AS celula_id, v.dia AS dia, sum(v.pedidos) AS pedidos,
@@ -85,7 +88,7 @@ const selecionarVendasPorDia = (diaLocal: string) => `
     SELECT affiliate_id, ${diaLocal} AS dia, count(*) AS pedidos,
       sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos
     FROM pedidos
-    WHERE campanha_id = ?1 AND status = 'approved'
+    WHERE campanha_id = ?1 AND status = 'approved' AND desconsiderado_em IS NULL
     GROUP BY affiliate_id, dia
   ) AS v
   LEFT JOIN afiliados AS a ON a.affiliate_id = v.affiliate_id
@@ -103,16 +106,16 @@ export const SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3 = selecionarVendasPorDia(
 );
 
 /** Outro deslocamento fixo, como parâmetro (?2 = '+345 minutes'): o GROUP BY não usa o índice. */
-const SELECIONAR_VENDAS_POR_DIA = selecionarVendasPorDia(
+export const SELECIONAR_VENDAS_POR_DIA = selecionarVendasPorDia(
   "date(aprovado_em, ?2)",
 );
 
 /** As vendas uma a uma, para agrupar no Worker quando o fuso não tem deslocamento fixo. */
-const SELECIONAR_VENDAS = `
+export const SELECIONAR_VENDAS = `
   SELECT a.celula_id AS celula_id, p.aprovado_em, p.qtd_bilhetes, p.total_centavos
   FROM pedidos AS p
   LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-  WHERE p.campanha_id = ?1 AND p.status = 'approved'`;
+  WHERE p.campanha_id = ?1 AND p.status = 'approved' AND p.desconsiderado_em IS NULL`;
 
 type EscopoComId = Extract<EscopoPainel, "rede" | "discipulador" | "celula">;
 

@@ -166,8 +166,9 @@ type LinhaPedido = Record<string, unknown> & {
 
 /**
  * O pedido como está no banco; também confere que ele se converte no `Pedido` do contrato. As colunas da
- * conferência (migração 0004, RIFA-012) são conferidas aqui e saem do objeto devolvido: todo pedido
- * gravado pelo webhook tem origem 'webhook' e nenhuma recuperação.
+ * conferência (migração 0004, RIFA-012) e as da desconsideração (0008, D20) são conferidas aqui e saem do objeto
+ * devolvido: todo pedido gravado pelo webhook tem origem 'webhook', nenhuma recuperação e nenhuma
+ * desconsideração (o webhook nunca escreve nelas).
  */
 async function lerPedido(id: string): Promise<LinhaPedido | null> {
   const completa = await db
@@ -175,10 +176,26 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
     .bind(id)
     .first<LinhaPedido>();
   if (completa === null) return null;
-  const { origem, recuperacao_id, ...linha } = completa;
-  expect({ origem, recuperacao_id }).toEqual({
+  const {
+    origem,
+    recuperacao_id,
+    desconsiderado_em,
+    desconsiderado_motivo,
+    desconsiderado_observacao,
+    ...linha
+  } = completa;
+  expect({
+    origem,
+    recuperacao_id,
+    desconsiderado_em,
+    desconsiderado_motivo,
+    desconsiderado_observacao,
+  }).toEqual({
     origem: "webhook",
     recuperacao_id: null,
+    desconsiderado_em: null,
+    desconsiderado_motivo: null,
+    desconsiderado_observacao: null,
   });
   pedidoSchema.parse({
     ...linha,

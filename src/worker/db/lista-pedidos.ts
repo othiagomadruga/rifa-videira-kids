@@ -1,8 +1,15 @@
 /**
  * Lista de pedidos da coordenação (RIFA-025, D16; docs/api.md, GET /api/admin/pedidos): os pedidos da campanha
  * ativa, do registrado mais novo para o mais antigo (empate pelo id), com a célula resolvida pelo afiliado na
- * leitura (D7), `suspeito` (pedidos_suspeitos, D11), totais por status e cursor opaco. Só lê; nada do comprador
- * além do DDD (D1).
+ * leitura (D7), `suspeito` (pedidos_suspeitos, D11), `desconsiderado` (D20), `origem` (D16, RIFA-012), totais por
+ * status e cursor opaco. Só lê; nada do comprador além do DDD (D1).
+ *
+ * Desconsiderados (RIFA-028, D20): ficam na lista, com o selo, e fora dos totais (que contam só o que conta). O
+ * filtro `desconsiderado=true` sem célula usa o índice parcial da migração 0008
+ * (`pedidos_desconsiderados_por_registro`) e lê só os desconsiderados; com `false`, o da 0007, conferindo a coluna
+ * na linha. O `+` de `+p.desconsiderado_em IS NULL` tira do planejador o índice parcial da 0003 recriado (com
+ * `status=approved`, a consulta satisfaz o WHERE dele, e a página o leria inteiro e ordenaria numa B-tree
+ * temporária): hoje ele já escolhe o da 0007 sem o `+` (conferido na -db); o `+` é a garantia, como no mapa.
  *
  * Custo (o D1 cobra por linha lida, D10). Uma ida ao banco: a página e, só na primeira, os totais, no mesmo
  * db.batch (uma transação: os totais batem com a lista). A campanha ativa entra como subconsulta. Cada forma de
@@ -21,6 +28,7 @@
 import type {
   ConsultaPedidos,
   ItemPedido,
+  MotivoDesconsideracao,
   RespostaPedidos,
   StatusPedido,
 } from "../../shared/contracts";
@@ -35,7 +43,7 @@ export interface CursorPedidos {
 /** Filtros da lista (os da consulta, menos a paginação). */
 export type FiltrosPedidos = Pick<
   ConsultaPedidos,
-  "status" | "celula_id" | "sem_celula" | "id"
+  "status" | "celula_id" | "sem_celula" | "id" | "desconsiderado"
 >;
 
 /** Um comando SQL montado: o texto (só trechos constantes do código) e os valores, sempre por bind. */
@@ -104,9 +112,13 @@ export function decodificarCursorPedidos(texto: string): CursorPedidos | null {
 
 const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 
-const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p.affiliate_id, a.celula_id,
+export const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p.affiliate_id, a.celula_id,
     c.nome AS celula_nome, p.ddd, p.criado_em, p.aprovado_em, p.expirado_em, p.registrado_em, p.atualizado_em,
-    EXISTS (SELECT 1 FROM pedidos_suspeitos AS s WHERE s.pedido_id = p.id) AS suspeito`;
+    EXISTS (SELECT 1 FROM pedidos_suspeitos AS s WHERE s.pedido_id = p.id) AS suspeito, p.origem,
+    p.desconsiderado_em, p.desconsiderado_motivo, p.desconsiderado_observacao`;
+
+/** O que conta (D20): sem a desconsideração do admin. */
+const CONTA = "p.desconsiderado_em IS NULL";
 
 const PEDIDOS_COM_AFILIADO = `pedidos AS p
     LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id`;
@@ -170,7 +182,8 @@ function origem(
 /**
  * A página: `limite + 1` linhas (a a mais só diz se há próxima), a partir do cursor. A comparação de linha
  * `(registrado_em, id) < (?, ?)` é a mesma ordem do ORDER BY: nenhuma linha se repete nem fica de fora entre
- * as páginas.
+ * as páginas. O filtro `desconsiderado` (D20): `true` repete o WHERE do índice parcial da 0008
+ * (`desconsiderado_em IS NOT NULL`); `false` vai com o `+`, conferido na linha (veja o topo do arquivo).
  */
 export function comandoListaPedidos(
   filtros: FiltrosPedidos,
@@ -186,6 +199,9 @@ export function comandoListaPedidos(
   const condicoes = [...base.condicoes];
   if (filtros.status !== undefined)
     condicoes.push(`p.status = ${valor(filtros.status)}`);
+  if (filtros.desconsiderado === true)
+    condicoes.push("p.desconsiderado_em IS NOT NULL");
+  else if (filtros.desconsiderado === false) condicoes.push(`+${CONTA}`);
   if (cursor !== null)
     condicoes.push(
       `(p.registrado_em, p.id) < (${valor(cursor.registrado_em)}, ${valor(cursor.id)})`,
@@ -198,7 +214,11 @@ export function comandoListaPedidos(
   return { sql, valores };
 }
 
-/** Totais por status com os mesmos filtros de célula, sem célula e id (sem o de status nem a paginação). */
+/**
+ * Totais por status com os mesmos filtros de célula, sem célula e id (sem os de status e de desconsiderado nem a
+ * paginação). Contam só os pedidos que contam (D20): o desconsiderado aparece na lista, mas não nos totais. A coluna
+ * está na linha que os totais já leem (nenhuma linha a mais).
+ */
 export function comandoTotaisPedidos(filtros: FiltrosPedidos): ComandoSql {
   const comAfiliado = filtros.id !== undefined;
   const base = origem(filtros, false);
@@ -208,7 +228,7 @@ export function comandoTotaisPedidos(filtros: FiltrosPedidos): ComandoSql {
   const sql = `SELECT p.status, count(*) AS pedidos, sum(p.qtd_bilhetes) AS bilhetes,
     sum(p.total_centavos) AS total_centavos
   FROM ${de}
-  WHERE ${base.condicoes.map(semIndiceDaCampanha).join("\n    AND ")}
+  WHERE ${[...base.condicoes.map(semIndiceDaCampanha), CONTA].join("\n    AND ")}
   GROUP BY p.status`;
   return { sql, valores: base.valores };
 }
@@ -222,8 +242,32 @@ function semIndiceDaCampanha(condicao: string): string {
 // Leitura
 // ---------------------------------------------------------------------------------------------------
 
-interface LinhaPedido extends Omit<ItemPedido, "suspeito"> {
+/** Uma linha de COLUNAS_ITEM, como o D1 devolve. */
+export interface LinhaPedido extends Omit<
+  ItemPedido,
+  "suspeito" | "desconsiderado"
+> {
   suspeito: number;
+  desconsiderado_em: string | null;
+  desconsiderado_motivo: MotivoDesconsideracao | null;
+  desconsiderado_observacao: string | null;
+}
+
+/** A linha lida (COLUNAS_ITEM) como um item da lista: a desconsideração vira o selo `desconsiderado`. */
+export function itemDaLinha(linha: LinhaPedido): ItemPedido {
+  const {
+    suspeito,
+    desconsiderado_em: em,
+    desconsiderado_motivo: motivo,
+    desconsiderado_observacao: observacao,
+    ...resto
+  } = linha;
+  return {
+    ...resto,
+    suspeito: suspeito === 1,
+    desconsiderado:
+      em === null || motivo === null ? null : { motivo, observacao, em },
+  };
 }
 
 interface LinhaTotal {
@@ -258,9 +302,7 @@ export async function listarPedidos(
   }
   const [linhas, linhasTotais] = await db.batch(comandos);
   const resultados = linhas.results as LinhaPedido[];
-  const itens = resultados
-    .slice(0, consulta.limite)
-    .map((linha) => ({ ...linha, suspeito: linha.suspeito === 1 }));
+  const itens = resultados.slice(0, consulta.limite).map(itemDaLinha);
   const ultimo = itens.at(-1);
   let totais: RespostaPedidos["totais"] = null;
   if (linhasTotais !== undefined) {

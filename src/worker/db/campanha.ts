@@ -13,13 +13,21 @@
 // - As datas dos períodos, a data final e a soma dos percentuais saem do contrato
 //   (src/shared/contracts/calendario.ts), o mesmo código que a tela usa.
 // - Auditoria (RIFA-013b): quem salvou e o que mudou vão no mesmo db.batch (resumirMudancaDaCampanha).
+// - Regras do admin (Sprint 6, D20; colunas da migração 0008): as chaves `pedidos.desconsiderar`,
+//   `acesso.discipuladores` e `acesso.redes` e os modelos das mensagens. No PUT, o grupo AUSENTE mantém o gravado
+//   (no primeiro PUT, o padrão das colunas) e o grupo presente substitui o grupo inteiro. Um modelo igual ao padrão
+//   do contrato (MENSAGENS_PADRAO) é gravado como NULL (= o padrão): se o padrão mudar um dia, quem nunca editou
+//   acompanha. Na leitura, NULL volta como o padrão.
 import type { z } from "zod";
 import {
+  MENSAGENS_PADRAO,
+  TIPOS_MENSAGEM,
   calcularCalendario,
   respostaCampanhaSchema,
   somarPercentuais,
   type Campanha,
   type DetalheValidacao,
+  type TipoMensagem,
   type corpoSalvarCampanhaSchema,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
@@ -62,9 +70,30 @@ export interface CampanhaAtiva {
   ranking_criterio: string;
   publico_mostra_percentual_meta: number;
   publico_limite_ranking: number | null;
+  /** Regras do admin (D20, migração 0008): as chaves (0/1) e os modelos (NULL = o padrão do contrato). */
+  pedidos_desconsiderar: number;
+  acesso_discipuladores: number;
+  acesso_redes: number;
+  mensagem_link_coordenacao: string | null;
+  mensagem_link_lider: string | null;
+  mensagem_link_discipulador: string | null;
+  mensagem_link_rede: string | null;
   criado_em: string;
   atualizado_em: string;
   periodos: PeriodoGravado[];
+}
+
+/** A coluna de cada modelo de mensagem (D20). */
+const COLUNA_DA_MENSAGEM = {
+  link_coordenacao: "mensagem_link_coordenacao",
+  link_lider: "mensagem_link_lider",
+  link_discipulador: "mensagem_link_discipulador",
+  link_rede: "mensagem_link_rede",
+} as const satisfies Record<TipoMensagem, keyof CampanhaAtiva>;
+
+/** O modelo que vale: o gravado ou, com NULL, o padrão do contrato. */
+function modeloGravado(campanha: CampanhaAtiva, tipo: TipoMensagem): string {
+  return campanha[COLUNA_DA_MENSAGEM[tipo]] ?? MENSAGENS_PADRAO[tipo];
 }
 
 /** Linha da consulta: os períodos chegam como texto JSON. */
@@ -76,7 +105,9 @@ type LinhaCampanhaAtiva = Omit<CampanhaAtiva, "periodos"> & {
 const SELECIONAR_CAMPANHA_ATIVA = `
   SELECT c.id, c.nome, c.slug_rifei, c.fuso_horario, c.data_inicio, c.preco_bilhete_centavos,
     c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio,
-    c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.criado_em, c.atualizado_em,
+    c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.pedidos_desconsiderar,
+    c.acesso_discipuladores, c.acesso_redes, c.mensagem_link_coordenacao, c.mensagem_link_lider,
+    c.mensagem_link_discipulador, c.mensagem_link_rede, c.criado_em, c.atualizado_em,
     (SELECT json_group_array(json_object('ordem', p.ordem, 'nome', p.nome, 'dias', p.dias,
         'percentual_bp', p.percentual_bp))
       FROM campanha_periodos AS p WHERE p.campanha_id = c.id) AS periodos
@@ -86,11 +117,15 @@ const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 
 // Cria a campanha ativa ou, se já existe uma, troca a configuração dela (upsert pelo índice parcial
 // campanhas_uma_ativa). criado_em fica como estava; atualizado_em vira o instante da gravação.
+// Regras do admin (D20): ?12 a ?14 são as chaves (null = grupo ausente: o padrão no INSERT, o gravado no UPDATE);
+// ?15 = 1 quando o grupo `mensagens` veio, e ?16 a ?19 são os modelos (null = o padrão do contrato).
 const GRAVAR_CAMPANHA = `
   INSERT INTO campanhas (nome, slug_rifei, ativa, fuso_horario, data_inicio, preco_bilhete_centavos,
     meta_unidade, meta_regra, meta_valor, ranking_criterio, publico_mostra_percentual_meta,
-    publico_limite_ranking)
-  VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+    publico_limite_ranking, pedidos_desconsiderar, acesso_discipuladores, acesso_redes,
+    mensagem_link_coordenacao, mensagem_link_lider, mensagem_link_discipulador, mensagem_link_rede)
+  VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, coalesce(?12, 0), coalesce(?13, 1),
+    coalesce(?14, 1), ?16, ?17, ?18, ?19)
   ON CONFLICT (ativa) WHERE ativa = 1 DO UPDATE SET
     nome = excluded.nome,
     slug_rifei = excluded.slug_rifei,
@@ -103,7 +138,22 @@ const GRAVAR_CAMPANHA = `
     ranking_criterio = excluded.ranking_criterio,
     publico_mostra_percentual_meta = excluded.publico_mostra_percentual_meta,
     publico_limite_ranking = excluded.publico_limite_ranking,
+    pedidos_desconsiderar = coalesce(?12, pedidos_desconsiderar),
+    acesso_discipuladores = coalesce(?13, acesso_discipuladores),
+    acesso_redes = coalesce(?14, acesso_redes),
+    mensagem_link_coordenacao = CASE WHEN ?15 = 1 THEN ?16 ELSE mensagem_link_coordenacao END,
+    mensagem_link_lider = CASE WHEN ?15 = 1 THEN ?17 ELSE mensagem_link_lider END,
+    mensagem_link_discipulador = CASE WHEN ?15 = 1 THEN ?18 ELSE mensagem_link_discipulador END,
+    mensagem_link_rede = CASE WHEN ?15 = 1 THEN ?19 ELSE mensagem_link_rede END,
     atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
+
+/** Chave (0/1) para o bind; null = grupo ausente. */
+const chave = (valor: boolean | undefined): number | null =>
+  valor === undefined ? null : valor ? 1 : 0;
+
+/** O modelo para gravar: igual ao padrão do contrato vira NULL (= o padrão). */
+const modeloParaGravar = (tipo: TipoMensagem, modelo: string): string | null =>
+  modelo === MENSAGENS_PADRAO[tipo] ? null : modelo;
 
 function campanhaDaLinha(
   linha: LinhaCampanhaAtiva | null | undefined,
@@ -172,6 +222,30 @@ export function resumirMudancaDaCampanha(
     antes.publico_limite_ranking !== depois.publico.limite_ranking
   )
     alterados.push("publico");
+  // Regras do admin (D20): cada chave que mudou com o antes e o depois; das mensagens, só o nome do modelo. Grupo
+  // ausente no corpo mantém o gravado: não muda nada.
+  const ligado = (valor: boolean) => (valor ? "ligado" : "desligado");
+  const chaves: [string, number, boolean | undefined][] = [
+    [
+      "pedidos.desconsiderar",
+      antes.pedidos_desconsiderar,
+      depois.pedidos?.desconsiderar,
+    ],
+    [
+      "acesso.discipuladores",
+      antes.acesso_discipuladores,
+      depois.acesso?.discipuladores,
+    ],
+    ["acesso.redes", antes.acesso_redes, depois.acesso?.redes],
+  ];
+  for (const [nome, gravada, nova] of chaves)
+    if (nova !== undefined && (gravada === 1) !== nova)
+      alterados.push(`${nome}: ${ligado(gravada === 1)} → ${ligado(nova)}`);
+  const { mensagens } = depois;
+  if (mensagens !== undefined)
+    for (const tipo of TIPOS_MENSAGEM)
+      if (modeloGravado(antes, tipo) !== mensagens[tipo])
+        alterados.push(`mensagens.${tipo}`);
   return alterados.length === 0
     ? "Configuração salva sem mudanças"
     : `Alterado: ${alterados.join(", ")}`;
@@ -201,6 +275,15 @@ export async function salvarCampanhaAtiva(
         dados.ranking.criterio,
         dados.publico.mostra_percentual_meta ? 1 : 0,
         dados.publico.limite_ranking,
+        chave(dados.pedidos?.desconsiderar),
+        chave(dados.acesso?.discipuladores),
+        chave(dados.acesso?.redes),
+        dados.mensagens === undefined ? 0 : 1,
+        ...TIPOS_MENSAGEM.map((tipo) =>
+          dados.mensagens === undefined
+            ? null
+            : modeloParaGravar(tipo, dados.mensagens[tipo]),
+        ),
       ),
     db.prepare(
       `DELETE FROM campanha_periodos WHERE campanha_id = ${ID_DA_ATIVA}`,
@@ -287,6 +370,14 @@ export function montarCampanha(campanha: CampanhaAtiva): Campanha {
       mostra_percentual_meta: campanha.publico_mostra_percentual_meta === 1,
       limite_ranking: campanha.publico_limite_ranking,
     },
+    pedidos: { desconsiderar: campanha.pedidos_desconsiderar === 1 },
+    acesso: {
+      discipuladores: campanha.acesso_discipuladores === 1,
+      redes: campanha.acesso_redes === 1,
+    },
+    mensagens: Object.fromEntries(
+      TIPOS_MENSAGEM.map((tipo) => [tipo, modeloGravado(campanha, tipo)]),
+    ),
     criado_em: campanha.criado_em,
     atualizado_em: campanha.atualizado_em,
   });

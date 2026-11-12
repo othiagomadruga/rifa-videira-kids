@@ -46,6 +46,8 @@ let volume: {
   daCelula: number;
   /** Pedidos sem célula (sem afiliado ou com afiliado não vinculado). */
   semCelula: number;
+  /** Pedidos desconsiderados pelo admin (RIFA-028, D20): 1 de cada 100. */
+  desconsiderados: number;
   entregas: number;
   entregas24h: number;
   erros24h: number;
@@ -207,6 +209,11 @@ beforeAll(async () => {
          strftime('%Y-%m-%dT%H:%M:%fZ', '2026-11-22T15:05:01.000Z', '+' || (i * 246) || ' seconds')
        FROM n`,
     ),
+    // 1 de cada 100 pedidos (de todos os status) foi desconsiderado pelo admin (D20).
+    db.prepare(
+      `UPDATE pedidos SET desconsiderado_em = '2026-12-01T12:00:00.000Z', desconsiderado_motivo = 'teste'
+       WHERE CAST(substr(id, 3) AS INTEGER) % 100 = 7`,
+    ),
     // 1 de cada 50 aprovados está na lista de suspeitos.
     db.prepare(
       `INSERT INTO pedidos_suspeitos (pedido_id, qtd_bilhetes, total_centavos, esperado_centavos, motivos, marcado_em)
@@ -243,6 +250,7 @@ beforeAll(async () => {
            WHERE a.celula_id = ?1) AS daCelula,
          (SELECT count(*) FROM pedidos AS p LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
            WHERE a.celula_id IS NULL) AS semCelula,
+         (SELECT count(*) FROM pedidos WHERE desconsiderado_em IS NOT NULL) AS desconsiderados,
          (SELECT count(*) FROM webhook_eventos) AS entregas,
          (SELECT count(*) FROM webhook_eventos WHERE recebido_em >= ?2) AS entregas24h,
          (SELECT count(*) FROM webhook_eventos WHERE resultado = 'erro_validacao' AND recebido_em >= ?2)
@@ -263,6 +271,7 @@ it("o volume é o da revisão do contrato", () => {
     pedidos: 7000,
     daCelula: 175,
     semCelula: 1400,
+    desconsiderados: 70,
     entregas: 20000,
     entregas24h: 912,
     erros24h: 20,
@@ -333,6 +342,77 @@ describe("pedidos: a lista sem filtro de célula desce pelo índice da 0007 e pa
         expect(linhasLidas).toBeLessThanOrEqual(10);
       }
     }
+  });
+});
+
+describe("pedidos: o filtro desconsiderado (RIFA-028, D20) e a origem (D16) na lista", () => {
+  it("desconsiderado=true: o índice parcial da 0008, que só tem os desconsiderados (~2 linhas por desconsiderado)", async () => {
+    for (const cursor of [null, meio]) {
+      const { plano, linhasLidas, linhas } = await medir(
+        comandoListaPedidos({ desconsiderado: true }, cursor, 50),
+      );
+      expect(linhas).toBe(cursor === null ? 51 : 35);
+      expect(plano[0]).toMatch(
+        /^SEARCH p USING INDEX pedidos_desconsiderados_por_registro \(campanha_id=\?/,
+      );
+      expect(semBtreeTemporaria(plano)).toEqual([]);
+      // Medido: 154 (a 1ª página) com 70 desconsiderados; pelo índice da 0007, a página leria ~10 mil linhas.
+      expect(linhasLidas).toBeLessThanOrEqual(3 * volume.desconsiderados);
+    }
+  });
+
+  it("desconsiderado=false, com e sem status: o índice da 0007 (nunca o parcial da 0003, que ordenaria tudo)", async () => {
+    for (const filtros of [
+      { desconsiderado: false },
+      { desconsiderado: false, status: "approved" as const },
+    ]) {
+      const { plano, linhasLidas, linhas } = await medir(
+        comandoListaPedidos(filtros, null, 50),
+      );
+      expect(linhas).toBe(51);
+      expect(plano).toContain(
+        "SEARCH p USING INDEX pedidos_por_campanha_registro (campanha_id=?)",
+      );
+      expect(plano.join("\n")).not.toContain(
+        "pedidos_aprovados_por_afiliado_dia",
+      );
+      expect(semBtreeTemporaria(plano)).toEqual([]);
+      // Medido: ~135 e ~152.
+      expect(linhasLidas).toBeLessThanOrEqual(250);
+    }
+  });
+
+  it("com célula, sem célula ou id, o filtro é conferido na linha (o mesmo plano de sem ele)", async () => {
+    for (const filtros of [
+      { celula_id: CELULA },
+      { sem_celula: true },
+      { id: "R-4207" },
+    ]) {
+      for (const desconsiderado of [true, false]) {
+        const com = await medir(
+          comandoListaPedidos({ ...filtros, desconsiderado }, null, 50),
+        );
+        const sem = await medir(comandoListaPedidos(filtros, null, 50));
+        expect(com.plano).toEqual(sem.plano);
+        expect(com.linhasLidas).toBeLessThanOrEqual(sem.linhasLidas);
+      }
+    }
+  });
+
+  it("os totais contam só o que conta e ignoram o filtro: o mesmo plano, ~1 linha por pedido", async () => {
+    const sem = await medir(comandoTotaisPedidos({}));
+    const com = await medir(comandoTotaisPedidos({ desconsiderado: true }));
+    expect(com).toEqual(sem);
+    expect(sem.plano.join("\n")).not.toMatch(
+      /pedidos_por_campanha_registro|pedidos_aprovados_por_afiliado_dia|pedidos_desconsiderados_por_registro/,
+    );
+    expect(sem.linhasLidas).toBeLessThanOrEqual(1.1 * volume.pedidos);
+    const { results } = await db
+      .prepare(comandoTotaisPedidos({}).sql)
+      .all<{ status: string; pedidos: number }>();
+    expect(results.reduce((soma, linha) => soma + linha.pedidos, 0)).toBe(
+      volume.pedidos - volume.desconsiderados,
+    );
   });
 });
 

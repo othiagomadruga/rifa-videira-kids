@@ -2,10 +2,17 @@
 // configuração (GET e PUT /api/admin/campanha).
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { corpoSalvarCampanhaSchema } from "../../shared/contracts";
+import {
+  ACESSO_PADRAO,
+  MENSAGENS_PADRAO,
+  PEDIDOS_PADRAO,
+  corpoSalvarCampanhaSchema,
+  type CampanhaEntrada,
+} from "../../shared/contracts";
 import {
   buscarCampanhaAtiva,
   montarCampanha,
+  resumirMudancaDaCampanha,
   salvarCampanhaAtiva,
 } from "./campanha";
 
@@ -60,6 +67,14 @@ describe("buscarCampanhaAtiva", () => {
       ranking_criterio: "percentual_meta",
       publico_mostra_percentual_meta: 0,
       publico_limite_ranking: 3,
+      // 0008 (D20): os padrões das colunas (chave de desconsiderar desligada, acessos ligados, modelos padrão).
+      pedidos_desconsiderar: 0,
+      acesso_discipuladores: 1,
+      acesso_redes: 1,
+      mensagem_link_coordenacao: null,
+      mensagem_link_lider: null,
+      mensagem_link_discipulador: null,
+      mensagem_link_rede: null,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],
@@ -133,5 +148,162 @@ describe("buscarCampanhaAtiva", () => {
       id,
       slug_rifei: "campanha-ativa-teste",
     });
+  });
+});
+
+describe("regras do admin na campanha (D20, migração 0008)", () => {
+  const BASE: CampanhaEntrada = {
+    nome: "Rifa de teste",
+    slug_rifei: "rifa-teste",
+    data_inicio: "2026-11-23",
+    preco_bilhete_centavos: 2000,
+    meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
+    periodos: [{ nome: "Período 1", dias: 10, percentual_bp: 10000 }],
+    ranking: { criterio: "percentual_meta" },
+  };
+  const MENSAGEM_LIDER =
+    "{saudacao} Segue o link da célula {alvo}, só seu:\n{link}";
+
+  async function salvar(corpo: CampanhaEntrada) {
+    const salvo = await salvarCampanhaAtiva(
+      db,
+      corpoSalvarCampanhaSchema.parse(corpo),
+    );
+    if (!salvo.ok) throw new Error(salvo.mensagem);
+    return salvo.campanha;
+  }
+  const colunas = () =>
+    db
+      .prepare(
+        `SELECT pedidos_desconsiderar, acesso_discipuladores, acesso_redes, mensagem_link_coordenacao,
+           mensagem_link_lider, mensagem_link_discipulador, mensagem_link_rede
+         FROM campanhas WHERE ativa = 1`,
+      )
+      .first();
+
+  it("o primeiro PUT sem os grupos: os padrões (desconsiderar desligado, acessos ligados, os modelos de hoje)", async () => {
+    const campanha = await salvar(BASE);
+    expect({
+      pedidos: campanha.pedidos,
+      acesso: campanha.acesso,
+      mensagens: campanha.mensagens,
+    }).toEqual({
+      pedidos: PEDIDOS_PADRAO,
+      acesso: ACESSO_PADRAO,
+      mensagens: MENSAGENS_PADRAO,
+    });
+    expect(await colunas()).toEqual({
+      pedidos_desconsiderar: 0,
+      acesso_discipuladores: 1,
+      acesso_redes: 1,
+      mensagem_link_coordenacao: null,
+      mensagem_link_lider: null,
+      mensagem_link_discipulador: null,
+      mensagem_link_rede: null,
+    });
+  });
+
+  it("grupo presente substitui o grupo inteiro; grupo ausente mantém o gravado (uma aba antiga não religa nada)", async () => {
+    await salvar(BASE);
+    const mensagens = { ...MENSAGENS_PADRAO, link_lider: MENSAGEM_LIDER };
+    const gravada = await salvar({
+      ...BASE,
+      pedidos: { desconsiderar: true },
+      acesso: { discipuladores: true, redes: false },
+      mensagens,
+    });
+    expect({
+      pedidos: gravada.pedidos,
+      acesso: gravada.acesso,
+      mensagens: gravada.mensagens,
+    }).toEqual({
+      pedidos: { desconsiderar: true },
+      acesso: { discipuladores: true, redes: false },
+      mensagens,
+    });
+    // O modelo igual ao padrão fica NULL (= o padrão); o editado, com o texto.
+    expect(await colunas()).toEqual({
+      pedidos_desconsiderar: 1,
+      acesso_discipuladores: 1,
+      acesso_redes: 0,
+      mensagem_link_coordenacao: null,
+      mensagem_link_lider: MENSAGEM_LIDER,
+      mensagem_link_discipulador: null,
+      mensagem_link_rede: null,
+    });
+
+    // Sem os grupos (o corpo de uma aba antiga): nada muda neles.
+    const semGrupos = await salvar({ ...BASE, nome: "Rifa renomeada" });
+    expect(semGrupos).toMatchObject({
+      nome: "Rifa renomeada",
+      pedidos: { desconsiderar: true },
+      acesso: { discipuladores: true, redes: false },
+      mensagens,
+    });
+
+    // Só o acesso: os outros grupos ficam; o acesso inteiro é o novo.
+    const soAcesso = await salvar({
+      ...BASE,
+      acesso: { discipuladores: false, redes: true },
+    });
+    expect(soAcesso).toMatchObject({
+      pedidos: { desconsiderar: true },
+      acesso: { discipuladores: false, redes: true },
+      mensagens,
+    });
+
+    // As mensagens de volta ao padrão: NULL de novo nas quatro.
+    await salvar({ ...BASE, mensagens: MENSAGENS_PADRAO });
+    expect(await colunas()).toMatchObject({
+      mensagem_link_coordenacao: null,
+      mensagem_link_lider: null,
+      mensagem_link_discipulador: null,
+      mensagem_link_rede: null,
+    });
+  });
+
+  it("um modelo gravado fora das regras (SQL à mão) não derruba a leitura: volta como está (só o tamanho é conferido)", async () => {
+    await salvar(BASE);
+    await db
+      .prepare(
+        "UPDATE campanhas SET mensagem_link_rede = 'Oi {Nome}, sem o link' WHERE ativa = 1",
+      )
+      .run();
+    const ativa = await buscarCampanhaAtiva(db);
+    expect(ativa && montarCampanha(ativa).mensagens.link_rede).toBe(
+      "Oi {Nome}, sem o link",
+    );
+  });
+
+  it("a trilha: cada chave com o antes e o depois; das mensagens, só o nome do modelo; grupo ausente ou igual não entra", async () => {
+    await salvar(BASE);
+    const antes = await buscarCampanhaAtiva(db);
+    const resumo = (corpo: CampanhaEntrada) =>
+      resumirMudancaDaCampanha(antes, corpoSalvarCampanhaSchema.parse(corpo));
+
+    expect(resumo(BASE)).toBe("Configuração salva sem mudanças");
+    expect(
+      resumo({
+        ...BASE,
+        pedidos: PEDIDOS_PADRAO,
+        acesso: ACESSO_PADRAO,
+        mensagens: MENSAGENS_PADRAO,
+      }),
+    ).toBe("Configuração salva sem mudanças");
+    expect(
+      resumo({
+        ...BASE,
+        nome: "Outra",
+        pedidos: { desconsiderar: true },
+        acesso: { discipuladores: true, redes: false },
+        mensagens: {
+          ...MENSAGENS_PADRAO,
+          link_lider: MENSAGEM_LIDER,
+          link_rede: `${MENSAGENS_PADRAO.link_rede} Obrigado!`,
+        },
+      }),
+    ).toBe(
+      "Alterado: nome, pedidos.desconsiderar: desligado → ligado, acesso.redes: ligado → desligado, mensagens.link_lider, mensagens.link_rede",
+    );
   });
 });

@@ -972,7 +972,8 @@ describe("CA7: nenhum dado pessoal na resposta nem na leitura", () => {
       expect(sql).not.toMatch(
         /telefone|phone|nome|email|buyer|utm_|numeros|lider|cupom|metodo|notas?\b/i,
       );
-      // Nenhuma coluna além destas (palavras do SQL fora): status, datas, ids, valores, país, DDD e divisão.
+      // Nenhuma coluna além destas (palavras do SQL fora): status, datas, ids, valores, país, DDD, divisão e a data
+      // da desconsideração do admin (D20: o desconsiderado não conta no mapa).
       const identificadores = new Set(
         sql
           .replace(/'[^']*'/g, "")
@@ -992,6 +993,7 @@ describe("CA7: nenhum dado pessoal na resposta nem na leitura", () => {
               "campanha_id",
               "centavos",
               "ddd",
+              "desconsiderado_em",
               "pais",
               "pedidos",
               "qtd_bilhetes",
@@ -1011,6 +1013,7 @@ describe("CA7: nenhum dado pessoal na resposta nem na leitura", () => {
               "centavos",
               "d",
               "ddd",
+              "desconsiderado_em",
               "discipulador_id",
               "discipuladores",
               "divisao",

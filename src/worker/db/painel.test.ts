@@ -16,6 +16,7 @@ import {
   PEDIDOS,
   aprovado,
   bancoQueConta,
+  desconsiderado,
   entradaEsperada,
   limparBanco,
   ordenarVendas,
@@ -23,6 +24,8 @@ import {
 } from "../test/painel-apoio";
 import {
   DESLOCAMENTO_DO_INDICE,
+  SELECIONAR_VENDAS,
+  SELECIONAR_VENDAS_POR_DIA,
   SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3,
   lerEntradaDoCalculo,
   type LeituraDoCalculo,
@@ -327,6 +330,102 @@ describe("dia local com outros fusos", () => {
     });
     // A campanha, o batch e a releitura das vendas uma a uma.
     expect(contagem.contagem.idas).toBe(3);
+  });
+});
+
+describe("RIFA-028 (D20): o pedido desconsiderado não conta, nas três formas da leitura", () => {
+  /** Plano de uma consulta (só o id da campanha, e o deslocamento na forma com parâmetro). */
+  async function plano(sql: string, ...valores: unknown[]) {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .bind(...valores)
+      .all<{ detail: string }>();
+    return results.map((linha) => linha.detail);
+  }
+  const COBERTURA =
+    "SEARCH pedidos USING COVERING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)";
+
+  it.each([
+    ["America/Belem (UTC−3: o literal igual ao do índice)", "America/Belem", 2],
+    ["Asia/Kathmandu (o deslocamento por parâmetro)", "Asia/Kathmandu", 2],
+    ["America/New_York (as vendas uma a uma)", "America/New_York", 3],
+  ] as const)(
+    "%s: o desconsiderado sai da soma (aprovado, em processo e sem afiliado)",
+    async (_nome, fuso, idas) => {
+      const campanha = campanhaEntradaSchema.parse({
+        ...DADOS_CAMPANHA,
+        fuso_horario: fuso,
+        data_inicio: "2026-10-26",
+      });
+      const contam = [
+        aprovado(101, "2026-11-01T05:30:00.000Z", 2),
+        aprovado(102, "2026-11-01T06:30:00.000Z", 3),
+        aprovado(null, "2026-11-02T15:00:00.000Z", 4),
+      ];
+      const fora = [
+        desconsiderado(aprovado(101, "2026-11-01T05:40:00.000Z", 50)),
+        desconsiderado(aprovado(null, "2026-11-02T15:10:00.000Z", 7), "fraude"),
+        desconsiderado(aprovado(103, "2026-11-03T15:00:00.000Z", 9), "estorno"),
+        // Um pedido de teste que ainda não foi pago (o status não importa).
+        desconsiderado({
+          ...aprovado(101, "2026-11-01T05:50:00.000Z", 1),
+          status: "in_process",
+          aprovado_em: null,
+        }),
+      ];
+      await semearCenario({ campanha, pedidos: [...contam, ...fora] });
+      const contagem = bancoQueConta();
+
+      const { entrada } = lida(await ler({}, contagem.db));
+
+      expect(ordenarVendas(entrada.vendas)).toEqual(
+        ordenarVendas(entradaEsperada(campanha, contam).vendas),
+      );
+      expect(
+        entrada.vendas.reduce((soma, venda) => soma + venda.bilhetes, 0),
+      ).toBe(9);
+      // A célula 3 (Canaã) só tinha o pedido desconsiderado: nenhuma venda dela.
+      expect(entrada.vendas.filter((venda) => venda.celula_id === 3)).toEqual(
+        [],
+      );
+      expect(contagem.contagem.idas).toBe(idas);
+    },
+  );
+
+  it("os planos das três formas: o índice de cobertura recriado na 0008, sem voltar à tabela", async () => {
+    // UTC−3: os pedidos já saem agrupados por afiliado e dia (a única B-tree é a do agrupamento por célula).
+    expect(await plano(SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3, 1)).toEqual([
+      "CO-ROUTINE v",
+      COBERTURA,
+      "SCAN v",
+      "SEARCH a USING INDEX sqlite_autoindex_afiliados_1 (affiliate_id=?) LEFT-JOIN",
+      "USE TEMP B-TREE FOR GROUP BY",
+    ]);
+    // Outro deslocamento: o mesmo índice de cobertura, com o agrupamento por dia numa B-tree temporária.
+    const comParametro = await plano(
+      SELECIONAR_VENDAS_POR_DIA,
+      1,
+      "+345 minutes",
+    );
+    expect(comParametro).toContain(COBERTURA);
+    expect(comParametro.join("\n")).not.toMatch(
+      /pedidos_por_campanha_registro|pedidos_por_status_aprovacao/,
+    );
+    // Uma a uma (fuso com horário de verão): o índice de cobertura e o afiliado de cada venda.
+    expect(await plano(SELECIONAR_VENDAS, 1)).toEqual([
+      "SEARCH p USING COVERING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)",
+      "SEARCH a USING INDEX sqlite_autoindex_afiliados_1 (affiliate_id=?) LEFT-JOIN",
+    ]);
+  });
+
+  it("sem o filtro do desconsiderado, o índice parcial não vale (por isso a consulta o repete)", async () => {
+    // A armadilha da D20 (OBRIGATÓRIO 3): sem `desconsiderado_em IS NULL`, o planejador não pode usar o índice
+    // parcial recriado e vai para o da 0007.
+    const semFiltro = SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3.replace(
+      " AND desconsiderado_em IS NULL",
+      "",
+    );
+    expect(semFiltro).not.toBe(SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3);
+    expect((await plano(semFiltro, 1)).join("\n")).not.toContain(COBERTURA);
   });
 });
 

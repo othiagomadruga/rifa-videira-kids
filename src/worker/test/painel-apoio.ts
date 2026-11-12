@@ -18,6 +18,7 @@ import {
   type CampanhaCalculo,
   type CelulaCalculo,
   type EntradaCalculo,
+  type MotivoDesconsideracao,
 } from "../../shared/contracts";
 import { salvarCampanhaAtiva, type DadosCampanha } from "../db/campanha";
 
@@ -106,7 +107,18 @@ export interface PedidoTeste {
   /** País e DDD do comprador (RIFA-015, mapa por DDD); padrão: null (sem telefone). */
   pais?: string | null;
   ddd?: string | null;
+  /** Desconsiderado pelo admin (RIFA-028, D20): não conta em nada. Padrão: conta. */
+  desconsiderado?: MotivoDesconsideracao;
 }
+
+/** Instante gravado na desconsideração dos pedidos de teste. */
+export const DESCONSIDERADO_EM = "2026-11-30T12:00:00.000Z";
+
+/** O mesmo pedido, desconsiderado pelo admin (D20). */
+export const desconsiderado = (
+  pedido: PedidoTeste,
+  motivo: MotivoDesconsideracao = "teste",
+): PedidoTeste => ({ ...pedido, desconsiderado: motivo });
 
 let sequencia = 0;
 
@@ -307,8 +319,8 @@ export async function semearPedidos(
       db
         .prepare(
           `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes,
-             total_centavos, aprovado_em, pais, ddd)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             total_centavos, aprovado_em, pais, ddd, desconsiderado_em, desconsiderado_motivo)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           pedido.id,
@@ -320,6 +332,8 @@ export async function semearPedidos(
           pedido.aprovado_em,
           pedido.pais ?? null,
           pedido.ddd ?? null,
+          pedido.desconsiderado === undefined ? null : DESCONSIDERADO_EM,
+          pedido.desconsiderado ?? null,
         ),
     ),
   );
@@ -347,8 +361,9 @@ export async function semearCenario(
 // ---------------------------------------------------------------------------------------------------
 
 /**
- * A entrada dos montadores para os mesmos dados, montada no JS: só os aprovados da campanha ativa, a
- * célula pelo afiliado (D7) e o dia local pelo Intl (agruparVendasPorDia), sem passar pelo banco.
+ * A entrada dos montadores para os mesmos dados, montada no JS: só os aprovados da campanha ativa que contam
+ * (sem os desconsiderados, D20), a célula pelo afiliado (D7) e o dia local pelo Intl (agruparVendasPorDia), sem
+ * passar pelo banco.
  */
 export function entradaEsperada(
   campanha: CampanhaCalculo = CAMPANHA,
@@ -360,7 +375,10 @@ export function entradaEsperada(
   const vendas = agruparVendasPorDia(
     pedidos
       .filter(
-        (pedido) => pedido.status === "approved" && pedido.campanha !== "outra",
+        (pedido) =>
+          pedido.status === "approved" &&
+          pedido.campanha !== "outra" &&
+          pedido.desconsiderado === undefined,
       )
       .map((pedido) => ({
         celula_id:
@@ -400,6 +418,11 @@ export interface ContagemBanco {
   ms: number;
   /** Linhas lidas pelo D1 nos batches (`meta.rows_read`; o `first` não informa). */
   linhasLidas: number;
+  /**
+   * Linhas lidas pelo D1 em TODOS os comandos: os batches e cada first, all e run (o `first` é lido pelo `all`, a
+   * mesma consulta, para ter o `meta`). Mede a requisição inteira, inclusive a sessão e a campanha.
+   */
+  linhasLidasTotal: number;
 }
 
 const ORIGINAL = Symbol("comando original");
@@ -415,6 +438,7 @@ export function bancoQueConta(db: D1Database = env.DB): {
     comandos: 0,
     ms: 0,
     linhasLidas: 0,
+    linhasLidasTotal: 0,
   };
   const medir = async <T>(promessa: () => Promise<T>): Promise<T> => {
     const inicio = performance.now();
@@ -433,6 +457,21 @@ export function bancoQueConta(db: D1Database = env.DB): {
         if (nome === "bind")
           return (...args: unknown[]) =>
             embrulhar(Reflect.apply(valor, alvo, args) as D1PreparedStatement);
+        if (nome === "first" || nome === "all" || nome === "run")
+          return async (...args: unknown[]) => {
+            contagem.idas += 1;
+            contagem.comandos += 1;
+            if (nome === "first" && args.length > 0)
+              throw new Error("first(coluna) não é usado aqui");
+            // O first não traz `meta`: lê pelo all (mesma consulta) e devolve a primeira linha.
+            const resultado = await medir(() =>
+              nome === "run" ? alvo.run() : alvo.all(),
+            );
+            contagem.linhasLidasTotal += resultado.meta.rows_read ?? 0;
+            return nome === "first"
+              ? (resultado.results[0] ?? null)
+              : resultado;
+          };
         if (typeof nome === "string" && EXECUTAM.has(nome))
           return (...args: unknown[]) => {
             contagem.idas += 1;
@@ -458,8 +497,10 @@ export function bancoQueConta(db: D1Database = env.DB): {
           const resultados = await medir(() =>
             alvo.batch(comandos.map(original)),
           );
-          for (const resultado of resultados)
+          for (const resultado of resultados) {
             contagem.linhasLidas += resultado.meta.rows_read ?? 0;
+            contagem.linhasLidasTotal += resultado.meta.rows_read ?? 0;
+          }
           return resultados;
         };
       const valor: unknown = Reflect.get(alvo, nome, alvo);

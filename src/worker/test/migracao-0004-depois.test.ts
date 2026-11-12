@@ -2,7 +2,8 @@
 // depois delas: num D1 que já tenha recebido as outras, o wrangler aplica, por nome, as que faltam, e a 0004 roda
 // por último (docs/lancamento.md, 2.3). Ela é aditiva e não depende das outras, nem elas dela: o schema final é o
 // mesmo da ordem normal (o DB dos testes) e o que existia continua lá. Este arquivo tem o próprio DB_MIGRACAO,
-// vazio no início (vitest.config.ts).
+// vazio no início (vitest.config.ts). As que vieram depois da 0004 entrar na `main` (a 0008, D20) são aplicadas
+// depois dela, como num D1 de verdade.
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +14,8 @@ const { DB, DB_MIGRACAO, TEST_MIGRATIONS } = env as Cloudflare.Env & {
 };
 
 const CONFERENCIA = "0004_conferencia.sql";
+/** As migrações que existiam quando a 0004 entrou na `main` (até a 0007). */
+const ATE_0007 = TEST_MIGRATIONS.filter((migracao) => migracao.name < "0008");
 
 /** Tabelas, índices, views e gatilhos com o SQL de cada um, sem os internos do SQLite, do D1 e das migrações. */
 async function schema(db: D1Database) {
@@ -33,7 +36,7 @@ describe("0004 aplicada depois da 0005 à 0007 (RIFA-012)", () => {
   let antes: Record<string, unknown>[];
 
   beforeAll(async () => {
-    const semConferencia = TEST_MIGRATIONS.filter(
+    const semConferencia = ATE_0007.filter(
       (migracao) => migracao.name !== CONFERENCIA,
     );
     expect(semConferencia.map((migracao) => migracao.name)).toContain(
@@ -76,19 +79,27 @@ describe("0004 aplicada depois da 0005 à 0007 (RIFA-012)", () => {
       ),
     ]);
     antes = (await db.prepare(PEDIDOS).all<Record<string, unknown>>()).results;
+    // A 0004 sozinha (é a única que falta até a 0007) e, depois, as que vieram depois dela (a 0008).
+    await applyD1Migrations(db, ATE_0007);
     await applyD1Migrations(db, TEST_MIGRATIONS);
   });
 
-  it("a 0004 foi aplicada por último, sobre os dados", async () => {
+  it("a 0004 foi aplicada depois da 0007, sobre os dados (e as posteriores, depois dela)", async () => {
     const { results } = await db
       .prepare("SELECT name FROM d1_migrations ORDER BY id")
       .all<{ name: string }>();
     expect(results.map((linha) => linha.name)).toEqual([
-      ...TEST_MIGRATIONS.map((migracao) => migracao.name).filter(
+      ...ATE_0007.map((migracao) => migracao.name).filter(
         (nome) => nome !== CONFERENCIA,
       ),
       CONFERENCIA,
+      ...TEST_MIGRATIONS.map((migracao) => migracao.name).filter(
+        (nome) => nome >= "0008",
+      ),
     ]);
+    expect(results.map((linha) => linha.name)).toContain(
+      "0008_regras_campanha.sql",
+    );
     expect(antes).toHaveLength(2);
   });
 
@@ -122,6 +133,10 @@ describe("0004 aplicada depois da 0005 à 0007 (RIFA-012)", () => {
         ...pedido,
         origem: "webhook",
         recuperacao_id: null,
+        // 0008 (D20): os pedidos de antes contam (nenhum desconsiderado).
+        desconsiderado_em: null,
+        desconsiderado_motivo: null,
+        desconsiderado_observacao: null,
       })),
     );
   });

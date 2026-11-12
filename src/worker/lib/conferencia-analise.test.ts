@@ -4,9 +4,11 @@
 // o modo agregado e o plano do "Recuperar". O corpo sai da mesma leitura do navegador (src/shared); os
 // pedidos "gravados" são montados aqui.
 import { describe, expect, it } from "vitest";
-import type {
-  CorpoConferencia,
-  RespostaAnalisePorPedido,
+import {
+  LIMITE_ITENS_POR_DIVERGENCIA,
+  respostaAnalisePorPedidoSchema,
+  type CorpoConferencia,
+  type RespostaAnalisePorPedido,
 } from "../../shared/contracts";
 import {
   lerArquivoConferencia,
@@ -79,6 +81,7 @@ function gravado(
     affiliate_id: 101,
     aprovado_ms: Date.parse("2026-11-25T15:00:00.000Z"),
     origem: "webhook",
+    desconsiderado: null,
     ...dados,
   };
 }
@@ -99,8 +102,12 @@ function sistemaDe(
 } {
   const codigos = new Set(corpo.pedido_id ?? []);
   const periodo = periodoDoArquivo(corpo, FUSO);
+  // Como PAGOS_DA_CAMPANHA: os pagos da campanha que contam (sem os desconsiderados, D20).
   const pagos = gravados.filter(
-    (pedido) => pedido.campanha_id === 1 && pedido.status === "approved",
+    (pedido) =>
+      pedido.campanha_id === 1 &&
+      pedido.status === "approved" &&
+      pedido.desconsiderado === null,
   );
   const noPeriodo = (pedido: PedidoGravado) =>
     periodo === null ||
@@ -802,6 +809,180 @@ describe("trava do código que não bate (B3 da revisão)", () => {
   });
 });
 
+describe("RIFA-028 (D20): pedido do arquivo desconsiderado no sistema", () => {
+  const DESCONSIDERACAO = {
+    motivo: "estorno" as const,
+    observacao: null,
+    em: "2026-11-30T12:00:00.000Z",
+  };
+  const LINHAS = [
+    CABECALHO,
+    ["OK", "Pago", "1", "1", "20,00", "101", "25/11/2026"],
+    // Pago nos dois lados, com valor e afiliado diferentes: seria valor_diferente e afiliado_diferente.
+    ["D-PAGO", "Pago", "1", "2", "35,00", "102", "25/11/2026"],
+    // Pendente no arquivo e pago no sistema: seria nao_pago_na_rifei (um estorno já resolvido).
+    ["D-ESTORNO", "Cancelado", "1", "3", "20,00", "101", "25/11/2026"],
+    // Pago no arquivo e em processo no sistema (um teste ainda não pago): seria pagamento_nao_registrado.
+    ["D-TESTE", "Pago", "1", "4", "20,00", "101", "25/11/2026"],
+    ["PERDIDO", "Pago", "1", "5", "20,00", "101", "25/11/2026"],
+  ];
+  const GRAVADOS = [
+    gravado("OK"),
+    gravado("D-PAGO", { desconsiderado: DESCONSIDERACAO }),
+    gravado("D-ESTORNO", { desconsiderado: DESCONSIDERACAO }),
+    gravado("D-TESTE", {
+      status: "in_process",
+      aprovado_ms: null,
+      desconsiderado: { ...DESCONSIDERACAO, motivo: "teste" },
+    }),
+    // Desconsiderado e fora do arquivo: não aparece (não conta nem há o que conferir); não é ausente_no_arquivo.
+    gravado("D-FORA", { desconsiderado: DESCONSIDERACAO }),
+    // Pago, conta e está fora do arquivo: ausente_no_arquivo, como sempre.
+    gravado("AUSENTE"),
+  ];
+
+  it("vai para o grupo à parte, nunca para uma divergência nem para o confere; os totais do sistema sem ele", () => {
+    const resposta = analisar(LINHAS, GRAVADOS);
+    const tipos = (id: string) =>
+      resposta.divergencias
+        .filter((grupoDe) =>
+          grupoDe.itens.some((item) => item.pedido_id === id),
+        )
+        .map((grupoDe) => grupoDe.tipo);
+
+    expect(resposta.desconsiderados).toEqual({
+      quantidade: 3,
+      itens: [
+        {
+          pedido_id: "D-ESTORNO",
+          arquivo: expect.objectContaining({ status: "cancelado" }),
+          sistema: expect.objectContaining({ status: "approved" }),
+          desconsiderado: DESCONSIDERACAO,
+        },
+        {
+          pedido_id: "D-PAGO",
+          arquivo: expect.objectContaining({
+            status: "aprovado",
+            total_centavos: 3500,
+            affiliate_id: 102,
+          }),
+          sistema: expect.objectContaining({
+            total_centavos: 2000,
+            affiliate_id: 101,
+          }),
+          desconsiderado: DESCONSIDERACAO,
+        },
+        {
+          pedido_id: "D-TESTE",
+          arquivo: expect.objectContaining({ status: "aprovado" }),
+          sistema: expect.objectContaining({ status: "in_process" }),
+          desconsiderado: { ...DESCONSIDERACAO, motivo: "teste" },
+        },
+      ],
+      itens_omitidos: 0,
+    });
+    for (const id of ["D-PAGO", "D-ESTORNO", "D-TESTE", "D-FORA"])
+      expect({ id, tipos: tipos(id) }).toEqual({ id, tipos: [] });
+    expect(tipos("PERDIDO")).toEqual(["venda_perdida"]);
+    expect(tipos("AUSENTE")).toEqual(["ausente_no_arquivo"]);
+    expect(resposta.resumo).toMatchObject({
+      // O lado do arquivo é o que o arquivo tem (os 4 pagos dele, inclusive os 2 desconsiderados no sistema).
+      aprovados_no_arquivo: { pedidos_aprovados: 4 },
+      // O do sistema conta só o que conta (OK e AUSENTE), como o painel.
+      aprovados_no_sistema: {
+        pedidos_aprovados: 2,
+        bilhetes: 2,
+        total_centavos: 4000,
+      },
+      conferem: 1,
+      com_divergencia: 2,
+    });
+    respostaAnalisePorPedidoSchema.parse(resposta);
+  });
+
+  it("sem nenhum: o grupo vem sempre, com quantidade 0", () => {
+    expect(
+      analisar(LINHAS.slice(0, 2), [gravado("OK")]).desconsiderados,
+    ).toEqual({ quantidade: 0, itens: [], itens_omitidos: 0 });
+  });
+
+  it("o Recuperar nunca grava de novo um desconsiderado (ja_existe)", () => {
+    expect(
+      planejar(LINHAS, GRAVADOS, ["D-PAGO", "D-TESTE", "PERDIDO"]),
+    ).toMatchObject({
+      gravar: [expect.objectContaining({ pedido_id: "PERDIDO" })],
+      naoRecuperados: [
+        { pedido_id: "D-PAGO", motivo: "ja_existe" },
+        { pedido_id: "D-TESTE", motivo: "ja_existe" },
+      ],
+    });
+  });
+
+  it("a trava do código compara o mesmo conjunto dos dois lados: o desconsiderado não conta nos pagos do sistema no período nem nos do arquivo", () => {
+    // O sistema tem 10 pagos que contam no período do arquivo (R-1 a R-10), 4 deles no arquivo, e 2
+    // desconsiderados do período que também estão no arquivo (X-1 e X-2); o arquivo tem ainda 10 perdidos. Os
+    // encontrados (6 de 16) travariam a coluna, e a exceção do webhook parado pede metade dos pagos do sistema no
+    // arquivo: 4 de 10 não chega. Contando os desconsiderados só de um lado (6 de 10), chegaria.
+    const noPeriodo = (id: string, desconsiderado: boolean) =>
+      gravado(id, {
+        aprovado_ms: Date.parse("2026-11-27T15:00:00.000Z"),
+        desconsiderado: desconsiderado ? DESCONSIDERACAO : null,
+      });
+    const contam = Array.from({ length: 10 }, (_, i) =>
+      noPeriodo(`R-${i + 1}`, false),
+    );
+    const desconsiderados = ["X-1", "X-2"].map((id) => noPeriodo(id, true));
+    const pagos = [
+      ["Pedido", "Status", "Quantidade", "Valor", "Data"],
+      ...[
+        "R-1",
+        "R-2",
+        "R-3",
+        "R-4",
+        "X-1",
+        "X-2",
+        ...Array.from({ length: 10 }, (_, i) => `PERDIDO-${i}`),
+      ].map((codigo) => [codigo, "Pago", "1", "20,00", "27/11/2026 10:00"]),
+    ];
+    // sistemaDe conta os pagos no período como CONTAR_PAGOS_NO_PERIODO (sem os desconsiderados): 10.
+    expect(analisar(pagos, [...contam, ...desconsiderados]).codigo).toEqual({
+      confere: false,
+      pagos_no_arquivo: 16,
+      encontrados: 6,
+    });
+    // Os mesmos pedidos, contando: 6 dos 12 pagos do período estão no arquivo, e a exceção vale.
+    expect(
+      analisar(pagos, [
+        ...contam,
+        ...desconsiderados.map((pedido) => ({
+          ...pedido,
+          desconsiderado: null,
+        })),
+      ]).codigo.confere,
+    ).toBe(true);
+  });
+
+  it("mais desconsiderados que o limite da lista: os primeiros em ordem de código e o resto em itens_omitidos", () => {
+    const quantos = LIMITE_ITENS_POR_DIVERGENCIA + 2;
+    const ids = Array.from(
+      { length: quantos },
+      (_, i) => `D-${String(i).padStart(4, "0")}`,
+    );
+    const resposta = analisar(
+      [
+        CABECALHO,
+        ...ids.map((id) => [id, "Pago", "1", "", "20,00", "101", "25/11/2026"]),
+      ],
+      ids.map((id) => gravado(id, { desconsiderado: DESCONSIDERACAO })),
+    );
+    expect(resposta.desconsiderados?.quantidade).toBe(quantos);
+    expect(resposta.desconsiderados?.itens_omitidos).toBe(2);
+    expect(
+      resposta.desconsiderados?.itens.map((item) => item.pedido_id),
+    ).toEqual(ids.slice(0, LIMITE_ITENS_POR_DIVERGENCIA));
+  });
+});
+
 describe("pagos no sistema que o arquivo não tem", () => {
   it("os de dias que o arquivo não cobre aparecem na lista, mas ficam à parte em com_divergencia", () => {
     const resposta = analisar(
@@ -873,6 +1054,7 @@ function agregadoDoSistema(
     (pedido) =>
       pedido.campanha_id === 1 &&
       pedido.status === "approved" &&
+      pedido.desconsiderado === null &&
       (periodo === null ||
         (pedido.aprovado_ms !== null &&
           pedido.aprovado_ms >= periodo.ms.inicio &&
