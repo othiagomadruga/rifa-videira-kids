@@ -80,7 +80,11 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
     artefato; o `publicar` instala com `npm ci --ignore-scripts`, baixa o artefato, confere o `wrangler.json` gerado com
     `scripts/conferir-artefato.mjs` e só o passo que roda `npm run deploy:publicar` recebe o token (`wrangler deploy
     --dry-run`, que barra a falta do build antes das migrações; migrações no D1 remoto; `wrangler deploy` do artefato).
-    D11 e D18; travado em `src/worker/config-publicacao.test.ts`.
+    D11 e D18; travado em `src/worker/config-publicacao.test.ts`. Publicar de novo sem commit: Actions → CI → Run workflow
+    na `main` (D22). Voltar o site à versão anterior: workflow `voltar-versao.yml` (Actions → "Voltar o site para a versão
+    anterior", com motivo e id opcional; roda `scripts/voltar-versao.mjs` = `wrangler versions deploy <id>@100%`, nunca
+    `wrangler rollback`, que sem interação força os segredos de antes). Logo depois de uma volta, não faça merge na `main`
+    até a correção (cada push publica de novo). D22.
     `npm run deploy` = `npm run build` + `npm run deploy:publicar`. D1 de produção já criado (id real no `wrangler.jsonc`).
     Da sessão de nuvem do Claude o upload dos assets falha (o proxy troca o JWT do upload), então não rode
     `npm run deploy` daqui; comandos D1 remotos funcionam. Segredos do Worker: `npx wrangler secret put <NOME>`.
