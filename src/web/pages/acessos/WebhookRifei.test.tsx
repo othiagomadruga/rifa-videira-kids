@@ -611,7 +611,7 @@ describe("CA5: um POST por vez", () => {
 });
 
 describe("CA6: acessibilidade", () => {
-  it("o foco vai para o token gerado, e a região viva anuncia que ele só aparece agora", async () => {
+  it("o foco vai para 'Copiar token', com o aviso como descrição (o token não é lido sozinho), e a região viva anuncia que ele só aparece agora, sem o token", async () => {
     const { api } = await abrirAba(criarApiWebhook(CENARIOS.nenhum));
     const regiao = within(painel())
       .getAllByRole("status")
@@ -619,15 +619,24 @@ describe("CA6: acessibilidade", () => {
     expect(regiao).toBeDefined();
     expect(regiao).toBeEmptyDOMElement();
 
-    const { campo } = await gerarDireto(api);
+    const { campo, token } = await gerarDireto(api);
 
-    await waitFor(() => expect(campo).toHaveFocus());
+    const copiar = within(painel()).getByRole("button", {
+      name: "Copiar token",
+    });
+    await waitFor(() => expect(copiar).toHaveFocus());
+    expect(campo).not.toHaveFocus();
+    expect(copiar).toHaveAccessibleDescription(
+      /^Este token só aparece agora\..*Copie e cole na Rifei antes de sair desta tela/,
+    );
+    expect(copiar.getAttribute("aria-describedby")).toBeTruthy();
     expect(regiao).toHaveTextContent(
       "Token do webhook gerado. Ele só aparece agora: copie e cole na Rifei.",
     );
+    expect(regiao?.textContent).not.toContain(token);
   });
 
-  it("o foco vai para o token novo também depois da confirmação", async () => {
+  it("o foco vai para 'Copiar token' também depois da confirmação (a descrição dá o aviso: a região viva muda ainda sob o inert do diálogo)", async () => {
     const { api } = await abrirAba(criarApiWebhook(CENARIOS.segredo));
     acionar(botaoGerar());
     fireEvent.click(
@@ -637,7 +646,13 @@ describe("CA6: acessibilidade", () => {
     );
 
     const campo = await within(painel()).findByLabelText("Token do webhook");
-    await waitFor(() => expect(campo).toHaveFocus());
+    const copiar = within(painel()).getByRole("button", {
+      name: "Copiar token",
+    });
+    await waitFor(() => expect(copiar).toHaveFocus());
+    expect(copiar).toHaveAccessibleDescription(
+      /^Este token só aparece agora\./,
+    );
     expect(campo).toHaveValue(api.tokens[0]);
   });
 
@@ -662,6 +677,10 @@ describe("CA6: acessibilidade", () => {
       "Vai no campo Token do webhook na Rifei.",
     );
     expect(campo).toHaveAttribute("spellcheck", "false");
+    // Sem autocomplete, o navegador não guarda o valor no estado da página que restaura a aba (sessão em disco);
+    // sem tradução, o token não vai para o serviço de tradução do navegador.
+    expect(campo).toHaveAttribute("autocomplete", "off");
+    expect(campo).toHaveAttribute("translate", "no");
     expect(
       within(painel()).getByRole("button", { name: "Copiar token" }),
     ).toBeInTheDocument();

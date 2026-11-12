@@ -64,6 +64,7 @@ const ANUNCIO_GERADO =
   "Token do webhook gerado. Ele só aparece agora: copie e cole na Rifei.";
 
 const ID_TOKEN = "acessos-webhook-token";
+const ID_AVISO_TOKEN = "acessos-webhook-token-aviso";
 
 export function WebhookRifei() {
   const [carga, setCarga] = useState<Carga>({ estado: null, erro: null });
@@ -82,6 +83,7 @@ export function WebhookRifei() {
   // Cancela o que estiver em andamento quando a tela sai (o token de uma resposta atrasada não aparece).
   const saida = useRef<AbortController | null>(null);
   const refToken = useRef<HTMLTextAreaElement>(null);
+  const refCopiarToken = useRef<HTMLButtonElement>(null);
   const refUrl = useRef<HTMLTextAreaElement>(null);
   // Quantos tokens esta aba gerou: um GET que saiu antes de uma geração não troca o estado novo pelo velho.
   const geracoes = useRef(0);
@@ -107,9 +109,11 @@ export function WebhookRifei() {
     return () => controle.abort();
   }, [versao]);
 
-  // O token gerado recebe o foco (o leitor de tela lê o rótulo e o token; o campo seleciona o texto).
+  // "Copiar token" recebe o foco, como o "Copiar link" do link de acesso: o leitor de tela lê o botão e, como
+  // descrição, o aviso "Este token só aparece agora" (o token em si não é lido sozinho). A descrição garante o
+  // aviso também depois da confirmação, quando a região viva muda ainda sob o `inert` do diálogo.
   useEffect(() => {
-    if (mostrado) refToken.current?.focus();
+    if (mostrado) refCopiarToken.current?.focus();
   }, [mostrado]);
 
   function recarregar() {
@@ -247,6 +251,7 @@ export function WebhookRifei() {
                 <TokenGerado
                   token={mostrado.token}
                   refToken={refToken}
+                  refCopiar={refCopiarToken}
                   copia={copia?.campo === "token" ? copia.resultado : null}
                   aoCopiar={() => void copiar("token", mostrado.token)}
                 />
@@ -373,17 +378,20 @@ function ExplicacaoDaSituacao({ estado }: { estado: EstadoTokenWebhook }) {
 function TokenGerado({
   token,
   refToken,
+  refCopiar,
   copia,
   aoCopiar,
 }: {
   token: string;
   refToken: RefObject<HTMLTextAreaElement | null>;
+  refCopiar: RefObject<HTMLButtonElement | null>;
   copia: Copia["resultado"] | null;
   aoCopiar: () => void;
 }) {
   return (
     <div className="acessos-webhook__token">
       <Aviso
+        id={ID_AVISO_TOKEN}
         tom="alerta"
         titulo="Este token só aparece agora."
         anuncio="nenhum"
@@ -409,7 +417,13 @@ function TokenGerado({
           className="acessos-url"
           onFocus={(evento) => evento.currentTarget.select()}
         />
-        <Button onClick={aoCopiar}>Copiar token</Button>
+        <Button
+          ref={refCopiar}
+          aria-describedby={ID_AVISO_TOKEN}
+          onClick={aoCopiar}
+        >
+          Copiar token
+        </Button>
         {copia && <p className="acessos-copia">{TEXTO_COPIA.token[copia]}</p>}
       </div>
       <div className="acessos-webhook__passos">
