@@ -16,6 +16,7 @@ import { CartaoCampanha, CartaoHoje, CartaoPeriodo } from "./Cartoes";
 import { CurvaDaCampanha } from "./CurvaDaCampanha";
 import { FiltroEscopo } from "./FiltroEscopo";
 import { Referencia } from "./Referencia";
+import { RelatorioCampanha } from "./RelatorioCampanha";
 import { ROTULO_DO_ESCOPO, textoSemVendas } from "./textos";
 import { useCelulasDoFiltro } from "./useCelulasDoFiltro";
 import {
@@ -44,7 +45,8 @@ const ehNaoEncontrado = (erro: unknown) =>
 
 // Visão geral da coordenação (RIFA-009), pensada para o celular: em que dia e período a campanha está,
 // quanto vender hoje, se está em dia ou abaixo (e quanto), para onde vai no ritmo atual e a curva
-// esperado × realizado. O recorte (campanha, divisão, rede, discipulador ou célula) fica na URL.
+// esperado × realizado. O recorte (campanha, divisão, rede, discipulador ou célula) fica na URL. No fim, o
+// relatório da campanha para baixar (RIFA-038).
 export function VisaoGeralPage() {
   const [params, setParams] = useSearchParams();
   const escopo = escopoDosParams(params);
@@ -110,6 +112,8 @@ export function VisaoGeralPage() {
         tentarDeNovo={tentarDeNovo}
         verCampanhaToda={() => mudarEscopo(ESCOPO_CAMPANHA)}
       />
+      {/* Relatório da campanha para baixar (RIFA-038): não depende do recorte nem do painel carregado. */}
+      <RelatorioCampanha />
     </>
   );
 }

@@ -16,7 +16,6 @@ import { Hono } from "hono";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   ROTAS,
-  campanhaEntradaSchema,
   montarBumbo,
   montarRankingPainel,
   montarRankingPublico,
@@ -28,15 +27,18 @@ import { lerEntradaDoCalculo } from "../db/painel";
 import { SEM_CACHE } from "../lib/cache-publico";
 import { erroNaoTratado, rotaInexistente } from "../lib/respostas-erro";
 import {
+  CAMPANHA_DE_CARGA as CAMPANHA,
+  CELULAS_DE_CARGA as TOTAL_CELULAS,
+  DIAS_DE_CARGA as DIAS,
   bancoQueConta,
   limparBanco,
   semearCampanha,
+  semearHierarquiaDeCarga as semearHierarquia,
+  semearPedidosDeCarga as semearPedidos,
 } from "../test/painel-apoio";
 import { PREFIXO_PAINEL, criarPainel, type MontadoresDoPainel } from "./painel";
 import { PREFIXO_PUBLICO, criarPublico, type OpcoesPublico } from "./publico";
 
-const DIAS = 24;
-const TOTAL_CELULAS = 36;
 /** Dia 20 de 24, às 12:00 em Belém: 19 dias fechados e o de hoje. */
 const AGORA = new Date("2026-12-12T15:00:00.000Z");
 /**
@@ -104,92 +106,6 @@ function appCom(
   app.notFound(rotaInexistente);
   app.onError(erroNaoTratado);
   return app;
-}
-
-const CAMPANHA = campanhaEntradaSchema.parse({
-  nome: "Rifa Videira Kids",
-  slug_rifei: "rifa-videira-kids-carga",
-  data_inicio: "2026-11-23",
-  preco_bilhete_centavos: 2000,
-  meta: { unidade: "bilhetes", regra: "total_proporcional", valor: 20000 },
-  periodos: [
-    { nome: "Semana 1", dias: 10, percentual_bp: 3500 },
-    { nome: "Semana 2", dias: 7, percentual_bp: 2500 },
-    { nome: "Semana 3", dias: 7, percentual_bp: 4500 },
-  ],
-  ranking: { criterio: "percentual_meta" },
-  publico: { mostra_percentual_meta: true, limite_ranking: 3 },
-});
-
-/** 2 redes, 6 discipuladores e 36 células (5 a 20 pessoas), cada uma com um afiliado. */
-async function semearHierarquia(db: D1Database) {
-  await db.batch([
-    db.prepare(
-      "INSERT INTO redes (id, nome, divisao) VALUES (1, 'Rede Jovem de Carga', 'jovens'), (2, 'Rede Adulta de Carga', 'adultos')",
-    ),
-    db.prepare(
-      `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 6)
-       INSERT INTO discipuladores (id, rede_id, nome)
-       SELECT i, CASE WHEN i <= 3 THEN 1 ELSE 2 END, 'Discipulador de Carga ' || i FROM n`,
-    ),
-    db.prepare(
-      `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${TOTAL_CELULAS})
-       INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
-       SELECT i, 1 + (i - 1) % 6, 'Célula de Carga ' || i, 5 + i % 16, 'Líder ' || i FROM n`,
-    ),
-    db.prepare(
-      `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em)
-       SELECT 1000 + id, id, 'manual', '2026-11-20T12:00:00.000Z' FROM celulas`,
-    ),
-  ]);
-}
-
-/**
- * `porCelulaPorDia` pedidos aprovados por célula em cada um dos 24 dias, espalhados pelo dia local
- * (de 03:00Z a 02:59Z do dia seguinte), mais 1 pedido por dia sem afiliado e 3 antes do início.
- */
-async function semearPedidos(
-  db: D1Database,
-  campanhaId: number,
-  porCelulaPorDia: number,
-) {
-  const total = TOTAL_CELULAS * DIAS * porCelulaPorDia;
-  const segundosEntrePedidos = Math.floor(86_400 / porCelulaPorDia);
-  await db.batch([
-    db
-      .prepare(
-        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?1 - 1)
-         INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
-           aprovado_em)
-         SELECT 'CARGA-' || i, ?2, 1001 + i % ${TOTAL_CELULAS}, 'approved', 1 + i % 4,
-           (1 + i % 4) * 2000,
-           strftime('%Y-%m-%dT%H:%M:%fZ', '2026-11-23T03:00:00.000Z',
-             '+' || ((i / ${TOTAL_CELULAS}) / ?3) || ' days',
-             '+' || (((i / ${TOTAL_CELULAS}) % ?3) * ?4) || ' seconds')
-         FROM n`,
-      )
-      .bind(total, campanhaId, porCelulaPorDia, segundosEntrePedidos),
-    db
-      .prepare(
-        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ${DIAS - 1})
-         INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
-           aprovado_em)
-         SELECT 'CARGA-SEM-' || i, ?1, NULL, 'approved', 2, 4000,
-           strftime('%Y-%m-%dT%H:%M:%fZ', '2026-11-23T15:00:00.000Z', '+' || i || ' days')
-         FROM n`,
-      )
-      .bind(campanhaId),
-    db
-      .prepare(
-        `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
-           aprovado_em)
-         VALUES ('CARGA-ANTES-1', ?1, 1001, 'approved', 1, 2000, '2026-11-20T15:00:00.000Z'),
-                ('CARGA-ANTES-2', ?1, 1002, 'approved', 1, 2000, '2026-11-21T15:00:00.000Z'),
-                ('CARGA-ANTES-3', ?1, NULL, 'approved', 1, 2000, '2026-11-22T15:00:00.000Z')`,
-      )
-      .bind(campanhaId),
-  ]);
-  return total + DIAS + 3;
 }
 
 const ESCOPO_CAMPANHA: EscopoResolvido = {

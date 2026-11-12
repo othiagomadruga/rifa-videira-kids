@@ -1,7 +1,8 @@
 // Apoio dos testes da Visão geral. A campanha fictícia é a dos exemplos de docs/api.md (10/7/7 dias com
 // 35/25/45 a partir de 23/11/2026, 10 bilhetes por pessoa, células de 12, 9 e 15 pessoas: meta 360).
 // A API simulada responde como a de verdade: o resumo sai de montarResumoPainel (calculos.ts), a mesma
-// função que o Worker chama, então os números são os do contrato.
+// função que o Worker chama, então os números são os do contrato; o relatório (RIFA-038) sai de
+// montarCsvRelatorio, com os cabeçalhos de cabecalhosDoRelatorio (relatorio.ts).
 import { vi } from "vitest";
 import {
   NOMES_DIVISAO,
@@ -12,6 +13,17 @@ import {
   type RespostaPainelResumo,
   type VendasDoDia,
 } from "../../../shared/contracts/calculos";
+import { hojeNoFuso } from "../../../shared/contracts/calendario";
+import {
+  COLUNAS_RELATORIO,
+  TIPOS_RELATORIO,
+  cabecalhoDoRelatorio,
+  cabecalhosDoRelatorio,
+  formatarInteiroCsv,
+  montarCsvRelatorio,
+  type ColunaRelatorio,
+  type TipoRelatorio,
+} from "../../../shared/contracts/relatorio";
 import { respostaJson } from "../../test/renderizar";
 
 export const CAMPANHA: CampanhaCalculo = {
@@ -254,6 +266,57 @@ export function resumoDoCenario(
 const erroJson = (status: number, codigo: string, mensagem: string) =>
   respostaJson({ erro: { codigo, mensagem } }, status);
 
+/** A data de referência do cenário (hoje no fuso da campanha): a do nome do arquivo do relatório. */
+export function dataDoCenario(cenario: Cenario): string {
+  return hojeNoFuso(cenario.campanha.fuso_horario, cenario.agora);
+}
+
+/**
+ * O CSV que a API mandaria para o tipo (RIFA-038): o cabeçalho do contrato, na unidade da meta, e uma linha
+ * fictícia (textos com acento nas colunas de nome, números nas outras), tudo por montarCsvRelatorio.
+ */
+export function csvDoRelatorio(
+  tipo: TipoRelatorio,
+  cenario: Cenario = CENARIOS.emDia,
+): string {
+  const [celula] = CELULAS;
+  const data = dataDoCenario(cenario);
+  const textos: Partial<Record<ColunaRelatorio, string>> = {
+    campanha: cenario.campanha.nome,
+    data_referencia: data,
+    data_inicio: cenario.campanha.data_inicio,
+    data_fim: "2026-12-16",
+    data,
+    divisao: NOMES_DIVISAO[celula.divisao],
+    rede: celula.rede_nome,
+    discipulador: celula.discipulador_nome,
+    celula: celula.nome,
+    lider: "Líder Fictício 01",
+    periodo: "Semana 2",
+  };
+  const linha = COLUNAS_RELATORIO[tipo].map(
+    (coluna, indice) => textos[coluna] ?? formatarInteiroCsv(indice + 1),
+  );
+  return montarCsvRelatorio(
+    cabecalhoDoRelatorio(tipo, cenario.campanha.meta.unidade),
+    [linha],
+  );
+}
+
+/** A resposta 200 do relatório: o CSV e os cabeçalhos do contrato (Content-Disposition com o nome do arquivo). */
+export function respostaRelatorio(
+  tipo: TipoRelatorio,
+  cenario: Cenario = CENARIOS.emDia,
+): Response {
+  return new Response(csvDoRelatorio(tipo, cenario), {
+    status: 200,
+    headers: cabecalhosDoRelatorio(tipo, dataDoCenario(cenario)),
+  });
+}
+
+const ehTipoRelatorio = (valor: string | null): valor is TipoRelatorio =>
+  (TIPOS_RELATORIO as readonly (string | null)[]).includes(valor);
+
 export const RESPOSTAS_DE_ERRO = {
   semCampanha: () => erroJson(404, "nao_encontrado", "Nenhuma campanha ativa"),
   naoEncontrado: (mensagem = "Célula não encontrada") =>
@@ -266,15 +329,25 @@ type Resposta = Response | Promise<Response>;
 
 /**
  * Troca o fetch por uma API simulada do cenário. Responde GET /api/painel/resumo (montarResumoPainel com
- * o escopo da consulta) e GET /api/admin/celulas. `api.resumo` e `api.celulas` trocam a resposta da próxima
- * chamada (devolvendo undefined, vale a padrão); `api.chamadas` guarda cada caminho pedido, com a consulta.
+ * o escopo da consulta), GET /api/admin/celulas e GET /api/painel/relatorio (o CSV do tipo, por
+ * respostaRelatorio; 400 sem tipo válido). `api.resumo`, `api.celulas` e `api.relatorio` trocam a resposta da
+ * próxima chamada (devolvendo undefined, vale a padrão); `api.chamadas` guarda cada caminho pedido, com a
+ * consulta, e `api.pedidos` cada Request (método, cabeçalhos, credenciais e signal).
  */
 export function simularApi(cenarioInicial: Cenario) {
   const api = {
     cenario: cenarioInicial,
     chamadas: [] as string[],
+    pedidos: [] as { url: URL; init: RequestInit | undefined }[],
     resumo: undefined as ((url: URL) => Resposta | undefined) | undefined,
     celulas: undefined as (() => Resposta | undefined) | undefined,
+    relatorio: undefined as ((url: URL) => Resposta | undefined) | undefined,
+    /** As consultas ao relatório (caminho e consulta), na ordem. */
+    get consultasAoRelatorio() {
+      return this.chamadas.filter((caminho) =>
+        caminho.startsWith("/api/painel/relatorio"),
+      );
+    },
     /** Quantas consultas ao resumo foram feitas. */
     get consultasAoResumo() {
       return this.chamadas.filter((caminho) =>
@@ -282,25 +355,36 @@ export function simularApi(cenarioInicial: Cenario) {
       ).length;
     },
   };
-  const fetchSimulado = vi.fn(async (entrada: RequestInfo | URL) => {
-    const url = new URL(String(entrada), "http://localhost");
-    api.chamadas.push(`${url.pathname}${url.search}`);
-    if (url.pathname === "/api/admin/celulas") {
-      return (
-        (await api.celulas?.()) ??
-        respostaJson({ itens: CELULAS.map(celulaDaApi) })
-      );
-    }
-    if (url.pathname === "/api/painel/resumo") {
-      const especial = await api.resumo?.(url);
-      if (especial) return especial;
-      const escopo = resolverEscopo(url.searchParams, api.cenario.campanha);
-      return escopo
-        ? respostaJson(resumoDoCenario(api.cenario, escopo))
-        : RESPOSTAS_DE_ERRO.naoEncontrado();
-    }
-    return erroJson(404, "nao_encontrado", "Rota não encontrada");
-  });
+  const fetchSimulado = vi.fn(
+    async (entrada: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(entrada), "http://localhost");
+      api.chamadas.push(`${url.pathname}${url.search}`);
+      api.pedidos.push({ url, init });
+      if (url.pathname === "/api/painel/relatorio") {
+        const especial = await api.relatorio?.(url);
+        if (especial) return especial;
+        const tipo = url.searchParams.get("tipo");
+        return ehTipoRelatorio(tipo)
+          ? respostaRelatorio(tipo, api.cenario)
+          : erroJson(400, "requisicao_invalida", "Requisição inválida");
+      }
+      if (url.pathname === "/api/admin/celulas") {
+        return (
+          (await api.celulas?.()) ??
+          respostaJson({ itens: CELULAS.map(celulaDaApi) })
+        );
+      }
+      if (url.pathname === "/api/painel/resumo") {
+        const especial = await api.resumo?.(url);
+        if (especial) return especial;
+        const escopo = resolverEscopo(url.searchParams, api.cenario.campanha);
+        return escopo
+          ? respostaJson(resumoDoCenario(api.cenario, escopo))
+          : RESPOSTAS_DE_ERRO.naoEncontrado();
+      }
+      return erroJson(404, "nao_encontrado", "Rota não encontrada");
+    },
+  );
   vi.stubGlobal("fetch", fetchSimulado);
   return api;
 }

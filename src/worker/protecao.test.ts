@@ -109,9 +109,9 @@ interface RotaDaCoordenacao {
  * Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao, ou os `papeis` da rota quando ela é mais
  * restrita, como a auditoria e as regras da campanha), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria
  * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin) e
- * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação). O relatório entra aqui já no contrato: sem `papeis`, ele passa
- * nos três testes mesmo antes de montado (sem cookie, o login do prefixo dá 401; com sessão, o 404 do caminho sem rota
- * "passa"), e a -api, no merge que monta a rota, confere que ela está registrada no app (teste abaixo).
+ * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação). O relatório entrou aqui já no contrato (sem `papeis`, ele passava
+ * nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que ele está registrado no app; com sessão,
+ * sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
 const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
   ...[
@@ -259,8 +259,7 @@ describe("a) toda rota da coordenação exige sessão", () => {
       ).toEqual(["admin"]);
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
     }
-    // O relatório (D23) está no filtro, para admin e coordenação. "Montado no app" entra com a -api (RIFA-038-api):
-    // expect(registradas).toContain("GET /api/painel/relatorio").
+    // O relatório (D23) está no filtro, para admin e coordenação, e montado no app (RIFA-038-api).
     expect(
       ROTAS_DA_COORDENACAO.find(
         (item) =>
@@ -268,6 +267,7 @@ describe("a) toda rota da coordenação exige sessão", () => {
           item.caminho === ROTAS_RELATORIO.baixarRelatorio.caminho,
       )?.papeis,
     ).toEqual(["admin", "coordenacao"]);
+    expect(registradas).toContain("GET /api/painel/relatorio");
   });
 
   it.each(casos(ROTAS_DA_COORDENACAO))(

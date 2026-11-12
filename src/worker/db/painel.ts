@@ -256,13 +256,17 @@ function exigir<T>(valor: T | undefined, nome: string): T {
  *   400 `requisicao_invalida`, com o detalhe `data_futura`;
  * - escopo de rede, discipulador ou célula com id inexistente: 404 `nao_encontrado`.
  * Chama o relógio uma vez só: o `agora` devolvido é o que a rota passa ao montador.
- * `comandosExtras` (a visão individual, RIFA-014) vão no MESMO lote, depois dos do cálculo: sem ida a mais.
+ * `comandosExtras` (a visão individual, RIFA-014; o relatório, RIFA-038) vão no MESMO lote, depois dos do cálculo:
+ * sem ida a mais. Recebem o id da campanha ativa, lida na 1ª ida (ex.: a contagem dos desconsiderados do relatório).
  */
 export async function lerEntradaDoCalculo(
   db: D1Database,
   relogio: Relogio,
   consulta: { data?: string; escopo?: PedidoEscopo } = {},
-  comandosExtras: (db: D1Database) => D1PreparedStatement[] = () => [],
+  comandosExtras: (
+    db: D1Database,
+    campanhaId: number,
+  ) => D1PreparedStatement[] = () => [],
 ): Promise<LeituraDoCalculo> {
   const agora = relogio();
   const ativa = await buscarCampanhaAtiva(db);
@@ -303,7 +307,10 @@ export async function lerEntradaDoCalculo(
   // O escopo vai no mesmo batch: um id inexistente (raro) custa a leitura, mas não uma ida a mais.
   if (comId) comandos.push(db.prepare(SELECIONAR_ESCOPO[tipo]).bind(id));
   const doCalculo = comandos.length;
-  const resultados = await db.batch([...comandos, ...comandosExtras(db)]);
+  const resultados = await db.batch([
+    ...comandos,
+    ...comandosExtras(db, ativa.id),
+  ]);
   const [linhasCelulas, linhasVendas, linhasEscopo] = resultados;
 
   let escopo: EscopoResolvido;

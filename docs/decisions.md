@@ -897,7 +897,7 @@ dos números, proteção contra fórmula, o arquivo, o nome e os cabeçalhos) e 
   - o Excel em português abre o CSV com dois cliques pelo separador de lista do Windows, que lá é `;` (a vírgula é o
     decimal); sem o BOM, ele lê o arquivo como Windows-1252 e quebra os acentos ("CÃ©lula"). É o formato do modelo
     da planilha da hierarquia (`public/modelos/hierarquia-modelo.csv`), que a coordenação já usou;
-  - no Google Planilhas: Arquivo → Importar → Fazer upload, separador "Detectar automaticamente"; numa planilha com
+  - no Google Planilhas: Arquivo → Importar → Fazer upload, "Tipo de separador" em "Personalizado" com `;` (a tela diz assim; "Detectar automaticamente" também costuma servir); numa planilha com
     a localidade Brasil (o padrão de uma conta em português), `1234,56` vira número. No Excel em inglês: Dados → De
     Texto/CSV, escolhendo `;`;
   - sem a linha `sep=;`: o Google Planilhas a mostraria como dado e, com ela, o Excel deixa de olhar o BOM;
@@ -974,7 +974,7 @@ o painel lê 8.876 linhas, 1,28 por pedido aprovado) e o de `mapa-ddd-desempenho
 
 | Tipo | Leitura | Linhas lidas por download (ordem de grandeza) |
 |---|---|---|
-| `totais` | `lerEntradaDoCalculo` + a contagem dos desconsiderados, no mesmo lote | ~9 mil (~1,3 por pedido aprovado) + ~1 por desconsiderado (índice parcial de cobertura `pedidos_desconsiderados_por_registro`, 0008) |
+| `totais` | `lerEntradaDoCalculo` + a contagem dos desconsiderados, no mesmo lote | ~9 mil (~1,3 por pedido aprovado) + ~1 por desconsiderado (índice parcial `pedidos_desconsiderados_por_registro`, 0008: o plano sai `USING INDEX`, sem COVERING, mas a tabela não é lida) |
 | `celulas` | `lerEntradaDoCalculo` + os líderes, no mesmo lote | ~9 mil + ~36 (uma por célula) |
 | `discipuladores`, `redes`, `periodos`, `dias` | `lerEntradaDoCalculo` | ~9 mil |
 | `ddd` | `lerMapaDdd` (campanha inteira) | ~11 mil (~2 por pedido aprovado; 10.925 medido na D17) |
@@ -1013,7 +1013,11 @@ mostram uma janela (a semana ou a campanha) e um nível por vez, e o relatório 
    `campanhas_uma_ativa`), o que der o plano certo. Travar, como em `painel-desempenho.test.ts` e
    `mapa-ddd-desempenho.test.ts`, as idas e as linhas lidas (`meta.rows_read`) por tipo, com o volume sintético
    (~1,3 por pedido aprovado nos seis tipos do painel; ~2 no `ddd`), e o plano da contagem com `EXPLAIN QUERY PLAN`
-   (`COVERING INDEX pedidos_desconsiderados_por_registro`). Nenhum índice novo e nenhum plano do painel muda.
+   (`SEARCH pedidos USING INDEX pedidos_desconsiderados_por_registro (campanha_id=?)`) e as linhas lidas dela (N a
+   N + 1 para N desconsiderados). Nenhum índice novo e nenhum plano do painel muda. **Correção da -api (revisão):** o
+   plano não sai COVERING porque o índice parcial não tem a coluna do próprio filtro (`desconsiderado_em`); na
+   execução, o `IS NOT NULL` é dado como satisfeito pelo índice e a busca na tabela nunca acontece (`count(*)` não lê
+   coluna), então o D1 conta só as entradas do índice, com o custo de um índice de cobertura.
 5. **Proteção** (`src/worker/protecao.test.ts`): `ROTAS_RELATORIO` já está em `ROTAS_DA_COORDENACAO` (este
    contrato). No merge que monta a rota, a -api acrescenta, no primeiro teste da seção a), que `GET
    /api/painel/relatorio` está registrada no app; a hierarquia leva 403 pelo prefixo, como hoje.
