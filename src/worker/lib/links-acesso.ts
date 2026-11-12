@@ -45,6 +45,8 @@ export function linkCriado(
     revogado_em: null,
     ultimo_uso_em: null,
     situacao: "valido",
+    // Recém-criado: ainda não abriu nenhuma sessão (RIFA-043).
+    desta_sessao: false,
     url: `${new URL(c.req.url).origin}${PREFIXO_LINK_ACESSO}${link.token}`,
   };
 }

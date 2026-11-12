@@ -219,6 +219,7 @@ export async function listarAcessosHierarquia(
   const linksPorUsuario = new Map<number, LinkAcesso[]>();
   for (const linha of links.results as LinhaLink[]) {
     const lista = linksPorUsuario.get(linha.usuario_id) ?? [];
+    // `desta_sessao` sempre false (RIFA-043): só o admin vê esta lista, e nenhum destes links abre sessão dele.
     lista.push(paraLink(linha, agora));
     linksPorUsuario.set(linha.usuario_id, lista);
   }

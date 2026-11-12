@@ -68,6 +68,11 @@ Registro curto das decisões técnicas (a mais nova no fim). Cada item diz o que
   45 dias e o fim do link. Links e pessoas podem ser revogados. Escritas só da mesma origem (CSRF).
 - Por quê: a equipe é pequena e entra pelo celular; sem senha não há o que esquecer nem e-mail para configurar, e o
   admin controla quem entra. O primeiro admin sai do `npm run acesso:criar`. Detalhes em `docs/acesso.md`.
+- **RIFA-043 (2026-11-12, ensaio geral):** no primeiro acesso (lançamento 3.1), o admin gera um link novo, entra por
+  ele e revoga o primeiro; a lista vem do mais novo para o mais antigo e, no ensaio, o link errado foi revogado. O
+  contrato ganhou `desta_sessao` no link da lista (`linkAcessoSchema`, autorizado pelo SM): true só no link que abriu
+  a sessão de quem pede, calculado pela API do `sessoes.link_id` que a 0002 já gravava (sem migração). A tela marca
+  "Este aparelho" e, ao revogá-lo, pede a confirmação "Revogar o link deste aparelho?", que avisa que a sessão cai.
 
 ## D9. Ordem de montagem das rotas e teste de proteção (INT-1, 2026-11-06)
 
@@ -590,6 +595,9 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
    `afiliado.remover`: a célula que ele tinha e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se
    couberem nos 1.000 caracteres). No `campanha.salvar`, as chaves com o antes e o depois ("acesso.redes: ligado →
    desligado") e, das mensagens, só o nome do modelo alterado. O que não muda nada não registra (RIFA-018).
+   **RIFA-043:** o primeiro salvamento (o que cria e ativa a campanha) diz também como as regras nasceram, no mesmo
+   formato sem o antes: as três chaves com o valor gravado (o do corpo ou o padrão) e o nome de cada mensagem
+   diferente do padrão (`acesso.redes: desligado`, `mensagens.link_lider`).
 7. **Conferência pelo CSV (RIFA-012, D19).** Os pedidos do sistema somados pela conferência (`PAGOS_DA_CAMPANHA` em
    `src/worker/db/reconciliacao.ts`: total do sistema, ausentes do arquivo, somas por afiliado e por dia) excluem o
    desconsiderado, para os totais do sistema baterem com o painel. Na busca dos pedidos do arquivo pelo id, o

@@ -90,6 +90,15 @@
   margin-top: var(--espaco-1);
 }
 
+/* RIFA-043: o link pelo qual esta sessão entrou ("Este aparelho"). */
+.acessos-link__desta-sessao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-2);
+  font-weight: var(--peso-medio);
+}
+
 .acessos-suave {
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);

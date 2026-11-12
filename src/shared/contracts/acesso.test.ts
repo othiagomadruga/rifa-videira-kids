@@ -19,6 +19,7 @@ import {
   corpoAtualizarUsuarioSchema,
   corpoCriarSessaoSchema,
   corpoCriarUsuarioSchema,
+  linkAcessoSchema,
   respostaCriarLinkSchema,
   respostaCriarUsuarioSchema,
   respostaListaUsuariosSchema,
@@ -65,6 +66,8 @@ const usuarioExemplo = {
       revogado_em: null,
       ultimo_uso_em: "2026-11-06T18:05:00.000Z",
       situacao: "valido",
+      // RIFA-043: o link que abriu a sessão de quem pediu a lista.
+      desta_sessao: true,
     },
   ],
 };
@@ -144,6 +147,20 @@ describe("contrato do acesso: o link só sai na criação", () => {
         nomesDeCampos(schema).filter((campo) => SEGREDO.test(campo)),
       ).toEqual(["url"]);
     }
+  });
+
+  it("RIFA-043: o link da lista traz sempre desta_sessao, booleano (calculado pela API)", () => {
+    const [link] = usuarioExemplo.links;
+    expect(linkAcessoSchema.parse(link).desta_sessao).toBe(true);
+    expect(
+      linkAcessoSchema.parse({ ...link, desta_sessao: false }).desta_sessao,
+    ).toBe(false);
+    const semCampo: Partial<typeof link> = { ...link };
+    delete semCampo.desta_sessao;
+    expect(linkAcessoSchema.safeParse(semCampo).success).toBe(false);
+    expect(
+      linkAcessoSchema.safeParse({ ...link, desta_sessao: "sim" }).success,
+    ).toBe(false);
   });
 
   it("a listagem aceita o formato documentado", () => {

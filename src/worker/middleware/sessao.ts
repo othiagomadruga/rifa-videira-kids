@@ -29,13 +29,26 @@ import { responderErro } from "../lib/respostas-erro";
 export const COOKIE_SESSAO = NOME_COOKIE_SESSAO;
 
 /**
- * Env das rotas que usam a sessão: depois de exigirSessao, `c.var.usuario` é quem está conectado e
+ * Env das rotas que usam a sessão: depois de exigirSessao, `c.var.usuario` é quem está conectado,
  * `c.var.acessoLigado`, a chave de acesso do papel dele na campanha ativa (RIFA-029; sempre true fora do
- * discipulador e da rede), lida junto com a sessão.
+ * discipulador e da rede), lida junto com a sessão, e `c.var.linkSessao`, o link que abriu a sessão (RIFA-043: a
+ * lista dos acessos marca "este aparelho"; null numa sessão sem link).
  */
 export interface AmbienteSessao {
   Bindings: Cloudflare.Env;
-  Variables: { usuario: UsuarioSessao; acessoLigado: boolean };
+  Variables: {
+    usuario: UsuarioSessao;
+    acessoLigado: boolean;
+    linkSessao: number | null;
+  };
+}
+
+/**
+ * O link que abriu a sessão desta requisição (RIFA-043), ou null: sem sessão lida (o sub-app montado sem o login,
+ * nos testes de unidade de uma rota) ou numa sessão gravada sem link.
+ */
+export function linkDaSessao(c: Context): number | null {
+  return (c.get("linkSessao") as number | null | undefined) ?? null;
 }
 
 /**
@@ -163,6 +176,7 @@ export function exigirSessao(
       usuario = encontrado.usuario;
       c.set("usuario", usuario);
       c.set("acessoLigado", encontrado.acessoLigado);
+      c.set("linkSessao", encontrado.linkId);
     }
 
     if (!papeis.includes(usuario.papel)) {

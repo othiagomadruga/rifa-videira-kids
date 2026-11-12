@@ -61,8 +61,14 @@
   }
 }
 
+/* Os totais (Stat): "51 pedidos · 165 bilhetes · R$ 3.300,00" no tamanho de número do Stat (até 1,875rem). Com
+   --grade-min 12rem, a 1280 px cabiam 4 por linha e o R$ quebrava no meio ("R$ 3.300,0" / "0"; RIFA-043).
+   Cada cartão tem pelo menos 16rem: o recuo (2 × 1,5rem) e "R$ 99.999,99" (≈ 6,6em = 12,4rem). A grade fica
+   com 4 colunas quando as 4 cabem com esse mínimo (67rem = 4 × 16rem + 3 vãos de 1rem) e, abaixo disso, com 2
+   (metade da largura cada; o "arquivo" ao lado do "sistema"), nunca 3 + 1; no celular, 1. O clamp(): abaixo de
+   67rem, (67rem - 100%) × 999 passa do máximo e vale a metade; a partir de 67rem, fica ≤ 0 e vale o mínimo. */
 .conferencia-totais {
-  --grade-min: 12rem;
+  --grade-min: clamp(16rem, (67rem - 100%) * 999, (100% - var(--espaco-4)) / 2);
 }
 
 .conferencia-grupo {

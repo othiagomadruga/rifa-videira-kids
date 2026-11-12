@@ -131,6 +131,9 @@ export function horaDaConferencia(estado: RespostaEstadoWebhook): string {
   return formatarHora(estado.verificado_em);
 }
 
+/** O começo da linha discreta do "ok" (RIFA-043): conta qualquer entrega da campanha, não só as vendas. */
+export const TEXTO_ULTIMA_ENTREGA = "Última entrega da Rifei";
+
 /**
  * O que mostrar por situação. `naTelaPedidos`: a consulta da tela Pedidos, quando o alerta está nela (o link das
  * entregas com erro mantém os filtros dos pedidos); null na Visão geral.
@@ -185,11 +188,13 @@ export function textoDoAlerta(
         link: null,
       };
     case "ok":
+      // RIFA-043: "entrega", não "venda": `ultima_processada_em` é a última entrega da campanha, de qualquer evento
+      // (pedido novo, pago ou expirado; a regra é a da D16 e não mudou).
       return estado.ultima_processada_em === null
         ? { tipo: "nada" }
         : {
             tipo: "linha",
-            texto: `Última venda recebida ${haQuanto(estado.ultima_processada_em, estado.verificado_em)}; conferido às ${horaDaConferencia(estado)}.`,
+            texto: `${TEXTO_ULTIMA_ENTREGA} ${haQuanto(estado.ultima_processada_em, estado.verificado_em)}; conferido às ${horaDaConferencia(estado)}.`,
           };
   }
 }

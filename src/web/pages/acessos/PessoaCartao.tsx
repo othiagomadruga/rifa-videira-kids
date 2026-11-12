@@ -23,7 +23,8 @@ type Props = {
   aoReativar: () => void;
 };
 
-// Cartão de uma pessoa da coordenação: papel, situação, links válidos (cada um com "Revogar") e as ações.
+// Cartão de uma pessoa da coordenação: papel, situação, links válidos (cada um com "Revogar"; o link pelo qual esta
+// sessão entrou vem marcado como "Este aparelho", RIFA-043) e as ações.
 export function PessoaCartao({
   pessoa,
   ehVoce,
@@ -77,6 +78,13 @@ export function PessoaCartao({
           >
             {validos.map((link) => (
               <li key={link.id} className="acessos-link">
+                {/* RIFA-043: o link que abriu esta sessão. Revogá-lo tira você do sistema neste aparelho. */}
+                {link.desta_sessao && (
+                  <p className="acessos-link__desta-sessao">
+                    <Badge tom="info">Este aparelho</Badge>
+                    <span>Você entrou por este link neste aparelho.</span>
+                  </p>
+                )}
                 <p>
                   Criado em {formatarDataHora(link.criado_em)}, vale até{" "}
                   {formatarData(link.expira_em)}.
@@ -91,6 +99,7 @@ export function PessoaCartao({
                   <span className="visualmente-oculto">
                     de {pessoa.nome} criado em{" "}
                     {formatarDataHora(link.criado_em)}
+                    {link.desta_sessao && ", o deste aparelho"}
                   </span>
                 </Button>
               </li>

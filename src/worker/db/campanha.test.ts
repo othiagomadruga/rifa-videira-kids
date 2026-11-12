@@ -275,6 +275,47 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
     );
   });
 
+  it("RIFA-043: a trilha do primeiro salvamento diz como as regras nasceram (as chaves e o nome das mensagens editadas)", () => {
+    const criacao = (corpo: CampanhaEntrada) =>
+      resumirMudancaDaCampanha(null, corpoSalvarCampanhaSchema.parse(corpo));
+    const PADROES =
+      "pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado";
+
+    // Sem os grupos (a coordenação, ou um admin que não mexeu): os padrões que o INSERT grava, sem mensagem.
+    expect(criacao(BASE)).toBe(
+      `Campanha criada: slug_rifei "rifa-teste", preco_bilhete_centavos 2000, ${PADROES}`,
+    );
+    // Os grupos iguais aos padrões: o mesmo resumo (as mensagens iguais ao padrão não são "editadas").
+    expect(
+      criacao({
+        ...BASE,
+        pedidos: PEDIDOS_PADRAO,
+        acesso: ACESSO_PADRAO,
+        mensagens: MENSAGENS_PADRAO,
+      }),
+    ).toBe(
+      `Campanha criada: slug_rifei "rifa-teste", preco_bilhete_centavos 2000, ${PADROES}`,
+    );
+    // As chaves com o valor do corpo; das mensagens, só o nome de cada modelo diferente do padrão, na ordem do
+    // contrato, e nunca o texto.
+    const resumo = criacao({
+      ...BASE,
+      slug_rifei: 'rifa "aspas"',
+      pedidos: { desconsiderar: true },
+      acesso: { discipuladores: false, redes: false },
+      mensagens: {
+        ...MENSAGENS_PADRAO,
+        link_rede: `${MENSAGENS_PADRAO.link_rede} Obrigado!`,
+        link_coordenacao: `Equipe: {link}`,
+      },
+    });
+    expect(resumo).toBe(
+      'Campanha criada: slug_rifei "rifa \\"aspas\\"", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: desligado, acesso.redes: desligado, mensagens.link_coordenacao, mensagens.link_rede',
+    );
+    expect(resumo).not.toContain("Obrigado");
+    expect(resumo).not.toContain("Equipe");
+  });
+
   it("a trilha: cada chave com o antes e o depois; das mensagens, só o nome do modelo; grupo ausente ou igual não entra", async () => {
     await salvar(BASE);
     const antes = await buscarCampanhaAtiva(db);

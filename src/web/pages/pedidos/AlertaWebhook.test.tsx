@@ -19,7 +19,7 @@ import {
   CENARIOS,
   simularApi as simularPainel,
 } from "../visao-geral/teste-apoio";
-import { INTERVALO_ESTADO_MS } from "./alerta-webhook";
+import { INTERVALO_ESTADO_MS, TEXTO_ULTIMA_ENTREGA } from "./alerta-webhook";
 import {
   BASE_MS,
   ROTA_ESTADO,
@@ -211,7 +211,7 @@ describe("CA3: o texto certo em cada situação, na tela Pedidos e na Visão ger
     ).toBeTruthy();
   });
 
-  it("ok: nenhum aviso, só a linha discreta 'Última venda recebida há X' (fora da região viva)", async () => {
+  it("ok: nenhum aviso, só a linha discreta 'Última entrega da Rifei há X' (fora da região viva)", async () => {
     simularApi({
       estado: estado("ok", {
         ultima_entrega_em: minutosAntes(12),
@@ -222,11 +222,31 @@ describe("CA3: o texto certo em cada situação, na tela Pedidos e na Visão ger
     renderizarRota("/coordenacao/pedidos");
 
     const linha = await screen.findByText(
-      "Última venda recebida há 12 min; conferido às 12:00.",
+      "Última entrega da Rifei há 12 min; conferido às 12:00.",
     );
     expect(regiao()).toBeEmptyDOMElement();
     expect(regiao()).not.toContainElement(linha);
     expect(document.querySelector(".ui-aviso")).toBeNull();
+  });
+
+  it("RIFA-043: a linha diz 'entrega', não 'venda': conta qualquer entrega da campanha (aqui, um pedido expirado depois da última venda)", async () => {
+    // A última venda (aprovação) foi há 5 h; a última entrega da campanha, há 12 min, foi a de um pedido que expirou.
+    simularApi({
+      estado: estado("ok", {
+        ultima_entrega_em: minutosAntes(12),
+        ultima_processada_em: minutosAntes(12),
+        ultimo_aprovado_em: minutosAntes(5 * 60),
+        ultimas_24h: { ...zerado, processado: 3 },
+      }),
+    });
+    renderizarRota("/coordenacao");
+
+    const linha = await screen.findByText(
+      "Última entrega da Rifei há 12 min; conferido às 12:00.",
+    );
+    expect(TEXTO_ULTIMA_ENTREGA).toBe("Última entrega da Rifei");
+    expect(linha.textContent).not.toMatch(/venda/i);
+    expect(document.body.textContent).not.toContain("Última venda");
   });
 
   it.each([
@@ -235,7 +255,7 @@ describe("CA3: o texto certo em cada situação, na tela Pedidos e na Visão ger
     [3 * 3600 + 59 * 60, "há 3 h"],
     [47 * 3600, "há 47 h"],
     [3 * 86_400, "há 3 dias"],
-  ])("ok, a última venda %i s antes: '%s'", async (segundos, texto) => {
+  ])("ok, a última entrega %i s antes: '%s'", async (segundos, texto) => {
     simularApi({
       estado: estado("ok", {
         ultima_processada_em: new Date(BASE_MS - segundos * 1000).toISOString(),
@@ -245,7 +265,7 @@ describe("CA3: o texto certo em cada situação, na tela Pedidos e na Visão ger
 
     expect(
       await screen.findByText(
-        `Última venda recebida ${texto}; conferido às 12:00.`,
+        `Última entrega da Rifei ${texto}; conferido às 12:00.`,
       ),
     ).toBeInTheDocument();
   });
@@ -310,7 +330,7 @@ describe("CA3/CA5: região viva fixa e atualização a cada 5 min com a aba vis�
     const api = simularApi();
     renderizarRota("/coordenacao/pedidos");
     await screen.findByText(
-      "Última venda recebida há 12 min; conferido às 12:00.",
+      "Última entrega da Rifei há 12 min; conferido às 12:00.",
     );
     expect(api.pedidosA(ROTA_ESTADO)).toHaveLength(1);
 
@@ -327,7 +347,7 @@ describe("CA3/CA5: região viva fixa e atualização a cada 5 min com a aba vis�
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "Última venda recebida há 12 min; conferido às 12:00.",
+        "Última entrega da Rifei há 12 min; conferido às 12:00.",
       ),
     ).not.toBeInTheDocument();
 
@@ -392,7 +412,7 @@ describe("CA3: erro ao consultar o estado não quebra a tela", () => {
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS));
     expect(
       await screen.findByText(
-        "Última venda recebida há 12 min; conferido às 12:00.",
+        "Última entrega da Rifei há 12 min; conferido às 12:00.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -427,7 +447,7 @@ describe("CA3: erro ao consultar o estado não quebra a tela", () => {
   it("ok: a linha diz a hora da conferência e, se as consultas seguintes falham, diz isso também; a próxima que dá certo volta ao normal", async () => {
     const api = simularApi();
     renderizarRota("/coordenacao/pedidos");
-    const ok = "Última venda recebida há 12 min; conferido às 12:00.";
+    const ok = "Última entrega da Rifei há 12 min; conferido às 12:00.";
     expect(await screen.findByText(ok)).toBeInTheDocument();
 
     for (const rodada of [2, 3]) {
@@ -454,7 +474,7 @@ describe("CA3: erro ao consultar o estado não quebra a tela", () => {
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ESTADO_MS));
     expect(
       await screen.findByText(
-        "Última venda recebida há 17 min; conferido às 12:15.",
+        "Última entrega da Rifei há 17 min; conferido às 12:15.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/falhou/)).not.toBeInTheDocument();

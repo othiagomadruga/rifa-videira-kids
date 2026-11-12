@@ -41,6 +41,7 @@ export function link(id: number, dados: Partial<LinkAcesso> = {}): LinkAcesso {
     revogado_em: null,
     ultimo_uso_em: null,
     situacao: "valido",
+    desta_sessao: false,
     ...dados,
   };
 }
@@ -288,6 +289,11 @@ export function criarApiFalsa(
   const urlsEmitidas: string[] = [];
   const marcadas: { metodo: string; caminho: string; responder: Responder }[] =
     [];
+  /**
+   * RIFA-043: revogar o link com `desta_sessao` (o que abriu a sessão da tela) derruba essa sessão, como na API: daí
+   * em diante, toda chamada responde 401, menos o POST /api/sessao/sair (204 mesmo sem sessão).
+   */
+  const sessao = { caiu: false };
   let proximoId = 1000;
   /**
    * As regras da campanha (D20) que GET /api/admin/campanha devolve; null = sem campanha (404, valem os padrões).
@@ -416,6 +422,16 @@ export function criarApiFalsa(
     corpo,
     consulta,
   }: Chamada): Response {
+    if (caminho === "/api/sessao/sair" && metodo === "POST") {
+      return new Response(null, { status: 204 });
+    }
+    if (sessao.caiu) {
+      return respostaErro(
+        401,
+        "nao_autenticado",
+        "Sessão ausente ou expirada: abra o seu link de acesso",
+      );
+    }
     if (caminho === "/api/admin/campanha" && metodo === "GET") {
       return regras.campanha
         ? respostaJson(campanhaFicticia(regras.campanha))
@@ -544,6 +560,7 @@ export function criarApiFalsa(
       }
       alvo.revogado_em ??= AGORA;
       alvo.situacao = "revogado";
+      if (alvo.desta_sessao) sessao.caiu = true;
       // Sem outro link válido, as sessões do usuário (abertas pelos links revogados) acabam.
       if (doAlvo && !doAlvo.links.some((item) => item.situacao === "valido")) {
         doAlvo.sessoes_ativas = 0;
@@ -580,6 +597,7 @@ export function criarApiFalsa(
   return {
     fetch: fetchFalso,
     regras,
+    sessao,
     pessoas,
     alvos,
     chamadas,

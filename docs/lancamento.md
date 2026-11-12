@@ -506,7 +506,7 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 - **"A Rifei mandou pedidos com erro nas últimas 24 h":** o botão **Ver as entregas com erro** abre as entregas recusadas. Confira cada pedido na Rifei.
 - **"Nenhuma venda chegou há N horas"** (ou **"até agora"**, se nenhuma chegou desde o início): durante a campanha, das 8h às 22h, depois de 4 horas sem venda. O botão **Abrir a Conferência** leva à conferência pelo CSV (6.4).
 - **"Ainda não chegou nenhuma venda":** nenhuma entrega da campanha até agora.
-- Tudo certo: só uma linha discreta, "Última venda recebida há …".
+- Tudo certo: só uma linha discreta, "Última entrega da Rifei há …". Ela conta qualquer entrega da campanha (pedido novo, pago ou expirado), não só as vendas.
 - Limites: um webhook que pare depois das 18h só acende o alerta no dia seguinte, ao meio-dia. Entrega recusada por token errado não fica gravada: o alerta mostra como se nenhuma venda tivesse chegado.
 
 1. **Veja as entregas [Coordenação]:** **Pedidos** → aba **Entregas do webhook** (a mais recente no topo; filtre por **Resultado**). Sem acesso ao site, o SM consulta o mesmo no D1 (tabela `webhook_eventos`).

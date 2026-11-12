@@ -421,7 +421,7 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 
 | Ação (`acao`) | Rota | Alvo (`alvo`) | Resumo |
 |---|---|---|---|
-| `campanha.salvar` | `PUT /api/admin/campanha` | `campanha:<id>` | criada (com o slug e o preço) ou os campos alterados; `slug_rifei` e `preco_bilhete_centavos` com o antes e o depois |
+| `campanha.salvar` | `PUT /api/admin/campanha` | `campanha:<id>` | criada (com o slug, o preço, as três chaves das regras com o valor gravado e o nome das mensagens diferentes do padrão, RIFA-043: `Campanha criada: slug_rifei "…", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: desligado, mensagens.link_lider`) ou os campos alterados; `slug_rifei` e `preco_bilhete_centavos` com o antes e o depois; as chaves que mudaram com o antes e o depois e o nome das mensagens alteradas (D20) |
 | `afiliado.salvar` | `PUT /api/admin/afiliados/:affiliateId` | `afiliado:<affiliate_id>` | célula antes → depois (pelos ids); o rótulo só como "alterado"/"apagado" |
 | `hierarquia.importar` | `POST /api/admin/hierarquia/importar` aplicada | `hierarquia` | linhas e contagens de criados e atualizados (a simulação não registra) |
 | `hierarquia.criar` | `POST /api/admin/redes`, `/discipuladores` ou `/celulas` (RIFA-018) | `rede:<id>`, `discipulador:<id>` ou `celula:<id>` | o nome do item e a configuração: `Célula "Célula Ágape" criada (discipulador_id 3, qtd_pessoas 12)` |

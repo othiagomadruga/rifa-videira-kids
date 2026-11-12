@@ -14,7 +14,7 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
-import { useUsuarioConectado } from "../../lib/sessao";
+import { useSessao, useUsuarioConectado } from "../../lib/sessao";
 import { definirAtivo, gerarLink, listarPessoas } from "./acessos-api";
 import {
   DialogoDesativar,
@@ -112,6 +112,7 @@ export function AcessosPage() {
 // Pessoas da coordenação (admin e coordenação): um cartão por pessoa, com os links e as ações.
 function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
   const eu = useUsuarioConectado();
+  const { sair } = useSessao();
   const [carga, setCarga] = useState<Carga>({ dados: null, erro: null });
   const [versao, setVersao] = useState(0);
   const [criando, setCriando] = useState(false);
@@ -205,7 +206,15 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
     setRevogacao({ pessoa, link });
   }
 
-  function aoRevogar(pessoa: Usuario) {
+  function aoRevogar(pessoa: Usuario, link: LinkAcesso) {
+    // RIFA-043: o link deste aparelho caiu e levou a sessão junto. Sai de vez (a tela de entrar diz "Você saiu do
+    // sistema neste aparelho"), em vez de esperar o 401 da recarga ("Sua sessão terminou"). Se nem isso responder,
+    // a recarga leva ao mesmo lugar pelo 401.
+    if (link.desta_sessao) {
+      setRevogacao(null);
+      sair().catch(recarregar);
+      return;
+    }
     refFocoAposRevogar.current =
       document.getElementById(idBotaoGerar(pessoa.id)) ??
       document.getElementById(idBotaoAtivo(pessoa.id));
@@ -306,7 +315,7 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
           pessoa={revogacao.pessoa}
           link={revogacao.link}
           aoFechar={() => setRevogacao(null)}
-          aoConcluir={() => aoRevogar(revogacao.pessoa)}
+          aoConcluir={() => aoRevogar(revogacao.pessoa, revogacao.link)}
           aoDesatualizar={recarregar}
           focoAoFechar={refFocoAposRevogar}
         />

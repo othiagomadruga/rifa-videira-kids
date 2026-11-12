@@ -180,6 +180,8 @@ describe("GET /api/admin/acessos-hierarquia: todos os alvos do papel", () => {
           revogado_em: null,
           ultimo_uso_em: expect.any(String),
           situacao: "valido",
+          // RIFA-043: nenhum link da hierarquia abre a sessão do admin que pede a lista.
+          desta_sessao: false,
         },
       ],
     });
@@ -225,6 +227,7 @@ describe("POST /api/admin/acessos-hierarquia/links: um link novo por alvo", () =
         revogado_em: null,
         ultimo_uso_em: null,
         situacao: "valido",
+        desta_sessao: false,
         url: expect.stringMatching(
           /^http:\/\/localhost\/acesso\/[A-Za-z0-9_-]{43}$/,
         ),

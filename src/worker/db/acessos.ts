@@ -157,7 +157,15 @@ export function situacaoDoLink(
   return link.expira_em > agora ? "valido" : "expirado";
 }
 
-export function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
+/**
+ * O link como as listas mostram. `linkDaSessao` é o link que abriu a sessão de quem pediu a lista (RIFA-043, o
+ * `link_id` da sessão): esse sai com `desta_sessao` true. null (o padrão) = nenhum link é o desta sessão.
+ */
+export function paraLink(
+  linha: LinhaLink,
+  agora: string,
+  linkDaSessao: number | null = null,
+): LinkAcesso {
   return {
     id: linha.id,
     criado_em: linha.criado_em,
@@ -165,6 +173,7 @@ export function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
     revogado_em: linha.revogado_em,
     ultimo_uso_em: linha.ultimo_uso_em,
     situacao: situacaoDoLink(linha, agora),
+    desta_sessao: linkDaSessao !== null && linha.id === linkDaSessao,
   };
 }
 
@@ -175,12 +184,13 @@ export function paraLink(linha: LinhaLink, agora: string): LinkAcesso {
 /**
  * Usuários com os links (sem hash) e as sessões válidas (no prazo e não paradas): um usuário pelo id (de qualquer
  * papel, com o alvo nos da hierarquia) ou, com `id` null, todos os da coordenação (a hierarquia tem a lista
- * própria, em db/acessos-hierarquia.ts).
+ * própria, em db/acessos-hierarquia.ts). `linkDaSessao`: o link que abriu a sessão de quem pede (RIFA-043).
  */
 async function carregarUsuarios(
   db: D1Database,
   agora: string,
   id: number | null,
+  linkDaSessao: number | null,
 ): Promise<Usuario[]> {
   // ?1 = o id, ou null para a lista da coordenação; ?2 = os papéis da coordenação (lista JSON do contrato).
   const doFiltro = `((?1 IS NULL AND u.papel IN (SELECT value FROM json_each(?2))) OR u.id = ?1)`;
@@ -215,7 +225,7 @@ async function carregarUsuarios(
   const linksPorUsuario = new Map<number, LinkAcesso[]>();
   for (const linha of links.results as LinhaLink[]) {
     const lista = linksPorUsuario.get(linha.usuario_id) ?? [];
-    lista.push(paraLink(linha, agora));
+    lista.push(paraLink(linha, agora, linkDaSessao));
     linksPorUsuario.set(linha.usuario_id, lista);
   }
   const sessoesPorUsuario = new Map(
@@ -244,21 +254,26 @@ async function carregarUsuarios(
   });
 }
 
-/** As pessoas da coordenação (admin e coordenacao). Os usuários da hierarquia têm a lista própria. */
+/**
+ * As pessoas da coordenação (admin e coordenacao). Os usuários da hierarquia têm a lista própria. Com
+ * `linkDaSessao` (o link que abriu a sessão de quem pede), esse link sai marcado com `desta_sessao` (RIFA-043).
+ */
 export function listarUsuarios(
   db: D1Database,
   agora: string,
+  linkDaSessao: number | null = null,
 ): Promise<Usuario[]> {
-  return carregarUsuarios(db, agora, null);
+  return carregarUsuarios(db, agora, null, linkDaSessao);
 }
 
-/** Um usuário de qualquer papel (com o alvo, nos papéis da hierarquia), ou null. */
+/** Um usuário de qualquer papel (com o alvo, nos papéis da hierarquia), ou null. `linkDaSessao`: como na lista. */
 export async function buscarUsuario(
   db: D1Database,
   id: number,
   agora: string,
+  linkDaSessao: number | null = null,
 ): Promise<Usuario | null> {
-  const [usuario] = await carregarUsuarios(db, agora, id);
+  const [usuario] = await carregarUsuarios(db, agora, id, linkDaSessao);
   return usuario ?? null;
 }
 
@@ -594,6 +609,11 @@ export interface SessaoEncontrada {
   usuario: UsuarioSessao;
   /** A chave de acesso do papel na campanha ativa: só discipulador e rede podem ter false (D20). */
   acessoLigado: boolean;
+  /**
+   * O link que abriu a sessão (`sessoes.link_id`): a lista dos acessos o marca como "este aparelho" (RIFA-043).
+   * null só numa sessão gravada sem link (a coluna aceita; a API sempre grava o link).
+   */
+  linkId: number | null;
 }
 
 /**
@@ -621,7 +641,7 @@ export async function buscarSessao(
 ): Promise<SessaoEncontrada | null> {
   const linha = await db
     .prepare(
-      `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em, ${COLUNAS_ALVO},
+      `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em, s.link_id, ${COLUNAS_ALVO},
          ${sqlAcessoDoPapel("u.papel")} AS acesso_ligado
        FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id ${JUNTAR_ALVO}
        WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1`,
@@ -633,6 +653,7 @@ export async function buscarSessao(
         nome: string;
         papel: Papel;
         ultimo_uso_em: string;
+        link_id: number | null;
         acesso_ligado: number;
       } & ColunasAlvo
     >();
@@ -648,7 +669,11 @@ export async function buscarSessao(
       .bind(idHash, agora)
       .run();
   }
-  return { usuario, acessoLigado: linha.acesso_ligado === 1 };
+  return {
+    usuario,
+    acessoLigado: linha.acesso_ligado === 1,
+    linkId: linha.link_id,
+  };
 }
 
 export async function apagarSessao(
