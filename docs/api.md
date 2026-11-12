@@ -1017,8 +1017,10 @@ afiliado vale na hora. Custo no D1: um lote com a campanha, as células do escop
 
 - começa exatamente por `https://rifei.com.br/` (`HOSTS_LINK_VENDAS`): sem `www.`, subdomínio, porta, usuário ou
   maiúsculas, e os marcadores só depois da barra, então nenhum valor muda o site de destino;
-- sem espaço, tabulação ou quebra de linha; só `{slug}` e `{afiliado}`, com o `{afiliado}` obrigatório; nenhuma chave
-  solta; até 300 caracteres.
+- depois do endereço, nenhum outro: nada de `//`, `\` ou `www.` (ex.: `https://rifei.com.br//golpe.example/...` ou
+  `?volta=https://...`);
+- sem espaço, tabulação, quebra de linha ou caractere invisível; só `{slug}` e `{afiliado}`, com o `{afiliado}`
+  obrigatório; nenhuma chave solta; até 300 caracteres.
 
 **O link** (`montarLinkDeVendas`): o modelo preenchido numa passada só, na forma canônica (`URL.href`) e conferido de
 novo (`eLinkDeVendas`: `https:`, `rifei.com.br`, sem usuário, senha nem porta). Os schemas das respostas recusam

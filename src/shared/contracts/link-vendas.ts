@@ -9,7 +9,8 @@
  * Rifei, com dois marcadores: `{slug}` (o slug da campanha) e `{afiliado}` (o `affiliate_id`, o mesmo número que
  * chega no webhook). Assim o link que o sistema mostra é, por construção, o que faz a venda contar para a célula.
  *
- * Segurança (D24): o modelo começa sempre por `https://rifei.com.br/` (HOSTS_LINK_VENDAS), e o link montado é
+ * Segurança (D24): o modelo começa sempre por `https://rifei.com.br/` (HOSTS_LINK_VENDAS), sem outro endereço depois
+ * (OUTRO_ENDERECO_NO_LINK), e o link montado é
  * conferido de novo (`eLinkDeVendas`) antes de sair da API e no schema das respostas: nenhum outro endereço chega aos
  * líderes, aos compradores ou ao QR code.
  *
@@ -46,8 +47,19 @@ export type MarcadorLinkVendas = (typeof MARCADORES_LINK_VENDAS)[number];
 /** Um marcador escrito no modelo: `{` + letras, dígitos ou `_` + `}` (a mesma forma das mensagens, regras.ts). */
 const MARCADOR_NO_TEXTO = /\{([A-Za-z0-9_]+)\}/g;
 
-/** Espaço, tabulação, quebra de linha ou outro caractere de controle. */
-const ESPACO_OU_CONTROLE = /[\s\p{Cc}]/u;
+/**
+ * Espaço, tabulação, quebra de linha, caractere de controle ou invisível (de formatação, como o espaço de largura
+ * zero e as marcas de direção do texto, que vêm junto quando se copia um link do WhatsApp ou de um site).
+ */
+const ESPACO_OU_INVISIVEL = /[\s\p{Cc}\p{Cf}]/u;
+
+/**
+ * Outro endereço depois do da Rifei (como o adendo da RIFA-042 nas mensagens): `//` (também `https://` e o caminho
+ * que começa por `//`), `\` (o navegador lê como `/`) ou `www.`. O site de destino continua o da Rifei, mas um segundo
+ * endereço no link só serviria para levar o comprador a outro site por um redirecionamento da página de destino, e
+ * nenhum formato plausível do link de afiliado tem um.
+ */
+const OUTRO_ENDERECO_NO_LINK = /\/\/|\\|www\./i;
 
 /** Valores de exemplo para conferir se o modelo forma um endereço (o slug e o id de verdade vêm do banco). */
 const EXEMPLO = { slug: "exemplo", affiliateId: 1 } as const;
@@ -109,20 +121,29 @@ export function eLinkDeVendas(texto: string): boolean {
  * válido). Não confere o tamanho (o schema confere). Regras:
  * - começa por `https://<endereço da Rifei>/` (HOSTS_LINK_VENDAS), exatamente assim, em minúsculas: o endereço fica
  *   fixo e os marcadores só entram depois da barra, então nenhum valor muda o site de destino;
- * - sem espaço, tabulação, quebra de linha ou caractere de controle;
+ * - depois do endereço da Rifei, nenhum outro endereço (`//`, `\` ou `www.`; OUTRO_ENDERECO_NO_LINK);
+ * - sem espaço, tabulação, quebra de linha, caractere de controle ou invisível;
  * - só os marcadores `{slug}` e `{afiliado}`, e o `{afiliado}` obrigatório;
  * - nenhuma chave solta (`{` ou `}` fora de um marcador);
  * - preenchido com valores de exemplo, forma um link de vendas válido (`eLinkDeVendas`).
  */
 export function problemasDoModeloLinkVendas(modelo: string): string[] {
   const problemas: string[] = [];
-  if (!HOSTS_LINK_VENDAS.some((host) => modelo.startsWith(`https://${host}/`)))
+  const inicio = HOSTS_LINK_VENDAS.map((host) => `https://${host}/`).find(
+    (endereco) => modelo.startsWith(endereco),
+  );
+  if (inicio === undefined)
     problemas.push(
       `O link de vendas começa com ${HOSTS_LINK_VENDAS.map((host) => `https://${host}/`).join(" ou ")}, o endereço da Rifei.`,
     );
-  if (ESPACO_OU_CONTROLE.test(modelo))
+  // A barra do fim do endereço fica no trecho conferido: "https://rifei.com.br//golpe.example" também é recusado.
+  else if (OUTRO_ENDERECO_NO_LINK.test(modelo.slice(inicio.length - 1)))
     problemas.push(
-      "Tire os espaços e as quebras de linha: o link é um endereço só.",
+      "Tire do modelo o outro endereço (//, \\ ou www.): o link de vendas leva só à Rifei.",
+    );
+  if (ESPACO_OU_INVISIVEL.test(modelo))
+    problemas.push(
+      "Tire os espaços, as quebras de linha e os caracteres invisíveis: o link é um endereço só.",
     );
   const aceitos: readonly string[] = MARCADORES_LINK_VENDAS;
   const desconhecidos = new Set<string>();
@@ -158,9 +179,10 @@ export function modeloLinkVendasValido(
 
 /**
  * O link de vendas de um afiliado, na forma canônica (`URL.href`), ou null: sem modelo (o PO ainda não confirmou o
- * formato), modelo com problema (gravado à mão), slug vazio (ou "." e ".."), `affiliateId` que não é inteiro
- * positivo, ou link montado fora de `eLinkDeVendas`. Null nunca vira erro na rota: a resposta sai com
- * `configurado: false` (modelo) ou sem o link daquele afiliado, e o site explica.
+ * formato), modelo com problema (gravado à mão), slug vazio (ou "." e ".."), slug que o `encodeURIComponent` recusa
+ * (um surrogate solto), `affiliateId` que não é inteiro positivo, ou link montado fora de `eLinkDeVendas`. Null
+ * nunca vira erro na rota: a resposta sai com `configurado: false` (modelo) ou sem o link daquele afiliado, e o site
+ * explica.
  */
 export function montarLinkDeVendas(
   modelo: string | null,
@@ -172,7 +194,12 @@ export function montarLinkDeVendas(
   const slug = valores.slug.trim();
   // "." e ".." viram segmentos de ponto, que o URL apaga do caminho (o encodeURIComponent não codifica o ponto).
   if (slug === "" || slug === "." || slug === "..") return null;
-  return normalizar(preencher(modelo, { ...valores, slug }));
+  try {
+    return normalizar(preencher(modelo, { ...valores, slug }));
+  } catch {
+    // URIError do encodeURIComponent (slug com surrogate solto): sem link, nunca um 500.
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -185,7 +212,11 @@ export function montarLinkDeVendas(
  */
 export const NIVEL_CORRECAO_QR_LINK_VENDAS = "M";
 
-/** Margem branca em volta do QR code, em módulos (a "zona de silêncio" da norma). */
+/**
+ * Margem branca em volta do QR code, em módulos (a "zona de silêncio" da norma). Vai como o `border` do `encodeQR`
+ * (a matriz `raw` já sai com ela; o `qr` 0.7.2 recusa `border: 0` com RangeError), e a tela pinta só os módulos
+ * escuros sobre o fundo branco.
+ */
 export const MARGEM_QR_LINK_VENDAS_MODULOS = 4;
 
 /** Prefixo do arquivo da imagem do QR code ("Baixar imagem"). */

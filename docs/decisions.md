@@ -1089,13 +1089,18 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
   - começa EXATAMENTE por `https://rifei.com.br/` (`HOSTS_LINK_VENDAS`; sem `www.`, subdomínio, porta, usuário ou
     maiúsculas): o endereço fica fixo e os marcadores só entram depois da barra, então nenhum valor muda o site de
     destino. `rifei.com.br.golpe.example`, `rifei.com.br@golpe.example` e `http://` são recusados (testado);
-  - sem espaço, tabulação, quebra de linha ou caractere de controle; só `{slug}` e `{afiliado}`; nenhuma chave solta;
+  - depois do endereço, nenhum outro (`OUTRO_ENDERECO_NO_LINK`: `//`, `\` ou `www.`, como o adendo da RIFA-042 nas
+    mensagens; revisão): `https://rifei.com.br//golpe.example`, `https://rifei.com.br/\golpe.example` (o navegador lê
+    `\` como `/`) e `?volta=https://golpe.example` continuam na Rifei, mas só serviriam para um redirecionamento de lá;
+  - sem espaço, tabulação, quebra de linha, caractere de controle ou invisível (espaço de largura zero, marcas de
+    direção: vêm junto quando se copia um link); só `{slug}` e `{afiliado}`; nenhuma chave solta;
   - preenchido com valores de exemplo, forma um link válido (`eLinkDeVendas`).
 - **A montagem** (`montarLinkDeVendas(modelo, { slug, affiliateId })`): preenche numa passada só (um slug com
   "{afiliado}" não é trocado de novo), devolve a forma canônica (`URL.href`) e confere de novo com `eLinkDeVendas`
   (`https:`, endereço de `HOSTS_LINK_VENDAS`, sem usuário, senha nem porta, canônico, até 2.048 caracteres). Null sem
   modelo, com modelo com problema (gravado à mão), slug vazio, "." ou ".." (o URL apagaria o segmento) ou
-  `affiliate_id` que não é inteiro positivo. Null nunca vira erro: a resposta sai com `configurado: false` ou sem o
+  `affiliate_id` que não é inteiro positivo; também com um slug que o `encodeURIComponent` recusa (surrogate solto,
+  revisão). Null nunca vira erro: a resposta sai com `configurado: false` ou sem o
   link daquele afiliado. Os schemas das respostas também recusam qualquer `url` fora de `eLinkDeVendas`: nenhum outro
   endereço chega aos líderes, aos compradores ou ao QR code.
 - **Onde fica e quem muda**: coluna `campanhas.link_vendas_modelo` (migração `0010_link_vendas.sql`, abaixo), numa
@@ -1149,8 +1154,8 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
   |---|---|---|---|---|---|
   | Licença | MIT ou Apache-2.0 | MIT | MIT | MIT | nossa |
   | Dependências | nenhuma | nenhuma | nenhuma | 3 (pngjs, yargs, dijkstrajs) | nenhuma |
-  | Tamanho (min + gzip) | ~6,9 KB (5,4 KB só o `encodeQR`, pelo README) | ~4,5 KB | ~3,7 KB | maior, feito para Node | ~3 a 4 KB (estimado) |
-  | Manutenção | ativa (4 versões em 2026; a última em 28/09/2026) | esparsa (0.1.2 em 2023; 0.1.3 em 04/2026) | ativa (2.7.4 em 07/09/2026), um mantenedor | 1.5.4 de 08/2024 | nossa |
+  | Tamanho (min + gzip) | ~6,9 KB (~6,6 KB só o `encodeQR` com a saída `raw`, medido na revisão; 5,4 KB pelo README) | ~4,5 KB | ~3,7 KB | maior, feito para Node | ~3 a 4 KB (estimado) |
+  | Manutenção | ativa (5 versões em 2026: 0.5.4, 0.5.5, 0.6.0, 0.7.0 e 0.7.2, a última em 28/09/2026; um mantenedor, com proveniência SLSA no npm) | esparsa (0.1.2 em 2023; 0.1.3 em 04/2026) | ativa (2.7.4 em 07/09/2026), um mantenedor | 1.5.4 de 08/2024 | nossa |
   | Uso (downloads na semana) | ~520 mil | ~10 milhões | ~220 mil | ~40 milhões | |
   | Decodificador para os testes | **sim, no mesmo pacote** (`qr/decode.js`) | não | não | não | precisaria de outro |
 
@@ -1218,7 +1223,9 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
    a chave desligada).
 7. **Dependência** (-web, depois do ok do SM): `qr` com versão fixa (`"qr": "0.7.2"`), no `package.json` e no
    `package-lock.json`; só em pedaços `lazy` (o QR da `/minha` e o da Adesão); conferir no `npm run build` que não
-   entrou no pacote inicial. `encodeQR(url, "raw", { ecc: "medium", border: 0 })` e a margem desenhada pela tela.
+   entrou no pacote inicial. `encodeQR(url, "raw", { ecc: "medium", border: MARGEM_QR_LINK_VENDAS_MODULOS })`: a
+   matriz já sai com a margem branca de 4 módulos, e a tela pinta só os módulos escuros sobre o fundo branco. **Nunca
+   `border: 0`**: o `qr` 0.7.2 lança `RangeError: invalid border=0` (a norma exige a margem; conferido na revisão).
 8. **Componente do QR** (-web, ex.: `src/web/components/qr/`, fora de `components/ui`): `<svg>` com `viewBox`, um
    `<path>` dos módulos, `shape-rendering="crispEdges"`, preto sobre branco fixos (exceção documentada aos tokens do
    tema), `role="img"` e `aria-label` com o nome da célula; nada de `dangerouslySetInnerHTML`. "Baixar imagem": PNG de
@@ -1227,7 +1234,8 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
    (QR com 4 cm ou mais). "Copiar link" (sem a área de transferência, seleciona o campo) e "Compartilhar no WhatsApp"
    (`https://wa.me/?text=` com `encodeURIComponent`; na Adesão, `wa.me/<telefone do líder>`).
 9. **Teste do QR** (-web): gerar → rasterizar a matriz em pixels (função pura) → `decodeQR` de `qr/decode.js` devolve
-   EXATAMENTE o `url`, com um link curto (~45 caracteres), um médio (~150) e um longo (~600). E no aparelho de
+   EXATAMENTE o `url`, com um link curto (~45 caracteres), um médio (~150) e um longo (~600) (na revisão, com o
+   `qr` 0.7.2, `border: 4` e 4 px por módulo: 47, 150 e 607 caracteres, versões 4, 8 e 19, os três exatos). E no aparelho de
    verdade: a câmera de um Android e de um iPhone lê o QR na tela da `/minha` (360 px), no PNG baixado e numa folha
    impressa, e abre o link certo (anotar no relatório).
 10. **`/minha`** (-web): o cartão "Seu link de vendas" (líder) e "Links de vendas das suas células" (discipulador e

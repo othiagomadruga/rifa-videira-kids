@@ -160,10 +160,42 @@ describe("D24: o modelo do link de vendas", () => {
       "https://rifei.com.br/{slug}?a={afiliado}\nhttps://golpe.example/",
       "https://rifei.com.br/{slug}?a=\t{afiliado}",
       "https://rifei.com.br/{slug}?a={afiliado}\u0000",
-    ])
+      // Invisíveis (vêm junto ao copiar um link): espaço de largura zero, marcas e inversão de direção, BOM.
+      "https://rifei.com.br/{slug}​?a={afiliado}",
+      "https://rifei.com.br/{slug}?a={afiliado}‎",
+      "https://rifei.com.br/‮{slug}?a={afiliado}",
+      "https://rifei.com.br/{slug}?a=⁠{afiliado}",
+      "https://rifei.com.br/{slug}﻿?a={afiliado}",
+    ]) {
       expect(problemasDoModeloLinkVendas(modelo)).toContain(
-        "Tire os espaços e as quebras de linha: o link é um endereço só.",
+        "Tire os espaços, as quebras de linha e os caracteres invisíveis: o link é um endereço só.",
       );
+      expect(modeloLinkVendasValido(modelo)).toBe(false);
+    }
+  });
+
+  it("recusa outro endereço depois do da Rifei (//, \\ ou www.), mesmo com o site de destino na Rifei (revisão)", () => {
+    for (const modelo of [
+      "https://rifei.com.br//golpe.example/{afiliado}",
+      "https://rifei.com.br/\\golpe.example/{afiliado}",
+      "https://rifei.com.br/..//golpe.example/{afiliado}",
+      "https://rifei.com.br/{slug}?a={afiliado}&volta=https://golpe.example/",
+      "https://rifei.com.br/{slug}?a={afiliado}&volta=//golpe.example/",
+      "https://rifei.com.br/{slug}?a={afiliado}&volta=\\\\golpe.example",
+      "https://rifei.com.br/{slug}?a={afiliado}&volta=WWW.golpe.example",
+      "https://rifei.com.br/{slug}?a={afiliado}#https://golpe.example",
+    ]) {
+      expect({
+        modelo,
+        problemas: problemasDoModeloLinkVendas(modelo),
+      }).toEqual({
+        modelo,
+        problemas: [
+          "Tire do modelo o outro endereço (//, \\ ou www.): o link de vendas leva só à Rifei.",
+        ],
+      });
+      expect(modeloLinkVendasValido(modelo)).toBe(false);
+    }
   });
 
   it("modeloLinkVendasValido: null, acima do limite ou com problema não servem", () => {
@@ -234,6 +266,9 @@ describe("D24: a montagem do link (montarLinkDeVendas) e a conferência do domí
     ).toBeNull();
     // "." e ".." seriam segmentos de ponto, que o URL apaga do caminho (o link iria para outra página da Rifei).
     for (const slug of [".", "..", " .. "])
+      expect(montarLinkDeVendas(MODELO, { slug, affiliateId: 1 })).toBeNull();
+    // Surrogate solto: o encodeURIComponent lança URIError; sai null, nunca um 500 (revisão).
+    for (const slug of ["\ud800", "videira\udc00kids"])
       expect(montarLinkDeVendas(MODELO, { slug, affiliateId: 1 })).toBeNull();
     for (const affiliateId of [0, -1, 1.5, Number.NaN, 2 ** 53])
       expect(
