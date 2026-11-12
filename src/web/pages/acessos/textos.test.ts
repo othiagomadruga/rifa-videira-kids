@@ -275,6 +275,8 @@ describe("RIFA-041: o {link} colado em outro endereço não sai na mensagem", ()
     ["depois de chave de outro marcador", "{saudacao}{link}"],
     ["com espaço sem quebra (U+00A0)", "Entre:\u00a0{link}"],
     ["em formatação do WhatsApp", "Entre: *{link}*"],
+    // Revisão RIFA-042: o contrato aceita um \r sozinho antes do {link} (só pela API crua); a Acessos, não.
+    ["depois de um \\r sozinho", "{saudacao} Veja site.example?u=\r{link}"],
   ])("%s: o padrão", (_caso, modelo) => {
     expect(
       mensagemWhatsApp("Ana", URL_FICTICIA, {
@@ -315,6 +317,7 @@ describe("RIFA-041: o {link} colado em outro endereço não sai na mensagem", ()
     ["depois de espaço", "{saudacao} Entre: {link}"],
     ["depois de quebra de linha", "{saudacao} Entre:\n{link}"],
     ["depois de tabulação", "{saudacao} Entre:\t{link}"],
+    ["depois de \\r\\n", "{saudacao} Entre:\r\n{link}"],
   ])("%s: vale o modelo da campanha", (_caso, modelo) => {
     expect(
       mensagemWhatsApp("Ana", URL_FICTICIA, {

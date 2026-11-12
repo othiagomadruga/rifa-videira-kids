@@ -57,11 +57,14 @@ export async function carregarRegras(
  * Um `{link}` colado no texto de antes (ex.: "https://outro.site/?u={link}"): o link pessoal viraria o fim de um
  * endereço de outro site. O WhatsApp de quem envia busca a prévia desse endereço ao montar a mensagem, e o token do
  * link sairia para esse site mesmo que ninguém toque nele (RIFA-041). Só vale o `{link}` no começo ou depois de
- * espaço, tabulação ou quebra de linha, como nos padrões. Desde a RIFA-042 o contrato também recusa esse modelo
- * (`problemasDoModelo`: a API não grava e a Campanha avisa) e só o admin edita as mensagens; esta trava continua
- * para um modelo gravado antes, independente do contrato.
+ * espaço, tabulação ou quebra de linha (`\n`, inclusive o fim de um `\r\n`), como nos padrões. Desde a RIFA-042 o
+ * contrato também recusa esse modelo (`problemasDoModelo`: a API não grava e a Campanha avisa) e só o admin edita as
+ * mensagens; esta trava continua para um modelo gravado antes, independente do contrato.
+ * Um `\r` sozinho antes do `{link}` não vale aqui (revisão RIFA-042), embora o contrato aceite: a caixa de texto do
+ * navegador nunca o produz (vira `\n`), só a API crua, e um app que descarte o `\r` ao receber a mensagem colaria o
+ * link no texto de antes (ex.: "site.com?u=\r{link}", que passa pela regra do outro endereço).
  */
-const LINK_COLADO = /[^ \t\r\n]\{link\}/;
+const LINK_COLADO = /[^ \t\n]\{link\}/;
 
 /**
  * O modelo que a mensagem usa: o da campanha, ou o padrão do tipo se o gravado tiver problema (D20: nunca mandar
