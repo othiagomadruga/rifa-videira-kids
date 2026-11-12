@@ -350,13 +350,18 @@ describe("D23: formato dos números", () => {
   it("R$: reais com vírgula e sempre 2 casas, sem 'R$' e sem milhar (por texto, sem float)", () => {
     expect(
       [
-        0, 5, 50, 100, 2000, 123_456, 278_000, 1_000_000_000, 999_999_999_999,
+        0, 1, 5, 10, 50, 99, 100, 101, 2000, 123_456, 278_000, 1_000_000_000,
+        999_999_999_999,
       ].map((centavos) => formatarCentavosCsv(centavos)),
     ).toEqual([
       "0,00",
+      "0,01",
       "0,05",
+      "0,10",
       "0,50",
+      "0,99",
       "1,00",
+      "1,01",
       "20,00",
       "1234,56",
       "2780,00",
@@ -425,6 +430,9 @@ describe("D23: proteção contra fórmula e aspas", () => {
     "=1+1",
     '=HYPERLINK("https://site.example";"clique")',
     "=cmd|' /C calc'!A0",
+    "+cmd|' /C calc'!A0",
+    "-cmd|' /C calc'!A0",
+    "@SUM(1+1)*cmd|' /C calc'!A0",
     "+123",
     "+Vida",
     "-2+3",
@@ -457,6 +465,12 @@ describe("D23: proteção contra fórmula e aspas", () => {
     "Ágape - Jovens",
     "e-mail@não-é-coluna",
     "1º lugar",
+    // O "|" do DDE só age numa célula que já começa como fórmula: sozinho ou no meio, é texto.
+    "|cmd",
+    "cmd|' /C calc'!A0",
+    "Célula | Betel",
+    // Um apóstrofo que já está no nome fica como está.
+    "'Ágape'",
     "",
   ])("%j não parece fórmula e não muda", (texto) => {
     expect(pareceFormulaNoCsv(texto)).toBe(false);

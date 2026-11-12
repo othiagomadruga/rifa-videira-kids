@@ -925,7 +925,10 @@ dos números, proteção contra fórmula, o arquivo, o nome e os cabeçalhos) e 
   texto (o apóstrofo pode aparecer na célula: é o preço). É a mesma família de sinais que a conferência trata como
   fórmula ao LER o CSV da Rifei (`pareceFormula`, D19), mais estrita: o `-` seguido de número também conta, porque
   os números do arquivo saem dos formatadores (só dígitos e vírgula) e nunca começam com sinal. Como a proteção vale
-  para toda célula, inclusive as numéricas (que ela nunca muda, testado), a rota não tem como esquecê-la.
+  para toda célula, inclusive as numéricas (que ela nunca muda, testado), a rota não tem como esquecê-la. O `|` do
+  DDE (`=cmd|' /C calc'!A0`, `@SUM(1+1)*cmd|...`) só é executado numa célula que já começa como fórmula, e essas a
+  proteção pega; sozinho ou no meio do texto, nem o Excel nem o Google Planilhas o executam, então ele não muda
+  (testado). Um nome que já começa com apóstrofo também não muda.
 - **Papéis**: grupo `coordenacao`, **sem `papeis`** (admin e coordenação, como o painel e o mapa), sob `/api/painel`:
   tem R$, então nunca é aberta nem da hierarquia (403 pelo login do prefixo, D12).
 - **Cabeçalhos** (`cabecalhosDoRelatorio(tipo, data)`): `Content-Type: text/csv; charset=utf-8`,
@@ -944,13 +947,13 @@ mesmo `agora` (uma chamada ao relógio). `lido` = `lerEntradaDoCalculo(db, relog
 
 | Tipo | Linhas | Colunas, na ordem (fonte) |
 |---|---|---|
-| `totais` | uma | Campanha (`escopo.nome`), Data de referência (`referencia.data`), Situação da campanha (`TEXTO_FASE_RELATORIO[referencia.fase]`), Início e Fim (`referencia.data_inicio` e `data_fim`), Meta (`campanha.meta`), Pedidos aprovados, Bilhetes e Arrecadação (`vendas`: na janela até hoje, com as sem célula), % da meta (`campanha.percentual_meta_bp`), Pedidos, Bilhetes e Arrecadação sem célula (`vendas_sem_celula`), Pedidos, Bilhetes e Arrecadação fora das datas da campanha (`vendas_fora_da_janela`: antes do início + depois do fim), Pedidos desconsiderados (a contagem abaixo), Critério do ranking (`TEXTO_CRITERIO_RELATORIO[campanha.ranking.criterio]`). Do `montarResumoPainel(lido.entrada, { escopo: lido.escopo }, lido.agora)` |
+| `totais` | uma | Do `resumo = montarResumoPainel(lido.entrada, { escopo: lido.escopo }, lido.agora)`: Campanha (`resumo.escopo.nome`), Data de referência (`resumo.referencia.data`), Situação da campanha (`TEXTO_FASE_RELATORIO[resumo.referencia.fase]`), Início e Fim (`resumo.referencia.data_inicio` e `data_fim`), Meta (`resumo.campanha.meta`, na `resumo.unidade`), Pedidos aprovados, Bilhetes e Arrecadação (`resumo.vendas`: na janela até hoje, com as sem célula), % da meta (`resumo.campanha.percentual_meta_bp`), Pedidos, Bilhetes e Arrecadação sem célula (`resumo.vendas_sem_celula`), Pedidos, Bilhetes e Arrecadação fora das datas da campanha (`resumo.vendas_fora_da_janela`: antes do início + depois do fim), Pedidos desconsiderados (a contagem abaixo). Fora do resumo (o `campanha` dele é o ritmo, sem o critério): Critério do ranking (`TEXTO_CRITERIO_RELATORIO[lido.entrada.campanha.ranking.criterio]`) |
 | `celulas` | uma por célula | Divisão (`NOMES_DIVISAO[item.divisao]`), Rede (`item.rede.nome`), Discipulador (`item.discipulador.nome`), Célula (`item.nome`), Líder (`lider_nome`, consulta abaixo), Meta (`item.meta`), Pedidos aprovados, Bilhetes e Arrecadação (`item.vendas`), % da meta (`item.percentual_meta_bp`), Posição na divisão (`item.posicao`) |
 | `discipuladores` | uma por discipulador com célula | as mesmas, sem Célula e Líder; Rede = `item.rede.nome`, Discipulador = `item.nome` |
 | `redes` | uma por rede com célula | as mesmas, sem Discipulador; Rede = `item.nome` |
 | `periodos` | uma por período já começado (`data_inicio` ≤ hoje) | Período (nome), Início e Fim (as datas de `calcularCalendario`, mesmo com o período em andamento), Pedidos aprovados, Bilhetes e Arrecadação: soma de `lido.entrada.vendas` (todas as células e as sem célula) de `data_inicio` até `min(data_fim, hoje)` |
 | `dias` | uma por dia, do 1º até `min(último dia, hoje)` (hoje, parcial; dia sem venda, zerado) | Data, Dia da campanha (1 = 1º dia), Período (o nome do que contém o dia), Pedidos aprovados, Bilhetes e Arrecadação do dia |
-| `ddd` | uma por DDD com venda, na ordem do mapa, mais "Exterior" e "Sem DDD" (DDD vazio; sempre, mesmo zeradas) | UF, DDD, Pedidos aprovados, Bilhetes, Arrecadação (`total_centavos`) e % dos bilhetes (`parte_bilhetes_bp`). De `lerMapaDdd(db, relogio, { periodo: "campanha" })` e `montarMapaDdd` sem divisão: o mesmo que `/api/painel/mapa-ddd?periodo=campanha` |
+| `ddd` | uma por DDD com venda, na ordem do mapa, mais "Exterior" e "Sem DDD" (DDD vazio; sempre, mesmo zeradas) | UF, DDD, Pedidos aprovados (`pedidos_aprovados`), Bilhetes, Arrecadação (`total_centavos`) e % dos bilhetes (`parte_bilhetes_bp`). De `lerMapaDdd(db, relogio, { periodo: "campanha" })` e `montarMapaDdd` sem divisão: o mesmo que `/api/painel/mapa-ddd?periodo=campanha`. A data do nome do arquivo é o `hojeNoFuso(fuso, agora)` que `lerMapaDdd` já calcula: ela passa a devolvê-lo (`hoje`), sem ida a mais. O cabeçalho do `ddd` não tem meta: `cabecalhoDoRelatorio("ddd", unidade)` sai igual com qualquer unidade |
 
 - Célula, discipulador e rede: para cada divisão em `ORDEM_DIVISOES` (jovens, depois adultos),
   `montarRankingPainel(lido.entrada, { nivel, divisao, periodo: "campanha" }, lido.agora)`, uma linha por item, na
@@ -1019,13 +1022,14 @@ mostram uma janela (a semana ou a campanha) e um nível por vez, e o relatório 
    `cabecalhosDoRelatorio(tipo, referencia.data)` (`c.body(csv, 200, cabecalhos)`); 400 `requisicao_invalida` sem
    `tipo` ou fora da lista; 404 `nao_encontrado` sem campanha ativa (antes de montar qualquer coisa). As linhas
    de cada tipo, pela tabela acima, num módulo puro (`lib/relatorio.ts`) testado sem banco, e as contas que fecham
-   (acima) testadas com o cenário do painel (`test/painel-apoio.ts`).
+   (acima) testadas com o cenário do painel (`src/worker/test/painel-apoio.ts`).
 7. **Site** (-web): o cartão da Visão geral (acima). O download por `fetch` (mesma origem, com o cookie) → `Blob` →
    link temporário com `download` = o nome do `Content-Disposition` (sem ele, `rifa-videira-kids-<tipo>.csv`) e
    `URL.revokeObjectURL` depois; o `lib/api.ts` ganha uma função para arquivo com o mesmo tratamento de erro e de
    401 do `requisitarJson`. Erros no formato único: 404 "A campanha ainda não foi configurada"; 401 leva à sessão,
    como hoje. Um download por vez (o botão fica desabilitado enquanto baixa). Tipos e nome do arquivo vêm de
-   `src/shared/contracts/relatorio` (sem zod), nunca do index. Conferir no navegador de verdade (`npm run dev`,
+   `src/shared/contracts/relatorio` (sem zod), nunca do index; o caminho da rota é uma cópia conferida pelo teste de
+   contrato da pasta, como nas outras telas (docs/frontend.md). Conferir no navegador de verdade (`npm run dev`,
    também no celular) que o arquivo baixa com o nome certo e abre no Excel e no Google Planilhas com acentos,
    colunas e números certos. Docs: a Visão geral em `docs/frontend.md`.
 
