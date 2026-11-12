@@ -1,7 +1,8 @@
 // Ajudantes do botão indisponível (RIFA-045): o botão cuja dica explica por que ele está indisponível usa
 // aria-disabled, e não disabled. O disabled sai do Tab (e um botão focado que vira disabled perde o foco, que cai no
 // <body>, até de dentro de um diálogo), então pelo teclado a dica nunca abria. Com aria-disabled, o botão continua no
-// Tab, a dica abre com o foco do teclado, a tela barra a ação no handler e o CSS da tela dá a cara de desabilitado.
+// Tab, a dica abre com o foco do teclado, a tela barra a ação no handler e o Button.css dá a cara de desabilitado (a
+// regra .ui-button[aria-disabled="true"], RIFA-047; a tela não a repete).
 import { act, fireEvent } from "@testing-library/react";
 import { expect } from "vitest";
 import { dicaDe } from "./dicas";
@@ -100,7 +101,10 @@ type Conferencia = {
   dica: string;
   /** Confere que nada aconteceu (ex.: nenhuma chamada nova à API, o diálogo continua aberto). */
   semEfeito: () => void;
-  /** As folhas de estilo da tela (`lerCss`), onde a cara de indisponível tem de estar. */
+  /**
+   * As folhas de estilo que valem no botão (`lerCss`), na ordem em que a página as carrega: o Button.css (onde está a
+   * cara de indisponível) e o CSS da tela (que não pode desfazê-la).
+   */
   css: string[];
 };
 
@@ -117,7 +121,7 @@ export async function conferirIndisponivel(
   esperarIndisponivel(controle);
   expect(
     caraDeIndisponivel(controle, ...css),
-    "sem a cara de indisponível no CSS da tela",
+    "sem a cara de indisponível no CSS (ou a tela a desfaz)",
   ).toEqual(caraDoDesabilitado());
   chegarPeloTab(controle);
   expect(dicaDe(controle), "a dica não abriu pelo teclado").toHaveTextContent(
@@ -160,26 +164,138 @@ export function lerCss(deSrcWeb: string): string {
 export type Cara = { opacity: string; cursor: string };
 
 /**
- * A cara de indisponível que o CSS dá a `elemento`: a opacidade e o cursor da primeira regra de `css` que casa com ele
- * e declara os dois (null se nenhuma). O jsdom não aplica o CSS: aqui, o seletor é conferido com `matches`.
+ * A cara de indisponível que o CSS dá a `elemento`: a opacidade e o cursor que valem nele pela cascata, entre as regras
+ * das `folhas` (na ordem em que a página as carrega) cujo seletor casa com ele. Cada propriedade fica com a regra de
+ * seletor mais específico e, no empate, com a que vem depois; null se faltar uma das duas (ex.: o botão disponível só
+ * tem o `cursor: pointer` do .ui-button). Assim, a regra geral do Button.css (RIFA-047) vale, e a tela que a
+ * sobrepõe (ex.: o cursor de espera de um "Carregando…") também aparece aqui. O jsdom não aplica o CSS: o seletor é
+ * conferido com `matches`, e o que está dentro de um @media conta como se valesse sempre.
  */
 export function caraDeIndisponivel(
   elemento: Element,
   ...folhas: string[]
 ): Cara | null {
+  const vencedoras: Partial<Record<keyof Cara, Declarada>> = {};
   for (const css of folhas) {
     for (const [, seletores, corpo] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const opacity = /(?:^|;)\s*opacity\s*:\s*([^;]+?)\s*(?:;|$)/.exec(corpo);
-      const cursor = /(?:^|;)\s*cursor\s*:\s*([^;]+?)\s*(?:;|$)/.exec(corpo);
-      if (!opacity || !cursor) continue;
-      const casa = seletores
-        .split(",")
-        .map((seletor) => seletor.trim())
-        .some((seletor) => casaCom(elemento, seletor));
-      if (casa) return { opacity: opacity[1], cursor: cursor[1] };
+      const casam = separarSeletores(seletores).filter((seletor) =>
+        casaCom(elemento, seletor),
+      );
+      if (casam.length === 0) continue;
+      const peso = casam
+        .map(especificidade)
+        .reduce((maior, atual) =>
+          compararEspecificidade(atual, maior) > 0 ? atual : maior,
+        );
+      for (const propriedade of ["opacity", "cursor"] as const) {
+        const valor = new RegExp(
+          `(?:^|;)\\s*${propriedade}\\s*:\\s*([^;]+?)\\s*(?:;|$)`,
+        ).exec(corpo)?.[1];
+        const atual = vencedoras[propriedade];
+        // Mesma especificidade: a que vem depois vence (o laço anda na ordem das folhas e das regras).
+        if (
+          valor !== undefined &&
+          (!atual || compararEspecificidade(peso, atual.peso) >= 0)
+        )
+          vencedoras[propriedade] = { valor, peso };
+      }
     }
   }
-  return null;
+  const { opacity, cursor } = vencedoras;
+  return opacity && cursor
+    ? { opacity: opacity.valor, cursor: cursor.valor }
+    : null;
+}
+
+/** Uma declaração que venceu até aqui: o valor e a especificidade do seletor que a trouxe. */
+type Declarada = { valor: string; peso: Especificidade };
+
+/** Especificidade de um seletor: [ids, classes + atributos + pseudo-classes, tipos + pseudo-elementos]. */
+export type Especificidade = [number, number, number];
+
+function compararEspecificidade(a: Especificidade, b: Especificidade): number {
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+}
+
+/** A lista de seletores ("a, b:not(c, d)") separada nas vírgulas de fora dos parênteses. */
+function separarSeletores(lista: string): string[] {
+  const partes: string[] = [];
+  let profundidade = 0;
+  let atual = "";
+  for (const caractere of lista) {
+    if (caractere === "(") profundidade += 1;
+    if (caractere === ")") profundidade -= 1;
+    if (caractere === "," && profundidade === 0) {
+      partes.push(atual);
+      atual = "";
+    } else atual += caractere;
+  }
+  partes.push(atual);
+  return partes.map((parte) => parte.trim()).filter(Boolean);
+}
+
+/** Onde termina o nome que começa em `inicio` (letras, números, - e _). */
+function fimDoNome(seletor: string, inicio: number): number {
+  let fim = inicio;
+  while (fim < seletor.length && /[\w-]/.test(seletor[fim])) fim += 1;
+  return fim;
+}
+
+/** O índice do ")" que fecha o "(" em `abre`. */
+function fechamento(seletor: string, abre: number): number {
+  let profundidade = 0;
+  for (let indice = abre; indice < seletor.length; indice += 1) {
+    if (seletor[indice] === "(") profundidade += 1;
+    if (seletor[indice] === ")" && --profundidade === 0) return indice;
+  }
+  return seletor.length;
+}
+
+/**
+ * A especificidade de um seletor (Selectors 4): :not(), :is() e :has() valem pelo argumento mais específico; :where(),
+ * nada. Basta para o CSS do site (sem escapes nem "]" dentro de atributo).
+ */
+export function especificidade(seletor: string): Especificidade {
+  const peso: Especificidade = [0, 0, 0];
+  let indice = 0;
+  while (indice < seletor.length) {
+    const caractere = seletor[indice];
+    if (caractere === "#" || caractere === ".") {
+      peso[caractere === "#" ? 0 : 1] += 1;
+      indice = fimDoNome(seletor, indice + 1);
+    } else if (caractere === "[") {
+      peso[1] += 1;
+      indice = seletor.indexOf("]", indice) + 1 || seletor.length;
+    } else if (caractere === ":" && seletor[indice + 1] === ":") {
+      peso[2] += 1;
+      indice = fimDoNome(seletor, indice + 2);
+    } else if (caractere === ":") {
+      const fimNome = fimDoNome(seletor, indice + 1);
+      const nome = seletor.slice(indice + 1, fimNome);
+      indice = fimNome;
+      if (seletor[fimNome] === "(") {
+        const fim = fechamento(seletor, fimNome);
+        if (["not", "is", "has"].includes(nome)) {
+          const maior = separarSeletores(seletor.slice(fimNome + 1, fim))
+            .map(especificidade)
+            .reduce<Especificidade>(
+              (anterior, atual) =>
+                compararEspecificidade(atual, anterior) > 0 ? atual : anterior,
+              [0, 0, 0],
+            );
+          peso[0] += maior[0];
+          peso[1] += maior[1];
+          peso[2] += maior[2];
+        } else if (nome !== "where") peso[1] += 1;
+        indice = fim + 1;
+      } else peso[1] += 1;
+    } else if (/[a-z]/i.test(caractere)) {
+      // Um nome solto (no começo ou depois de um combinador) é um tipo: button, input...
+      peso[2] += 1;
+      indice = fimDoNome(seletor, indice);
+    } else indice += 1;
+  }
+  return peso;
 }
 
 /** `matches` que diz não ao que não é seletor (ex.: o "from" de um @keyframes). */

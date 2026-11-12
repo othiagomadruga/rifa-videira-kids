@@ -377,6 +377,7 @@ export const DICAS = {
   cancelarNovaPessoa: "Fecha sem cadastrar ninguém.",
   criarEGerarLink:
     "Cadastra a pessoa e mostra o link pessoal dela uma vez, para copiar ou mandar.",
+  criando: "Indisponível enquanto a pessoa é cadastrada. Espere um instante.",
   campoLink:
     "O link pessoal: quem abrir entra no sistema como esta pessoa. Mande só para ela.",
   copiarLink:
@@ -390,9 +391,12 @@ export const DICAS = {
     "O link para de funcionar agora, e quem entrou com ele sai do sistema.",
   confirmarRevogarESair:
     "O link para de funcionar agora, e você sai do sistema neste aparelho.",
+  revogando: "Indisponível enquanto o link é revogado. Espere um instante.",
   cancelarDesativar: "Fecha sem desativar. A pessoa continua entrando.",
   confirmarDesativar:
     "A pessoa sai do sistema em todos os aparelhos agora. Dá para reativar depois.",
+  desativando:
+    "Indisponível enquanto o acesso é desativado. Espere um instante.",
   papelDaHierarquia:
     "Escolha de quem ver os acessos: dos líderes de célula, dos discipuladores ou das redes.",
   gerarLote:
@@ -410,6 +414,8 @@ export const DICAS = {
   cancelarTrocar: "Fecha sem trocar. Os links atuais continuam valendo.",
   confirmarTrocar:
     "Cria o link novo agora e cancela os anteriores. O link novo aparece em seguida, para mandar.",
+  trocando:
+    "Indisponível enquanto o acesso é trocado e o link novo é criado. Espere um instante.",
   prontoLinks:
     "Fecha esta janela. Se algum link ainda não foi mandado, pede confirmação antes.",
   copiarMensagem:

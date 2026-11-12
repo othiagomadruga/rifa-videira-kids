@@ -84,16 +84,26 @@ export function DialogoTrocarAcesso({
       }}
       rodape={
         <>
-          <ComDica texto={DICAS.cancelarTrocar}>
-            <Button variante="secundario" onClick={aoFechar}>
+          {/* Trocando: os dois com aria-disabled (RIFA-047), no Tab e com a dica dizendo por quê; o clique é barrado aqui
+              (o Cancelar fechava o diálogo no meio da gravação). */}
+          <ComDica texto={trocando ? DICAS.trocando : DICAS.cancelarTrocar}>
+            <Button
+              variante="secundario"
+              aria-disabled={trocando || undefined}
+              onClick={() => {
+                if (!trocando) aoFechar();
+              }}
+            >
               Cancelar
             </Button>
           </ComDica>
-          <ComDica texto={DICAS.confirmarTrocar}>
+          <ComDica texto={trocando ? DICAS.trocando : DICAS.confirmarTrocar}>
             <Button
               variante="perigo"
-              disabled={trocando}
-              onClick={() => void confirmar()}
+              aria-disabled={trocando || undefined}
+              onClick={() => {
+                if (!trocando) void confirmar();
+              }}
             >
               {trocando ? "Trocando…" : "Trocar acesso"}
             </Button>

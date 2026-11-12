@@ -10,6 +10,11 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
 import { ADMIN_DE_TESTE, renderizarRota } from "../../test/renderizar";
 import {
   alvosExemplo,
@@ -17,7 +22,7 @@ import {
   respostaErro,
   type ApiFalsa,
 } from "./teste-apoio";
-import { mensagemHierarquia } from "./textos";
+import { DICAS, mensagemHierarquia } from "./textos";
 
 const ROTA_ALVOS = "/api/admin/acessos-hierarquia";
 const ROTA_LINKS = "/api/admin/acessos-hierarquia/links";
@@ -783,6 +788,68 @@ describe("CA4: por linha, 'Novo link' e 'Trocar acesso'", () => {
     expect(anuncio()).toContain(
       "Acesso de Célula Éfeso trocado: os links anteriores pararam de funcionar.",
     );
+  });
+
+  it("Trocar acesso, gravando: 'Trocando…' e Cancelar ficam indisponíveis (no Tab, com o motivo, e o foco fica no diálogo); nada repete o POST nem fecha (RIFA-047)", async () => {
+    const { api } = await abrirAba();
+    let responder: ((resposta: Response) => void) | null = null;
+    api.proxima(
+      "POST",
+      ROTA_LINKS,
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+    acionar(
+      within(linha("Célula Éfeso")).getByRole("button", {
+        name: "Trocar acesso de Célula Éfeso",
+      }),
+    );
+    const confirmacao = screen.getByRole("alertdialog", {
+      name: "Trocar o acesso de Célula Éfeso?",
+    });
+    const trocar = within(confirmacao).getByRole("button", {
+      name: "Trocar acesso",
+    });
+
+    acionar(trocar);
+    await waitFor(() => expect(responder).not.toBeNull());
+    // O mesmo botão, com o foco (com o disabled, caía no <body>, fora do diálogo).
+    expect(trocar).toHaveTextContent("Trocando…");
+    expect(trocar).toHaveFocus();
+    const semEfeito = () => {
+      expect(api.chamadasA("POST", ROTA_LINKS)).toHaveLength(1);
+      expect(screen.getByRole("alertdialog")).toBe(confirmacao);
+    };
+    const css = [
+      lerCss("components/ui/Button.css"),
+      lerCss("pages/acessos/acessos.css"),
+      lerCss("pages/acessos/acessos-hierarquia.css"),
+    ];
+    await conferirIndisponivel(trocar, {
+      dica: DICAS.trocando,
+      semEfeito,
+      css,
+    });
+    // O Cancelar fechava o diálogo no meio da gravação.
+    await conferirIndisponivel(
+      within(confirmacao).getByRole("button", { name: "Cancelar" }),
+      { dica: DICAS.trocando, semEfeito, css },
+    );
+    fireEvent.keyDown(document.activeElement ?? confirmacao, {
+      key: "Escape",
+    });
+    fireEvent.keyDown(document.activeElement ?? confirmacao, {
+      key: "Escape",
+    });
+    semEfeito();
+
+    await act(async () =>
+      responder?.(respostaErro(500, "erro_interno", "Falha simulada")),
+    );
+    expect(
+      await within(confirmacao).findByText("Não foi possível trocar o acesso"),
+    ).toBeInTheDocument();
+    esperarDisponivel(trocar);
+    expect(api.urlsEmitidas).toEqual([]);
   });
 
   it("Trocar acesso com a lista velha (404): explica em português no diálogo, recarrega a lista e não mostra link", async () => {

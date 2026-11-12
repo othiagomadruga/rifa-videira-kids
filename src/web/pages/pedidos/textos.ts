@@ -297,6 +297,10 @@ export const DICAS = {
     "Tira o pedido das contas agora. Ele continua nesta lista, com o selo.",
   cancelarDesfazer: "Fecha sem mudar nada. O pedido continua fora das contas.",
   confirmarDesfazer: "O pedido volta a contar em todas as contas agora.",
+  desconsiderando:
+    "Indisponível enquanto o pedido sai das contas. Espere um instante.",
+  desfazendo:
+    "Indisponível enquanto o pedido volta para as contas. Espere um instante.",
   entendi:
     "Fecha esta janela. Para voltar a desconsiderar, o admin liga a regra na tela Campanha.",
   filtroResultado:

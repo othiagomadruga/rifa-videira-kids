@@ -20,10 +20,13 @@
 }
 
 /*
- * Os :hover e o :active (abaixo) pulam o desabilitado e o indisponível com aria-disabled (RIFA-045: ele continua
- * focável e com a dica, ex.: "Baixando…", "Carregar mais" carregando): nenhum dos dois reage ao mouse.
+ * Indisponível (RIFA-045): o botão com aria-disabled="true" continua focável e com a dica que diz por quê (ex.:
+ * "Salvando…", "Carregar mais" carregando) e tem a mesma cara do :disabled, nesta regra só (RIFA-047): a tela não
+ * repete. Uma tela que quer outra cara (ex.: o cursor de espera do "Carregando…") sobrepõe com um seletor mais
+ * específico. Os :hover e o :active (abaixo) pulam os dois: nenhum reage ao mouse.
  */
-.ui-button:disabled {
+.ui-button:disabled,
+.ui-button[aria-disabled="true"] {
   opacity: 0.55;
   cursor: not-allowed;
 }

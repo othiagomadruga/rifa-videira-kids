@@ -165,17 +165,21 @@ export function DialogoNovaPessoa({
       aoEnviar={(evento) => void enviar(evento)}
       rodape={
         <>
-          <ComDica texto={DICAS.cancelarNovaPessoa}>
+          {/* Criando: aria-disabled (RIFA-047), no Tab e com a dica dizendo por quê; o foco fica no botão (dentro do
+              diálogo). O Cancelar barra o clique aqui; o envio, no `enviar` (o Enter num campo também envia). */}
+          <ComDica texto={salvando ? DICAS.criando : DICAS.cancelarNovaPessoa}>
             <Button
               variante="secundario"
-              onClick={aoFechar}
-              disabled={salvando}
+              aria-disabled={salvando || undefined}
+              onClick={() => {
+                if (!salvando) aoFechar();
+              }}
             >
               Cancelar
             </Button>
           </ComDica>
-          <ComDica texto={DICAS.criarEGerarLink}>
-            <Button type="submit" disabled={salvando}>
+          <ComDica texto={salvando ? DICAS.criando : DICAS.criarEGerarLink}>
+            <Button type="submit" aria-disabled={salvando || undefined}>
               {salvando ? "Criando…" : "Criar e gerar link"}
             </Button>
           </ComDica>
@@ -421,22 +425,34 @@ export function DialogoRevogar({
       focoAoFechar={props.focoAoFechar}
       rodape={
         <>
-          <ComDica texto={DICAS.cancelarRevogar}>
-            <Button variante="secundario" onClick={props.aoFechar}>
+          {/* Revogando: os dois com aria-disabled (RIFA-047), no Tab e com a dica dizendo por quê; o clique é barrado aqui
+              (o Cancelar fechava o diálogo no meio da gravação). */}
+          <ComDica texto={executando ? DICAS.revogando : DICAS.cancelarRevogar}>
+            <Button
+              variante="secundario"
+              aria-disabled={executando || undefined}
+              onClick={() => {
+                if (!executando) props.aoFechar();
+              }}
+            >
               Cancelar
             </Button>
           </ComDica>
           <ComDica
             texto={
-              desteAparelho
-                ? DICAS.confirmarRevogarESair
-                : DICAS.confirmarRevogar
+              executando
+                ? DICAS.revogando
+                : desteAparelho
+                  ? DICAS.confirmarRevogarESair
+                  : DICAS.confirmarRevogar
             }
           >
             <Button
               variante="perigo"
-              disabled={executando}
-              onClick={() => void confirmar()}
+              aria-disabled={executando || undefined}
+              onClick={() => {
+                if (!executando) void confirmar();
+              }}
             >
               {executando
                 ? "Revogando…"
@@ -504,16 +520,29 @@ export function DialogoDesativar({
       focoAoFechar={props.focoAoFechar}
       rodape={
         <>
-          <ComDica texto={DICAS.cancelarDesativar}>
-            <Button variante="secundario" onClick={props.aoFechar}>
+          {/* Desativando: os dois com aria-disabled (RIFA-047), como no Revogar. */}
+          <ComDica
+            texto={executando ? DICAS.desativando : DICAS.cancelarDesativar}
+          >
+            <Button
+              variante="secundario"
+              aria-disabled={executando || undefined}
+              onClick={() => {
+                if (!executando) props.aoFechar();
+              }}
+            >
               Cancelar
             </Button>
           </ComDica>
-          <ComDica texto={DICAS.confirmarDesativar}>
+          <ComDica
+            texto={executando ? DICAS.desativando : DICAS.confirmarDesativar}
+          >
             <Button
               variante="perigo"
-              disabled={executando}
-              onClick={() => void confirmar()}
+              aria-disabled={executando || undefined}
+              onClick={() => {
+                if (!executando) void confirmar();
+              }}
             >
               {executando ? "Desativando…" : "Desativar acesso"}
             </Button>

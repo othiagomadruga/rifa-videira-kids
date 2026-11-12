@@ -135,4 +135,6 @@ export const DICAS = {
   confirmarTrocaDoSlug:
     "Confirma a troca: daqui em diante, só as vendas com o slug novo contam.",
   voltarERevisar: "Não salva nada e volta para o formulário, para conferir.",
+  salvando:
+    "Indisponível enquanto as mudanças são gravadas. Espere um instante.",
 } as const;

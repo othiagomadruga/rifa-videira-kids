@@ -63,8 +63,10 @@ function falhaDe(erro: unknown): Falha {
 }
 
 /**
- * Depois de uma falha, o foco fica no diálogo: o botão que o tinha estava desabilitado enquanto enviava. Com a chave
- * desligada, vai para "Entendi" (a ação some); senão, para o botão da ação, para tentar de novo.
+ * Enviando, Cancelar e o botão da ação ficam indisponíveis com aria-disabled (RIFA-047), não disabled: o foco fica no
+ * botão da ação (dentro do diálogo), o Tab passa por eles com a dica dizendo por quê e o clique, o Enter, o espaço, o
+ * Esc e o × são ignorados até a resposta. Depois de uma falha, o foco fica no diálogo: com a chave desligada, vai para
+ * "Entendi" (a ação some); senão, para o botão da ação, para tentar de novo.
  */
 function useFocoAposFalha(falha: Falha | null) {
   const refEntendi = useRef<HTMLButtonElement>(null);
@@ -175,25 +177,36 @@ export function DialogoDesconsiderar({
         <>
           <ComDica
             texto={
-              falha?.desligada ? DICAS.entendi : DICAS.cancelarDesconsiderar
+              enviando
+                ? DICAS.desconsiderando
+                : falha?.desligada
+                  ? DICAS.entendi
+                  : DICAS.cancelarDesconsiderar
             }
           >
             <Button
               ref={refEntendi}
               variante="secundario"
-              onClick={aoFechar}
-              disabled={enviando}
+              aria-disabled={enviando || undefined}
+              onClick={() => {
+                if (!enviando) aoFechar();
+              }}
             >
               {falha?.desligada ? "Entendi" : "Cancelar"}
             </Button>
           </ComDica>
           {!falha?.desligada && (
-            <ComDica texto={DICAS.confirmarDesconsiderar}>
+            <ComDica
+              texto={
+                enviando ? DICAS.desconsiderando : DICAS.confirmarDesconsiderar
+              }
+            >
+              {/* Enviando: o envio é barrado no aoEnviar (o clique, o Enter e o espaço nele e o Enter num campo). */}
               <Button
                 ref={refAcao}
                 type="submit"
                 variante="perigo"
-                disabled={enviando}
+                aria-disabled={enviando || undefined}
               >
                 {enviando ? "Desconsiderando…" : "Desconsiderar"}
               </Button>
@@ -295,23 +308,35 @@ export function DialogoDesfazer({
       rodape={
         <>
           <ComDica
-            texto={falha?.desligada ? DICAS.entendi : DICAS.cancelarDesfazer}
+            texto={
+              enviando
+                ? DICAS.desfazendo
+                : falha?.desligada
+                  ? DICAS.entendi
+                  : DICAS.cancelarDesfazer
+            }
           >
             <Button
               ref={refEntendi}
               variante="secundario"
-              onClick={aoFechar}
-              disabled={enviando}
+              aria-disabled={enviando || undefined}
+              onClick={() => {
+                if (!enviando) aoFechar();
+              }}
             >
               {falha?.desligada ? "Entendi" : "Cancelar"}
             </Button>
           </ComDica>
           {!falha?.desligada && (
-            <ComDica texto={DICAS.confirmarDesfazer}>
+            <ComDica
+              texto={enviando ? DICAS.desfazendo : DICAS.confirmarDesfazer}
+            >
               <Button
                 ref={refAcao}
-                disabled={enviando}
-                onClick={() => void confirmar()}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) void confirmar();
+                }}
               >
                 {enviando ? "Desfazendo…" : "Desfazer"}
               </Button>

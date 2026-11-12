@@ -178,16 +178,6 @@
   gap: var(--espaco-2);
 }
 
-/* Gravando (RIFA-045): "Salvando…", "Desvinculando…", "Trocar para esta célula" e os Cancelar ao lado e, no diálogo de
-   remover (num portal, fora da tela: classe própria), "Removendo…" e Cancelar continuam focáveis (aria-disabled), com a
-   dica dizendo por quê, mas com a cara do :disabled do Button.css. */
-.adesao-acoes button[aria-disabled="true"],
-.adesao-codigo button[aria-disabled="true"],
-.adesao-dialogo-botao[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .adesao-erro {
   font-weight: var(--peso-forte);
   color: var(--cor-perigo);

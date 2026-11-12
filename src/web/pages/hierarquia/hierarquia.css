@@ -28,13 +28,6 @@
   color: var(--cor-texto-suave);
 }
 
-/* Conferir e Importar indisponíveis (RIFA-045): continuam focáveis (aria-disabled), com a dica dizendo por quê, mas
-   com a cara do :disabled do Button.css. */
-.hierarquia-importar button[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* Botões de cada linha (Editar e Excluir): altura de toque inteira, menos espaço dos lados. */
 .hierarquia-acoes {
   display: inline-flex;

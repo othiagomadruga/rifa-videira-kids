@@ -439,6 +439,46 @@ describe("CA2: role tooltip e aria-describedby juntando com a descrição que j�
     expect(segunda).toHaveTextContent("Segunda dica.");
     expect(screen.getAllByRole("tooltip")).toHaveLength(1);
   });
+
+  it("uma dica por vez (RIFA-047): a aberta pelo teclado fecha quando o mouse abre a de outro controle, e a do mouse fecha quando o teclado abre outra", () => {
+    render(
+      <>
+        <ComDica texto="Primeira dica.">
+          <Button>Um</Button>
+        </ComDica>
+        <ComDica texto="Segunda dica.">
+          <Button>Dois</Button>
+        </ComDica>
+        <ComDica texto="Terceira dica.">
+          <Button>Três</Button>
+        </ComDica>
+      </>,
+    );
+    focarPeloTeclado(botao("Um"));
+    expect(dicaDe(botao("Um"))).toHaveTextContent("Primeira dica.");
+
+    // O mouse para em "Dois": a dica dele abre e a de "Um" fecha (o foco continua em "Um").
+    passarOMouse(botao("Dois"));
+    esperar(ATRASO_DA_DICA_MS - 1);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Primeira dica.");
+    esperar(1);
+    expect(screen.getAllByRole("tooltip")).toHaveLength(1);
+    expect(dicaDe(botao("Dois"))).toHaveTextContent("Segunda dica.");
+    expect(dicaDe(botao("Um"))).toBeNull();
+    expect(botao("Um")).toHaveFocus();
+
+    // O Tab leva o foco a "Três", com o mouse ainda em "Dois": fica só a dica de "Três".
+    focarPeloTeclado(botao("Três"));
+    expect(screen.getAllByRole("tooltip")).toHaveLength(1);
+    expect(dicaDe(botao("Três"))).toHaveTextContent("Terceira dica.");
+    expect(dicaDe(botao("Dois"))).toBeNull();
+    // Tirar o mouse de "Dois" não mexe na de "Três"; o Esc fecha a que está aberta.
+    tirarOMouse(botao("Dois"));
+    esperar(FOLGA_DA_DICA_MS);
+    expect(dicaDe(botao("Três"))).toHaveTextContent("Terceira dica.");
+    fireEvent.keyDown(botao("Três"), { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
 });
 
 /** Simula o layout que o jsdom não faz: o retângulo do controle, o tamanho da dica e o tamanho da tela. */

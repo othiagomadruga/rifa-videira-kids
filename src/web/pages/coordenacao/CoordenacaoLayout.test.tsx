@@ -10,7 +10,13 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
+import { DICA_BOTAO_SAINDO } from "../../components/ui/AppShell";
 import { guardarDestino, retirarDestino } from "../../lib/sessao";
+import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
 import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
@@ -277,7 +283,46 @@ describe("CA4: nome de quem está conectado, Sair e menu conforme o papel", () =
       "Não foi possível sair: Não foi possível conectar à API.",
     );
     expect(roteador.state.location.pathname).toBe("/coordenacao/pedidos");
-    expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();
+    esperarDisponivel(screen.getByRole("button", { name: "Sair" }));
+  });
+
+  it("saindo: 'Saindo…' fica indisponível com aria-disabled (no Tab, com o motivo, e o foco fica nele) e não manda outro POST (RIFA-047)", async () => {
+    let responder: (resposta: Response) => void = () => {};
+    const api = simularApi({
+      "POST /api/sessao/sair": () =>
+        new Promise<Response>((resolver) => (responder = resolver)),
+    });
+    const { roteador } = renderizarRota("/coordenacao/pedidos");
+    const postsDeSair = () =>
+      api.chamadas.filter(
+        ({ metodo, caminho }) =>
+          metodo === "POST" && caminho === "/api/sessao/sair",
+      );
+    const sair = within(painelDoMenu()).getByRole("button", { name: "Sair" });
+    esperarDisponivel(sair);
+
+    act(() => sair.focus());
+    fireEvent.click(sair);
+    // O mesmo botão, com o foco (com o disabled, caía no <body>); clique, Enter e espaço não fazem nada.
+    expect(sair).toHaveTextContent("Saindo…");
+    expect(sair).toHaveFocus();
+    await conferirIndisponivel(sair, {
+      dica: DICA_BOTAO_SAINDO,
+      semEfeito: () => {
+        expect(postsDeSair()).toHaveLength(1);
+        expect(roteador.state.location.pathname).toBe("/coordenacao/pedidos");
+      },
+      css: [
+        lerCss("components/ui/Button.css"),
+        lerCss("components/ui/AppShell.css"),
+      ],
+    });
+
+    await act(async () => responder(new Response(null, { status: 204 })));
+    await waitFor(() =>
+      expect(roteador.state.location.pathname).toBe("/entrar"),
+    );
+    expect(postsDeSair()).toHaveLength(1);
   });
 
   it("o menu da coordenação não tem 'Acessos'; o do admin tem", () => {

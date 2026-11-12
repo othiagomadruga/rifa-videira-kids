@@ -57,6 +57,7 @@ export function EditorPeriodos({
   aoRemover,
   aoUsarModelo,
 }: Props) {
+  const noLimite = periodos.length >= LIMITE_PERIODOS;
   return (
     <div className="campanha-periodos-area">
       <div className="campanha-periodos-topo">
@@ -198,17 +199,21 @@ export function EditorPeriodos({
       )}
 
       <div>
+        {/* No limite: aria-disabled (RIFA-047), no Tab e com a dica dizendo por quê, e o foco fica no botão (com o
+            disabled, o clique que chegava ao limite jogava o foco no <body>); o clique é barrado aqui. */}
         <ComDica
           texto={
-            periodos.length >= LIMITE_PERIODOS
+            noLimite
               ? DICAS.adicionarPeriodoNoLimite(LIMITE_PERIODOS)
               : DICAS.adicionarPeriodo
           }
         >
           <Button
             variante="secundario"
-            onClick={aoAdicionar}
-            disabled={periodos.length >= LIMITE_PERIODOS}
+            aria-disabled={noLimite || undefined}
+            onClick={() => {
+              if (!noLimite) aoAdicionar();
+            }}
           >
             Adicionar período
           </Button>

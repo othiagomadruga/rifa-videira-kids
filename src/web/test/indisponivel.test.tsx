@@ -9,6 +9,7 @@ import {
   caraDeIndisponivel,
   caraDoDesabilitado,
   chegarPeloTab,
+  especificidade,
   ordemDoTab,
   tab,
 } from "./indisponivel";
@@ -112,5 +113,68 @@ describe("caraDeIndisponivel()", () => {
       ),
     ).toBeNull();
     expect(caraDeIndisponivel(fora, css)).toBeNull();
+  });
+
+  it("segue a cascata (RIFA-047): o seletor mais específico vence e, no empate, a regra que vem depois; cada propriedade na sua", () => {
+    const geral =
+      '.ui-button:disabled, .ui-button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; } .ui-button { cursor: pointer; }';
+    const tela =
+      '.tela-rodape button[aria-disabled="true"] { opacity: 0.55; cursor: progress; }';
+    render(
+      <div className="tela-rodape">
+        <Button aria-disabled>Carregando…</Button>
+      </div>,
+    );
+    const botao = screen.getByRole("button", { name: "Carregando…" });
+    const naoPermitido = { opacity: "0.55", cursor: "not-allowed" };
+    const deEspera = { opacity: "0.55", cursor: "progress" };
+
+    expect(caraDeIndisponivel(botao, geral)).toEqual(naoPermitido);
+    // A tela sobrepõe a regra geral (mais específica), antes ou depois dela.
+    expect(caraDeIndisponivel(botao, geral, tela)).toEqual(deEspera);
+    expect(caraDeIndisponivel(botao, tela, geral)).toEqual(deEspera);
+    // Uma regra menos específica que vem depois não desfaz.
+    expect(
+      caraDeIndisponivel(
+        botao,
+        geral,
+        "button { opacity: 1; cursor: default; }",
+      ),
+    ).toEqual(naoPermitido);
+    // Mesma especificidade: vale a que vem depois. Só o cursor muda: a opacidade continua a da outra regra.
+    const outra = '.ui-button[aria-disabled="true"] { cursor: wait; }';
+    expect(caraDeIndisponivel(botao, geral, outra)).toEqual({
+      opacity: "0.55",
+      cursor: "wait",
+    });
+    expect(caraDeIndisponivel(botao, outra, geral)).toEqual(naoPermitido);
+    // Sem opacidade em regra nenhuma (só o cursor do .ui-button): não tem a cara.
+    expect(
+      caraDeIndisponivel(botao, ".ui-button { cursor: pointer; }"),
+    ).toBeNull();
+  });
+});
+
+describe("especificidade()", () => {
+  it("conta ids, classes (com atributos e pseudo-classes) e tipos; :not, :is e :has pelo argumento mais específico; :where, nada", () => {
+    expect(especificidade("button")).toEqual([0, 0, 1]);
+    expect(especificidade(".ui-button:disabled")).toEqual([0, 2, 0]);
+    expect(especificidade('.ui-button[aria-disabled="true"]')).toEqual([
+      0, 2, 0,
+    ]);
+    expect(especificidade('.tela button[aria-disabled="true"]')).toEqual([
+      0, 2, 1,
+    ]);
+    expect(especificidade("#conteudo .a > b::before")).toEqual([1, 1, 2]);
+    expect(
+      especificidade(
+        '.ui-button--primario:hover:not(:disabled):not([aria-disabled="true"])',
+      ),
+    ).toEqual([0, 4, 0]);
+    expect(
+      especificidade('.campanha-opcao:has(input[aria-disabled="true"])'),
+    ).toEqual([0, 2, 1]);
+    expect(especificidade(":is(#a, .b) c")).toEqual([1, 0, 1]);
+    expect(especificidade(":where(#a, .b) c")).toEqual([0, 0, 1]);
   });
 });

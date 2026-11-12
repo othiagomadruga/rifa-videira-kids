@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import { respostaMapaDddSchema } from "../../../shared/contracts/api";
 import { NOME_DA_UF, UFS, type Uf } from "../../../shared/contracts/ddd";
+import { conferirIndisponivel, lerCss } from "../../test/indisponivel";
 import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
@@ -30,6 +31,7 @@ import {
   respostaErro,
   simularApi,
 } from "./teste-apoio";
+import { DICAS } from "./textos";
 
 const CAMINHO = "/coordenacao/mapa";
 
@@ -614,7 +616,7 @@ describe("CA4: estados vazio, sem campanha e erro", () => {
 
   it("'Atualizar' que falha mantém os números na tela e avisa", async () => {
     let liberar: () => void = () => {};
-    simularApi((_consulta, ordem) =>
+    const api = simularApi((_consulta, ordem) =>
       ordem === 0
         ? respostaJson(mapaDeBelem())
         : new Promise<Response>((resolver) => {
@@ -628,10 +630,18 @@ describe("CA4: estados vazio, sem campanha e erro", () => {
     await tabelaDdd();
 
     const botao = screen.getByRole("button", { name: "Atualizar" });
+    act(() => botao.focus());
     fireEvent.click(botao);
     // Enquanto pede, os números ficam e o botão diz que está atualizando (sem pedir duas vezes).
     expect(botao).toHaveTextContent("Atualizando…");
-    expect(botao).toHaveAttribute("aria-disabled", "true");
+    expect(botao).toHaveFocus();
+    // RIFA-047: no Tab, com a dica do motivo e a cara do disabled, que vem da regra geral do Button.css (o mapa.css
+    // não tinha regra para o "Atualizando…": o botão parecia disponível).
+    await conferirIndisponivel(botao, {
+      dica: DICAS.atualizando,
+      semEfeito: () => expect(api.chamadas).toHaveLength(2),
+      css: [lerCss("components/ui/Button.css"), lerCss("pages/mapa/mapa.css")],
+    });
     expect(await tabelaDdd()).toBeInTheDocument();
     act(() => liberar());
 

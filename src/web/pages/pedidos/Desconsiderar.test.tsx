@@ -12,6 +12,11 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
+import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
   renderizarRota,
@@ -27,6 +32,7 @@ import {
   respostaErro,
   simularApi,
 } from "./teste-apoio";
+import { DICAS } from "./textos";
 
 function abrir(
   usuario: UsuarioSessao = ADMIN_DE_TESTE,
@@ -385,6 +391,129 @@ describe("CA3: desconsiderar e desfazer", () => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
     expect(api.envios).toHaveLength(2);
+  });
+});
+
+describe("RIFA-047: enviando, os botões dos diálogos ficam indisponíveis com aria-disabled", () => {
+  /** O CSS que vale nos botões dos diálogos (num portal): a cara de indisponível vem do Button.css. */
+  const CSS = [
+    lerCss("components/ui/Button.css"),
+    lerCss("pages/pedidos/pedidos.css"),
+  ];
+
+  /** Segura a resposta da próxima chamada a `rota` até `falhar()` (o diálogo fica aberto, com o erro). */
+  function segurar(api: ReturnType<typeof simularApi>, rota: string) {
+    let responder: ((resposta: Response) => void) | null = null;
+    api.proxima(
+      rota,
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+    return {
+      chegou: () => responder !== null,
+      falhar: () =>
+        act(async () =>
+          responder?.(respostaErro(500, "erro_interno", "Erro interno")),
+        ),
+    };
+  }
+
+  /**
+   * A ação e o Cancelar continuam no Tab, com a dica do motivo; o clique, o Enter, o espaço e o Esc não repetem o
+   * envio nem fecham o diálogo; o foco fica na ação (com o disabled, ele caía no <body>, fora do diálogo).
+   */
+  async function conferirEnviando(
+    dialogo: HTMLElement,
+    acao: HTMLElement,
+    dica: string,
+    envios: () => unknown[],
+  ) {
+    expect(acao).toHaveFocus();
+    const semEfeito = () => {
+      expect(envios()).toHaveLength(1);
+      expect(dialogo).toBeInTheDocument();
+    };
+    await conferirIndisponivel(acao, { dica, semEfeito, css: CSS });
+    await conferirIndisponivel(
+      within(dialogo).getByRole("button", { name: "Cancelar" }),
+      { dica, semEfeito, css: CSS },
+    );
+    // Esc: o primeiro fecha a dica aberta pelo Tab; o segundo chega ao diálogo, que ignora enquanto envia.
+    fireEvent.keyDown(document.activeElement ?? dialogo, { key: "Escape" });
+    fireEvent.keyDown(document.activeElement ?? dialogo, { key: "Escape" });
+    semEfeito();
+  }
+
+  it("Desconsiderar: 'Desconsiderando…' e Cancelar (o Enter num campo também é barrado)", async () => {
+    const api = simularApi({ pedidos: pedidosDoTeste(), desconsiderar: true });
+    const envio = segurar(api, ROTA_DESCONSIDERAR);
+    abrir();
+    acionar(
+      await within(await linhaDo("PED-A")).findByRole("button", {
+        name: "Desconsiderar o pedido PED-A",
+      }),
+    );
+    const dialogo = screen.getByRole("dialog", {
+      name: "Desconsiderar o pedido PED-A?",
+    });
+    fireEvent.change(
+      within(dialogo).getByRole("combobox", { name: "Motivo" }),
+      { target: { value: "teste" } },
+    );
+    const desconsiderar = within(dialogo).getByRole("button", {
+      name: "Desconsiderar",
+    });
+    esperarDisponivel(desconsiderar);
+
+    acionar(desconsiderar);
+    await waitFor(() => expect(envio.chegou()).toBe(true));
+    expect(desconsiderar).toHaveTextContent("Desconsiderando…");
+    const envios = () =>
+      api.envios.filter(([rota]) => rota === ROTA_DESCONSIDERAR);
+    await conferirEnviando(
+      dialogo,
+      desconsiderar,
+      DICAS.desconsiderando,
+      envios,
+    );
+    fireEvent.submit(desconsiderar.closest("form")!);
+    expect(envios()).toHaveLength(1);
+
+    await envio.falhar();
+    expect(
+      await within(dialogo).findByText("Não foi possível desconsiderar"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(desconsiderar).toHaveFocus());
+    esperarDisponivel(desconsiderar);
+    esperarDisponivel(
+      within(dialogo).getByRole("button", { name: "Cancelar" }),
+    );
+  });
+
+  it("Desfazer: 'Desfazendo…' e Cancelar", async () => {
+    const api = simularApi({ pedidos: pedidosDoTeste(), desconsiderar: true });
+    const envio = segurar(api, ROTA_RECONSIDERAR);
+    abrir();
+    acionar(
+      await within(await linhaDo("PED-TESTE")).findByRole("button", {
+        name: "Desfazer a desconsideração do pedido PED-TESTE",
+      }),
+    );
+    const dialogo = screen.getByRole("alertdialog");
+    const desfazer = within(dialogo).getByRole("button", { name: "Desfazer" });
+
+    acionar(desfazer);
+    await waitFor(() => expect(envio.chegou()).toBe(true));
+    expect(desfazer).toHaveTextContent("Desfazendo…");
+    await conferirEnviando(dialogo, desfazer, DICAS.desfazendo, () =>
+      api.envios.filter(([rota]) => rota === ROTA_RECONSIDERAR),
+    );
+
+    await envio.falhar();
+    expect(
+      await within(dialogo).findByText("Não foi possível desfazer"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(desfazer).toHaveFocus());
+    esperarDisponivel(desfazer);
   });
 });
 

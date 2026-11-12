@@ -101,7 +101,6 @@ export function DialogoRecuperar({
           >
             <Button
               variante="secundario"
-              className="conferencia-dialogo-botao"
               aria-disabled={gravando || undefined}
               onClick={() => {
                 if (!gravando) aoFechar();
@@ -113,7 +112,6 @@ export function DialogoRecuperar({
           {aGravar > 0 && (
             <ComDica texto={gravando ? DICAS.gravando : DICAS.gravar}>
               <Button
-                className="conferencia-dialogo-botao"
                 aria-disabled={gravando || undefined}
                 onClick={() => {
                   if (!gravando) void gravar();

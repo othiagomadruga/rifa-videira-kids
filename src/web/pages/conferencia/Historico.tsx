@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Recuperacao } from "../../../shared/contracts";
 import {
   Button,
@@ -25,12 +25,25 @@ type Estado =
   | { tipo: "ok"; itens: Recuperacao[]; proximo: number | null }
   | { tipo: "erro"; mensagem: string };
 
+/** Id do "Quando" de uma recuperação: o foco vai para a primeira nova depois de "Carregar mais". */
+export const idDaRecuperacao = (id: number) => `conferencia-recuperacao-${id}`;
+/** O texto do histórico: recebe o foco se a página seguinte vier vazia e a lista também (o botão some). */
+export const ID_TEXTO_DO_HISTORICO = "conferencia-historico-texto";
+
 const COLUNAS: ColunaTabela<Recuperacao>[] = [
   {
     chave: "quando",
     titulo: "Quando",
     principal: true,
-    celula: (item) => formatarDataHora(item.executado_em),
+    celula: (item) => (
+      <span
+        id={idDaRecuperacao(item.id)}
+        tabIndex={-1}
+        className="conferencia-foco"
+      >
+        {formatarDataHora(item.executado_em)}
+      </span>
+    ),
   },
   { chave: "quem", titulo: "Quem", celula: (item) => item.usuario.nome },
   {
@@ -74,14 +87,21 @@ function textoDoHistorico(quantas: number, temMais: boolean): string {
 
 // Auditoria das recuperações da campanha ativa: quem, quando e quantas vendas cada "Recuperar" gravou (a
 // mais recente primeiro), de 50 em 50 ("Carregar mais"). `versao` muda depois de cada gravação, para a
-// lista carregar de novo desde o começo.
+// lista carregar de novo desde o começo. Como na Trilha (RIFA-047), o "Carregar mais" leva o foco à primeira
+// recuperação nova (ou, se a página vier vazia, à última da lista: na última página o botão some, e o foco caía no
+// <body>) e anuncia o que chegou numa região viva fixa.
 export function Historico({ versao }: { versao: number }) {
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
   const [tentativa, setTentativa] = useState(0);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [erroDoMais, setErroDoMais] = useState<string | null>(null);
+  const [anuncio, setAnuncio] = useState("");
+  // Elemento que recebe o foco quando a página nova aparecer na tela.
+  const focoPendente = useRef<string | null>(null);
 
   useEffect(() => {
+    // A lista recomeça: o foco que esperava a página do "Carregar mais" não vale mais.
+    focoPendente.current = null;
     const controle = new AbortController();
     listarRecuperacoes(null, { signal: controle.signal }).then(
       ({ itens, proximo }) => {
@@ -96,11 +116,29 @@ export function Historico({ versao }: { versao: number }) {
     return () => controle.abort();
   }, [versao, tentativa]);
 
-  async function carregarMais(antesDe: number) {
+  useEffect(() => {
+    if (focoPendente.current === null) return;
+    const alvo = document.getElementById(focoPendente.current);
+    focoPendente.current = null;
+    if (!alvo) return;
+    // A recuperação nova vai para o meio da tela (o foco sozinho a deixaria colada na borda de baixo). O jsdom não
+    // tem scrollIntoView.
+    alvo.focus({ preventScroll: true });
+    alvo.scrollIntoView?.({ block: "center" });
+  }, [estado]);
+
+  /** `ultimaId`: a última recuperação da lista agora (recebe o foco se a página vier vazia). */
+  async function carregarMais(antesDe: number, ultimaId: number | null) {
     setCarregandoMais(true);
     setErroDoMais(null);
     try {
       const pagina = await listarRecuperacoes(antesDe);
+      const [primeiraNova] = pagina.itens;
+      focoPendente.current = primeiraNova
+        ? idDaRecuperacao(primeiraNova.id)
+        : ultimaId !== null
+          ? idDaRecuperacao(ultimaId)
+          : ID_TEXTO_DO_HISTORICO;
       // Só junta se a lista ainda espera esta página (ela pode ter recarregado no meio do caminho).
       setEstado((atual) =>
         atual.tipo === "ok" && atual.proximo === antesDe
@@ -110,6 +148,9 @@ export function Historico({ versao }: { versao: number }) {
               proximo: pagina.proximo,
             }
           : atual,
+      );
+      setAnuncio(
+        `${plural(pagina.itens.length, "recuperação", "recuperações")} a mais na lista.${pagina.proximo === null ? " Não há recuperações mais antigas." : ""}`,
       );
     } catch (erro) {
       setErroDoMais(mensagemDoErro(erro));
@@ -134,7 +175,15 @@ export function Historico({ versao }: { versao: number }) {
       )}
       {estado.tipo === "ok" && (
         <div className="conferencia-bloco">
-          <p className="conferencia-suave">
+          {/* Região viva fixa: anuncia o que o "Carregar mais" trouxe. */}
+          <p className="visualmente-oculto" role="status">
+            {anuncio}
+          </p>
+          <p
+            id={ID_TEXTO_DO_HISTORICO}
+            tabIndex={-1}
+            className="conferencia-suave conferencia-foco"
+          >
             {textoDoHistorico(estado.itens.length, proximo !== null)}
           </p>
           <DataTable
@@ -154,7 +203,11 @@ export function Historico({ versao }: { versao: number }) {
                   variante="secundario"
                   aria-disabled={carregandoMais || undefined}
                   onClick={() => {
-                    if (!carregandoMais) void carregarMais(proximo);
+                    if (!carregandoMais)
+                      void carregarMais(
+                        proximo,
+                        estado.itens.at(-1)?.id ?? null,
+                      );
                   }}
                 >
                   {carregandoMais ? "Carregando…" : "Carregar mais"}

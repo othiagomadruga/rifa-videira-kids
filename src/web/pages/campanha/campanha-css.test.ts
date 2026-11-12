@@ -3,6 +3,11 @@
 // nenhuma largura fixa nem medida em px (fora as bordas finas), nada que impeça a quebra de linha e os textos
 // longos (o link da pré-visualização) quebrando em qualquer ponto. A medida na tela de verdade está nas capturas.
 import { describe, expect, it } from "vitest";
+import {
+  caraDeIndisponivel,
+  caraDoDesabilitado,
+  lerCss,
+} from "../../test/indisponivel";
 
 // O Vitest esvazia todo import de CSS (até com ?raw): o texto vem do disco, pelo fs do Node.
 type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
@@ -47,13 +52,25 @@ describe("CA8: o CSS da Campanha em 390 px", () => {
     }
   });
 
-  it("'Voltar ao texto padrão' indisponível (aria-disabled) parece desabilitado", () => {
-    const regra =
-      /\.campanha-mensagem__rodape button\[aria-disabled="true"\]\s*\{([^}]*)\}/.exec(
-        CSS,
-      )?.[1] ?? "";
-    expect(regra).toMatch(/opacity:\s*0\.55/);
-    expect(regra).toMatch(/cursor:\s*not-allowed/);
+  it("'Voltar ao texto padrão' indisponível (aria-disabled) parece desabilitado: a regra geral do Button.css, sem a tela desfazer (RIFA-047)", () => {
+    const rodape = document.createElement("div");
+    rodape.className = "campanha-mensagem__rodape";
+    const voltar = document.createElement("button");
+    voltar.className = "ui-button ui-button--discreto";
+    voltar.setAttribute("aria-disabled", "true");
+    rodape.append(voltar);
+    document.body.append(rodape);
+    try {
+      expect(
+        caraDeIndisponivel(
+          voltar,
+          lerCss("components/ui/Button.css"),
+          lerCss("pages/campanha/campanha.css"),
+        ),
+      ).toEqual(caraDoDesabilitado());
+    } finally {
+      rodape.remove();
+    }
   });
 
   it("a pré-visualização mantém as quebras do modelo e quebra o link em qualquer ponto", () => {

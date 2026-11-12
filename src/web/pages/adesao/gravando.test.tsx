@@ -16,7 +16,7 @@ import { ADMIN_DE_TESTE, renderizarRota } from "../../test/renderizar";
 import { simularApiAdesao } from "./teste-apoio";
 import { DICAS } from "./textos";
 
-/** A cara de indisponível vem do adesao.css (o Button.css só a dá ao disabled). */
+/** A cara de indisponível vem do Button.css (RIFA-047), e o adesao.css não a desfaz (a cascata, em caraDeIndisponivel). */
 const CSS = [
   lerCss("components/ui/Button.css"),
   lerCss("pages/adesao/adesao.css"),
@@ -282,5 +282,129 @@ describe("RIFA-045: os botões em gravação da Adesão, pelo teclado", () => {
     ).not.toHaveLength(0);
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(gravacoes("DELETE")).toBe(1);
+  });
+});
+
+describe("RIFA-047: defeitos achados na revisão (gravando, nada fecha a pergunta nem a escolha no meio)", () => {
+  /** Os três botões do afiliado 1001 na Célula Betel (o admin tem também o Remover). */
+  const BOTOES_DO_AFILIADO = [
+    "Trocar a célula do afiliado 1001",
+    "Desvincular o afiliado 1001",
+    "Remover o afiliado 1001",
+  ];
+
+  it("'Desvinculando…': Trocar, Desvincular e Remover do mesmo afiliado ficam indisponíveis (no Tab, com o motivo) e não fecham a pergunta", async () => {
+    await abrir(ADMIN_DE_TESTE);
+    const betel = () => naLista("Célula Betel");
+    acionar(
+      betel().getByRole("button", { name: "Desvincular o afiliado 1001" }),
+    );
+    const confirmar = await betel().findByRole("button", {
+      name: "Confirmar desvínculo",
+    });
+    for (const nome of BOTOES_DO_AFILIADO)
+      esperarDisponivel(betel().getByRole("button", { name: nome }));
+
+    const soltar = api!.segurarGravacoes();
+    acionar(confirmar);
+    expect(confirmar).toHaveTextContent("Desvinculando…");
+    const semEfeito = () => {
+      expect(gravacoes("PUT")).toBe(1);
+      expect(
+        betel().getByText(/^Desvincular o afiliado 1001/),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("group", { name: "Nova célula do afiliado 1001" }),
+      ).toBeNull();
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    };
+    for (const nome of BOTOES_DO_AFILIADO)
+      await conferirIndisponivel(betel().getByRole("button", { name: nome }), {
+        dica: DICAS.desvinculando,
+        semEfeito,
+        css: CSS,
+      });
+
+    soltar();
+    expect(
+      await screen.findAllByText(
+        "Afiliado 1001 desvinculado. Ele voltou para “Sem célula”.",
+      ),
+    ).not.toHaveLength(0);
+    expect(gravacoes("PUT")).toBe(1);
+  });
+
+  it("'Salvando…' da troca de célula: Trocar, Desvincular e Remover também ficam indisponíveis e não fecham a escolha", async () => {
+    await abrir(ADMIN_DE_TESTE);
+    const betel = () => naLista("Célula Betel");
+    acionar(
+      betel().getByRole("button", { name: "Trocar a célula do afiliado 1001" }),
+    );
+    const escolha = await screen.findByRole("group", {
+      name: "Nova célula do afiliado 1001",
+    });
+    fireEvent.click(
+      within(escolha).getByRole("radio", { name: /^Célula Débora/ }),
+    );
+    const confirmar = botao("Trocar para: Célula Débora");
+
+    const soltar = api!.segurarGravacoes();
+    acionar(confirmar);
+    expect(confirmar).toHaveTextContent("Salvando…");
+    const semEfeito = () => {
+      expect(gravacoes("PUT")).toBe(1);
+      expect(
+        screen.getByRole("group", { name: "Nova célula do afiliado 1001" }),
+      ).toBe(escolha);
+      expect(betel().queryByText(/^Desvincular o afiliado 1001/)).toBeNull();
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    };
+    for (const nome of BOTOES_DO_AFILIADO)
+      await conferirIndisponivel(betel().getByRole("button", { name: nome }), {
+        dica: DICAS.salvandoEscolha,
+        semEfeito,
+        css: CSS,
+      });
+
+    soltar();
+    expect(
+      await screen.findAllByText("Afiliado 1001 trocado para: Célula Débora."),
+    ).not.toHaveLength(0);
+    expect(gravacoes("PUT")).toBe(1);
+  });
+
+  it("pré-cadastro com troca: digitar no campo durante a gravação não limpa a pergunta (o campo fica só leitura até a resposta)", async () => {
+    await abrir();
+    const agape = naLista("Célula Ágape");
+    const campo = agape.getByRole("textbox", {
+      name: "Código de afiliado (Célula Ágape)",
+    });
+    fireEvent.change(campo, { target: { value: "1002" } });
+    fireEvent.click(agape.getByRole("button", { name: "Salvar código" }));
+    const trocarPara = await agape.findByRole("button", {
+      name: "Trocar para esta célula",
+    });
+    expect(campo).not.toHaveAttribute("readonly");
+
+    const soltar = api!.segurarGravacoes();
+    acionar(trocarPara);
+    expect(campo).toHaveAttribute("readonly");
+    act(() => campo.focus());
+    fireEvent.change(campo, { target: { value: "10029" } });
+
+    // A pergunta e os botões dela continuam (antes, a pergunta sumia e o foco caía no <body>); o código também.
+    expect(
+      agape.getByText(/^O afiliado 1002 está em Célula Canaã/),
+    ).toBeInTheDocument();
+    expect(trocarPara).toBeInTheDocument();
+    esperarIndisponivel(trocarPara);
+    expect(campo).toHaveValue("1002");
+    expect(gravacoes("PUT")).toBe(1);
+
+    soltar();
+    expect(
+      await screen.findAllByText("Afiliado 1002 trocado para: Célula Ágape."),
+    ).not.toHaveLength(0);
+    expect(gravacoes("PUT")).toBe(1);
   });
 });
