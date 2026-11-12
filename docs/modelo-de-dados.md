@@ -8,6 +8,7 @@
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
 - Regras do admin (Sprint 6, D20): [`0008_regras_campanha.sql`](../migrations/0008_regras_campanha.sql), aditiva, com as chaves e as mensagens em `campanhas`, a desconsideração em `pedidos`, o índice da 0003 recriado, o índice da lista dos desconsiderados e a view recriada. Como foi feita e por quê: [seção 9](#9-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20).
 - Token do webhook gerado pela tela (RIFA-039, D21): [`0009_token_webhook.sql`](../migrations/0009_token_webhook.sql), aditiva, com a tabela `token_webhook` (uma linha no máximo, só o SHA-256 do token). Aplicada depois da 0008; como foi feita, as consultas e o que foi medido: [seção 10](#10-migração-0009_token_webhooksql-rifa-039-d21).
+- Link de vendas de cada célula (RIFA-046, D24): `0010_link_vendas.sql` (**plano**, a -db aplica), aditiva, com a coluna `campanhas.link_vendas_modelo` (o modelo do link de afiliado da Rifei, só do admin). Plano e consultas: [seção 11](#11-migração-0010_link_vendassql-rifa-046-d24-plano).
 
 ## 1. Visão geral
 
@@ -69,6 +70,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |
 | `acesso_discipuladores`, `acesso_redes` | INTEGER 0/1 | padrão 1 (0008): as chaves `acesso.discipuladores` e `acesso.redes` |
 | `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 | o modelo de cada mensagem do WhatsApp (0008); NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar. Um modelo salvo igual ao padrão é gravado como NULL |
+| `link_vendas_modelo` | TEXT NULL, 1–300 | o modelo do link de vendas (0010, D24; plano): `https://rifei.com.br/...` com `{slug}` e `{afiliado}`, conferido pelo contrato (`problemasDoModeloLinkVendas`); NULL = o PO ainda não confirmou o formato com a Rifei, e nenhuma célula tem link. Só o admin muda (`PUT /api/admin/links-vendas/modelo`); o PUT da campanha nunca escreve nele |
 | `criado_em`, `atualizado_em` | TEXT | instantes UTC |
 
 O fim da campanha não é guardado: é `data_inicio + soma dos dias dos períodos − 1`.
@@ -456,3 +458,40 @@ CREATE TABLE token_webhook (
   gera lê 6 linhas e escreve 3 (sessão 2, a linha do token 1, a trilha 2 com a chave estrangeira do autor e a
   subconsulta do resumo, o UPSERT 1; sem credencial, 7); o 409 lê 3 (sessão 2 e a linha do token). O GET lê 3 mais a
   última entrega (6 com poucas entregas; ~8 com 3 mil, `ULTIMA_ENTREGA`).
+
+## 11. Migração `0010_link_vendas.sql` (RIFA-046; D24; plano)
+
+A aplicar na tarefa -db (RIFA-046-db), depois da `0009_token_webhook.sql`, no mesmo merge que as consultas de
+`src/worker/db/links-vendas.ts`. Aditiva: uma coluna nova em `campanhas`, que nasce NULL (nenhuma célula tem link até o
+admin gravar o modelo). O plano foi conferido no SQLite 3.53.1 na escrita do contrato, com todas as migrações
+aplicadas antes: a coluna nasce NULL, o CHECK recusa o vazio e 301 caracteres, e o UPSERT do PUT da campanha (que
+nomeia as colunas) não apaga o modelo.
+
+```sql
+-- 0010_link_vendas.sql: modelo do link de vendas de cada célula (RIFA-046). Aplica-se depois de 0009. Documentação:
+-- docs/decisions.md (D24) e docs/api.md (GET /api/minha/links-vendas, GET /api/admin/links-vendas e
+-- PUT /api/admin/links-vendas/modelo).
+--
+-- * O link de afiliado da Rifei de cada líder sai deste modelo, com {slug} e {afiliado} (o affiliate_id do webhook).
+--   NULL = o PO ainda não confirmou o formato com a Rifei.
+-- * O banco só confere o tamanho (como as mensagens da 0008): o endereço (https://rifei.com.br/) e os marcadores
+--   ficam no contrato (problemasDoModeloLinkVendas), que muda sem migração; o SQLite não troca o CHECK de uma
+--   coluna sem recriar a tabela.
+-- * Só o admin muda (PUT /api/admin/links-vendas/modelo); o PUT da campanha nunca escreve aqui. Quem mudou fica na
+--   trilha (campanha.salvar).
+ALTER TABLE campanhas ADD COLUMN link_vendas_modelo TEXT
+  CHECK (link_vendas_modelo IS NULL OR length(link_vendas_modelo) BETWEEN 1 AND 300);
+```
+
+- **Leitura** (um `db.batch`, sem pedidos): `SELECT id, slug_rifei, link_vendas_modelo FROM campanhas WHERE ativa = 1`
+  (índice `campanhas_uma_ativa`); as células do escopo com a hierarquia (`celulas` → `discipuladores` → `redes`; só
+  `lider_nome`, nunca o telefone nem o e-mail); e `SELECT affiliate_id, celula_id FROM afiliados WHERE celula_id IN
+  (...) ORDER BY celula_id, vinculado_em DESC, affiliate_id DESC`, com o plano `SEARCH afiliados USING INDEX
+  afiliados_por_celula (celula_id=?)` e uma B-tree temporária para os dois últimos termos da ordem (poucas linhas por
+  célula; se a -db preferir, ordena no Worker). A -db trava as linhas lidas e os planos.
+- **Gravação** (`PUT`, um `db.batch`): o registro na trilha com a mesma condição do UPDATE, antes dele, e
+  `UPDATE campanhas SET link_vendas_modelo = ?1, atualizado_em = <agora> WHERE ativa = 1 AND link_vendas_modelo IS NOT
+  ?1` (`IS NOT` compara também o NULL: o mesmo modelo de novo não muda nada e não registra).
+- Teste da migração (`src/worker/test/migrations.test.ts`): a 0010 sobre dados das anteriores (nenhuma outra coluna
+  nem linha muda; a coluna nasce NULL), o CHECK (vazio e 301 caracteres recusados; 1 e 300 aceitos) e o UPSERT do PUT
+  da campanha mantendo o modelo.

@@ -51,6 +51,13 @@ import {
 import { detalheResumidoSchema } from "./erros";
 import { UF_DO_DDD, UFS } from "./ddd";
 import {
+  LIMITE_CARACTERES_LINK_VENDAS,
+  LIMITE_CARACTERES_MODELO_LINK_VENDAS,
+  eLinkDeVendas,
+  modeloLinkVendasValido,
+  problemasDoModeloLinkVendas,
+} from "./link-vendas";
+import {
   CHAVES_REGRAS,
   LIMITE_OBSERVACAO_DESCONSIDERACAO,
   LIMITE_PEDIDOS_NO_DETALHE,
@@ -529,7 +536,8 @@ export type RespostaPedidosSuspeitos = z.infer<
 
 /**
  * Ações registradas (a lista cresce sem mudar o formato):
- * - campanha.salvar: PUT /api/admin/campanha (criação ou troca da configuração, inclusive do slug);
+ * - campanha.salvar: PUT /api/admin/campanha (criação ou troca da configuração, inclusive do slug) e, desde a
+ *   RIFA-046 (D24), PUT /api/admin/links-vendas/modelo (o antes e o depois do modelo do link de vendas);
  * - afiliado.salvar: PUT /api/admin/afiliados/:affiliateId (vínculo, troca ou desvínculo de célula);
  * - hierarquia.importar: POST /api/admin/hierarquia/importar quando aplica (não na simulação);
  * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos;
@@ -2695,3 +2703,226 @@ export const ROTAS_RELATORIO = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRotaRelatorio = keyof typeof ROTAS_RELATORIO;
+
+// ---------------------------------------------------------------------------------------------------
+// Link de vendas e QR code de cada célula (RIFA-046, D24): o link de afiliado da Rifei de cada líder, montado pelo
+// modelo que só o admin grava. Regras puras (o modelo, a montagem, o domínio e o nome do arquivo do QR) em
+// ./link-vendas, sem zod, para o site.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * PUT /api/admin/links-vendas/modelo (só admin). `modelo` é obrigatório: o texto (sem os espaços das pontas) ou null
+ * para apagar; vazio vira null (o PO ainda não confirmou o formato com a Rifei). Os problemas
+ * (`problemasDoModeloLinkVendas`) vão nos `detalhes` do 400, em português: fora de `https://rifei.com.br/`, sem
+ * `{afiliado}`, marcador desconhecido, espaço, chave solta. Campo a mais: 400.
+ */
+export const corpoSalvarModeloLinkVendasSchema = z.strictObject({
+  modelo: z
+    .string()
+    .trim()
+    .max(LIMITE_CARACTERES_MODELO_LINK_VENDAS)
+    .nullable()
+    .transform((modelo) => (modelo === "" ? null : modelo))
+    .superRefine((modelo, ctx) => {
+      if (modelo !== null)
+        for (const message of problemasDoModeloLinkVendas(modelo))
+          ctx.addIssue({ code: "custom", message });
+    }),
+});
+export type CorpoSalvarModeloLinkVendas = z.input<
+  typeof corpoSalvarModeloLinkVendasSchema
+>;
+
+/** Um link montado: só `https://rifei.com.br/...`, na forma canônica (`eLinkDeVendas`). */
+const urlLinkVendasSchema = z
+  .string()
+  .max(LIMITE_CARACTERES_LINK_VENDAS)
+  .refine(eLinkDeVendas, {
+    message: "O link de vendas é um endereço https://rifei.com.br/...",
+  });
+
+/** O link de vendas de um afiliado vinculado à célula: o QR code é deste `url`. */
+export const linkVendasAfiliadoSchema = z.strictObject({
+  affiliate_id: affiliateIdSchema,
+  url: urlLinkVendasSchema,
+});
+export type LinkVendasAfiliado = z.infer<typeof linkVendasAfiliadoSchema>;
+
+/**
+ * Uma célula com os links de vendas dela. Só nomes da hierarquia (o líder pelo nome, como na Adesão e na equipe da
+ * visão individual): nunca telefone, e-mail, o `rotulo` do afiliado (nota interna da coordenação) ou número de venda.
+ *
+ * `links`: um por afiliado vinculado à célula, do vínculo mais recente para o mais antigo (`vinculado_em` decrescente;
+ * empate, `affiliate_id` decrescente). O primeiro é o que a tela destaca ("Seu link de vendas"); todos contam para a
+ * célula. Vazia quando a célula ainda não tem afiliado vinculado, ou quando o modelo não está configurado.
+ */
+export const celulaLinksVendasSchema = z.strictObject({
+  celula_id: idSchema,
+  celula_nome: z.string().min(1).max(120),
+  lider_nome: z.string().min(1).max(120),
+  discipulador_id: idSchema,
+  discipulador_nome: z.string().min(1).max(120),
+  rede_id: idSchema,
+  rede_nome: z.string().min(1).max(120),
+  divisao: divisaoSchema,
+  links: z.array(linkVendasAfiliadoSchema),
+});
+export type CelulaLinksVendas = z.infer<typeof celulaLinksVendasSchema>;
+
+/**
+ * Regras comuns às duas listas: cada célula e cada afiliado aparecem uma vez (um afiliado é de uma célula só), e sem
+ * modelo configurado nenhuma célula tem link.
+ */
+function conferirListaDeLinksVendas(
+  itens: readonly CelulaLinksVendas[],
+  configurado: boolean,
+  ctx: z.RefinementCtx,
+): void {
+  const celulas = new Set<number>();
+  const afiliados = new Set<number>();
+  itens.forEach((item, indice) => {
+    if (celulas.has(item.celula_id))
+      ctx.addIssue({
+        code: "custom",
+        path: ["itens", indice, "celula_id"],
+        message: "Cada célula aparece uma vez",
+      });
+    celulas.add(item.celula_id);
+    if (!configurado && item.links.length > 0)
+      ctx.addIssue({
+        code: "custom",
+        path: ["itens", indice, "links"],
+        message: "Sem modelo configurado, nenhuma célula tem link",
+      });
+    item.links.forEach((link, posicao) => {
+      if (afiliados.has(link.affiliate_id))
+        ctx.addIssue({
+          code: "custom",
+          path: ["itens", indice, "links", posicao, "affiliate_id"],
+          message: "Um afiliado é de uma célula só e aparece uma vez",
+        });
+      afiliados.add(link.affiliate_id);
+    });
+  });
+}
+
+/**
+ * GET /api/admin/links-vendas (admin e coordenação) e a resposta do PUT do modelo: o modelo gravado e TODAS as
+ * células da hierarquia (inclusive as sem afiliado, com `links` vazia), pelo caminho na hierarquia (nome da rede, do
+ * discipulador e da célula, em ordem de português; empate, pelo id), como a lista dos acessos.
+ * - `modelo`: como está gravado (só o tamanho é conferido, como as mensagens da campanha: um modelo gravado à mão fora
+ *   das regras não derruba a rota; ele só deixa de montar links);
+ * - `configurado`: o modelo serve para montar os links (`modeloLinkVendasValido`). False = o PO ainda não confirmou o
+ *   formato com a Rifei (ou o modelo gravado tem problema), e nenhuma célula tem link.
+ */
+export const respostaLinksVendasSchema = z
+  .strictObject({
+    modelo: z
+      .string()
+      .min(1)
+      .max(LIMITE_CARACTERES_MODELO_LINK_VENDAS)
+      .nullable(),
+    configurado: z.boolean(),
+    itens: z.array(celulaLinksVendasSchema),
+  })
+  .superRefine((resposta, ctx) => {
+    if (resposta.configurado !== modeloLinkVendasValido(resposta.modelo))
+      ctx.addIssue({
+        code: "custom",
+        path: ["configurado"],
+        message: "configurado = o modelo gravado serve para montar os links",
+      });
+    conferirListaDeLinksVendas(resposta.itens, resposta.configurado, ctx);
+  });
+export type RespostaLinksVendas = z.infer<typeof respostaLinksVendasSchema>;
+
+/**
+ * GET /api/minha/links-vendas (líder, discipulador e rede; D24). O alvo vem SÓ da sessão (a rota não aceita id) e o
+ * escopo é o da visão individual (D12): o líder, a célula dele (sempre uma); o discipulador, as células dele; a rede,
+ * as células dos discipuladores dela. Mesma ordem da lista da coordenação. Sem o modelo (a tela não precisa dele) e,
+ * como toda a /minha, sem dinheiro: o link não é número nem valor.
+ */
+export const respostaMeusLinksVendasSchema = z
+  .strictObject({
+    alvo: alvoSchema,
+    configurado: z.boolean(),
+    itens: z.array(celulaLinksVendasSchema),
+  })
+  .superRefine((resposta, ctx) => {
+    const { alvo } = resposta;
+    if (alvo.tipo === "celula" && resposta.itens.length !== 1)
+      ctx.addIssue({
+        code: "custom",
+        path: ["itens"],
+        message: "O líder recebe só a célula dele",
+      });
+    resposta.itens.forEach((item, indice) => {
+      const doAlvo =
+        alvo.tipo === "celula"
+          ? item.celula_id === alvo.id
+          : alvo.tipo === "discipulador"
+            ? item.discipulador_id === alvo.id
+            : item.rede_id === alvo.id;
+      if (!doAlvo || item.divisao !== alvo.divisao)
+        ctx.addIssue({
+          code: "custom",
+          path: ["itens", indice],
+          message:
+            "Só as células do alvo da sessão: a do líder, as do discipulador, as da rede",
+        });
+    });
+    conferirListaDeLinksVendas(resposta.itens, resposta.configurado, ctx);
+  });
+export type RespostaMeusLinksVendas = z.infer<
+  typeof respostaMeusLinksVendasSchema
+>;
+
+/**
+ * Rotas do link de vendas (RIFA-046, D24). Catálogo à parte de ROTAS até a -api montá-las, como ROTAS_REGRAS_CAMPANHA:
+ * o src/worker/protecao.test.ts exige o 403 da coordenação nas rotas só de admin, que uma rota ainda não montada não
+ * dá (404), e o teste da hierarquia confere que ROTAS tem só a visão em /api/minha. A -api põe este catálogo nos dois
+ * lugares do protecao.test.ts no mesmo merge que monta as rotas.
+ *
+ * Sem campanha ativa, as três dão 404 `nao_encontrado` (o slug e o modelo são da campanha). Todas saem com
+ * `Cache-Control: no-store` (autenticadas) e leem o D1 a cada requisição, sem cache: mudar o modelo vale na hora.
+ */
+export const ROTAS_LINK_VENDAS = {
+  /**
+   * 200: os links das células do alvo da sessão. Erros: 401; 403 `proibido` (coordenação); 403 `acesso_desligado`
+   * (discipulador ou rede com o acesso do papel desligado na campanha, D20: vale para todo /api/minha/*); 404.
+   */
+  meusLinksVendas: {
+    metodo: "GET",
+    caminho: "/api/minha/links-vendas",
+    grupo: "hierarquia",
+    papeis: ["lider", "discipulador", "rede"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaMeusLinksVendasSchema },
+  },
+  /** 200: o modelo e os links de todas as células (tela Adesão). Erros: 401; 403 (hierarquia); 404. */
+  linksVendas: {
+    metodo: "GET",
+    caminho: "/api/admin/links-vendas",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaLinksVendasSchema },
+  },
+  /**
+   * Só admin: grava o modelo (ou null) na campanha ativa e responde 200 com a lista já montada com ele. Erros, depois
+   * do login (401 sem sessão; 403 da coordenação, da hierarquia e de outra origem): 400 `json_invalido` (corpo que não
+   * é JSON ou sem `Content-Type` JSON) ou `requisicao_invalida` (fora do schema, com os problemas do modelo em
+   * português nos `detalhes`); 404 sem campanha ativa. Trilha: `campanha.salvar`, alvo `campanha:<id>`, no mesmo lote
+   * da gravação, com o antes e o depois do modelo; o mesmo modelo de novo responde 200 e não registra (RIFA-018).
+   */
+  salvarModeloLinkVendas: {
+    metodo: "PUT",
+    caminho: "/api/admin/links-vendas/modelo",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoSalvarModeloLinkVendasSchema,
+    sucesso: { status: 200, corpo: respostaLinksVendasSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaLinkVendas = keyof typeof ROTAS_LINK_VENDAS;
