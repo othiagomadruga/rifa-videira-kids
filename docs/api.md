@@ -663,7 +663,7 @@ _Adultos_
 
 *Quem mais subiu ontem:* Célula Ficticia 01 e Célula Ficticia 03.
 
-Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o link da sua célula com quem é de fora da igreja!
+Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o seu link de afiliado com quem é de fora da igreja!
 ```
 
 - Partes: venda de ontem (% da meta do dia), acumulado contra a curva e projeção, top 3 do período por divisão (como no ranking público: só quem vendeu, nunca mais posições que `publico.limite_ranking`), as 3 células que mais subiram ontem (em % da própria meta) e a chamada final. Antes do início, no 1º dia, no último dia e depois do fim, o texto muda (contagem regressiva, largada, último dia e resultado final).
@@ -865,7 +865,12 @@ Remove um afiliado de teste, vinculado ou não. **204**.
 - Só se nenhum pedido dele conta, de qualquer status e de qualquer campanha: todos desconsiderados (ou nenhum
   pedido). Senão, 409 `afiliado_com_pedidos` com `{ "pedidos_que_contam": 3, "pedidos": ["PED3", "PED2", "PED1"] }`
   (os ids dos mais recentes, até 20, na ordem da lista de pedidos, para achar na lista e desconsiderar). Um pedido
-  que conta noutra campanha não se desconsidera daqui: esse afiliado não é de teste e fica.
+  que conta noutra campanha não se desconsidera daqui: esse afiliado não é de teste e fica. A `mensagem` separa os
+  dois casos (RIFA-040): com todos os que contam na campanha ativa, "O afiliado tem 3 pedidos que contam:
+  desconsidere os pedidos (teste) na tela Pedidos antes de remover"; com algum fora dela (de outra campanha, ou sem
+  campanha ativa), "O afiliado tem 3 pedidos que contam, 1 fora da campanha ativa: pedido fora da campanha ativa não
+  se desconsidera daqui, então este afiliado não é de teste e não pode ser removido". Os `detalhes` não separam (o
+  site mostra a lista e explica os dois casos).
 - Os pedidos desconsiderados dele ficam sem afiliado (a chave estrangeira não deixa apagar um afiliado com pedido),
   no mesmo lote; a trilha (`afiliado.remover`) guarda o affiliate_id, a célula e quantos eram.
 - Se a Rifei mandar depois um pedido com esse `affiliate_id`, ele volta como não vinculado (D7). Não depende de

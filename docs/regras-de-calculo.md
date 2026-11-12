@@ -255,7 +255,7 @@ No critério % da meta, Ágape tem `acima` = Betel (1º, 2500 pontos-base) e `ab
   3. **Acumulado contra a curva**: % da meta da campanha e o % que a curva esperava até ontem; depois, em dia ou abaixo da curva e a projeção ("no ritmo atual, chegamos a X% da meta").
   4. **Posições**: top 3 das células no período que contém ontem, por divisão (jovens e adultos separados), pelo critério configurado, como no ranking público (só quem vendeu; nunca mais posições que `publico.limite_ranking`: SUPOSIÇÃO S21). No período que acabou ontem, "resultado final". Cada divisão lista no máximo 5 células (`NOMES_POR_DIVISAO_NO_BUMBO`); as demais empatadas viram "e mais N empatadas no Pº lugar", para o texto caber sempre nos 4000 caracteres (SUPOSIÇÃO S22; o pior caso, 72 células empatadas com nomes de 120 caracteres, dá 2436).
   5. **As 3 células que mais subiram ontem**: maior avanço ontem em % da própria meta (justo entre células de tamanhos diferentes); empate pelo nome.
-  6. **Chamada final**: dias que faltam e o convite a compartilhar o link da célula com quem é de fora da igreja.
+  6. **Chamada final**: dias que faltam e o convite a compartilhar o seu link de afiliado (o link da Rifei do líder, como o site diz em tudo) com quem é de fora da igreja. Antes do início, "Confira se o seu link de afiliado está pronto para compartilhar!".
 - Nunca R$, centavos nem quantidade de bilhetes (R9), com qualquer configuração. `montarBumbo` ainda aceita `OpcoesBumbo` como 4º argumento, por compatibilidade, e o ignora: `mostrar_bilhetes` fica para um bumbo interno da coordenação (pendência na seção 6). % por célula (no ranking e no "quem mais subiu") só se `publico.mostra_percentual_meta`; os % da campanha aparecem sempre.
 - Fases: antes do início, contagem regressiva; no 1º dia, a largada; no último dia, "hoje é o último dia"; depois do fim, o resultado final e o ranking final da campanha (no dia seguinte ao fim, também a venda do último dia).
 - Percentuais em números inteiros truncados ("33%"); datas em "dd/mm"; *negrito* e _itálico_ do WhatsApp.
@@ -284,7 +284,7 @@ _Adultos_
 
 *Quem mais subiu ontem:* Célula Betel, Célula Ágape e Célula Dorcas.
 
-Faltam 13 dias e dá para virar o jogo: compartilhe hoje o link da sua célula com quem é de fora da igreja!
+Faltam 13 dias e dá para virar o jogo: compartilhe hoje o seu link de afiliado com quem é de fora da igreja!
 ```
 
 **Função:** `montarBumbo(entrada, { data }, agora)` (um 4º argumento `OpcoesBumbo` é aceito e ignorado).

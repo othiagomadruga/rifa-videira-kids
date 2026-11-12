@@ -156,15 +156,41 @@ afiliadosAdesao.delete(
     if (resultado.ok) return c.body(null, 204);
     if (resultado.motivo === "nao_encontrado")
       return responderErro(c, "nao_encontrado", "Afiliado não encontrado");
-    const quantos = resultado.pedidosQueContam;
     return responderErro(
       c,
       "afiliado_com_pedidos",
-      `O afiliado tem ${quantos} ${quantos === 1 ? "pedido que conta" : "pedidos que contam"}: desconsidere ${quantos === 1 ? "o pedido" : "os pedidos"} (teste) antes de remover`,
-      { pedidos_que_contam: quantos, pedidos: resultado.pedidos },
+      mensagemAfiliadoComPedidos(
+        resultado.pedidosQueContam,
+        resultado.foraDaCampanhaAtiva,
+      ),
+      {
+        pedidos_que_contam: resultado.pedidosQueContam,
+        pedidos: resultado.pedidos,
+      },
     );
   },
 );
+
+/**
+ * A mensagem do 409 `afiliado_com_pedidos`. Só os pedidos da campanha ativa se desconsideram (na tela Pedidos): com
+ * todos os que contam nela, a mensagem manda desconsiderar antes de remover. Com algum fora dela (de outra
+ * campanha, ou sem campanha ativa), desconsiderar daqui não resolve: o afiliado não é de teste e fica (D20).
+ */
+function mensagemAfiliadoComPedidos(
+  quantos: number,
+  foraDaCampanhaAtiva: number,
+): string {
+  const contam = `O afiliado tem ${quantos} ${quantos === 1 ? "pedido que conta" : "pedidos que contam"}`;
+  if (foraDaCampanhaAtiva === 0)
+    return `${contam}: desconsidere ${quantos === 1 ? "o pedido" : "os pedidos"} (teste) na tela Pedidos antes de remover`;
+  const fora =
+    foraDaCampanhaAtiva === quantos
+      ? quantos === 1
+        ? "fora da campanha ativa"
+        : "todos fora da campanha ativa"
+      : `${foraDaCampanhaAtiva} fora da campanha ativa`;
+  return `${contam}, ${fora}: pedido fora da campanha ativa não se desconsidera daqui, então este afiliado não é de teste e não pode ser removido`;
+}
 
 afiliadosAdesao.get(local(ROTAS.adesao.caminho), async (c) =>
   c.json(await obterAdesao(c.env.DB)),

@@ -1611,7 +1611,7 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
         // Avanço ontem em % da própria meta: Betel 8,3%; Ágape e Dorcas 5% (desempate pelo nome).
         "*Quem mais subiu ontem:* Célula Betel, Célula Ágape e Célula Dorcas.",
         "",
-        "Faltam 13 dias e dá para virar o jogo: compartilhe hoje o link da sua célula com quem é de fora da igreja!",
+        "Faltam 13 dias e dá para virar o jogo: compartilhe hoje o seu link de afiliado com quem é de fora da igreja!",
       ].join("\n"),
     );
   });
@@ -1677,6 +1677,46 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
   ])("em %s o texto traz %j", (data, trechos) => {
     const texto = bumbo(data);
     for (const trecho of trechos) expect(texto).toContain(trecho);
+  });
+
+  it("RIFA-040: o convite a compartilhar fala do link de afiliado (como o site), em todas as fases; depois do fim, nenhum", () => {
+    // Abaixo da curva (as vendas do cenário) e em dia (100 bilhetes por dia em cada célula): as duas chamadas.
+    const emDia = [1, 2, 3, 4].flatMap((id) => porDia(id, 1, 21, 100));
+    const chamada =
+      "compartilhe hoje o seu link de afiliado com quem é de fora da igreja!";
+    const vistas = new Set<string>();
+    for (const lista of [vendas, emDia])
+      for (let n = -3; n <= 24; n++) {
+        const data = dia(n);
+        const texto = bumbo(data, CAMPANHA, BUMBO_PADRAO, lista);
+        // O link da Rifei do líder não é "da célula" (o site diz "link de afiliado" em tudo).
+        expect(texto, data).not.toMatch(/link d[ae] (sua )?c[ée]lula/i);
+        const ultima = texto.split("\n").at(-1) ?? "";
+        if (n < 1) {
+          expect(ultima, data).toBe(
+            "Confira se o seu link de afiliado está pronto para compartilhar!",
+          );
+        } else if (n <= 21) {
+          expect(ultima, data).toMatch(
+            /^(Bora: |\*Hoje é o último dia!\* Bora: |Faltam \d+ dias? e dá para virar o jogo: |Faltam \d+ dias?\. Bora manter o ritmo: )/,
+          );
+          expect(ultima.endsWith(chamada), data).toBe(true);
+          vistas.add(
+            ultima.slice(0, -chamada.length).replace(/\d+ dias?/, "N dias"),
+          );
+        } else {
+          expect(texto, data).not.toMatch(/link/i);
+        }
+      }
+    // As quatro formas da chamada apareceram (a largada, o meio da campanha nos dois ritmos e o último dia).
+    expect([...vistas].sort()).toEqual(
+      [
+        "*Hoje é o último dia!* Bora: ",
+        "Bora: ",
+        "Faltam N dias e dá para virar o jogo: ",
+        "Faltam N dias. Bora manter o ritmo: ",
+      ].sort(),
+    );
   });
 
   it("depois do fim só o resultado final; antes do início não fala de vendas", () => {

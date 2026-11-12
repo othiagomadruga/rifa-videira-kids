@@ -240,12 +240,16 @@ const NENHUM_QUE_CONTA =
   "NOT EXISTS (SELECT 1 FROM pedidos WHERE affiliate_id = ?1 AND desconsiderado_em IS NULL)";
 
 /**
- * O afiliado, quantos pedidos dele contam (com os ids dos mais recentes, na ordem da lista de pedidos) e os ids dos
- * desconsiderados (que ficarão sem afiliado). Lê os pedidos dele pelo índice por afiliado.
+ * O afiliado, quantos pedidos dele contam (com os ids dos mais recentes, na ordem da lista de pedidos), quantos dos
+ * que contam estão fora da campanha ativa (de outra campanha, ou todos, sem campanha ativa: esses não se
+ * desconsideram daqui) e os ids dos desconsiderados (que ficarão sem afiliado). Lê os pedidos dele pelo índice por
+ * afiliado e, para os de fora, a campanha ativa (+1 linha).
  */
 const LER_AFILIADO = `
   SELECT a.celula_id,
     (SELECT count(*) FROM pedidos WHERE affiliate_id = ?1 AND desconsiderado_em IS NULL) AS contam,
+    (SELECT count(*) FROM pedidos WHERE affiliate_id = ?1 AND desconsiderado_em IS NULL
+       AND campanha_id IS NOT (SELECT id FROM campanhas WHERE ativa = 1)) AS fora_da_ativa,
     (SELECT json_group_array(id) FROM (SELECT id FROM pedidos
        WHERE affiliate_id = ?1 AND desconsiderado_em IS NULL
        ORDER BY registrado_em DESC, id DESC LIMIT ?2)) AS que_contam,
@@ -264,6 +268,8 @@ export type ResultadoRemoverAfiliado =
       ok: false;
       motivo: "afiliado_com_pedidos";
       pedidosQueContam: number;
+      /** Dos que contam, quantos estão fora da campanha ativa (não se desconsideram daqui: o afiliado fica). */
+      foraDaCampanhaAtiva: number;
       pedidos: string[];
     };
 
@@ -300,6 +306,7 @@ export async function removerAfiliado(
       .first<{
         celula_id: number | null;
         contam: number;
+        fora_da_ativa: number;
         que_contam: string;
         desconsiderados: string;
       }>();
@@ -309,6 +316,7 @@ export async function removerAfiliado(
         ok: false,
         motivo: "afiliado_com_pedidos",
         pedidosQueContam: lido.contam,
+        foraDaCampanhaAtiva: lido.fora_da_ativa,
         pedidos: JSON.parse(lido.que_contam) as string[],
       };
     const desconsiderados = JSON.parse(lido.desconsiderados) as string[];
