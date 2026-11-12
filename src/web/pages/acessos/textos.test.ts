@@ -1,13 +1,19 @@
 // CA4 (RIFA-014): a mensagem do link da hierarquia (cumprimenta, diz para que é o link e avisa que é
 // pessoal), o telefone do líder no formato do wa.me e a situação do acesso de cada alvo.
 import { describe, expect, it } from "vitest";
+import {
+  MENSAGENS_PADRAO,
+  preencherMensagem,
+} from "../../../shared/contracts/regras";
 import { ErroApi } from "../../lib/api";
 import { alvosExemplo, link } from "./teste-apoio";
 import {
   avisoDeOutraPessoa,
+  linkWhatsApp,
   linkWhatsAppDoNumero,
   mensagemAoGerarLinks,
   mensagemHierarquia,
+  mensagemWhatsApp,
   motivoSemWhatsApp,
   precisaDeLink,
   situacaoDoAcesso,
@@ -220,5 +226,80 @@ describe("situação do acesso de cada alvo", () => {
         new ErroApi({ codigo: "nao_encontrado", mensagem: "x", status: 404 }),
       ),
     ).toMatch(/^A hierarquia mudou/);
+  });
+});
+
+describe("RIFA-041: o {link} colado em outro endereço não sai na mensagem", () => {
+  // Quem edita os modelos na Campanha (admin e coordenação, D20) poderia pôr o link pessoal no fim de um endereço
+  // de outro site: o WhatsApp de quem envia busca a prévia desse endereço e o token sairia para lá.
+  const ESPIAO = "https://outro-site.example/?u=";
+  const comLinkColado = {
+    ...MENSAGENS_PADRAO,
+    link_coordenacao: `{saudacao} Seu acesso: ${ESPIAO}{link}`,
+    link_lider: `{saudacao} A {alvo} já pode acompanhar: ${ESPIAO}{link}`,
+  };
+
+  it("coordenação (o link de um admin): o modelo com o {link} colado dá lugar ao padrão", () => {
+    const mensagem = mensagemWhatsApp(
+      "Ana Fictícia",
+      URL_FICTICIA,
+      comLinkColado,
+    );
+    expect(mensagem).toBe(
+      preencherMensagem(MENSAGENS_PADRAO.link_coordenacao, {
+        pessoaNome: "Ana Fictícia",
+        url: URL_FICTICIA,
+      }),
+    );
+    expect(mensagem).not.toContain(ESPIAO);
+    expect(
+      decodeURIComponent(linkWhatsApp("Ana", URL_FICTICIA, comLinkColado)),
+    ).not.toContain(`${ESPIAO}${URL_FICTICIA}`);
+  });
+
+  it("hierarquia: o mesmo vale para o modelo do líder", () => {
+    const mensagem = mensagemHierarquia(
+      {
+        alvo: { tipo: "celula", nome: "Célula Ágape" },
+        pessoaNome: "Maria",
+        url: URL_FICTICIA,
+      },
+      comLinkColado,
+    );
+    expect(mensagem).not.toContain(ESPIAO);
+    expect(mensagem.endsWith(`\n${URL_FICTICIA}`)).toBe(true);
+  });
+
+  it.each([
+    ["colado num caractere qualquer", "Entre:{link}"],
+    ["depois de chave de outro marcador", "{saudacao}{link}"],
+    ["com espaço sem quebra (U+00A0)", "Entre:\u00a0{link}"],
+    ["em formatação do WhatsApp", "Entre: *{link}*"],
+  ])("%s: o padrão", (_caso, modelo) => {
+    expect(
+      mensagemWhatsApp("Ana", URL_FICTICIA, {
+        ...MENSAGENS_PADRAO,
+        link_coordenacao: modelo,
+      }),
+    ).toBe(
+      preencherMensagem(MENSAGENS_PADRAO.link_coordenacao, {
+        pessoaNome: "Ana",
+        url: URL_FICTICIA,
+      }),
+    );
+  });
+
+  it.each([
+    ["no começo", "{link}\n{saudacao}"],
+    ["depois de espaço", "{saudacao} Entre: {link}"],
+    ["depois de quebra de linha", "{saudacao} Entre:\n{link}"],
+    ["depois de tabulação", "{saudacao} Entre:\t{link}"],
+  ])("%s: vale o modelo da campanha", (_caso, modelo) => {
+    expect(
+      mensagemWhatsApp("Ana", URL_FICTICIA, {
+        ...MENSAGENS_PADRAO,
+        link_coordenacao: modelo,
+      }),
+    ).toBe(preencherMensagem(modelo, { pessoaNome: "Ana", url: URL_FICTICIA }));
   });
 });

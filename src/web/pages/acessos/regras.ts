@@ -54,15 +54,25 @@ export async function carregarRegras(
 }
 
 /**
+ * Um `{link}` colado no texto de antes (ex.: "https://outro.site/?u={link}"): o link pessoal viraria o fim de um
+ * endereço de outro site. O WhatsApp de quem envia busca a prévia desse endereço ao montar a mensagem, e o token do
+ * link sairia para esse site mesmo que ninguém toque nele (RIFA-041). Quem edita os modelos na Campanha (admin e
+ * coordenação, D20) poderia assim levar o link de um admin. Só vale o `{link}` no começo ou depois de espaço,
+ * tabulação ou quebra de linha, como nos padrões.
+ */
+const LINK_COLADO = /[^ \t\r\n]\{link\}/;
+
+/**
  * O modelo que a mensagem usa: o da campanha, ou o padrão do tipo se o gravado tiver problema (D20: nunca mandar
- * mensagem sem o link).
+ * mensagem sem o link) ou o `{link}` colado no texto de antes (LINK_COLADO).
  */
 export function modeloDaMensagem(
   tipo: TipoMensagem,
   mensagens: Mensagens,
 ): string {
   const modelo = mensagens[tipo];
-  return problemasDoModelo(tipo, modelo).length === 0
+  return problemasDoModelo(tipo, modelo).length === 0 &&
+    !LINK_COLADO.test(modelo)
     ? modelo
     : MENSAGENS_PADRAO[tipo];
 }
