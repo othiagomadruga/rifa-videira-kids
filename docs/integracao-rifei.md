@@ -528,5 +528,6 @@ O suporte da Rifei atende pelo WhatsApp, de segunda a sábado, das 9h às 21h (h
 5. Como cancelar ou estornar um pedido pago? Isso dispara algum evento do webhook?
 6. Se eu mudar o título da campanha, o link (slug) muda?
 7. Quanto tempo um pedido fica reservado até expirar? A Rifei reenvia o webhook se o nosso servidor responder com erro? Ela manda um teste quando o webhook é adicionado?
+8. Se o comprador abre o link do afiliado e só paga depois (outro dia, outro aparelho, ou voltando pela página da campanha sem o link), a compra continua com o afiliado? Por quanto tempo a Rifei guarda essa indicação?
 
 Passe as respostas ao SM, para a seção 9 e o DevMission.
