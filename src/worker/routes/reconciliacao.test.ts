@@ -1132,6 +1132,13 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       aprovado_em: "2026-11-30T12:00:00.000Z",
       origem_data: "arquivo",
     });
+    // No arquivo, o R-CORRIDA está fora do padrão (D11), mas não entra (já existe, gravado pelo webhook): a
+    // plausibilidade do Recuperar (RIFA-042) só marca o que este lote gravou.
+    const corridaForaDoPadrao: PedidoRecuperado = {
+      ...pedido("R-CORRIDA"),
+      qtd_bilhetes: 201,
+      total_centavos: 402000,
+    };
 
     const resultado = await gravarRecuperacao(env.DB, {
       campanhaId: campanha!.id,
@@ -1141,7 +1148,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       linhasArquivo: 2,
       arquivoSha256: "0".repeat(64),
       colunas: { ...COLUNAS_VAZIAS, pedido_id: "Pedido" },
-      pedidos: [pedido("R-CORRIDA"), pedido("R-NOVO")],
+      pedidos: [corridaForaDoPadrao, pedido("R-NOVO")],
       precoBilheteCentavos: DADOS_CAMPANHA.preco_bilhete_centavos,
     });
 
@@ -1171,11 +1178,13 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       linhasArquivo: 1,
       arquivoSha256: "0".repeat(64),
       colunas: COLUNAS_VAZIAS,
-      pedidos: [pedido("R-CORRIDA")],
+      pedidos: [corridaForaDoPadrao],
       precoBilheteCentavos: DADOS_CAMPANHA.preco_bilhete_centavos,
     });
     expect(nada).toEqual({ recuperacaoId: null, gravados: new Set() });
     expect(await contar("recuperacoes")).toBe(1);
+    // O R-CORRIDA do webhook (dentro do padrão) não foi marcado pelos valores do arquivo, nas duas gravações.
+    expect(await contar("pedidos_suspeitos")).toBe(0);
     // Na trilha, só a primeira (a que gravou), com a contagem do que de fato entrou.
     expect(
       (await env.DB.prepare("SELECT resumo FROM auditoria").all()).results,
