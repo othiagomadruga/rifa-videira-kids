@@ -536,7 +536,8 @@ export type RespostaPedidosSuspeitos = z.infer<
 
 /**
  * Ações registradas (a lista cresce sem mudar o formato):
- * - campanha.salvar: PUT /api/admin/campanha (criação ou troca da configuração, inclusive do slug);
+ * - campanha.salvar: PUT /api/admin/campanha (criação ou troca da configuração, inclusive do slug) e, desde a
+ *   RIFA-046 (D24), PUT /api/admin/links-vendas/modelo (o antes e o depois do modelo do link de vendas);
  * - afiliado.salvar: PUT /api/admin/afiliados/:affiliateId (vínculo, troca ou desvínculo de célula);
  * - hierarquia.importar: POST /api/admin/hierarquia/importar quando aplica (não na simulação);
  * - usuario.criar, usuario.ativar, usuario.desativar, link.criar e link.revogar: administração dos acessos;

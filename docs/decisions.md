@@ -1081,7 +1081,9 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
   **Escolha: (a)**, vazio até o PO confirmar o formato. É reversível: as respostas trazem `url` por afiliado nas duas
   opções. Se a Rifei confirmar que o link de afiliado NÃO leva o `affiliate_id` (ex.: um código aleatório por
   afiliado), a troca para (b) é uma coluna `link_vendas` em `afiliados`, colada pela coordenação na Adesão, com a
-  mesma conferência de endereço (`eLinkDeVendas`): as rotas e as telas continuam iguais, muda só a origem do `url`.
+  mesma conferência de endereço (`eLinkDeVendas` e, no link colado, as regras do modelo sem os marcadores: nada de
+  `//`, `\`, `www.` ou invisível depois do endereço, que o `eLinkDeVendas` sozinho não pega): as rotas e as telas
+  continuam iguais, muda só a origem do `url`.
 - **O modelo**: um texto com os marcadores `{slug}` (o `slug_rifei` da campanha ativa, com `encodeURIComponent`) e
   `{afiliado}` (o `affiliate_id`, obrigatório), até 300 caracteres. Ex. (o formato real ainda é desconhecido):
   `https://rifei.com.br/{slug}?afiliado={afiliado}`. Regras executáveis (`problemasDoModeloLinkVendas`, as mensagens
