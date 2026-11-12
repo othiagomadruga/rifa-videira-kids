@@ -21,6 +21,7 @@ import {
   respostaCriarUsuarioSchema,
   respostaGerarLinksHierarquiaSchema,
   respostaListaUsuariosSchema,
+  respostaSessaoSchema,
   usuarioSchema,
   type ItemAcessoHierarquia,
   type LinkAcesso,
@@ -430,6 +431,21 @@ export function criarApiFalsa(
         401,
         "nao_autenticado",
         "Sessão ausente ou expirada: abra o seu link de acesso",
+      );
+    }
+    // Quem está conectado (a tela confere depois de revogar o link deste aparelho: RIFA-043).
+    if (caminho === "/api/sessao" && metodo === "GET") {
+      const conectado = pessoas.find((pessoa) => pessoa.id === eu);
+      return respostaJson(
+        respostaSessaoSchema.parse({
+          usuario: conectado
+            ? {
+                id: conectado.id,
+                nome: conectado.nome,
+                papel: conectado.papel,
+              }
+            : ADMIN_DE_TESTE,
+        }),
       );
     }
     if (caminho === "/api/admin/campanha" && metodo === "GET") {
