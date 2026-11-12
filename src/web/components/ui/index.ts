@@ -20,6 +20,12 @@ export {
 export { Card } from "./Card";
 export { juntarClasses } from "./classes";
 export { DataTable, type ColunaTabela } from "./DataTable";
+export {
+  ATRASO_DA_DICA_MS,
+  ComDica,
+  FOLGA_DA_DICA_MS,
+  esquecerTecladoDaDica,
+} from "./Dica";
 export { Dialogo } from "./Dialogo";
 export { EmptyState } from "./EmptyState";
 export { ErrorState } from "./ErrorState";

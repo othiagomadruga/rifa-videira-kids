@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { ComDica } from "./Dica";
 import "./Dialogo.css";
 
 type Props = {
@@ -39,6 +40,8 @@ type Props = {
   focoAoFechar?: RefObject<HTMLElement | null>;
   /** Nome do botão × (padrão "Fechar"). */
   rotuloFechar?: string;
+  /** Dica do botão × (RIFA-045): o que acontece ao fechar este diálogo. */
+  dicaFechar?: ReactNode;
 };
 
 // Diálogo modal acessível: role="dialog" com aria-modal, nome (título) e descrição; o foco entra ao
@@ -60,6 +63,7 @@ function DialogoAberto({
   focoInicial,
   focoAoFechar,
   rotuloFechar = "Fechar",
+  dicaFechar = "Fecha esta janela e volta para a tela. O que não foi confirmado fica como estava.",
 }: Props) {
   const idTitulo = useId();
   const idDescricao = useId();
@@ -150,28 +154,30 @@ function DialogoAberto({
               </p>
             )}
           </div>
-          <button
-            type="button"
-            className="ui-dialogo__fechar"
-            aria-label={rotuloFechar}
-            onClick={aoFechar}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              aria-hidden="true"
-              focusable="false"
+          <ComDica texto={dicaFechar}>
+            <button
+              type="button"
+              className="ui-dialogo__fechar"
+              aria-label={rotuloFechar}
+              onClick={aoFechar}
             >
-              <path
-                d="M5 5l10 10M15 5L5 15"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
-          </button>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M5 5l10 10M15 5L5 15"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+            </button>
+          </ComDica>
         </div>
         {aoEnviar ? (
           <form

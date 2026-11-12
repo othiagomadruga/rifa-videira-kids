@@ -1,0 +1,49 @@
+/*
+ * Dica (tooltip, RIFA-045): balão escuro (marinho da Videira com texto branco, o mesmo par do texto do site) num
+ * portal no fim do <body>. Top e left vêm do JS (posição fixa, sempre dentro da tela; nunca cria rolagem lateral);
+ * a seta aponta para o meio do controle (--dica-seta) e fica embaixo (dica acima) ou em cima (dica abaixo).
+ */
+.ui-dica {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1100;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 1rem));
+  padding: var(--espaco-2) var(--espaco-3);
+  border-radius: var(--raio-2);
+  background: var(--cor-texto);
+  color: var(--cor-superficie);
+  box-shadow: var(--sombra-2);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-normal);
+  line-height: 1.4;
+  text-align: left;
+  overflow-wrap: break-word;
+}
+
+.ui-dica::after {
+  content: "";
+  position: absolute;
+  left: var(--dica-seta, 50%);
+  width: 0.625rem;
+  height: 0.625rem;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.ui-dica[data-lado="acima"]::after {
+  bottom: -0.3125rem;
+}
+
+.ui-dica[data-lado="abaixo"]::after {
+  top: -0.3125rem;
+}
+
+/* Chega com um fade curto; com prefers-reduced-motion: reduce, aparece pronta. */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-dica {
+    animation: ui-surgir var(--duracao-rapida) var(--curva-saida);
+  }
+}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { juntarClasses } from "./classes";
+import { ComDica } from "./Dica";
 import "./Aviso.css";
 
 export type TomAviso = "info" | "sucesso" | "alerta" | "perigo";
@@ -22,6 +23,8 @@ type Props = {
   /** Mostra o botão × para fechar o aviso. */
   aoFechar?: () => void;
   rotuloFechar?: string;
+  /** Dica do botão × (RIFA-045). */
+  dicaFechar?: ReactNode;
   id?: string;
   className?: string;
 };
@@ -55,6 +58,7 @@ export function Aviso({
   acao,
   aoFechar,
   rotuloFechar = "Fechar aviso",
+  dicaFechar = "Tira este aviso da tela. Ele não volta sozinho.",
   id,
   className,
 }: Props) {
@@ -73,28 +77,30 @@ export function Aviso({
         {acao && <div className="ui-aviso__acao">{acao}</div>}
       </div>
       {aoFechar && (
-        <button
-          type="button"
-          className="ui-aviso__fechar"
-          aria-label={rotuloFechar}
-          onClick={aoFechar}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            focusable="false"
+        <ComDica texto={dicaFechar}>
+          <button
+            type="button"
+            className="ui-aviso__fechar"
+            aria-label={rotuloFechar}
+            onClick={aoFechar}
           >
-            <path
-              d="M4 4l8 8M12 4l-8 8"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
-        </button>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M4 4l8 8M12 4l-8 8"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+        </ComDica>
       )}
     </div>
   );

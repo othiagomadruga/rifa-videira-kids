@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router";
 import { Button } from "./Button";
+import { ComDica } from "./Dica";
 import { Marca } from "./Marca";
 import "./AppShell.css";
 
@@ -10,7 +11,15 @@ export type ItemNavegacao = {
   rotulo: string;
   /** Só fica "atual" no caminho exato (use na tela inicial da área). */
   exato?: boolean;
+  /** Dica do link (RIFA-045): o que a tela faz. */
+  dica?: ReactNode;
 };
+
+/** Dicas dos botões da moldura (RIFA-045). */
+export const DICA_BOTAO_MENU =
+  "Mostra ou esconde a lista das telas da coordenação.";
+export const DICA_BOTAO_SAIR =
+  "Encerra o seu acesso neste aparelho. Para voltar, abra de novo o seu link pessoal.";
 
 /** Quem está conectado: nome e botão "Sair" no fim do menu. */
 export type ContaAppShell = {
@@ -113,31 +122,35 @@ export function AppShell({ area, itens, conta, children }: Props) {
       <div className="ui-app-shell__lateral" ref={refAreaMenu}>
         <header className="ui-app-shell__topo">
           <Marca complemento={area} />
-          <button
-            ref={refBotaoMenu}
-            type="button"
-            className="ui-app-shell__botao-menu"
-            aria-expanded={menuAberto}
-            aria-controls={idPainel}
-            onClick={() => setMenuAberto((aberto) => !aberto)}
-          >
-            <IconeMenu aberto={menuAberto} />
-            Menu
-          </button>
+          <ComDica texto={DICA_BOTAO_MENU}>
+            <button
+              ref={refBotaoMenu}
+              type="button"
+              className="ui-app-shell__botao-menu"
+              aria-expanded={menuAberto}
+              aria-controls={idPainel}
+              onClick={() => setMenuAberto((aberto) => !aberto)}
+            >
+              <IconeMenu aberto={menuAberto} />
+              Menu
+            </button>
+          </ComDica>
         </header>
         <div id={idPainel} className="ui-app-shell__painel">
           <nav className="ui-app-shell__nav" aria-label={area}>
             <ul className="ui-app-shell__lista">
               {itens.map((item) => (
                 <li key={item.para}>
-                  <NavLink
-                    to={item.para}
-                    end={item.exato}
-                    className="ui-app-shell__link"
-                    onClick={aoEscolherTela}
-                  >
-                    {item.rotulo}
-                  </NavLink>
+                  <ComDica texto={item.dica}>
+                    <NavLink
+                      to={item.para}
+                      end={item.exato}
+                      className="ui-app-shell__link"
+                      onClick={aoEscolherTela}
+                    >
+                      {item.rotulo}
+                    </NavLink>
+                  </ComDica>
                 </li>
               ))}
             </ul>
@@ -170,14 +183,16 @@ function Conta({ nome, detalhe, aoSair, saindo = false, erro }: ContaAppShell) {
           </>
         )}
       </p>
-      <Button
-        variante="secundario"
-        larguraTotal
-        disabled={saindo}
-        onClick={aoSair}
-      >
-        {saindo ? "Saindo…" : "Sair"}
-      </Button>
+      <ComDica texto={DICA_BOTAO_SAIR}>
+        <Button
+          variante="secundario"
+          larguraTotal
+          disabled={saindo}
+          onClick={aoSair}
+        >
+          {saindo ? "Saindo…" : "Sair"}
+        </Button>
+      </ComDica>
       {erro && (
         <p className="ui-app-shell__erro" role="alert">
           {erro}
