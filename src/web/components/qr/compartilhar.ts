@@ -25,8 +25,12 @@ export function linkWhatsAppLinkVendas({
   url: string;
   telefone?: string | null;
 }): string {
-  const numero = telefone !== null && /^\d+$/.test(telefone) ? telefone : "";
-  return `https://wa.me/${numero}?text=${encodeURIComponent(mensagemWhatsAppLinkVendas(celulaNome, url))}`;
+  return `https://wa.me/${numeroDoWhatsApp(telefone)}?text=${encodeURIComponent(mensagemWhatsAppLinkVendas(celulaNome, url))}`;
+}
+
+/** O número que vai no wa.me: o telefone só com dígitos, ou "" (sem ele, a pessoa escolhe o contato). */
+export function numeroDoWhatsApp(telefone: string | null = null): string {
+  return telefone !== null && /^\d+$/.test(telefone) ? telefone : "";
 }
 
 export type ResultadoCopia = "copiado" | "selecionado";

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Button, Dialogo } from "../ui";
+import { Button, ComDica, Dialogo } from "../ui";
 import { QrCodeLinkVendasLazy } from "./QrCodeLazy";
+import { DICAS } from "./textos";
 import "./compartilhar.css";
 
 type Props = {
@@ -20,22 +21,27 @@ export function VerQr({ url, celulaNome, affiliateId }: Props) {
     affiliateId === undefined ? "" : ` (afiliado ${affiliateId})`;
   return (
     <>
-      <Button variante="secundario" onClick={() => setAberto(true)}>
-        Ver QR{" "}
-        <span className="visualmente-oculto">
-          code da {celulaNome}
-          {doAfiliado}
-        </span>
-      </Button>
+      <ComDica texto={DICAS.verQr}>
+        <Button variante="secundario" onClick={() => setAberto(true)}>
+          Ver QR{" "}
+          <span className="visualmente-oculto">
+            code da {celulaNome}
+            {doAfiliado}
+          </span>
+        </Button>
+      </ComDica>
       <Dialogo
         aberto={aberto}
         titulo={`QR code da ${celulaNome}${doAfiliado}`}
         descricao="Aponte a câmera do celular para abrir o link de vendas na Rifei."
         aoFechar={() => setAberto(false)}
+        dicaFechar={DICAS.fecharQr}
         rodape={
-          <Button variante="secundario" onClick={() => setAberto(false)}>
-            Pronto
-          </Button>
+          <ComDica texto={DICAS.fecharQr}>
+            <Button variante="secundario" onClick={() => setAberto(false)}>
+              Pronto
+            </Button>
+          </ComDica>
         }
       >
         <div className="qr-dialogo">

@@ -4,10 +4,11 @@ import {
   montarLinkDeVendas,
   problemasDoModeloLinkVendas,
 } from "../../../shared/contracts/link-vendas";
-import { Aviso, Button, Input } from "../../components/ui";
+import { Aviso, Button, ComDica, Input } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarNumero } from "../../lib/formatadores";
 import { carregarSlug, problemasDoErro } from "./links-vendas-api";
+import { DICAS } from "./textos";
 
 /** O afiliado da prévia: um de verdade (o primeiro vinculado, com a célula dele) ou, sem nenhum, um de exemplo. */
 export type ExemploDaPrevia = {
@@ -71,15 +72,17 @@ function ModeloSoLeitura({ modelo }: { modelo: string | null }) {
       <p id={idAviso} className="adesao-links__so-admin">
         Só o admin muda o modelo.
       </p>
-      <Input
-        rotulo="Modelo do link de vendas"
-        value={modelo ?? ""}
-        placeholder="Ainda sem modelo"
-        readOnly
-        spellCheck={false}
-        aria-describedby={idAviso}
-        className="adesao-links__campo-modelo"
-      />
+      <ComDica texto={DICAS.modeloSoLeitura}>
+        <Input
+          rotulo="Modelo do link de vendas"
+          value={modelo ?? ""}
+          placeholder="Ainda sem modelo"
+          readOnly
+          spellCheck={false}
+          aria-describedby={idAviso}
+          className="adesao-links__campo-modelo"
+        />
+      </ComDica>
     </div>
   );
 }
@@ -168,30 +171,32 @@ function EditorDoModelo({ modelo, exemplo, aoSalvar }: Omit<Props, "admin">) {
 
   return (
     <form className="adesao-links__modelo" onSubmit={salvar} noValidate>
-      <Input
-        ref={refCampo}
-        id={idCampo}
-        rotulo="Modelo do link de vendas"
-        dica={
-          <>
-            Use {"{slug}"} (o endereço da campanha na Rifei) e {"{afiliado}"} (o
-            código de afiliado de cada líder). Ex.: {EXEMPLO_DE_MODELO}
-          </>
-        }
-        erro={erros.length > 0 ? erros.join(" ") : undefined}
-        value={texto}
-        inputMode="url"
-        autoComplete="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        aria-describedby={idContagem}
-        className="adesao-links__campo-modelo"
-        onChange={(evento) => {
-          setTexto(evento.target.value);
-          setProblemasDaApi([]);
-          setResultado(null);
-        }}
-      />
+      <ComDica texto={DICAS.modelo}>
+        <Input
+          ref={refCampo}
+          id={idCampo}
+          rotulo="Modelo do link de vendas"
+          dica={
+            <>
+              Use {"{slug}"} (o endereço da campanha na Rifei) e {"{afiliado}"}{" "}
+              (o código de afiliado de cada líder). Ex.: {EXEMPLO_DE_MODELO}
+            </>
+          }
+          erro={erros.length > 0 ? erros.join(" ") : undefined}
+          value={texto}
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          aria-describedby={idContagem}
+          className="adesao-links__campo-modelo"
+          onChange={(evento) => {
+            setTexto(evento.target.value);
+            setProblemasDaApi([]);
+            setResultado(null);
+          }}
+        />
+      </ComDica>
       <p id={idContagem} className="adesao-links__contagem">
         {formatarNumero(valor.length)} de{" "}
         {formatarNumero(LIMITE_CARACTERES_MODELO_LINK_VENDAS)} caracteres
@@ -205,9 +210,19 @@ function EditorDoModelo({ modelo, exemplo, aoSalvar }: Omit<Props, "admin">) {
       />
       <div className="adesao-links__salvar">
         {/* Indisponível (continua focável) enquanto salva ou quando o campo é igual ao gravado. */}
-        <Button type="submit" aria-disabled={salvando || !mudou || undefined}>
-          {salvando ? "Salvando…" : "Salvar modelo"}
-        </Button>
+        <ComDica
+          texto={
+            salvando
+              ? DICAS.salvarModeloSalvando
+              : mudou
+                ? DICAS.salvarModelo
+                : DICAS.salvarModeloSemMudanca
+          }
+        >
+          <Button type="submit" aria-disabled={salvando || !mudou || undefined}>
+            {salvando ? "Salvando…" : "Salvar modelo"}
+          </Button>
+        </ComDica>
       </div>
       {/* Região viva fixa: o resultado de salvar. */}
       <p className="visualmente-oculto" role="status">
@@ -271,14 +286,16 @@ function Previa({
             : " (um código de exemplo)"}
           :
         </p>
-        <a
-          className="adesao-links__previa-link"
-          href={previa}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {previa}
-        </a>
+        <ComDica texto={DICAS.previa}>
+          <a
+            className="adesao-links__previa-link"
+            href={previa}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {previa}
+          </a>
+        </ComDica>
         <p>
           Abra a prévia e confira, antes de salvar, que ela leva à página da
           campanha na Rifei.

@@ -18,7 +18,9 @@ import {
   type UsuarioSessao,
 } from "../../../shared/contracts";
 import { CLASSE_IMPRIMINDO } from "../../components/qr/QrCodeLinkVendas";
-import { pixelsDoSvg } from "../../components/qr/teste-apoio";
+import { pixelsDoSvg, textoDaDica } from "../../components/qr/teste-apoio";
+import { DICAS as DICAS_DO_QR } from "../../components/qr/textos";
+import { contarControles, controlesSemDica } from "../../test/dicas";
 import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
@@ -32,6 +34,7 @@ import {
   respostaLinksDe,
   urlDeTeste,
 } from "./teste-apoio-links";
+import { DICAS } from "./textos";
 import { INTERVALO_ATUALIZACAO_MS } from "./usePainelAdesao";
 
 const ESPERA_DO_PACOTE = { timeout: 5000 };
@@ -79,16 +82,21 @@ type Erro = {
   detalhes?: unknown;
 };
 
-/** fetch simulado: o painel da Adesão, a lista dos links, o PUT do modelo e a campanha (o slug). */
+/**
+ * fetch simulado: o painel da Adesão, a lista dos links, o PUT do modelo e a campanha (o slug). `falhasDoGet`: as
+ * próximas respostas de erro do GET dos links, uma por consulta, antes das de sucesso.
+ */
 function simularApi({
   modelo = null as string | null,
   celulas = celulasDaReuniao(),
   slug = SLUG_DE_TESTE as string | null,
+  falhasDoGet = [] as Erro[],
 } = {}) {
   const estado = { modelo, celulas, slug };
   const corpos: unknown[] = [];
   const chamadas: string[] = [];
   const proximaFalhaDoPut: Erro[] = [];
+  const proximaFalhaDoGet: Erro[] = [...falhasDoGet];
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const metodo = init?.method ?? "GET";
     chamadas.push(`${metodo} ${url}`);
@@ -115,8 +123,15 @@ function simularApi({
           },
         }),
       );
-    if (metodo === "GET" && url === "/api/admin/links-vendas")
-      return respostaJson(respostaLinksDe(estado.celulas, estado.modelo));
+    if (metodo === "GET" && url === "/api/admin/links-vendas") {
+      const falha = proximaFalhaDoGet.shift();
+      return falha
+        ? respostaJson(
+            { erro: { codigo: falha.codigo, mensagem: falha.mensagem } },
+            falha.status,
+          )
+        : respostaJson(respostaLinksDe(estado.celulas, estado.modelo));
+    }
     if (metodo === "GET" && url === "/api/admin/campanha")
       return estado.slug === null
         ? respostaJson(
@@ -575,5 +590,190 @@ describe("CA3: o link e o QR code de cada célula", () => {
         name: "Link de vendas (afiliado 1003) da Célula Canaã",
       }),
     ).toHaveValue(urlDeTeste(1003));
+  });
+});
+
+describe("estados da seção Links de vendas", () => {
+  it("404 (sem campanha ativa): a campanha ainda não foi configurada, sem modelo nem lista", async () => {
+    const { secao } = await abrir(ADMIN_DE_TESTE, {
+      falhasDoGet: [
+        { status: 404, codigo: "nao_encontrado", mensagem: "Sem campanha" },
+      ],
+    });
+    expect(
+      within(secao).getByText("A campanha ainda não foi configurada."),
+    ).toBeInTheDocument();
+    expect(within(secao).queryByRole("textbox")).toBeNull();
+    expect(within(secao).queryByRole("button")).toBeNull();
+  });
+
+  it("falha ao carregar: o erro com Tentar de novo, que pede a lista outra vez", async () => {
+    const { api, secao } = await abrir(USUARIO_DE_TESTE, {
+      modelo: MODELO_DE_TESTE,
+      falhasDoGet: [
+        { status: 503, codigo: "indisponivel", mensagem: "Fora do ar" },
+      ],
+    });
+    const alerta = within(secao).getByRole("alert");
+    expect(alerta).toHaveTextContent(
+      "Não foi possível carregar os links de vendas.",
+    );
+    fireEvent.click(
+      within(alerta).getByRole("button", { name: "Tentar de novo" }),
+    );
+    expect(
+      await within(secao).findByRole("textbox", {
+        name: "Link de vendas (afiliado 1002) da Célula Betel",
+      }),
+    ).toHaveValue(urlDeTeste(1002));
+    expect(
+      api.chamadas.filter(
+        (chamada) => chamada === "GET /api/admin/links-vendas",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("403 no PUT (a sessão deixou de ser admin): só o admin muda o modelo, e nada muda na tela", async () => {
+    const { api, secao } = await abrir(ADMIN_DE_TESTE);
+    api.proximaFalhaDoPut.push({
+      status: 403,
+      codigo: "proibido",
+      mensagem: "Sem permissão",
+    });
+    fireEvent.change(
+      within(secao).getByRole("textbox", { name: "Modelo do link de vendas" }),
+      { target: { value: MODELO_DE_TESTE } },
+    );
+    fireEvent.click(
+      within(secao).getByRole("button", { name: "Salvar modelo" }),
+    );
+    expect(
+      await within(secao).findByText("Só o admin muda o modelo.", {
+        selector: ".ui-aviso__titulo",
+      }),
+    ).toBeInTheDocument();
+    expect(api.estado.modelo).toBeNull();
+    expect(
+      within(secao).getByText("Os links de vendas ainda não foram liberados."),
+    ).toBeInTheDocument();
+  });
+});
+
+// RIFA-045 nos controles da RIFA-046: o resto da Adesão é da fase 2 das dicas, então a varredura fica na seção
+// "Links de vendas" (e no diálogo do "Ver QR", que deixa o resto da página `inert`).
+describe("dicas nos botões e campos dos links de vendas", () => {
+  it("admin com o modelo gravado: o campo, Salvar (indisponível), Imprimir os QR codes, a busca e os links de cada célula; no Ver QR, o diálogo", async () => {
+    const { secao } = await abrir(ADMIN_DE_TESTE, { modelo: MODELO_DE_TESTE });
+    await within(secao).findByRole("link", { name: urlDeTeste(1001) });
+    // Modelo, Salvar, Imprimir os QR codes, busca; Ágape (2 links × 4) e Betel (4).
+    expect(contarControles(secao)).toBe(16);
+    expect(controlesSemDica(secao)).toEqual([]);
+
+    const texto = (papel: "button" | "link" | "textbox", nome: string) =>
+      textoDaDica(within(secao).getByRole(papel, { name: nome }));
+    expect(texto("textbox", "Modelo do link de vendas")).toBe(
+      "O endereço do link de afiliado da Rifei, com {slug} e {afiliado}.",
+    );
+    expect(texto("button", "Salvar modelo")).toBe(
+      "Nada mudou desde o modelo gravado.",
+    );
+    // A prévia é um link comum (a varredura não o pega): a dica confere à parte.
+    expect(texto("link", urlDeTeste(1001))).toBe(
+      "Abre o link de exemplo na Rifei para conferir.",
+    );
+    expect(texto("button", "Imprimir os QR codes (2)")).toBe(
+      "Imprime uma página por célula com link.",
+    );
+    expect(
+      textoDaDica(
+        within(secao).getByRole("searchbox", {
+          name: "Buscar nos links: célula, líder ou código",
+        }),
+      ),
+    ).toBe("Filtra pelo nome da célula, do líder ou pelo código.");
+    // WhatsApp: com o telefone do líder (Ágape) e sem ele (Betel, a pessoa escolhe o contato).
+    expect(
+      texto(
+        "link",
+        "Enviar no WhatsApp o link da Célula Ágape (afiliado 1077)",
+      ),
+    ).toBe(
+      "Abre o WhatsApp com a mensagem e o link prontos para o telefone do líder.",
+    );
+    expect(texto("link", "Enviar no WhatsApp o link da Célula Betel")).toBe(
+      DICAS_DO_QR.enviarWhatsApp,
+    );
+    expect(texto("button", "Copiar link da Célula Betel")).toBe(
+      "Copia o link de vendas para colar onde quiser.",
+    );
+    expect(
+      texto("textbox", "Link de vendas (afiliado 1002) da Célula Betel"),
+    ).toBe("Toque para selecionar o link inteiro.");
+
+    // Com o campo mudado, Salvar diz o que acontece.
+    fireEvent.change(
+      within(secao).getByRole("textbox", { name: "Modelo do link de vendas" }),
+      { target: { value: "https://rifei.com.br/{slug}/{afiliado}" } },
+    );
+    expect(texto("button", "Salvar modelo")).toBe(
+      "Grava o modelo; os links de todas as células mudam na hora.",
+    );
+
+    const verQr = within(cartaoDaCelula(secao, "Célula Betel")).getByRole(
+      "button",
+      { name: "Ver QR code da Célula Betel" },
+    );
+    fireEvent.pointerDown(verQr);
+    fireEvent.click(verQr);
+    const dialogo = await screen.findByRole("dialog", {
+      name: "QR code da Célula Betel",
+    });
+    await within(dialogo).findByRole("img", undefined, ESPERA_DO_PACOTE);
+    // O ×, Baixar imagem, Imprimir e Pronto.
+    expect(contarControles(dialogo)).toBe(4);
+    expect(controlesSemDica(dialogo)).toEqual([]);
+  });
+
+  it("coordenação: o modelo só leitura tem a dica de que só o admin muda", async () => {
+    const { secao } = await abrir(USUARIO_DE_TESTE, {
+      modelo: MODELO_DE_TESTE,
+    });
+    // Modelo (só leitura), Imprimir os QR codes, busca e os links das células.
+    expect(contarControles(secao)).toBe(15);
+    expect(controlesSemDica(secao)).toEqual([]);
+    expect(
+      textoDaDica(
+        within(secao).getByRole("textbox", {
+          name: "Modelo do link de vendas",
+        }),
+      ),
+    ).toBe(DICAS.modeloSoLeitura);
+  });
+
+  it("nenhuma célula com link: Imprimir os QR codes indisponível diz por quê", async () => {
+    const { secao } = await abrir(USUARIO_DE_TESTE, {
+      modelo: MODELO_DE_TESTE,
+      celulas: [celula(3, "Célula Canaã")],
+    });
+    const imprimirTodos = within(secao).getByRole("button", {
+      name: "Imprimir os QR codes (0)",
+    });
+    expect(imprimirTodos).toHaveAttribute("aria-disabled", "true");
+    expect(controlesSemDica(secao)).toEqual([]);
+    expect(textoDaDica(imprimirTodos)).toBe(DICAS.imprimirOsQrCodesSemLink);
+  });
+
+  it("busca sem resultado e admin sem modelo: os controles que sobram também têm dica", async () => {
+    const { secao } = await abrir(ADMIN_DE_TESTE, { modelo: MODELO_DE_TESTE });
+    fireEvent.change(
+      within(secao).getByRole("searchbox", {
+        name: "Buscar nos links: célula, líder ou código",
+      }),
+      { target: { value: "nada-com-isto" } },
+    );
+    expect(
+      within(secao).getByText("Nenhuma célula encontrada."),
+    ).toBeInTheDocument();
+    expect(controlesSemDica(secao)).toEqual([]);
   });
 });

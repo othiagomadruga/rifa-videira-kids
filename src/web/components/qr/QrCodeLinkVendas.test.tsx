@@ -94,9 +94,12 @@ describe("CA4: Baixar imagem", () => {
     const pixels = canvas.pixelsDoPng(png);
     expect(pixels?.width).toBe(matrizDoQr(URL_AGAPE).length * 10);
     expect(pixels && decodeQR(pixels)).toBe(URL_AGAPE);
-    // O link temporário saiu da página; o <canvas> nunca entrou nela; nenhum <img src="blob:">.
+    // O link temporário saiu da página; o <canvas> nunca entrou nela e foi zerado; nenhum <img src="blob:">.
     expect(document.querySelector("a[download]")).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
+    expect(canvas.usados).toHaveLength(1);
+    expect(canvas.usados[0].isConnected).toBe(false);
+    expect([canvas.usados[0].width, canvas.usados[0].height]).toEqual([0, 0]);
     expect(document.querySelector('img[src^="blob:"]')).toBeNull();
 
     expect(
@@ -139,6 +142,8 @@ describe("CA4: Baixar imagem", () => {
     );
     expect(downloads.cliques).toEqual([]);
     expect(downloads.criar).not.toHaveBeenCalled();
+    // Mesmo sem imagem, o canvas temporário é zerado.
+    expect([canvas.usados[0].width, canvas.usados[0].height]).toEqual([0, 0]);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   Aviso,
   Button,
   Card,
+  ComDica,
   EmptyState,
   ErrorState,
   Input,
@@ -33,6 +34,7 @@ import {
   ModeloLinkVendas,
   type ExemploDaPrevia,
 } from "./ModeloLinkVendas";
+import { DICAS } from "./textos";
 import "./links-vendas.css";
 
 type CelulaComLinks = RespostaLinksVendas["itens"][number];
@@ -227,27 +229,37 @@ function LinksDasCelulas({
         <h3 id={idTitulo} className="adesao-links__subtitulo">
           Link de cada célula
         </h3>
-        <Button
-          variante="secundario"
-          aria-disabled={paraImprimir.length === 0 || undefined}
-          onClick={() => {
-            if (paraImprimir.length > 0) imprimir(paraImprimir);
-          }}
+        <ComDica
+          texto={
+            paraImprimir.length > 0
+              ? DICAS.imprimirOsQrCodes
+              : DICAS.imprimirOsQrCodesSemLink
+          }
         >
-          Imprimir os QR codes ({paraImprimir.length})
-        </Button>
+          <Button
+            variante="secundario"
+            aria-disabled={paraImprimir.length === 0 || undefined}
+            onClick={() => {
+              if (paraImprimir.length > 0) imprimir(paraImprimir);
+            }}
+          >
+            Imprimir os QR codes ({paraImprimir.length})
+          </Button>
+        </ComDica>
       </div>
       <p className="adesao-links__nota">
         Uma página por célula com link: o QR code, o nome da célula e o link em
         texto.
       </p>
-      <Input
-        rotulo="Buscar nos links: célula, líder ou código"
-        type="search"
-        autoComplete="off"
-        value={busca}
-        onChange={(evento) => setBusca(evento.target.value)}
-      />
+      <ComDica texto={DICAS.buscar}>
+        <Input
+          rotulo="Buscar nos links: célula, líder ou código"
+          type="search"
+          autoComplete="off"
+          value={busca}
+          onChange={(evento) => setBusca(evento.target.value)}
+        />
+      </ComDica>
       <p className="adesao-contagem">
         {termos.length > 0
           ? `${quantidade(filtradas.length, "célula encontrada", "células encontradas")} de ${dados.itens.length}`

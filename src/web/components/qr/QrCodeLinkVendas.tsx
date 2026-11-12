@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { nomeDoArquivoQrLinkVendas } from "../../../shared/contracts/link-vendas";
 import { LIBERAR_ARQUIVO_DEPOIS_MS } from "../../lib/api";
-import { Button } from "../ui";
+import { Button, ComDica } from "../ui";
 import {
   COR_CLARA_QR,
   COR_ESCURA_QR,
@@ -16,6 +16,7 @@ import {
   rasterizarQr,
   type MatrizQr,
 } from "./qr-matriz";
+import { DICAS } from "./textos";
 import "./qr-codigo.css";
 
 /** O nome do QR code para o leitor de tela (o `aria-label` do <svg>). */
@@ -51,9 +52,10 @@ export function QrSvg({
 }
 
 /**
- * Gera o PNG num <canvas> (10 px por módulo, fundo branco, fora da página) e o entrega ao navegador por um link
- * temporário com `download` (como o relatório da D23): nunca um <img src="blob:">, que a CSP recusa. O endereço do
- * arquivo é liberado depois de LIBERAR_ARQUIVO_DEPOIS_MS. Nada vai para storage, URL ou histórico.
+ * Gera o PNG num <canvas> temporário (10 px por módulo, fundo branco, nunca posto na página) e o entrega ao navegador
+ * por um link temporário com `download` (como o relatório da D23): nunca um <img src="blob:">, que a CSP recusa. O
+ * canvas é zerado logo depois de gerar o PNG e o endereço do arquivo é liberado depois de LIBERAR_ARQUIVO_DEPOIS_MS.
+ * Nada vai para storage, URL ou histórico.
  */
 export async function baixarPngDoQr(
   matriz: MatrizQr,
@@ -61,16 +63,24 @@ export async function baixarPngDoQr(
 ): Promise<void> {
   const pixels = rasterizarQr(matriz, PX_POR_MODULO_PNG);
   const canvas = document.createElement("canvas");
-  canvas.width = pixels.width;
-  canvas.height = pixels.height;
-  const contexto = canvas.getContext("2d");
-  if (!contexto) throw new Error("Este navegador não desenha imagens.");
-  const imagem = contexto.createImageData(pixels.width, pixels.height);
-  imagem.data.set(pixels.data);
-  contexto.putImageData(imagem, 0, 0);
-  const png = await new Promise<Blob | null>((resolver) =>
-    canvas.toBlob(resolver, "image/png"),
-  );
+  let png: Blob | null;
+  try {
+    canvas.width = pixels.width;
+    canvas.height = pixels.height;
+    const contexto = canvas.getContext("2d");
+    if (!contexto) throw new Error("Este navegador não desenha imagens.");
+    const imagem = contexto.createImageData(pixels.width, pixels.height);
+    imagem.data.set(pixels.data);
+    contexto.putImageData(imagem, 0, 0);
+    png = await new Promise<Blob | null>((resolver) =>
+      canvas.toBlob(resolver, "image/png"),
+    );
+  } finally {
+    // Tamanho zero libera na hora a memória da imagem (o Safari do iPhone tem um teto para a memória dos canvas e
+    // só a devolve quando o coletor passa).
+    canvas.width = 0;
+    canvas.height = 0;
+  }
   if (!png) throw new Error("Este navegador não gerou a imagem.");
   const endereco = URL.createObjectURL(png);
   const link = document.createElement("a");
@@ -204,17 +214,25 @@ export function QrCodeLinkVendas({ url, celulaNome }: Props) {
         />
       </div>
       <div className="qr-codigo__acoes">
-        <Button variante="secundario" onClick={() => void baixar()}>
-          Baixar imagem{" "}
-          <span className="visualmente-oculto">do QR code da {celulaNome}</span>
-        </Button>
-        <Button
-          variante="secundario"
-          onClick={() => imprimir([{ celulaNome, url }])}
-        >
-          Imprimir{" "}
-          <span className="visualmente-oculto">o QR code da {celulaNome}</span>
-        </Button>
+        <ComDica texto={DICAS.baixarImagem}>
+          <Button variante="secundario" onClick={() => void baixar()}>
+            Baixar imagem{" "}
+            <span className="visualmente-oculto">
+              do QR code da {celulaNome}
+            </span>
+          </Button>
+        </ComDica>
+        <ComDica texto={DICAS.imprimir}>
+          <Button
+            variante="secundario"
+            onClick={() => imprimir([{ celulaNome, url }])}
+          >
+            Imprimir{" "}
+            <span className="visualmente-oculto">
+              o QR code da {celulaNome}
+            </span>
+          </Button>
+        </ComDica>
       </div>
       {/* Região viva fixa (anuncia o resultado de baixar) e o mesmo texto visível. */}
       <p className="visualmente-oculto" role="status">

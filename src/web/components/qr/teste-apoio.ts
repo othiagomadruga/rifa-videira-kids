@@ -1,7 +1,20 @@
 // Apoio dos testes do QR code (só nos testes; nunca vai para o pacote do site): ler de volta o <svg> que a tela
 // desenha e trocar o <canvas> e o window.print, que o jsdom não tem.
+import { act } from "@testing-library/react";
 import { vi } from "vitest";
+import { dicaDe, focarPeloTeclado } from "../../test/dicas";
 import { rasterizarQr, type MatrizQr, type PixelsQr } from "./qr-matriz";
+
+/**
+ * O texto da dica (RIFA-045) de um controle: foca pelo teclado (a dica abre na hora), lê e tira o foco. Para os
+ * controles que a varredura `controlesSemDica` não pega (o link da prévia) e para conferir qual texto aparece.
+ */
+export function textoDaDica(controle: HTMLElement): string | null {
+  focarPeloTeclado(controle);
+  const texto = dicaDe(controle)?.textContent ?? null;
+  act(() => controle.blur());
+  return texto;
+}
 
 /** Os módulos escuros desenhados por um `d` de caminhoDosModulos ("M3 4h2v1h-2z..."); outro comando lança erro. */
 export function matrizDoCaminho(d: string, lado: number): MatrizQr {
@@ -46,6 +59,8 @@ export function pixelsDoSvg(svg: Element): PixelsQr {
 export function simularCanvas() {
   const desenhados = new WeakMap<Blob, PixelsQr>();
   const tipos: (string | undefined)[] = [];
+  /** Os canvas que geraram (ou tentaram gerar) um PNG. */
+  const usados: HTMLCanvasElement[] = [];
   let falharToBlob = false;
   /** O contexto 2D de mentira de um canvas: guarda no próprio canvas os pixels do putImageData. */
   const contextoDe = (canvas: HTMLCanvasElement) =>
@@ -76,6 +91,7 @@ export function simularCanvas() {
       tipo?: string,
     ) {
       tipos.push(tipo);
+      usados.push(this);
       if (falharToBlob) {
         callback(null);
         return;
@@ -89,6 +105,7 @@ export function simularCanvas() {
     });
   return {
     tipos,
+    usados,
     /** Os pixels que o canvas tinha quando gerou este PNG. */
     pixelsDoPng: (png: Blob | undefined) =>
       png ? (desenhados.get(png) ?? null) : null,

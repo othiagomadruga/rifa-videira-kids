@@ -1,11 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Button, Textarea, classesBotao } from "../ui";
+import { Button, ComDica, Textarea, classesBotao } from "../ui";
 import {
   TEXTO_COPIA,
   copiarTexto,
   linkWhatsAppLinkVendas,
+  numeroDoWhatsApp,
   type ResultadoCopia,
 } from "./compartilhar";
+import { DICAS } from "./textos";
 import "./compartilhar.css";
 
 type Props = {
@@ -52,33 +54,45 @@ export function CompartilharLink({
   const doLink = `da ${celulaNome}${affiliateId === undefined ? "" : ` (afiliado ${affiliateId})`}`;
   return (
     <div className="qr-compartilhar">
-      <Textarea
-        ref={refCampo}
-        rotulo={rotulo}
-        value={url}
-        readOnly
-        rows={linhasDoCampo(url)}
-        spellCheck={false}
-        autoComplete="off"
-        className="qr-compartilhar__campo"
-        onFocus={(evento) => evento.currentTarget.select()}
-      />
+      <ComDica texto={DICAS.campoLink}>
+        <Textarea
+          ref={refCampo}
+          rotulo={rotulo}
+          value={url}
+          readOnly
+          rows={linhasDoCampo(url)}
+          spellCheck={false}
+          autoComplete="off"
+          className="qr-compartilhar__campo"
+          onFocus={(evento) => evento.currentTarget.select()}
+        />
+      </ComDica>
       <div className="qr-compartilhar__acoes">
-        <Button
-          variante={destaque ? "primario" : "secundario"}
-          onClick={() => void copiar()}
+        <ComDica texto={DICAS.copiarLink}>
+          <Button
+            variante={destaque ? "primario" : "secundario"}
+            onClick={() => void copiar()}
+          >
+            Copiar link <span className="visualmente-oculto">{doLink}</span>
+          </Button>
+        </ComDica>
+        <ComDica
+          texto={
+            numeroDoWhatsApp(telefone) === ""
+              ? DICAS.enviarWhatsApp
+              : DICAS.enviarWhatsAppAoLider
+          }
         >
-          Copiar link <span className="visualmente-oculto">{doLink}</span>
-        </Button>
-        <a
-          className={classesBotao({ variante: "secundario" })}
-          href={linkWhatsAppLinkVendas({ celulaNome, url, telefone })}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Enviar no WhatsApp{" "}
-          <span className="visualmente-oculto">o link {doLink}</span>
-        </a>
+          <a
+            className={classesBotao({ variante: "secundario" })}
+            href={linkWhatsAppLinkVendas({ celulaNome, url, telefone })}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Enviar no WhatsApp{" "}
+            <span className="visualmente-oculto">o link {doLink}</span>
+          </a>
+        </ComDica>
         {extra}
       </div>
       {/* Região viva fixa (anuncia o resultado de copiar) e o mesmo texto visível. */}
