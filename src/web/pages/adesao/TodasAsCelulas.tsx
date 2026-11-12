@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  ComDica,
   EmptyState,
   Input,
   type TomBadge,
@@ -13,6 +14,7 @@ import { formatarDataHora } from "../../lib/formatadores";
 import type { AfiliadoResumo, CelulaAdesao } from "./adesao-api";
 import { EscolherCelula } from "./EscolherCelula";
 import { DialogoRemoverAfiliado } from "./RemoverAfiliado";
+import { DICAS } from "./textos";
 import {
   celulaCombina,
   lerCodigoAfiliado,
@@ -65,13 +67,15 @@ export function TodasAsCelulas({
     <section aria-labelledby={idTitulo}>
       <Card titulo={<span id={idTitulo}>Todas as células</span>}>
         <div className="pilha adesao-secao">
-          <Input
-            rotulo="Buscar célula, líder ou código"
-            type="search"
-            autoComplete="off"
-            value={busca}
-            onChange={(evento) => setBusca(evento.target.value)}
-          />
+          <ComDica texto={DICAS.buscarCelulas}>
+            <Input
+              rotulo="Buscar célula, líder ou código"
+              type="search"
+              autoComplete="off"
+              value={busca}
+              onChange={(evento) => setBusca(evento.target.value)}
+            />
+          </ComDica>
           <p className="adesao-contagem">
             {busca.trim()
               ? `${quantidade(filtradas.length, "célula encontrada", "células encontradas")} de ${celulas.length}`
@@ -243,37 +247,51 @@ function AfiliadoDaCelula({
       <div className="adesao-afiliado__linha">
         <p className="adesao-afiliado__codigo">Afiliado {codigo}</p>
         <div className="adesao-acoes">
-          <Button
-            ref={refTrocar}
-            variante="secundario"
-            aria-expanded={acao === "trocar"}
-            onClick={() => alternar("trocar", refTrocar)}
+          <ComDica
+            texto={acao === "trocar" ? DICAS.trocarAberto : DICAS.trocar}
           >
-            Trocar{" "}
-            <span className="visualmente-oculto">
-              a célula do afiliado {codigo}
-            </span>
-          </Button>
-          <Button
-            ref={refDesvincular}
-            variante="secundario"
-            aria-expanded={acao === "desvincular"}
-            onClick={() => alternar("desvincular", refDesvincular)}
-          >
-            Desvincular{" "}
-            <span className="visualmente-oculto">o afiliado {codigo}</span>
-          </Button>
-          {aoRemover && (
             <Button
+              ref={refTrocar}
               variante="secundario"
-              onClick={() => {
-                refFocoAposRemover.current = null;
-                setRemovendo(true);
-              }}
+              aria-expanded={acao === "trocar"}
+              onClick={() => alternar("trocar", refTrocar)}
             >
-              Remover{" "}
+              Trocar{" "}
+              <span className="visualmente-oculto">
+                a célula do afiliado {codigo}
+              </span>
+            </Button>
+          </ComDica>
+          <ComDica
+            texto={
+              acao === "desvincular"
+                ? DICAS.desvincularAberto
+                : DICAS.desvincular
+            }
+          >
+            <Button
+              ref={refDesvincular}
+              variante="secundario"
+              aria-expanded={acao === "desvincular"}
+              onClick={() => alternar("desvincular", refDesvincular)}
+            >
+              Desvincular{" "}
               <span className="visualmente-oculto">o afiliado {codigo}</span>
             </Button>
+          </ComDica>
+          {aoRemover && (
+            <ComDica texto={DICAS.removerAfiliado}>
+              <Button
+                variante="secundario"
+                onClick={() => {
+                  refFocoAposRemover.current = null;
+                  setRemovendo(true);
+                }}
+              >
+                Remover{" "}
+                <span className="visualmente-oculto">o afiliado {codigo}</span>
+              </Button>
+            </ComDica>
           )}
         </div>
       </div>
@@ -327,22 +345,35 @@ function AfiliadoDaCelula({
             </p>
           )}
           <div className="adesao-acoes">
-            <Button
-              variante="perigo"
-              aria-describedby={idPergunta}
-              onClick={() => void desvincular()}
-              disabled={enviando}
-              autoFocus
+            {/* Gravando: aria-disabled (RIFA-045), no Tab e com a dica dizendo por quê; o clique é barrado aqui. */}
+            <ComDica
+              texto={enviando ? DICAS.desvinculando : DICAS.confirmarDesvinculo}
             >
-              {enviando ? "Desvinculando…" : "Confirmar desvínculo"}
-            </Button>
-            <Button
-              variante="secundario"
-              onClick={() => fechar(refDesvincular)}
-              disabled={enviando}
+              <Button
+                variante="perigo"
+                aria-describedby={idPergunta}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) void desvincular();
+                }}
+                autoFocus
+              >
+                {enviando ? "Desvinculando…" : "Confirmar desvínculo"}
+              </Button>
+            </ComDica>
+            <ComDica
+              texto={enviando ? DICAS.desvinculando : DICAS.cancelarDesvinculo}
             >
-              Cancelar
-            </Button>
+              <Button
+                variante="secundario"
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) fechar(refDesvincular);
+                }}
+              >
+                Cancelar
+              </Button>
+            </ComDica>
           </div>
         </div>
       )}
@@ -398,6 +429,9 @@ function FormCodigo({
 
   function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    // Gravando, "Salvar código" fica com aria-disabled (RIFA-045) e o envio é barrado aqui: o clique, o Enter e o espaço
+    // nele e o Enter no campo chegam como envio do formulário.
+    if (enviando) return;
     const id = lerCodigoAfiliado(codigo);
     if (id === null) {
       setErro("Digite só os números do código de afiliado (ex.: 1043).");
@@ -423,10 +457,12 @@ function FormCodigo({
 
   if (celula.vinculada && !aberto) {
     return (
-      <Button variante="discreto" onClick={() => setAberto(true)}>
-        Adicionar outro código{" "}
-        <span className="visualmente-oculto">em {celula.celula_nome}</span>
-      </Button>
+      <ComDica texto={DICAS.adicionarOutroCodigo}>
+        <Button variante="discreto" onClick={() => setAberto(true)}>
+          Adicionar outro código{" "}
+          <span className="visualmente-oculto">em {celula.celula_nome}</span>
+        </Button>
+      </ComDica>
     );
   }
 
@@ -434,29 +470,33 @@ function FormCodigo({
     <form className="adesao-codigo" onSubmit={aoEnviar} noValidate>
       <div className="adesao-codigo__linha">
         <div className="adesao-codigo__campo">
-          <Input
-            rotulo={
-              <>
-                Código de afiliado{" "}
-                <span className="visualmente-oculto">
-                  ({celula.celula_nome})
-                </span>
-              </>
-            }
-            inputMode="numeric"
-            autoComplete="off"
-            value={codigo}
-            erro={erro ?? undefined}
-            onChange={(evento) => {
-              setCodigo(evento.target.value);
-              setErro(null);
-              setTroca(null);
-            }}
-          />
+          <ComDica texto={DICAS.codigoAfiliado}>
+            <Input
+              rotulo={
+                <>
+                  Código de afiliado{" "}
+                  <span className="visualmente-oculto">
+                    ({celula.celula_nome})
+                  </span>
+                </>
+              }
+              inputMode="numeric"
+              autoComplete="off"
+              value={codigo}
+              erro={erro ?? undefined}
+              onChange={(evento) => {
+                setCodigo(evento.target.value);
+                setErro(null);
+                setTroca(null);
+              }}
+            />
+          </ComDica>
         </div>
-        <Button type="submit" disabled={enviando}>
-          {enviando ? "Salvando…" : "Salvar código"}
-        </Button>
+        <ComDica texto={enviando ? DICAS.salvandoCodigo : DICAS.salvarCodigo}>
+          <Button type="submit" aria-disabled={enviando || undefined}>
+            {enviando ? "Salvando…" : "Salvar código"}
+          </Button>
+        </ComDica>
       </div>
       {troca && (
         <div className="adesao-confirmacao">
@@ -465,26 +505,39 @@ function FormCodigo({
             para esta célula?
           </p>
           <div className="adesao-acoes">
-            <Button
-              aria-describedby={idPergunta}
-              onClick={() =>
-                void salvar(
-                  troca.codigo,
-                  `Afiliado ${troca.codigo} trocado para: ${celula.celula_nome}.`,
-                )
+            <ComDica
+              texto={
+                enviando ? DICAS.salvandoCodigo : DICAS.trocarParaEstaCelula
               }
-              disabled={enviando}
-              autoFocus
             >
-              Trocar para esta célula
-            </Button>
-            <Button
-              variante="secundario"
-              onClick={() => setTroca(null)}
-              disabled={enviando}
+              <Button
+                aria-describedby={idPergunta}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando)
+                    void salvar(
+                      troca.codigo,
+                      `Afiliado ${troca.codigo} trocado para: ${celula.celula_nome}.`,
+                    );
+                }}
+                autoFocus
+              >
+                Trocar para esta célula
+              </Button>
+            </ComDica>
+            <ComDica
+              texto={enviando ? DICAS.salvandoCodigo : DICAS.cancelarTroca}
             >
-              Cancelar
-            </Button>
+              <Button
+                variante="secundario"
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) setTroca(null);
+                }}
+              >
+                Cancelar
+              </Button>
+            </ComDica>
           </div>
         </div>
       )}

@@ -374,7 +374,11 @@ describe("Acessos", () => {
     });
     conferirDicas(3);
     fireEvent.click(botao("Gerar token novo"));
-    await screen.findByRole("button", { name: "Copiar token" });
+    const copiar = await screen.findByRole("button", { name: "Copiar token" });
+    // A confirmação sai da tela no mesmo render em que o token aparece, mas o `inert` do resto da página só sai num
+    // efeito do Dialogo (e o foco vai para "Copiar token" no efeito seguinte), que pode rodar depois de o findBy
+    // voltar: sob carga, a varredura via a página toda inert e não contava nenhum controle. Espera o efeito.
+    await waitFor(() => expect(copiar).toHaveFocus());
     conferirDicas(15);
   });
 });

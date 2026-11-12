@@ -503,3 +503,14 @@ export function tituloSemAdesao(quantas: number): string {
     ? "1 célula ainda não aderiu"
     : `${formatarNumero(quantas)} células ainda não aderiram`;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// visão individual. Dizem para que serve e o que acontece, sem repetir o rótulo. O "Sair" da moldura fica em
+// textos-moldura.ts (vai no pacote inicial, como o minha-moldura.css); os do link de vendas, em components/qr.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  dadosDaCurva:
+    "Abre uma tabela, dia a dia, com o esperado e o realizado acumulados, em % da meta.",
+} as const;

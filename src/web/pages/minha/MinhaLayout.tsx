@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
-import { Button, ErrorState, Loading, Marca } from "../../components/ui";
+import {
+  Button,
+  ComDica,
+  ErrorState,
+  Loading,
+  Marca,
+} from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
+import { DICAS_DA_MOLDURA } from "./textos-moldura";
 import "./minha-moldura.css";
 
 type Saida = { saindo: boolean; erro: string | null };
@@ -17,6 +24,8 @@ export function MinhaLayout() {
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
 
   async function sairDoSistema() {
+    // Saindo, o botão fica com aria-disabled (RIFA-045: continua no Tab, com a dica dizendo por quê): barra aqui.
+    if (saida.saindo) return;
     setSaida({ saindo: true, erro: null });
     try {
       await sair();
@@ -36,13 +45,19 @@ export function MinhaLayout() {
             complemento={usuario ? ROTULO_PAPEL[usuario.papel] : undefined}
           />
           {usuario && (
-            <Button
-              variante="secundario"
-              disabled={saida.saindo}
-              onClick={() => void sairDoSistema()}
+            <ComDica
+              texto={
+                saida.saindo ? DICAS_DA_MOLDURA.saindo : DICAS_DA_MOLDURA.sair
+              }
             >
-              {saida.saindo ? "Saindo…" : "Sair"}
-            </Button>
+              <Button
+                variante="secundario"
+                aria-disabled={saida.saindo || undefined}
+                onClick={() => void sairDoSistema()}
+              >
+                {saida.saindo ? "Saindo…" : "Sair"}
+              </Button>
+            </ComDica>
           )}
         </div>
         {saida.erro && (

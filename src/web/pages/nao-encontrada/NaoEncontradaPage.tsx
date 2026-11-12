@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router";
-import { classesBotao, PageHeader } from "../../components/ui";
+import { classesBotao, ComDica, PageHeader } from "../../components/ui";
+import { dicaVoltarAoInicio } from "./textos";
 
 type Props = {
   /** Para onde o botão leva: "/" nas telas abertas, "/coordenacao" na coordenação. */
@@ -20,9 +21,14 @@ export function NaoEncontradaPage({ inicio = "/" }: Props) {
         }
       />
       <div>
-        <Link to={inicio} className={classesBotao({ variante: "secundario" })}>
-          Voltar ao início
-        </Link>
+        <ComDica texto={dicaVoltarAoInicio(inicio)}>
+          <Link
+            to={inicio}
+            className={classesBotao({ variante: "secundario" })}
+          >
+            Voltar ao início
+          </Link>
+        </ComDica>
       </div>
     </>
   );

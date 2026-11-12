@@ -6,12 +6,13 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { Aviso, Button, Card } from "../../components/ui";
+import { Aviso, Button, Card, ComDica } from "../../components/ui";
 import { formatarDataHora, formatarMoeda } from "../../lib/formatadores";
 import type { AfiliadoResumo, CelulaAdesao } from "./adesao-api";
 import { EscolherCelula } from "./EscolherCelula";
 import { quantidade, tempoRelativo } from "./formatos";
 import { DialogoRemoverAfiliado } from "./RemoverAfiliado";
+import { DICAS } from "./textos";
 import {
   avisoDaFila,
   type AoRemoverAfiliado,
@@ -260,32 +261,37 @@ function ItemOrfao({
         <p className="adesao-item__detalhe">Nota: {afiliado.rotulo}</p>
       )}
       {/* Aberto, o botão fica secundário: a ação principal passa a ser a confirmação da célula. */}
-      <Button
-        ref={(botao) => {
-          refBotao.current = botao;
-          registrarBotao(codigo, botao);
-        }}
-        variante={aberto ? "secundario" : "primario"}
-        larguraTotal
-        className="adesao-alvo-foco"
-        aria-expanded={aberto}
-        aria-controls={aberto ? idPainel : undefined}
-        onClick={() => (aberto ? fechar() : setAberto(true))}
-      >
-        Vincular <span className="visualmente-oculto">o afiliado {codigo}</span>
-      </Button>
-      {aoRemover && (
+      <ComDica texto={aberto ? DICAS.vincularAberto : DICAS.vincular}>
         <Button
-          variante="discreto"
-          larguraTotal
-          onClick={() => {
-            refFocoAposRemover.current = null;
-            setRemovendo(true);
+          ref={(botao) => {
+            refBotao.current = botao;
+            registrarBotao(codigo, botao);
           }}
+          variante={aberto ? "secundario" : "primario"}
+          larguraTotal
+          className="adesao-alvo-foco"
+          aria-expanded={aberto}
+          aria-controls={aberto ? idPainel : undefined}
+          onClick={() => (aberto ? fechar() : setAberto(true))}
         >
-          Remover{" "}
+          Vincular{" "}
           <span className="visualmente-oculto">o afiliado {codigo}</span>
         </Button>
+      </ComDica>
+      {aoRemover && (
+        <ComDica texto={DICAS.removerAfiliado}>
+          <Button
+            variante="discreto"
+            larguraTotal
+            onClick={() => {
+              refFocoAposRemover.current = null;
+              setRemovendo(true);
+            }}
+          >
+            Remover{" "}
+            <span className="visualmente-oculto">o afiliado {codigo}</span>
+          </Button>
+        </ComDica>
       )}
       {removendo && aoRemover && (
         <DialogoRemoverAfiliado

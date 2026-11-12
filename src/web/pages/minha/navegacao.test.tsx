@@ -13,6 +13,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import { guardarDestino, retirarDestino } from "../../lib/sessao";
 import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
+import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
   renderizarRota,
@@ -27,6 +32,7 @@ import {
   visaoDe,
   type ApiFalsa,
 } from "./teste-apoio";
+import { DICAS_DA_MOLDURA } from "./textos-moldura";
 
 /** Token fictício no formato do contrato (43 caracteres base64url). */
 const TOKEN = "TokenFicticioDeTeste_0123456789-abcdefghijk";
@@ -352,7 +358,44 @@ describe("CA1 e CA5: Sair e endereço desconhecido em /minha", () => {
       ),
     ).toHaveAttribute("role", "alert");
     expect(roteador.state.location.pathname).toBe("/minha");
-    expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();
+    esperarDisponivel(screen.getByRole("button", { name: "Sair" }));
+  });
+
+  it("saindo: 'Saindo…' fica indisponível com aria-disabled (no Tab, com o motivo) e não manda outro POST", async () => {
+    const api = simular(LIDER);
+    let responder: (resposta: Response) => void = () => {};
+    api.proxima(
+      "POST",
+      "/api/sessao/sair",
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+    const { roteador } = renderizarRota("/minha", { usuario: LIDER });
+    await screen.findByRole("heading", { level: 2, name: "Ranking" });
+    const sair = screen.getByRole("button", { name: "Sair" });
+    esperarDisponivel(sair);
+
+    act(() => sair.focus());
+    fireEvent.click(sair);
+    // RIFA-045: o mesmo botão, com o foco (com o disabled, caía no <body>); clique, Enter e espaço não fazem nada.
+    expect(sair).toHaveTextContent("Saindo…");
+    expect(sair).toHaveFocus();
+    await conferirIndisponivel(sair, {
+      dica: DICAS_DA_MOLDURA.saindo,
+      semEfeito: () => {
+        expect(api.chamadasA("POST", "/api/sessao/sair")).toHaveLength(1);
+        expect(roteador.state.location.pathname).toBe("/minha");
+      },
+      css: [
+        lerCss("components/ui/Button.css"),
+        lerCss("pages/minha/minha-moldura.css"),
+      ],
+    });
+
+    await act(async () => responder(new Response(null, { status: 204 })));
+    await waitFor(() =>
+      expect(roteador.state.location.pathname).toBe("/entrar"),
+    );
+    expect(api.chamadasA("POST", "/api/sessao/sair")).toHaveLength(1);
   });
 
   it("endereço desconhecido dentro de /minha: a 404 na moldura, com o início em /minha", async () => {

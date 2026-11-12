@@ -14,8 +14,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../App";
 import { guardarDestino } from "../../lib/sessao";
 import { rotas } from "../../rotas";
+import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import { FORMATO_TOKEN } from "./AcessoPage";
+import { DICAS } from "./textos";
 
 /** Token fictício no formato do contrato (43 caracteres base64url). */
 const TOKEN = "TokenFicticioDeTeste_0123456789-abcdefghijk";
@@ -119,7 +125,7 @@ describe("CA1: o link no navegador (barra de endereço e histórico)", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: TITULO }),
     ).toBeInTheDocument();
-    expect(botaoEntrar()).toBeEnabled();
+    esperarDisponivel(botaoEntrar());
     await waitFor(() => expect(window.location.pathname).toBe("/acesso"));
     expect(replaceState).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -260,17 +266,28 @@ describe("CA1: confirmação e resposta da API", () => {
     ]);
   });
 
-  it("enquanto entra, o botão fica ocupado e um segundo toque não repete o POST", async () => {
+  it("enquanto entra, o botão fica ocupado (aria-disabled: no Tab, com o motivo) e um segundo toque não repete o POST", async () => {
     let responder: (resposta: Response) => void = () => {};
     const { chamadas } = simularApi(
       () => new Promise<Response>((resolver) => (responder = resolver)),
     );
     const { roteador } = renderizarRota(`/acesso/${TOKEN}`, { usuario: null });
 
-    fireEvent.click(botaoEntrar());
+    const entrar = botaoEntrar();
+    act(() => entrar.focus());
+    fireEvent.click(entrar);
     const ocupado = await screen.findByRole("button", { name: "Entrando…" });
-    expect(ocupado).toBeDisabled();
-    fireEvent.click(ocupado);
+    // RIFA-045: o mesmo botão, com o foco (com o disabled, caía no <body>); clique, Enter e espaço não repetem o POST.
+    expect(ocupado).toBe(entrar);
+    expect(ocupado).toHaveFocus();
+    await conferirIndisponivel(ocupado, {
+      dica: DICAS.entrando,
+      semEfeito: () => expect(daSessao(chamadas)).toHaveLength(1),
+      css: [
+        lerCss("components/ui/Button.css"),
+        lerCss("pages/acesso/acesso.css"),
+      ],
+    });
     await act(async () => responder(respostaJson({ usuario: USUARIO })));
 
     await waitFor(() =>

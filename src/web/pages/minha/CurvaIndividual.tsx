@@ -5,7 +5,7 @@ import {
   formatarNumero,
   formatarPercentual,
 } from "../../lib/formatadores";
-import { dataCurta, descricaoDaCurva } from "./textos";
+import { DICAS, dataCurta, descricaoDaCurva } from "./textos";
 
 const percentual = (pontosBase: number) => formatarPercentual(pontosBase);
 
@@ -53,6 +53,7 @@ export function CurvaIndividual({ visao }: { visao: RespostaVisaoIndividual }) {
                 : null
             }
             rotuloAtual="hoje"
+            dicaDados={DICAS.dadosDaCurva}
           />
         </>
       )}

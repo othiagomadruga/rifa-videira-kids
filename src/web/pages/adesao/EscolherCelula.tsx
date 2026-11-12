@@ -1,8 +1,9 @@
 import { useId, useState, type FormEvent } from "react";
-import { Button, Input } from "../../components/ui";
+import { Button, ComDica, Input } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import type { CelulaAdesao } from "./adesao-api";
 import { celulaCombina, ordenarParaEscolha } from "./formatos";
+import { DICAS } from "./textos";
 
 /** Quantas células a lista mostra de uma vez (a busca encontra as outras). */
 export const LIMITE_OPCOES = 8;
@@ -46,6 +47,9 @@ export function EscolherCelula({
 
   async function confirmar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    // Gravando, o botão fica com aria-disabled (RIFA-045: continua no Tab, com a dica dizendo por quê) e o envio é
+    // barrado aqui: o clique, o Enter e o espaço nele e o Enter no campo de busca chegam como envio do formulário.
+    if (enviando) return;
     if (!escolhida) {
       setErro("Escolha a célula na lista.");
       return;
@@ -62,39 +66,54 @@ export function EscolherCelula({
 
   return (
     <form className="adesao-escolha" onSubmit={confirmar} noValidate>
-      <Input
-        rotulo="Buscar célula ou líder"
-        type="search"
-        autoComplete="off"
-        value={busca}
-        onChange={(evento) => setBusca(evento.target.value)}
-        autoFocus
-      />
+      <ComDica texto={DICAS.buscarNaEscolha}>
+        <Input
+          rotulo="Buscar célula ou líder"
+          type="search"
+          autoComplete="off"
+          value={busca}
+          onChange={(evento) => setBusca(evento.target.value)}
+          autoFocus
+        />
+      </ComDica>
       <fieldset className="adesao-escolha__opcoes">
         <legend className="visualmente-oculto">{legenda}</legend>
-        {visiveis.map((celula) => (
-          <label key={celula.celula_id} className="adesao-opcao">
-            <input
-              type="radio"
-              name={grupo}
-              value={celula.celula_id}
-              checked={celula.celula_id === escolhidaId}
-              onChange={() => {
-                setEscolhidaId(celula.celula_id);
-                setErro(null);
-              }}
-            />
-            <span className="adesao-opcao__textos">
-              <span className="adesao-opcao__nome">{celula.celula_nome}</span>
-              <span className="adesao-opcao__detalhe">
-                Líder: {celula.lider_nome} ·{" "}
-                {celula.afiliados.length > 0
-                  ? `já tem o afiliado ${celula.afiliados.join(", ")}`
-                  : "sem afiliado"}
-              </span>
-            </span>
-          </label>
-        ))}
+        {visiveis.map((celula) => {
+          // A dica fica na linha toda (rádio e textos); o rádio a tem no fim da descrição (`id` da dica).
+          const idDica = `${grupo}-${celula.celula_id}-dica`;
+          return (
+            <ComDica
+              key={celula.celula_id}
+              id={idDica}
+              texto={DICAS.opcaoCelula}
+            >
+              <label className="adesao-opcao">
+                <input
+                  type="radio"
+                  name={grupo}
+                  value={celula.celula_id}
+                  checked={celula.celula_id === escolhidaId}
+                  aria-describedby={idDica}
+                  onChange={() => {
+                    setEscolhidaId(celula.celula_id);
+                    setErro(null);
+                  }}
+                />
+                <span className="adesao-opcao__textos">
+                  <span className="adesao-opcao__nome">
+                    {celula.celula_nome}
+                  </span>
+                  <span className="adesao-opcao__detalhe">
+                    Líder: {celula.lider_nome} ·{" "}
+                    {celula.afiliados.length > 0
+                      ? `já tem o afiliado ${celula.afiliados.join(", ")}`
+                      : "sem afiliado"}
+                  </span>
+                </span>
+              </label>
+            </ComDica>
+          );
+        })}
       </fieldset>
       <p className="adesao-escolha__contagem">
         {encontradas.length === 0
@@ -109,16 +128,36 @@ export function EscolherCelula({
         </p>
       )}
       <div className="adesao-acoes">
-        <Button type="submit" disabled={enviando}>
-          {enviando
-            ? "Salvando…"
-            : escolhida
-              ? textoConfirmar(escolhida)
-              : "Confirmar"}
-        </Button>
-        <Button variante="secundario" onClick={aoCancelar} disabled={enviando}>
-          Cancelar
-        </Button>
+        <ComDica
+          texto={
+            enviando
+              ? DICAS.salvandoEscolha
+              : escolhida
+                ? DICAS.confirmarEscolha
+                : DICAS.confirmarSemEscolha
+          }
+        >
+          <Button type="submit" aria-disabled={enviando || undefined}>
+            {enviando
+              ? "Salvando…"
+              : escolhida
+                ? textoConfirmar(escolhida)
+                : "Confirmar"}
+          </Button>
+        </ComDica>
+        <ComDica
+          texto={enviando ? DICAS.salvandoEscolha : DICAS.cancelarEscolha}
+        >
+          <Button
+            variante="secundario"
+            aria-disabled={enviando || undefined}
+            onClick={() => {
+              if (!enviando) aoCancelar();
+            }}
+          >
+            Cancelar
+          </Button>
+        </ComDica>
       </div>
     </form>
   );
