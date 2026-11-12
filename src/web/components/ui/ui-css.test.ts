@@ -141,3 +141,47 @@ describe("DataTable: a caixa com rolagem segura o que é absoluto numa célula",
     );
   });
 });
+
+describe("Button: o indisponível não reage ao mouse (RIFA-045)", () => {
+  // Os seletores com :hover ou :active do Button.css (cada um da lista separada por vírgulas, sem repetir).
+  const seletores = [
+    ...new Set(
+      declaracoes(lerArquivo("./Button.css")).flatMap(({ blocos }) =>
+        blocos
+          .at(-1)!
+          .split(/\s*,\s*/)
+          .filter((seletor) => /:(hover|active)/.test(seletor)),
+      ),
+    ),
+  ];
+
+  /** O seletor pula o desabilitado de verdade e o indisponível com aria-disabled (que continua focável). */
+  const pulaOIndisponivel = (seletor: string) =>
+    seletor.includes(":not(:disabled)") &&
+    seletor.includes(':not([aria-disabled="true"])');
+
+  it('com aria-disabled="true" (ex.: "Baixando…", "Carregar mais" carregando), nem o passar do mouse nem o pressionar mudam o botão', () => {
+    // Os quatro :hover das variantes, o subir 1 px no mouse e o afundar ao pressionar.
+    expect(seletores.length).toBeGreaterThanOrEqual(6);
+    expect(seletores.filter((seletor) => !pulaOIndisponivel(seletor))).toEqual(
+      [],
+    );
+    // Sem pointer-events: none, o mouse continua chegando ao botão e a dica dele aparece (Dica.test.tsx, CA1).
+    expect(
+      declaracoes(lerArquivo("./Button.css")).filter(
+        ({ propriedade }) => propriedade === "pointer-events",
+      ),
+    ).toEqual([]);
+  });
+
+  it("o leitor de seletores não passa por acaso (um :hover sem a exceção é pego)", () => {
+    expect(pulaOIndisponivel(".ui-button--primario:hover:not(:disabled)")).toBe(
+      false,
+    );
+    expect(
+      pulaOIndisponivel(
+        '.ui-button--primario:hover:not(:disabled):not([aria-disabled="true"])',
+      ),
+    ).toBe(true);
+  });
+});

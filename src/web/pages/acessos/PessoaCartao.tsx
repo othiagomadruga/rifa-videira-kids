@@ -1,11 +1,12 @@
 import type { LinkAcesso, Usuario } from "../../../shared/contracts";
-import { Badge, Button, Card } from "../../components/ui";
+import { Badge, Button, Card, ComDica } from "../../components/ui";
 import {
   formatarData,
   formatarDataHora,
   formatarNumero,
 } from "../../lib/formatadores";
 import { ROTULO_PAPEL } from "../../lib/sessao";
+import { DICAS } from "./textos";
 
 /** Ids dos botões de cada pessoa (para devolver o foco depois de revogar um link). */
 export const idBotaoGerar = (usuarioId: number) => `acessos-gerar-${usuarioId}`;
@@ -94,14 +95,22 @@ export function PessoaCartao({
                     ? `Último uso em ${formatarDataHora(link.ultimo_uso_em)}.`
                     : "Ainda não usado."}
                 </p>
-                <Button variante="secundario" onClick={() => aoRevogar(link)}>
-                  Revogar link{" "}
-                  <span className="visualmente-oculto">
-                    de {pessoa.nome} criado em{" "}
-                    {formatarDataHora(link.criado_em)}
-                    {link.desta_sessao && ", o deste aparelho"}
-                  </span>
-                </Button>
+                <ComDica
+                  texto={
+                    link.desta_sessao
+                      ? DICAS.revogarLinkDesteAparelho
+                      : DICAS.revogarLink
+                  }
+                >
+                  <Button variante="secundario" onClick={() => aoRevogar(link)}>
+                    Revogar link{" "}
+                    <span className="visualmente-oculto">
+                      de {pessoa.nome} criado em{" "}
+                      {formatarDataHora(link.criado_em)}
+                      {link.desta_sessao && ", o deste aparelho"}
+                    </span>
+                  </Button>
+                </ComDica>
               </li>
             ))}
           </ul>
@@ -119,35 +128,49 @@ export function PessoaCartao({
         )}
         <div className="acessos-acoes">
           {pessoa.ativo && (
-            <Button
-              id={idBotaoGerar(pessoa.id)}
-              variante="secundario"
-              onClick={aoGerarLink}
-              aria-disabled={ocupada !== null || undefined}
+            <ComDica
+              texto={ocupada !== null ? DICAS.ocupado : DICAS.gerarLinkNovo}
             >
-              {ocupada === "gerando" ? "Gerando…" : "Gerar link novo"}{" "}
-              <span className="visualmente-oculto">para {pessoa.nome}</span>
-            </Button>
+              <Button
+                id={idBotaoGerar(pessoa.id)}
+                variante="secundario"
+                onClick={aoGerarLink}
+                aria-disabled={ocupada !== null || undefined}
+              >
+                {ocupada === "gerando" ? "Gerando…" : "Gerar link novo"}{" "}
+                <span className="visualmente-oculto">para {pessoa.nome}</span>
+              </Button>
+            </ComDica>
           )}
           {!(ehVoce && pessoa.ativo) && (
-            <Button
-              id={idBotaoAtivo(pessoa.id)}
-              variante="secundario"
-              onClick={() => {
-                // Indisponível (outra ação desta pessoa em andamento): não abre a confirmação.
-                if (ocupada !== null) return;
-                if (pessoa.ativo) aoDesativar();
-                else aoReativar();
-              }}
-              aria-disabled={ocupada !== null || undefined}
+            <ComDica
+              texto={
+                ocupada !== null
+                  ? DICAS.ocupado
+                  : pessoa.ativo
+                    ? DICAS.desativarAcesso
+                    : DICAS.reativarAcesso
+              }
             >
-              {pessoa.ativo
-                ? "Desativar acesso"
-                : ocupada === "reativando"
-                  ? "Reativando…"
-                  : "Reativar acesso"}{" "}
-              <span className="visualmente-oculto">de {pessoa.nome}</span>
-            </Button>
+              <Button
+                id={idBotaoAtivo(pessoa.id)}
+                variante="secundario"
+                onClick={() => {
+                  // Indisponível (outra ação desta pessoa em andamento): não abre a confirmação.
+                  if (ocupada !== null) return;
+                  if (pessoa.ativo) aoDesativar();
+                  else aoReativar();
+                }}
+                aria-disabled={ocupada !== null || undefined}
+              >
+                {pessoa.ativo
+                  ? "Desativar acesso"
+                  : ocupada === "reativando"
+                    ? "Reativando…"
+                    : "Reativar acesso"}{" "}
+                <span className="visualmente-oculto">de {pessoa.nome}</span>
+              </Button>
+            </ComDica>
           )}
         </div>
       </div>

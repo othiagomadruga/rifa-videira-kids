@@ -3,12 +3,12 @@
 - Migration: [`migrations/0001_init.sql`](../migrations/0001_init.sql), aplicada depois de `0000_setup.sql` (tabela `_meta`, RIFA-001). O acesso da equipe (`0002_acessos.sql`) e os papéis da hierarquia (`0006_acesso_hierarquia.sql`, RIFA-014) estão na seção [`usuarios`, `links_acesso` e `sessoes`](#usuarios-links_acesso-e-sessoes-acesso-da-equipe).
 - Conferência pelo CSV da Rifei (RIFA-012): [`0004_conferencia.sql`](../migrations/0004_conferencia.sql), aditiva, com a tabela [`recuperacoes`](#recuperacoes-migração-0004-rifa-012) e as colunas `pedidos.origem` e `pedidos.recuperacao_id`. Não depende da 0005 à 0007 nem elas dela: aplicada antes ou depois delas, dá o mesmo schema (`src/worker/test/migracao-0004-depois.test.ts`).
 - Tipos e schemas espelho: `src/shared/contracts/dominio.ts`.
-- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007, a 0008 e a 0009 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
-- Índices só de leitura: `0003_vendas_por_dia.sql` (painel; recriado na 0008), `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025) e o da lista dos desconsiderados (0008), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts`, `src/worker/db/pedidos-webhook-desempenho.test.ts`, `src/worker/db/mapa-ddd-desempenho.test.ts`, `src/worker/routes/painel-desempenho.test.ts`, `src/worker/routes/minha-desempenho.test.ts` e `src/worker/routes/reconciliacao-desempenho.test.ts`).
+- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007, a 0008, a 0009 e a 0010 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
+- Índices só de leitura: `0003_vendas_por_dia.sql` (painel; recriado na 0008), `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025) e o da lista dos desconsiderados (0008), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts`, `src/worker/db/pedidos-webhook-desempenho.test.ts`, `src/worker/db/mapa-ddd-desempenho.test.ts`, `src/worker/routes/painel-desempenho.test.ts`, `src/worker/routes/minha-desempenho.test.ts`, `src/worker/routes/reconciliacao-desempenho.test.ts` e `src/worker/db/links-vendas.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
 - Regras do admin (Sprint 6, D20): [`0008_regras_campanha.sql`](../migrations/0008_regras_campanha.sql), aditiva, com as chaves e as mensagens em `campanhas`, a desconsideração em `pedidos`, o índice da 0003 recriado, o índice da lista dos desconsiderados e a view recriada. Como foi feita e por quê: [seção 9](#9-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20).
 - Token do webhook gerado pela tela (RIFA-039, D21): [`0009_token_webhook.sql`](../migrations/0009_token_webhook.sql), aditiva, com a tabela `token_webhook` (uma linha no máximo, só o SHA-256 do token). Aplicada depois da 0008; como foi feita, as consultas e o que foi medido: [seção 10](#10-migração-0009_token_webhooksql-rifa-039-d21).
-- Link de vendas de cada célula (RIFA-046, D24): `0010_link_vendas.sql` (**plano**, a -db aplica), aditiva, com a coluna `campanhas.link_vendas_modelo` (o modelo do link de afiliado da Rifei, só do admin). Plano e consultas: [seção 11](#11-migração-0010_link_vendassql-rifa-046-d24-plano).
+- Link de vendas de cada célula (RIFA-046, D24): [`0010_link_vendas.sql`](../migrations/0010_link_vendas.sql), aditiva, com a coluna `campanhas.link_vendas_modelo` (o modelo do link de afiliado da Rifei, só do admin). Aplicada depois da 0009; as consultas e o que foi medido: [seção 11](#11-migração-0010_link_vendassql-rifa-046-d24).
 
 ## 1. Visão geral
 
@@ -70,7 +70,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |
 | `acesso_discipuladores`, `acesso_redes` | INTEGER 0/1 | padrão 1 (0008): as chaves `acesso.discipuladores` e `acesso.redes` |
 | `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 | o modelo de cada mensagem do WhatsApp (0008); NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar. Um modelo salvo igual ao padrão é gravado como NULL |
-| `link_vendas_modelo` | TEXT NULL, 1–300 | o modelo do link de vendas (0010, D24; plano): `https://rifei.com.br/...` com `{slug}` e `{afiliado}`, conferido pelo contrato (`problemasDoModeloLinkVendas`); NULL = o PO ainda não confirmou o formato com a Rifei, e nenhuma célula tem link. Só o admin muda (`PUT /api/admin/links-vendas/modelo`); o PUT da campanha nunca escreve nele |
+| `link_vendas_modelo` | TEXT NULL, 1–300 | o modelo do link de vendas (0010, D24): `https://rifei.com.br/...` com `{slug}` e `{afiliado}`, conferido pelo contrato (`problemasDoModeloLinkVendas`); NULL = o PO ainda não confirmou o formato com a Rifei, e nenhuma célula tem link. Só o admin muda (`PUT /api/admin/links-vendas/modelo`); o PUT da campanha nunca escreve nele |
 | `criado_em`, `atualizado_em` | TEXT | instantes UTC |
 
 O fim da campanha não é guardado: é `data_inicio + soma dos dias dos períodos − 1`.
@@ -459,13 +459,14 @@ CREATE TABLE token_webhook (
   subconsulta do resumo, o UPSERT 1; sem credencial, 7); o 409 lê 3 (sessão 2 e a linha do token). O GET lê 3 mais a
   última entrega (6 com poucas entregas; ~8 com 3 mil, `ULTIMA_ENTREGA`).
 
-## 11. Migração `0010_link_vendas.sql` (RIFA-046; D24; plano)
+## 11. Migração `0010_link_vendas.sql` (RIFA-046; D24)
 
-A aplicar na tarefa -db (RIFA-046-db), depois da `0009_token_webhook.sql`, no mesmo merge que as consultas de
+Aplicada na tarefa -db (RIFA-046-db), depois da `0009_token_webhook.sql`, no mesmo merge que as consultas de
 `src/worker/db/links-vendas.ts`. Aditiva: uma coluna nova em `campanhas`, que nasce NULL (nenhuma célula tem link até o
-admin gravar o modelo). O plano foi conferido no SQLite 3.53.1 na escrita do contrato, com todas as migrações
-aplicadas antes: a coluna nasce NULL, o CHECK recusa o vazio e 301 caracteres, e o UPSERT do PUT da campanha (que
-nomeia as colunas) não apaga o modelo.
+admin gravar o modelo). O plano foi conferido no SQLite 3.53.1 na escrita do contrato e de novo no D1 local do workerd,
+sobre dados das migrações anteriores (`src/worker/test/migrations.test.ts`, "0010 sobre dados que já existiam"): nenhuma
+outra coluna nem linha muda, a coluna nasce NULL, o CHECK recusa o vazio e 301 caracteres, e o UPSERT do PUT da
+campanha (que nomeia as colunas) não apaga o modelo.
 
 ```sql
 -- 0010_link_vendas.sql: modelo do link de vendas de cada célula (RIFA-046). Aplica-se depois de 0009. Documentação:
@@ -483,15 +484,48 @@ ALTER TABLE campanhas ADD COLUMN link_vendas_modelo TEXT
   CHECK (link_vendas_modelo IS NULL OR length(link_vendas_modelo) BETWEEN 1 AND 300);
 ```
 
-- **Leitura** (um `db.batch`, sem pedidos): `SELECT id, slug_rifei, link_vendas_modelo FROM campanhas WHERE ativa = 1`
-  (índice `campanhas_uma_ativa`); as células do escopo com a hierarquia (`celulas` → `discipuladores` → `redes`; só
-  `lider_nome`, nunca o telefone nem o e-mail); e `SELECT affiliate_id, celula_id FROM afiliados WHERE celula_id IN
-  (...) ORDER BY celula_id, vinculado_em DESC, affiliate_id DESC`, com o plano `SEARCH afiliados USING INDEX
-  afiliados_por_celula (celula_id=?)` e uma B-tree temporária para os dois últimos termos da ordem (poucas linhas por
-  célula; se a -db preferir, ordena no Worker). A -db trava as linhas lidas e os planos.
-- **Gravação** (`PUT`, um `db.batch`): o registro na trilha com a mesma condição do UPDATE, antes dele, e
-  `UPDATE campanhas SET link_vendas_modelo = ?1, atualizado_em = <agora> WHERE ativa = 1 AND link_vendas_modelo IS NOT
-  ?1` (`IS NOT` compara também o NULL: o mesmo modelo de novo não muda nada e não registra).
-- Teste da migração (`src/worker/test/migrations.test.ts`): a 0010 sobre dados das anteriores (nenhuma outra coluna
-  nem linha muda; a coluna nasce NULL), o CHECK (vazio e 301 caracteres recusados; 1 e 300 aceitos) e o UPSERT do PUT
-  da campanha mantendo o modelo.
+- **Leitura** (`lerLinksVendas`, um `db.batch`, sem pedidos e sem cache): `LER_CAMPANHA_LINKS_VENDAS` (`SELECT id,
+  slug_rifei, link_vendas_modelo FROM campanhas WHERE ativa = 1`, plano `SEARCH campanhas USING INDEX
+  campanhas_uma_ativa (ativa=?)`); as células do escopo com a hierarquia (`celulas` → `discipuladores` → `redes`; só
+  `lider_nome`, nunca o telefone nem o e-mail), com `c.id = ?1` (líder), `c.discipulador_id = ?1` (discipulador),
+  `d.rede_id = ?1` (rede) ou todas (coordenação); e `SELECT affiliate_id, celula_id, vinculado_em FROM afiliados WHERE
+  <as células do escopo> ORDER BY celula_id` (nunca o `rotulo`), sempre pelo índice `afiliados_por_celula`:
+  `celula_id = ?1` no líder, `celula_id IN (subconsulta das células do alvo)` no discipulador e na rede, e
+  `celula_id IS NOT NULL` na coordenação (desce pelo índice só pelos vinculados, sem ler as células de novo).
+- **A ordem dos links no Worker** (a opção que o plano deixava): o SQL ordena só por `celula_id`, que o próprio índice
+  dá; a ordem dentro de cada célula (`vinculado_em` decrescente; empate, `affiliate_id` decrescente) é da montagem
+  pura (`src/worker/lib/links-vendas.ts`, testada sem banco). O `ORDER BY celula_id, vinculado_em DESC, affiliate_id
+  DESC` do plano punha uma B-tree temporária, que lia mais uma linha por afiliado (84 em vez de 42 na coordenação, no
+  volume abaixo); e, sem nenhum `ORDER BY`, o planejador lia a tabela inteira na coordenação (`SCAN afiliados`, os sem
+  célula também). A ordem das células é a dos acessos (`src/worker/lib/ordem-hierarquia.ts`, `Intl.Collator("pt-BR")`).
+- **Gravação** (`salvarModeloLinkVendas`, `PUT`, um `db.batch`): `REGISTRAR_MODELO_LINK_VENDAS` (o registro na trilha,
+  `campanha.salvar`, alvo `campanha:<id>`, lendo o antes da própria linha da campanha ativa e com a MESMA condição do
+  UPDATE, antes dele), `GRAVAR_MODELO_LINK_VENDAS` (`UPDATE campanhas SET link_vendas_modelo = ?1, atualizado_em = ?2
+  WHERE ativa = 1 AND link_vendas_modelo IS NOT ?1`; `?2` é o instante da trilha) e as três leituras da coordenação. O
+  `IS NOT` compara também o NULL: o mesmo modelo de novo não muda nada e não registra. O resumo: "Modelo do link de
+  vendas: <antes> → <depois>", com "(vazio)" no lugar do NULL (até 629 caracteres, cabe nos 1.000 da coluna).
+- **Medido** no D1 local do workerd (`meta.rows_read`; `src/worker/db/links-vendas.test.ts`), com 2 redes, 6
+  discipuladores e 36 células, 42 afiliados vinculados (6 células com dois), 2 sem célula e ~7 mil pedidos aprovados
+  (que a leitura não toca; o dobro de pedidos lê as mesmas linhas):
+
+  | Escopo | Campanha | Células | Afiliados | Lote | Sessão | Idas |
+  |---|---|---|---|---|---|---|
+  | líder (1 célula, 2 afiliados) | 1 | 3 | 3 | 7 | 5 | 2 |
+  | discipulador (6 células, 12 afiliados) | 1 | 9 | 31 | 41 | 5 | 2 |
+  | rede (18 células, 24 afiliados) | 1 | 26 | 85 | 112 | 4 | 2 |
+  | coordenação (36 células, 42 afiliados) | 1 | 108 | 42 | 151 | 2 | 2 |
+
+  A sessão é a consulta de toda rota autenticada (no discipulador e na rede, com a chave de acesso do papel da D20). O
+  PUT do modelo: 2 idas (a sessão e o lote); a trilha lê 2 linhas e escreve 2 (a linha e a entrada do índice
+  `auditoria_por_usuario`), o UPDATE lê 1 e escreve 1, e a lista lê o mesmo que a coordenação; o mesmo modelo de novo
+  lê 1 + 1 e não escreve nada.
+- Os planos, travados por `EXPLAIN QUERY PLAN` no mesmo teste: as células pela chave (líder), por
+  `celulas_por_discipulador` (discipulador), por `discipuladores_por_rede` e `celulas_por_discipulador` (rede) ou
+  `SCAN c` com o discipulador e a rede pela chave (coordenação); os afiliados por `afiliados_por_celula (celula_id=?)`
+  (com `LIST SUBQUERY` pelos índices da hierarquia no discipulador e na rede) ou `(celula_id>?)` na coordenação, sem
+  B-tree temporária.
+- Teste da migração (`src/worker/test/migrations.test.ts`): a 0010 sobre dados das anteriores (todas as tabelas
+  iguais, linha por linha, inclusive o token do webhook e o telefone e o e-mail do líder; cada campanha ganha só a
+  coluna nova, NULL), o CHECK (vazio, 301 caracteres e um modelo de 301 recusados; NULL, 1, 300, um endereço fora das
+  regras do contrato e o modelo de exemplo aceitos: o banco só confere o tamanho) e o UPSERT do PUT da campanha
+  (`salvarCampanhaAtiva`, com e sem os grupos do admin) mantendo o modelo.

@@ -15,13 +15,14 @@ import {
   type TipoMensagem,
   type ValoresMensagem,
 } from "../../../shared/contracts";
-import { Aviso, Button, Card, Textarea } from "../../components/ui";
+import { Aviso, Button, Card, ComDica, Textarea } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
 import {
   ROTULO_MENSAGEM,
   type ErrosFormulario,
   type Formulario,
 } from "./formulario";
+import { DICAS } from "./textos";
 
 /** As chaves da campanha, pelo campo do formulário. */
 export type ChaveDoFormulario =
@@ -113,26 +114,34 @@ export function ChavesDaCampanha({
             const ligada = formulario[chave];
             return (
               <li key={chave} className="campanha-chave">
-                <label className="campanha-opcao" htmlFor={id}>
-                  <input
-                    id={id}
-                    type="checkbox"
-                    checked={ligada}
-                    // Só leitura: continua focável (o resumo e o link da tela Pedidos levam o foco a ela), com o
-                    // aviso como descrição; o clique não muda nada (o React devolve a caixa ao valor dela).
-                    aria-disabled={somenteLeitura || undefined}
-                    aria-describedby={
-                      somenteLeitura
-                        ? `${idAviso} ${id}-explicacao`
-                        : `${id}-explicacao`
-                    }
-                    onChange={(evento) => {
-                      if (!somenteLeitura)
-                        aoAlterar(chave, evento.target.checked);
-                    }}
-                  />
-                  <span>{texto.rotulo}</span>
-                </label>
+                {/* A dica fica na linha toda (caixa e texto); a caixa a tem na descrição (`id` da dica). */}
+                <ComDica
+                  id={`${id}-dica`}
+                  texto={
+                    somenteLeitura ? DICAS.chaveSoLeitura : DICAS.chave[chave]
+                  }
+                >
+                  <label className="campanha-opcao" htmlFor={id}>
+                    <input
+                      id={id}
+                      type="checkbox"
+                      checked={ligada}
+                      // Só leitura: continua focável (o resumo e o link da tela Pedidos levam o foco a ela), com o
+                      // aviso como descrição; o clique não muda nada (o React devolve a caixa ao valor dela).
+                      aria-disabled={somenteLeitura || undefined}
+                      aria-describedby={
+                        somenteLeitura
+                          ? `${idAviso} ${id}-explicacao ${id}-dica`
+                          : `${id}-explicacao ${id}-dica`
+                      }
+                      onChange={(evento) => {
+                        if (!somenteLeitura)
+                          aoAlterar(chave, evento.target.checked);
+                      }}
+                    />
+                    <span>{texto.rotulo}</span>
+                  </label>
+                </ComDica>
                 <p
                   id={`${id}-explicacao`}
                   className="campanha-chave__explicacao"
@@ -287,22 +296,28 @@ function EditorMensagem({
 
   return (
     <div className="campanha-mensagem">
-      <Textarea
-        id={id}
-        rotulo={ROTULO_MENSAGEM[tipo]}
-        dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
-          .map((marcador) => EXPLICACAO_DO_MARCADOR[marcador])
-          .join("; ")}.`}
-        erro={erro}
-        value={texto}
-        rows={5}
-        spellCheck={!somenteLeitura}
-        readOnly={somenteLeitura}
-        aria-describedby={idAvisoSoAdmin ?? undefined}
-        onChange={(evento) => {
-          if (!somenteLeitura) aoAlterar(evento.target.value);
-        }}
-      />
+      <ComDica
+        texto={
+          somenteLeitura ? DICAS.mensagemSoLeitura(tipo) : DICAS.mensagem(tipo)
+        }
+      >
+        <Textarea
+          id={id}
+          rotulo={ROTULO_MENSAGEM[tipo]}
+          dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
+            .map((marcador) => EXPLICACAO_DO_MARCADOR[marcador])
+            .join("; ")}.`}
+          erro={erro}
+          value={texto}
+          rows={5}
+          spellCheck={!somenteLeitura}
+          readOnly={somenteLeitura}
+          aria-describedby={idAvisoSoAdmin ?? undefined}
+          onChange={(evento) => {
+            if (!somenteLeitura) aoAlterar(evento.target.value);
+          }}
+        />
+      </ComDica>
       <div className="campanha-mensagem__rodape">
         <p id={idContagem} className="campanha-texto-suave">
           {formatarNumero(texto.trim().length)} de{" "}
@@ -310,20 +325,26 @@ function EditorMensagem({
           {ehPadrao ? " · é o texto padrão" : ""}
         </p>
         {!somenteLeitura && (
-          <Button
-            variante="discreto"
-            aria-disabled={ehPadrao || undefined}
-            // Indisponível: a contagem ao lado diz por quê ("é o texto padrão").
-            aria-describedby={ehPadrao ? idContagem : undefined}
-            onClick={() => {
-              if (!ehPadrao) voltar();
-            }}
+          <ComDica
+            texto={
+              ehPadrao ? DICAS.voltarAoPadraoJaEstaNele : DICAS.voltarAoPadrao
+            }
           >
-            Voltar ao texto padrão{" "}
-            <span className="visualmente-oculto">
-              da {ROTULO_MENSAGEM[tipo].toLowerCase()}
-            </span>
-          </Button>
+            <Button
+              variante="discreto"
+              aria-disabled={ehPadrao || undefined}
+              // Indisponível: a contagem ao lado diz por quê ("é o texto padrão").
+              aria-describedby={ehPadrao ? idContagem : undefined}
+              onClick={() => {
+                if (!ehPadrao) voltar();
+              }}
+            >
+              Voltar ao texto padrão{" "}
+              <span className="visualmente-oculto">
+                da {ROTULO_MENSAGEM[tipo].toLowerCase()}
+              </span>
+            </Button>
+          </ComDica>
         )}
       </div>
       <figure className="campanha-previa" aria-labelledby={idPrevia}>

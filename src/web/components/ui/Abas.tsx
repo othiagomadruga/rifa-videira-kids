@@ -1,4 +1,5 @@
 import { useId, type KeyboardEvent, type ReactNode } from "react";
+import { ComDica } from "./Dica";
 import "./Abas.css";
 
 export type Aba<Id extends string = string> = {
@@ -6,6 +7,8 @@ export type Aba<Id extends string = string> = {
   id: Id;
   rotulo: ReactNode;
   conteudo: ReactNode;
+  /** Dica do botão da aba (RIFA-045): o que a aba mostra e o que se faz nela. */
+  dica?: ReactNode;
 };
 
 type Props<Id extends string> = {
@@ -68,19 +71,20 @@ export function Abas<Id extends string>({
         {abas.map((aba) => {
           const ativa = aba.id === abaAtiva;
           return (
-            <button
-              key={aba.id}
-              type="button"
-              role="tab"
-              id={idDaAba(base, aba.id)}
-              className="ui-abas__aba"
-              aria-selected={ativa}
-              aria-controls={idDoPainel(base, aba.id)}
-              tabIndex={ativa ? 0 : -1}
-              onClick={() => aoMudar(aba.id)}
-            >
-              {aba.rotulo}
-            </button>
+            <ComDica key={aba.id} texto={aba.dica}>
+              <button
+                type="button"
+                role="tab"
+                id={idDaAba(base, aba.id)}
+                className="ui-abas__aba"
+                aria-selected={ativa}
+                aria-controls={idDoPainel(base, aba.id)}
+                tabIndex={ativa ? 0 : -1}
+                onClick={() => aoMudar(aba.id)}
+              >
+                {aba.rotulo}
+              </button>
+            </ComDica>
           );
         })}
       </div>

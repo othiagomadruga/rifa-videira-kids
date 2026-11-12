@@ -251,3 +251,56 @@ export function totaisDepoisDe(
   if (depois.desconsiderado === null) somar(depois, 1);
   return novos;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  abaPedidos:
+    "Os pedidos que chegaram da Rifei, do mais novo para o mais antigo, com os totais por status.",
+  abaEntregas:
+    "Cada aviso de venda que a Rifei mandou e o que o sistema fez com ele. Serve para achar pedido com erro.",
+  filtroStatus:
+    "Mostra só os pedidos com o status escolhido. Só os aprovados contam nas vendas.",
+  filtroCelula:
+    "Mostra só os pedidos de uma célula, ou os que chegaram sem célula. Os totais seguem a escolha.",
+  filtroDesconsiderados:
+    "Mostra todos os pedidos, só os que contam nas vendas ou só os que foram tirados das contas.",
+  campoBusca:
+    "Procura um pedido pelo id completo da Rifei, junto com os outros filtros.",
+  buscar: "Procura o pedido com o id digitado no campo.",
+  limparBusca:
+    "Apaga o id da busca e volta a mostrar os pedidos dos outros filtros.",
+  limparFiltros:
+    "Tira todos os filtros e a busca e mostra a lista inteira de novo.",
+  carregarMaisPedidos:
+    "Traz os próximos pedidos, mais antigos, para o fim da lista.",
+  carregarMaisEntregas:
+    "Traz as próximas entregas, mais antigas, para o fim da lista.",
+  carregando:
+    "Indisponível enquanto a próxima parte da lista chega. Espere um instante.",
+  seloSuspeito:
+    "O sistema marcou este pedido para conferir. Abre a tela Pedidos suspeitos, com o motivo.",
+  desconsiderar:
+    "Tira este pedido das contas: metas, rankings, painel e telão. Antes, pede o motivo. Dá para desfazer.",
+  desfazer:
+    "Faz este pedido voltar a contar nas metas e nos rankings. Antes, pede confirmação.",
+  motivo:
+    "Por que o pedido sai das contas. Fica gravado junto com o pedido e na trilha.",
+  observacao:
+    "Um detalhe para quem conferir depois, como o número do estorno. Não escreva dados do comprador.",
+  cancelarDesconsiderar:
+    "Fecha sem desconsiderar. O pedido continua contando nas vendas.",
+  confirmarDesconsiderar:
+    "Tira o pedido das contas agora. Ele continua nesta lista, com o selo.",
+  cancelarDesfazer: "Fecha sem mudar nada. O pedido continua fora das contas.",
+  confirmarDesfazer: "O pedido volta a contar em todas as contas agora.",
+  entendi:
+    "Fecha esta janela. Para voltar a desconsiderar, o admin liga a regra na tela Campanha.",
+  filtroResultado:
+    "Mostra só as entregas com o resultado escolhido, como as que deram erro.",
+  verTodasAsEntregas:
+    "Tira o filtro de resultado e mostra todas as entregas de novo.",
+} as const;

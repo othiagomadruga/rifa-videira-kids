@@ -13,7 +13,14 @@ import type {
   ItemPedido,
   MotivoDesconsideracao,
 } from "../../../shared/contracts";
-import { Aviso, Button, Dialogo, Select, Textarea } from "../../components/ui";
+import {
+  Aviso,
+  Button,
+  ComDica,
+  Dialogo,
+  Select,
+  Textarea,
+} from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/formatadores";
 import {
@@ -25,6 +32,7 @@ import {
   reconsiderarPedido,
 } from "./pedidos-api";
 import {
+  DICAS,
   ROTULO_MOTIVO,
   ROTULO_STATUS,
   bilhetes,
@@ -165,64 +173,76 @@ export function DialogoDesconsiderar({
       focoAoFechar={focoAoFechar}
       rodape={
         <>
-          <Button
-            ref={refEntendi}
-            variante="secundario"
-            onClick={aoFechar}
-            disabled={enviando}
+          <ComDica
+            texto={
+              falha?.desligada ? DICAS.entendi : DICAS.cancelarDesconsiderar
+            }
           >
-            {falha?.desligada ? "Entendi" : "Cancelar"}
-          </Button>
-          {!falha?.desligada && (
             <Button
-              ref={refAcao}
-              type="submit"
-              variante="perigo"
+              ref={refEntendi}
+              variante="secundario"
+              onClick={aoFechar}
               disabled={enviando}
             >
-              {enviando ? "Desconsiderando…" : "Desconsiderar"}
+              {falha?.desligada ? "Entendi" : "Cancelar"}
             </Button>
+          </ComDica>
+          {!falha?.desligada && (
+            <ComDica texto={DICAS.confirmarDesconsiderar}>
+              <Button
+                ref={refAcao}
+                type="submit"
+                variante="perigo"
+                disabled={enviando}
+              >
+                {enviando ? "Desconsiderando…" : "Desconsiderar"}
+              </Button>
+            </ComDica>
           )}
         </>
       }
     >
       <div className="pedidos-dialogo">
         <p className="pedidos-suave">{resumoDoPedido(pedido)}</p>
-        <Select
-          ref={refMotivo}
-          rotulo="Motivo"
-          value={motivo}
-          erro={erros.motivo}
-          required
-          onChange={(evento) => {
-            setMotivo(
-              MOTIVOS_DESCONSIDERACAO.find(
-                (opcao) => opcao === evento.target.value,
-              ) ?? "",
-            );
-            setErros((atuais) => ({ ...atuais, motivo: undefined }));
-          }}
-        >
-          <option value="">Escolha…</option>
-          {MOTIVOS_DESCONSIDERACAO.map((opcao) => (
-            <option key={opcao} value={opcao}>
-              {ROTULO_MOTIVO[opcao]}
-            </option>
-          ))}
-        </Select>
-        <Textarea
-          ref={refObservacao}
-          rotulo="Observação (opcional)"
-          dica={`Até ${LIMITE_OBSERVACAO} caracteres. Não escreva nome, telefone, e-mail nem documento do comprador.`}
-          value={observacao}
-          maxLength={LIMITE_OBSERVACAO}
-          rows={3}
-          erro={erros.observacao}
-          onChange={(evento) => {
-            setObservacao(evento.target.value);
-            setErros((atuais) => ({ ...atuais, observacao: undefined }));
-          }}
-        />
+        <ComDica texto={DICAS.motivo}>
+          <Select
+            ref={refMotivo}
+            rotulo="Motivo"
+            value={motivo}
+            erro={erros.motivo}
+            required
+            onChange={(evento) => {
+              setMotivo(
+                MOTIVOS_DESCONSIDERACAO.find(
+                  (opcao) => opcao === evento.target.value,
+                ) ?? "",
+              );
+              setErros((atuais) => ({ ...atuais, motivo: undefined }));
+            }}
+          >
+            <option value="">Escolha…</option>
+            {MOTIVOS_DESCONSIDERACAO.map((opcao) => (
+              <option key={opcao} value={opcao}>
+                {ROTULO_MOTIVO[opcao]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.observacao}>
+          <Textarea
+            ref={refObservacao}
+            rotulo="Observação (opcional)"
+            dica={`Até ${LIMITE_OBSERVACAO} caracteres. Não escreva nome, telefone, e-mail nem documento do comprador.`}
+            value={observacao}
+            maxLength={LIMITE_OBSERVACAO}
+            rows={3}
+            erro={erros.observacao}
+            onChange={(evento) => {
+              setObservacao(evento.target.value);
+              setErros((atuais) => ({ ...atuais, observacao: undefined }));
+            }}
+          />
+        </ComDica>
         {falha && (
           <Aviso tom="perigo" titulo="Não foi possível desconsiderar">
             <p>{falha.texto}</p>
@@ -274,22 +294,28 @@ export function DialogoDesfazer({
       focoAoFechar={focoAoFechar}
       rodape={
         <>
-          <Button
-            ref={refEntendi}
-            variante="secundario"
-            onClick={aoFechar}
-            disabled={enviando}
+          <ComDica
+            texto={falha?.desligada ? DICAS.entendi : DICAS.cancelarDesfazer}
           >
-            {falha?.desligada ? "Entendi" : "Cancelar"}
-          </Button>
-          {!falha?.desligada && (
             <Button
-              ref={refAcao}
+              ref={refEntendi}
+              variante="secundario"
+              onClick={aoFechar}
               disabled={enviando}
-              onClick={() => void confirmar()}
             >
-              {enviando ? "Desfazendo…" : "Desfazer"}
+              {falha?.desligada ? "Entendi" : "Cancelar"}
             </Button>
+          </ComDica>
+          {!falha?.desligada && (
+            <ComDica texto={DICAS.confirmarDesfazer}>
+              <Button
+                ref={refAcao}
+                disabled={enviando}
+                onClick={() => void confirmar()}
+              >
+                {enviando ? "Desfazendo…" : "Desfazer"}
+              </Button>
+            </ComDica>
           )}
         </>
       }

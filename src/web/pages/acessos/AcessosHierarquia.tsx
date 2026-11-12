@@ -10,6 +10,7 @@ import {
   Aviso,
   Badge,
   Button,
+  ComDica,
   DataTable,
   EmptyState,
   ErrorState,
@@ -37,6 +38,7 @@ import {
   type RegrasDosAcessos,
 } from "./regras";
 import {
+  DICAS,
   ALVO_DO_PAPEL,
   PAPEL_NO_PLURAL,
   avisoDeOutraPessoa,
@@ -293,39 +295,53 @@ export function AcessosHierarquia({ regras, aoDesligar }: Props) {
       </p>
       <div className="acessos-hierarquia__controles">
         <div className="acessos-hierarquia__papel">
-          <Select
-            rotulo="Papel"
-            value={papel}
-            onChange={(evento) => {
-              setPapel(evento.currentTarget.value as PapelHierarquia);
-              setResultado(null);
-            }}
-          >
-            {PAPEIS_DO_SELETOR.map((opcao) => (
-              <option key={opcao} value={opcao}>
-                {PAPEL_NO_PLURAL[opcao]}
-              </option>
-            ))}
-          </Select>
+          <ComDica texto={DICAS.papelDaHierarquia}>
+            <Select
+              rotulo="Papel"
+              value={papel}
+              onChange={(evento) => {
+                setPapel(evento.currentTarget.value as PapelHierarquia);
+                setResultado(null);
+              }}
+            >
+              {PAPEIS_DO_SELETOR.map((opcao) => (
+                <option key={opcao} value={opcao}>
+                  {PAPEL_NO_PLURAL[opcao]}
+                </option>
+              ))}
+            </Select>
+          </ComDica>
         </div>
         <div className="acessos-hierarquia__lote">
-          <Button
-            onClick={() =>
-              void gerar(
-                "lote",
-                lote.map((item) => item.alvo.id),
-                "os links",
-              )
+          <ComDica
+            texto={
+              !ligado
+                ? DICAS.loteIndisponivel.desligado
+                : ocupado !== null
+                  ? DICAS.loteIndisponivel.ocupado
+                  : lote.length === 0
+                    ? DICAS.loteIndisponivel.ninguem
+                    : DICAS.gerarLote
             }
-            aria-disabled={
-              lote.length === 0 || ocupado !== null || !ligado || undefined
-            }
-            aria-describedby={ligado ? undefined : ID_AVISO_DESLIGADO}
           >
-            {ocupado?.chave === "lote"
-              ? "Gerando…"
-              : `Gerar links para quem ainda não tem (${formatarNumero(lote.length)})`}
-          </Button>
+            <Button
+              onClick={() =>
+                void gerar(
+                  "lote",
+                  lote.map((item) => item.alvo.id),
+                  "os links",
+                )
+              }
+              aria-disabled={
+                lote.length === 0 || ocupado !== null || !ligado || undefined
+              }
+              aria-describedby={ligado ? undefined : ID_AVISO_DESLIGADO}
+            >
+              {ocupado?.chave === "lote"
+                ? "Gerando…"
+                : `Gerar links para quem ainda não tem (${formatarNumero(lote.length)})`}
+            </Button>
+          </ComDica>
           {dados && ligado && (
             <p className="acessos-suave">
               {semLink.length === 0
@@ -382,9 +398,11 @@ export function AcessosHierarquia({ regras, aoDesligar }: Props) {
           tom="perigo"
           titulo="Não foi possível atualizar a lista"
           acao={
-            <Button variante="secundario" onClick={recarregar}>
-              Tentar de novo
-            </Button>
+            <ComDica texto={DICAS.tentarDeNovoLista}>
+              <Button variante="secundario" onClick={recarregar}>
+                Tentar de novo
+              </Button>
+            </ComDica>
           }
         >
           <p>{mensagemDoErro(erro)}</p>
@@ -537,55 +555,87 @@ function AcoesDoAlvo({
   return (
     <div className="acessos-acoes-linha">
       {situacao.tipo !== "desativado" && (
-        <Button
-          id={idBotaoNovoLink(alvo.id)}
-          variante="secundario"
-          onClick={seLigado(aoNovoLink)}
-          aria-disabled={semLink}
-          aria-describedby={descricaoSemLink}
+        <ComDica
+          texto={
+            ocupada
+              ? DICAS.ocupado
+              : ligado
+                ? DICAS.novoLink
+                : DICAS.semLinkDesligado
+          }
         >
-          {acaoAqui === "gerando" ? "Gerando…" : "Novo link"}{" "}
-          <span className="visualmente-oculto">para {alvo.nome}</span>
-        </Button>
+          <Button
+            id={idBotaoNovoLink(alvo.id)}
+            variante="secundario"
+            onClick={seLigado(aoNovoLink)}
+            aria-disabled={semLink}
+            aria-describedby={descricaoSemLink}
+          >
+            {acaoAqui === "gerando" ? "Gerando…" : "Novo link"}{" "}
+            <span className="visualmente-oculto">para {alvo.nome}</span>
+          </Button>
+        </ComDica>
       )}
       {situacao.tipo === "valido" && (
-        <Button
-          variante="secundario"
-          onClick={seLigado(aoTrocar)}
-          aria-disabled={semLink}
-          aria-describedby={descricaoSemLink}
+        <ComDica
+          texto={
+            ocupada
+              ? DICAS.ocupado
+              : ligado
+                ? DICAS.trocarAcesso
+                : DICAS.semLinkDesligado
+          }
         >
-          Trocar acesso{" "}
-          <span className="visualmente-oculto">de {alvo.nome}</span>
-        </Button>
+          <Button
+            variante="secundario"
+            onClick={seLigado(aoTrocar)}
+            aria-disabled={semLink}
+            aria-describedby={descricaoSemLink}
+          >
+            Trocar acesso{" "}
+            <span className="visualmente-oculto">de {alvo.nome}</span>
+          </Button>
+        </ComDica>
       )}
       {validos.map((link) => (
-        <Button
-          key={link.id}
-          variante="secundario"
-          onClick={seDisponivel(() => aoRevogar(link))}
-          aria-disabled={ocupada}
-        >
-          Revogar link{" "}
-          <span className="visualmente-oculto">
-            de {alvo.nome} criado em {formatarDataHora(link.criado_em)}
-          </span>
-        </Button>
+        <ComDica texto={ocupada ? DICAS.ocupado : DICAS.revogarLink}>
+          <Button
+            key={link.id}
+            variante="secundario"
+            onClick={seDisponivel(() => aoRevogar(link))}
+            aria-disabled={ocupada}
+          >
+            Revogar link{" "}
+            <span className="visualmente-oculto">
+              de {alvo.nome} criado em {formatarDataHora(link.criado_em)}
+            </span>
+          </Button>
+        </ComDica>
       ))}
       {usuario && (
-        <Button
-          id={idBotaoAtivoDoAlvo(alvo.id)}
-          variante="secundario"
-          onClick={seDisponivel(usuario.ativo ? aoDesativar : aoReativar)}
-          aria-disabled={ocupada}
+        <ComDica
+          texto={
+            ocupada
+              ? DICAS.ocupado
+              : usuario.ativo
+                ? DICAS.desativarAcesso
+                : DICAS.reativarAcesso
+          }
         >
-          {usuario.ativo
-            ? "Desativar acesso"
-            : acaoAqui === "reativando"
-              ? "Reativando…"
-              : "Reativar acesso"}{" "}
-          <span className="visualmente-oculto">de {alvo.nome}</span>
-        </Button>
+          <Button
+            id={idBotaoAtivoDoAlvo(alvo.id)}
+            variante="secundario"
+            onClick={seDisponivel(usuario.ativo ? aoDesativar : aoReativar)}
+            aria-disabled={ocupada}
+          >
+            {usuario.ativo
+              ? "Desativar acesso"
+              : acaoAqui === "reativando"
+                ? "Reativando…"
+                : "Reativar acesso"}{" "}
+            <span className="visualmente-oculto">de {alvo.nome}</span>
+          </Button>
+        </ComDica>
       )}
     </div>
   );

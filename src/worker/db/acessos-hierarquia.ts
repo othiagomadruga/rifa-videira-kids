@@ -18,6 +18,7 @@ import {
   type LinkAcesso,
   type PapelHierarquia,
 } from "../../shared/contracts";
+import { compararNivel } from "../lib/ordem-hierarquia";
 import {
   limiteDeInatividade,
   paraLink,
@@ -136,26 +137,6 @@ function consultaDosAlvos(
     FROM ${definicao.de}
     LEFT JOIN usuarios AS u ON u.${definicao.coluna} = a.id
     ${soOsDaLista ? "WHERE a.id IN (SELECT value FROM json_each(?1))" : ""}`;
-}
-
-/**
- * Nomes em português, como no ranking: sem diferenciar acentos e maiúsculas, "Célula 2" antes de "Célula 10".
- * (O COLLATE NOCASE do SQLite só ignora maiúsculas ASCII e poria "Célula Ágape" depois de "Célula Betel".)
- */
-const ordemDosNomes = new Intl.Collator("pt-BR", {
-  sensitivity: "base",
-  numeric: true,
-});
-
-function compararNivel(
-  nomeA: string | null,
-  idA: number | null,
-  nomeB: string | null,
-  idB: number | null,
-): number {
-  return (
-    ordemDosNomes.compare(nomeA ?? "", nomeB ?? "") || (idA ?? 0) - (idB ?? 0)
-  );
 }
 
 /** Pelo caminho na hierarquia: nome da rede, do discipulador e do alvo (empate de nome, pelo id). */

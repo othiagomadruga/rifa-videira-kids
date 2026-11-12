@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Card,
+  ComDica,
   Dialogo,
   ErrorState,
   Loading,
@@ -21,6 +22,7 @@ import {
   gerarTokenWebhook,
   obterEstadoToken,
 } from "./webhook-api";
+import { DICAS } from "./textos";
 import "./acessos-webhook.css";
 
 // Aba "Webhook da Rifei" de Acessos (RIFA-039, D21; só admin, como a tela). Mostra qual credencial autentica o
@@ -210,9 +212,11 @@ export function WebhookRifei() {
           tom="perigo"
           titulo="Não foi possível atualizar a situação do webhook"
           acao={
-            <Button variante="secundario" onClick={recarregar}>
-              Tentar de novo
-            </Button>
+            <ComDica texto={DICAS.tentarDeNovoLista}>
+              <Button variante="secundario" onClick={recarregar}>
+                Tentar de novo
+              </Button>
+            </ComDica>
           }
         >
           <p>{mensagemDoErro(erro)}</p>
@@ -224,23 +228,27 @@ export function WebhookRifei() {
           <Card titulo="Colar na Rifei" className="acessos-webhook__rifei">
             <div className="acessos-webhook__corpo">
               <div className="acessos-webhook__campo">
-                <Textarea
-                  ref={refUrl}
-                  rotulo="URL do webhook"
-                  dica="Vai no campo URL do webhook na Rifei."
-                  value={estado.url}
-                  readOnly
-                  rows={2}
-                  spellCheck={false}
-                  className="acessos-url"
-                  onFocus={(evento) => evento.currentTarget.select()}
-                />
-                <Button
-                  variante="secundario"
-                  onClick={() => void copiar("url", estado.url)}
-                >
-                  Copiar URL
-                </Button>
+                <ComDica texto={DICAS.campoUrl}>
+                  <Textarea
+                    ref={refUrl}
+                    rotulo="URL do webhook"
+                    dica="Vai no campo URL do webhook na Rifei."
+                    value={estado.url}
+                    readOnly
+                    rows={2}
+                    spellCheck={false}
+                    className="acessos-url"
+                    onFocus={(evento) => evento.currentTarget.select()}
+                  />
+                </ComDica>
+                <ComDica texto={DICAS.copiarUrl}>
+                  <Button
+                    variante="secundario"
+                    onClick={() => void copiar("url", estado.url)}
+                  >
+                    Copiar URL
+                  </Button>
+                </ComDica>
                 {copia?.campo === "url" && (
                   <p className="acessos-copia">
                     {TEXTO_COPIA.url[copia.resultado]}
@@ -267,15 +275,25 @@ export function WebhookRifei() {
                 </Aviso>
               )}
               <div className="acessos-webhook__acao">
-                <Button
-                  variante={mostrado ? "secundario" : "primario"}
-                  aria-disabled={gerando || undefined}
-                  onClick={pedirGeracao}
+                <ComDica
+                  texto={
+                    gerando
+                      ? DICAS.gerandoToken
+                      : estado.vigente
+                        ? DICAS.gerarTokenComVigente
+                        : DICAS.gerarToken
+                  }
                 >
-                  {gerando && !confirmacao
-                    ? "Gerando…"
-                    : "Gerar token do webhook"}
-                </Button>
+                  <Button
+                    variante={mostrado ? "secundario" : "primario"}
+                    aria-disabled={gerando || undefined}
+                    onClick={pedirGeracao}
+                  >
+                    {gerando && !confirmacao
+                      ? "Gerando…"
+                      : "Gerar token do webhook"}
+                  </Button>
+                </ComDica>
               </div>
             </div>
           </Card>
@@ -402,28 +420,32 @@ function TokenGerado({
         </p>
       </Aviso>
       <div className="acessos-webhook__campo">
-        <Textarea
-          ref={refToken}
-          id={ID_TOKEN}
-          rotulo="Token do webhook"
-          dica="Vai no campo Token do webhook na Rifei."
-          value={token}
-          readOnly
-          rows={3}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          translate="no"
-          className="acessos-url"
-          onFocus={(evento) => evento.currentTarget.select()}
-        />
-        <Button
-          ref={refCopiar}
-          aria-describedby={ID_AVISO_TOKEN}
-          onClick={aoCopiar}
-        >
-          Copiar token
-        </Button>
+        <ComDica texto={DICAS.campoToken}>
+          <Textarea
+            ref={refToken}
+            id={ID_TOKEN}
+            rotulo="Token do webhook"
+            dica="Vai no campo Token do webhook na Rifei."
+            value={token}
+            readOnly
+            rows={3}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            translate="no"
+            className="acessos-url"
+            onFocus={(evento) => evento.currentTarget.select()}
+          />
+        </ComDica>
+        <ComDica texto={DICAS.copiarToken}>
+          <Button
+            ref={refCopiar}
+            aria-describedby={ID_AVISO_TOKEN}
+            onClick={aoCopiar}
+          >
+            Copiar token
+          </Button>
+        </ComDica>
         {copia && <p className="acessos-copia">{TEXTO_COPIA.token[copia]}</p>}
       </div>
       <div className="acessos-webhook__passos">
@@ -480,22 +502,27 @@ function ConfirmarTroca({
           : "O segredo do Worker para de valer na hora."
       }
       aoFechar={aoCancelar}
+      dicaFechar={DICAS.cancelarTroca}
       rodape={
         <>
-          <Button
-            variante="secundario"
-            aria-disabled={gerando || undefined}
-            onClick={aoCancelar}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variante="perigo"
-            aria-disabled={gerando || undefined}
-            onClick={aoConfirmar}
-          >
-            {gerando ? "Gerando…" : "Gerar token novo"}
-          </Button>
+          <ComDica texto={gerando ? DICAS.gerandoToken : DICAS.cancelarTroca}>
+            <Button
+              variante="secundario"
+              aria-disabled={gerando || undefined}
+              onClick={aoCancelar}
+            >
+              Cancelar
+            </Button>
+          </ComDica>
+          <ComDica texto={gerando ? DICAS.gerandoToken : DICAS.confirmarTroca}>
+            <Button
+              variante="perigo"
+              aria-disabled={gerando || undefined}
+              onClick={aoConfirmar}
+            >
+              {gerando ? "Gerando…" : "Gerar token novo"}
+            </Button>
+          </ComDica>
         </>
       }
     >

@@ -32,6 +32,7 @@ import {
   ROTAS,
   ROTAS_ACESSO,
   ROTAS_ACESSO_HIERARQUIA,
+  ROTAS_LINK_VENDAS,
   ROTAS_REGRAS_CAMPANHA,
   ROTAS_RELATORIO,
   ROTAS_TOKEN_WEBHOOK,
@@ -45,6 +46,7 @@ import {
   respostaBumboSchema,
   respostaListaAfiliadosSchema,
   respostaListaRecuperacoesSchema,
+  respostaMeusLinksVendasSchema,
   respostaPainelResumoSchema,
   respostaPedidosSuspeitosSchema,
   respostaRankingPublicoSchema,
@@ -108,10 +110,11 @@ interface RotaDaCoordenacao {
 /**
  * Grupo `coordenacao` do contrato: ROTAS (admin e coordenacao, ou os `papeis` da rota quando ela é mais
  * restrita, como a auditoria e as regras da campanha), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria
- * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin) e
- * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação). O relatório entrou aqui já no contrato (sem `papeis`, ele passava
- * nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que ele está registrado no app; com sessão,
- * sem `tipo`, ele responde o 400 do formato único (passou do login).
+ * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin),
+ * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação) e ROTAS_LINK_VENDAS (RIFA-046, D24: a lista de admin e coordenação
+ * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora). O relatório entrou aqui
+ * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
+ * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
 const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
   ...[
@@ -119,6 +122,7 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_REGRAS_CAMPANHA),
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
     ...Object.values(ROTAS_RELATORIO),
+    ...Object.values(ROTAS_LINK_VENDAS),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -213,6 +217,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_REGRAS_CAMPANHA),
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
     ...Object.values(ROTAS_RELATORIO),
+    ...Object.values(ROTAS_LINK_VENDAS),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -236,13 +241,14 @@ describe("a) toda rota da coordenação exige sessão", () => {
     // 24 de ROTAS + 6 de ROTAS_ACESSO (5 só de admin e o GET /api/sessao) na Sprint 2; a auditoria (só admin)
     // na Sprint 4; as 2 de ROTAS_ACESSO_HIERARQUIA (só admin) na Sprint 5; as 3 de ROTAS_REGRAS_CAMPANHA (só
     // admin) na Sprint 6; as 2 de ROTAS_TOKEN_WEBHOOK (só admin) na RIFA-039; a de ROTAS_RELATORIO (admin e
-    // coordenação) na RIFA-038.
-    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(39);
+    // coordenação) na RIFA-038; as 2 de ROTAS_LINK_VENDAS da coordenação (a lista, de admin e coordenação, e o PUT
+    // do modelo, só de admin) na RIFA-046.
+    expect(ROTAS_DA_COORDENACAO.length).toBeGreaterThanOrEqual(41);
     expect(
       ROTAS_DA_COORDENACAO.filter(
         (rota) => !rota.papeis.includes("coordenacao"),
       ).length,
-    ).toBeGreaterThanOrEqual(13);
+    ).toBeGreaterThanOrEqual(14);
     // As regras da campanha (D20) e o token do webhook (D21) estão todos no filtro, só de admin, e montados no app.
     const registradas = rotasRegistradas().map(
       (rota) => `${rota.metodo} ${rota.caminho}`,
@@ -268,6 +274,22 @@ describe("a) toda rota da coordenação exige sessão", () => {
       )?.papeis,
     ).toEqual(["admin", "coordenacao"]);
     expect(registradas).toContain("GET /api/painel/relatorio");
+    // O link de vendas (D24): a lista para admin e coordenação, o PUT do modelo só de admin, os dois montados; a visão
+    // da hierarquia (em /api/minha) fora do filtro da coordenação.
+    const doFiltro = (rota: { metodo: string; caminho: string }) =>
+      ROTAS_DA_COORDENACAO.find(
+        (item) => item.metodo === rota.metodo && item.caminho === rota.caminho,
+      )?.papeis;
+    expect(doFiltro(ROTAS_LINK_VENDAS.linksVendas)).toEqual([
+      "admin",
+      "coordenacao",
+    ]);
+    expect(doFiltro(ROTAS_LINK_VENDAS.salvarModeloLinkVendas)).toEqual([
+      "admin",
+    ]);
+    expect(doFiltro(ROTAS_LINK_VENDAS.meusLinksVendas)).toBeUndefined();
+    for (const rota of Object.values(ROTAS_LINK_VENDAS))
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
   });
 
   it.each(casos(ROTAS_DA_COORDENACAO))(
@@ -1221,6 +1243,10 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
     "/api/minha/../minha/visao",
     "/api/qualquer/../minha/visao",
     "/api/%6dinha/visao",
+    // RIFA-046 (D24): os links de vendas das células do alvo.
+    "/api/minha/links-vendas",
+    "/api/minha/links-vendas?celula_id=2",
+    "/api/minha/links-vendas/",
   ];
   const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
 
@@ -1245,9 +1271,17 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
         rota.papeis,
       ]),
     ).toEqual([["GET /api/minha/visao", PAPEIS_HIERARQUIA]]);
+    // O catálogo à parte do link de vendas (D24): só a visão da hierarquia em /api/minha.
     expect(
-      rotasRegistradas().map((rota) => `${rota.metodo} ${rota.caminho}`),
-    ).toContain("GET /api/minha/visao");
+      Object.values(ROTAS_LINK_VENDAS)
+        .filter((rota) => rota.grupo === "hierarquia")
+        .map((rota) => [`${rota.metodo} ${rota.caminho}`, rota.papeis]),
+    ).toEqual([["GET /api/minha/links-vendas", PAPEIS_HIERARQUIA]]);
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    expect(registradas).toContain("GET /api/minha/visao");
+    expect(registradas).toContain("GET /api/minha/links-vendas");
   });
 
   it.each(PAPEIS_HIERARQUIA)(
@@ -1305,6 +1339,17 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
       expect(visao.status).toBe(200);
       expect(visao.headers.get("Cache-Control")).toBe("no-store");
       respostaVisaoIndividualSchema.parse(await visao.json());
+      // RIFA-046 (D24): os links de vendas das células do alvo, pelo schema estrito (o escopo é conferido nele).
+      const links = await requisitar(
+        "GET",
+        ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+        sessoes[papel],
+      );
+      expect(links.status).toBe(200);
+      expect(links.headers.get("Cache-Control")).toBe("no-store");
+      expect(
+        respostaMeusLinksVendasSchema.parse(await links.json()).alvo,
+      ).toMatchObject({ id: { lider: 1, discipulador: 10, rede: 1 }[papel] });
     },
   );
 
@@ -1389,6 +1434,8 @@ describe("h) RIFA-029 (D20, CA4): acesso de discipuladores e redes pela chave da
     "/api/minha/visao",
     "/api/minha/visao?periodo=campanha",
     "/api/minha/visao?periodo=invalido",
+    // RIFA-046 (D24): os links de vendas seguem a chave, como todo /api/minha.
+    "/api/minha/links-vendas",
     "/api/minha/qualquer",
     "/api/minha/qualquer/coisa/funda",
     "/api/minha",
@@ -1470,6 +1517,14 @@ describe("h) RIFA-029 (D20, CA4): acesso de discipuladores e redes pela chave da
     const lider = await requisitar("GET", "/api/minha/visao", sessoes.lider);
     expect(lider.status).toBe(200);
     respostaVisaoIndividualSchema.parse(await lider.json());
+    // Os links de vendas do líder também (RIFA-046, D24: o líder não tem chave).
+    const links = await requisitar(
+      "GET",
+      ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+      sessoes.lider,
+    );
+    expect(links.status).toBe(200);
+    respostaMeusLinksVendasSchema.parse(await links.json());
     await esperarErro(
       await requisitar("GET", "/api/minha/visao", coordenacao),
       403,

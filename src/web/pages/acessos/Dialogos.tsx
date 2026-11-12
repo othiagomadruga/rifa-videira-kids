@@ -14,6 +14,7 @@ import type {
 import {
   Aviso,
   Button,
+  ComDica,
   Dialogo,
   Input,
   Select,
@@ -31,6 +32,7 @@ import {
   revogarLink,
 } from "./acessos-api";
 import {
+  DICAS,
   camposRecusados,
   ehNaoEncontrado,
   linkWhatsApp,
@@ -163,12 +165,20 @@ export function DialogoNovaPessoa({
       aoEnviar={(evento) => void enviar(evento)}
       rodape={
         <>
-          <Button variante="secundario" onClick={aoFechar} disabled={salvando}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={salvando}>
-            {salvando ? "Criando…" : "Criar e gerar link"}
-          </Button>
+          <ComDica texto={DICAS.cancelarNovaPessoa}>
+            <Button
+              variante="secundario"
+              onClick={aoFechar}
+              disabled={salvando}
+            >
+              Cancelar
+            </Button>
+          </ComDica>
+          <ComDica texto={DICAS.criarEGerarLink}>
+            <Button type="submit" disabled={salvando}>
+              {salvando ? "Criando…" : "Criar e gerar link"}
+            </Button>
+          </ComDica>
         </>
       }
     >
@@ -178,41 +188,47 @@ export function DialogoNovaPessoa({
             <p>{mensagem}</p>
           </Aviso>
         )}
-        <Input
-          rotulo="Nome"
-          name="nome"
-          value={valores.nome}
-          onChange={mudar("nome")}
-          maxLength={LIMITES.nome}
-          autoComplete="off"
-          erro={erros.nome}
-        />
-        <Input
-          rotulo="E-mail (opcional)"
-          name="email"
-          type="email"
-          inputMode="email"
-          value={valores.email}
-          onChange={mudar("email")}
-          maxLength={LIMITES.email}
-          autoComplete="off"
-          dica="Só para referência: a entrada é pelo link."
-          erro={erros.email}
-        />
-        <Select
-          rotulo="Papel"
-          name="papel"
-          value={valores.papel}
-          onChange={mudar("papel")}
-          dica="Admin também cria pessoas e gera e revoga links. Coordenação usa as demais telas."
-          erro={erros.papel}
-        >
-          {PAPEIS_DO_FORMULARIO.map((papel) => (
-            <option key={papel} value={papel}>
-              {ROTULO_PAPEL[papel]}
-            </option>
-          ))}
-        </Select>
+        <ComDica texto={DICAS.nome}>
+          <Input
+            rotulo="Nome"
+            name="nome"
+            value={valores.nome}
+            onChange={mudar("nome")}
+            maxLength={LIMITES.nome}
+            autoComplete="off"
+            erro={erros.nome}
+          />
+        </ComDica>
+        <ComDica texto={DICAS.email}>
+          <Input
+            rotulo="E-mail (opcional)"
+            name="email"
+            type="email"
+            inputMode="email"
+            value={valores.email}
+            onChange={mudar("email")}
+            maxLength={LIMITES.email}
+            autoComplete="off"
+            dica="Só para referência: a entrada é pelo link."
+            erro={erros.email}
+          />
+        </ComDica>
+        <ComDica texto={DICAS.papel}>
+          <Select
+            rotulo="Papel"
+            name="papel"
+            value={valores.papel}
+            onChange={mudar("papel")}
+            dica="Admin também cria pessoas e gera e revoga links. Coordenação usa as demais telas."
+            erro={erros.papel}
+          >
+            {PAPEIS_DO_FORMULARIO.map((papel) => (
+              <option key={papel} value={papel}>
+                {ROTULO_PAPEL[papel]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
       </div>
     </Dialogo>
   );
@@ -264,11 +280,14 @@ export function DialogoLink({
       titulo={`Link de acesso de ${nome}`}
       descricao="Este link só aparece agora: copie ou envie antes de fechar."
       aoFechar={aoFechar}
+      dicaFechar={DICAS.fecharLink}
       focoInicial={refCopiar}
       rodape={
-        <Button variante="secundario" onClick={aoFechar}>
-          Pronto
-        </Button>
+        <ComDica texto={DICAS.fecharLink}>
+          <Button variante="secundario" onClick={aoFechar}>
+            Pronto
+          </Button>
+        </ComDica>
       }
     >
       <div className="acessos-link-criado">
@@ -283,27 +302,33 @@ export function DialogoLink({
             até {formatarData(link.expira_em)}.
           </p>
         </Aviso>
-        <Textarea
-          ref={refCampo}
-          rotulo="Link de acesso"
-          value={link.url}
-          readOnly
-          rows={3}
-          className="acessos-url"
-          onFocus={(evento) => evento.currentTarget.select()}
-        />
+        <ComDica texto={DICAS.campoLink}>
+          <Textarea
+            ref={refCampo}
+            rotulo="Link de acesso"
+            value={link.url}
+            readOnly
+            rows={3}
+            className="acessos-url"
+            onFocus={(evento) => evento.currentTarget.select()}
+          />
+        </ComDica>
         <div className="acessos-link-acoes">
-          <Button ref={refCopiar} onClick={() => void copiar()}>
-            Copiar link
-          </Button>
-          <a
-            className={classesBotao({ variante: "secundario" })}
-            href={linkWhatsApp(nome, link.url, mensagens)}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Enviar pelo WhatsApp
-          </a>
+          <ComDica texto={DICAS.copiarLink}>
+            <Button ref={refCopiar} onClick={() => void copiar()}>
+              Copiar link
+            </Button>
+          </ComDica>
+          <ComDica texto={DICAS.enviarPeloWhatsApp}>
+            <a
+              className={classesBotao({ variante: "secundario" })}
+              href={linkWhatsApp(nome, link.url, mensagens)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Enviar pelo WhatsApp
+            </a>
+          </ComDica>
         </div>
         {/* Região viva fixa (anuncia o resultado de copiar) e o mesmo texto visível. */}
         <p className="visualmente-oculto" role="status">
@@ -396,20 +421,30 @@ export function DialogoRevogar({
       focoAoFechar={props.focoAoFechar}
       rodape={
         <>
-          <Button variante="secundario" onClick={props.aoFechar}>
-            Cancelar
-          </Button>
-          <Button
-            variante="perigo"
-            disabled={executando}
-            onClick={() => void confirmar()}
+          <ComDica texto={DICAS.cancelarRevogar}>
+            <Button variante="secundario" onClick={props.aoFechar}>
+              Cancelar
+            </Button>
+          </ComDica>
+          <ComDica
+            texto={
+              desteAparelho
+                ? DICAS.confirmarRevogarESair
+                : DICAS.confirmarRevogar
+            }
           >
-            {executando
-              ? "Revogando…"
-              : desteAparelho
-                ? "Revogar e sair"
-                : "Revogar link"}
-          </Button>
+            <Button
+              variante="perigo"
+              disabled={executando}
+              onClick={() => void confirmar()}
+            >
+              {executando
+                ? "Revogando…"
+                : desteAparelho
+                  ? "Revogar e sair"
+                  : "Revogar link"}
+            </Button>
+          </ComDica>
         </>
       }
     >
@@ -469,16 +504,20 @@ export function DialogoDesativar({
       focoAoFechar={props.focoAoFechar}
       rodape={
         <>
-          <Button variante="secundario" onClick={props.aoFechar}>
-            Cancelar
-          </Button>
-          <Button
-            variante="perigo"
-            disabled={executando}
-            onClick={() => void confirmar()}
-          >
-            {executando ? "Desativando…" : "Desativar acesso"}
-          </Button>
+          <ComDica texto={DICAS.cancelarDesativar}>
+            <Button variante="secundario" onClick={props.aoFechar}>
+              Cancelar
+            </Button>
+          </ComDica>
+          <ComDica texto={DICAS.confirmarDesativar}>
+            <Button
+              variante="perigo"
+              disabled={executando}
+              onClick={() => void confirmar()}
+            >
+              {executando ? "Desativando…" : "Desativar acesso"}
+            </Button>
+          </ComDica>
         </>
       }
     >

@@ -19,6 +19,7 @@ import { PREFIXO_AUDITORIA, auditoria } from "./routes/auditoria";
 import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
+import { PREFIXO_LINKS_VENDAS, linksVendas } from "./routes/links-vendas";
 import { PREFIXO_MINHA, minha } from "./routes/minha";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
 import { PREFIXO_PEDIDOS, pedidos } from "./routes/pedidos";
@@ -103,6 +104,10 @@ app.route(PREFIXO_TOKEN_WEBHOOK, tokenWebhook);
 // Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4). Remover
 // afiliado de teste (RIFA-031, D20) é só admin (o sub-app exige no DELETE; o PUT do caminho segue da coordenação).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
+// Link de vendas de cada célula (RIFA-046, D24): GET /api/admin/links-vendas (admin e coordenação, para a Adesão) e
+// PUT /api/admin/links-vendas/modelo, só admin (o sub-app exige no handler do PUT, antes do corpo; nunca num use de
+// /api/admin/links-vendas/*, que pegaria o GET). O GET da hierarquia fica no sub-app de /api/minha (abaixo).
+app.route(PREFIXO_LINKS_VENDAS, linksVendas);
 // Conferência pelo CSV da Rifei (RIFA-012): análise, "Recuperar" e auditoria sob /api/admin (passo 4).
 app.route(PREFIXO_RECONCILIACAO, reconciliacao);
 // Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.
@@ -110,8 +115,8 @@ app.route(PREFIXO_PAINEL, painel);
 // Visão pública (RIFA-PAINEL): ranking e bumbo sob /api/publico, ABERTOS (fora dos prefixos do
 // passo 4) e nunca com valores em R$ ou bilhetes (o sub-app confere a resposta no schema estrito).
 app.route(PREFIXO_PUBLICO, publico);
-// Visão individual (RIFA-014): sob /api/minha, protegida pelo passo 4c; o alvo vem só da sessão e a
-// resposta nunca traz dinheiro (o sub-app confere no schema estrito).
+// Visão individual (RIFA-014) e links de vendas das células do alvo (RIFA-046, D24): sob /api/minha, protegidos
+// pelo passo 4c; o alvo vem só da sessão e a resposta nunca traz dinheiro (o sub-app confere no schema estrito).
 app.route(PREFIXO_MINHA, minha);
 
 app.notFound(rotaInexistente);
