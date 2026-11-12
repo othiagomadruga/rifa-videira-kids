@@ -650,7 +650,7 @@ describe("CA2: editar e excluir", () => {
 
   it("409 em_uso ao excluir a célula mostra o motivo que veio da API e mantém a célula", async () => {
     const mensagem =
-      "A célula tem afiliados vinculados (1). Desvincule os afiliados antes de excluir a célula.";
+      "A célula tem afiliados vinculados (1). Passe os afiliados para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.";
     const { api, alerta } = await excluirComEmUso(
       "Células",
       "Célula Ágape",
@@ -739,7 +739,7 @@ describe("CA2: editar e excluir", () => {
       caminho: "/api/admin/celulas/103",
       mensagem: "",
       reserva:
-        "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Desvincule o afiliado antes de excluir a célula.",
+        "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Passe o afiliado para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.",
     },
     {
       aba: "Discipuladores",

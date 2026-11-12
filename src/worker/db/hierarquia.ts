@@ -909,7 +909,7 @@ export function removerCelula(
       tabela: "afiliados",
       coluna: "celula_id",
       mensagem: (quantidade) =>
-        `A célula tem afiliados vinculados (${quantidade}). Desvincule os afiliados antes de excluir a célula.`,
+        `A célula tem afiliados vinculados (${quantidade}). Passe os afiliados para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.`,
       mensagemDaTrilha:
         "A célula não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
     },

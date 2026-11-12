@@ -794,7 +794,7 @@ describe("CA1: células", () => {
       "em_uso",
     );
     expect(emUso.mensagem).toBe(
-      "A célula tem afiliados vinculados (1). Desvincule os afiliados antes de excluir a célula.",
+      "A célula tem afiliados vinculados (1). Passe os afiliados para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.",
     );
 
     await env.DB.prepare(

@@ -164,7 +164,7 @@ describe("recusada por chave estrangeira: a mensagem diz o motivo certo e nada �
       [
         "lider",
         celula.id,
-        "A célula tem afiliados vinculados (1). Desvincule os afiliados antes de excluir a célula.",
+        "A célula tem afiliados vinculados (1). Passe os afiliados para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.",
       ],
       [
         "discipulador",

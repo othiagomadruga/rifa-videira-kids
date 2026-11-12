@@ -112,7 +112,7 @@ const EM_USO: Record<Entidade, string> = {
   discipulador:
     "Não dá para excluir: o discipulador ainda tem células. Mova as células para outro discipulador (botão Editar, na aba Células) ou exclua-as antes.",
   celula:
-    "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Desvincule o afiliado antes de excluir a célula.",
+    "Não dá para excluir: a célula tem afiliado da Rifei vinculado. Passe o afiliado para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.",
 };
 
 /**
