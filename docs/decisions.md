@@ -1200,10 +1200,18 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
 2. **Leitura** (-db/-api, `db/links-vendas.ts`): um `db.batch` com (a) `SELECT id, slug_rifei, link_vendas_modelo FROM
    campanhas WHERE ativa = 1`; (b) as células do escopo com a célula, o `lider_nome`, o discipulador, a rede e a
    divisão (todas; `c.id = ?` no líder; `c.discipulador_id = ?` no discipulador; `d.rede_id = ?` na rede), nunca
-   `lider_telefone` nem `lider_email`; (c) `SELECT affiliate_id, celula_id FROM afiliados WHERE celula_id IN (as do
-   escopo) ORDER BY celula_id, vinculado_em DESC, affiliate_id DESC`. A montagem num módulo puro (`lib/links-vendas.ts`,
-   testado sem banco), com `montarLinkDeVendas` (nunca juntar texto à mão) e a ordem das células de
-   `db/acessos-hierarquia.ts` (`Intl.Collator("pt-BR")`, rede → discipulador → célula, empate pelo id); afiliado cujo
+   `lider_telefone` nem `lider_email`; (c) `SELECT affiliate_id, celula_id, vinculado_em FROM afiliados WHERE <as células do escopo> ORDER BY
+   celula_id`, sempre pelo índice `afiliados_por_celula` e nunca o `rotulo`: `celula_id = ?1` no líder; `celula_id IN
+   (SELECT id FROM celulas WHERE discipulador_id = ?1)` no discipulador; `celula_id IN (SELECT c.id FROM celulas AS c
+   JOIN discipuladores AS d ON d.id = c.discipulador_id WHERE d.rede_id = ?1)` na rede; e `celula_id IS NOT NULL` na
+   coordenação (o `ORDER BY celula_id` faz o planejador descer pelo índice só pelos vinculados, `celula_id>?`, em vez
+   de `SCAN afiliados`). A ordem dos links dentro da célula (`vinculado_em` decrescente; empate, `affiliate_id`
+   decrescente) fica na montagem, no Worker (`doVinculoMaisRecente`, sort estável): o `ORDER BY celula_id,
+   vinculado_em DESC, affiliate_id DESC` no SQL dá a mesma ordem, mas põe uma B-tree temporária que lê o dobro das
+   linhas dos afiliados (84 em vez de 42 na coordenação; conferido na revisão). A montagem num módulo puro
+   (`lib/links-vendas.ts`, testado sem banco), com `montarLinkDeVendas` (nunca juntar texto à mão) e a ordem das
+   células de `lib/ordem-hierarquia.ts` (extraída de `db/acessos-hierarquia.ts` sem mudar o comportamento;
+   `Intl.Collator("pt-BR")`, rede → discipulador → célula, empate pelo id); afiliado cujo
    link sai null fica de fora. Travar as idas ao D1 e as linhas lidas (`meta.rows_read`) no líder, no discipulador, na
    rede e na coordenação, e o plano dos afiliados com `EXPLAIN QUERY PLAN` (`afiliados_por_celula`). Sem cache.
 3. **Rotas** (-api): `GET /api/minha/links-vendas` no sub-app de `routes/minha.ts` (já exige os papéis e marca
