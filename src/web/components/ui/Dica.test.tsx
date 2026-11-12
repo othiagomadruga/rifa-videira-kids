@@ -120,6 +120,20 @@ describe("CA1: aparece com o mouse parado e com o foco, e some ao sair, ao perde
     fireEvent.keyDown(document.body, { key: "Escape" });
     act(() => botao().focus());
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    // Mesmo logo depois de um Tab: o Esc (ou o Enter) no meio apaga a marca do teclado.
+    act(() => botao().blur());
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    act(() => botao().focus());
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    // Shift+Tab abre (o Shift sozinho não apaga a marca).
+    act(() => botao().blur());
+    fireEvent.keyDown(document.body, { key: "Tab", shiftKey: true });
+    fireEvent.keyDown(document.body, { key: "Shift", shiftKey: true });
+    act(() => botao().focus());
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
 
   it("Esc fecha a dica aberta pelo mouse sem mover o mouse, e ela só volta com o mouse entrando de novo", () => {

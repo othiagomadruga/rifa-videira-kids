@@ -50,8 +50,12 @@ const TECLAS_DE_NAVEGACAO = new Set([
   "PageDown",
 ]);
 
+/** Só modificadoras: não mudam a marca (o Shift do Shift+Tab vem antes do Tab). */
+const TECLAS_MODIFICADORAS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
 // De onde veio o último foco: guardado no módulo, uma escuta só para todas as dicas (na captura, antes de qualquer
-// tela parar a propagação). Um ponteiro (mouse, toque, caneta) apaga a marca do teclado.
+// tela parar a propagação). Outra tecla (Esc, Enter...) e um ponteiro (mouse, toque, caneta) apagam a marca: o foco
+// que um diálogo ou o menu devolve depois do Esc, ou que vai para dentro de um diálogo aberto com Enter, não abre.
 let navegouPeloTecladoEm = Number.NEGATIVE_INFINITY;
 let escutandoOTeclado = false;
 
@@ -61,8 +65,10 @@ function escutarOTeclado() {
   document.addEventListener(
     "keydown",
     (evento) => {
-      if (TECLAS_DE_NAVEGACAO.has(evento.key))
-        navegouPeloTecladoEm = performance.now();
+      if (TECLAS_MODIFICADORAS.has(evento.key)) return;
+      navegouPeloTecladoEm = TECLAS_DE_NAVEGACAO.has(evento.key)
+        ? performance.now()
+        : Number.NEGATIVE_INFINITY;
     },
     true,
   );
