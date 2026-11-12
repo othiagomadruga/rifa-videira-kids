@@ -492,11 +492,40 @@ describe("estados do link de vendas", () => {
       ),
     ).toBeInTheDocument();
 
+    // O pedido novo do link fica preso até a conferência abaixo: enquanto ele não volta, o cartão fica como estava,
+    // sem voltar ao "carregando" (não pisca).
+    let liberar: () => void = () => undefined;
+    const segura = new Promise<void>((resolver) => {
+      liberar = resolver;
+    });
+    api.proxima("GET", CAMINHO_LINKS, async () => {
+      await segura;
+      return respostaJson(meusLinksDe(ALVO_CELULA));
+    });
     vinculados = 1;
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    await waitFor(() =>
+      expect(api.chamadasA("GET", CAMINHO_LINKS)).toHaveLength(2),
+    );
+    expect(
+      screen.queryByText(
+        "Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação.",
+      ),
+    ).toBeNull();
+    expect(
+      within(cartao).queryByText("Carregando o link de vendas…"),
+    ).toBeNull();
+    expect(
+      within(cartao).getByText(/ainda não tem cadastro de afiliado ligado/),
+    ).toBeInTheDocument();
+
+    liberar();
     expect(
       await within(cartao).findByRole("textbox", { name: "Link de vendas" }),
     ).toHaveValue(urlDoAfiliado(1042));
+    expect(
+      within(cartao).queryByText("Carregando o link de vendas…"),
+    ).toBeNull();
     expect(
       screen.queryByText(
         "Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação.",
@@ -512,7 +541,11 @@ describe("estados do link de vendas", () => {
         ESPERA_DO_PACOTE,
       ),
     ).toBeInTheDocument();
-    expect(api.chamadasA("GET", CAMINHO_LINKS)).toHaveLength(2);
+    // D12: o pedido de novo continua sem id de nada (o alvo vem da sessão).
+    expect(api.chamadasA("GET", CAMINHO_LINKS)).toEqual([
+      { metodo: "GET", caminho: CAMINHO_LINKS },
+      { metodo: "GET", caminho: CAMINHO_LINKS },
+    ]);
 
     // Sem mudança nos vínculos, a atualização seguinte não pede o link de novo.
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));

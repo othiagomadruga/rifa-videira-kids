@@ -46,8 +46,8 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 - **Em dia** ou **Abaixo do esperado:** o ritmo da célula até ontem. Logo abaixo: "No ritmo atual, chega a …% da meta".
 - **Hoje:** quanto falta para a meta de hoje.
 - O período atual (ex.: **Período 2**) e a **Curva da campanha**: o que a célula vendeu e o esperado, dia a dia.
-- **Ranking:** a posição da célula **Na sua divisão** (jovens ou adultos) e no **Geral**, quem está **Logo acima** e **Logo abaixo** e **Os primeiros** da sua divisão. A sua célula aparece com a marca **Você**.
 - **Seu link de vendas:** o seu link da Rifei, com **Copiar link**, **Enviar no WhatsApp** e o **QR code** para a pessoa apontar a câmera (**Baixar imagem** e **Imprimir**). Mostra "A coordenação ainda não liberou o link de vendas."? Use o link da sua Área de afiliados na Rifei.
+- **Ranking:** a posição da célula **Na sua divisão** (jovens ou adultos) e no **Geral**, quem está **Logo acima** e **Logo abaixo** e **Os primeiros** da sua divisão. A sua célula aparece com a marca **Você**.
 - Apareceu o aviso **"Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação."**? Fale com a coordenação. Quando ela ligar o link, as vendas que você já fez entram na célula.
 - **Sair:** só se o celular for emprestado.
 

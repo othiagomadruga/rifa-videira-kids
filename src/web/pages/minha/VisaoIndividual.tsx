@@ -14,7 +14,7 @@ import "./minha.css";
 
 // O conteúdo da visão individual (carregado à parte, só em /minha: veja MinhaPage.tsx): o cabeçalho, os
 // estados (carregando, erro, sem campanha) e a visão do alvo, que se atualiza sozinha a cada minuto, com o
-// link de vendas (RIFA-046), pedido uma vez.
+// link de vendas (RIFA-046), pedido uma vez (e de novo quando os vínculos do líder mudam).
 export function VisaoIndividual() {
   const usuario = useUsuarioConectado();
   const { estado, tentarDeNovo } = useVisaoIndividual();

@@ -22,7 +22,8 @@ import "./minha-links.css";
 // O link de vendas (RIFA-046, D24): a venda só conta para a célula quando é feita na Rifei pelo link de afiliado do
 // líder. O líder vê o link da célula dele, com o QR code em destaque ("Seu link de vendas"); o discipulador e a rede,
 // os links das células deles, com "Ver QR" num diálogo. Copiar, "Enviar no WhatsApp" e o QR (Baixar imagem e
-// Imprimir). Pedido uma vez ao abrir (sem a atualização de 60 s da visão). Nada de dinheiro.
+// Imprimir). Pedido uma vez ao abrir (sem a atualização de 60 s da visão) e de novo só quando os vínculos do líder
+// mudam (`vinculos`, RIFA-036). Nada de dinheiro.
 
 /** O título do cartão, pelo tipo do alvo (o da sessão enquanto carrega). */
 function tituloDoCartao(alvo: Alvo): string {
