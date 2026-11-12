@@ -268,10 +268,14 @@ describe("CA1: /minha sem sessão segue o fluxo da coordenação", () => {
       await screen.findByRole("heading", { level: 1, name: "Célula Ágape" }),
     ).toBeInTheDocument();
     await screen.findByRole("heading", { level: 2, name: "Ranking" });
-    expect(api.chamadas.map((chamada) => chamada.caminho)).toEqual([
-      "/api/sessao",
-      "/api/minha/visao?periodo=atual",
-    ]);
+    // A visão e, uma vez, o link de vendas (RIFA-046).
+    await waitFor(() =>
+      expect(api.chamadas.map((chamada) => chamada.caminho)).toEqual([
+        "/api/sessao",
+        "/api/minha/visao?periodo=atual",
+        "/api/minha/links-vendas",
+      ]),
+    );
   });
 
   it("falha ao conferir a sessão: avisa com 'Tentar de novo', sem sair de /minha", async () => {

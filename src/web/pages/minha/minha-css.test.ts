@@ -29,8 +29,10 @@ const semComentarios = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const tokensCss = lerArquivo("../../tema/tokens.css");
 const molduraCss = semComentarios(lerArquivo("./minha-moldura.css"));
 const visaoCss = semComentarios(lerArquivo("./minha.css"));
-/** Todo o CSS da tela: a moldura (pacote inicial) e o da visão (pacote à parte). */
-const minhaCss = `${molduraCss}\n${visaoCss}`;
+/** O link de vendas (RIFA-046), que também vem com a VisaoIndividual. */
+const linksCss = semComentarios(lerArquivo("./minha-links.css"));
+/** Todo o CSS da tela: a moldura (pacote inicial), o da visão e o do link de vendas (pacote à parte). */
+const minhaCss = `${molduraCss}\n${visaoCss}\n${linksCss}`;
 
 /** As declarações dos dois arquivos: propriedade e valor. */
 const DECLARACOES = [...minhaCss.matchAll(/([\w-]+)\s*:\s*([^;{}]+);/g)].map(
@@ -108,6 +110,9 @@ describe("CA5: o CSS da visão individual", () => {
       ".minha-vizinhos dd",
       ".minha-primeiros__nome",
       ".minha-grupo__titulo",
+      ".minha-links__nome",
+      ".minha-links__detalhe",
+      ".minha-links__explicacao",
     ]) {
       const inicio = minhaCss.indexOf(`${seletor} {`);
       expect(inicio, seletor).toBeGreaterThanOrEqual(0);
@@ -141,6 +146,13 @@ describe("CA5: o CSS da visão individual", () => {
     ["meta de hoje batida", "--cor-sucesso", "--cor-sucesso-suave", 4.5],
     ["texto na meta batida", "--cor-texto", "--cor-sucesso-suave", 4.5],
     ["falha da atualização", "--cor-alerta", "--cor-alerta-suave", 4.5],
+    ["célula sem link de vendas", "--cor-alerta", "--cor-alerta-suave", 4.5],
+    [
+      "texto suave nos outros links",
+      "--cor-texto-suave",
+      "--cor-superficie-2",
+      4.5,
+    ],
     ["falha ao sair", "--cor-perigo", "--cor-superficie", 4.5],
   ] as const)("%s: contraste suficiente", (_nome, texto, fundo, minimo) => {
     expect(contraste(cor(texto), cor(fundo))).toBeGreaterThanOrEqual(minimo);
@@ -173,6 +185,11 @@ describe("CSS no pacote inicial: só a moldura da visão individual", () => {
 
   it("o resto do CSS (minha.css) vem só com a VisaoIndividual, que é carregada à parte", () => {
     expect(quemImporta("minha.css")).toEqual(["./VisaoIndividual.tsx"]);
+    // O do link de vendas, com o cartão dele, que só a VisaoIndividual importa.
+    expect(quemImporta("minha-links.css")).toEqual(["./LinksDeVendas.tsx"]);
+    for (const [arquivo, fonte] of Object.entries(FONTES))
+      if (arquivo !== "./VisaoIndividual.tsx")
+        expect(fonte, arquivo).not.toMatch(/from "\.\/LinksDeVendas"/);
     expect(FONTES["./MinhaPage.tsx"]).toMatch(
       /lazy\(\(\) =>\s*import\("\.\/VisaoIndividual"\)/,
     );
@@ -188,6 +205,7 @@ describe("CSS no pacote inicial: só a moldura da visão individual", () => {
     for (const nome of classes(molduraCss))
       expect(nome).toMatch(/^minha-(moldura|cabecalho)/);
     for (const nome of classes(visaoCss))
-      expect(nome).not.toMatch(/^minha-(moldura|cabecalho)/);
+      expect(nome).not.toMatch(/^minha-(moldura|cabecalho|links)/);
+    for (const nome of classes(linksCss)) expect(nome).toMatch(/^minha-links/);
   });
 });

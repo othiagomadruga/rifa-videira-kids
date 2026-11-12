@@ -7,12 +7,14 @@ import { Cabecalho } from "./Cabecalho";
 import { CurvaIndividual } from "./CurvaIndividual";
 import { CartaoPeriodo, Destaque } from "./Destaque";
 import { Equipe } from "./Equipe";
+import { LinksDeVendas } from "./LinksDeVendas";
 import { RankingIndividual } from "./RankingIndividual";
 import { useVisaoIndividual } from "./useVisaoIndividual";
 import "./minha.css";
 
 // O conteúdo da visão individual (carregado à parte, só em /minha: veja MinhaPage.tsx): o cabeçalho, os
-// estados (carregando, erro, sem campanha) e a visão do alvo, que se atualiza sozinha a cada minuto.
+// estados (carregando, erro, sem campanha) e a visão do alvo, que se atualiza sozinha a cada minuto, com o
+// link de vendas (RIFA-046), pedido uma vez.
 export function VisaoIndividual() {
   const usuario = useUsuarioConectado();
   const { estado, tentarDeNovo } = useVisaoIndividual();
@@ -87,9 +89,13 @@ function Visao({
           />
         )}
       </div>
+      {/* O link de vendas (RIFA-046): o do líder logo abaixo dos números; os da equipe, depois dela. Pedido uma
+          vez (o cartão fica montado nas atualizações de cada minuto). */}
+      {alvo.tipo === "celula" && <LinksDeVendas alvo={alvo} />}
       <CurvaIndividual visao={visao} />
       <RankingIndividual visao={visao} />
       {alvo.tipo !== "celula" && <Equipe visao={visao} />}
+      {alvo.tipo !== "celula" && <LinksDeVendas alvo={alvo} />}
       <div className="minha-rodape">
         <p>
           Atualizado às {formatarHora(visao.atualizado_em)}. A página se

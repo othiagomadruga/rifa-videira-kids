@@ -1,0 +1,77 @@
+/* O link de vendas num campo só leitura, com "Copiar link" e "Enviar no WhatsApp" (RIFA-046). Celular primeiro: o
+   link quebra a linha (360 px sem rolagem lateral) e os botões descem para a linha de baixo quando não cabem. */
+
+.qr-compartilhar {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+/* Mais justo que o textarea comum: o link tem de 2 a 4 linhas, sem alça de redimensionar. */
+.qr-compartilhar .qr-compartilhar__campo {
+  min-height: 0;
+  resize: none;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-md);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.qr-compartilhar__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+/* Os botões ocupam a linha toda quando descem (no celular e nos cartões estreitos): linhas sem buraco. */
+.qr-compartilhar__acoes > * {
+  flex: 1 1 auto;
+}
+
+.qr-compartilhar__retorno {
+  font-size: var(--texto-sm);
+  color: var(--cor-sucesso);
+}
+
+.qr-compartilhar__retorno[data-resultado="selecionado"] {
+  color: var(--cor-alerta);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .qr-compartilhar__retorno {
+    animation: ui-surgir var(--duracao-media) var(--curva-saida);
+  }
+}
+
+/* O lugar do QR code enquanto o pedaço com o gerador chega (QrCodeLazy.tsx): o mesmo tamanho do QR. */
+.qr-carregando {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: min(100%, 16rem);
+  aspect-ratio: 1;
+  padding: var(--espaco-4);
+  border: 1px dashed var(--cor-borda-forte);
+  border-radius: var(--raio-2);
+  font-size: var(--texto-sm);
+  text-align: center;
+  color: var(--cor-texto-suave);
+}
+
+/* O QR code no diálogo do "Ver QR" (VerQr.tsx), com o link em texto embaixo. */
+.qr-dialogo {
+  display: grid;
+  gap: var(--espaco-3);
+  justify-items: center;
+  min-width: 0;
+}
+
+.qr-dialogo__link {
+  max-width: 100%;
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-sm);
+  text-align: center;
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}

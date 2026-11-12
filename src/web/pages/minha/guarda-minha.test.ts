@@ -1,7 +1,8 @@
 // CA2 (RIFA-014, D12): a regra do dinheiro na visão individual vale também no código, além da tela
 // renderizada (MinhaPage.test.tsx varre o DOM em todos os cenários). O código da pasta não formata nem lê
 // dinheiro, não lê a distância até os vizinhos, só conhece as rotas /api/minha/... e só importa da própria
-// pasta, dos componentes base, de lib/ e do contrato sem zod (de api.ts, dominio.ts e acesso.ts, só tipos).
+// pasta, dos componentes base, de lib/ e do contrato sem zod (calculos.ts e, desde a RIFA-046, link-vendas.ts;
+// de api.ts, dominio.ts e acesso.ts, só tipos).
 import { describe, expect, it } from "vitest";
 
 const PASTA = "/src/web/pages/minha/";
@@ -9,6 +10,16 @@ const PASTA = "/src/web/pages/minha/";
 /** O código da tela (sem os testes e sem o apoio deles, que nunca vai para o pacote do site). */
 const FONTES = import.meta.glob<string>(
   ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+  { query: "?raw", import: "default", eager: true },
+);
+
+/** O QR code e o "Copiar link" do link de vendas (RIFA-046), que a /minha usa: também sem dinheiro. */
+const FONTES_DO_QR = import.meta.glob<string>(
+  [
+    "../../components/qr/**/*.{ts,tsx}",
+    "!../../components/qr/**/*.test.{ts,tsx}",
+    "!../../components/qr/teste-apoio.ts",
+  ],
   { query: "?raw", import: "default", eager: true },
 );
 
@@ -57,12 +68,19 @@ describe("CA2: o código da visão individual não mostra dinheiro", () => {
         "./minha-api.ts",
         "./textos.ts",
         "./useVisaoIndividual.ts",
+        "./LinksDeVendas.tsx",
+        "./links-vendas-api.ts",
+        "./useMeusLinksVendas.ts",
       ]),
     );
   });
 
   it("sem formatarMoeda, R$, currency, BRL nem campos _centavos", () => {
-    for (const [arquivo, fonte] of Object.entries(FONTES)) {
+    expect(Object.keys(FONTES_DO_QR).length).toBeGreaterThanOrEqual(5);
+    for (const [arquivo, fonte] of Object.entries({
+      ...FONTES,
+      ...FONTES_DO_QR,
+    })) {
       expect(fonte, arquivo).not.toMatch(
         /formatarMoeda|R\$|currency|BRL|_centavos|total_centavos/,
       );
@@ -79,13 +97,17 @@ describe("CA2: o código da visão individual não mostra dinheiro", () => {
 
   it("as únicas rotas da API no código são as da visão individual (/api/minha/...)", () => {
     const rotas: string[] = [];
-    for (const [arquivo, fonte] of Object.entries(FONTES)) {
+    for (const [arquivo, fonte] of Object.entries({
+      ...FONTES,
+      ...FONTES_DO_QR,
+    })) {
       for (const [rota] of fonte.matchAll(/\/api\/[\w/-]*/g)) {
         rotas.push(rota);
         expect(rota, arquivo).toMatch(/^\/api\/minha\//);
       }
     }
     expect(rotas).toContain("/api/minha/visao");
+    expect(rotas).toContain("/api/minha/links-vendas");
   });
 });
 
@@ -100,10 +122,12 @@ describe("CA2: de onde a visão individual importa", () => {
         if (destino.startsWith("/src/web/pages/")) {
           expect(destino.startsWith(PASTA), contexto).toBe(true);
         }
-        // Contrato: valores só de calculos.ts (sem zod); de api.ts, dominio.ts e acesso.ts, só tipos.
+        // Contrato: valores só de calculos.ts e link-vendas.ts (sem zod; RIFA-046, D24); de api.ts,
+        // dominio.ts e acesso.ts, só tipos.
         if (destino.startsWith("/src/shared/")) {
           const permitido =
             destino === "/src/shared/contracts/calculos" ||
+            destino === "/src/shared/contracts/link-vendas" ||
             (soTipo &&
               [
                 "/src/shared/contracts/api",
