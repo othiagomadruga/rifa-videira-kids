@@ -159,7 +159,8 @@ const MARCADOR_NO_TEXTO = /\{([A-Za-z0-9_]+)\}/g;
  * levando o token para lá sem ninguém tocar no link (revisão RIFA-041; no modelo da coordenação, o link de um admin).
  * Só vale o `{link}` no começo ou depois de espaço, tabulação ou quebra de linha, como nos padrões (RIFA-042).
  */
-const LINK_COLADO = /[^ \t\r\n]\{link\}/;
+// Um \r sozinho não separa: se o app de quem recebe descartar o \r, o link cola no texto de antes (revisão da RIFA-042).
+const LINK_COLADO = /[^ \t\n]\{link\}/;
 
 /**
  * Outro endereço no modelo (RIFA-042): `://` (http://, https://...), `www.` ou um domínio seguido de barra

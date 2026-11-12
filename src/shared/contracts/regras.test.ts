@@ -204,6 +204,7 @@ describe("D20: as regras na campanha (corpo do PUT)", () => {
       ["{saudacao} Entre: {link}", [COLADO]],
       // Um {link} certo não salva outro colado no mesmo modelo.
       ["{link}\nDe novo: x{link}", [COLADO]],
+      ["{saudacao} Seu acesso: site.com?u=\r{link}", [COLADO]],
       ["{saudacao} Veja https://outro.site antes:\n{link}", [ENDERECO]],
       ["{saudacao} Veja http://outro.site antes:\n{link}", [ENDERECO]],
       ["{saudacao} Veja WWW.outro.site antes:\n{link}", [ENDERECO]],
