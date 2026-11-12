@@ -156,6 +156,14 @@ export const detalhesErroWebhookSchema = z.object({
 // GET e PUT /api/admin/campanha
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * Corpo do PUT. Os grupos `pedidos`, `acesso` e `mensagens` são só do admin (RIFA-042, adendo da D20): quem não é
+ * admin (a coordenação) e manda algum deles diferente do gravado (sem campanha, dos padrões) leva 403 `proibido`,
+ * só com `codigo` e `mensagem` (a mensagem diz quais grupos mudavam), e nada é gravado. Ausentes ou iguais ao
+ * gravado passam e não são gravados (grupo ausente mantém o gravado). Ordem: 400 → 403 → 409. Os modelos das
+ * mensagens seguem `problemasDoModelo` (regras.ts): o `{link}` no começo ou depois de espaço, tabulação ou quebra de
+ * linha, e nenhum outro endereço (400).
+ */
 export const corpoSalvarCampanhaSchema = campanhaEntradaSchema;
 export const respostaCampanhaSchema = campanhaSchema;
 

@@ -21,6 +21,8 @@
  * 3. os pedidos, com INSERT ... ON CONFLICT (id) DO NOTHING: um pedido que já existe (inclusive um que o
  *    webhook gravou depois da pré-visualização) nunca é sobrescrito, e repetir a mesma recuperação não
  *    duplica nada (idempotente). Cada pedido leva `origem = 'conferencia'` e o id da auditoria;
+ *    3a. o pedido fora do padrão (a plausibilidade da D11, a mesma do webhook: lib/plausibilidade.ts, com o preço do
+ *    bilhete da campanha) entra em `pedidos_suspeitos`, com os mesmos motivos, só se entrou neste lote (RIFA-042);
  * 4. as contagens da auditoria, tiradas dos pedidos que de fato entraram;
  * 5. a linha da trilha de auditoria da coordenação (`auditoria`, ação `conferencia.recuperar`, alvo
  *    `campanha:<id>`), só se algum pedido entrou;
@@ -47,6 +49,7 @@ import type {
   AusentesDoArquivo,
   PedidoGravado,
 } from "../lib/conferencia-analise";
+import { avaliarPlausibilidade } from "../lib/plausibilidade";
 
 const SELECIONAR_AFILIADOS = `
   SELECT a.affiliate_id, a.rotulo, a.celula_id, c.nome AS celula_nome
@@ -349,24 +352,19 @@ export interface GravacaoRecuperacao {
   /** Nome da coluna usada em cada campo. */
   colunas: ColunasDoCorpo;
   pedidos: readonly PedidoRecuperado[];
+  /** Preço do bilhete da campanha ativa: a base da plausibilidade (D11), como no webhook. */
+  precoBilheteCentavos: number;
 }
 
 /** Tamanho máximo (em caracteres) do JSON de pedidos num comando: o D1 limita o tamanho de um valor. */
 const LIMITE_JSON_POR_COMANDO = 400_000;
 
-/** Os pedidos em pedaços de JSON pequenos o bastante para um parâmetro do D1. */
-function pedacosDePedidos(pedidos: readonly PedidoRecuperado[]): string[] {
+/** Os itens (cada um já em JSON) em listas JSON pequenas o bastante para um parâmetro do D1. */
+function pedacosDeJson(itens: readonly string[]): string[] {
   const pedacos: string[] = [];
   let atual: string[] = [];
   let tamanho = 0;
-  for (const pedido of pedidos) {
-    const json = JSON.stringify({
-      id: pedido.pedido_id,
-      afiliado: pedido.affiliate_id,
-      bilhetes: pedido.qtd_bilhetes,
-      centavos: pedido.total_centavos,
-      aprovado_em: pedido.aprovado_em,
-    });
+  for (const json of itens) {
     if (atual.length > 0 && tamanho + json.length > LIMITE_JSON_POR_COMANDO) {
       pedacos.push(`[${atual.join(",")}]`);
       atual = [];
@@ -377,6 +375,52 @@ function pedacosDePedidos(pedidos: readonly PedidoRecuperado[]): string[] {
   }
   if (atual.length > 0) pedacos.push(`[${atual.join(",")}]`);
   return pedacos;
+}
+
+/** Os pedidos em pedaços de JSON para o INSERT em `pedidos`. */
+function pedacosDePedidos(pedidos: readonly PedidoRecuperado[]): string[] {
+  return pedacosDeJson(
+    pedidos.map((pedido) =>
+      JSON.stringify({
+        id: pedido.pedido_id,
+        afiliado: pedido.affiliate_id,
+        bilhetes: pedido.qtd_bilhetes,
+        centavos: pedido.total_centavos,
+        aprovado_em: pedido.aprovado_em,
+      }),
+    ),
+  );
+}
+
+/**
+ * Os pedidos fora do padrão (D11: mais de 200 bilhetes, ou total acima de bilhetes × preço ou abaixo da metade
+ * disso), em pedaços de JSON para o INSERT em `pedidos_suspeitos`: os mesmos campos e motivos que o webhook grava
+ * (`motivos` vai como o texto JSON da lista, igual ao do webhook).
+ */
+function pedacosDeSuspeitos(
+  pedidos: readonly PedidoRecuperado[],
+  precoBilheteCentavos: number,
+): string[] {
+  return pedacosDeJson(
+    pedidos.flatMap((pedido) => {
+      const suspeita = avaliarPlausibilidade({
+        qtdBilhetes: pedido.qtd_bilhetes,
+        totalCentavos: pedido.total_centavos,
+        precoBilheteCentavos,
+      });
+      return suspeita === null
+        ? []
+        : [
+            JSON.stringify({
+              id: pedido.pedido_id,
+              bilhetes: pedido.qtd_bilhetes,
+              centavos: pedido.total_centavos,
+              esperado: suspeita.esperadoCentavos,
+              motivos: JSON.stringify(suspeita.motivos),
+            }),
+          ];
+    }),
+  );
 }
 
 const ID_DA_RECUPERACAO = "(SELECT max(id) FROM recuperacoes)";
@@ -432,6 +476,30 @@ export async function gravarRecuperacao(
            ON CONFLICT (id) DO NOTHING`,
         )
         .bind(gravacao.campanhaId, gravacao.executadoEm, pedaco),
+    ),
+    // A plausibilidade da D11 (RIFA-042), como o webhook: só os pedidos que este lote gravou (os que já existiam
+    // ficam como estão) entram na lista de revisão, e continuam contando nas vendas.
+    ...pedacosDeSuspeitos(gravacao.pedidos, gravacao.precoBilheteCentavos).map(
+      (pedaco) =>
+        db
+          .prepare(
+            `INSERT INTO pedidos_suspeitos
+               (pedido_id, qtd_bilhetes, total_centavos, esperado_centavos, motivos, marcado_em)
+             SELECT json_extract(j.value, '$.id'), json_extract(j.value, '$.bilhetes'),
+               json_extract(j.value, '$.centavos'), json_extract(j.value, '$.esperado'),
+               json_extract(j.value, '$.motivos'), ?1
+             FROM json_each(?2) AS j
+             WHERE EXISTS (SELECT 1 FROM pedidos AS p
+                           WHERE p.id = json_extract(j.value, '$.id')
+                             AND p.recuperacao_id = ${ID_DA_RECUPERACAO})
+             ON CONFLICT (pedido_id) DO UPDATE SET
+               qtd_bilhetes = excluded.qtd_bilhetes,
+               total_centavos = excluded.total_centavos,
+               esperado_centavos = excluded.esperado_centavos,
+               motivos = excluded.motivos,
+               marcado_em = excluded.marcado_em`,
+          )
+          .bind(gravacao.executadoEm, pedaco),
     ),
     db.prepare(
       `UPDATE recuperacoes SET

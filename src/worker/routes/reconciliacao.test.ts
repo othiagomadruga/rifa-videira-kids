@@ -36,6 +36,7 @@ import {
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { juntarAvisos } from "../../shared/conferencia/avisos";
+import { listarPedidosSuspeitos } from "../db/pedidos-suspeitos";
 import { gravarRecuperacao } from "../db/reconciliacao";
 import { sha256Hex } from "../lib/cripto";
 import app from "../index";
@@ -978,6 +979,141 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     ).toEqual({ affiliate_id: 7777, celula_id: null, origem: "webhook" });
   });
 
+  it("RIFA-042 (CA4): o recuperado fora do padrão (mais de 200 bilhetes ou valor fora do preço) entra nos suspeitos, com os motivos do webhook; o normal, não; a trilha e a resposta não mudam", async () => {
+    // Preço do bilhete da campanha: R$ 20,00. Um pedido de cada motivo da D11 e um normal.
+    const linhas: LinhaRifei[] = [
+      ["R-0400", "201", "R$ 4.020,00"], // mais de 200 bilhetes (o valor bate com o preço)
+      ["R-0401", "2", "R$ 100,00"], // acima de 2 × R$ 20,00
+      ["R-0402", "4", "R$ 30,00"], // abaixo de 4 × R$ 20,00 com mais de 50% de desconto
+      ["R-0403", "2", "R$ 40,00"], // normal
+    ].map(([pedido, quantidade, valor], indice) => ({
+      pedido,
+      status: "Pago",
+      quantidade,
+      bilhetes: "",
+      valor,
+      afiliado: "101",
+      data: `29/11/2026 10:0${indice}`,
+    }));
+    const enviado = {
+      ...(await corpo(csvDoCenario(linhas))),
+      pedidos: linhas.map((linha) => linha.pedido),
+    };
+
+    // A prévia não marca nada.
+    await recuperar({ ...enviado, simular: true });
+    expect(await contar("pedidos_suspeitos")).toBe(0);
+
+    const resposta = await postar(conferencia, RECUPERAR, enviado);
+    expect(resposta.status).toBe(200);
+    // A resposta é a de antes: o contrato inteiro, sem campo a mais, com os quatro recuperados.
+    const resultado = respostaRecuperarReconciliacaoSchema.parse(
+      resposta.corpo,
+    );
+    expect(resposta.corpo).toEqual(resultado);
+    expect(resultado).toMatchObject({
+      simulado: false,
+      aplicado: true,
+      nao_recuperados: [],
+      totais: { pedidos_aprovados: 4, bilhetes: 209, total_centavos: 419000 },
+    });
+    expect(resultado.recuperados.map((pedido) => pedido.pedido_id)).toEqual([
+      "R-0400",
+      "R-0401",
+      "R-0402",
+      "R-0403",
+    ]);
+
+    // Os três fora do padrão, na mesma gravação (o instante é o da recuperação), com os motivos e as mensagens
+    // da plausibilidade do webhook (lib/plausibilidade.ts); o normal fica de fora.
+    const suspeitos = (
+      await env.DB.prepare(
+        `SELECT pedido_id, qtd_bilhetes, total_centavos, esperado_centavos, motivos, marcado_em
+         FROM pedidos_suspeitos ORDER BY pedido_id`,
+      ).all<{ motivos: string }>()
+    ).results.map((linha) => ({
+      ...linha,
+      motivos: (
+        JSON.parse(linha.motivos) as { codigo: string; mensagem: string }[]
+      ).map(({ codigo, mensagem }) => [codigo, mensagem]),
+    }));
+    const marcado_em = AGORA_CONFERENCIA.toISOString();
+    expect(suspeitos).toEqual([
+      {
+        pedido_id: "R-0400",
+        qtd_bilhetes: 201,
+        total_centavos: 402000,
+        esperado_centavos: 402000,
+        motivos: [
+          [
+            "quantidade_acima_do_teto",
+            "Mais de 200 bilhetes num pedido só: confira na Rifei (o pedido continua contando)",
+          ],
+        ],
+        marcado_em,
+      },
+      {
+        pedido_id: "R-0401",
+        qtd_bilhetes: 2,
+        total_centavos: 10000,
+        esperado_centavos: 4000,
+        motivos: [
+          [
+            "total_acima_do_esperado",
+            "Total maior que bilhetes × preço do bilhete da campanha: confira na Rifei (o pedido continua contando)",
+          ],
+        ],
+        marcado_em,
+      },
+      {
+        pedido_id: "R-0402",
+        qtd_bilhetes: 4,
+        total_centavos: 3000,
+        esperado_centavos: 8000,
+        motivos: [
+          [
+            "total_abaixo_do_esperado",
+            "Total abaixo de bilhetes × preço do bilhete da campanha com mais de 50% de desconto: confira na Rifei (o pedido continua contando)",
+          ],
+        ],
+        marcado_em,
+      },
+    ]);
+    // Na lista de revisão da coordenação (GET /api/admin/pedidos/suspeitos), como os do webhook.
+    expect(
+      (await listarPedidosSuspeitos(env.DB)).itens.map((item) => [
+        item.pedido_id,
+        item.motivos.map((motivo) => motivo.codigo),
+        item.celula_id,
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        ["R-0400", ["quantidade_acima_do_teto"], 1],
+        ["R-0401", ["total_acima_do_esperado"], 1],
+        ["R-0402", ["total_abaixo_do_esperado"], 1],
+      ]),
+    );
+
+    // A trilha é a de antes: uma linha, com as contagens do que entrou (os suspeitos continuam contando).
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT acao, resumo FROM auditoria WHERE acao = 'conferencia.recuperar'",
+        ).all()
+      ).results,
+    ).toEqual([
+      {
+        acao: "conferencia.recuperar",
+        resumo: `Recuperação ${resultado.recuperacao_id} (conferência pelo CSV): 4 pedidos e 209 bilhetes gravados como vendas aprovadas`,
+      },
+    ]);
+
+    // Repetir não marca de novo nem muda a marcação (nada entra: ja_existe).
+    const segunda = await recuperar(enviado);
+    expect(segunda.recuperados).toEqual([]);
+    expect(await contar("pedidos_suspeitos")).toBe(3);
+  });
+
   it("corrida: pedido que entrou depois da prévia não é sobrescrito e não conta na auditoria", async () => {
     await env.DB.prepare(
       `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em)
@@ -1006,6 +1142,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       arquivoSha256: "0".repeat(64),
       colunas: { ...COLUNAS_VAZIAS, pedido_id: "Pedido" },
       pedidos: [pedido("R-CORRIDA"), pedido("R-NOVO")],
+      precoBilheteCentavos: DADOS_CAMPANHA.preco_bilhete_centavos,
     });
 
     expect([...resultado.gravados]).toEqual(["R-NOVO"]);
@@ -1035,6 +1172,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       arquivoSha256: "0".repeat(64),
       colunas: COLUNAS_VAZIAS,
       pedidos: [pedido("R-CORRIDA")],
+      precoBilheteCentavos: DADOS_CAMPANHA.preco_bilhete_centavos,
     });
     expect(nada).toEqual({ recuperacaoId: null, gravados: new Set() });
     expect(await contar("recuperacoes")).toBe(1);
@@ -1074,6 +1212,9 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
             pedido_id: "R-OK",
             affiliate_id: 8888,
             aprovado_em: "2026-11-30T12:00:00.000Z",
+            // Fora do padrão (RIFA-042): a marcação de suspeito também volta com o lote.
+            qtd_bilhetes: 201,
+            total_centavos: 402000,
           },
           // aprovado_em fora do formato: o CHECK da tabela recusa e o lote inteiro volta.
           {
@@ -1083,12 +1224,14 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
             aprovado_em: "30/11/2026",
           },
         ],
+        precoBilheteCentavos: DADOS_CAMPANHA.preco_bilhete_centavos,
       }),
     ).rejects.toThrow(/CHECK constraint failed/);
     expect(await contar("recuperacoes")).toBe(0);
     expect(await contar("pedidos", "id IN ('R-OK', 'R-RUIM')")).toBe(0);
     expect(await contar("afiliados", "affiliate_id = 8888")).toBe(0);
     expect(await contar("auditoria")).toBe(0);
+    expect(await contar("pedidos_suspeitos")).toBe(0);
   });
 
   it("um paid_order do webhook depois da recuperação é duplicado e não muda o pedido recuperado", async () => {
