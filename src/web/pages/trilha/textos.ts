@@ -21,7 +21,7 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "pedido.desconsiderar": "Pedido desconsiderado",
   "pedido.reconsiderar": "Pedido voltou a contar",
   "afiliado.remover": "Afiliado removido",
-  // RIFA-039 (D21): o token do webhook gerado pela tela (o rótulo do alvo `webhook` vem na tarefa -web).
+  // RIFA-039 (D21): o token do webhook gerado pela tela (aba Webhook da Rifei de Acessos; alvo `webhook`).
   "webhook.gerar_token": "Token do webhook gerado",
 };
 
@@ -44,6 +44,8 @@ const TIPO_DO_ALVO: Record<string, string> = {
   celula: "Célula",
   // D20: pedido.desconsiderar e pedido.reconsiderar (`pedido:<id>`, ou só `pedido` quando o id não cabe).
   pedido: "Pedido",
+  // D21: webhook.gerar_token (ALVO_AUDITORIA_TOKEN_WEBHOOK, sem id: há um token só).
+  webhook: "Webhook da Rifei",
 };
 
 /**

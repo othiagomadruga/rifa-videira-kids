@@ -1,0 +1,61 @@
+/* Aba "Webhook da Rifei" de Acessos (RIFA-039): vem junto com ela (pacote à parte). Uma coluna só, celular
+   primeiro; no computador, a coluna não passa de 48rem (a URL e o token, em fonte mono, cabem numa linha). Usa
+   também as classes de acessos.css (.acessos-dados, .acessos-suave, .acessos-url, .acessos-copia). */
+.acessos-webhook {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+  max-width: var(--largura-publica);
+}
+
+.acessos-webhook__corpo,
+.acessos-webhook__token {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.acessos-webhook__campo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.acessos-webhook__campo .ui-campo {
+  align-self: stretch;
+}
+
+.acessos-webhook__campo .acessos-url {
+  min-height: 0;
+}
+
+.acessos-webhook__acao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.acessos-webhook__passos {
+  display: grid;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-fundo);
+  overflow-wrap: anywhere;
+}
+
+.acessos-webhook__subtitulo {
+  font-size: var(--texto-md);
+}
+
+.acessos-webhook__passos ol {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding-left: var(--espaco-5);
+}
