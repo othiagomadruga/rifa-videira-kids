@@ -5,6 +5,7 @@ import {
   Aviso,
   Button,
   Card,
+  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -14,6 +15,7 @@ import {
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import {
+  DICAS,
   avisoDaMensagem,
   linkWhatsApp,
   opcoesDoSeletor,
@@ -44,12 +46,14 @@ export function BumboPage() {
           titulo="A campanha ainda não foi configurada."
           descricao="A mensagem do bumbo aparece aqui depois que a campanha estiver configurada."
           acao={
-            <Link
-              className={classesBotao({ variante: "secundario" })}
-              to="/coordenacao/campanha"
-            >
-              Configurar a campanha
-            </Link>
+            <ComDica texto={DICAS.configurarCampanha}>
+              <Link
+                className={classesBotao({ variante: "secundario" })}
+                to="/coordenacao/campanha"
+              >
+                Configurar a campanha
+              </Link>
+            </ComDica>
           }
         />
       ) : (
@@ -98,18 +102,20 @@ type PropsSeletor = {
 function SeletorDoDia({ opcoes, valor, aoMudar }: PropsSeletor) {
   return (
     <div className="bumbo__seletor">
-      <Select
-        rotulo="Dia da mensagem"
-        dica="A mensagem fala sempre do dia anterior, já fechado."
-        value={valor}
-        onChange={(evento) => aoMudar(evento.target.value)}
-      >
-        {opcoes.map((opcao) => (
-          <option key={opcao.data} value={opcao.valor}>
-            {opcao.rotulo}
-          </option>
-        ))}
-      </Select>
+      <ComDica texto={DICAS.dia}>
+        <Select
+          rotulo="Dia da mensagem"
+          dica="A mensagem fala sempre do dia anterior, já fechado."
+          value={valor}
+          onChange={(evento) => aoMudar(evento.target.value)}
+        >
+          {opcoes.map((opcao) => (
+            <option key={opcao.data} value={opcao.valor}>
+              {opcao.rotulo}
+            </option>
+          ))}
+        </Select>
+      </ComDica>
     </div>
   );
 }
@@ -174,22 +180,26 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
       )}
       {/* As ações vêm antes do texto: ao abrir a tela, enviar é um toque, sem rolar. */}
       <div className="bumbo__acoes">
-        <a
-          className={classesBotao({ variante: "primario" }, "bumbo__acao")}
-          href={linkWhatsApp(bumbo.texto)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Enviar no WhatsApp{" "}
-          <span className="visualmente-oculto">(abre em outra aba)</span>
-        </a>
-        <Button
-          variante="secundario"
-          className="bumbo__acao"
-          onClick={() => void copiar()}
-        >
-          Copiar mensagem
-        </Button>
+        <ComDica texto={DICAS.enviarNoWhatsApp}>
+          <a
+            className={classesBotao({ variante: "primario" }, "bumbo__acao")}
+            href={linkWhatsApp(bumbo.texto)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Enviar no WhatsApp{" "}
+            <span className="visualmente-oculto">(abre em outra aba)</span>
+          </a>
+        </ComDica>
+        <ComDica texto={DICAS.copiar}>
+          <Button
+            variante="secundario"
+            className="bumbo__acao"
+            onClick={() => void copiar()}
+          >
+            Copiar mensagem
+          </Button>
+        </ComDica>
       </div>
       {/* Região viva fixa (anuncia o resultado de copiar) e o mesmo texto, visível. */}
       <p className="visualmente-oculto" role="status">

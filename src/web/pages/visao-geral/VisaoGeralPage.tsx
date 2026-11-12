@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import type { RespostaPainelResumo } from "../../../shared/contracts/calculos";
 import {
   Button,
+  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -17,7 +18,7 @@ import { CurvaDaCampanha } from "./CurvaDaCampanha";
 import { FiltroEscopo } from "./FiltroEscopo";
 import { Referencia } from "./Referencia";
 import { RelatorioCampanha } from "./RelatorioCampanha";
-import { ROTULO_DO_ESCOPO, textoSemVendas } from "./textos";
+import { DICAS, ROTULO_DO_ESCOPO, textoSemVendas } from "./textos";
 import { useCelulasDoFiltro } from "./useCelulasDoFiltro";
 import {
   INTERVALO_ATUALIZACAO_MS,
@@ -90,9 +91,11 @@ export function VisaoGeralPage() {
                 `Atualizado às ${formatarHora(resumo.atualizado_em)}.`}{" "}
             Atualiza sozinho a cada {SEGUNDOS_ENTRE_ATUALIZACOES} s.
           </p>
-          <Button variante="secundario" onClick={atualizar}>
-            Atualizar
-          </Button>
+          <ComDica texto={DICAS.atualizar}>
+            <Button variante="secundario" onClick={atualizar}>
+              Atualizar
+            </Button>
+          </ComDica>
         </div>
       </div>
       <p className="visao-falha" role="status">
@@ -161,9 +164,11 @@ function Conteudo({
           titulo="Não encontramos este recorte"
           descricao={`${comoFrase(mensagemDoErro(estado.erro))} O item pode ter saído da hierarquia.`}
           acao={
-            <Button variante="secundario" onClick={verCampanhaToda}>
-              Ver a campanha toda
-            </Button>
+            <ComDica texto={DICAS.verCampanhaToda}>
+              <Button variante="secundario" onClick={verCampanhaToda}>
+                Ver a campanha toda
+              </Button>
+            </ComDica>
           }
         />
       );

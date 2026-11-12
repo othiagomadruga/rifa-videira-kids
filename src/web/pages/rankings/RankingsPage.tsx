@@ -7,6 +7,7 @@ import {
 } from "../../../shared/contracts/calculos";
 import {
   Abas,
+  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -35,6 +36,7 @@ import {
 } from "./rankings-api";
 import { TabelaRanking } from "./TabelaRanking";
 import {
+  DICAS,
   TEXTO_CRITERIO,
   TEXTO_JANELA,
   TEXTO_NIVEL,
@@ -96,33 +98,37 @@ export function RankingsPage() {
   const painel = (
     <div className="pilha rankings-painel">
       <div className="rankings-filtros">
-        <Select
-          rotulo="Divisão"
-          value={filtros.divisao ?? ""}
-          onChange={(evento) =>
-            mudarFiltros({ divisao: lerDivisao(evento.target.value) })
-          }
-        >
-          <option value="">Todas</option>
-          {ORDEM_DIVISOES.map((divisao) => (
-            <option key={divisao} value={divisao}>
-              {NOMES_DIVISAO[divisao]}
-            </option>
-          ))}
-        </Select>
-        <Select
-          rotulo="Janela"
-          value={filtros.periodo}
-          onChange={(evento) =>
-            mudarFiltros({ periodo: lerJanela(evento.target.value) })
-          }
-        >
-          {JANELAS.map((janela) => (
-            <option key={janela} value={janela}>
-              {TEXTO_JANELA[janela]}
-            </option>
-          ))}
-        </Select>
+        <ComDica texto={DICAS.divisao}>
+          <Select
+            rotulo="Divisão"
+            value={filtros.divisao ?? ""}
+            onChange={(evento) =>
+              mudarFiltros({ divisao: lerDivisao(evento.target.value) })
+            }
+          >
+            <option value="">Todas</option>
+            {ORDEM_DIVISOES.map((divisao) => (
+              <option key={divisao} value={divisao}>
+                {NOMES_DIVISAO[divisao]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.janela}>
+          <Select
+            rotulo="Janela"
+            value={filtros.periodo}
+            onChange={(evento) =>
+              mudarFiltros({ periodo: lerJanela(evento.target.value) })
+            }
+          >
+            {JANELAS.map((janela) => (
+              <option key={janela} value={janela}>
+                {TEXTO_JANELA[janela]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
       </div>
       <ConteudoDoRanking resultado={resultado} aoTentarDeNovo={tentarDeNovo} />
     </div>
@@ -146,6 +152,7 @@ export function RankingsPage() {
         abas={NIVEIS.map((nivel) => ({
           id: nivel,
           rotulo: TEXTO_NIVEL[nivel].aba,
+          dica: DICAS.aba[nivel],
           // Só o painel da aba atual tem conteúdo: os outros níveis não são consultados.
           conteudo: nivel === filtros.nivel ? painel : null,
         }))}

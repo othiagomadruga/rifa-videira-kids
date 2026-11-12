@@ -8,6 +8,7 @@ import type {
 import {
   Badge,
   Button,
+  ComDica,
   DataTable,
   EmptyState,
   Input,
@@ -16,11 +17,13 @@ import {
 } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
 import {
+  DICAS,
   DIVISOES,
   ROTULO_DIVISAO,
   compararNomes,
   paraBusca,
   plural,
+  type Entidade,
 } from "./textos";
 
 type AcoesDaLinha<T> = {
@@ -55,7 +58,11 @@ export function TabelaCelulas({
       <EmptyState
         titulo="Nenhuma célula ainda: importe a planilha"
         descricao="Baixe o modelo, preencha uma linha por célula e importe o arquivo: as redes e os discipuladores entram junto."
-        acao={<Button onClick={aoIrParaImportar}>Importar planilha</Button>}
+        acao={
+          <ComDica texto={DICAS.irParaImportar}>
+            <Button onClick={aoIrParaImportar}>Importar planilha</Button>
+          </ComDica>
+        }
       />
     );
   }
@@ -133,6 +140,7 @@ export function TabelaCelulas({
       titulo: "Ações",
       celula: (celula) => (
         <BotoesDaLinha
+          entidade="celula"
           nome={celula.nome}
           aoEditar={() => aoEditar(celula)}
           aoExcluir={() => aoExcluir(celula)}
@@ -144,42 +152,48 @@ export function TabelaCelulas({
   return (
     <div className="hierarquia-painel">
       <div className="hierarquia-filtros">
-        <Select
-          rotulo="Divisão"
-          value={divisao}
-          onChange={(evento) => {
-            const nova = evento.currentTarget.value as Divisao | "";
-            setDivisao(nova);
-            const rede = redes.find((item) => String(item.id) === redeId);
-            if (nova !== "" && rede && rede.divisao !== nova) setRedeId("");
-          }}
-        >
-          <option value="">Todas</option>
-          {DIVISOES.map((item) => (
-            <option key={item} value={item}>
-              {ROTULO_DIVISAO[item]}
-            </option>
-          ))}
-        </Select>
-        <Select
-          rotulo="Rede"
-          value={redeFiltro}
-          onChange={(evento) => setRedeId(evento.currentTarget.value)}
-        >
-          <option value="">Todas as redes</option>
-          {redesDaDivisao.map((rede) => (
-            <option key={rede.id} value={rede.id}>
-              {rede.nome}
-            </option>
-          ))}
-        </Select>
-        <Input
-          rotulo="Buscar por nome"
-          dica="Célula, líder ou discipulador"
-          type="search"
-          value={busca}
-          onChange={(evento) => setBusca(evento.currentTarget.value)}
-        />
+        <ComDica texto={DICAS.filtroDivisao}>
+          <Select
+            rotulo="Divisão"
+            value={divisao}
+            onChange={(evento) => {
+              const nova = evento.currentTarget.value as Divisao | "";
+              setDivisao(nova);
+              const rede = redes.find((item) => String(item.id) === redeId);
+              if (nova !== "" && rede && rede.divisao !== nova) setRedeId("");
+            }}
+          >
+            <option value="">Todas</option>
+            {DIVISOES.map((item) => (
+              <option key={item} value={item}>
+                {ROTULO_DIVISAO[item]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.filtroRede}>
+          <Select
+            rotulo="Rede"
+            value={redeFiltro}
+            onChange={(evento) => setRedeId(evento.currentTarget.value)}
+          >
+            <option value="">Todas as redes</option>
+            {redesDaDivisao.map((rede) => (
+              <option key={rede.id} value={rede.id}>
+                {rede.nome}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.busca}>
+          <Input
+            rotulo="Buscar por nome"
+            dica="Célula, líder ou discipulador"
+            type="search"
+            value={busca}
+            onChange={(evento) => setBusca(evento.currentTarget.value)}
+          />
+        </ComDica>
       </div>
       <p className="hierarquia-contagem" role="status">
         {temFiltro
@@ -197,9 +211,11 @@ export function TabelaCelulas({
             <EmptyState
               titulo="Nenhuma célula encontrada com esses filtros."
               acao={
-                <Button variante="secundario" onClick={limparFiltros}>
-                  Limpar filtros
-                </Button>
+                <ComDica texto={DICAS.limparFiltros}>
+                  <Button variante="secundario" onClick={limparFiltros}>
+                    Limpar filtros
+                  </Button>
+                </ComDica>
               }
             />
           }
@@ -268,6 +284,7 @@ export function TabelaDiscipuladores({
       titulo: "Ações",
       celula: (item) => (
         <BotoesDaLinha
+          entidade="discipulador"
           nome={item.nome}
           aoEditar={() => aoEditar(item)}
           aoExcluir={() => aoExcluir(item)}
@@ -356,6 +373,7 @@ export function TabelaRedes({
       titulo: "Ações",
       celula: (rede) => (
         <BotoesDaLinha
+          entidade="rede"
           nome={rede.nome}
           aoEditar={() => aoEditar(rede)}
           aoExcluir={() => aoExcluir(rede)}
@@ -450,22 +468,28 @@ function enderecoTel(telefone: string): string | null {
 }
 
 function BotoesDaLinha({
+  entidade,
   nome,
   aoEditar,
   aoExcluir,
 }: {
+  entidade: Entidade;
   nome: string;
   aoEditar: () => void;
   aoExcluir: () => void;
 }) {
   return (
     <span className="hierarquia-acoes">
-      <Button variante="secundario" onClick={aoEditar}>
-        Editar <span className="visualmente-oculto">{nome}</span>
-      </Button>
-      <Button variante="discreto" onClick={aoExcluir}>
-        Excluir <span className="visualmente-oculto">{nome}</span>
-      </Button>
+      <ComDica texto={DICAS.editar[entidade]}>
+        <Button variante="secundario" onClick={aoEditar}>
+          Editar <span className="visualmente-oculto">{nome}</span>
+        </Button>
+      </ComDica>
+      <ComDica texto={DICAS.excluir[entidade]}>
+        <Button variante="discreto" onClick={aoExcluir}>
+          Excluir <span className="visualmente-oculto">{nome}</span>
+        </Button>
+      </ComDica>
     </span>
   );
 }

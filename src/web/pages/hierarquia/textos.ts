@@ -149,3 +149,95 @@ export function camposDoErro(erro: unknown): string[] {
   }
   return campos;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  abaCelulas:
+    "Cada célula com rede, discipulador, divisão, pessoas e líder. Dá para filtrar, editar e excluir.",
+  abaDiscipuladores:
+    "Cada discipulador com a rede e quantas células e pessoas tem. Dá para editar e excluir.",
+  abaRedes:
+    "Cada rede com a divisão, o responsável e os totais de discipuladores, células e pessoas.",
+  abaImportar:
+    "Cadastra ou atualiza de uma vez as redes, os discipuladores e as células por uma planilha.",
+  tentarDeNovo:
+    "Lê as tabelas de novo. Enquanto isso, a tela continua com os dados que já tinha.",
+  // Tabela das células
+  filtroDivisao:
+    "Mostra só as células de Jovens ou de Adultos. A lista de redes ao lado segue a escolha.",
+  filtroRede:
+    "Mostra só as células de uma rede. A contagem de células e pessoas segue o filtro.",
+  busca:
+    "Filtra a lista enquanto você digita. Acentos e maiúsculas não fazem diferença.",
+  limparFiltros:
+    "Tira a divisão, a rede e a busca e mostra todas as células de novo.",
+  irParaImportar:
+    "Abre a aba de importação, onde você baixa o modelo e envia a planilha das células.",
+  editar: {
+    celula:
+      "Abre o formulário para corrigir o nome, o discipulador, as pessoas e o líder desta célula.",
+    discipulador:
+      "Abre o formulário para corrigir o nome deste discipulador ou mudar a rede dele.",
+    rede: "Abre o formulário para corrigir o nome, a divisão e o responsável desta rede.",
+  } satisfies Record<Entidade, string>,
+  excluir: {
+    celula:
+      "Apaga a célula, depois de pedir confirmação. Só dá se ela não tiver afiliado da Rifei vinculado.",
+    discipulador:
+      "Apaga o discipulador, depois de pedir confirmação. Só dá se ele não tiver células.",
+    rede: "Apaga a rede, depois de pedir confirmação. Só dá se ela não tiver discipuladores.",
+  } satisfies Record<Entidade, string>,
+  // Diálogos de edição
+  nome: {
+    celula:
+      "Como a célula aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outra célula.",
+    discipulador:
+      "Como o discipulador aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outro.",
+    rede: "Como a rede aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outra rede.",
+  } satisfies Record<Entidade, string>,
+  discipuladorDaCelula:
+    "Quem acompanha a célula. Nos rankings, ela passa a contar para este discipulador e para a rede dele.",
+  pessoas:
+    "Quantas pessoas a célula tem. Nas metas por pessoa, mudar este número muda a meta da célula.",
+  liderNome:
+    "Quem lidera a célula. Aparece na tabela das células e no relatório por célula.",
+  liderEmail:
+    "Para a coordenação falar com o líder: vira um link de e-mail na tabela. Pode ficar em branco.",
+  liderTelefone:
+    "Para a coordenação falar com o líder: no celular, vira um link que liga. Pode ficar em branco.",
+  redeDoDiscipulador:
+    "Mude quando o discipulador passar para outra rede. Ele e as células dele ficam com a divisão da rede nova.",
+  divisaoDaRede:
+    "Jovens ou Adultos. O painel, os rankings e o mapa podem ser filtrados por divisão.",
+  responsavel:
+    "Quem responde pela rede. Aparece na tabela das redes. Pode ficar em branco.",
+  cancelarEdicao: "Fecha sem salvar. Nada muda na hierarquia.",
+  salvar:
+    "Grava as mudanças e atualiza as tabelas. Se algum campo estiver errado, ele avisa.",
+  salvando: "Gravando as mudanças. Espere um instante.",
+  // Confirmação da exclusão
+  cancelarExclusao: "Fecha sem excluir. Nada muda na hierarquia.",
+  confirmarExclusao:
+    "Apaga de vez. Se ainda houver algo ligado, o sistema avisa e não apaga.",
+  excluindo: "Excluindo. Espere um instante.",
+  // Importação da planilha
+  baixarModelo:
+    "Baixa a planilha com as colunas certas e duas linhas de exemplo, para preencher no Excel ou no Google Planilhas.",
+  colunasDaPlanilha:
+    "Abre a explicação de cada coluna da planilha: o que vai nela e se é obrigatória.",
+  escolherPlanilha:
+    "Abre a escolha do arquivo no aparelho. A tela lê a planilha, mas nada é gravado ainda.",
+  escolherPlanilhaOcupado:
+    "Indisponível enquanto a planilha é conferida ou importada.",
+  conferir:
+    "Manda a planilha para o sistema conferir e mostra o que vai mudar e os erros de cada linha. Nada é gravado.",
+  conferirIndisponivel:
+    "Indisponível até escolher uma planilha que a tela consiga ler, ou enquanto o sistema trabalha nela.",
+  importar:
+    "Grava a planilha conferida, e as tabelas da hierarquia mudam na hora. Só libera depois de uma conferência sem erros.",
+  verCelulas: "Volta para a aba Células, que já mostra o que foi importado.",
+} as const;

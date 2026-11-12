@@ -3,8 +3,8 @@ import type {
   ColunaArquivoReconciliacao,
   MapeamentoReconciliacao,
 } from "../../../shared/contracts";
-import { Button, Card, Select } from "../../components/ui";
-import { CAMPOS } from "./textos";
+import { Button, Card, ComDica, Select } from "../../components/ui";
+import { CAMPOS, DICAS } from "./textos";
 
 type Props = {
   colunas: readonly ColunaArquivoReconciliacao[];
@@ -47,28 +47,32 @@ export function Mapeamento({
         </p>
         <div className="conferencia-campos">
           {CAMPOS_EM_ORDEM.map((campo) => (
-            <Select
+            <ComDica
               key={campo}
-              rotulo={CAMPOS[campo].rotulo}
-              dica={CAMPOS[campo].dica}
-              value={mapeamento[campo] ?? ""}
-              disabled={ocupado}
-              onChange={(evento) =>
-                aoMudar(
-                  campo,
-                  evento.currentTarget.value === ""
-                    ? null
-                    : Number(evento.currentTarget.value),
-                )
-              }
+              texto={ocupado ? DICAS.colunaOcupada : DICAS.coluna}
             >
-              <option value="">{CAMPOS[campo].semColuna ?? "Não tem"}</option>
-              {usaveis.map((coluna) => (
-                <option key={coluna.indice} value={coluna.indice}>
-                  {`${coluna.nome} (coluna ${coluna.indice + 1})`}
-                </option>
-              ))}
-            </Select>
+              <Select
+                rotulo={CAMPOS[campo].rotulo}
+                dica={CAMPOS[campo].dica}
+                value={mapeamento[campo] ?? ""}
+                disabled={ocupado}
+                onChange={(evento) =>
+                  aoMudar(
+                    campo,
+                    evento.currentTarget.value === ""
+                      ? null
+                      : Number(evento.currentTarget.value),
+                  )
+                }
+              >
+                <option value="">{CAMPOS[campo].semColuna ?? "Não tem"}</option>
+                {usaveis.map((coluna) => (
+                  <option key={coluna.indice} value={coluna.indice}>
+                    {`${coluna.nome} (coluna ${coluna.indice + 1})`}
+                  </option>
+                ))}
+              </Select>
+            </ComDica>
           ))}
         </div>
         {pessoais.length > 0 && (
@@ -83,17 +87,29 @@ export function Mapeamento({
             : "Sem o código do pedido, a comparação é pelos totais (por afiliado e por dia) e não dá para recuperar vendas."}
         </p>
         <div className="conferencia-acoes">
-          <Button
-            variante="secundario"
-            disabled={!alterado || ocupado}
-            onClick={aoConferir}
+          <ComDica
+            texto={
+              ocupado
+                ? DICAS.conferindo
+                : alterado
+                  ? DICAS.conferirColunas
+                  : DICAS.conferirSemTroca
+            }
           >
-            {ocupado ? "Conferindo…" : "Conferir com estas colunas"}
-          </Button>
-          {alterado && !ocupado && (
-            <Button variante="discreto" onClick={aoDesfazer}>
-              Desfazer as trocas
+            <Button
+              variante="secundario"
+              disabled={!alterado || ocupado}
+              onClick={aoConferir}
+            >
+              {ocupado ? "Conferindo…" : "Conferir com estas colunas"}
             </Button>
+          </ComDica>
+          {alterado && !ocupado && (
+            <ComDica texto={DICAS.desfazerTrocas}>
+              <Button variante="discreto" onClick={aoDesfazer}>
+                Desfazer as trocas
+              </Button>
+            </ComDica>
           )}
         </div>
       </div>

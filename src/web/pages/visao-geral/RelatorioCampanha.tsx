@@ -4,9 +4,9 @@ import {
   TIPOS_RELATORIO,
   type TipoRelatorio,
 } from "../../../shared/contracts/relatorio";
-import { Aviso, Button, Card } from "../../components/ui";
+import { Aviso, Button, Card, ComDica } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
-import { TEXTOS_TIPO_RELATORIO } from "./textos";
+import { DICAS, TEXTOS_TIPO_RELATORIO } from "./textos";
 import { baixarRelatorio } from "./visao-geral-api";
 
 type Resultado =
@@ -113,42 +113,55 @@ export function RelatorioCampanha() {
               const { rotulo, descricao } = TEXTOS_TIPO_RELATORIO[opcao];
               const idRotulo = `${id}-${opcao}`;
               const idDescricao = `${id}-${opcao}-descricao`;
+              const idDica = `${id}-${opcao}-dica`;
+              // A dica fica no cartão todo (rádio e textos); o rádio a tem no fim da descrição (`id` da dica).
               return (
-                <label key={opcao} className="visao-relatorio__opcao">
-                  <input
-                    type="radio"
-                    name={`${id}-tipo`}
-                    value={opcao}
-                    checked={tipo === opcao}
-                    onChange={() => escolher(opcao)}
-                    aria-labelledby={idRotulo}
-                    aria-describedby={idDescricao}
-                  />
-                  <span className="visao-relatorio__opcao-textos">
-                    <span id={idRotulo} className="visao-relatorio__opcao-nome">
-                      {rotulo}
+                <ComDica
+                  key={opcao}
+                  id={idDica}
+                  texto={DICAS.tipoRelatorio[opcao]}
+                >
+                  <label className="visao-relatorio__opcao">
+                    <input
+                      type="radio"
+                      name={`${id}-tipo`}
+                      value={opcao}
+                      checked={tipo === opcao}
+                      onChange={() => escolher(opcao)}
+                      aria-labelledby={idRotulo}
+                      aria-describedby={`${idDescricao} ${idDica}`}
+                    />
+                    <span className="visao-relatorio__opcao-textos">
+                      <span
+                        id={idRotulo}
+                        className="visao-relatorio__opcao-nome"
+                      >
+                        {rotulo}
+                      </span>
+                      <span
+                        id={idDescricao}
+                        className="visao-relatorio__opcao-descricao"
+                      >
+                        {descricao}
+                      </span>
                     </span>
-                    <span
-                      id={idDescricao}
-                      className="visao-relatorio__opcao-descricao"
-                    >
-                      {descricao}
-                    </span>
-                  </span>
-                </label>
+                  </label>
+                </ComDica>
               );
             })}
           </div>
         </fieldset>
         <div className="visao-relatorio__acoes">
-          <Button
-            ref={refBotao}
-            onClick={() => void baixar()}
-            aria-disabled={baixando || undefined}
-          >
-            <IconeBaixar />
-            {baixando ? "Baixando…" : "Baixar relatório"}
-          </Button>
+          <ComDica texto={baixando ? DICAS.baixando : DICAS.baixarRelatorio}>
+            <Button
+              ref={refBotao}
+              onClick={() => void baixar()}
+              aria-disabled={baixando || undefined}
+            >
+              <IconeBaixar />
+              {baixando ? "Baixando…" : "Baixar relatório"}
+            </Button>
+          </ComDica>
           {resultado.tipo === "baixado" && (
             <p className="visao-relatorio__baixado">
               <span aria-hidden="true">✓</span> Baixado:{" "}
@@ -171,9 +184,11 @@ export function RelatorioCampanha() {
               titulo={TITULO_FALHA}
               acao={
                 podeTentarDeNovo(resultado.erro) && (
-                  <Button variante="secundario" onClick={tentarDeNovo}>
-                    Tentar de novo
-                  </Button>
+                  <ComDica texto={DICAS.tentarBaixarDeNovo}>
+                    <Button variante="secundario" onClick={tentarDeNovo}>
+                      Tentar de novo
+                    </Button>
+                  </ComDica>
                 )
               }
             >

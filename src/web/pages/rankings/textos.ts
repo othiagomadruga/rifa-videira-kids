@@ -124,3 +124,22 @@ export function textoDaReferencia(referencia: ReferenciaCampanha): string {
   }
   return `Dia ${referencia.dia_campanha ?? 1} de ${referencia.duracao_dias} da campanha`;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  aba: {
+    celula:
+      "A posição de cada célula na disputa, com quanto da meta já fez e se está em dia.",
+    discipulador:
+      "Cada discipulador, com as vendas e as metas das células dele somadas.",
+    rede: "Cada rede, com as vendas e as metas das células dela somadas.",
+  } satisfies Record<NivelRanking, string>,
+  divisao:
+    "Mostra só a disputa dos Jovens ou só a dos Adultos. A escolha fica no endereço da página.",
+  janela:
+    "Escolhe o tempo da disputa: só o período de agora ou a campanha inteira. As datas aparecem logo abaixo.",
+} as const;
