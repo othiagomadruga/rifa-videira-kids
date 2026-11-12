@@ -10,6 +10,7 @@ import {
   LIBERAR_ARQUIVO_DEPOIS_MS,
   mensagemDoErro,
   requisitarJson,
+  TAMANHO_MAXIMO_NOME_ARQUIVO,
   TEMPO_LIMITE_PADRAO_MS,
 } from "./api";
 
@@ -363,6 +364,31 @@ describe("cliente da API: arquivo para baixar (baixarArquivo, RIFA-038)", () => 
     expect(espiao.liberados).toEqual([]);
   });
 
+  it("o arquivo baixado tem os bytes da resposta, um por um: o BOM (EF BB BF) no começo e os acentos em UTF-8 (o corpo nunca passa por texto, que tiraria o BOM e o Excel quebraria os acentos)", async () => {
+    const espiao = espiar();
+    // Como o Worker manda: os bytes UTF-8 do CSV, com o BOM.
+    const enviados = new TextEncoder().encode(CSV);
+    expect([...enviados.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    simularFetch(
+      async () =>
+        new Response(enviados.slice(), {
+          status: 200,
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": `attachment; filename="${NOME}"`,
+          },
+        }),
+    );
+
+    await baixarArquivo("/api/x", { nomeReserva: "reserva.csv" });
+
+    const baixados = await espiao.bytes();
+    expect([...baixados.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect([...baixados]).toEqual([...enviados]);
+    // "Célula": o "é" chega como C3 A9 (UTF-8), não como um byte só.
+    expect([...baixados.slice(3, 6)]).toEqual([0x43, 0xc3, 0xa9]);
+  });
+
   it(`libera o object URL ${LIBERAR_ARQUIVO_DEPOIS_MS / 1000} s depois do clique (o navegador lê o arquivo depois)`, async () => {
     const espiao = espiar();
     simularFetch(async () => arquivo(`attachment; filename="${NOME}"`));
@@ -398,6 +424,65 @@ describe("cliente da API: arquivo para baixar (baixarArquivo, RIFA-038)", () => 
       baixarArquivo("/api/x", { nomeReserva: "reserva.csv" }),
     ).resolves.toBe(esperado);
     expect(espiao.cliques.map((clique) => clique.nome)).toEqual([esperado]);
+  });
+
+  it.each([
+    [
+      "com pasta e ..: só o último trecho",
+      'attachment; filename="../../relatorio.csv"',
+      "relatorio.csv",
+    ],
+    [
+      "filename* com / codificada",
+      `attachment; filename*=UTF-8''..%2F..%2Fpasta%2Frelat%C3%B3rio.csv`,
+      "relatório.csv",
+    ],
+    [
+      "filename* com \\ do Windows",
+      `attachment; filename*=UTF-8''C%3A%5CUsers%5Cx%5C..%5Crelatorio.csv`,
+      "relatorio.csv",
+    ],
+    ["só ..: o de reserva", 'attachment; filename=".."', "reserva.csv"],
+    [
+      "filename* do qual nada sobra: fica o filename",
+      `attachment; filename*=UTF-8''..%2F..; filename="${NOME}"`,
+      NOME,
+    ],
+    ["oculto (ponto na frente)", 'attachment; filename=".bashrc"', "bashrc"],
+    [
+      "com o U+202E, que inverte o texto e disfarça a extensão",
+      `attachment; filename*=UTF-8''relatorio%E2%80%AEvsc.exe`,
+      "relatoriovsc.exe",
+    ],
+    [
+      "com caracteres de controle (nulo, quebra de linha, tabulação)",
+      `attachment; filename*=UTF-8''rela%00t%0D%0Aorio%09.csv`,
+      "relatorio.csv",
+    ],
+    [
+      "com os caracteres que o Windows recusa",
+      'attachment; filename="a<b>c:d|e?f*g\\".csv"',
+      "a_b_c_d_e_f_g_.csv",
+    ],
+    [
+      "com espaços e pontos sobrando",
+      'attachment; filename="  relatorio   final.csv. . "',
+      "relatorio final.csv",
+    ],
+    [
+      "comprido demais: corta e mantém a extensão",
+      `attachment; filename="${"a".repeat(300)}.csv"`,
+      `${"a".repeat(TAMANHO_MAXIMO_NOME_ARQUIVO - 4)}.csv`,
+    ],
+  ])("nome do arquivo saneado, %s: %s", async (_caso, disposicao, esperado) => {
+    const espiao = espiar();
+    simularFetch(async () => arquivo(disposicao));
+
+    await expect(
+      baixarArquivo("/api/x", { nomeReserva: "reserva.csv" }),
+    ).resolves.toBe(esperado);
+    expect(espiao.cliques.map((clique) => clique.nome)).toEqual([esperado]);
+    expect(esperado.length).toBeLessThanOrEqual(TAMANHO_MAXIMO_NOME_ARQUIVO);
   });
 
   it("erros como no requisitarJson: o formato da API, ERRO_HTTP fora dele e SEM_CONEXAO; nada é baixado", async () => {

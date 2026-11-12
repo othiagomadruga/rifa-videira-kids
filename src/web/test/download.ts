@@ -1,8 +1,8 @@
 // Ajudante dos testes de download (baixarArquivo, em lib/api.ts): o jsdom não tem URL.createObjectURL nem baixa
 // arquivos. espiarDownloads() troca o createObjectURL e o revokeObjectURL por espiões (cada endereço guarda o seu
 // Blob) e o click() dos links com `download` por um que só anota o que seria baixado: o endereço, o nome e se o
-// link estava na página durante o clique. O click() dos outros elementos continua o de sempre. No afterEach,
-// desfazer().
+// link estava na página durante o clique (os bytes e o texto do arquivo: bytes(i) e texto(i)). O click() dos
+// outros elementos continua o de sempre. No afterEach, desfazer().
 import { vi } from "vitest";
 
 export type CliqueDeDownload = {
@@ -65,18 +65,24 @@ export function espiarDownloads() {
       clickOriginal.call(this);
     });
 
+  /** Os bytes do arquivo baixado no clique `indice`, como o navegador os gravaria (o BOM é EF BB BF). */
+  async function bytes(indice = 0): Promise<Uint8Array> {
+    const arquivo = arquivos.get(cliques[indice]?.endereco ?? "");
+    if (!arquivo) throw new Error(`nenhum arquivo no clique ${indice}`);
+    return new Uint8Array(await arquivo.arrayBuffer());
+  }
+
   return {
     criar,
     liberar,
     arquivos,
     liberados,
     cliques,
+    bytes,
     /** O texto do arquivo baixado no clique `indice`, com o BOM (o Blob.text() o tiraria). */
     async texto(indice = 0): Promise<string> {
-      const arquivo = arquivos.get(cliques[indice]?.endereco ?? "");
-      if (!arquivo) throw new Error(`nenhum arquivo no clique ${indice}`);
       return new TextDecoder("utf-8", { ignoreBOM: true }).decode(
-        await arquivo.arrayBuffer(),
+        await bytes(indice),
       );
     },
     desfazer() {

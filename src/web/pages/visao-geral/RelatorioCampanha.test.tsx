@@ -173,6 +173,10 @@ describe("CA1: o cartão, os tipos, a consulta e o nome do arquivo", () => {
     ]);
     expect(await downloads.texto()).toBe(csvDoRelatorio("celulas"));
     expect((await downloads.texto()).startsWith("﻿Divisão;Rede;")).toBe(true);
+    // Os bytes gravados começam pelo BOM UTF-8, que faz o Excel ler os acentos certos (D23).
+    expect([...(await downloads.bytes()).slice(0, 3)]).toEqual([
+      0xef, 0xbb, 0xbf,
+    ]);
     expect(regiaoViva()).toHaveTextContent(`Relatório baixado: ${nome}.`);
     expect(cartao().getByText(/^Baixado:/).parentElement).toHaveTextContent(
       `Baixado: ${nome}. Fica na pasta de downloads do aparelho.`,

@@ -119,11 +119,15 @@ export type OpcoesArquivo = OpcoesSemCorpo & {
  */
 export const LIBERAR_ARQUIVO_DEPOIS_MS = 60_000;
 
+/** Quantos caracteres o nome do arquivo baixado pode ter, com a extensão. */
+export const TAMANHO_MAXIMO_NOME_ARQUIVO = 120;
+
 /**
- * Baixa um arquivo da API (GET na mesma origem, com o cookie): fetch → Blob → link temporário com `download`
- * igual ao nome do `Content-Disposition` (ou `nomeReserva`), clicado e removido na hora; o object URL é
- * liberado depois de LIBERAR_ARQUIVO_DEPOIS_MS. Falhas e 401 como em requisitarJson (os erros da API vêm em
- * JSON, no formato único). Devolve o nome dado ao arquivo. Cancelada pelo `signal`, não baixa nada.
+ * Baixa um arquivo da API (GET na mesma origem, com o cookie): fetch → Blob (os bytes como vieram, com o BOM; nunca
+ * pelo texto, que o tiraria) → link temporário com `download` igual ao nome do `Content-Disposition`, saneado por
+ * nomeSeguroDoArquivo (ou `nomeReserva`), clicado e removido na hora; o object URL é liberado depois de
+ * LIBERAR_ARQUIVO_DEPOIS_MS. Falhas e 401 como em requisitarJson (os erros da API vêm em JSON, no formato único).
+ * Devolve o nome dado ao arquivo. Cancelada pelo `signal`, não baixa nada.
  */
 export async function baixarArquivo(
   caminho: string,
@@ -269,15 +273,16 @@ function erroDaResposta(
 }
 
 /**
- * O nome do arquivo no `Content-Disposition`: `filename*=UTF-8''...` (RFC 6266/8187) e, sem ele,
- * `filename="..."` ou `filename=...`. Null sem cabeçalho, sem nome ou com nome vazio.
+ * O nome do arquivo no `Content-Disposition`, já saneado (nomeSeguroDoArquivo): `filename*=UTF-8''...`
+ * (RFC 6266/8187) e, sem ele (ou se dele não sobrar nome), `filename="..."` ou `filename=...`. Null sem
+ * cabeçalho, sem nome ou com um nome do qual nada sobra.
  */
 function nomeDoContentDisposition(cabecalho: string | null): string | null {
   if (!cabecalho) return null;
   const estendido = /filename\*\s*=\s*utf-8''([^;\s]+)/i.exec(cabecalho);
   if (estendido) {
     try {
-      const nome = decodeURIComponent(estendido[1]).trim();
+      const nome = nomeSeguroDoArquivo(decodeURIComponent(estendido[1]));
       if (nome) return nome;
     } catch {
       // Codificação inválida: fica o filename simples, se houver.
@@ -286,8 +291,32 @@ function nomeDoContentDisposition(cabecalho: string | null): string | null {
   const simples = /filename\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;\s]+))/i.exec(
     cabecalho,
   );
-  const nome = (simples?.[1]?.replace(/\\(.)/g, "$1") ?? simples?.[2])?.trim();
-  return nome ? nome : null;
+  const nome = simples?.[1]?.replace(/\\(.)/g, "$1") ?? simples?.[2];
+  return nome === undefined ? null : nomeSeguroDoArquivo(nome);
+}
+
+/**
+ * O nome que o arquivo ganha no aparelho (e que a tela mostra), saneado: só o último trecho de um caminho (nada de
+ * pasta nem `..`); sem caracteres de controle nem os invisíveis de formatação (como o U+202E, que inverte o texto e
+ * disfarça a extensão); `<>:"|?*` (recusados pelo Windows) viram `_`; espaços seguidos viram um; sem ponto nem
+ * espaço nas pontas (nada de arquivo oculto); até TAMANHO_MAXIMO_NOME_ARQUIVO caracteres, mantendo a extensão.
+ * Null quando não sobra nome.
+ */
+function nomeSeguroDoArquivo(bruto: string): string | null {
+  const nome = (bruto.normalize("NFC").split(/[/\\]/).at(-1) ?? "")
+    .replace(/[\p{Cc}\p{Cf}]/gu, "")
+    .replace(/[<>:"|?*]/g, "_")
+    .replace(/\s+/gu, " ")
+    .replace(/^[\s.]+|[\s.]+$/gu, "");
+  if (!nome) return null;
+  const caracteres = Array.from(nome);
+  if (caracteres.length <= TAMANHO_MAXIMO_NOME_ARQUIVO) return nome;
+  const extensao = /\.[^.\s]{1,10}$/u.exec(nome)?.[0] ?? "";
+  const base = caracteres
+    .slice(0, TAMANHO_MAXIMO_NOME_ARQUIVO - Array.from(extensao).length)
+    .join("")
+    .replace(/[\s.]+$/u, "");
+  return `${base}${extensao}`;
 }
 
 // Aceita só caminhos absolutos da própria origem ("/api/..."). Barra dupla,
