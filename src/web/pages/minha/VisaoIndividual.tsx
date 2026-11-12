@@ -90,8 +90,10 @@ function Visao({
         )}
       </div>
       {/* O link de vendas (RIFA-046): o do líder logo abaixo dos números; os da equipe, depois dela. Pedido uma
-          vez (o cartão fica montado nas atualizações de cada minuto). */}
-      {alvo.tipo === "celula" && <LinksDeVendas alvo={alvo} />}
+          vez (o cartão fica montado nas atualizações de cada minuto) e de novo só quando os vínculos do líder mudam. */}
+      {alvo.tipo === "celula" && (
+        <LinksDeVendas alvo={alvo} vinculos={visao.afiliados_vinculados} />
+      )}
       <CurvaIndividual visao={visao} />
       <RankingIndividual visao={visao} />
       {alvo.tipo !== "celula" && <Equipe visao={visao} />}

@@ -19,8 +19,13 @@ export type EstadoLinks =
 /**
  * Os links de vendas do alvo, pedidos uma vez ao abrir a tela (D24: sem a atualização de 60 s da visão; o link só
  * muda quando a coordenação vincula um afiliado ou o admin muda o modelo). "Tentar de novo" pede outra vez.
+ *
+ * `vinculos`: quantos afiliados a visão diz que a célula tem (`afiliados_vinculados`, só do líder; null nos outros).
+ * Quando muda numa atualização da visão (a coordenação vinculou ou desvinculou), os links são pedidos de novo, sem
+ * voltar ao "carregando": na reunião dos líderes (lancamento.md 5.2), o aviso amarelo some e o link e o QR aparecem
+ * juntos, sem recarregar a página (RIFA-036, ensaio geral 2). Sem mudança, nenhum pedido a mais.
  */
-export function useMeusLinksVendas() {
+export function useMeusLinksVendas(vinculos: number | null = null) {
   const [estado, setEstado] = useState<EstadoLinks>({ tipo: "carregando" });
   const [rodada, setRodada] = useState(0);
 
@@ -42,7 +47,7 @@ export function useMeusLinksVendas() {
       },
     );
     return () => controle.abort();
-  }, [rodada]);
+  }, [rodada, vinculos]);
 
   const tentarDeNovo = useCallback(() => {
     setEstado({ tipo: "carregando" });

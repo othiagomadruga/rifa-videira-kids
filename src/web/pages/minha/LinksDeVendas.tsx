@@ -31,8 +31,15 @@ function tituloDoCartao(alvo: Alvo): string {
     : "Links de vendas das suas células";
 }
 
-export function LinksDeVendas({ alvo }: { alvo: Alvo }) {
-  const { estado, tentarDeNovo } = useMeusLinksVendas();
+export function LinksDeVendas({
+  alvo,
+  vinculos = null,
+}: {
+  alvo: Alvo;
+  /** `afiliados_vinculados` da visão (só do líder): mudou, os links são pedidos de novo (useMeusLinksVendas). */
+  vinculos?: number | null;
+}) {
+  const { estado, tentarDeNovo } = useMeusLinksVendas(vinculos);
   const idTitulo = useId();
   const doAlvo = estado.tipo === "ok" ? estado.dados.alvo : alvo;
 

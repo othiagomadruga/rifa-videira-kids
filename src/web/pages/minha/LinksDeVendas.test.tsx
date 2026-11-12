@@ -471,6 +471,56 @@ describe("estados do link de vendas", () => {
       within(cartao).getByRole("textbox", { name: "Link de vendas" }),
     ).toHaveValue(urlDoAfiliado(1042));
   });
+
+  it("a coordenação vincula o afiliado com a tela aberta (reunião): na atualização da visão, o aviso amarelo sai e o link e o QR entram, sem recarregar", async () => {
+    // RIFA-036 (ensaio geral 2): antes, o aviso amarelo sumia e o cartão continuava dizendo que a célula não tinha
+    // cadastro de afiliado até o líder recarregar a página.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let vinculados = 0;
+    const api = criarApiFalsa(() =>
+      visaoDe({ papel: "lider", afiliados: vinculados }),
+    );
+    const { cartao } = await abrir("lider", null, api);
+    expect(
+      await within(cartao).findByText(
+        "Sua célula ainda não tem cadastro de afiliado ligado: fale com a coordenação.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação.",
+      ),
+    ).toBeInTheDocument();
+
+    vinculados = 1;
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    expect(
+      await within(cartao).findByRole("textbox", { name: "Link de vendas" }),
+    ).toHaveValue(urlDoAfiliado(1042));
+    expect(
+      screen.queryByText(
+        "Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação.",
+      ),
+    ).toBeNull();
+    expect(
+      within(cartao).queryByText(/ainda não tem cadastro de afiliado ligado/),
+    ).toBeNull();
+    expect(
+      await within(cartao).findByRole(
+        "img",
+        { name: "QR code do link de vendas da Célula Ágape" },
+        ESPERA_DO_PACOTE,
+      ),
+    ).toBeInTheDocument();
+    expect(api.chamadasA("GET", CAMINHO_LINKS)).toHaveLength(2);
+
+    // Sem mudança nos vínculos, a atualização seguinte não pede o link de novo.
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    await waitFor(() =>
+      expect(api.chamadasA("GET", "/api/minha/visao")).toHaveLength(3),
+    );
+    expect(api.chamadasA("GET", CAMINHO_LINKS)).toHaveLength(2);
+  });
 });
 
 // RIFA-045 nos controles da RIFA-046: aqui a varredura fica no cartão do link de vendas (e no diálogo do "Ver QR", que

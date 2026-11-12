@@ -1258,7 +1258,10 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
     link da sua Área de afiliados na Rifei."); célula sem afiliado ("Sua célula ainda não tem cadastro de afiliado
     ligado: fale com a coordenação."); um link ou mais (o primeiro em destaque); 403 `acesso_desligado` e 404 como a
     visão. 360 px sem rolagem lateral (o link quebra a linha). O `guarda-minha.test.ts` passa a aceitar
-    `src/shared/contracts/link-vendas` (sem zod) e continua sem dinheiro.
+    `src/shared/contracts/link-vendas` (sem zod) e continua sem dinheiro. **Adendo (RIFA-036, ensaio geral 2):** o do
+    líder é pedido de novo, sem voltar ao "carregando", quando o `afiliados_vinculados` da visão muda numa atualização
+    de 60 s (a coordenação vinculou na reunião): sem isso, o aviso amarelo sumia e o cartão continuava dizendo que a
+    célula não tinha afiliado até o líder recarregar. Sem mudança, nenhum pedido a mais (o orçamento continua o mesmo).
 11. **Adesão** (-web): a seção "Links de vendas" (acima): o campo do modelo só para o admin, com os problemas ao vivo
     (`problemasDoModeloLinkVendas`), a prévia do link de um afiliado de exemplo para abrir e conferir, e "Salvar"
     (PUT); para a coordenação, só leitura. Caminhos e constantes copiados conferidos pelo teste de contrato da pasta,
