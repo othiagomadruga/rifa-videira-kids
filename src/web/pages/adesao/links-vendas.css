@@ -1,0 +1,140 @@
+/* A seção "Links de vendas" da Adesão (RIFA-046, D24): o modelo do link e o link e o QR code de cada célula.
+   Celular primeiro (390 px sem rolagem lateral: o link e a prévia quebram a linha); no computador, as células em
+   grade, como em "Todas as células". Só variáveis do tema; vem junto com LinksDeVendas.tsx (pacote à parte). */
+
+.adesao-links {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-5);
+  min-width: 0;
+}
+
+.adesao-links__explicacao,
+.adesao-links__contagem,
+.adesao-links__nota {
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.adesao-links__contagem,
+.adesao-links__nota {
+  font-size: var(--texto-sm);
+}
+
+/* O modelo do link: o campo, a contagem, a prévia e o "Salvar modelo". */
+.adesao-links__modelo {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.adesao-links__campo-modelo {
+  font-family: var(--fonte-mono);
+}
+
+.adesao-links__so-admin {
+  justify-self: start;
+  padding: var(--espaco-1) var(--espaco-3);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-info-suave);
+  color: var(--cor-info);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+.adesao-links__previa {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  padding: var(--espaco-3);
+  border-left: 4px solid var(--cor-primaria);
+  border-radius: var(--raio-2);
+  background: var(--cor-primaria-suave);
+  overflow-wrap: anywhere;
+}
+
+.adesao-links__previa-titulo {
+  font-weight: var(--peso-forte);
+}
+
+.adesao-links__previa-link {
+  font-family: var(--fonte-mono);
+  font-weight: var(--peso-forte);
+  color: var(--cor-primaria-forte);
+  word-break: break-all;
+}
+
+.adesao-links__salvar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-3);
+}
+
+.adesao-links__falha {
+  padding: var(--espaco-2) var(--espaco-3);
+  border-radius: var(--raio-2);
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+  font-size: var(--texto-sm);
+}
+
+/* O link de cada célula. */
+.adesao-links__celulas {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.adesao-links__cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.adesao-links__subtitulo {
+  font-size: var(--texto-lg);
+}
+
+.adesao-links__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: var(--espaco-3);
+  padding: 0;
+  list-style: none;
+}
+
+.adesao-links__celula {
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-3);
+  min-width: 0;
+  height: 100%;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  background: var(--cor-superficie);
+}
+
+/* Célula com mais de um código: uma linha separa cada link. */
+.adesao-links__celula > .qr-compartilhar + .qr-compartilhar {
+  padding-top: var(--espaco-3);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.adesao-links__nome {
+  font-size: var(--texto-lg);
+  overflow-wrap: anywhere;
+}
+
+.adesao-links__sem-link {
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-alerta);
+  border-radius: var(--raio-2);
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+}

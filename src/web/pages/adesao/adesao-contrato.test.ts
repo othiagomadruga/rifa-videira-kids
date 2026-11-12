@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ROTAS,
+  ROTAS_LINK_VENDAS,
   ROTAS_REGRAS_CAMPANHA,
   consultaPedidosSchema,
 } from "../../../shared/contracts";
@@ -13,6 +14,11 @@ import {
   CAMINHO_TELA_PEDIDOS,
   linkDoPedido,
 } from "./adesao-api";
+import {
+  CAMINHO_CAMPANHA,
+  CAMINHO_LINKS_VENDAS,
+  CAMINHO_MODELO_LINK_VENDAS,
+} from "./links-vendas-api";
 
 describe("cópias do contrato na tela Adesão", () => {
   it("o caminho dos afiliados e o de remover (DELETE, só admin)", () => {
@@ -23,6 +29,25 @@ describe("cópias do contrato na tela Adesão", () => {
       papeis: ["admin"],
     });
     expect(CAMINHO_REMOVER_AFILIADO).toBe(`${CAMINHO_AFILIADOS}/:affiliateId`);
+  });
+
+  it("o link de vendas (RIFA-046): a lista (toda a coordenação), o modelo (só admin) e a campanha", () => {
+    expect(ROTAS_LINK_VENDAS.linksVendas).toMatchObject({
+      metodo: "GET",
+      caminho: CAMINHO_LINKS_VENDAS,
+      grupo: "coordenacao",
+    });
+    expect(ROTAS_LINK_VENDAS.linksVendas).not.toHaveProperty("papeis");
+    expect(ROTAS_LINK_VENDAS.salvarModeloLinkVendas).toMatchObject({
+      metodo: "PUT",
+      caminho: CAMINHO_MODELO_LINK_VENDAS,
+      grupo: "coordenacao",
+      papeis: ["admin"],
+    });
+    expect(ROTAS.obterCampanha).toMatchObject({
+      metodo: "GET",
+      caminho: CAMINHO_CAMPANHA,
+    });
   });
 
   it("o link do pedido que ainda conta abre a tela Pedidos com a busca exata pelo id", () => {
