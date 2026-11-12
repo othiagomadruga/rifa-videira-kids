@@ -3,11 +3,11 @@
 - Migration: [`migrations/0001_init.sql`](../migrations/0001_init.sql), aplicada depois de `0000_setup.sql` (tabela `_meta`, RIFA-001). O acesso da equipe (`0002_acessos.sql`) e os papéis da hierarquia (`0006_acesso_hierarquia.sql`, RIFA-014) estão na seção [`usuarios`, `links_acesso` e `sessoes`](#usuarios-links_acesso-e-sessoes-acesso-da-equipe).
 - Conferência pelo CSV da Rifei (RIFA-012): [`0004_conferencia.sql`](../migrations/0004_conferencia.sql), aditiva, com a tabela [`recuperacoes`](#recuperacoes-migração-0004-rifa-012) e as colunas `pedidos.origem` e `pedidos.recuperacao_id`. Não depende da 0005 à 0007 nem elas dela: aplicada antes ou depois delas, dá o mesmo schema (`src/worker/test/migracao-0004-depois.test.ts`).
 - Tipos e schemas espelho: `src/shared/contracts/dominio.ts`.
-- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007 e a 0008 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
+- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007, a 0008 e a 0009 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
 - Índices só de leitura: `0003_vendas_por_dia.sql` (painel; recriado na 0008), `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025) e o da lista dos desconsiderados (0008), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts`, `src/worker/db/pedidos-webhook-desempenho.test.ts`, `src/worker/db/mapa-ddd-desempenho.test.ts`, `src/worker/routes/painel-desempenho.test.ts`, `src/worker/routes/minha-desempenho.test.ts` e `src/worker/routes/reconciliacao-desempenho.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
 - Regras do admin (Sprint 6, D20): [`0008_regras_campanha.sql`](../migrations/0008_regras_campanha.sql), aditiva, com as chaves e as mensagens em `campanhas`, a desconsideração em `pedidos`, o índice da 0003 recriado, o índice da lista dos desconsiderados e a view recriada. Como foi feita e por quê: [seção 9](#9-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20).
-- Token do webhook gerado pela tela (RIFA-039, D21): o **plano** da migração `0009_token_webhook.sql` está na [seção 10](#10-plano-da-migração-0009_token_webhooksql-rifa-039-d21). Ela é da tarefa -db e entra depois da 0008.
+- Token do webhook gerado pela tela (RIFA-039, D21): [`0009_token_webhook.sql`](../migrations/0009_token_webhook.sql), aditiva, com a tabela `token_webhook` (uma linha no máximo, só o SHA-256 do token). Aplicada depois da 0008; como foi feita, as consultas e o que foi medido: [seção 10](#10-migração-0009_token_webhooksql-rifa-039-d21).
 
 ## 1. Visão geral
 
@@ -279,6 +279,7 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 - Do comprador: nome, e-mail, documento (CPF), data de nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. Ficam só `ddd` e `pais`.
 - O payload bruto do webhook nunca é gravado, só o redigido.
 - O CSV da conferência (RIFA-012), que traz dados pessoais, é lido no navegador e não vai para a API: ela recebe só as colunas mapeadas que não são pessoais. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, valor, afiliado e instante).
+- Segredos (como os tokens dos links e os ids das sessões, 0002): o token do webhook gerado pela tela (0009, D21) fica só como SHA-256 em `token_webhook`; nem ele nem o hash vão para a trilha (`auditoria`) ou para outra tabela (varredura em `src/worker/routes/webhook-token.test.ts`).
 
 ## 9. Migração `0008_regras_campanha.sql` (RIFA-028, 029 e 032; D20)
 
@@ -393,12 +394,16 @@ WHERE p.status = 'approved' AND p.desconsiderado_em IS NULL;
   uma linha a menos no painel e nas somas (6.727 e 5.530) e na view (afiliados 16.805, adesão 28.504); a lista com
   `desconsiderado=true` lê 154 linhas.
 
-## 10. Plano da migração `0009_token_webhook.sql` (RIFA-039; D21)
+<a id="10-plano-da-migração-0009_token_webhooksql-rifa-039-d21"></a>
 
-Só o plano: a migração é da tarefa -db e entra na `main` depois da `0008_regras_campanha.sql` (RIFA-028). Aditiva:
-uma tabela nova, nenhuma linha muda. Com a tabela vazia, o webhook continua no segredo do Worker, como hoje. O SQL
-abaixo foi conferido no SQLite 3.53 (os CHECK, o UPSERT e a gravação condicional da trilha) e a leitura pela chave
-no D1 local do workerd (`rows_read` 1, com a tabela vazia ou não).
+## 10. Migração `0009_token_webhook.sql` (RIFA-039; D21)
+
+Aplicada na tarefa -db (RIFA-039-db), depois da `0008_regras_campanha.sql` (RIFA-028), no mesmo merge que as consultas
+de `src/worker/db/token-webhook.ts`. Aditiva: uma tabela nova, nenhuma linha muda. Com a tabela vazia, o webhook
+continua no segredo do Worker, como antes. O SQL foi conferido no SQLite 3.53 na revisão do contrato e de novo no D1
+local do workerd, sobre dados das migrações anteriores (`src/worker/test/migrations.test.ts`, "0009 sobre dados que
+já existiam"): os CHECK, o UPSERT, o `DO NOTHING` e a leitura pela chave (`rows_read` 1, com a tabela vazia ou não)
+se comportaram como descrito abaixo.
 
 **`token_webhook`** (uma linha no máximo; a regra das credenciais está em [decisions.md, D21](decisions.md#d21-token-do-webhook-gerado-pela-tela-da-coordenação-rifa-039-contrato-2026-11-11)):
 
@@ -424,8 +429,9 @@ CREATE TABLE token_webhook (
 );
 ```
 
-- **Leitura do webhook**: `SELECT token_hash FROM token_webhook WHERE id = 1` (plano `SEARCH token_webhook USING
-  INTEGER PRIMARY KEY (rowid=?)`, 1 linha lida). A comparação é no Worker, em tempo constante, nunca no SQL.
+- **Leitura do webhook** (`LER_HASH_TOKEN_WEBHOOK`): `SELECT token_hash FROM token_webhook WHERE id = 1` (plano
+  `SEARCH token_webhook USING INTEGER PRIMARY KEY (rowid=?)`, 1 linha lida). A comparação é no Worker, em tempo
+  constante, nunca no SQL. A tela (GET e POST) lê só o `gerado_em` (`LER_GERADO_EM_TOKEN_WEBHOOK`), nunca o hash.
 - **Gravação** (um `db.batch`, com o registro na trilha antes e a mesma condição, D11):
   - sem `substituir`: `INSERT INTO auditoria (...) SELECT ... WHERE NOT EXISTS (SELECT 1 FROM token_webhook)` e
     `INSERT INTO token_webhook (id, token_hash, gerado_em) VALUES (1, ?, ?) ON CONFLICT (id) DO NOTHING`. Com uma
@@ -433,10 +439,20 @@ CREATE TABLE token_webhook (
   - com `substituir`: o registro com o `gerado_em` anterior lido por subconsulta (`coalesce(... (SELECT gerado_em
     FROM token_webhook WHERE id = 1) ..., ...)`) e `INSERT ... ON CONFLICT (id) DO UPDATE SET token_hash =
     excluded.token_hash, gerado_em = excluded.gerado_em` (1 linha lida e 1 escrita, medido).
+  - O resumo da trilha diz o que deixou de valer ("não havia credencial", "o segredo do Worker deixou de valer" ou
+    "o token anterior, gerado em <instante>, deixou de valer") e nunca traz o token nem o hash.
 - **Último uso** (GET): `ULTIMA_ENTREGA` de `src/worker/db/estado-webhook.ts` (índice `webhook_eventos_por_resultado`,
   ~8 linhas lidas com 3 mil entregas), comparado com `gerado_em` por `ultimoUsoDoWebhook`.
 - **Voltar ao segredo do Worker** (contingência do SM, fora da API e sem trilha; com o segredo já gravado no Worker,
   senão o webhook responde 503): `npx wrangler d1 execute DB --remote --command "DELETE FROM token_webhook"`.
-- Teste da migração (`src/worker/test/migrations.test.ts`): aplicar a 0009 sobre dados das anteriores e conferir a
-  tabela vazia, uma linha só (`id` 2 e INSERT sem id recusados), o hash fora do formato (maiúsculo, curto, texto
-  qualquer) e o instante fora do formato recusados, o UPSERT e o `DO NOTHING`.
+- Teste da migração (`src/worker/test/migrations.test.ts`): a 0009 aplicada sobre dados das anteriores (usuários,
+  links, sessões, trilha, hierarquia, campanhas, pedidos e entregas do webhook) confere que nenhuma tabela muda
+  (todas as linhas de todas as tabelas, iguais), a tabela nova vazia e as colunas dela, uma linha só (`id` 2, `id` 0
+  e INSERT sem id com a linha 1 gravada, recusados), o hash fora do formato (maiúsculo, curto, longo, com letra fora
+  do hex, com espaço, texto qualquer, vazio) e o instante fora do formato recusados, o NOT NULL, o UPSERT, o
+  `DO NOTHING` e o plano e as linhas lidas da leitura do webhook.
+- Medido no D1 local do workerd (`meta.rows_read`, por requisição, com a sessão): o webhook lê 1 linha a mais em toda
+  requisição (no 503 e no 401, só ela; na entrega aceita, ela e o fluxo de antes, sem escrita a mais). O POST que
+  gera lê 6 linhas e escreve 3 (sessão 2, a linha do token 1, a trilha 2 com a chave estrangeira do autor e a
+  subconsulta do resumo, o UPSERT 1; sem credencial, 7); o 409 lê 3 (sessão 2 e a linha do token). O GET lê 3 mais a
+  última entrega (6 com poucas entregas; ~8 com 3 mil, `ULTIMA_ENTREGA`).

@@ -1,8 +1,9 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
-// 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql e
-// 0008_regras_campanha.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A
-// 0006, a 0007 e a 0008 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados
-// com as migrações anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8).
+// 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
+// 0008_regras_campanha.sql e 0009_token_webhook.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes,
+// dentro do workerd. A 0006, a 0007, a 0008 e a 0009 também são aplicadas num D1 à parte (DB_MIGRACAO,
+// vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7;
+// RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -14,6 +15,11 @@ import {
 import { buscarLinkValido, buscarUsuarioDaSessao } from "../db/acessos";
 import { montarCampanha, type CampanhaAtiva } from "../db/campanha";
 import { SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3 } from "../db/painel";
+import {
+  GRAVAR_SE_NAO_HA_TOKEN,
+  LER_HASH_TOKEN_WEBHOOK,
+  SUBSTITUIR_TOKEN,
+} from "../db/token-webhook";
 
 const TABELAS = [
   "_meta",
@@ -32,6 +38,8 @@ const TABELAS = [
   "recuperacoes",
   "redes",
   "sessoes",
+  // 0009 (RIFA-039, D21): o SHA-256 do token do webhook gerado pela tela (uma linha no máximo).
+  "token_webhook",
   "usuarios",
   "webhook_eventos",
 ];
@@ -502,7 +510,8 @@ async function fotografar(db: D1Database) {
 }
 
 // As migrações sobre dados que já existiam são um cenário em passos no mesmo D1 (DB_MIGRACAO): até a 0005 e os
-// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados e a 0008 sobre mais outros. Por isso a
+// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados, a 0008 sobre mais outros e a 0009 sobre
+// tudo o que ficou (inclusive a trilha e as entregas do webhook). Por isso a
 // ordem é a do arquivo, mesmo com --sequence.shuffle: cada uma tem de ser a última aplicada quando os testes dela
 // rodam, e a cascata apaga linhas que a comparação "continuam iguais" fotografou.
 describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
@@ -1162,7 +1171,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           .bind(campanhaId),
       ]);
       antes = await fotografar0008();
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0008: a 0009 é aplicada depois, sobre tudo isto (describe "0009 sobre dados que já existiam").
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0009"),
+      );
     });
 
     it("a 0008 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -1402,6 +1415,217 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           )
           .first(),
       ).toEqual({ affiliate_id: null, desconsiderado_motivo: "teste" });
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0009 (RIFA-039, D21): o token do webhook gerado pela tela, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0009 sobre dados que já existiam (RIFA-039, CA8)", () => {
+    const db = DB_MIGRACAO;
+    const HASH_1 = "0123456789abcdef".repeat(4);
+    const HASH_2 = "fedcba9876543210".repeat(4);
+    const GERADO_EM_1 = "2026-11-12T10:00:00.000Z";
+    const GERADO_EM_2 = "2026-11-12T11:30:00.123Z";
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    /** Todas as tabelas nossas, linha por linha (pela ordem do rowid): a 0009 não pode mudar nenhuma. */
+    const fotografarTudo = async () => {
+      const { results } = await db
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND ${soNossas("name")} ORDER BY name`,
+        )
+        .all<{ name: string }>();
+      const nomes = results.map((linha) => linha.name);
+      const linhas = await db.batch(
+        nomes.map((nome) =>
+          db.prepare(`SELECT * FROM "${nome}" ORDER BY rowid`),
+        ),
+      );
+      return Object.fromEntries(
+        nomes.map((nome, indice) => [
+          nome,
+          linhas[indice].results as Record<string, unknown>[],
+        ]),
+      );
+    };
+
+    const linhaDoToken = () =>
+      db.prepare("SELECT * FROM token_webhook ORDER BY rowid").all();
+    const apagarToken = async () => {
+      await db.prepare("DELETE FROM token_webhook").run();
+    };
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0008 (aqui vale também rodando este sozinho).
+      const ate0008 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0009",
+      );
+      expect(ate0008.map((migracao) => migracao.name)).not.toContain(
+        "0009_token_webhook.sql",
+      );
+      await applyD1Migrations(db, ate0008);
+      // Além do que os describes anteriores gravaram: uma geração de link na trilha e entregas autenticadas do
+      // webhook (o "último uso" da tela sai de webhook_eventos, D21), de antes da 0009.
+      await db.batch([
+        db.prepare(
+          `INSERT INTO auditoria (usuario_id, em, acao, alvo, resumo)
+           VALUES (1, '2026-11-10T10:00:00.000Z', 'link.criar', 'link:1', 'Link criado antes da 0009')`,
+        ),
+        db.prepare(
+          `INSERT INTO webhook_eventos (recebido_em, evento, pedido_id, slug, resultado, payload_redigido, erro)
+           VALUES ('2026-11-10T12:00:00.000Z', 'new_order', 'ANTES-0009-1', 'outra-campanha',
+             'ignorado_outra_campanha', '{}', NULL),
+           ('2026-11-10T12:05:00.000Z', NULL, NULL, NULL, 'erro_validacao', NULL,
+             '[{"caminho":[],"codigo":"json_invalido","mensagem":"O corpo não é um JSON válido","ocorrencias":1}]')`,
+        ),
+      ]);
+      antes = await fotografarTudo();
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0009 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0009_token_webhook.sql",
+      );
+      expect(antes.token_webhook).toBeUndefined();
+      for (const tabela of [
+        "usuarios",
+        "links_acesso",
+        "sessoes",
+        "auditoria",
+        "pedidos",
+        "webhook_eventos",
+        "campanhas",
+      ])
+        expect({ tabela, vazia: antes[tabela].length === 0 }).toEqual({
+          tabela,
+          vazia: false,
+        });
+    });
+
+    it("nenhum dado muda: toda tabela de antes fica igual, e token_webhook começa vazia (vale o segredo do Worker)", async () => {
+      const { token_webhook: tokenWebhook, ...depois } = await fotografarTudo();
+      expect(depois).toEqual(antes);
+      expect(tokenWebhook).toEqual([]);
+      const { results: colunas } = await db
+        .prepare(
+          "SELECT name, type, \"notnull\", pk FROM pragma_table_info('token_webhook') ORDER BY cid",
+        )
+        .all();
+      expect(colunas).toEqual([
+        { name: "id", type: "INTEGER", notnull: 0, pk: 1 },
+        { name: "token_hash", type: "TEXT", notnull: 1, pk: 0 },
+        { name: "gerado_em", type: "TEXT", notnull: 1, pk: 0 },
+      ]);
+    });
+
+    it("a leitura do webhook é pela chave (plano pela INTEGER PRIMARY KEY) e lê 1 linha, com a tabela vazia ou não", async () => {
+      const { results: plano } = await db
+        .prepare(`EXPLAIN QUERY PLAN ${LER_HASH_TOKEN_WEBHOOK}`)
+        .all<{ detail: string }>();
+      expect(plano.map((passo) => passo.detail)).toEqual([
+        "SEARCH token_webhook USING INTEGER PRIMARY KEY (rowid=?)",
+      ]);
+
+      const vazia = await db.prepare(LER_HASH_TOKEN_WEBHOOK).all();
+      expect({ linhas: vazia.results, lidas: vazia.meta.rows_read }).toEqual({
+        linhas: [],
+        lidas: 1,
+      });
+      await db.prepare(GRAVAR_SE_NAO_HA_TOKEN).bind(HASH_1, GERADO_EM_1).run();
+      onTestFinished(apagarToken);
+      const comLinha = await db.prepare(LER_HASH_TOKEN_WEBHOOK).all();
+      expect({
+        linhas: comLinha.results,
+        lidas: comLinha.meta.rows_read,
+      }).toEqual({ linhas: [{ token_hash: HASH_1 }], lidas: 1 });
+    });
+
+    it("os CHECK: uma linha só (id 2 e INSERT sem id), o hash fora do formato e o instante fora do formato são recusados", async () => {
+      const recusar = (sql: string, ...valores: unknown[]) =>
+        expect(
+          db
+            .prepare(sql)
+            .bind(...valores)
+            .run(),
+        ).rejects.toThrow(/CHECK constraint failed/);
+      onTestFinished(apagarToken);
+      const inserir =
+        "INSERT INTO token_webhook (id, token_hash, gerado_em) VALUES (?1, ?2, ?3)";
+
+      await recusar(inserir, 2, HASH_1, GERADO_EM_1);
+      await recusar(inserir, 0, HASH_1, GERADO_EM_1);
+      for (const hashErrado of [
+        HASH_1.toUpperCase(),
+        HASH_1.slice(0, 63),
+        `${HASH_1}0`,
+        `${HASH_1.slice(0, 63)}g`,
+        `${HASH_1.slice(0, 62)} 0`,
+        "token-do-webhook-em-texto",
+        "",
+      ])
+        await recusar(inserir, 1, hashErrado, GERADO_EM_1);
+      for (const instanteErrado of [
+        "2026-11-12 10:00:00",
+        "2026-11-12T10:00:00Z",
+        "2026-11-12T10:00:00.000+00:00",
+        "2026-11-12",
+        "12/11/2026 10:00",
+      ])
+        await recusar(inserir, 1, HASH_1, instanteErrado);
+      // NOT NULL nas duas colunas.
+      await expect(
+        db
+          .prepare(
+            "INSERT INTO token_webhook (id, token_hash, gerado_em) VALUES (1, NULL, ?1)",
+          )
+          .bind(GERADO_EM_1)
+          .run(),
+      ).rejects.toThrow(/NOT NULL constraint failed/);
+      expect((await linhaDoToken()).results).toEqual([]);
+
+      // Com a linha 1 gravada, um INSERT sem id ganharia o rowid 2: recusado pelo CHECK.
+      await db.prepare(inserir).bind(1, HASH_1, GERADO_EM_1).run();
+      await recusar(
+        "INSERT INTO token_webhook (token_hash, gerado_em) VALUES (?1, ?2)",
+        HASH_2,
+        GERADO_EM_2,
+      );
+      expect((await linhaDoToken()).results).toEqual([
+        { id: 1, token_hash: HASH_1, gerado_em: GERADO_EM_1 },
+      ]);
+    });
+
+    it("a gravação: sem substituir, ON CONFLICT DO NOTHING mantém a primeira (changes 0); com substituir, o UPSERT troca a linha", async () => {
+      onTestFinished(apagarToken);
+      const primeira = await db
+        .prepare(GRAVAR_SE_NAO_HA_TOKEN)
+        .bind(HASH_1, GERADO_EM_1)
+        .run();
+      expect(primeira.meta.changes).toBe(1);
+
+      const outraAba = await db
+        .prepare(GRAVAR_SE_NAO_HA_TOKEN)
+        .bind(HASH_2, GERADO_EM_2)
+        .run();
+      expect(outraAba.meta.changes).toBe(0);
+      expect((await linhaDoToken()).results).toEqual([
+        { id: 1, token_hash: HASH_1, gerado_em: GERADO_EM_1 },
+      ]);
+
+      const troca = await db
+        .prepare(SUBSTITUIR_TOKEN)
+        .bind(HASH_2, GERADO_EM_2)
+        .run();
+      expect(troca.meta.changes).toBe(1);
+      expect((await linhaDoToken()).results).toEqual([
+        { id: 1, token_hash: HASH_2, gerado_em: GERADO_EM_2 },
+      ]);
     });
 
     it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
