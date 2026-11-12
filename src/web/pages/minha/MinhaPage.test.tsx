@@ -123,9 +123,13 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
       "Meta de hoje: 9 bilhetes; vendidos hoje: 2.",
     );
 
-    expect(api.chamadas).toEqual([
-      { metodo: "GET", caminho: `${CAMINHO_VISAO}?periodo=atual` },
-    ]);
+    // A visão e, uma vez, o link de vendas (RIFA-046).
+    await waitFor(() =>
+      expect(api.chamadas).toEqual([
+        { metodo: "GET", caminho: `${CAMINHO_VISAO}?periodo=atual` },
+        { metodo: "GET", caminho: "/api/minha/links-vendas" },
+      ]),
+    );
   });
 
   it("o período atual, com a situação contra a curva do período", async () => {
@@ -478,7 +482,9 @@ describe("fases, primeira venda e alvo sem células", () => {
     await abrir(visaoDe({ fase: "encerrada" }), { api });
 
     // A 1ª consulta (período atual) mostra que a campanha acabou: a tela pede de novo a campanha inteira.
-    expect(api.chamadas.map((chamada) => chamada.caminho)).toEqual([
+    expect(
+      api.chamadasA("GET", CAMINHO_VISAO).map((chamada) => chamada.caminho),
+    ).toEqual([
       `${CAMINHO_VISAO}?periodo=atual`,
       `${CAMINHO_VISAO}?periodo=campanha`,
     ]);

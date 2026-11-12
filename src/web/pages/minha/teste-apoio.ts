@@ -7,6 +7,7 @@
 // 7 dias com 35/25/45 (normalizados), consultada em 04/12/2026 (dia 12, 2º dia da Semana 2).
 import { vi } from "vitest";
 import {
+  respostaMeusLinksVendasSchema,
   respostaVisaoIndividualSchema,
   type Alvo,
   type CriterioRanking,
@@ -14,6 +15,7 @@ import {
   type ItemEquipe,
   type PapelHierarquia,
   type ReferenciaCampanha,
+  type RespostaMeusLinksVendas,
   type RespostaVisaoIndividual,
   type UnidadeMeta,
   type UsuarioSessao,
@@ -732,6 +734,87 @@ export function todosOsCenarios(): [string, Cenario][] {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Links de vendas (RIFA-046, D24): GET /api/minha/links-vendas
+// ---------------------------------------------------------------------------------------------------
+
+/** O link de vendas de um afiliado (o formato do exemplo da D24; o real ainda não foi confirmado com a Rifei). */
+export function urlDoAfiliado(affiliateId: number): string {
+  return `https://rifei.com.br/videira-kids?afiliado=${affiliateId}`;
+}
+
+/** As células da Rede Jovem Fictícia (as mesmas da visão), com os afiliados vinculados (o mais recente primeiro). */
+const CELULAS_COM_AFILIADOS = [
+  {
+    id: 1,
+    nome: "Célula Ágape",
+    lider: "Maria Fictícia",
+    disc: [10, "Davi Fictício"],
+    afiliados: [1042],
+  },
+  {
+    id: 2,
+    nome: "Célula Betel",
+    lider: "João Fictício",
+    disc: [10, "Davi Fictício"],
+    afiliados: [1043],
+  },
+  {
+    id: 3,
+    nome: "Célula Canaã",
+    lider: "Ana Fictícia",
+    disc: [10, "Davi Fictício"],
+    afiliados: [],
+  },
+  {
+    id: 4,
+    nome: "Célula Dorcas",
+    lider: "Pedro Fictício",
+    disc: [11, "Elias Fictício"],
+    afiliados: [1050],
+  },
+] as const;
+
+export type CenarioLinks = {
+  /** false: sem modelo (o PO ainda não confirmou o formato), nenhuma célula tem link. Padrão: true. */
+  configurado?: boolean;
+  /** Os afiliados da célula do líder (Célula Ágape), do mais recente para o mais antigo. Padrão: [1042]. */
+  afiliadosDoLider?: number[];
+};
+
+/** A resposta de GET /api/minha/links-vendas para o alvo, passada pelo schema (escopo, ordem, só rifei.com.br). */
+export function meusLinksDe(
+  alvo: Alvo,
+  { configurado = true, afiliadosDoLider }: CenarioLinks = {},
+): RespostaMeusLinksVendas {
+  const itens = CELULAS_COM_AFILIADOS.filter((celula) =>
+    alvo.tipo === "celula"
+      ? celula.id === alvo.id
+      : alvo.tipo === "discipulador"
+        ? celula.disc[0] === alvo.id
+        : alvo.id === ALVO_REDE.id,
+  ).map((celula) => {
+    const afiliados =
+      celula.id === ALVO_CELULA.id && afiliadosDoLider
+        ? afiliadosDoLider
+        : celula.afiliados;
+    return {
+      celula_id: celula.id,
+      celula_nome: celula.nome,
+      lider_nome: celula.lider,
+      discipulador_id: celula.disc[0],
+      discipulador_nome: celula.disc[1],
+      rede_id: ALVO_REDE.id,
+      rede_nome: ALVO_REDE.nome,
+      divisao: ALVO_REDE.divisao,
+      links: configurado
+        ? afiliados.map((id) => ({ affiliate_id: id, url: urlDoAfiliado(id) }))
+        : [],
+    };
+  });
+  return respostaMeusLinksVendasSchema.parse({ alvo, configurado, itens });
+}
+
+// ---------------------------------------------------------------------------------------------------
 // API falsa
 // ---------------------------------------------------------------------------------------------------
 
@@ -749,14 +832,16 @@ type Responder = (chamada: Chamada) => Response | Promise<Response>;
 
 /**
  * fetch simulado: GET /api/minha/visao responde com `visao` (ou com o que `visao(periodo)` devolver),
- * passando pelo schema; POST /api/sessao/sair, 204; GET /api/sessao, a `sessao` (sem ela, 401). Outra rota:
- * 404 no formato da API.
+ * passando pelo schema; GET /api/minha/links-vendas, os `links` (padrão: os do alvo da visão, pelo schema; o
+ * líder sem afiliado na visão, sem link); POST /api/sessao/sair, 204; GET /api/sessao, a `sessao` (sem ela,
+ * 401). Outra rota: 404 no formato da API.
  */
 export function criarApiFalsa(
   visao:
     | RespostaVisaoIndividual
     | ((periodo: string) => RespostaVisaoIndividual) = visaoDe(),
   sessao: UsuarioSessao | null = null,
+  links: RespostaMeusLinksVendas | null = null,
 ) {
   const chamadas: Chamada[] = [];
   const marcadas: { metodo: string; caminho: string; responder: Responder }[] =
@@ -767,6 +852,21 @@ export function criarApiFalsa(
       const periodo = url.searchParams.get("periodo") ?? "atual";
       const resposta = typeof visao === "function" ? visao(periodo) : visao;
       return respostaJson(respostaVisaoIndividualSchema.parse(resposta));
+    }
+    if (
+      chamada.metodo === "GET" &&
+      url.pathname === "/api/minha/links-vendas"
+    ) {
+      const daVisao = typeof visao === "function" ? visao("atual") : visao;
+      return respostaJson(
+        respostaMeusLinksVendasSchema.parse(
+          links ??
+            meusLinksDe(daVisao.alvo, {
+              afiliadosDoLider:
+                daVisao.afiliados_vinculados === 0 ? [] : undefined,
+            }),
+        ),
+      );
     }
     if (chamada.metodo === "POST" && url.pathname === "/api/sessao/sair") {
       return new Response(null, { status: 204 });

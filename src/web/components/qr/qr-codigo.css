@@ -1,0 +1,109 @@
+/* QR code do link de vendas (RIFA-046, D24). O QR é sempre preto no branco (cores fixas no <svg>, em
+   qr-matriz.ts: a exceção aos tokens que a D24 documenta); o resto usa as variáveis do tema. Celular primeiro: o
+   QR encolhe até a largura do cartão, sem passar de 16rem na tela. */
+
+.qr-codigo {
+  display: grid;
+  gap: var(--espaco-3);
+  justify-items: center;
+  min-width: 0;
+}
+
+/* A borda fina separa a margem branca do QR do cartão (também branco). */
+.qr-codigo__moldura {
+  width: min(100%, 16rem);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  overflow: hidden;
+  line-height: 0;
+}
+
+.qr-codigo__imagem {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.qr-codigo__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--espaco-2);
+}
+
+.qr-codigo__retorno {
+  max-width: 100%;
+  font-size: var(--texto-sm);
+  text-align: center;
+  color: var(--cor-sucesso);
+  overflow-wrap: anywhere;
+}
+
+.qr-codigo__retorno[data-tom="alerta"] {
+  color: var(--cor-alerta);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .qr-codigo__retorno {
+    animation: ui-surgir var(--duracao-media) var(--curva-saida);
+  }
+}
+
+/* As folhas impressas ficam fora da tela; só aparecem na impressão (useImpressaoQr). */
+.qr-folhas {
+  display: none;
+}
+
+@media print {
+  html.qr-imprimindo,
+  html.qr-imprimindo body {
+    overflow: visible !important;
+    background: none;
+  }
+
+  html.qr-imprimindo body > :not(.qr-folhas) {
+    display: none !important;
+  }
+
+  html.qr-imprimindo .qr-folhas {
+    display: block;
+    color: var(--cor-texto);
+  }
+
+  .qr-folha {
+    display: grid;
+    gap: 0.6cm;
+    justify-items: center;
+    padding-top: 1.5cm;
+    text-align: center;
+    break-inside: avoid;
+    break-after: page;
+  }
+
+  .qr-folha:last-child {
+    break-after: auto;
+  }
+
+  .qr-folha__titulo {
+    font-size: 26pt;
+    overflow-wrap: anywhere;
+  }
+
+  .qr-folha__chamada {
+    font-size: 14pt;
+  }
+
+  /* 9 cm: bem acima dos 4 cm que a D24 pede, para a câmera ler de longe. */
+  .qr-folha__imagem {
+    width: 9cm;
+    height: 9cm;
+    print-color-adjust: exact;
+  }
+
+  .qr-folha__link {
+    max-width: 16cm;
+    font-family: var(--fonte-mono);
+    font-size: 11pt;
+    overflow-wrap: anywhere;
+  }
+}

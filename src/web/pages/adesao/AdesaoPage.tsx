@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Link } from "react-router";
 import {
   Button,
@@ -29,6 +29,14 @@ import type {
 } from "./vinculo";
 import "./adesao.css";
 
+// Os links de vendas e o QR code de cada célula (RIFA-046, D24) vêm num pacote à parte, com o próprio CSS: o gerador
+// de QR code (`qr`) nunca entra no pacote inicial do site.
+const LinksDeVendas = lazy(() =>
+  import("./LinksDeVendas").then((modulo) => ({
+    default: modulo.LinksDeVendas,
+  })),
+);
+
 const SEGUNDOS_ENTRE_ATUALIZACOES = INTERVALO_ATUALIZACAO_MS / 1000;
 
 /** Órfão vinculado nesta tela e quando (Date.now() da resposta do PUT). */
@@ -53,7 +61,8 @@ function filaSemOsVinculadosAgora(
 }
 
 // Painel da reunião de cadastro dos líderes, pensado para o celular: quem já virou afiliado na Rifei,
-// a fila de códigos sem célula (para vincular) e quem falta (para chamar o líder ali mesmo).
+// a fila de códigos sem célula (para vincular), quem falta (para chamar o líder ali mesmo) e, no fim, o link
+// de vendas e o QR code de cada célula (RIFA-046).
 export function AdesaoPage() {
   const { estado, atualizando, atualizarAgora, tentarDeNovo } =
     usePainelAdesao();
@@ -146,6 +155,11 @@ export function AdesaoPage() {
             aoSalvar={aoSalvar}
             aoRemover={admin ? aoRemover : null}
           />
+          <Suspense
+            fallback={<Loading texto="Carregando os links de vendas…" />}
+          >
+            <LinksDeVendas celulas={estado.painel.adesao.itens} />
+          </Suspense>
         </>
       )}
     </>

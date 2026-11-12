@@ -20,6 +20,7 @@ import {
 } from "../../../shared/contracts";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import type { CelulaAdesao } from "./adesao-api";
+import { respostaLinksDe } from "./teste-apoio-links";
 import { INTERVALO_ATUALIZACAO_MS } from "./usePainelAdesao";
 
 // 11/11/2026, 19:33 em Belém (22:33 UTC): a reunião de cadastro dos líderes.
@@ -100,7 +101,8 @@ const SEM_VENDAS = { pedidos_aprovados: 0, bilhetes: 0, total_centavos: 0 };
 
 /**
  * fetch simulado com estado: GET /api/admin/adesao, GET ?vinculado=false e PUT do afiliado. Também responde, vazia,
- * a lista de recuperações da Conferência (RIFA-012), a tela para onde o teste "ao sair da tela" navega.
+ * a lista de recuperações da Conferência (RIFA-012), a tela para onde o teste "ao sair da tela" navega, e a lista
+ * dos links de vendas (RIFA-046), sem modelo (os testes do link ficam em LinksDeVendas.test.tsx).
  */
 function simularApi(inicial: EstadoApi) {
   const estado = structuredClone(inicial);
@@ -154,6 +156,8 @@ function simularApi(inicial: EstadoApi) {
           }),
         );
       }
+      if (metodo === "GET" && url === "/api/admin/links-vendas")
+        return respostaJson(respostaLinksDe(estado.celulas, null));
       if (metodo === "GET" && url === "/api/admin/reconciliacao/recuperacoes")
         return respostaJson(
           respostaListaRecuperacoesSchema.parse({ itens: [], proximo: null }),
@@ -935,11 +939,14 @@ describe("RIFA-006b: no celular, a fila logo no topo; depois de vincular, aviso 
       within(resumo).queryByText("Células que já venderam"),
     ).not.toBeInTheDocument();
     expect(within(resumo).queryByRole("progressbar")).not.toBeInTheDocument();
+    // Os links de vendas (RIFA-046), num pacote à parte, ficam no fim.
+    await screen.findByRole("region", { name: "Links de vendas" });
     expect(ordemDasSecoes()).toEqual([
       "Resumo",
       "Sem célula (2)",
       "Quem falta (2)",
       "Todas as células",
+      "Links de vendas",
     ]);
     // Nada entre o resumo e a fila; o "Atualizar agora" fica na linha da hora, acima do resumo.
     expect(resumo.nextElementSibling?.firstElementChild).toBe(
@@ -962,11 +969,14 @@ describe("RIFA-006b: no celular, a fila logo no topo; depois de vincular, aviso 
     expect(
       within(resumo).getByRole("progressbar", { name: "Adesão das células" }),
     ).toBeInTheDocument();
+    // Os links de vendas (RIFA-046), num pacote à parte, ficam no fim.
+    await screen.findByRole("region", { name: "Links de vendas" });
     expect(ordemDasSecoes()).toEqual([
       "Resumo",
       "Sem célula (2)",
       "Quem falta (2)",
       "Todas as células",
+      "Links de vendas",
     ]);
   });
 

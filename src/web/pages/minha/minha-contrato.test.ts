@@ -8,6 +8,7 @@ import {
   PAPEIS_COORDENACAO,
   PAPEIS_HIERARQUIA,
   ROTAS,
+  ROTAS_LINK_VENDAS,
   TIPO_ALVO_DO_PAPEL,
   consultaVisaoIndividualSchema,
   respostaVisaoIndividualSchema,
@@ -20,9 +21,11 @@ import {
   ehPapelDaHierarquia,
   inicioDoPapel,
 } from "../../lib/sessao";
+import { CAMINHO_MEUS_LINKS_VENDAS } from "./links-vendas-api";
 import { CAMINHO_VISAO, caminhoDaVisao, periodoDaFase } from "./minha-api";
 import {
   SESSOES,
+  meusLinksDe,
   sessaoDaVisao,
   todosOsCenarios,
   visaoDe,
@@ -34,6 +37,17 @@ describe("cópias do contrato na visão individual", () => {
     expect(ROTAS.visaoIndividual.metodo).toBe("GET");
     expect(ROTAS.visaoIndividual.grupo).toBe("hierarquia");
     expect([...ROTAS.visaoIndividual.papeis].sort()).toEqual(
+      [...PAPEIS_DA_HIERARQUIA].sort(),
+    );
+  });
+
+  it("o link de vendas (RIFA-046): caminho, grupo e papéis da rota", () => {
+    expect(CAMINHO_MEUS_LINKS_VENDAS).toBe(
+      ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+    );
+    expect(ROTAS_LINK_VENDAS.meusLinksVendas.metodo).toBe("GET");
+    expect(ROTAS_LINK_VENDAS.meusLinksVendas.grupo).toBe("hierarquia");
+    expect([...ROTAS_LINK_VENDAS.meusLinksVendas.papeis].sort()).toEqual(
       [...PAPEIS_DA_HIERARQUIA].sort(),
     );
   });
@@ -88,6 +102,23 @@ describe("a API falsa dos testes segue o contrato", () => {
         TIPO_ALVO_DO_PAPEL[papel as keyof typeof TIPO_ALVO_DO_PAPEL],
       );
     }
+  });
+
+  it("os links de vendas de cada alvo passam no schema (escopo do papel, configurado ou não, vários códigos)", () => {
+    for (const cenario of todosOsCenarios()) {
+      const { alvo } = visaoDe(cenario[1]);
+      for (const configurado of [true, false]) {
+        const links = meusLinksDe(alvo, { configurado });
+        expect(links.alvo).toEqual(alvo);
+        if (alvo.tipo === "celula") expect(links.itens).toHaveLength(1);
+      }
+    }
+    expect(
+      meusLinksDe(SESSOES.lider.alvo!, { afiliadosDoLider: [1077, 1042] })
+        .itens[0].links,
+    ).toHaveLength(2);
+    expect(meusLinksDe(SESSOES.rede.alvo!).itens).toHaveLength(4);
+    expect(meusLinksDe(SESSOES.discipulador.alvo!).itens).toHaveLength(3);
   });
 
   it.each(todosOsCenarios())(
