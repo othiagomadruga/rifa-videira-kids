@@ -19,6 +19,10 @@
     box-shadow var(--transicao);
 }
 
+/*
+ * Os :hover e o :active (abaixo) pulam o desabilitado e o indisponível com aria-disabled (RIFA-045: ele continua
+ * focável e com a dica, ex.: "Baixando…", "Carregar mais" carregando): nenhum dos dois reage ao mouse.
+ */
 .ui-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -29,7 +33,7 @@
   color: var(--cor-sobre-primaria);
 }
 
-.ui-button--primario:hover:not(:disabled) {
+.ui-button--primario:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--cor-primaria-forte);
   color: var(--cor-sobre-primaria);
   box-shadow: var(--sombra-marca);
@@ -41,7 +45,7 @@
   color: var(--cor-texto);
 }
 
-.ui-button--secundario:hover:not(:disabled) {
+.ui-button--secundario:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--cor-superficie-2);
   border-color: var(--cor-primaria);
   color: var(--cor-texto);
@@ -52,7 +56,7 @@
   color: var(--cor-primaria);
 }
 
-.ui-button--discreto:hover:not(:disabled) {
+.ui-button--discreto:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--cor-primaria-suave);
   color: var(--cor-primaria-forte);
 }
@@ -62,7 +66,7 @@
   color: var(--cor-sobre-primaria);
 }
 
-.ui-button--perigo:hover:not(:disabled) {
+.ui-button--perigo:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--cor-perigo);
   color: var(--cor-sobre-primaria);
 }
@@ -91,13 +95,13 @@
       transform var(--duracao-rapida) var(--curva-saida);
   }
 
-  .ui-button:active:not(:disabled) {
+  .ui-button:active:not(:disabled):not([aria-disabled="true"]) {
     transform: scale(0.97);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) and (hover: hover) {
-  .ui-button:hover:not(:disabled):not(:active) {
+  .ui-button:hover:not(:disabled):not([aria-disabled="true"]):not(:active) {
     transform: translateY(-1px);
   }
 }
