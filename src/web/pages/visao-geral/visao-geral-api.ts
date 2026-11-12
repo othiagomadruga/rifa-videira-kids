@@ -1,10 +1,11 @@
 // Chamadas da tela Visão geral (RIFA-009): o resumo do painel (GET /api/painel/resumo) e as células com a
-// hierarquia (GET /api/admin/celulas), que dão as opções do filtro (redes e discipuladores saem delas).
+// hierarquia (GET /api/admin/celulas), que dão as opções do filtro (redes e discipuladores saem delas); e o
+// relatório da campanha para baixar (GET /api/painel/relatorio?tipo=..., RIFA-038, D23).
 //
-// Do contrato: regras e tipos de shared/contracts/calculos (módulo sem zod) e, de api.ts, só o TIPO de
-// ROTAS (o catálogo e os schemas poriam o zod no pacote do site). Os caminhos e a lista de escopos são
-// cópias, conferidas por visao-geral-contrato.test.ts.
-import type { ROTAS } from "../../../shared/contracts/api";
+// Do contrato: regras e tipos de shared/contracts/calculos e de shared/contracts/relatorio (módulos sem zod)
+// e, de api.ts, só o TIPO dos catálogos (o catálogo e os schemas poriam o zod no pacote do site). Os caminhos
+// e a lista de escopos são cópias, conferidas por visao-geral-contrato.test.ts.
+import type { ROTAS, ROTAS_RELATORIO } from "../../../shared/contracts/api";
 import {
   ORDEM_DIVISOES,
   type CelulaCalculo,
@@ -12,12 +13,18 @@ import {
   type EscopoPainel,
   type RespostaPainelResumo,
 } from "../../../shared/contracts/calculos";
-import { api } from "../../lib/api";
+import {
+  PREFIXO_ARQUIVO_RELATORIO,
+  type TipoRelatorio,
+} from "../../../shared/contracts/relatorio";
+import { api, baixarArquivo } from "../../lib/api";
 
 export const CAMINHO_RESUMO: (typeof ROTAS)["painelResumo"]["caminho"] =
   "/api/painel/resumo";
 export const CAMINHO_CELULAS: (typeof ROTAS)["listarCelulas"]["caminho"] =
   "/api/admin/celulas";
+export const CAMINHO_RELATORIO: (typeof ROTAS_RELATORIO)["baixarRelatorio"]["caminho"] =
+  "/api/painel/relatorio";
 
 type EscopoComId = Exclude<EscopoPainel, "campanha" | "divisao">;
 
@@ -126,4 +133,28 @@ export async function carregarCelulas(
     opcoes,
   );
   return itens;
+}
+
+/** Nome do arquivo quando a resposta não traz o `Content-Disposition` (D23): `rifa-videira-kids-<tipo>.csv`. */
+export function nomeReservaDoRelatorio(tipo: TipoRelatorio): string {
+  return `${PREFIXO_ARQUIVO_RELATORIO}-${tipo}.csv`;
+}
+
+/** A consulta do relatório: `tipo=celulas` (o tipo é obrigatório; sem `data`, é sempre o retrato de agora). */
+export function consultaDoRelatorio(tipo: TipoRelatorio): URLSearchParams {
+  return new URLSearchParams({ tipo });
+}
+
+/**
+ * Baixa o relatório do tipo (o navegador salva o arquivo) e devolve o nome do arquivo: o da resposta
+ * (`rifa-videira-kids-<tipo>-<data>.csv`) ou, sem ele, o de reserva.
+ */
+export function baixarRelatorio(
+  tipo: TipoRelatorio,
+  opcoes: Opcoes = {},
+): Promise<string> {
+  return baixarArquivo(`${CAMINHO_RELATORIO}?${consultaDoRelatorio(tipo)}`, {
+    ...opcoes,
+    nomeReserva: nomeReservaDoRelatorio(tipo),
+  });
 }

@@ -1,4 +1,5 @@
 // Cliente HTTP da API: só mesma origem, JSON nos dois sentidos e tempo limite.
+// Arquivo para baixar (o relatório em CSV): baixarArquivo, com o mesmo tratamento de erro.
 // Toda falha vira ErroApi. Quando a API responde no formato de erro combinado,
 //   { "erro": { "codigo": string, "mensagem": string, "detalhes"?: unknown } },
 // o ErroApi traz esse código e essa mensagem; nos demais casos, um dos
@@ -90,63 +91,13 @@ export async function requisitarJson<T = unknown>(
   caminho: string,
   opcoes: OpcoesRequisicao = {},
 ): Promise<T> {
-  garantirMesmaOrigem(caminho);
-  const {
-    metodo = "GET",
-    corpo,
-    tempoLimiteMs = TEMPO_LIMITE_PADRAO_MS,
-    signal,
-  } = opcoes;
-  if (signal?.aborted) {
-    throw erroSemResposta(signal.reason, false, signal);
-  }
-
-  const controle = new AbortController();
-  let tempoEsgotado = false;
-  const temporizador = setTimeout(() => {
-    tempoEsgotado = true;
-    controle.abort();
-  }, tempoLimiteMs);
-  const cancelar = () => controle.abort();
-  signal?.addEventListener("abort", cancelar, { once: true });
-
-  const headers: Record<string, string> = { accept: "application/json" };
-  if (corpo !== undefined) headers["content-type"] = "application/json";
-
-  let resposta: Response;
-  let texto: string;
-  try {
-    resposta = await fetch(caminho, {
-      method: metodo,
-      headers,
-      body: corpo === undefined ? undefined : JSON.stringify(corpo),
-      credentials: "same-origin",
-      signal: controle.signal,
-    });
-    texto = await resposta.text();
-  } catch (causa) {
-    throw erroSemResposta(causa, tempoEsgotado, signal);
-  } finally {
-    clearTimeout(temporizador);
-    signal?.removeEventListener("abort", cancelar);
-  }
-
+  const { resposta, corpo: texto } = await requisitar(
+    caminho,
+    opcoes,
+    "application/json",
+    (sucesso) => sucesso.text(),
+  );
   const json = lerJson(texto);
-  if (!resposta.ok) {
-    if (resposta.status === 401) {
-      for (const ouvinte of [...ouvintes401]) ouvinte(caminho);
-    }
-    const erroPadrao = json.valido ? lerCorpoErro(json.valor) : null;
-    throw new ErroApi(
-      erroPadrao
-        ? { ...erroPadrao, status: resposta.status }
-        : {
-            codigo: CODIGOS_CLIENTE.erroHttp,
-            mensagem: `A API respondeu com falha (HTTP ${resposta.status}).`,
-            status: resposta.status,
-          },
-    );
-  }
   if (!json.valido) {
     throw new ErroApi({
       codigo: CODIGOS_CLIENTE.respostaInvalida,
@@ -155,6 +106,55 @@ export async function requisitarJson<T = unknown>(
     });
   }
   return json.valor as T;
+}
+
+export type OpcoesArquivo = OpcoesSemCorpo & {
+  /** Nome do arquivo quando a resposta não traz o `filename` no `Content-Disposition`. */
+  nomeReserva: string;
+};
+
+/**
+ * Por quanto tempo o endereço do arquivo baixado (object URL) continua valendo depois do clique: o navegador
+ * lê o arquivo depois, e no iPhone só quando a pessoa confirma o download. Depois disso, a memória é liberada.
+ */
+export const LIBERAR_ARQUIVO_DEPOIS_MS = 60_000;
+
+/**
+ * Baixa um arquivo da API (GET na mesma origem, com o cookie): fetch → Blob → link temporário com `download`
+ * igual ao nome do `Content-Disposition` (ou `nomeReserva`), clicado e removido na hora; o object URL é
+ * liberado depois de LIBERAR_ARQUIVO_DEPOIS_MS. Falhas e 401 como em requisitarJson (os erros da API vêm em
+ * JSON, no formato único). Devolve o nome dado ao arquivo. Cancelada pelo `signal`, não baixa nada.
+ */
+export async function baixarArquivo(
+  caminho: string,
+  { nomeReserva, ...opcoes }: OpcoesArquivo,
+): Promise<string> {
+  const { resposta, corpo: arquivo } = await requisitar(
+    caminho,
+    { ...opcoes, metodo: "GET" },
+    "*/*",
+    (sucesso) => sucesso.blob(),
+  );
+  const { signal } = opcoes;
+  if (signal?.aborted) throw erroSemResposta(signal.reason, false, signal);
+
+  const nome =
+    nomeDoContentDisposition(resposta.headers.get("content-disposition")) ??
+    nomeReserva;
+  const endereco = URL.createObjectURL(arquivo);
+  const link = document.createElement("a");
+  link.href = endereco;
+  link.download = nome;
+  link.hidden = true;
+  // No documento durante o clique: alguns navegadores só baixam por um link que está na página.
+  document.body.append(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(endereco), LIBERAR_ARQUIVO_DEPOIS_MS);
+  }
+  return nome;
 }
 
 /** Atalhos por método: api.get("/api/..."), api.post("/api/...", corpo)... */
@@ -185,6 +185,109 @@ export function mensagemDoErro(erro: unknown): string {
   return erro instanceof ErroApi
     ? erro.mensagem
     : "Ocorreu um erro inesperado. Tente de novo.";
+}
+
+type Recebida<T> = { resposta: Response; corpo: T };
+
+/**
+ * O caminho comum de requisitarJson e baixarArquivo: mesma origem, tempo limite, cancelamento e o corpo
+ * lido dentro do tempo limite (`lerCorpo` no sucesso; o texto do erro na falha, que vira ErroApi).
+ */
+async function requisitar<T>(
+  caminho: string,
+  opcoes: OpcoesRequisicao,
+  aceitar: string,
+  lerCorpo: (resposta: Response) => Promise<T>,
+): Promise<Recebida<T>> {
+  garantirMesmaOrigem(caminho);
+  const {
+    metodo = "GET",
+    corpo,
+    tempoLimiteMs = TEMPO_LIMITE_PADRAO_MS,
+    signal,
+  } = opcoes;
+  if (signal?.aborted) {
+    throw erroSemResposta(signal.reason, false, signal);
+  }
+
+  const controle = new AbortController();
+  let tempoEsgotado = false;
+  const temporizador = setTimeout(() => {
+    tempoEsgotado = true;
+    controle.abort();
+  }, tempoLimiteMs);
+  const cancelar = () => controle.abort();
+  signal?.addEventListener("abort", cancelar, { once: true });
+
+  const headers: Record<string, string> = { accept: aceitar };
+  if (corpo !== undefined) headers["content-type"] = "application/json";
+
+  let resposta: Response;
+  let lido: { ok: true; corpo: T } | { ok: false; texto: string };
+  try {
+    resposta = await fetch(caminho, {
+      method: metodo,
+      headers,
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      credentials: "same-origin",
+      signal: controle.signal,
+    });
+    lido = resposta.ok
+      ? { ok: true, corpo: await lerCorpo(resposta) }
+      : { ok: false, texto: await resposta.text() };
+  } catch (causa) {
+    throw erroSemResposta(causa, tempoEsgotado, signal);
+  } finally {
+    clearTimeout(temporizador);
+    signal?.removeEventListener("abort", cancelar);
+  }
+
+  if (!lido.ok) throw erroDaResposta(caminho, resposta.status, lido.texto);
+  return { resposta, corpo: lido.corpo };
+}
+
+/** A resposta de erro vira ErroApi; um 401 avisa os ouvintes antes (a sessão leva para /entrar). */
+function erroDaResposta(
+  caminho: string,
+  status: number,
+  texto: string,
+): ErroApi {
+  if (status === 401) {
+    for (const ouvinte of [...ouvintes401]) ouvinte(caminho);
+  }
+  const json = lerJson(texto);
+  const erroPadrao = json.valido ? lerCorpoErro(json.valor) : null;
+  return new ErroApi(
+    erroPadrao
+      ? { ...erroPadrao, status }
+      : {
+          codigo: CODIGOS_CLIENTE.erroHttp,
+          mensagem: `A API respondeu com falha (HTTP ${status}).`,
+          status,
+        },
+  );
+}
+
+/**
+ * O nome do arquivo no `Content-Disposition`: `filename*=UTF-8''...` (RFC 6266/8187) e, sem ele,
+ * `filename="..."` ou `filename=...`. Null sem cabeçalho, sem nome ou com nome vazio.
+ */
+function nomeDoContentDisposition(cabecalho: string | null): string | null {
+  if (!cabecalho) return null;
+  const estendido = /filename\*\s*=\s*utf-8''([^;\s]+)/i.exec(cabecalho);
+  if (estendido) {
+    try {
+      const nome = decodeURIComponent(estendido[1]).trim();
+      if (nome) return nome;
+    } catch {
+      // Codificação inválida: fica o filename simples, se houver.
+    }
+  }
+  const simples = /filename\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;\s]+))/i.exec(
+    cabecalho,
+  );
+  const nome = (simples?.[1]?.replace(/\\(.)/g, "$1") ?? simples?.[2])?.trim();
+  return nome ? nome : null;
 }
 
 // Aceita só caminhos absolutos da própria origem ("/api/..."). Barra dupla,

@@ -248,3 +248,151 @@
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
 }
+
+/* Relatório da campanha para baixar (RIFA-038): o tipo em cartões de escolha, o botão e como abrir. */
+.visao-relatorio__corpo {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.visao-relatorio__intro {
+  margin-top: calc(-1 * var(--espaco-2));
+  color: var(--cor-texto-suave);
+}
+
+.visao-relatorio__tipos {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.visao-relatorio__legenda {
+  padding: 0;
+  margin-bottom: var(--espaco-2);
+  font-weight: var(--peso-forte);
+}
+
+/* Um por linha no celular; dois ou três por linha conforme a largura. */
+.visao-relatorio__opcoes {
+  display: grid;
+  gap: var(--espaco-2);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+
+.visao-relatorio__opcao {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+  min-width: 0;
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao),
+    box-shadow var(--transicao);
+}
+
+.visao-relatorio__opcao:hover {
+  background: var(--cor-superficie-2);
+}
+
+.visao-relatorio__opcao:has(input:checked) {
+  border-color: var(--cor-primaria);
+  background: var(--cor-primaria-suave);
+  box-shadow: inset 0 0 0 1px var(--cor-primaria);
+}
+
+.visao-relatorio__opcao input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.125rem 0 0;
+  accent-color: var(--cor-primaria);
+}
+
+.visao-relatorio__opcao-textos {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.visao-relatorio__opcao-nome {
+  font-weight: var(--peso-forte);
+}
+
+.visao-relatorio__opcao-descricao {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.visao-relatorio__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-4);
+}
+
+.visao-relatorio__icone {
+  flex: none;
+}
+
+/* Baixando: o botão continua focável (aria-disabled), mas parece ocupado. Com 0,75, o "Baixando…" branco ainda
+   tem 5:1 sobre o roxo esmaecido (com 0,55, como nos outros botões ocupados, ficaria abaixo de 4,5:1). */
+.visao-relatorio__acoes .ui-button[aria-disabled="true"] {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.visao-relatorio__baixado {
+  flex: 1 1 16rem;
+  min-width: 0;
+  color: var(--cor-sucesso);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+/* O nome do arquivo é uma palavra só, comprida: quebra em qualquer ponto em vez de estourar a largura. */
+.visao-relatorio__arquivo {
+  overflow-wrap: anywhere;
+}
+
+.visao-relatorio__como-abrir {
+  display: grid;
+  gap: var(--espaco-1);
+  padding: var(--espaco-3);
+  border-radius: var(--raio-2);
+  background: var(--cor-fundo);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.visao-relatorio__como-abrir-titulo {
+  color: var(--cor-texto);
+  font-weight: var(--peso-forte);
+}
+
+.visao-relatorio__como-abrir ul {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding-left: var(--espaco-5);
+}
+
+.visao-relatorio__como-abrir strong {
+  color: var(--cor-texto);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* O "Baixado" chega com o mesmo deslize curto dos blocos que aparecem. */
+  .visao-relatorio__baixado {
+    animation: ui-entrar var(--duracao-media) var(--curva-saida);
+  }
+}

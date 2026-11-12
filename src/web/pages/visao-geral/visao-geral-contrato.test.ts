@@ -5,16 +5,39 @@ import { describe, expect, it } from "vitest";
 import {
   ESCOPOS_PAINEL,
   ROTAS,
+  ROTAS_RELATORIO,
   consultaPainelResumoSchema,
+  consultaRelatorioSchema,
   respostaPainelResumoSchema,
+  respostaRelatorioCsvSchema,
 } from "../../../shared/contracts";
-import { CENARIOS, resolverEscopo, resumoDoCenario } from "./teste-apoio";
+import {
+  BOM_UTF8,
+  FIM_DE_LINHA_CSV_RELATORIO,
+  PREFIXO_ARQUIVO_RELATORIO,
+  SEPARADOR_CSV_RELATORIO,
+  TIPOS_RELATORIO,
+  cabecalhoDoRelatorio,
+  cabecalhosDoRelatorio,
+} from "../../../shared/contracts/relatorio";
+import {
+  CENARIOS,
+  csvDoRelatorio,
+  dataDoCenario,
+  resolverEscopo,
+  respostaRelatorio,
+  resumoDoCenario,
+} from "./teste-apoio";
+import { TEXTOS_TIPO_RELATORIO } from "./textos";
 import {
   CAMINHO_CELULAS,
+  CAMINHO_RELATORIO,
   CAMINHO_RESUMO,
   ESCOPOS,
   chaveDoEscopo,
+  consultaDoRelatorio,
   escopoDosParams,
+  nomeReservaDoRelatorio,
   paramsDoEscopo,
   type Escopo,
 } from "./visao-geral-api";
@@ -78,6 +101,55 @@ describe("cópias do contrato na Visão geral", () => {
         expect(() =>
           respostaPainelResumoSchema.parse(resumoDoCenario(cenario, resolvido)),
         ).not.toThrow();
+      }
+    }
+  });
+});
+
+describe("cópias do contrato no relatório da campanha (RIFA-038)", () => {
+  it("o caminho da rota, os tipos na ordem do contrato e o nome de reserva do arquivo (D23)", () => {
+    expect(CAMINHO_RELATORIO).toBe(ROTAS_RELATORIO.baixarRelatorio.caminho);
+    expect(ROTAS_RELATORIO.baixarRelatorio.metodo).toBe("GET");
+    expect(Object.keys(TEXTOS_TIPO_RELATORIO)).toEqual([...TIPOS_RELATORIO]);
+    for (const tipo of TIPOS_RELATORIO)
+      expect(nomeReservaDoRelatorio(tipo)).toBe(
+        `${PREFIXO_ARQUIVO_RELATORIO}-${tipo}.csv`,
+      );
+  });
+
+  it.each(TIPOS_RELATORIO)(
+    "a consulta do tipo %s passa no schema da rota",
+    (tipo) => {
+      expect(
+        consultaRelatorioSchema.parse(
+          Object.fromEntries(consultaDoRelatorio(tipo)),
+        ),
+      ).toEqual({ tipo });
+    },
+  );
+
+  it("a API simulada dos testes responde o CSV e os cabeçalhos do contrato, em todos os cenários e tipos", async () => {
+    for (const cenario of Object.values(CENARIOS)) {
+      for (const tipo of TIPOS_RELATORIO) {
+        const csv = csvDoRelatorio(tipo, cenario);
+        expect(() => respostaRelatorioCsvSchema.parse(csv)).not.toThrow();
+        const [cabecalho] = csv
+          .slice(BOM_UTF8.length)
+          .split(FIM_DE_LINHA_CSV_RELATORIO);
+        expect(cabecalho).toBe(
+          cabecalhoDoRelatorio(tipo, cenario.campanha.meta.unidade).join(
+            SEPARADOR_CSV_RELATORIO,
+          ),
+        );
+        const resposta = respostaRelatorio(tipo, cenario);
+        expect(Object.fromEntries(resposta.headers)).toEqual(
+          Object.fromEntries(
+            new Headers(cabecalhosDoRelatorio(tipo, dataDoCenario(cenario))),
+          ),
+        );
+        // O corpo vai em bytes UTF-8 com o BOM (EF BB BF), como o Worker manda.
+        const bytes = new Uint8Array(await resposta.arrayBuffer());
+        expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
       }
     }
   });
