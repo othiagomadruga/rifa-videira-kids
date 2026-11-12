@@ -367,6 +367,8 @@ Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → 
 
 ### 12.2 Ligar a Efí à Rifei (recebimento do Pix)
 
+**Alternativa: Pix manual.** A Rifei também aceita o Pix manual: o comprador paga direto na chave Pix cadastrada nas formas de pagamento, manda o comprovante no WhatsApp e o organizador confere no extrato e marca o pedido como pago no painel ([Como saber se um PIX manual foi pago](https://rifei.com.br/ajuda/pagamentos/como-saber-se-um-pix-manual-foi-pago), conferido em 13/11/2026). A célula continua vindo do afiliado do pedido, nas duas formas. Diferenças: com a Efí o pedido vira pago sozinho e a venda aparece no sistema em segundos; no Pix manual cada venda espera alguém conferir o extrato e marcar no painel (o artigo avisa que comprovante pode ser adulterado), e falta confirmar se a marcação manual dispara o webhook (pergunta 9 da seção 12.7). Para centenas de vendas, a Efí é o caminho recomendado.
+
 O artigo oficial da Rifei é [Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank). Ele pede uma conta Efí Pro ou Empresas, uma aplicação com permissões do Pix, um certificado e uma chave Pix. Abaixo, na ordem: A (conta), B (certificado), C (aplicação), D (chave Pix) e E (colar na Rifei). A Efí diz que a API Pix precisa de um certificado ativo, por isso aqui o certificado vem antes da aplicação ([Como criar uma nova aplicação](https://sejaefi.com.br/central-de-ajuda/api/como-criar-uma-nova-aplicacao-para-usar-a-api-pix)).
 
 **Que conta Efí serve.** A Rifei pede **Efí Pro ou Efí Empresas** ([Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank)). A conta pessoal "Efí Para você" não basta.
@@ -529,5 +531,6 @@ O suporte da Rifei atende pelo WhatsApp, de segunda a sábado, das 9h às 21h (h
 6. Se eu mudar o título da campanha, o link (slug) muda?
 7. Quanto tempo um pedido fica reservado até expirar? A Rifei reenvia o webhook se o nosso servidor responder com erro? Ela manda um teste quando o webhook é adicionado?
 8. Se o comprador abre o link do afiliado e só paga depois (outro dia, outro aparelho, ou voltando pela página da campanha sem o link), a compra continua com o afiliado? Por quanto tempo a Rifei guarda essa indicação?
+9. Quando eu marco um pedido como pago à mão (Pix manual), a Rifei manda o evento `paid_order` no webhook, com o afiliado do pedido?
 
 Passe as respostas ao SM, para a seção 9 e o DevMission.
