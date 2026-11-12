@@ -14,6 +14,7 @@ import {
 } from "vitest";
 import newOrderAfiliado from "../../../test/fixtures/rifei/new_order.afiliado.json";
 import {
+  BYTES_TOKEN_WEBHOOK,
   FORMATO_TOKEN_WEBHOOK,
   NOME_COOKIE_SESSAO,
   ROTAS_TOKEN_WEBHOOK,
@@ -594,6 +595,112 @@ describe("GET: o estado do token (ultimoUsoDoWebhook)", () => {
     expect(estadoTokenWebhookSchema.parse(await res.json()).url).toBe(
       "https://rifa.example/api/webhooks/rifei",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// O token fora do log; a gravação que falha descarta o token sem mostrá-lo (D21, Segurança)
+// ---------------------------------------------------------------------------------------------------
+
+describe("o token gerado fora do log e de qualquer resposta que não seja a 201 (D21)", () => {
+  /** Os tokens que a rota gerou: cada crypto.getRandomValues de BYTES_TOKEN_WEBHOOK bytes, em hex. */
+  function capturarTokensGerados(): string[] {
+    const gerados: string[] = [];
+    const original = crypto.getRandomValues.bind(crypto);
+    vi.spyOn(crypto, "getRandomValues").mockImplementation((destino) => {
+      const bytes = original(destino);
+      if (bytes instanceof Uint8Array && bytes.length === BYTES_TOKEN_WEBHOOK)
+        gerados.push(
+          Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+            "",
+          ),
+        );
+      return bytes;
+    });
+    return gerados;
+  }
+
+  const espionarConsole = () =>
+    (["log", "info", "warn", "error", "debug"] as const).map((metodo) =>
+      vi.spyOn(console, metodo).mockImplementation(() => {}),
+    );
+
+  /** O que foi para o console, com a mensagem e a pilha dos Error por extenso (o JSON.stringify de um Error dá "{}"). */
+  const textoDoConsole = (chamadas: ReturnType<typeof espionarConsole>) =>
+    JSON.stringify(
+      chamadas.map((chamada) => chamada.mock.calls),
+      (_chave, valor: unknown) =>
+        valor instanceof Error ? `${valor.message} ${valor.stack}` : valor,
+    );
+
+  it("201: nada do token nem do hash no console", async () => {
+    const gerados = capturarTokensGerados();
+    const chamadas = espionarConsole();
+
+    const { token } = await esperarGerado(
+      await gerar({ cabecalhos: admin, corpo: { substituir: true }, env: {} }),
+    );
+
+    expect(gerados).toEqual([token]);
+    const texto = textoDoConsole(chamadas);
+    for (const segredo of [token, await sha256Hex(token)])
+      expect(texto).not.toContain(segredo);
+  });
+
+  it("a gravação falha depois de gerar o token: 500 erro_interno, nada muda (nem a trilha), e o token não sai na resposta nem no log", async () => {
+    const semSegredo = { RIFEI_WEBHOOK_TOKEN: undefined };
+    const gerados = capturarTokensGerados();
+    const chamadas = espionarConsole();
+    const anterior = await esperarGerado(
+      await gerar({ cabecalhos: admin, env: semSegredo }),
+    );
+    const linhaAnterior = await linhaDoToken();
+    // Um erro do D1 dentro do lote, depois de o token ser gerado: no UPSERT sobre o anterior e no INSERT sem linha.
+    const falhar = (evento: string) =>
+      db.prepare(
+        `CREATE TRIGGER falha_token_${evento.toLowerCase()} BEFORE ${evento} ON token_webhook
+         BEGIN SELECT RAISE(ABORT, 'falha simulada ao gravar token_webhook'); END`,
+      );
+    await db.batch([falhar("INSERT"), falhar("UPDATE")]);
+    const respostas: string[] = [];
+    const esperarFalha = async (res: Response) => {
+      const texto = await res.text();
+      respostas.push(texto);
+      expect({ status: res.status, corpo: JSON.parse(texto) }).toEqual({
+        status: 500,
+        corpo: { erro: { codigo: "erro_interno", mensagem: "Erro interno" } },
+      });
+    };
+    try {
+      // Com o anterior e `substituir`: o anterior continua valendo, e só ele.
+      await esperarFalha(
+        await gerar({
+          cabecalhos: admin,
+          corpo: { substituir: true },
+          env: semSegredo,
+        }),
+      );
+      expect(await linhaDoToken()).toEqual(linhaAnterior);
+      // Sem credencial (a linha apagada): continua sem linha.
+      await db.prepare("DELETE FROM token_webhook").run();
+      await esperarFalha(await gerar({ cabecalhos: admin, env: semSegredo }));
+      expect(await linhaDoToken()).toEqual([]);
+    } finally {
+      await db.batch([
+        db.prepare("DROP TRIGGER falha_token_insert"),
+        db.prepare("DROP TRIGGER falha_token_update"),
+      ]);
+    }
+
+    // Os tokens das duas falhas foram gerados (a falha veio depois) e descartados; a trilha só tem a 1ª geração.
+    expect(gerados).toHaveLength(3);
+    expect(gerados[0]).toBe(anterior.token);
+    expect(await trilha()).toHaveLength(1);
+    const texto = JSON.stringify([respostas, textoDoConsole(chamadas)]);
+    expect(texto).toContain("falha simulada ao gravar token_webhook");
+    for (const token of gerados.slice(1))
+      for (const segredo of [token, await sha256Hex(token)])
+        expect(texto).not.toContain(segredo);
   });
 });
 
