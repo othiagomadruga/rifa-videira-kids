@@ -4,9 +4,10 @@ import { act, fireEvent } from "@testing-library/react";
 import { vi } from "vitest";
 import { ATRASO_DA_DICA_MS, FOLGA_DA_DICA_MS } from "../components/ui";
 
-/** O que precisa de dica: botões, campos, abas, links com cara de botão e os links do menu. */
+/** O que precisa de dica: botões, campos, abas, links com cara de botão, os links do menu e o "abrir" de um <details>. */
 export const SELETOR_COM_DICA = [
   "button",
+  "summary",
   "input:not([type='hidden'])",
   "select",
   "textarea",

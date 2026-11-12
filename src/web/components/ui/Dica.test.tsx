@@ -347,6 +347,35 @@ describe("CA2: role tooltip e aria-describedby juntando com a descrição que j�
     expect(campo).toHaveAttribute("aria-invalid", "true");
   });
 
+  it("caixa de marcar dentro de um <label>: a dica fica na linha toda (o mouse no texto abre) e na descrição da caixa (id dado)", () => {
+    render(
+      <ComDica id="caixa-dica" texto="Marcada, o telão mostra o %.">
+        <label htmlFor="caixa">
+          <input id="caixa" type="checkbox" aria-describedby="caixa-dica" />
+          <span>Mostrar o percentual</span>
+        </label>
+      </ComDica>,
+    );
+    const caixa = screen.getByRole("checkbox", {
+      name: "Mostrar o percentual",
+    });
+    // Fechada, o id não aponta para nada e fica de fora da descrição.
+    expect(caixa).not.toHaveAccessibleDescription();
+
+    passarOMouse(screen.getByText("Mostrar o percentual"));
+    esperar(ATRASO_DA_DICA_MS);
+    expect(screen.getByRole("tooltip")).toHaveAttribute("id", "caixa-dica");
+    expect(caixa).toHaveAccessibleDescription("Marcada, o telão mostra o %.");
+    expect(dicaDe(caixa)).toBe(screen.getByRole("tooltip"));
+    // O <label> não ganha aria-describedby.
+    expect(caixa.closest("label")).not.toHaveAttribute("aria-describedby");
+
+    tirarOMouse(screen.getByText("Mostrar o percentual"));
+    esperar(FOLGA_DA_DICA_MS);
+    focarPeloTeclado(caixa);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+  });
+
   it("cada controle tem a sua dica, com id próprio", () => {
     render(
       <>
