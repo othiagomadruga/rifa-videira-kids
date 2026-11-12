@@ -247,7 +247,7 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
 - `DELETE` não apaga em cascata:
   - rede com discipuladores: `409 em_uso`;
   - discipulador com células: `409 em_uso`;
-  - célula com afiliado vinculado: `409 em_uso` (desvincule antes).
+  - célula com afiliado vinculado: `409 em_uso` (passe os afiliados para outra célula antes, com o [PUT do afiliado](#put-apiadminafiliadosaffiliateid-coordenacao), que leva as vendas junto; desvincular as tiraria de qualquer célula).
 - **Trilha de auditoria** (RIFA-018): cada POST, PUT e DELETE que muda algo grava uma linha (`hierarquia.criar`, `hierarquia.atualizar`, `hierarquia.remover`; [GET /api/admin/auditoria](#get-apiadminauditoria-só-admin-sprint-4-rifa-013b)) no mesmo `db.batch` da gravação: recusado (400, 404, 409) ou sem mudança, nada fica. O PUT e o DELETE gravam só se a linha (e, no DELETE, o acesso do alvo) ainda é a que foi lida; se outra gravação a mudou no meio, leem de novo e refazem, até 3 vezes, e depois respondem `409 em_uso` ("A célula mudou enquanto isso..."), sem gravar nada.
 
 ### `POST /api/admin/hierarquia/importar` (`coordenacao`)

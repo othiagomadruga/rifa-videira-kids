@@ -264,7 +264,8 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
 2. **[Thiago]** Abra o link no navegador e toque em **Entrar**: você cai na área `/coordenacao`. Então, nesta ordem:
    1. **Acessos → Coordenação** → no seu cartão, **Gerar link novo** → **Copiar link**;
    2. abra o link novo numa aba nova e toque em **Entrar**;
-   3. só então, já dentro pelo link novo, use **Revogar link** no primeiro. Revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez: por isso ele vem antes. O sistema também não deixa revogar o último link válido de admin.
+   3. só então, já dentro pelo link novo, use **Revogar link** no primeiro, o que veio do SM. **No seu cartão, ele é o de baixo:** a lista vem do mais novo para o mais antigo, e o de cima é o link novo, com o qual você acabou de entrar. Confira pelo "Criado em" (o do SM é o mais antigo). Revogar derruba a sessão aberta por ele, e o link novo só aparece uma vez: por isso ele vem antes. O sistema também não deixa revogar o último link válido de admin.
+      - Revogou o de cima por engano? A sessão cai e o link novo para de valer. Abra de novo o link do SM (ele ainda vale) e recomece do item 1.
 3. Guarde o link novo só para você (ex.: no gerenciador de senhas). Ele vale 45 dias e pode ser aberto de novo nesse prazo (outro aparelho, como o seu celular). Uma sessão parada há mais de 7 dias cai; é só abrir o link de novo.
 
 - O script só aceita `--nome`, `--papel` (`admin` ou `coordenacao`), `--remote`, `--local` e `--origem` (`docs/acesso.md`, seção 5). Não existe opção de e-mail.
@@ -313,7 +314,7 @@ No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5):
 - **Bilhete e meta:** preço do bilhete (R$), unidade, regra e valor da meta.
 - **Ranking e público:** critério do ranking e o que o público vê (o % da meta e quantas posições).
 - **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores" e "Acesso das redes". Só o admin muda estas regras e as mensagens (a coordenação as vê só leitura).
-- **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório, no começo ou depois de um espaço ou de uma quebra de linha; nenhum outro endereço na mensagem). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição.
+- **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório, no começo ou depois de um espaço ou de uma quebra de linha; nenhum outro endereço na mensagem). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição. Se editar, mantenha as palavras "link pessoal" no texto: o guia do líder ("Perdi o link") manda procurar por elas na conversa.
 - **Ativar a campanha** (pede confirmação). A partir daí, as vendas da Rifei com esse slug contam.
 
 Cuidados:
@@ -321,11 +322,11 @@ Cuidados:
 - **Sem campanha ativa, ou com o slug errado, o webhook ignora os pedidos** (a entrega aparece como "Outra campanha" em **Pedidos → Entregas do webhook**) e o código do afiliado não aparece na Adesão. Trocar o slug depois pede confirmação.
 - O preço do bilhete também serve para marcar pedidos estranhos (seção 4.2): com um preço diferente do da Rifei, pedidos normais podem cair na lista de suspeitos.
 - Os números são recalculados na leitura: mudar meta, preço, períodos ou percentuais depois muda os números da campanha inteira, inclusive dos dias que passaram. Combine com o PO antes.
-- Cada salvamento fica na trilha de auditoria (`campanha.salvar`, com o slug e o preço de antes e de depois, as regras que mudaram e o nome da mensagem alterada).
+- Cada salvamento fica na trilha de auditoria (`campanha.salvar`, com o slug e o preço de antes e de depois, as regras que mudaram e o nome da mensagem alterada). O primeiro, que ativa a campanha, registra só "Campanha criada" com o slug e o preço: as regras e as mensagens daquele momento não aparecem nele.
 
 ### 3.4 Planilha das 36 células [Coordenação]
 
-Siga [importar-hierarquia.md](importar-hierarquia.md). Em resumo: **Coordenação → Hierarquia →** aba **Importar planilha** → **Baixe o modelo** → **Escolha o arquivo** → **Conferir** (não grava nada) → **Importar**.
+Siga [importar-hierarquia.md](importar-hierarquia.md). Em resumo: **Coordenação → Hierarquia →** aba **Importar planilha** → **Baixar modelo** → **Escolher arquivo** → **Conferir** (não grava nada) → **Importar**.
 
 - Confira no resultado: 36 células criadas, sem erros. Leia os avisos (coluna ignorada não entra).
 - Preencha `lider_telefone`: é ele que abre o WhatsApp do líder na hora de mandar o link (5.1) e de cobrar quem falta (5.3).
@@ -352,7 +353,7 @@ O roteiro da reunião está na seção 5. Regra de ouro: **não use "Desvincular
 
 1. Com a conta afiliada de teste, abra o link de afiliado dela e **inicie uma compra sem pagar**. Em segundos, o **"Afiliado <código>"** aparece em **Adesão → Sem célula**. Vincule a uma célula.
    - De preferência, use como afiliada de teste a conta de um **líder de verdade** (ex.: alguém da coordenação que lidera uma célula) e vincule à célula dele: o vínculo já vale para a campanha.
-   - Uma conta só de teste dá para tirar depois **[Admin]**: desconsidere os pedidos dela (4.4) e toque em **Remover** no afiliado, na **Adesão** (na fila "Sem célula" ou em **Todas as células**), e confirme em **Remover afiliado**. O sistema só remove afiliado sem nenhum pedido que conte; se a Rifei mandar outra venda com o mesmo código, ele volta para a fila "Sem célula".
+   - Uma conta só de teste dá para tirar depois **[Admin]**: desconsidere **todos** os pedidos dela (4.4), não só o pago: também a compra iniciada no passo 1 e a do passo 3, que expiraram (pedido de qualquer status conta). Depois toque em **Remover** no afiliado, na **Adesão** (na fila "Sem célula" ou em **Todas as células**), e confirme em **Remover afiliado**. Se ainda faltar algum, o sistema recusa e lista os pedidos que ainda contam, com o link de cada um: desconsidere esses e tente de novo. Se a Rifei mandar outra venda com o mesmo código, ele volta para a fila "Sem célula".
    - Se a entrega chegar (4.2) e nada aparecer em "Sem célula", o código de afiliado não veio no pedido: chame o SM antes da reunião dos líderes.
 2. **Faça uma compra paga de 1 bilhete** (Pix pela Efí), pelo mesmo link de afiliado.
 3. Inicie **outra compra e não pague**: depois do prazo de reserva, a Rifei avisa que expirou.
@@ -369,7 +370,7 @@ O roteiro da reunião está na seção 5. Regra de ouro: **não use "Desvincular
   - **Outra campanha:** o slug do sistema não é o da Rifei (3.3).
   - Nenhuma entrega: o webhook não chegou (URL, token ou eventos na Rifei; seção 7.1).
   - Algo na coluna **Erro e avisos:** a Rifei mandou um campo diferente da documentação. A tela mostra só o campo e o código, nunca dado pessoal: mande um print ao SM.
-- **Alerta do webhook** (topo da Visão geral e de Pedidos): depois do teste, mostra só a linha "Última venda recebida há …" (7.1).
+- **Alerta do webhook** (topo da Visão geral e de Pedidos): depois do teste, mostra só a linha "Última venda recebida há …" (7.1). Ele consulta o sistema a cada 5 minutos: com a tela aberta desde antes do teste, pode continuar mostrando "Ainda não chegou nenhuma venda" por até 5 minutos. Recarregue a página para ver na hora.
 - **Trilha de auditoria** (o que a equipe fez) [Admin]: tela **Trilha** no menu da coordenação (`/coordenacao/trilha`), do mais novo para o mais antigo, com "Carregar mais". Confira que aparecem o salvamento da campanha, a importação da hierarquia e os vínculos de afiliado.
 - **Pedidos suspeitos:** tela **Pedidos suspeitos** no menu da coordenação (`/coordenacao/pedidos-suspeitos`). Esperado: lista vazia. Se o pedido de teste aparecer, confira o preço do bilhete na Campanha: ele precisa ser igual ao da Rifei.
 
@@ -550,9 +551,9 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 Tudo é recalculado na leitura, para a campanha inteira, e cada mudança fica na trilha de auditoria. Combine com o PO e avise os líderes antes.
 
 - **Célula mudou de discipulador ou discipulador mudou de rede:** **Editar célula** ou **Editar discipulador** (ou planilha corrigida, sempre com **Conferir** antes). As vendas da célula vão junto, inclusive as antigas; o ranking de discipuladores e redes muda. O acesso de quem está acima acompanha sozinho (em até 30 s).
-- **Mudou o número de pessoas:** a meta da célula muda para a campanha inteira, e o ranking por % muda junto. Na regra "total proporcional", a meta das outras células também muda (o total é repartido pelas pessoas).
-- **Célula nova:** cadastre (ou importe). Ela ganha meta desde o 1º dia, então começa "abaixo" (e, na regra "total proporcional", diminui a meta das outras). Gere o link do líder (**Gerar links para quem ainda não tem**) e vincule o afiliado.
-- **Célula saiu ou juntou com outra:** com afiliado vinculado, ela não pode ser excluída. Passe os afiliados para a célula de destino (**Adesão → Todas as células → Trocar**), o que leva todas as vendas deles, e então exclua (o acesso do líder dela cai junto). A importação nunca apaga nada.
+- **Mudou o número de pessoas:** a meta da célula muda para a campanha inteira, e o ranking por % muda junto. Na regra "Total da campanha, dividido pelas células", a meta das outras células também muda (o total é repartido pelas pessoas).
+- **Célula nova:** importe uma planilha com a linha dela (a tela **Hierarquia** não tem cadastro de célula avulsa; o arquivo pode ter só essa linha, com a rede, a divisão e o discipulador escritos como já estão no sistema, senão eles entram como novos ou mudam; sempre com **Conferir** antes, e o esperado é **Criados** 1 em Células e **Atualizados** 0 em tudo). A coluna `rede_responsavel` vazia apaga o responsável da rede (a conferência mostra a rede em **Atualizados**): preencha como está no sistema ou tire a coluna do arquivo. A célula nova ganha meta desde o 1º dia, então começa "abaixo" (e, na regra "Total da campanha, dividido pelas células", diminui a meta das outras). Gere o link do líder (**Gerar links para quem ainda não tem**) e vincule o afiliado.
+- **Célula saiu ou juntou com outra:** com afiliado vinculado, ela não pode ser excluída (**Excluir** recusa e diz o porquê). Passe os afiliados para a célula de destino (**Adesão → Todas as células → Trocar**), o que leva todas as vendas deles, e então exclua (o acesso do líder dela cai junto). Não use **Desvincular** aqui: as vendas do afiliado sairiam de todas as células. A importação nunca apaga nada.
 
 ---
 
