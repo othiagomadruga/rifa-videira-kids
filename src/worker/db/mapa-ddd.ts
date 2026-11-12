@@ -120,6 +120,8 @@ export type LeituraMapaDdd =
       ok: true;
       /** O instante único da requisição (o da janela e o `atualizado_em`). */
       agora: Date;
+      /** Hoje no fuso da campanha (`hojeNoFuso`), o fim da janela: a data do nome do arquivo do relatório (D23). */
+      hoje: string;
       janela: JanelaRankingResposta;
       linhas: LinhaMapaDdd[];
     }
@@ -127,7 +129,8 @@ export type LeituraMapaDdd =
 
 /**
  * Lê as vendas da janela agrupadas por país e DDD. Sem campanha ativa: 404 `nao_encontrado` (a mesma mensagem do
- * painel). Chama o relógio uma vez só.
+ * painel). Chama o relógio uma vez só e devolve o `hoje` que já calcula (o relatório por DDD, D23, o usa no nome do
+ * arquivo, sem ida a mais).
  */
 export async function lerMapaDdd(
   db: D1Database,
@@ -145,14 +148,15 @@ export async function lerMapaDdd(
   const campanha = montarCampanha(ativa);
   const janela = janelaDosRankings(campanha, consulta.periodo, agora);
   const fuso = campanha.fuso_horario;
+  const hoje = hojeNoFuso(fuso, agora);
   const { sql, valores } = comandoMapaDdd(
     ativa.id,
-    intervaloUtcDaJanela(janela, hojeNoFuso(fuso, agora), fuso),
+    intervaloUtcDaJanela(janela, hoje, fuso),
     consulta.divisao,
   );
   const { results } = await db
     .prepare(sql)
     .bind(...valores)
     .all<LinhaMapaDdd>();
-  return { ok: true, agora, janela, linhas: results };
+  return { ok: true, agora, hoje, janela, linhas: results };
 }

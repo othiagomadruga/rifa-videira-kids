@@ -4,7 +4,10 @@
  *   escopo (campanha, divisão, rede, discipulador ou célula);
  * - GET /api/painel/ranking: todas as instâncias do nível, com valores, situação e vizinhos;
  * - GET /api/painel/mapa-ddd (RIFA-015, D17): as vendas da janela por UF e DDD do comprador, mais exterior e sem
- *   DDD. Mesma janela e mesmo filtro de venda do painel (R6): db/mapa-ddd.ts lê, lib/mapa-ddd.ts monta.
+ *   DDD. Mesma janela e mesmo filtro de venda do painel (R6): db/mapa-ddd.ts lê, lib/mapa-ddd.ts monta;
+ * - GET /api/painel/relatorio (RIFA-038, D23): o relatório da campanha para baixar, um CSV por tipo, das MESMAS
+ *   leituras e montadores do painel, dos rankings e do mapa (lib/relatorio.ts monta as linhas; db/relatorio.ts tem os
+ *   dois comandos a mais do lote). Catálogo `ROTAS_RELATORIO`.
  *
  * Caminhos e schemas vêm do contrato (`ROTAS`). Este sub-app NÃO autentica: o index.ts o monta sob
  * /api/painel, depois do login da coordenação (passo 4): `app.route(PREFIXO_PAINEL, painel)`.
@@ -15,6 +18,8 @@
 import { Hono } from "hono";
 import {
   ROTAS,
+  ROTAS_RELATORIO,
+  cabecalhosDoRelatorio,
   montarRankingPainel,
   montarResumoPainel,
 } from "../../shared/contracts";
@@ -24,7 +29,9 @@ import {
   relogioDoSistema,
   type Relogio,
 } from "../db/painel";
+import { comandosDoRelatorio, extrasDoRelatorio } from "../db/relatorio";
 import { montarMapaDdd } from "../lib/mapa-ddd";
+import { arquivoDoDdd, arquivoDoPainel } from "../lib/relatorio";
 import { responderErro } from "../lib/respostas-erro";
 import { validarConsulta } from "../middleware/validacao";
 
@@ -116,6 +123,52 @@ export function criarPainel(
           divisao: consulta.divisao,
           agora: lido.agora,
         }),
+      );
+    },
+  );
+
+  // Relatório (D23): 400 sem `tipo` ou fora da lista (validarConsulta); 404 sem campanha ativa, antes de montar
+  // qualquer coisa (a leitura devolve antes do lote); 200 com o CSV e TODOS os cabeçalhos do contrato. Duas idas ao D1
+  // por download em todos os tipos; sem cache (o no-store acima vale também nos erros).
+  painel.get(
+    local(ROTAS_RELATORIO.baixarRelatorio.caminho),
+    validarConsulta(ROTAS_RELATORIO.baixarRelatorio.consulta),
+    async (c) => {
+      const { tipo } = c.req.valid("query");
+      if (tipo === "ddd") {
+        const lido = await lerMapaDdd(c.env.DB, relogio, {
+          periodo: "campanha",
+        });
+        if (!lido.ok) return responderErro(c, lido.codigo, lido.mensagem);
+        const mapa = montarMapaDdd(lido.linhas, {
+          janela: lido.janela,
+          divisao: undefined,
+          agora: lido.agora,
+        });
+        return c.body(
+          arquivoDoDdd(mapa),
+          200,
+          cabecalhosDoRelatorio(tipo, lido.hoje),
+        );
+      }
+      const lido = await lerEntradaDoCalculo(
+        c.env.DB,
+        relogio,
+        {},
+        comandosDoRelatorio(tipo),
+      );
+      if (!lido.ok)
+        return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
+      const arquivo = arquivoDoPainel(
+        tipo,
+        lido,
+        extrasDoRelatorio(tipo, lido.extras),
+        montadores,
+      );
+      return c.body(
+        arquivo.csv,
+        200,
+        cabecalhosDoRelatorio(tipo, arquivo.data),
       );
     },
   );

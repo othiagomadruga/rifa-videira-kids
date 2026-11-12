@@ -1,7 +1,8 @@
 // Apoio aos testes do painel, dos rankings e das rotas abertas (RIFA-PAINEL): o cenário gravado direto no
 // D1 dos testes (como a hierarquia, o PUT da campanha e o webhook gravariam), a entrada esperada dos
 // montadores calculada À PARTE (vendas agrupadas no JS com agruparVendasPorDia, sem o SQL), um D1 que
-// conta as idas ao banco e as varreduras de campos e textos das respostas abertas.
+// conta as idas ao banco e as varreduras de campos e textos das respostas abertas. Também o volume sintético dos
+// testes de desempenho (36 células × 24 dias, ~7 mil ou 259 mil pedidos), usado pelo painel e pelo relatório.
 //
 // Cenário: redes Jovem (jovens) e Adulta (adultos); discipuladores Abel e Boaz (jovens), Caleb e Davi
 // (adultos; Davi sem células); 5 células (metas de 10 bilhetes por pessoa: Ágape 120, Betel 60, Canaã 120,
@@ -354,6 +355,102 @@ export async function semearCenario(
   const outra = await semearOutraCampanha(db);
   await semearPedidos(db, opcoes.pedidos ?? PEDIDOS, { ativa, outra });
   return { campanhaId: ativa };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Volume sintético dos testes de desempenho (painel-desempenho.test.ts, CA5; relatorio-desempenho.test.ts, RIFA-038)
+// ---------------------------------------------------------------------------------------------------
+
+/** Dias com venda no volume sintético (o 20º é o "agora" dos testes de desempenho). */
+export const DIAS_DE_CARGA = 24;
+/** Células do volume sintético (36, cada uma com um afiliado). */
+export const CELULAS_DE_CARGA = 36;
+
+/** A campanha do volume sintético: 24 dias (10 + 7 + 7) a partir de 23/11/2026, meta proporcional de 20 mil bilhetes. */
+export const CAMPANHA_DE_CARGA = campanhaEntradaSchema.parse({
+  nome: "Rifa Videira Kids",
+  slug_rifei: "rifa-videira-kids-carga",
+  data_inicio: "2026-11-23",
+  preco_bilhete_centavos: 2000,
+  meta: { unidade: "bilhetes", regra: "total_proporcional", valor: 20000 },
+  periodos: [
+    { nome: "Semana 1", dias: 10, percentual_bp: 3500 },
+    { nome: "Semana 2", dias: 7, percentual_bp: 2500 },
+    { nome: "Semana 3", dias: 7, percentual_bp: 4500 },
+  ],
+  ranking: { criterio: "percentual_meta" },
+  publico: { mostra_percentual_meta: true, limite_ranking: 3 },
+});
+
+/** 2 redes, 6 discipuladores e 36 células (5 a 20 pessoas), cada uma com um afiliado. */
+export async function semearHierarquiaDeCarga(db: D1Database = env.DB) {
+  await db.batch([
+    db.prepare(
+      "INSERT INTO redes (id, nome, divisao) VALUES (1, 'Rede Jovem de Carga', 'jovens'), (2, 'Rede Adulta de Carga', 'adultos')",
+    ),
+    db.prepare(
+      `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 6)
+       INSERT INTO discipuladores (id, rede_id, nome)
+       SELECT i, CASE WHEN i <= 3 THEN 1 ELSE 2 END, 'Discipulador de Carga ' || i FROM n`,
+    ),
+    db.prepare(
+      `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${CELULAS_DE_CARGA})
+       INSERT INTO celulas (id, discipulador_id, nome, qtd_pessoas, lider_nome)
+       SELECT i, 1 + (i - 1) % 6, 'Célula de Carga ' || i, 5 + i % 16, 'Líder ' || i FROM n`,
+    ),
+    db.prepare(
+      `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em)
+       SELECT 1000 + id, id, 'manual', '2026-11-20T12:00:00.000Z' FROM celulas`,
+    ),
+  ]);
+}
+
+/**
+ * `porCelulaPorDia` pedidos aprovados por célula em cada um dos 24 dias, espalhados pelo dia local
+ * (de 03:00Z a 02:59Z do dia seguinte), mais 1 pedido por dia sem afiliado e 3 antes do início.
+ */
+export async function semearPedidosDeCarga(
+  db: D1Database,
+  campanhaId: number,
+  porCelulaPorDia: number,
+) {
+  const total = CELULAS_DE_CARGA * DIAS_DE_CARGA * porCelulaPorDia;
+  const segundosEntrePedidos = Math.floor(86_400 / porCelulaPorDia);
+  await db.batch([
+    db
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?1 - 1)
+         INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
+           aprovado_em)
+         SELECT 'CARGA-' || i, ?2, 1001 + i % ${CELULAS_DE_CARGA}, 'approved', 1 + i % 4,
+           (1 + i % 4) * 2000,
+           strftime('%Y-%m-%dT%H:%M:%fZ', '2026-11-23T03:00:00.000Z',
+             '+' || ((i / ${CELULAS_DE_CARGA}) / ?3) || ' days',
+             '+' || (((i / ${CELULAS_DE_CARGA}) % ?3) * ?4) || ' seconds')
+         FROM n`,
+      )
+      .bind(total, campanhaId, porCelulaPorDia, segundosEntrePedidos),
+    db
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ${DIAS_DE_CARGA - 1})
+         INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
+           aprovado_em)
+         SELECT 'CARGA-SEM-' || i, ?1, NULL, 'approved', 2, 4000,
+           strftime('%Y-%m-%dT%H:%M:%fZ', '2026-11-23T15:00:00.000Z', '+' || i || ' days')
+         FROM n`,
+      )
+      .bind(campanhaId),
+    db
+      .prepare(
+        `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
+           aprovado_em)
+         VALUES ('CARGA-ANTES-1', ?1, 1001, 'approved', 1, 2000, '2026-11-20T15:00:00.000Z'),
+                ('CARGA-ANTES-2', ?1, 1002, 'approved', 1, 2000, '2026-11-21T15:00:00.000Z'),
+                ('CARGA-ANTES-3', ?1, NULL, 'approved', 1, 2000, '2026-11-22T15:00:00.000Z')`,
+      )
+      .bind(campanhaId),
+  ]);
+  return total + DIAS_DE_CARGA + 3;
 }
 
 // ---------------------------------------------------------------------------------------------------
