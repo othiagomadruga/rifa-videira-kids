@@ -5,15 +5,19 @@ import {
   SEGREDO_WEBHOOK_RIFEI,
   analisarPayloadRifei,
   avisosParaGravar,
+  credencialVigenteDoWebhook,
   identificarPayloadInvalido,
   redigirPayloadRifei,
+  segredoDoWorkerConfigurado,
   type DetalheResumido,
   type RespostaWebhookRifei,
 } from "../../shared/contracts";
 import { buscarCampanhaAtiva } from "../db/campanha";
 import { processarEventoPedido } from "../db/pedidos";
+import { lerHashDoTokenWebhook } from "../db/token-webhook";
 import { registrarEvento } from "../db/webhook-eventos";
 import { lerCorpoComLimite } from "../lib/corpo-limitado";
+import { sha256Hex } from "../lib/cripto";
 import { MENSAGEM_JSON_INVALIDO, responderErro } from "../lib/respostas-erro";
 import { textosIguaisEmTempoConstante } from "../lib/tempo-constante";
 
@@ -57,21 +61,57 @@ async function recusarCorpo(
   });
 }
 
-// POST /api/webhooks/rifei (com ou sem barra no fim): pedidos da Rifei. Passo a passo em
-// docs/integracao-rifei.md, seção 5. O corpo bruto só existe na memória desta requisição: o que se
-// grava é o payload redigido (D1).
-async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
-  // D6: sem segredo configurado, nenhuma entrega é aceita (falha fechada).
+/**
+ * O Bearer confere com a credencial vigente? Em tempo constante (lib/tempo-constante.ts: timingSafeEqual sobre dois
+ * resumos de 32 bytes): o token da tela pelo SHA-256 dele contra o hash gravado (nunca `===` nem
+ * `WHERE token_hash = ?`); o segredo do Worker como antes.
+ */
+async function bearerConfere(
+  bearer: string,
+  tokenHash: string | null,
+  segredo: string | undefined,
+): Promise<boolean> {
+  if (tokenHash !== null)
+    return textosIguaisEmTempoConstante(await sha256Hex(bearer), tokenHash);
+  if (segredo === undefined) return false;
+  return textosIguaisEmTempoConstante(bearer, segredo);
+}
+
+/**
+ * Autenticação do webhook (D6 e D21, OBRIGATÓRIO 2), nesta ordem. Devolve a resposta de recusa, ou null para seguir.
+ * (a) A linha do token da tela, pela chave (1 linha lida por requisição, com a tabela vazia ou não, autenticada ou
+ *     não). Sem try e sem cache: se a leitura falha, o erro sobe ao onError (500) e o webhook NUNCA cai para o
+ *     segredo do Worker; e o token novo vale (e o anterior para de valer) na requisição seguinte, em todo servidor.
+ * (b) A credencial vigente: o token da tela tem prioridade; sem ele, o segredo do Worker; (c) sem nenhum dos dois,
+ *     503 `nao_configurado` e nada é gravado (falha fechada).
+ * (d) e (e) O Bearer contra a credencial vigente, em tempo constante; (f) ausente ou diferente: 401.
+ * O Bearer nunca vai para log, resposta ou banco.
+ */
+async function autenticarWebhook(
+  c: Context<Ambiente>,
+): Promise<Response | null> {
+  const tokenHash = await lerHashDoTokenWebhook(c.env.DB);
   const segredo = c.env[SEGREDO_WEBHOOK_RIFEI];
-  if (segredo === undefined || segredo.trim() === "") {
+  const vigente = credencialVigenteDoWebhook({
+    tokenDaTela: tokenHash !== null,
+    segredoConfigurado: segredoDoWorkerConfigurado(segredo),
+  });
+  if (vigente === null) {
     return responderErro(
       c,
       "nao_configurado",
       "O webhook da Rifei não está configurado no servidor",
     );
   }
-  const token = tokenBearer(c.req.header("Authorization"));
-  if (token === null || !(await textosIguaisEmTempoConstante(token, segredo))) {
+  const bearer = tokenBearer(c.req.header("Authorization"));
+  if (
+    bearer === null ||
+    !(await bearerConfere(
+      bearer,
+      vigente === "tela" ? tokenHash : null,
+      vigente === "segredo" ? segredo : undefined,
+    ))
+  ) {
     c.header("WWW-Authenticate", "Bearer");
     return responderErro(
       c,
@@ -79,6 +119,15 @@ async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
       "Token do webhook ausente ou inválido",
     );
   }
+  return null;
+}
+
+// POST /api/webhooks/rifei (com ou sem barra no fim): pedidos da Rifei. Passo a passo em
+// docs/integracao-rifei.md, seção 5. O corpo bruto só existe na memória desta requisição: o que se
+// grava é o payload redigido (D1).
+async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
+  const recusa = await autenticarWebhook(c);
+  if (recusa !== null) return recusa;
 
   // Limite de tamanho só depois da autenticação: sem token, nada é lido nem gravado.
   const recebidoEm = new Date().toISOString();

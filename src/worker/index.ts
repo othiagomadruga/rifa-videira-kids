@@ -33,6 +33,7 @@ import {
   webhookCoordenacao,
 } from "./routes/webhook-coordenacao";
 import { webhookRifei } from "./routes/webhook-rifei";
+import { PREFIXO_TOKEN_WEBHOOK, tokenWebhook } from "./routes/webhook-token";
 
 // API do sistema. O Worker só recebe /api e /api/* (assets.run_worker_first no
 // wrangler.jsonc); o resto é o site React, servido pelos Static Assets.
@@ -81,8 +82,9 @@ app.route(PREFIXO_AUDITORIA, auditoria);
 app.route(PREFIXO_ACESSOS_HIERARQUIA, acessosHierarquia);
 
 // 6. Demais rotas.
-// Webhook da Rifei: público, autenticado só pelo Bearer (D6), fora da sessão. Declara os próprios
-// caminhos (CAMINHOS_WEBHOOK_RIFEI: com e sem barra no fim).
+// Webhook da Rifei: público, autenticado só pelo Bearer (D6), fora da sessão: o token gerado pela tela (D21, lido
+// do D1 a cada requisição) ou, só sem ele, o segredo do Worker. Declara os próprios caminhos
+// (CAMINHOS_WEBHOOK_RIFEI: com e sem barra no fim).
 app.route("/", webhookRifei);
 // Hierarquia (RIFA-005): CRUD e importação sob /api/admin, protegidos pelo passo 4.
 app.route(PREFIXO_HIERARQUIA, hierarquia);
@@ -94,6 +96,10 @@ app.route(PREFIXO_PEDIDOS_SUSPEITOS, pedidosSuspeitos);
 // desconsiderar e reconsiderar pedido (RIFA-028, D20), só admin (o sub-app exige nas duas rotas).
 app.route(PREFIXO_PEDIDOS, pedidos);
 app.route(PREFIXO_WEBHOOK_COORDENACAO, webhookCoordenacao);
+// Token do webhook da Rifei gerado pela tela (RIFA-039, D21): GET e POST /api/admin/webhook/token, só admin (o
+// sub-app exige no handler das duas rotas, nunca num use de /api/admin/webhook/*: as entregas e o estado acima
+// continuam da coordenação).
+app.route(PREFIXO_TOKEN_WEBHOOK, tokenWebhook);
 // Afiliados e adesão (RIFA-006): vínculo afiliado → célula e "quem falta" sob /api/admin (passo 4). Remover
 // afiliado de teste (RIFA-031, D20) é só admin (o sub-app exige no DELETE; o PUT do caminho segue da coordenação).
 app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
