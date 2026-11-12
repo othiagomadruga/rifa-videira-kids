@@ -1,7 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { SeletorArquivo } from ".";
+import { ATRASO_DA_DICA_MS, FOLGA_DA_DICA_MS, SeletorArquivo } from ".";
+import {
+  dicaDe,
+  focarPeloTeclado,
+  passarOMouse,
+  tirarOMouse,
+} from "../../test/dicas";
 
 function Exemplo({ aoEscolher }: { aoEscolher: (arquivo: File) => void }) {
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -81,5 +87,49 @@ describe("SeletorArquivo", () => {
       "Escolha um arquivo .csv. Nada ainda",
     );
     expect(campo).toBeDisabled();
+  });
+
+  it("dica do botão (RIFA-045): abre com o mouse no botão e com o foco do teclado no campo, e entra no fim da descrição do campo", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <SeletorArquivo
+          rotulo="Planilha em CSV"
+          dica="Salve como CSV UTF-8."
+          arquivo={null}
+          aoEscolher={() => {}}
+          dicaEscolher="Abre a escolha do arquivo no aparelho."
+        />,
+      );
+      const campo = screen.getByLabelText("Planilha em CSV");
+      // Fechada, a dica não existe e fica de fora da descrição.
+      expect(dicaDe(campo)).toBeNull();
+      expect(campo).toHaveAccessibleDescription(
+        "Salve como CSV UTF-8. Nenhum arquivo escolhido",
+      );
+
+      // O mouse fica no botão (o <label> visível); a dica é do campo escondido.
+      passarOMouse(screen.getByText("Escolher arquivo"));
+      act(() => vi.advanceTimersByTime(ATRASO_DA_DICA_MS));
+      expect(dicaDe(campo)).toHaveTextContent(
+        "Abre a escolha do arquivo no aparelho.",
+      );
+      expect(campo).toHaveAccessibleDescription(
+        "Salve como CSV UTF-8. Nenhum arquivo escolhido Abre a escolha do arquivo no aparelho.",
+      );
+      tirarOMouse(screen.getByText("Escolher arquivo"));
+      act(() => vi.advanceTimersByTime(FOLGA_DA_DICA_MS));
+      expect(screen.queryByRole("tooltip")).toBeNull();
+
+      // O teclado foca o campo de verdade: a dica abre na hora e some quando o foco sai.
+      focarPeloTeclado(campo);
+      expect(dicaDe(campo)).toHaveTextContent(
+        "Abre a escolha do arquivo no aparelho.",
+      );
+      act(() => campo.blur());
+      expect(screen.queryByRole("tooltip")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

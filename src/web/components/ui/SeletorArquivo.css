@@ -7,6 +7,13 @@
   min-width: 0;
 }
 
+/* O campo e o botão (a dica fica presa a eles, não à linha toda); o campo escondido fica preso aqui dentro. */
+.ui-seletor-arquivo__controle {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
 /* Escondido só visualmente: continua focável e acessível. */
 .ui-seletor-arquivo__input {
   position: absolute;
