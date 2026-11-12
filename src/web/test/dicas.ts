@@ -71,14 +71,18 @@ function nomeDoControle(controle: HTMLElement): string {
  * Passa o mouse em cada botão e campo visível de `raiz` (padrão: o <body>, com os diálogos abertos), espera o tempo
  * da dica, confere a dica (role="tooltip" com texto, no `aria-describedby`), tira o mouse e confere que ela some.
  * Devolve os controles que falharam (vazio: todos têm dica). Usa o relógio falso só durante a varredura: chame
- * depois de a tela carregar.
+ * depois de a tela carregar. Num teste que já usa o relógio falso, usa o dele e o deixa ligado (avançar o tempo
+ * também roda os timers da tela).
  */
 export function controlesSemDica(raiz: ParentNode = document.body): string[] {
   const controles = Array.from(
     raiz.querySelectorAll<HTMLElement>(SELETOR_COM_DICA),
   ).filter(participa);
   const falhas: string[] = [];
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const relogioJaFalso = vi.isFakeTimers();
+  if (!relogioJaFalso) {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  }
   try {
     for (const controle of controles) {
       passarOMouse(controle);
@@ -94,7 +98,7 @@ export function controlesSemDica(raiz: ParentNode = document.body): string[] {
       }
     }
   } finally {
-    vi.useRealTimers();
+    if (!relogioJaFalso) vi.useRealTimers();
   }
   return falhas;
 }
