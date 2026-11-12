@@ -75,7 +75,11 @@
 
 /* Computador: tabela de verdade, com rolagem horizontal só dentro dela se precisar. */
 @media (min-width: 48rem) {
+  /* O position segura dentro da caixa com rolagem o que é absoluto numa célula (o texto escondido para o leitor de
+     tela nos botões, `.visualmente-oculto`): sem ele, numa tabela mais larga que a caixa, esse texto ficava fora
+     dela e a página inteira rolava na horizontal (a tabela de Pedidos do admin a 1280 px). */
   .ui-data-table {
+    position: relative;
     overflow-x: auto;
     background: var(--cor-superficie);
     border: 1px solid var(--cor-borda);
