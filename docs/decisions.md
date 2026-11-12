@@ -150,6 +150,8 @@ prazo de guarda dos dados, Workers Paid) continuam como perguntas.
   mas os motivos vão para `webhook_eventos.avisos` (formato `DetalheResumido`) e o pedido entra em
   `pedidos_suspeitos` (migração 0005), listado em `GET /api/admin/pedidos/suspeitos`. Tirar um pedido das
   vendas é decisão do PO.
+  - **RIFA-042 (2026-11-12):** o "Recuperar" da conferência (D19) passa pela mesma regra: o recuperado fora do
+    padrão entra em `pedidos_suspeitos`, com os mesmos motivos, na mesma gravação (adendo da D20).
 - **Trilha de auditoria** (tabela `auditoria`, migração 0005): quem (o usuário da sessão), quando, a ação, o alvo
   e um resumo sem dados pessoais, gravados no MESMO `db.batch` da ação (ação recusada não registra nada): PUT da
   campanha (com o slug e o preço antes e depois), vínculos de afiliado, importação da hierarquia aplicada e as
@@ -452,7 +454,8 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
   (ausente = padrão) de propósito: uma aba antiga do site, que não conhece os grupos, não religa um acesso
   desligado nem apaga uma mensagem editada. Na resposta, os grupos têm `.default()`: a API de hoje não os devolve e
   o parse do `montarCampanha` completa com o padrão, que é o que vale enquanto a 0008 não existe. Quem muda as
-  chaves é quem muda a Campanha hoje (admin e coordenação): pergunta ao PO.
+  chaves é quem muda a Campanha hoje (admin e coordenação): pergunta ao PO. (Respondida no adendo da RIFA-042: só o
+  admin.)
 - **RIFA-028, desconsiderar pedido.** `POST /api/admin/pedidos/desconsiderar { pedido_id, motivo, observacao? }` e
   `POST /api/admin/pedidos/reconsiderar { pedido_id }`, **só admin**, 200 com o pedido como a lista mostra. O id do
   pedido vai no corpo, não na URL: é o texto da Rifei, de até 128 caracteres, e na URL dependeria da codificação.
@@ -614,6 +617,38 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
    (`problemasDoModelo` não vazio) dá lugar ao padrão do tipo, para nunca mandar mensagem sem o link. Afiliados:
    "Remover" (só admin) com o 409 explicado e os ids. /minha e a página de acesso: a mensagem do 403
    `acesso_desligado`. Trilha: o tipo de alvo `pedido`.
+
+### Adendo (RIFA-042, 2026-11-12): as regras na conta do admin e os modelos sem outro endereço
+
+Reforços da revisão de segurança RIFA-041 (decisões do SM, reversíveis; o PO foi informado). Responde à pergunta
+"quem muda as chaves" acima: o PO pediu as regras "na conta do admin".
+
+- **`pedidos`, `acesso` e `mensagens` só do admin.** No `PUT /api/admin/campanha`, quem não é admin (a coordenação)
+  e manda algum dos três diferente do gravado (sem campanha, dos padrões) leva **403 `proibido`**, só com `codigo` e
+  `mensagem` (a mensagem diz quais grupos mudavam; nenhum detalhe novo no contrato), e nada é gravado (nem o resto
+  do corpo, nem a trilha). Ordem: 400 (schema) → 403 → 409 (slug). Ausentes ou iguais ao gravado passam, mas a
+  gravação vai **sem** eles (`semGruposDoAdmin` em `db/campanha.ts`): o PUT da coordenação nunca escreve essas
+  colunas, então um admin que as muda entre a leitura e o lote não é desfeito (sem transação interativa, que o D1
+  não tem). Sem sessão (só no sub-app montado sem o login, nos testes), também não é admin. O resto da campanha
+  continua com a coordenação. Site: na Campanha, para a coordenação, os cartões "Pedidos e acessos" e "Mensagens do
+  link pessoal" ficam só leitura, com o aviso "Só o admin muda estas regras." (caixas com `aria-disabled`, textos com
+  `readOnly`, focáveis e descritos pelo aviso; sem "Voltar ao texto padrão"), e o PUT dela não manda os três (um
+  modelo gravado com problema não barra mais o salvamento do resto). O resumo "Regras da campanha" continua para os
+  dois papéis. Testes: `routes/regras-campanha.test.ts` (RIFA-042) e `pages/campanha/RegrasDaCampanha.test.tsx`.
+- **Modelos das mensagens** (`problemasDoModelo`, `regras.ts`; a API recusa com 400 e a Campanha avisa enquanto a
+  pessoa digita): o `{link}` só no começo ou depois de espaço, tabulação ou quebra de linha (colado no texto de
+  antes, como em `https://outro.site/?u={link}` ou `x{link}`, o link pessoal vira o fim de outro endereço, e a
+  prévia do WhatsApp de quem envia leva o token a esse site; no modelo da coordenação, o link de um admin) e nenhum
+  outro endereço no modelo: `://`, `www.` ou um domínio seguido de barra (`site.com/`, `bit.ly/`). É a regra mais
+  simples que pega os casos comuns sem acusar os textos padrão; um domínio solto, sem barra nem `www.` (`site.com`),
+  passa (não leva o token: o `{link}` continua separado). A Acessos mantém a defesa da RIFA-041 para modelos já
+  gravados (`modeloDaMensagem`: o padrão do tipo no lugar do modelo com problema, agora também com outro endereço).
+- **Recuperar da conferência com a plausibilidade da D11.** O pedido recuperado com mais de 200 bilhetes, ou com o
+  total acima de bilhetes × preço do bilhete da campanha ou abaixo da metade disso, entra em `pedidos_suspeitos` com
+  os mesmos motivos do webhook (`avaliarPlausibilidade`, `lib/plausibilidade.ts`), no mesmo `db.batch` da gravação
+  (`gravarRecuperacao`, `db/reconciliacao.ts`): só o que entrou neste lote (`recuperacao_id` da recuperação), com
+  `marcado_em` = o instante da recuperação. Continua contando, como no webhook. A prévia não marca; a resposta e a
+  trilha (`conferencia.recuperar`) não mudam. O Recuperar continua com a coordenação.
 
 ## D21. Token do webhook gerado pela tela da coordenação (RIFA-039; contrato, 2026-11-11)
 

@@ -341,6 +341,8 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
         arquivoSha256: corpo.arquivo_sha256,
         colunas: corpo.colunas,
         pedidos: plano.gravar,
+        // A plausibilidade da D11, como no webhook (RIFA-042): o pedido fora do padrão vai para os suspeitos.
+        precoBilheteCentavos: campanha.preco,
       });
       recuperacaoId = resultado.recuperacaoId;
       // O que não entrou já existia: gravado por outra via entre a leitura e o lote.

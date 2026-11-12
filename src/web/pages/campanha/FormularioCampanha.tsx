@@ -23,6 +23,7 @@ import {
 import { Button, Card, Input, Select } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/formatadores";
+import { useUsuarioConectado } from "../../lib/sessao";
 import { salvarCampanha } from "./campanha-api";
 import {
   EditorPeriodos,
@@ -70,6 +71,8 @@ type Props = {
 };
 
 export function FormularioCampanha({ campanhaInicial }: Props) {
+  // Pedidos, acesso e mensagens são só do admin (RIFA-042): para a coordenação, só leitura e fora do PUT.
+  const admin = useUsuarioConectado().papel === "admin";
   const [salva, setSalva] = useState(campanhaInicial);
   const [formulario, setFormulario] = useState<Formulario>(() =>
     campanhaInicial ? formularioDaCampanha(campanhaInicial) : formularioVazio(),
@@ -145,10 +148,12 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
   }
 
   function alterarChave(chave: ChaveDoFormulario, ligada: boolean) {
+    if (!admin) return;
     alterar({ [chave]: ligada }, CAMINHO_DA_CHAVE[chave]);
   }
 
   function alterarMensagem(tipo: TipoMensagem, texto: string) {
+    if (!admin) return;
     setFormulario((atual) => ({
       ...atual,
       mensagens: { ...atual.mensagens, [tipo]: texto },
@@ -175,7 +180,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
   function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     if (salvando) return;
-    const montagem = montarCorpo(formulario);
+    const montagem = montarCorpo(formulario, { regrasDoAdmin: admin });
     if (!montagem.ok) {
       mostrarErros(montagem.erros, null);
       return;
@@ -543,12 +548,14 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
 
           <ChavesDaCampanha
             formulario={formulario}
+            somenteLeitura={!admin}
             idDoCampo={idDoCampo}
             aoAlterar={alterarChave}
           />
 
           <MensagensDoLink
             mensagens={formulario.mensagens}
+            somenteLeitura={!admin}
             erros={erros}
             idDoCampo={idDoCampo}
             aoAlterar={alterarMensagem}

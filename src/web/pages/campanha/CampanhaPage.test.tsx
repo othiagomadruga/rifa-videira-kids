@@ -1,12 +1,7 @@
 // CA2 a CA4: tela /coordenacao/campanha pela rota de verdade, com a API simulada (fetch trocado).
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  ACESSO_PADRAO,
-  MENSAGENS_PADRAO,
-  PEDIDOS_PADRAO,
-  type CampanhaEntrada,
-} from "../../../shared/contracts";
+import type { CampanhaEntrada } from "../../../shared/contracts";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   CONFIGURADA,
@@ -57,10 +52,8 @@ const CORPO_DO_FORMULARIO_VALIDO = {
   ],
   ranking: { criterio: "percentual_meta" },
   publico: { mostra_percentual_meta: false, limite_ranking: 3 },
-  // Regras do admin (D20): sem campanha, o formulário manda os padrões.
-  pedidos: { ...PEDIDOS_PADRAO },
-  acesso: { ...ACESSO_PADRAO },
-  mensagens: { ...MENSAGENS_PADRAO },
+  // Pedidos, acesso e mensagens são só do admin (RIFA-042): a coordenação (a sessão destes testes) não os manda, e
+  // a API grava os padrões no primeiro PUT. O PUT do admin está em RegrasDaCampanha.test.tsx.
 };
 
 function periodo(numero: number) {

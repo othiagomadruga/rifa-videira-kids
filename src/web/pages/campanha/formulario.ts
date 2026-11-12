@@ -292,7 +292,18 @@ export type ResultadoMontagem =
 const MENSAGEM_REAIS = "Use só números, com até 2 casas decimais. Ex.: 20,00.";
 
 /** Lê o formulário e valida com o contrato. Erros de leitura (ex.: "abc" no preço) vêm primeiro. */
-export function montarCorpo(formulario: Formulario): ResultadoMontagem {
+export function montarCorpo(
+  formulario: Formulario,
+  {
+    regrasDoAdmin,
+  }: {
+    /**
+     * Manda os grupos `pedidos`, `acesso` e `mensagens` (só o admin muda, RIFA-042). Sem eles, a API mantém o
+     * gravado; e um modelo gravado com problema não barra o salvamento do resto.
+     */
+    regrasDoAdmin: boolean;
+  },
+): ResultadoMontagem {
   const errosDeLeitura: ErrosFormulario = {};
   function ler<T>(
     chave: string,
@@ -362,13 +373,16 @@ export function montarCorpo(formulario: Formulario): ResultadoMontagem {
           ? null
           : (lerInteiro(formulario.publico_limite_ranking) ?? -1),
     },
-    // Os três grupos vão sempre (D20): o grupo presente substitui o gravado.
-    pedidos: { desconsiderar: formulario.pedidos_desconsiderar },
-    acesso: {
-      discipuladores: formulario.acesso_discipuladores,
-      redes: formulario.acesso_redes,
-    },
-    mensagens: { ...formulario.mensagens },
+    // Os três grupos vão sempre que é o admin (D20: o grupo presente substitui o gravado); da coordenação, nunca
+    // (RIFA-042: grupo ausente mantém o gravado).
+    ...(regrasDoAdmin && {
+      pedidos: { desconsiderar: formulario.pedidos_desconsiderar },
+      acesso: {
+        discipuladores: formulario.acesso_discipuladores,
+        redes: formulario.acesso_redes,
+      },
+      mensagens: { ...formulario.mensagens },
+    }),
   };
 
   const validacao = corpoSalvarCampanhaSchema.safeParse(corpo);

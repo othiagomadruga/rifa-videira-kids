@@ -8,6 +8,7 @@
 // - CA3: chave desligada: 409 nos dois; desligar não devolve o que já foi desconsiderado; a ordem dos erros;
 // - CA5: remover afiliado (204, 404, 409 com a lista, os desconsiderados sem afiliado no mesmo lote, a trilha);
 // - CA6: as mensagens no PUT da campanha e um modelo gravado fora das regras que não derruba as leituras;
+// - RIFA-042: pedidos, acesso e mensagens só do admin (403 da coordenação) e o {link} colado ou outro endereço (400);
 // - CA7: desconsiderar e reconsiderar leem menos de 10 linhas; remover lê os pedidos do afiliado.
 // O acesso de discipuladores e redes (CA4) está em src/worker/protecao.test.ts e routes/admin-usuarios.test.ts.
 import { env } from "cloudflare:workers";
@@ -26,6 +27,7 @@ import {
   erroApiSchema,
   itemPedidoSchema,
   respostaAnalisePorPedidoSchema,
+  type Campanha,
   type CampanhaEntrada,
 } from "../../shared/contracts";
 import { montarCsv } from "../../shared/conferencia/teste-csv";
@@ -541,15 +543,11 @@ describe("CA3: a chave pedidos.desconsiderar e a ordem dos erros", () => {
       motivo: "teste",
     });
     const antes = await contas();
-    const salvo = await chamar(
-      "PUT",
-      ROTAS.salvarCampanha.caminho,
-      coordenacao,
-      {
-        ...DADOS_CAMPANHA,
-        pedidos: { desconsiderar: false },
-      },
-    );
+    // A chave é só do admin (RIFA-042).
+    const salvo = await chamar("PUT", ROTAS.salvarCampanha.caminho, admin, {
+      ...DADOS_CAMPANHA,
+      pedidos: { desconsiderar: false },
+    });
     expect(salvo.status).toBe(200);
     expect(campanhaSchema.parse(salvo.corpo).pedidos).toEqual({
       desconsiderar: false,
@@ -922,8 +920,9 @@ describe("CA6: os modelos das mensagens no PUT da campanha", () => {
     await semear();
   });
 
+  // As mensagens são só do admin (RIFA-042): a coordenação está no bloco seguinte.
   const salvar = (corpo: Partial<CampanhaEntrada>) =>
-    chamar("PUT", ROTAS.salvarCampanha.caminho, coordenacao, {
+    chamar("PUT", ROTAS.salvarCampanha.caminho, admin, {
       ...DADOS_CAMPANHA,
       ...corpo,
     });
@@ -1013,6 +1012,259 @@ describe("CA6: os modelos das mensagens no PUT da campanha", () => {
         (await chamar("GET", ROTAS.obterCampanha.caminho, admin)).corpo,
       ).mensagens.link_lider,
     ).toBe("Oi {Nome}, sem o link");
+  });
+
+  it("RIFA-042 (CA3): recusa o {link} colado (?u={link}, x{link}) e outro endereço (400, nada gravado); os quatro padrões passam", async () => {
+    const COLADO = "Deixe o {link} no começo da mensagem";
+    const ENDERECO = "Tire o outro endereço da mensagem";
+    for (const [tipo, modelo, trecho] of [
+      [
+        "link_coordenacao",
+        "{saudacao} Seu acesso: https://outro.site/?u={link}",
+        COLADO,
+      ],
+      ["link_coordenacao", "{saudacao} Seu acesso: ?u={link}", COLADO],
+      ["link_lider", "{saudacao} A {alvo} entra por x{link}", COLADO],
+      ["link_rede", "{saudacao} Veja www.outro.site antes:\n{link}", ENDERECO],
+      [
+        "link_discipulador",
+        "{saudacao} Veja https://outro.site antes:\n{link}",
+        ENDERECO,
+      ],
+    ] as const) {
+      const resposta = await salvar({
+        mensagens: { ...MENSAGENS_PADRAO, [tipo]: modelo },
+      });
+      expect({ modelo, resposta }).toMatchObject({
+        modelo,
+        resposta: {
+          status: 400,
+          corpo: {
+            erro: {
+              codigo: "requisicao_invalida",
+              detalhes: expect.arrayContaining([
+                expect.objectContaining({
+                  caminho: ["mensagens", tipo],
+                  mensagem: expect.stringContaining(trecho),
+                }),
+              ]),
+            },
+          },
+        },
+      });
+    }
+    const trilha = await contarTrilha("campanha.salvar");
+    expect(
+      campanhaSchema.parse(
+        (await chamar("GET", ROTAS.obterCampanha.caminho, admin)).corpo,
+      ).mensagens,
+    ).toEqual(MENSAGENS_PADRAO);
+    // Os quatro padrões, mandados por inteiro, continuam válidos.
+    expect((await salvar({ mensagens: { ...MENSAGENS_PADRAO } })).status).toBe(
+      200,
+    );
+    expect(await contarTrilha("campanha.salvar")).toBe(trilha + 1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-042 (CA1): os grupos pedidos, acesso e mensagens da campanha são só do admin (adendo da D20)
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * O banco dos testes com uma escrita de outra pessoa logo antes do lote da gravação (depois de a rota ler a
+ * campanha): a corrida "um admin muda os grupos enquanto a coordenação salva".
+ */
+function bancoComEscritaAntesDoLote(sql: string): D1Database {
+  return new Proxy(db, {
+    get(alvo, nome) {
+      if (nome === "batch")
+        return async (comandos: D1PreparedStatement[]) => {
+          await alvo.prepare(sql).run();
+          return alvo.batch(comandos);
+        };
+      const valor: unknown = Reflect.get(alvo, nome, alvo);
+      return typeof valor === "function" ? valor.bind(alvo) : valor;
+    },
+  });
+}
+
+describe("RIFA-042 (CA1): pedidos, acesso e mensagens da campanha são só do admin", () => {
+  beforeEach(async () => {
+    // A campanha do cenário com a chave de desconsiderar ligada; acesso e mensagens com os padrões.
+    await semear();
+  });
+
+  const lerCampanha = async () =>
+    campanhaSchema.parse(
+      (await chamar("GET", ROTAS.obterCampanha.caminho, admin)).corpo,
+    );
+  const salvarComo = (
+    quem: Record<string, string>,
+    corpo: Partial<CampanhaEntrada>,
+    banco?: D1Database,
+  ) =>
+    chamar(
+      "PUT",
+      ROTAS.salvarCampanha.caminho,
+      quem,
+      { ...DADOS_CAMPANHA, ...corpo },
+      banco,
+    );
+  const gruposDe = ({ pedidos, acesso, mensagens }: Campanha) => ({
+    pedidos,
+    acesso,
+    mensagens,
+  });
+
+  it("a coordenação que manda um dos três diferente do gravado leva 403 proibido, e nada é gravado (nem o resto do corpo, nem a trilha)", async () => {
+    const antes = await lerCampanha();
+    const trilha = await contarTrilha("campanha.salvar");
+    for (const [grupo, mudanca] of [
+      ["pedidos", { pedidos: { desconsiderar: false } }],
+      ["acesso", { acesso: { discipuladores: true, redes: false } }],
+      [
+        "mensagens",
+        {
+          mensagens: {
+            ...MENSAGENS_PADRAO,
+            link_rede: "{saudacao} A rede {alvo} entra por aqui:\n{link}",
+          },
+        },
+      ],
+    ] as const) {
+      const resposta = await salvarComo(coordenacao, {
+        ...gruposDe(antes),
+        ...mudanca,
+        nome: "Nome que não pode entrar",
+      });
+      expect({ grupo, resposta }).toEqual({
+        grupo,
+        resposta: { status: 403, corpo: erro("proibido") },
+      });
+      expect(erroApiSchema.parse(resposta.corpo).erro.mensagem).toMatch(
+        new RegExp(
+          `^Só o admin muda os grupos pedidos, acesso e mensagens da campanha \\(este salvamento mudava: ${grupo}\\)\\. Nada foi salvo`,
+        ),
+      );
+    }
+    // Os três de uma vez: a mensagem diz todos.
+    const todos = await salvarComo(coordenacao, {
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: false, redes: false },
+      mensagens: { ...MENSAGENS_PADRAO, link_lider: "{link}" },
+    });
+    expect(erroApiSchema.parse(todos.corpo).erro.mensagem).toContain(
+      "(este salvamento mudava: pedidos, acesso, mensagens)",
+    );
+    expect(await lerCampanha()).toEqual(antes);
+    expect(await contarTrilha("campanha.salvar")).toBe(trilha);
+  });
+
+  it("ausentes ou iguais ao gravado passam: o resto é gravado e os três continuam como estavam", async () => {
+    // Um modelo editado e um acesso desligado pelo admin, para "igual ao gravado" não ser só o padrão.
+    const doAdmin = {
+      pedidos: { desconsiderar: true },
+      acesso: { discipuladores: true, redes: false },
+      mensagens: {
+        ...MENSAGENS_PADRAO,
+        link_coordenacao: "{saudacao} Seu acesso à rifa:\n{link}",
+      },
+    };
+    expect((await salvarComo(admin, doAdmin)).status).toBe(200);
+
+    const ausentes = await salvarComo(coordenacao, {
+      nome: "Rifa da coordenação",
+    });
+    expect(ausentes.status).toBe(200);
+    expect(campanhaSchema.parse(ausentes.corpo)).toMatchObject({
+      nome: "Rifa da coordenação",
+      ...doAdmin,
+    });
+
+    // Iguais: como uma aba antiga do site, que mandava sempre os três.
+    const iguais = await salvarComo(coordenacao, {
+      nome: "Rifa da coordenação de novo",
+      ...doAdmin,
+    });
+    expect(iguais.status).toBe(200);
+    expect(await lerCampanha()).toMatchObject({
+      nome: "Rifa da coordenação de novo",
+      ...doAdmin,
+    });
+    expect(await ultimaDaTrilha("campanha.salvar")).toMatchObject({
+      resumo: "Alterado: nome",
+    });
+  });
+
+  it("o admin muda os três (e a trilha diz quem e o quê)", async () => {
+    const mudanca = {
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: false, redes: false },
+      mensagens: {
+        ...MENSAGENS_PADRAO,
+        link_rede: "{saudacao} A rede {alvo} entra por aqui:\n{link}",
+      },
+    };
+    const resposta = await salvarComo(admin, mudanca);
+    expect(resposta.status).toBe(200);
+    expect(campanhaSchema.parse(resposta.corpo)).toMatchObject(mudanca);
+    expect(await lerCampanha()).toMatchObject(mudanca);
+    expect(await ultimaDaTrilha("campanha.salvar")).toMatchObject({
+      usuario_id: adminId,
+      resumo:
+        "Alterado: pedidos.desconsiderar: ligado → desligado, acesso.discipuladores: ligado → desligado, acesso.redes: ligado → desligado, mensagens.link_rede",
+    });
+  });
+
+  it("sem campanha ativa, o gravado é o padrão: a coordenação cria com os padrões (ou sem os grupos); fora deles, 403", async () => {
+    await db.prepare("UPDATE campanhas SET ativa = 0 WHERE ativa = 1").run();
+    const nova = { slug_rifei: "rifa-nova-da-coordenacao" };
+    const recusada = await salvarComo(coordenacao, {
+      ...nova,
+      acesso: { discipuladores: true, redes: false },
+    });
+    expect(recusada).toEqual({ status: 403, corpo: erro("proibido") });
+    expect(
+      (await chamar("GET", ROTAS.obterCampanha.caminho, admin)).status,
+    ).toBe(404);
+
+    const criada = await salvarComo(coordenacao, {
+      ...nova,
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: true, redes: true },
+      mensagens: { ...MENSAGENS_PADRAO },
+    });
+    expect(criada.status).toBe(200);
+    expect(gruposDe(campanhaSchema.parse(criada.corpo))).toEqual({
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: true, redes: true },
+      mensagens: MENSAGENS_PADRAO,
+    });
+  });
+
+  it("a gravação da coordenação não escreve os três: um admin que os muda entre a leitura e o lote não é desfeito", async () => {
+    const antes = await lerCampanha();
+    const modeloDoAdmin = "{saudacao} Rede {alvo}, o seu link:\n{link}";
+    const banco = bancoComEscritaAntesDoLote(
+      `UPDATE campanhas SET pedidos_desconsiderar = 0, acesso_redes = 0,
+         mensagem_link_rede = '${modeloDoAdmin}' WHERE ativa = 1`,
+    );
+
+    // A coordenação manda os três iguais ao que leu (como estavam antes do admin).
+    const resposta = await salvarComo(
+      coordenacao,
+      { nome: "Rifa da coordenação", ...gruposDe(antes) },
+      banco,
+    );
+
+    expect(resposta.status).toBe(200);
+    expect(gruposDe(campanhaSchema.parse(resposta.corpo))).toEqual({
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: true, redes: false },
+      mensagens: { ...MENSAGENS_PADRAO, link_rede: modeloDoAdmin },
+    });
+    expect((await lerCampanha()).nome).toBe("Rifa da coordenação");
   });
 });
 

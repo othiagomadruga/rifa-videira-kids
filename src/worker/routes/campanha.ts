@@ -11,14 +11,24 @@
  *   seguintes substituem a configuração dela, numa transação. É a partir daí que o webhook passa a
  *   contar as vendas da Rifei com esse `slug_rifei` (D5). Cada PUT gravado deixa na trilha de auditoria
  *   quem salvou e o que mudou (RIFA-013b; inclusive o slug antes e depois), na mesma transação.
+ * - Os grupos `pedidos`, `acesso` e `mensagens` são só do admin (RIFA-042, adendo da D20): quem não é admin e
+ *   manda algum deles diferente do gravado leva 403 `proibido` (depois do 400 do schema e antes de gravar), e nada é
+ *   gravado. Ausentes ou iguais ao gravado passam, mas a gravação vai sem eles (grupo ausente mantém o gravado): o
+ *   PUT da coordenação nunca escreve essas colunas, nem desfaz o que um admin gravar no meio.
  */
 import { Hono } from "hono";
-import { ROTAS, detalhesDeValidacao } from "../../shared/contracts";
+import {
+  ROTAS,
+  detalhesDeValidacao,
+  type UsuarioSessao,
+} from "../../shared/contracts";
 import {
   buscarCampanhaAtiva,
+  gruposDoAdminAlterados,
   montarCampanha,
   resumirMudancaDaCampanha,
   salvarCampanhaAtiva,
+  semGruposDoAdmin,
 } from "../db/campanha";
 import { responderErro } from "../lib/respostas-erro";
 import { autoriaDaSessao, type AmbienteSessao } from "../middleware/sessao";
@@ -77,20 +87,28 @@ campanha.put(CAMINHO, async (c) => {
       detalhesDeValidacao(validacao.error),
     );
   }
-  // Auditoria (RIFA-013b): o antes vem da mesma leitura do GET; o registro vai no lote da gravação.
+  // O antes vem da mesma leitura do GET: serve à conferência dos grupos do admin e ao resumo da trilha.
+  const antes = await buscarCampanhaAtiva(c.env.DB);
+  let dados = validacao.data;
+  // Grupos só do admin (RIFA-042). Sem sessão (só no sub-app de teste, montado sem o login), também não é admin.
+  const usuario = c.get("usuario") as UsuarioSessao | undefined;
+  if (usuario?.papel !== "admin") {
+    const alterados = gruposDoAdminAlterados(antes, dados);
+    if (alterados.length > 0)
+      return responderErro(
+        c,
+        "proibido",
+        `Só o admin muda os grupos pedidos, acesso e mensagens da campanha (este salvamento mudava: ${alterados.join(", ")}). Nada foi salvo: mande esses grupos como estão gravados, ou sem eles.`,
+      );
+    dados = semGruposDoAdmin(dados);
+  }
+  // Auditoria (RIFA-013b): o registro vai no lote da gravação.
   const autoria = autoriaDaSessao(c);
   const auditoria = autoria && {
     ...autoria,
-    resumo: resumirMudancaDaCampanha(
-      await buscarCampanhaAtiva(c.env.DB),
-      validacao.data,
-    ),
+    resumo: resumirMudancaDaCampanha(antes, dados),
   };
-  const resultado = await salvarCampanhaAtiva(
-    c.env.DB,
-    validacao.data,
-    auditoria,
-  );
+  const resultado = await salvarCampanhaAtiva(c.env.DB, dados, auditoria);
   return resultado.ok
     ? c.json(resultado.campanha, 200)
     : responderErro(

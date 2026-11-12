@@ -174,9 +174,81 @@ describe("D20: as regras na campanha (corpo do PUT)", () => {
     expect(
       aceita(
         campanhaEntradaSchema,
-        comMensagens({ link_rede: "{ } {saudacao} {{link}} :-}" }),
+        comMensagens({ link_rede: "{ } {saudacao} {{nome}} :-}\n{link}" }),
       ),
     ).toBe(true);
+  });
+
+  it("RIFA-042: o {link} só no começo ou depois de espaço, tabulação ou quebra de linha, e nenhum outro endereço", () => {
+    const comMensagens = (mudanca: Partial<Record<string, string>>) => ({
+      ...corpoDeHoje,
+      mensagens: { ...MENSAGENS_PADRAO, ...mudanca },
+    });
+    const COLADO =
+      "Deixe o {link} no começo da mensagem ou depois de um espaço ou de uma quebra de linha: colado no texto de antes, o link pessoal vira parte de outro endereço.";
+    const ENDERECO =
+      "Tire o outro endereço da mensagem (http://, www. ou site.com/): o único link dela é o {link}.";
+    // Recusados: o {link} colado (o caso da revisão RIFA-041 e outros) e outro endereço no modelo.
+    for (const [modelo, problemas] of [
+      [
+        "{saudacao} Seu acesso: https://outro.site/?u={link}",
+        [COLADO, ENDERECO],
+      ],
+      ["{saudacao} Seu acesso: outro.site/?u={link}", [COLADO, ENDERECO]],
+      ["{saudacao} Seu acesso: ?u={link}", [COLADO]],
+      ["{saudacao} Seu acesso: x{link}", [COLADO]],
+      ["{saudacao} Entre:{link}", [COLADO]],
+      ["{saudacao}{link}", [COLADO]],
+      ["{saudacao} {{link}}", [COLADO]],
+      ["{saudacao} Entre: *{link}*", [COLADO]],
+      ["{saudacao} Entre: {link}", [COLADO]],
+      // Um {link} certo não salva outro colado no mesmo modelo.
+      ["{link}\nDe novo: x{link}", [COLADO]],
+      ["{saudacao} Veja https://outro.site antes:\n{link}", [ENDERECO]],
+      ["{saudacao} Veja http://outro.site antes:\n{link}", [ENDERECO]],
+      ["{saudacao} Veja WWW.outro.site antes:\n{link}", [ENDERECO]],
+      ["{saudacao} Veja bit.ly/abc antes:\n{link}", [ENDERECO]],
+      ["{saudacao} Fale no wa.me/5591988880001\n{link}", [ENDERECO]],
+    ] as const) {
+      expect({
+        modelo,
+        problemas: problemasDoModelo("link_coordenacao", modelo),
+      }).toEqual({
+        modelo,
+        problemas,
+      });
+      expect({
+        modelo,
+        ok: aceita(
+          campanhaEntradaSchema,
+          comMensagens({ link_coordenacao: modelo }),
+        ),
+      }).toEqual({ modelo, ok: false });
+    }
+    // Aceitos: no começo, depois de espaço, de tabulação ou de quebra de linha (também \r\n), e pontuação comum.
+    for (const modelo of [
+      "{link}\n{saudacao}",
+      "{saudacao} Entre: {link}",
+      "{saudacao} Entre:\n{link}",
+      "{saudacao} Entre:\r\n{link}",
+      "{saudacao} Entre:\t{link}",
+      "{saudacao} Entre: {link}. Até já!",
+      "{saudacao} São R$ 20,00/bilhete e 1.000/dia; e/ou peça ajuda: {link}",
+    ])
+      expect({
+        modelo,
+        ok: aceita(
+          campanhaEntradaSchema,
+          comMensagens({ link_coordenacao: modelo }),
+        ),
+      }).toEqual({
+        modelo,
+        ok: true,
+      });
+    // Os quatro padrões continuam válidos.
+    for (const tipo of TIPOS_MENSAGEM)
+      expect(problemasDoModelo(tipo, MENSAGENS_PADRAO[tipo])).toEqual([]);
+    expect(aceita(campanhaEntradaSchema, comMensagens({}))).toBe(true);
   });
 
   it("o problema do modelo vem em português, com os marcadores aceitos", () => {
