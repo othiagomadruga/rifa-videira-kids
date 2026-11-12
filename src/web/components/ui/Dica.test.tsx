@@ -14,6 +14,7 @@ import {
 } from "../../test/dicas";
 import { Button } from "./Button";
 import { Input } from "./Campos";
+import { Dialogo } from "./Dialogo";
 import { ATRASO_DA_DICA_MS, ComDica, FOLGA_DA_DICA_MS } from "./Dica";
 
 const TEXTO = "Grava as mudanças. A tela mostra o resultado logo abaixo.";
@@ -158,7 +159,7 @@ describe("CA1: aparece com o mouse parado e com o foco, e some ao sair, ao perde
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
 
-  it("Esc fecha a dica aberta pelo foco sem tirar o foco, e o Esc segue para quem mais o escuta (ex.: o diálogo)", () => {
+  it("Esc fecha a dica aberta pelo foco sem tirar o foco; esse Esc fica na dica (a camada de cima) e o seguinte segue para quem mais o escuta", () => {
     const aoTeclar = vi.fn();
     render(
       <div onKeyDown={(evento) => aoTeclar(evento.key)}>
@@ -173,7 +174,36 @@ describe("CA1: aparece com o mouse parado e com o foco, e some ao sair, ao perde
     fireEvent.keyDown(botao(), { key: "Escape" });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expect(botao()).toHaveFocus();
+    expect(aoTeclar).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(botao(), { key: "Escape" });
     expect(aoTeclar).toHaveBeenCalledWith("Escape");
+  });
+
+  it("revisão: num diálogo, o Esc com a dica aberta só fecha a dica (o que foi digitado fica); o Esc seguinte fecha o diálogo", () => {
+    const aoFechar = vi.fn();
+    render(
+      <Dialogo aberto titulo="Nova pessoa" aoFechar={aoFechar}>
+        <Input rotulo="Nome" />
+        <ComDica texto="Só para saber quem é.">
+          <Input rotulo="E-mail" />
+        </ComDica>
+      </Dialogo>,
+    );
+    const nome = screen.getByRole("textbox", { name: "Nome" });
+    const email = screen.getByRole("textbox", { name: "E-mail" });
+    fireEvent.change(nome, { target: { value: "Fulano" } });
+    focarPeloTeclado(email);
+    expect(dicaDe(email)).toHaveTextContent("Só para saber quem é.");
+
+    fireEvent.keyDown(email, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(aoFechar).not.toHaveBeenCalled();
+    expect(email).toHaveFocus();
+    expect(nome).toHaveValue("Fulano");
+
+    fireEvent.keyDown(email, { key: "Escape" });
+    expect(aoFechar).toHaveBeenCalledTimes(1);
   });
 
   it("dá para passar o mouse por cima da dica: ela fica enquanto o mouse está nela e some ao sair dela", () => {

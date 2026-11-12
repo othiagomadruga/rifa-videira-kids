@@ -449,6 +449,10 @@ describe("CA2: editar e excluir", () => {
     fireEvent.keyDown(salvar, { key: "Tab" });
     expect(fechar).toHaveFocus();
 
+    // RIFA-045: o Tab abriu a dica do ×; o 1º Esc só fecha a dica (a camada de cima) e o 2º fecha o diálogo.
+    fireEvent.keyDown(fechar, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(fechar).toHaveFocus();
     fireEvent.keyDown(fechar, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(botao).toHaveFocus();
