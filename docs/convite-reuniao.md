@@ -20,7 +20,7 @@ A mensagem do sistema (o nome e a célula mudam; o link vem na última linha):
 > O link é só seu: não repasse para ninguém, porque quem tiver o link entra como você.
 > (o link)
 
-- O texto vem do modelo da Campanha (cartão "Mensagens do link pessoal"; o de cima é o padrão). Não edite a mensagem na hora de mandar: o link precisa ir inteiro. Para mudar o texto, edite o modelo na **Campanha**, que mostra como fica e não deixa salvar sem o link ([lancamento.md](lancamento.md), seção 3.3). Mantenha as palavras "link pessoal": é por elas que o líder acha a conversa quando perde o link (guia, "Perdi o link").
+- O texto vem do modelo da Campanha (cartão "Mensagens do link pessoal"; o de cima é o padrão). Não edite a mensagem na hora de mandar: o link precisa ir inteiro. Para mudar o texto, um admin edita o modelo na **Campanha** (a coordenação vê só leitura), que mostra como fica e não deixa salvar sem o link ([lancamento.md](lancamento.md), seção 3.3). Mantenha as palavras "link pessoal": é por elas que o líder acha a conversa quando perde o link (guia, "Perdi o link").
 - Sem telefone na planilha, ou com um número que o WhatsApp não abre, a linha só tem **Copiar mensagem**: mande por fora, no privado.
 
 **Mensagem complementar** (opcional, logo depois, na mesma conversa, sem link):
