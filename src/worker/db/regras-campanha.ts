@@ -243,7 +243,8 @@ const NENHUM_QUE_CONTA =
  * O afiliado, quantos pedidos dele contam (com os ids dos mais recentes, na ordem da lista de pedidos), quantos dos
  * que contam estão fora da campanha ativa (de outra campanha, ou todos, sem campanha ativa: esses não se
  * desconsideram daqui) e os ids dos desconsiderados (que ficarão sem afiliado). Lê os pedidos dele pelo índice por
- * afiliado e, para os de fora, a campanha ativa (+1 linha).
+ * afiliado. A contagem dos de fora passa de novo pelos pedidos dele (+1 linha por pedido) e lê a campanha ativa (+1),
+ * também no caminho do 204 (medido na revisão da RIFA-040, afiliado com 22 pedidos: 113 linhas, e não 90).
  */
 const LER_AFILIADO = `
   SELECT a.celula_id,
