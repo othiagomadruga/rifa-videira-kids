@@ -1,9 +1,9 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
-// 0008_regras_campanha.sql e 0009_token_webhook.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes,
-// dentro do workerd. A 0006, a 0007, a 0008 e a 0009 também são aplicadas num D1 à parte (DB_MIGRACAO,
-// vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7;
-// RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8).
+// 0008_regras_campanha.sql, 0009_token_webhook.sql e 0010_link_vendas.sql), aplicado pelo setup apply-migrations.ts
+// no D1 local dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009 e a 0010 também são aplicadas num D1 à
+// parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá
+// (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -11,9 +11,14 @@ import {
   ACESSO_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
+  campanhaEntradaSchema,
 } from "../../shared/contracts";
 import { buscarLinkValido, buscarUsuarioDaSessao } from "../db/acessos";
-import { montarCampanha, type CampanhaAtiva } from "../db/campanha";
+import {
+  montarCampanha,
+  salvarCampanhaAtiva,
+  type CampanhaAtiva,
+} from "../db/campanha";
 import { SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3 } from "../db/painel";
 import {
   GRAVAR_SE_NAO_HA_TOKEN,
@@ -509,9 +514,30 @@ async function fotografar(db: D1Database) {
   );
 }
 
+/** Todas as tabelas nossas, linha por linha (pela ordem do rowid), com todas as colunas de cada uma. */
+async function fotografarTodasAsTabelas(
+  db: D1Database,
+): Promise<Record<string, Record<string, unknown>[]>> {
+  const { results } = await db
+    .prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND ${soNossas("name")} ORDER BY name`,
+    )
+    .all<{ name: string }>();
+  const nomes = results.map((linha) => linha.name);
+  const linhas = await db.batch(
+    nomes.map((nome) => db.prepare(`SELECT * FROM "${nome}" ORDER BY rowid`)),
+  );
+  return Object.fromEntries(
+    nomes.map((nome, indice) => [
+      nome,
+      linhas[indice].results as Record<string, unknown>[],
+    ]),
+  );
+}
+
 // As migrações sobre dados que já existiam são um cenário em passos no mesmo D1 (DB_MIGRACAO): até a 0005 e os
-// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados, a 0008 sobre mais outros e a 0009 sobre
-// tudo o que ficou (inclusive a trilha e as entregas do webhook). Por isso a
+// dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados, a 0008 sobre mais outros, a 0009 sobre
+// tudo o que ficou (inclusive a trilha e as entregas do webhook) e a 0010 sobre tudo isso e o token. Por isso a
 // ordem é a do arquivo, mesmo com --sequence.shuffle: cada uma tem de ser a última aplicada quando os testes dela
 // rodam, e a cascata apaga linhas que a comparação "continuam iguais" fotografou.
 describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
@@ -1429,27 +1455,8 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
     const GERADO_EM_1 = "2026-11-12T10:00:00.000Z";
     const GERADO_EM_2 = "2026-11-12T11:30:00.123Z";
     let antes: Record<string, Record<string, unknown>[]>;
-
-    /** Todas as tabelas nossas, linha por linha (pela ordem do rowid): a 0009 não pode mudar nenhuma. */
-    const fotografarTudo = async () => {
-      const { results } = await db
-        .prepare(
-          `SELECT name FROM sqlite_master WHERE type = 'table' AND ${soNossas("name")} ORDER BY name`,
-        )
-        .all<{ name: string }>();
-      const nomes = results.map((linha) => linha.name);
-      const linhas = await db.batch(
-        nomes.map((nome) =>
-          db.prepare(`SELECT * FROM "${nome}" ORDER BY rowid`),
-        ),
-      );
-      return Object.fromEntries(
-        nomes.map((nome, indice) => [
-          nome,
-          linhas[indice].results as Record<string, unknown>[],
-        ]),
-      );
-    };
+    /** Todas as tabelas nossas, linha por linha: a 0009 não pode mudar nenhuma. */
+    const fotografarTudo = () => fotografarTodasAsTabelas(db);
 
     const linhaDoToken = () =>
       db.prepare("SELECT * FROM token_webhook ORDER BY rowid").all();
@@ -1482,7 +1489,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ),
       ]);
       antes = await fotografarTudo();
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0009: a 0010 é aplicada depois, sobre tudo isto (describe "0010 sobre dados que já existiam").
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0010"),
+      );
     });
 
     it("a 0009 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -1626,6 +1637,182 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       expect((await linhaDoToken()).results).toEqual([
         { id: 1, token_hash: HASH_2, gerado_em: GERADO_EM_2 },
       ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0010 (RIFA-046, D24): o modelo do link de vendas na campanha, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0010 sobre dados que já existiam (RIFA-046, CA7)", () => {
+    const db = DB_MIGRACAO;
+    const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    const modelos = async () =>
+      (
+        await db
+          .prepare(
+            "SELECT id, ativa, link_vendas_modelo FROM campanhas ORDER BY id",
+          )
+          .all<{
+            id: number;
+            ativa: number;
+            link_vendas_modelo: string | null;
+          }>()
+      ).results;
+    const apagarModelos = async () => {
+      await db.prepare("UPDATE campanhas SET link_vendas_modelo = NULL").run();
+    };
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0009 (aqui vale também rodando este sozinho).
+      const ate0009 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0010",
+      );
+      expect(ate0009.map((migracao) => migracao.name)).not.toContain(
+        "0010_link_vendas.sql",
+      );
+      await applyD1Migrations(db, ate0009);
+      // Além do que os describes anteriores gravaram: um token do webhook gravado pela tela (0009) e o líder com o
+      // telefone e o e-mail, que a 0010 também não pode mexer.
+      await db.batch([
+        db
+          .prepare(
+            "INSERT INTO token_webhook (id, token_hash, gerado_em) VALUES (1, ?1, '2026-11-12T10:00:00.000Z')",
+          )
+          .bind("0123456789abcdef".repeat(4)),
+        db.prepare(
+          "UPDATE celulas SET lider_telefone = '(91) 98888-7777', lider_email = 'lider@example.com' WHERE id = 7000",
+        ),
+      ]);
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0010 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0010_link_vendas.sql",
+      );
+      // Duas campanhas (a ativa da 0007 e a inativa da 0008), sem a coluna nova antes da 0010.
+      expect(antes.campanhas).toHaveLength(2);
+      expect(antes.campanhas[0]).not.toHaveProperty("link_vendas_modelo");
+      for (const tabela of [
+        "usuarios",
+        "links_acesso",
+        "sessoes",
+        "auditoria",
+        "afiliados",
+        "pedidos",
+        "webhook_eventos",
+        "token_webhook",
+      ])
+        expect({ tabela, vazia: antes[tabela].length === 0 }).toEqual({
+          tabela,
+          vazia: false,
+        });
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada campanha ganha só link_vendas_modelo, NULL (nenhuma célula tem link)", async () => {
+      const { campanhas, ...depois } = await fotografarTodasAsTabelas(db);
+      const { campanhas: campanhasAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(campanhas).toEqual(
+        campanhasAntes.map((campanha) => ({
+          ...campanha,
+          link_vendas_modelo: null,
+        })),
+      );
+      const { results: coluna } = await db
+        .prepare(
+          `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('campanhas')
+           WHERE name = 'link_vendas_modelo'`,
+        )
+        .all();
+      expect(coluna).toEqual([
+        {
+          name: "link_vendas_modelo",
+          type: "TEXT",
+          notnull: 0,
+          dflt_value: null,
+          pk: 0,
+        },
+      ]);
+    });
+
+    it("o CHECK: vazio e 301 caracteres recusados; NULL, 1 e 300 aceitos (o endereço e os marcadores ficam no contrato)", async () => {
+      onTestFinished(apagarModelos);
+      const gravar = (valor: string | null) =>
+        db
+          .prepare(
+            "UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1",
+          )
+          .bind(valor)
+          .run();
+      for (const recusado of [
+        "",
+        "x".repeat(301),
+        `${MODELO}${"x".repeat(301 - MODELO.length)}`,
+      ])
+        await expect(gravar(recusado)).rejects.toThrow(
+          /CHECK constraint failed/,
+        );
+      expect(
+        (await modelos()).map((linha) => linha.link_vendas_modelo),
+      ).toEqual([null, null]);
+      for (const aceito of [
+        "x",
+        "x".repeat(300),
+        // Só o tamanho: um modelo fora das regras do contrato passa no banco (a API não grava; a montagem o ignora).
+        "http://golpe.example/{afiliado}",
+        MODELO,
+        null,
+      ]) {
+        await gravar(aceito);
+        expect(
+          (await modelos()).find((linha) => linha.ativa === 1)
+            ?.link_vendas_modelo,
+        ).toBe(aceito);
+      }
+    });
+
+    it("o UPSERT do PUT da campanha (salvarCampanhaAtiva, que nomeia as colunas) não apaga o modelo, com e sem os grupos do admin", async () => {
+      onTestFinished(apagarModelos);
+      await db
+        .prepare("UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1")
+        .bind(MODELO)
+        .run();
+      const dados = {
+        nome: "Campanha Depois da 0010",
+        slug_rifei: "campanha-depois-da-0010",
+        data_inicio: "2026-11-23",
+        preco_bilhete_centavos: 2000,
+        meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
+        periodos: [{ nome: "Período 1", dias: 21, percentual_bp: 10000 }],
+        ranking: { criterio: "percentual_meta" },
+        publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+      };
+      for (const corpo of [
+        campanhaEntradaSchema.parse(dados),
+        // Com os grupos do admin (o PUT do admin): o UPSERT também não nomeia o modelo.
+        campanhaEntradaSchema.parse({
+          ...dados,
+          slug_rifei: "campanha-depois-da-0010-b",
+          pedidos: PEDIDOS_PADRAO,
+          acesso: ACESSO_PADRAO,
+          mensagens: MENSAGENS_PADRAO,
+        }),
+      ]) {
+        const salvo = await salvarCampanhaAtiva(db, corpo);
+        expect(salvo.ok && salvo.campanha.slug_rifei).toBe(corpo.slug_rifei);
+        expect(
+          (await modelos()).find((linha) => linha.ativa === 1)
+            ?.link_vendas_modelo,
+        ).toBe(MODELO);
+      }
     });
 
     it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
