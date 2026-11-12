@@ -244,6 +244,36 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
       ]);
   });
 
+  /** O último seletor composto ("a > b.c[d]" → "b.c[d]"): o que diz em quem a regra vale. */
+  function ultimoComposto(seletor: string): string {
+    let profundidade = 0;
+    let inicio = 0;
+    for (let indice = 0; indice < seletor.length; indice += 1) {
+      const caractere = seletor[indice];
+      if (caractere === "(" || caractere === "[") profundidade += 1;
+      else if (caractere === ")" || caractere === "]") profundidade -= 1;
+      else if (profundidade === 0 && /[\s>+~]/.test(caractere))
+        inicio = indice + 1;
+    }
+    return seletor.slice(inicio);
+  }
+
+  /**
+   * Seletor de um botão indisponível: o último composto tem o [aria-disabled="true"] (fora de um :not() ou :has()) e
+   * é um botão ou não diz o tipo. Pega também a repetida com a classe da tela (ex.: a antiga
+   * `.adesao-dialogo-botao[aria-disabled="true"]`); a caixa de marcar (`input[...]`) fica fora (RIFA-047, revisão).
+   */
+  function ehDeBotaoIndisponivel(seletor: string): boolean {
+    let composto = ultimoComposto(seletor);
+    while (/\([^()]*\)/.test(composto))
+      composto = composto.replace(/\([^()]*\)/g, "");
+    const tipo = /^[a-z][\w-]*/i.exec(composto)?.[0];
+    return (
+      /\[aria-disabled=["']?true["']?\]/.test(composto) &&
+      (tipo === undefined || tipo === "button")
+    );
+  }
+
   /** As regras de botão indisponível de uma folha: os seletores de botão e a cara que dão (as caixas de marcar ficam fora). */
   function regrasDeBotaoIndisponivel(css: string) {
     return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(
@@ -251,9 +281,7 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
         const deBotao = seletores
           .split(",")
           .map((seletor) => seletor.trim())
-          .filter((seletor) =>
-            /(button|\.ui-button)\[aria-disabled="true"\]$/.test(seletor),
-          );
+          .filter(ehDeBotaoIndisponivel);
         if (deBotao.length === 0) return [];
         return [
           {
@@ -307,6 +335,10 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
         .tela-acoes button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
         .tela-lista .ui-button[aria-disabled="true"] { opacity: 0.55; cursor: progress; }
         .tela-opcao input[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+        .tela-dialogo-botao[aria-disabled="true"],
+        .tela-acoes > [aria-disabled="true"].ui-button { opacity: 0.55; cursor: not-allowed; }
+        .tela-opcao:has(input[aria-disabled="true"]) { opacity: 0.55; cursor: not-allowed; }
+        .tela .ui-button:hover:not([aria-disabled="true"]) { opacity: 0.55; cursor: not-allowed; }
       `),
     ).toEqual([
       {
@@ -316,6 +348,12 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
       {
         seletores: '.tela-lista .ui-button[aria-disabled="true"]',
         repete: false,
+      },
+      // RIFA-047 (revisão): a repetida com a classe da tela (como a antiga do diálogo da Adesão) também é pega.
+      {
+        seletores:
+          '.tela-dialogo-botao[aria-disabled="true"], .tela-acoes > [aria-disabled="true"].ui-button',
+        repete: true,
       },
     ]);
   });
