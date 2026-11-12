@@ -1421,8 +1421,9 @@ function juntarNomes(nomes: readonly string[]): string {
   return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
 }
 
+/** Chamada final do bumbo: o link da Rifei do líder é o "link de afiliado", como no site (RIFA-040). */
 const CHAMADA_LINK =
-  "compartilhe hoje o link da sua célula com quem é de fora da igreja!";
+  "compartilhe hoje o seu link de afiliado com quem é de fora da igreja!";
 
 /**
  * Monta o bumbo do dia `data` (padrão: hoje), que fala do dia anterior já fechado: venda de ontem
@@ -1471,7 +1472,7 @@ function textoDoBumbo(
       `*${campanha.nome}*`,
       "",
       `${faltam === 1 ? "Falta" : "Faltam"} ${textoDias(faltam)} para começar: as vendas vão de ${dataCurta(referencia.data_inicio)} a ${dataCurta(referencia.data_fim)}.`,
-      "Confira se o link da sua célula está pronto para compartilhar!",
+      "Confira se o seu link de afiliado está pronto para compartilhar!",
     );
     return linhas.join("\n");
   }

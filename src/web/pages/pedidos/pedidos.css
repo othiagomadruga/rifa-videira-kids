@@ -354,9 +354,18 @@
     white-space: nowrap;
   }
 
-  /* "Aprovado em ..." quebra a linha: com a coluna das ações do admin (D20), a tabela cabe em 1366 px. */
+  /* "Aprovado em ..." quebra a linha e as células têm menos espaço dos lados (12 px, e não os 16 px da DataTable):
+     com a coluna das ações do admin (D20), a tabela cabe em 1366 px sem rolar dentro da caixa, e o botão fica
+     longe da borda (no Chromium, a tabela precisa de 1026 px e tem 1044 px, com "Aguardando pagamento", "Recuperado
+     na conferência", "R$ 6.000,00" e "Sem célula (afiliado 1044)"; antes, 1090 px). O :is() com td[data-principal]
+     passa na frente das regras da DataTable, seja qual for a ordem do CSS. */
   .pedidos-quando__mudou {
     white-space: normal;
+  }
+
+  .pedidos .ui-data-table__tabela :is(th, td, td[data-principal]) {
+    padding-right: var(--espaco-3);
+    padding-left: var(--espaco-3);
   }
 
   .pedidos-resultado {

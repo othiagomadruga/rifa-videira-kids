@@ -165,6 +165,98 @@ describe("CA5: textos longos (id do pedido, célula, slug, erro e avisos) quebra
   });
 });
 
+/**
+ * Especificidade de um seletor simples, como um número (ids × 10000 + classes, atributos e pseudoclasses × 100 +
+ * elementos); um :is() vale o mais específico dos argumentos. Basta para os seletores destes arquivos.
+ */
+function especificidade(seletor: string): number {
+  let total = 0;
+  const resto = seletor.replace(/:is\(([^()]*)\)/g, (_, lista: string) => {
+    total += Math.max(
+      ...lista.split(",").map((parte) => especificidade(parte.trim())),
+    );
+    return " ";
+  });
+  const ids = resto.match(/#[\w-]+/g) ?? [];
+  // Classes, atributos e pseudoclasses (":hover"); o pseudoelemento ("::before") conta como elemento.
+  const classes = resto.match(/\.[\w-]+|\[[^\]]+\]|(?<!:):(?!:)[\w-]+/g) ?? [];
+  const elementos =
+    resto
+      .replace(/#[\w-]+|\.[\w-]+|\[[^\]]+\]|(?<!:):(?!:)[\w-]+/g, " ")
+      .match(/[a-z][\w-]*/gi) ?? [];
+  return total + ids.length * 10000 + classes.length * 100 + elementos.length;
+}
+
+describe("RIFA-040: com a coluna das ações do admin, a tabela cabe em 1366 px", () => {
+  const TABELA = "@media (min-width: 48rem)";
+  const DATA_TABLE = declaracoes(
+    semComentarios(lerArquivo("../../components/ui/DataTable.css")),
+  );
+  /** Os seletores de uma regra (a lista separada por vírgula, sem as quebras de linha). */
+  const seletores = (bloco: string) =>
+    bloco.replace(/\s+/g, " ").split(/\s*,\s*/);
+
+  it("o leitor de especificidade conta como o navegador (a comparação abaixo não passa por acaso)", () => {
+    expect(especificidade(".ui-data-table__tabela td")).toBe(101);
+    expect(especificidade(".ui-data-table__tabela td[data-principal]")).toBe(
+      201,
+    );
+    expect(especificidade(".pedidos-selo::before")).toBe(101);
+    expect(
+      especificidade(
+        ".pedidos .ui-data-table__tabela :is(th, td, td[data-principal])",
+      ),
+    ).toBe(301);
+  });
+
+  it("as células da tabela têm 12 px dos lados (e não os 16 px da DataTable), na frente das regras dela", () => {
+    const nossas = declaracoes(CSS["./pedidos.css"]).filter(
+      ({ propriedade, blocos }) =>
+        blocos[0] === TABELA && /^padding-(left|right)$/.test(propriedade),
+    );
+    expect(
+      nossas.map(({ propriedade, valor }) => `${propriedade}: ${valor}`),
+    ).toEqual([
+      "padding-right: var(--espaco-3)",
+      "padding-left: var(--espaco-3)",
+    ]);
+    const nosso = nossas[0].blocos[1];
+    expect(nosso).toBe(
+      ".pedidos .ui-data-table__tabela :is(th, td, td[data-principal])",
+    );
+    // Toda regra da DataTable que dá o espaço das células (padding) perde para a nossa, seja qual for a ordem do
+    // CSS (pedidos.css vem num pacote à parte).
+    const daDataTable = DATA_TABLE.filter(
+      ({ propriedade, blocos }) =>
+        blocos[0] === TABELA && /^padding/.test(propriedade),
+    ).flatMap(({ blocos }) => seletores(blocos[1]));
+    expect(daDataTable).toEqual(
+      expect.arrayContaining([
+        ".ui-data-table__tabela th",
+        ".ui-data-table__tabela td",
+        ".ui-data-table__tabela td[data-principal]",
+      ]),
+    );
+    for (const seletor of daDataTable)
+      expect(especificidade(nosso), seletor).toBeGreaterThan(
+        especificidade(seletor),
+      );
+  });
+
+  it("'Aprovado em ...' quebra a linha; só a data e hora do pedido e o valor ficam numa linha só", () => {
+    const naoQuebram = declaracoes(CSS["./pedidos.css"])
+      .filter(
+        ({ propriedade, valor }) =>
+          propriedade === "white-space" && valor === "nowrap",
+      )
+      .flatMap(({ blocos }) => seletores(blocos[1]));
+    expect(naoQuebram).toEqual([".pedidos-quando", ".pedidos-valor"]);
+    expect(regra(CSS["./pedidos.css"], "  .pedidos-quando__mudou")).toMatch(
+      /white-space:\s*normal/,
+    );
+  });
+});
+
 describe("pacotes: a tela carrega à parte; o alerta, no pacote inicial", () => {
   it("só TelaPedidos (carregada com lazy) importa pedidos.css; ninguém importa TelaPedidos direto", () => {
     const quemImporta = (css: string) =>

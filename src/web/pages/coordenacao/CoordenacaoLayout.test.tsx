@@ -176,13 +176,33 @@ describe("CA2: guarda das telas da coordenação", () => {
     expect(tentativas).toBe(2);
   });
 
+  // O 401 destes dois testes vem da configuração da Campanha, que carrega à parte (lazy, com o zod do contrato).
+  // O primeiro deles a rodar (a ordem não pode importar) espera o pacote ser transformado e carregado, e só então
+  // a resposta 401 e a ida para /entrar, que vem de um efeito (a guarda): sob carga, isso passava do 1 s padrão do
+  // findBy (com o pacote atrasado 1,5 s, "Unable to find role=heading"). A espera é mais longa; a asserção é a
+  // mesma.
+  const ESPERA_DO_PACOTE = { timeout: 5_000 };
+
+  /** Espera a guarda levar a /entrar depois do 401 (waitFor: vem de um efeito depois da resposta da API). */
+  async function esperarIrParaEntrar(
+    roteador: ReturnType<typeof renderizarRota>["roteador"],
+  ) {
+    await waitFor(
+      () => expect(roteador.state.location.pathname).toBe("/entrar"),
+      ESPERA_DO_PACOTE,
+    );
+    return screen.findByRole(
+      "heading",
+      { level: 1, name: "Entrar" },
+      ESPERA_DO_PACOTE,
+    );
+  }
+
   it("um 401 de qualquer rota durante o uso leva a /entrar ('sessão terminou'), guardando a tela", async () => {
     simularApi({ "GET /api/admin/campanha": SEM_SESSAO });
     const { roteador } = renderizarRota("/coordenacao/campanha");
 
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Entrar" }),
-    ).toBeInTheDocument();
+    expect(await esperarIrParaEntrar(roteador)).toBeInTheDocument();
     expect(roteador.state.location.pathname).toBe("/entrar");
     expect(screen.getByText("Sua sessão terminou.")).toBeInTheDocument();
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
@@ -192,7 +212,7 @@ describe("CA2: guarda das telas da coordenação", () => {
   it("depois do 401, voltar a uma tela da coordenação manda de novo para /entrar (a sessão não volta sozinha)", async () => {
     simularApi({ "GET /api/admin/campanha": SEM_SESSAO });
     const { roteador } = renderizarRota("/coordenacao/campanha");
-    await screen.findByRole("heading", { level: 1, name: "Entrar" });
+    await esperarIrParaEntrar(roteador);
 
     await act(() => roteador.navigate("/coordenacao/pedidos"));
 

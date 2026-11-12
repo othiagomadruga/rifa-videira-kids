@@ -714,8 +714,11 @@ describe("CA5: DELETE /api/admin/afiliados/:affiliateId (só admin)", () => {
         pedidos: esperados,
       }),
     });
-    detalhesAfiliadoComPedidosSchema.parse(
-      erroApiSchema.parse(resposta.corpo).erro.detalhes,
+    const { erro: corpoErro } = erroApiSchema.parse(resposta.corpo);
+    detalhesAfiliadoComPedidosSchema.parse(corpoErro.detalhes);
+    // Todos da campanha ativa: dá para desconsiderar daqui (a tela Pedidos), e a mensagem diz isso.
+    expect(corpoErro.mensagem).toBe(
+      "O afiliado tem 22 pedidos que contam: desconsidere os pedidos (teste) na tela Pedidos antes de remover",
     );
     expect(await afiliado(104)).toMatchObject({ celula_id: 4 });
     expect(await contarTrilha("afiliado.remover")).toBe(trilha);
@@ -738,19 +741,95 @@ describe("CA5: DELETE /api/admin/afiliados/:affiliateId (só admin)", () => {
       )
       .bind(outra!.id)
       .run();
-    expect(await chamar("DELETE", removerCaminho(105), admin)).toEqual({
+    const resposta = await chamar("DELETE", removerCaminho(105), admin);
+    expect(resposta).toEqual({
       status: 409,
       corpo: erro("afiliado_com_pedidos", {
         pedidos_que_contam: 1,
         pedidos: ["EFESO-2025"],
       }),
     });
+    // RIFA-040: a mensagem não manda desconsiderar (daqui não se faz): o afiliado não é de teste e fica.
+    expect(erroApiSchema.parse(resposta.corpo).erro.mensagem).toBe(
+      "O afiliado tem 1 pedido que conta, fora da campanha ativa: pedido fora da campanha ativa não se desconsidera daqui, então este afiliado não é de teste e não pode ser removido",
+    );
     expect(
       await chamar("POST", DESCONSIDERAR, admin, {
         pedido_id: "EFESO-2025",
         motivo: "teste",
       }),
     ).toMatchObject({ status: 404 });
+  });
+
+  it("RIFA-040: a mensagem do 409 diferencia os pedidos da campanha ativa (desconsidere) dos de fora dela (o afiliado fica)", async () => {
+    const outra = await db
+      .prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos, meta_unidade,
+           meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Outra', 'outra-edicao-mensagem', 0, '2025-11-23', 2000, 'bilhetes', 'por_pessoa', 10,
+           'percentual_meta')
+         RETURNING id`,
+      )
+      .first<{ id: number }>();
+    // O afiliado 105 com 2 pedidos que contam na campanha ativa e 1 noutra campanha.
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+             registrado_em)
+           VALUES ('EFESO-2025', ?1, 105, 'approved', 1, 2000, '2025-11-24T15:00:00.000Z', '2025-11-24T15:00:00.000Z')`,
+        )
+        .bind(outra!.id),
+      db.prepare(
+        `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+           registrado_em)
+         SELECT 'EFESO-' || n, (SELECT id FROM campanhas WHERE ativa = 1), 105, 'approved', 1, 2000,
+           '2026-11-27T15:00:00.000Z', '2026-11-27T15:0' || n || ':00.000Z'
+         FROM (SELECT 1 AS n UNION ALL SELECT 2)`,
+      ),
+    ]);
+    const mensagem = async () => {
+      const resposta = await chamar("DELETE", removerCaminho(105), admin);
+      expect(resposta.status).toBe(409);
+      return erroApiSchema.parse(resposta.corpo).erro.mensagem;
+    };
+    const FICA =
+      ": pedido fora da campanha ativa não se desconsidera daqui, então este afiliado não é de teste e não pode ser removido";
+
+    // Misturados: desconsiderar os da ativa não basta, e a mensagem não manda desconsiderar.
+    expect(await mensagem()).toBe(
+      `O afiliado tem 3 pedidos que contam, 1 fora da campanha ativa${FICA}`,
+    );
+    // Os da ativa desconsiderados: sobra o de outra campanha, que segura o afiliado.
+    for (const pedido_id of ["EFESO-1", "EFESO-2"])
+      expect(
+        (
+          await chamar("POST", DESCONSIDERAR, admin, {
+            pedido_id,
+            motivo: "teste",
+          })
+        ).status,
+      ).toBe(200);
+    expect(await mensagem()).toBe(
+      `O afiliado tem 1 pedido que conta, fora da campanha ativa${FICA}`,
+    );
+    // Os da ativa de volta e o de outra campanha sem contar (desconsiderado à mão, como faria o SQL): só a ativa.
+    for (const pedido_id of ["EFESO-1", "EFESO-2"])
+      await chamar("POST", RECONSIDERAR, admin, { pedido_id });
+    await db
+      .prepare(
+        "UPDATE pedidos SET desconsiderado_em = '2026-11-28T12:00:00.000Z', desconsiderado_motivo = 'teste' WHERE id = 'EFESO-2025'",
+      )
+      .run();
+    expect(await mensagem()).toBe(
+      "O afiliado tem 2 pedidos que contam: desconsidere os pedidos (teste) na tela Pedidos antes de remover",
+    );
+    // Sem campanha ativa, nenhum pedido se desconsidera daqui: todos ficam fora.
+    await db.prepare("UPDATE campanhas SET ativa = 0").run();
+    expect(await mensagem()).toBe(
+      `O afiliado tem 2 pedidos que contam, todos fora da campanha ativa${FICA}`,
+    );
+    expect(await afiliado(105)).not.toBeNull();
   });
 
   it("só com desconsiderados: 204; eles ficam sem afiliado (e desconsiderados) no mesmo lote; a trilha guarda quantos e os ids; um evento depois o traz de volta como não vinculado", async () => {
