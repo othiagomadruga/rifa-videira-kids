@@ -11,7 +11,7 @@ Siga de cima para baixo. Cada passo leva à seção com os detalhes.
 3. **Token da Cloudflare no GitHub.** Antes de criar o token, peça ao SM o ponto de volta do banco (bookmark) e espere ele dizer que anotou: com o token no GitHub, qualquer mudança na `main` já publica. → [2.1](#21-antes-bookmark-do-time-travel-do-d1-thiago-ou-sm), [1.1 b](#11-cloudflare) e [1.2](#12-github)
 4. **Avisar o SM que o token está salvo.** Ele publica, confere o site, cria o primeiro admin pela sessão dele e te manda o link. Abra, gere um link novo para você, entre pelo novo e só então revogue o primeiro. → [2.2](#22-publicar) e [3.1](#31-primeiro-admin-sm-depois-thiago)
 5. **Campanha na Rifei.** Escolha o plano pelo preço do bilhete, pague a taxa de liberação e anote o slug. → [1.3](#13-rifei)
-6. **Afiliados na Rifei.** Mande já as perguntas prontas ao suporte da Rifei. Com as respostas, ligue os afiliados e prepare os convites dos líderes. → [1.3](#13-rifei)
+6. **Afiliados na Rifei.** Mande já as perguntas prontas ao suporte da Rifei. Com as respostas, ligue os afiliados e prepare os convites dos líderes. Com o formato do link de afiliado confirmado, grave o modelo do **link de vendas** na Adesão: é dele que saem o link e o QR code de cada célula. → [1.3](#13-rifei) e [3.6](#36-link-de-vendas-e-qr-code-das-células-admin)
 7. **Efí na Rifei**, quando a Efí aprovar a conta. Faça num computador. → [1.4](#14-conta-efí)
 8. **Token do webhook e webhook na Rifei, de uma vez, pelo site** (sem Node nem terminal): em **Acessos → Webhook da Rifei**, gere o token, copie e cole direto na Rifei, com a URL e os três eventos. → [3.2](#32-token-do-webhook-e-webhook-na-rifei-thiago)
 9. **Preencher a Campanha no site** e ativar: nome, slug da Rifei, datas, preço, meta, ranking, o que o público vê e as regras de pedidos e acessos (as mensagens do link são opcionais). → [1.5](#15-decisões-do-po) e [3.3](#33-campanha-admin-com-as-decisões-do-po)
@@ -26,6 +26,7 @@ Depois da largada, o dia a dia é da coordenação (seção 6). Se algo cair: se
 - **Quem faz:** **[Thiago]** (contas de terceiros; o caminho principal não pede Node nem terminal, e os comandos com a conta Cloudflare ficam como alternativa), **[SM]** (a sessão do Claude que orquestra: merge, registro e comandos no D1), **[Admin]** (quem tem o papel admin no sistema), **[Coordenação]** (admin ou coordenação).
 - **PENDÊNCIA** marca o que o sistema ainda não faz e o lançamento precisaria. A lista completa está no fim.
 - **NÃO DOCUMENTADO** quer dizer que a fonte oficial (Rifei ou Efí) não diz. Confira na tela ou pergunte ao suporte.
+- **Dicas na tela:** com o mouse parado em cima de um botão ou campo, aparece uma explicação curta do que ele faz (no celular, o toque não abre dica). Um botão apagado não faz nada ao clicar, e a dica dele diz por quê (ex.: **Importar** antes de **Conferir** a planilha). **Esc** fecha a dica; dentro de uma janela (diálogo), o primeiro Esc fecha só a dica e o segundo fecha a janela.
 - O passo a passo da Rifei e da Efí, com os links oficiais, está em [integracao-rifei.md, seção 12](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Aqui fica o resumo.
 - **Credenciais** (o token da Cloudflare, o token do webhook, a Client Secret e o certificado da Efí e o seu link de admin) não passam por chat (nem o do SM), e-mail ou WhatsApp, e não vão para este documento, o git ou o DevMission. Aqui só se diz **onde** cada uma fica. Se uma delas passar por algum desses lugares, troque (3.1 e 7.3). A exceção combinada é o primeiro link de admin: o SM o cria pela sessão e o manda no chat, e você o troca logo ao entrar (3.1). O token do webhook vai do site direto para a Rifei (3.2). Os links pessoais da equipe e dos líderes vão só no WhatsApp privado da própria pessoa (3.1 e 5.1), nunca em grupo.
 
@@ -38,7 +39,7 @@ Cada etapa depende da anterior. As datas são sugestão; quem decide é o PO.
 | 0 | Abrir a conta Efí e as decisões fora do sistema (1.5) | Thiago | já |
 | 1 | Contas: Cloudflare (Workers Paid) e Rifei (campanha e perguntas ao suporte) | Thiago | até 14/11 |
 | 2 | Bookmark do D1, depois o token da Cloudflare no GitHub, primeira publicação e conferência | Thiago e SM | até 14/11 |
-| 3 | Configuração em produção: admin, token do webhook e webhook na Rifei, Campanha, planilha das células e a Efí ligada à Rifei | SM, Thiago e Admin | até 16/11 |
+| 3 | Configuração em produção: admin, token do webhook e webhook na Rifei, Campanha, planilha das células, a Efí ligada à Rifei e o modelo do link de vendas (quando a Rifei confirmar o formato) | SM, Thiago e Admin | até 16/11 |
 | 4 | Compra de teste de ponta a ponta | Thiago e Admin | até 17/11 |
 | 5 | Convites de afiliado, links dos líderes e reunião de cadastro | Thiago, Admin e Coordenação | entre 18 e 21/11 |
 | 6 | Largada (23/11) e dia a dia | Coordenação | 23/11 em diante |
@@ -111,7 +112,7 @@ A Rifei faz a venda, o pagamento e o sorteio. O sistema só recebe os pedidos pe
 
 - Na Rifei, o afiliado se cadastra **por convite**: o organizador manda o convite, o líder se cadastra com o e-mail e entra pela **"Área de afiliados"** (menu da página da campanha). É o que mostra a conta de demonstração da Rifei; se dá para liberar o cadastro sem convite: NÃO DOCUMENTADO.
 - A Central de Ajuda da Rifei não tem artigo sobre afiliados. Onde ligar os afiliados, onde gerar o convite, o formato do link de afiliado e onde ver o código de cada afiliado: NÃO DOCUMENTADO.
-- Por isso, **mande já as perguntas prontas da [12.7](integracao-rifei.md#127-perguntas-prontas-para-o-suporte-da-rifei)** ao suporte da Rifei (WhatsApp, de segunda a sábado, das 9h às 21h de Brasília). Passe as respostas ao SM.
+- Por isso, **mande já as perguntas prontas da [12.7](integracao-rifei.md#127-perguntas-prontas-para-o-suporte-da-rifei)** ao suporte da Rifei (WhatsApp, de segunda a sábado, das 9h às 21h de Brasília). Passe as respostas ao SM. A do formato do link de afiliado (pergunta 2) vira o modelo do link de vendas das células (3.6).
 - Os convites vão para os líderes antes da reunião (5.1, item 4).
 - Não confunda com o "Indique e Ganhe": é o programa de indicação da própria Rifei, não o afiliado da campanha.
 
@@ -344,6 +345,20 @@ Siga [importar-hierarquia.md](importar-hierarquia.md). Em resumo: **Coordenaçã
 
 O roteiro da reunião está na seção 5. Regra de ouro: **não use "Desvincular" num afiliado que já vendeu**, a não ser de propósito: todas as vendas dele, inclusive as antigas, saem da célula na hora.
 
+### 3.6 Link de vendas e QR code das células [Admin]
+
+O link de vendas de uma célula é o link de afiliado do líder na Rifei, montado pelo sistema a partir de um **modelo** (`docs/decisions.md`, D24). A compra feita por ele chega com o código do afiliado e conta para a célula; o QR code abre o mesmo link. Pix mandado direto para uma chave, fora da Rifei, nunca entra no sistema.
+
+- **Antes:** o formato do link de afiliado da Rifei é NÃO DOCUMENTADO (pergunta 2 da [12.7](integracao-rifei.md#127-perguntas-prontas-para-o-suporte-da-rifei); também se vê na compra de teste, seção 4). Até a resposta, deixe o modelo vazio: o líder vê "A coordenação ainda não liberou o link de vendas." e usa o link da Área de afiliados na Rifei.
+- **Onde:** **Coordenação → Adesão** → seção **Links de vendas**, no fim da tela → campo **Modelo do link de vendas** → **Salvar modelo**. Só o admin muda; a coordenação vê o campo só leitura ("Só o admin muda o modelo.").
+- **O modelo:** o link de afiliado da Rifei com `{slug}` no lugar do slug da campanha e `{afiliado}` no lugar do código do afiliado. Ex. (o formato real ainda não está confirmado): `https://rifei.com.br/{slug}?afiliado={afiliado}`. Ele precisa começar por `https://rifei.com.br/`. A tela mostra os problemas enquanto você digita e a **prévia**, com o link de um afiliado já vinculado (sem nenhum vinculado, um código de exemplo): abra a prévia e confira que ela cai na campanha certa da Rifei antes de salvar.
+- **Depois de salvar,** cada célula com afiliado vinculado tem o link e o QR na hora (quem já estava com a tela aberta em `/minha` vê ao recarregar a página):
+  - o líder vê **Seu link de vendas** na tela dele (`/minha`), com **Copiar link**, **Enviar no WhatsApp** e o QR code (**Baixar imagem** e **Imprimir**); o discipulador e a rede veem **Links de vendas das suas células**, com **Ver QR**;
+  - na Adesão, **Link de cada célula** tem o link e o QR de cada uma (o **Enviar no WhatsApp** abre a conversa com o telefone do líder) e **Imprimir os QR codes** (uma folha por célula com link).
+- Célula sem afiliado vinculado fica "Sem link". Célula com mais de um código mostra todos, o mais recente em destaque: todos contam para ela.
+- O salvamento fica na trilha (`campanha.salvar`, com o modelo de antes e o de depois). Trocar o slug na Campanha (3.3) muda os links na hora.
+- **Confira com a compra de teste (4.1, passo 2):** a compra feita pelo QR code da célula precisa cair nela. Se cair em "Sem célula" ou em outra célula, o modelo não bate com o link da Rifei: apague-o (campo vazio → **Salvar modelo**) até acertar.
+
 ---
 
 ## 4. Compra de teste de ponta a ponta
@@ -356,7 +371,7 @@ O roteiro da reunião está na seção 5. Regra de ouro: **não use "Desvincular
    - De preferência, use como afiliada de teste a conta de um **líder de verdade** (ex.: alguém da coordenação que lidera uma célula) e vincule à célula dele: o vínculo já vale para a campanha.
    - Uma conta só de teste dá para tirar depois **[Admin]**: desconsidere **todos** os pedidos dela (4.4), não só o pago: também a compra iniciada no passo 1 e a do passo 3, que expiraram (pedido de qualquer status conta). Depois toque em **Remover** no afiliado, na **Adesão** (na fila "Sem célula" ou em **Todas as células**), e confirme em **Remover afiliado**. Se ainda faltar algum, o sistema recusa e lista os pedidos que ainda contam, com o link de cada um: desconsidere esses e tente de novo. Se a Rifei mandar outra venda com o mesmo código, ele volta para a fila "Sem célula".
    - Se a entrega chegar (4.2) e nada aparecer em "Sem célula", o código de afiliado não veio no pedido: chame o SM antes da reunião dos líderes.
-2. **Faça uma compra paga de 1 bilhete** (Pix pela Efí), pelo mesmo link de afiliado.
+2. **Faça uma compra paga de 1 bilhete** (Pix pela Efí), pelo mesmo link de afiliado. Com o modelo do link de vendas gravado (3.6), faça esta compra **pelo QR code da célula** (na tela do líder ou em **Adesão → Links de vendas → Ver QR**): o pedido precisa aparecer na célula (4.2). Se cair noutro lugar, apague o modelo até acertar com a Rifei.
 3. Inicie **outra compra e não pague**: depois do prazo de reserva, a Rifei avisa que expirou.
 
 ### 4.2 O que olhar
@@ -383,7 +398,7 @@ Responda à lista "O que confirmar com uma campanha de teste" de [integracao-rif
 
 **Fazer o teste antes de 23/11 resolve quase tudo.** Venda aprovada antes do 1º dia fica fora de meta, realizado, ranking, bumbo, telão e visão do líder; só aparece no aviso "antes do início" da Visão geral (`docs/regras-de-calculo.md`, S8). O que continua mostrando o teste: a lista de **Pedidos**, a **Adesão** (a célula fica "Já vendeu") e os totais do afiliado. Não atrapalha a campanha.
 
-**Para tirar o teste também da Adesão e dos totais [Admin]:** com "Permitir desconsiderar pedidos" ligada na Campanha (3.3), em **Pedidos**, toque em **Desconsiderar** na linha do pedido, escolha o **Motivo** (**Teste**) e confirme. O pedido sai de todas as contas e continua na lista, com o selo "Desconsiderado (teste)" (no filtro **Desconsiderados**, **Só os desconsiderados** mostra só eles). **Desfazer** devolve o pedido às contas. Cada um fica na trilha de auditoria. Não mexe na Rifei nem no dinheiro: o bilhete continua valendo no sorteio.
+**Para tirar o teste também da Adesão e dos totais [Admin]:** com "Permitir desconsiderar pedidos" ligada na Campanha (3.3), em **Pedidos**, toque em **Desconsiderar** na linha do pedido, escolha o **Motivo** (**Teste**) e confirme. O pedido sai de todas as contas (inclusive do relatório da campanha, 6.3, onde aparece só no número "Pedidos desconsiderados") e continua na lista, com o selo "Desconsiderado (teste)" (no filtro **Desconsiderados**, **Só os desconsiderados** mostra só eles). **Desfazer** devolve o pedido às contas. Cada um fica na trilha de auditoria. Não mexe na Rifei nem no dinheiro: o bilhete continua valendo no sorteio.
 
 O bilhete comprado é de verdade e entra no sorteio. Decisão do PO (1.5): manter (o dinheiro foi para a causa) ou estornar.
 
@@ -416,6 +431,7 @@ Se um teste for feito **depois de 23/11**, ele conta como venda (e é: o dinheir
 3. **Ensaiar a Adesão:** abra **Coordenação → Adesão** no aparelho que vai ser usado na reunião (celular ou notebook). Ela se atualiza sozinha a cada 15 s e tem **Atualizar agora**.
 4. **Convites de afiliado [Thiago]:** na Rifei, o cadastro de afiliado é só por convite do organizador ([12.3](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes)). Mande a cada líder o convite antes da reunião, pelo caminho que o suporte indicar (pergunta 1 da [12.7](integracao-rifei.md#127-perguntas-prontas-para-o-suporte-da-rifei)). Onde gerar o convite: NÃO DOCUMENTADO. Tenha à mão também onde o líder acha o link de afiliado dele (pergunta 2). O que o líder faz está na [seção 1 do guia do líder](guia-lideres.md#1-vender-pela-rifei-o-seu-link-de-afiliado).
 5. **Guia do líder [Coordenação]:** troque os trechos `[confirmar com a Rifei]` de [guia-lideres.md](guia-lideres.md) e de `guia-lideres.html` com as respostas do suporte (12.7) e gere o PDF: abra `guia-lideres.html` no navegador → **Imprimir** → **Salvar como PDF**, A4 retrato (1 página).
+6. **Link de vendas [Admin]:** com o formato confirmado pela Rifei, grave o modelo antes da reunião (3.6): cada líder sai da reunião com o link e o QR code na tela dele.
 
 ### 5.2 Durante
 
@@ -427,6 +443,7 @@ O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de co
    1. O líder abre o próprio link de afiliado e **inicia uma compra sem pagar**.
    2. Em segundos, **"Afiliado <código>"** aparece no topo de **Sem célula**, na Adesão. Se não aparecer em um minuto, toque em **Atualizar agora**; se ainda assim não vier, confira se o líder usou o link de afiliado dele (e não o link comum da campanha).
    3. Toque em **Vincular**, escolha a célula do líder e confirme. A célula vai para "Vinculada".
+   4. Na tela do líder, o aviso amarelo sobre o link de afiliado some sozinho em até 2 minutos, sem recarregar. Com o modelo gravado (3.6), no mesmo instante aparecem o link e o QR code em **Seu link de vendas**.
    - **Um de cada vez:** com dois líderes ao mesmo tempo, não dá para saber qual código é de quem.
    - Se o líder souber o código: **Todas as células** → a célula → **Código de afiliado** → **Salvar código**.
    - A compra iniciada e não paga só reserva números até expirar; nunca conta como venda.
@@ -464,9 +481,14 @@ O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de co
 - **Visão geral:** meta do dia, situação (em dia ou abaixo), curva e projeção, por campanha, divisão, rede, discipulador ou célula. Os avisos de "sem célula" pedem uma olhada na Adesão. No topo, o alerta do webhook (7.1).
 - **Rankings:** com valores, para a coordenação.
 - **Mapa:** de onde vêm as vendas aprovadas, por estado e por DDD do telefone do comprador (só o DDD é guardado).
-- **Adesão:** a fila **Sem célula** deve ficar vazia. Código novo ali = venda de afiliado sem vínculo: vincule.
+- **Adesão:** a fila **Sem célula** deve ficar vazia. Código novo ali = venda de afiliado sem vínculo: vincule. Na seção **Links de vendas** ficam o link e o QR code de cada célula, para mandar ao líder que perdeu o dele ou imprimir (3.6).
 - **Pedidos:** a lista dos pedidos (filtro por status, por célula e **Desconsiderados**, busca pelo id da Rifei) e as entregas do webhook. O admin desconsidera ali um pedido de teste, fraude ou estorno (4.4).
 - **Líderes, discipuladores e redes** acompanham pelo próprio link (`/minha`), sem valores em reais. O que o líder vê e faz no dia a dia está nas seções [3](guia-lideres.md#3-o-que-você-vê-na-sua-tela) e [4](guia-lideres.md#4-dia-a-dia) do guia do líder.
+- **Relatório da campanha** (no fim da **Visão geral**; admin e coordenação): em **O que baixar**, escolha **Totais da campanha**, **Por célula**, **Por discipulador**, **Por rede**, **Por período**, **Por dia** ou **Por DDD** e toque em **Baixar relatório** (`docs/decisions.md`, D23).
+  - É uma planilha (CSV) com os números de agora; depois do fim da campanha, o resultado final. No dia seguinte ao último dia, baixe os 7 tipos para guardar e prestar contas.
+  - Abre com dois cliques no Excel. No Google Planilhas: **Arquivo → Importar → Fazer upload**, com "Tipo de separador" em "Personalizado" e `;` (ponto e vírgula).
+  - As contas fecham entre os arquivos (células + sem célula = totais; períodos, dias e DDD = totais). Os pedidos desconsiderados (4.4) ficam fora de todos; nos totais, só o número deles.
+  - Tem valores em reais e o nome dos líderes: fica com a coordenação, nunca nos grupos.
 - **Pedidos suspeitos** (mais de 200 bilhetes num pedido ou valor fora do preço): uma vez por semana, um coordenador abre a tela **Pedidos suspeitos** e confere na Rifei. Eles continuam contando até o admin desconsiderá-los em **Pedidos** (motivo **Fraude** ou **Outro**; 4.4), o que é decisão do PO. O desconsiderado continua na lista dos suspeitos, com o selo.
 
 ### 6.4 Conferência pelo CSV (RIFA-012; exige o Workers Paid)
@@ -503,7 +525,7 @@ Sugestão: uma conferência por semana e sempre que o webhook falhar (7.1). O av
 
 **Sinal:** o alerta no topo da **Visão geral** e de **Pedidos**, ou vendas pagas na Rifei que o painel não mostra.
 
-O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
+O alerta consulta o sistema a cada 5 minutos, com a tela aberta (passar da Visão geral para Pedidos não consulta de novo; para ver na hora, recarregue a página):
 
 - **"A Rifei mandou pedidos com erro nas últimas 24 h":** o botão **Ver as entregas com erro** abre as entregas recusadas. Confira cada pedido na Rifei.
 - **"Nenhuma venda chegou há N horas"** (ou **"até agora"**, se nenhuma chegou desde o início): durante a campanha, das 8h às 22h, depois de 4 horas sem venda. O botão **Abrir a Conferência** leva à conferência pelo CSV (6.4).
@@ -544,7 +566,7 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta:
 
 1. **Hierarquia → Células → Editar célula:** novo nome e telefone do líder (ou corrija a planilha e importe de novo).
 2. **[Admin]** **Acessos → Líderes, discipuladores e redes → Trocar acesso** na célula: o link novo vai para o novo líder e o aparelho do antigo sai.
-3. O novo líder recebe o convite de afiliado da Rifei (5.1, item 4), e a coordenação vincula o código dele na **Adesão** (**Adicionar outro código** na célula).
+3. O novo líder recebe o convite de afiliado da Rifei (5.1, item 4), e a coordenação vincula o código dele na **Adesão** (**Adicionar outro código** na célula). Com o modelo do link de vendas gravado (3.6), o link do novo código aparece em destaque em **Seu link de vendas** (o mais recente primeiro); o do líder antigo continua listado e contando.
 4. **Mantenha o código do líder antigo vinculado**, para as vendas dele continuarem na célula. Desvincular tira todas as vendas dele da célula, inclusive as antigas. O vínculo não tem data: se o líder antigo continuar vendendo pelo link dele, a venda continua indo para a célula.
 
 ### 7.5 A hierarquia mudou durante a campanha
@@ -569,7 +591,7 @@ O que o sistema ainda não faz e o lançamento precisaria (ou faria melhor com):
 5. ~~Sem alerta de webhook parado~~: resolvido na RIFA-025 (alerta na Visão geral e em Pedidos; 7.1). Fica o limite: entrega recusada por token errado não é gravada (o alerta mostra como se nenhuma venda tivesse chegado), e um webhook que pare de noite só acende o alerta no dia seguinte.
 6. **Estorno ou cancelamento na Rifei não chega ao sistema** (a Rifei só avisa pedido novo, pago e expirado): pedido aprovado e depois estornado continua contando até o admin desconsiderá-lo (motivo **Estorno**). A ordem do estorno (Efí → Rifei, antes de 7 dias da reserva → **Desconsiderar** no sistema) está em 4.4 e na [12.6](integracao-rifei.md#126-estorno-de-um-pedido).
 7. ~~Adesão e totais do afiliado não separam a compra de teste~~: resolvido nas RIFA-028 e 031. O pedido de teste desconsiderado sai da Adesão (a célula deixa de estar "Já vendeu" por ele) e dos totais do afiliado (4.4); o afiliado só de teste sai com **Remover**, na Adesão [Admin], depois de desconsiderados os pedidos dele (4.1).
-8. **Rifei e Efí:** o passo a passo está na [seção 12 de integracao-rifei.md](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Ainda NÃO DOCUMENTADO pela Rifei: onde ligar os afiliados e gerar o convite, o formato do link de afiliado, onde ver o código de cada afiliado, onde adicionar a Efí e o nome do campo da chave Pix. Vão para o suporte (12.7) e para a compra de teste (seção 9). As mesmas respostas fecham os trechos `[confirmar com a Rifei]` do [guia do líder](guia-lideres.md) (seção 1 e "Perdi o link") e do [convite](convite-reuniao.md) (seções 2 e 3): troque-os antes de mandar (5.1, item 5).
+8. **Rifei e Efí:** o passo a passo está na [seção 12 de integracao-rifei.md](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Ainda NÃO DOCUMENTADO pela Rifei: onde ligar os afiliados e gerar o convite, o formato do link de afiliado (sem ele, o modelo do link de vendas fica vazio e as células ficam sem link e sem QR code, 3.6), onde ver o código de cada afiliado, onde adicionar a Efí e o nome do campo da chave Pix. Vão para o suporte (12.7) e para a compra de teste (seção 9). As mesmas respostas fecham os trechos `[confirmar com a Rifei]` do [guia do líder](guia-lideres.md) (seção 1 e "Perdi o link") e do [convite](convite-reuniao.md) (seções 2 e 3): troque-os antes de mandar (5.1, item 5).
 9. **Vínculo afiliado → célula sem data:** trocar ou desvincular é retroativo (7.4).
 10. ~~Volta do código só pelo terminal~~: resolvido na RIFA-035 (workflow **Voltar o site para a versão anterior**, pelo celular; 2.4 e 7.2). Continua: na primeira publicação não há versão anterior para voltar; só o Time Travel do banco.
 11. ~~**Token do webhook pelo site (RIFA-039) em construção**~~: resolvido na RIFA-039 (Acessos → **Webhook da Rifei**, só admin). A alternativa do wrangler (3.2) continua valendo.

@@ -3,7 +3,7 @@
 Guia de 1 página para o líder de célula, que a coordenação manda no WhatsApp em PDF ou imagem. A versão para imprimir ou compartilhar é a [guia-lideres.html](guia-lideres.html) (abra no navegador e use "Imprimir" → "Salvar como PDF", em A4 retrato). O convite da reunião, a mensagem do link e o roteiro de 20 minutos estão em [convite-reuniao.md](convite-reuniao.md).
 
 - Os textos entre `[confirmar com a Rifei]` dependem da Rifei e ainda não estão documentados ([integracao-rifei.md](integracao-rifei.md), seção 12.3). **Troque-os antes de mandar o guia** aos líderes.
-- Os nomes de botão e os textos do sistema foram conferidos nas telas `/acesso`, `/entrar` e `/minha`, com dados fictícios.
+- Os nomes de botão e os textos do sistema foram conferidos nas telas `/acesso`, `/entrar` e `/minha` (inclusive o cartão "Seu link de vendas"), com dados fictícios, no ensaio geral 2 (RIFA-036).
 - Se algo mudar no sistema (ex.: o texto de um botão), atualize este arquivo e o HTML juntos.
 
 ---
@@ -22,7 +22,7 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 1. Abra o convite de afiliado da campanha. `[confirmar com a Rifei: como o convite chega e o que a tela pede]`
 2. Crie a sua conta de afiliado com o seu e-mail.
-3. Copie o **seu link de afiliado**. `[confirmar com a Rifei: onde ele fica e como ele é]`
+3. Copie o **seu link de afiliado**. `[confirmar com a Rifei: onde ele fica e como ele é]` Quando a coordenação liberar, ele aparece também na sua tela do sistema, em **Seu link de vendas**, com o QR code (seção 3).
 4. Na reunião, **quando a coordenação chamar o seu nome**: abra o seu link de afiliado e comece a compra de 1 bilhete, **sem pagar**. Assim a coordenação liga o seu link à sua célula. A compra sem pagamento não conta e expira sozinha.
 5. Mande o seu link para amigos, família, vizinhos e colegas, inclusive para quem não é da igreja.
 
@@ -46,6 +46,7 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 - **Em dia** ou **Abaixo do esperado:** o ritmo da célula até ontem. Logo abaixo: "No ritmo atual, chega a …% da meta".
 - **Hoje:** quanto falta para a meta de hoje.
 - O período atual (ex.: **Período 2**) e a **Curva da campanha**: o que a célula vendeu e o esperado, dia a dia.
+- **Seu link de vendas:** o seu link da Rifei, com **Copiar link**, **Enviar no WhatsApp** e o **QR code** para a pessoa apontar a câmera (**Baixar imagem** e **Imprimir**). Mostra "A coordenação ainda não liberou o link de vendas."? Use o link da sua Área de afiliados na Rifei.
 - **Ranking:** a posição da célula **Na sua divisão** (jovens ou adultos) e no **Geral**, quem está **Logo acima** e **Logo abaixo** e **Os primeiros** da sua divisão. A sua célula aparece com a marca **Você**.
 - Apareceu o aviso **"Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação."**? Fale com a coordenação. Quando ela ligar o link, as vendas que você já fez entram na célula.
 - **Sair:** só se o celular for emprestado.
@@ -53,13 +54,13 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 ### 4. Dia a dia
 
 - **De manhã, o bumbo no grupo dos líderes:** como a campanha foi ontem, o ritmo, as 3 primeiras células de jovens e de adultos e quem mais subiu. Só % e posições. Comemore e anime a sua célula.
-- **Durante o dia:** abra a sua tela, veja quanto falta hoje e mande o seu link de afiliado.
+- **Durante o dia:** abra a sua tela, veja quanto falta hoje e mande o seu link de vendas (ou mostre o QR code).
 - **No culto, o telão:** o ranking de jovens e de adultos, lado a lado.
 - **Ranking para todo mundo ver:** rifa-videira-kids.madruga.workers.dev
 
 ### Dúvidas frequentes
 
-**Perdi o link.** Do sistema: no WhatsApp, procure "link pessoal" na conversa com a coordenação. Não achou, ou a página diz "Este link não vale mais"? Peça um link novo à coordenação. De afiliado: na página da campanha na Rifei, abra o menu, toque em **Área de afiliados** e entre com o seu e-mail. `[confirmar com a Rifei]`
+**Perdi o link.** Do sistema: no WhatsApp, procure "link pessoal" na conversa com a coordenação. Não achou, ou a página diz "Este link não vale mais"? Peça um link novo à coordenação. De afiliado: na sua tela do sistema, em **Seu link de vendas**; ou na página da campanha na Rifei, abra o menu, toque em **Área de afiliados** e entre com o seu e-mail. `[confirmar com a Rifei]`
 
 **Mudei de celular.** No celular novo, toque no mesmo link e em **Entrar**. Se o celular antigo ficou com outra pessoa, peça à coordenação para trocar o seu acesso: você recebe um link novo e o celular antigo sai do sistema. A conversa não veio para o celular novo? Peça um link novo.
 
