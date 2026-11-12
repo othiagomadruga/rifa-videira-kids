@@ -26,12 +26,6 @@
   justify-items: start;
 }
 
-/* Botão ocupado ou sem nada a fazer: continua focável (aria-disabled), mas parece desabilitado. */
-.acessos-hierarquia button[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* O conteúdo de uma célula da tabela num bloco só: no celular, a célula vira "rótulo: valor". */
 .acessos-celula {
   min-width: 0;

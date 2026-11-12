@@ -2,11 +2,23 @@
 // (AppShell) em tela baixa: com o menu do admin, em 1366×768 e 1280×720, ela é mais alta que a janela; o topo
 // encolhia e "Coordenação" ficava por cima de "Visão geral". E a caixa com rolagem da DataTable segura o que é
 // absoluto numa célula (o texto escondido dos botões), para a página não rolar na horizontal. A medida na tela de
-// verdade está nas capturas do Playwright.
+// verdade está nas capturas do Playwright. RIFA-047: o botão indisponível (aria-disabled) tem a cara do disabled numa
+// regra só, no Button.css, e nenhuma tela a repete.
 import { describe, expect, it } from "vitest";
+import {
+  caraDeIndisponivel,
+  caraDoDesabilitado,
+  lerCss,
+} from "../../test/indisponivel";
 
 // O Vitest esvazia todo import de CSS (até com ?raw): o texto vem do disco, pelo fs do Node.
-type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
+type ModuloFs = {
+  readFileSync(caminho: string, codificacao: "utf8"): string;
+  readdirSync(
+    caminho: string,
+    opcoes: { recursive: true; encoding: "utf8" },
+  ): string[];
+};
 const { process } = globalThis as unknown as {
   process: { getBuiltinModule(nome: "node:fs"): ModuloFs };
 };
@@ -183,5 +195,166 @@ describe("Button: o indisponível não reage ao mouse (RIFA-045)", () => {
         '.ui-button--primario:hover:not(:disabled):not([aria-disabled="true"])',
       ),
     ).toBe(true);
+  });
+});
+
+describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa regra só (RIFA-047)", () => {
+  /** Um botão da tela com aria-disabled (ex.: "Saindo…" da coordenação, "Atualizando…" do Mapa). */
+  function indisponivel(classes = "ui-button ui-button--secundario") {
+    const botao = document.createElement("button");
+    botao.className = classes;
+    botao.setAttribute("aria-disabled", "true");
+    return botao;
+  }
+
+  it('.ui-button[aria-disabled="true"]: a opacidade e o cursor do :disabled, em todas as variantes, só com o Button.css', () => {
+    const button = lerCss("components/ui/Button.css");
+    for (const variante of ["primario", "secundario", "discreto", "perigo"]) {
+      expect(
+        caraDeIndisponivel(
+          indisponivel(`ui-button ui-button--${variante}`),
+          button,
+        ),
+        variante,
+      ).toEqual(caraDoDesabilitado());
+    }
+    // Disponível (sem aria-disabled ou com "false"), nada: só o cursor de sempre.
+    const disponivel = indisponivel();
+    disponivel.setAttribute("aria-disabled", "false");
+    expect(caraDeIndisponivel(disponivel, button)).toBeNull();
+    disponivel.removeAttribute("aria-disabled");
+    expect(caraDeIndisponivel(disponivel, button)).toBeNull();
+  });
+
+  it("a mesma regra do :disabled (um seletor ao lado do outro): mudar um muda o outro", () => {
+    const regra = declaracoes(lerArquivo("./Button.css")).filter(({ blocos }) =>
+      blocos
+        .at(-1)!
+        .split(/\s*,\s*/)
+        .includes(".ui-button:disabled"),
+    );
+    expect(regra.map(({ propriedade }) => propriedade).sort()).toEqual([
+      "cursor",
+      "opacity",
+    ]);
+    for (const { blocos } of regra)
+      expect(blocos.at(-1)!.split(/\s*,\s*/)).toEqual([
+        ".ui-button:disabled",
+        '.ui-button[aria-disabled="true"]',
+      ]);
+  });
+
+  /** O último seletor composto ("a > b.c[d]" → "b.c[d]"): o que diz em quem a regra vale. */
+  function ultimoComposto(seletor: string): string {
+    let profundidade = 0;
+    let inicio = 0;
+    for (let indice = 0; indice < seletor.length; indice += 1) {
+      const caractere = seletor[indice];
+      if (caractere === "(" || caractere === "[") profundidade += 1;
+      else if (caractere === ")" || caractere === "]") profundidade -= 1;
+      else if (profundidade === 0 && /[\s>+~]/.test(caractere))
+        inicio = indice + 1;
+    }
+    return seletor.slice(inicio);
+  }
+
+  /**
+   * Seletor de um botão indisponível: o último composto tem o [aria-disabled="true"] (fora de um :not() ou :has()) e
+   * é um botão ou não diz o tipo. Pega também a repetida com a classe da tela (ex.: a antiga
+   * `.adesao-dialogo-botao[aria-disabled="true"]`); a caixa de marcar (`input[...]`) fica fora (RIFA-047, revisão).
+   */
+  function ehDeBotaoIndisponivel(seletor: string): boolean {
+    let composto = ultimoComposto(seletor);
+    while (/\([^()]*\)/.test(composto))
+      composto = composto.replace(/\([^()]*\)/g, "");
+    const tipo = /^[a-z][\w-]*/i.exec(composto)?.[0];
+    return (
+      /\[aria-disabled=["']?true["']?\]/.test(composto) &&
+      (tipo === undefined || tipo === "button")
+    );
+  }
+
+  /** As regras de botão indisponível de uma folha: os seletores de botão e a cara que dão (as caixas de marcar ficam fora). */
+  function regrasDeBotaoIndisponivel(css: string) {
+    return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(
+      ([, seletores, corpo]) => {
+        const deBotao = seletores
+          .split(",")
+          .map((seletor) => seletor.trim())
+          .filter(ehDeBotaoIndisponivel);
+        if (deBotao.length === 0) return [];
+        return [
+          {
+            seletores: deBotao.join(", "),
+            repete:
+              /(^|;)\s*opacity:\s*0\.55\s*(;|$)/.test(corpo) &&
+              /(^|;)\s*cursor:\s*not-allowed\s*(;|$)/.test(corpo),
+          },
+        ];
+      },
+    );
+  }
+
+  it("nenhuma tela repete a regra: o que sobra no CSS das telas é só a cara diferente de propósito", () => {
+    expect(caraDoDesabilitado()).toEqual({
+      opacity: "0.55",
+      cursor: "not-allowed",
+    });
+    const fs = process.getBuiltinModule("node:fs");
+    // A pasta src/web (o caminho numa variável, como no lerArquivo).
+    const acima = "../../";
+    const raiz = decodeURIComponent(new URL(acima, import.meta.url).pathname);
+    const folhas = fs
+      .readdirSync(raiz, { recursive: true, encoding: "utf8" })
+      .filter(
+        (caminho) =>
+          caminho.endsWith(".css") && caminho !== "components/ui/Button.css",
+      );
+    expect(folhas.length).toBeGreaterThan(20);
+    const regras = folhas.flatMap((folha) =>
+      regrasDeBotaoIndisponivel(lerCss(folha)).map((regra) => ({
+        ...regra,
+        folha,
+      })),
+    );
+    expect(regras.filter(({ repete }) => repete)).toEqual([]);
+    // As que ficam são de propósito: o cursor de espera no "Carregando…" das listas e no "Baixando…" do relatório
+    // (que fica com 0,75, para o texto branco manter o contraste).
+    expect(
+      regras.map(({ folha, seletores }) => `${folha}: ${seletores}`).sort(),
+    ).toEqual([
+      'pages/pedidos/pedidos.css: .pedidos-rodape button[aria-disabled="true"]',
+      'pages/trilha/trilha.css: .trilha-rodape button[aria-disabled="true"]',
+      'pages/visao-geral/visao-geral.css: .visao-relatorio__acoes .ui-button[aria-disabled="true"]',
+    ]);
+  });
+
+  it("o leitor das regras das telas não passa por acaso: a repetida é pega, a diferente e a da caixa de marcar não", () => {
+    expect(
+      regrasDeBotaoIndisponivel(`
+        .tela-acoes button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+        .tela-lista .ui-button[aria-disabled="true"] { opacity: 0.55; cursor: progress; }
+        .tela-opcao input[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+        .tela-dialogo-botao[aria-disabled="true"],
+        .tela-acoes > [aria-disabled="true"].ui-button { opacity: 0.55; cursor: not-allowed; }
+        .tela-opcao:has(input[aria-disabled="true"]) { opacity: 0.55; cursor: not-allowed; }
+        .tela .ui-button:hover:not([aria-disabled="true"]) { opacity: 0.55; cursor: not-allowed; }
+      `),
+    ).toEqual([
+      {
+        seletores: '.tela-acoes button[aria-disabled="true"]',
+        repete: true,
+      },
+      {
+        seletores: '.tela-lista .ui-button[aria-disabled="true"]',
+        repete: false,
+      },
+      // RIFA-047 (revisão): a repetida com a classe da tela (como a antiga do diálogo da Adesão) também é pega.
+      {
+        seletores:
+          '.tela-dialogo-botao[aria-disabled="true"], .tela-acoes > [aria-disabled="true"].ui-button',
+        repete: true,
+      },
+    ]);
   });
 });

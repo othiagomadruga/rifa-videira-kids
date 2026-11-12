@@ -389,7 +389,7 @@ describe("CA3: importação em 2 passos", () => {
 // continuam no Tab e a dica diz por quê (com o disabled, o foco nunca chegava e a dica só abria com o mouse); o clique,
 // o Enter e o espaço não fazem nada; a cara continua a do disabled.
 describe("RIFA-045: Conferir e Importar indisponíveis, pelo teclado", () => {
-  /** A cara de indisponível vem do hierarquia.css (o Button.css só a dá ao disabled). */
+  /** A cara de indisponível vem do Button.css (RIFA-047), e o hierarquia.css não a desfaz (a cascata, em caraDeIndisponivel). */
   const CSS = [
     lerCss("components/ui/Button.css"),
     lerCss("pages/hierarquia/hierarquia.css"),

@@ -22,6 +22,9 @@ export function CoordenacaoLayout() {
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
 
   async function sairDoSistema() {
+    // Saindo, o "Sair" fica com aria-disabled (continua no Tab, com a dica dizendo por quê): o AppShell barra o
+    // clique, e aqui também, por garantia.
+    if (saida.saindo) return;
     setSaida({ saindo: true, erro: null });
     try {
       await sair();

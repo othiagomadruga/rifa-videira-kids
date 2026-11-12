@@ -20,6 +20,8 @@ export const DICA_BOTAO_MENU =
   "Mostra ou esconde a lista das telas da coordenação.";
 export const DICA_BOTAO_SAIR =
   "Encerra o seu acesso neste aparelho. Para voltar, abra de novo o seu link pessoal.";
+export const DICA_BOTAO_SAINDO =
+  "Indisponível enquanto o seu acesso é encerrado neste aparelho. Espere um instante.";
 
 /** Quem está conectado: nome e botão "Sair" no fim do menu. */
 export type ContaAppShell = {
@@ -27,7 +29,10 @@ export type ContaAppShell = {
   /** Linha abaixo do nome (ex.: o papel). */
   detalhe?: string;
   aoSair: () => void;
-  /** Saindo: o botão fica desabilitado e mostra "Saindo…". */
+  /**
+   * Saindo: o botão mostra "Saindo…" e fica indisponível com aria-disabled (RIFA-047: continua no Tab, com a dica
+   * dizendo por quê, e o foco fica nele); o clique, o Enter e o espaço não chamam `aoSair` de novo.
+   */
   saindo?: boolean;
   /** Falha ao sair, abaixo do botão (role="alert"). */
   erro?: string | null;
@@ -183,12 +188,14 @@ function Conta({ nome, detalhe, aoSair, saindo = false, erro }: ContaAppShell) {
           </>
         )}
       </p>
-      <ComDica texto={DICA_BOTAO_SAIR}>
+      <ComDica texto={saindo ? DICA_BOTAO_SAINDO : DICA_BOTAO_SAIR}>
         <Button
           variante="secundario"
           larguraTotal
-          disabled={saindo}
-          onClick={aoSair}
+          aria-disabled={saindo || undefined}
+          onClick={() => {
+            if (!saindo) aoSair();
+          }}
         >
           {saindo ? "Saindo…" : "Sair"}
         </Button>

@@ -110,7 +110,6 @@ export function DialogoRemoverAfiliado({
             <Button
               ref={refEntendi}
               variante="secundario"
-              className="adesao-dialogo-botao"
               aria-disabled={removendo || undefined}
               onClick={() => {
                 if (!removendo) aoFechar();
@@ -126,7 +125,6 @@ export function DialogoRemoverAfiliado({
               <Button
                 ref={refRemover}
                 variante="perigo"
-                className="adesao-dialogo-botao"
                 aria-disabled={removendo || undefined}
                 onClick={() => {
                   if (!removendo) void confirmar();

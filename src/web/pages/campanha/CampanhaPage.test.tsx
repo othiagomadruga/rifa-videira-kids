@@ -1,7 +1,18 @@
 // CA2 a CA4: tela /coordenacao/campanha pela rota de verdade, com a API simulada (fetch trocado).
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CampanhaEntrada } from "../../../shared/contracts";
+import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   CONFIGURADA,
@@ -9,6 +20,14 @@ import {
   campanhaDaEntrada,
   simularApi,
 } from "./teste-apoio";
+import { LIMITE_PERIODOS } from "./formulario";
+import { DICAS } from "./textos";
+
+/** O CSS que vale nos botões da tela (RIFA-047: a cara de indisponível vem do Button.css; a tela não a desfaz). */
+const CSS_DA_CAMPANHA = [
+  lerCss("components/ui/Button.css"),
+  lerCss("pages/campanha/campanha.css"),
+];
 
 async function abrirTela() {
   const resultado = renderizarRota("/coordenacao/campanha");
@@ -253,6 +272,42 @@ describe("CA2: datas e períodos", () => {
     expect(screen.queryByText(/o sistema normaliza/)).toBeNull();
   });
 
+  it("'Adicionar período' no limite: fica indisponível (no Tab, com o motivo e com o foco) e não acrescenta nada (RIFA-047)", async () => {
+    const periodos = Array.from({ length: LIMITE_PERIODOS - 1 }, (_, i) => ({
+      nome: `Período ${i + 1}`,
+      dias: 1,
+      percentual_bp: 100,
+    }));
+    simularApi({
+      campanha: campanhaDaEntrada({
+        ...(CORPO_DO_FORMULARIO_VALIDO as CampanhaEntrada),
+        periodos,
+      }),
+    });
+    await abrirTela();
+    const ultimo = () =>
+      document.querySelectorAll(".campanha-periodos > li").length;
+    expect(ultimo()).toBe(LIMITE_PERIODOS - 1);
+    const adicionar = botao("Adicionar período");
+    esperarDisponivel(adicionar);
+
+    act(() => adicionar.focus());
+    fireEvent.click(adicionar);
+
+    // Chegou ao limite: o mesmo botão, com o foco (com o disabled, ele caía no <body>).
+    expect(ultimo()).toBe(LIMITE_PERIODOS);
+    expect(adicionar).toHaveFocus();
+    await conferirIndisponivel(adicionar, {
+      dica: DICAS.adicionarPeriodoNoLimite(LIMITE_PERIODOS),
+      semEfeito: () => expect(ultimo()).toBe(LIMITE_PERIODOS),
+      css: CSS_DA_CAMPANHA,
+    });
+
+    // Removeu um: volta a ficar disponível.
+    fireEvent.click(botao(`Remover o período ${LIMITE_PERIODOS}`));
+    esperarDisponivel(adicionar);
+  });
+
   it("adicionar e remover períodos recalcula as datas e a data final", async () => {
     simularApi();
     await abrirTela();
@@ -383,16 +438,38 @@ describe("CA3: ativar e salvar", () => {
 
   it("enquanto salva, o formulário fica travado: nada digitado se perde quando a resposta chega", async () => {
     const resposta = Promise.withResolvers<Response>();
-    simularApi({ aoSalvar: () => resposta.promise });
+    const { puts } = simularApi({ aoSalvar: () => resposta.promise });
     await abrirTela();
     preencherFormularioValido();
     fireEvent.click(botao("Ativar a campanha"));
 
-    fireEvent.click(botao("Sim, ativar a campanha"));
+    const confirmar = botao("Sim, ativar a campanha");
+    act(() => confirmar.focus());
+    fireEvent.click(confirmar);
 
-    expect(
-      await screen.findByRole("button", { name: "Salvando…" }),
-    ).toBeDisabled();
+    // RIFA-047: o mesmo botão vira "Salvando…" e fica indisponível com aria-disabled, com o foco (com o disabled, ele
+    // caía no <body>); o clique, o Enter e o espaço não mandam outro PUT. "Voltar e revisar" também fica indisponível,
+    // com o mesmo motivo, e a confirmação não fecha no meio da gravação.
+    expect(confirmar).toHaveTextContent("Salvando…");
+    expect(confirmar).toHaveFocus();
+    const confirmacao = screen.getByRole("alertdialog", {
+      name: "Ativar a campanha?",
+    });
+    const semEfeito = () => {
+      expect(puts()).toHaveLength(1);
+      expect(screen.getByRole("alertdialog")).toBe(confirmacao);
+    };
+    await conferirIndisponivel(confirmar, {
+      dica: DICAS.salvando,
+      semEfeito,
+      css: CSS_DA_CAMPANHA,
+    });
+    await conferirIndisponivel(botao("Voltar e revisar"), {
+      dica: DICAS.salvando,
+      semEfeito,
+      css: CSS_DA_CAMPANHA,
+    });
+    // Os campos ficam desabilitados (o motivo, "Salvando…", está à vista).
     expect(campo("Nome da campanha")).toBeDisabled();
     expect(campo("Dias do período 1")).toBeDisabled();
     resposta.resolve(
@@ -402,6 +479,65 @@ describe("CA3: ativar e salvar", () => {
     );
     expect(await screen.findByText(/^Campanha ativada\./)).toBeInTheDocument();
     expect(campo("Nome da campanha")).toBeEnabled();
+    await waitFor(() => expect(botao("Salvar alterações")).toHaveFocus());
+    esperarDisponivel(botao("Salvar alterações"));
+    expect(puts()).toHaveLength(1);
+  });
+
+  it("salvar sem confirmação: 'Salvando…' fica indisponível (no Tab, com o motivo e com o foco) e não manda outro PUT; o Enter num campo leva o foco a ele, sem cair no <body> (RIFA-047)", async () => {
+    const respostas: PromiseWithResolvers<Response>[] = [];
+    const { puts } = simularApi({
+      campanha: CONFIGURADA,
+      aoSalvar: () => {
+        const resposta = Promise.withResolvers<Response>();
+        respostas.push(resposta);
+        return resposta.promise;
+      },
+    });
+    await abrirTela();
+    const salvar = botao("Salvar alterações");
+    esperarDisponivel(salvar);
+
+    digitar("Preço do bilhete (R$)", "15");
+    act(() => salvar.focus());
+    fireEvent.click(salvar);
+
+    expect(salvar).toHaveTextContent("Salvando…");
+    expect(salvar).toHaveFocus();
+    await conferirIndisponivel(salvar, {
+      dica: DICAS.salvando,
+      semEfeito: () => expect(puts()).toHaveLength(1),
+      css: CSS_DA_CAMPANHA,
+    });
+    // O Enter num campo também envia o formulário: barrado (e o campo está desabilitado).
+    fireEvent.submit(salvar.closest("form")!);
+    expect(puts()).toHaveLength(1);
+
+    const salva = campanhaDaEntrada({
+      ...(puts()[0]?.corpo as CampanhaEntrada),
+    });
+    respostas[0]?.resolve(respostaJson(salva));
+    expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
+    await waitFor(() => expect(salvar).toHaveFocus());
+    esperarDisponivel(salvar);
+    expect(salvar).toHaveTextContent("Salvar alterações");
+
+    // Pelo Enter no campo: o foco sai do campo (que fica desabilitado) para "Salvando…", e não para o <body>.
+    const preco = campo("Preço do bilhete (R$)");
+    digitar("Preço do bilhete (R$)", "16");
+    act(() => preco.focus());
+    fireEvent.submit(preco.closest("form")!);
+    expect(puts()).toHaveLength(2);
+    expect(preco).toBeDisabled();
+    expect(salvar).toHaveTextContent("Salvando…");
+    expect(salvar).toHaveFocus();
+    respostas[1]?.resolve(
+      respostaJson(
+        campanhaDaEntrada({ ...(puts()[1]?.corpo as CampanhaEntrada) }),
+      ),
+    );
+    await waitFor(() => esperarDisponivel(salvar));
+    expect(salvar).toHaveFocus();
   });
 
   it("campanha ativa com o mesmo slug: salva sem confirmação e mostra 'Alterações salvas.'", async () => {

@@ -1,10 +1,15 @@
 /* Tela de campanha: celular primeiro; só variáveis do tema. */
-/* <fieldset> que desativa o formulário enquanto salva: sem a borda e o recuo do navegador. */
-.campanha-formulario {
+/* O formulário: os campos, num <fieldset> que os desativa enquanto salva, e as ações, fora dele (RIFA-047). */
+.campanha-formulario,
+.campanha-formulario__campos {
   display: flex;
   flex-direction: column;
   gap: var(--espaco-5);
   min-width: 0;
+}
+
+/* O <fieldset> sem a borda e o recuo do navegador. */
+.campanha-formulario__campos {
   margin: 0;
   padding: 0;
   border: 0;
@@ -330,12 +335,6 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--espaco-2) var(--espaco-3);
-}
-
-/* "Voltar ao texto padrão" com o texto padrão: continua focável (aria-disabled), mas parece desabilitado. */
-.campanha-mensagem__rodape button[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .campanha-previa {

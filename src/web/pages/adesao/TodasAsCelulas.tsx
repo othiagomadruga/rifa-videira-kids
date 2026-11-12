@@ -185,7 +185,9 @@ function CartaoCelula({
 
 /**
  * Um afiliado da célula, com "Trocar" (escolhe outra célula) e "Desvincular" (pede confirmação). Os dois
- * tiram o afiliado deste cartão: depois de salvar, o foco vai para o título do cartão.
+ * tiram o afiliado deste cartão: depois de salvar, o foco vai para o título do cartão. Gravando (o desvínculo ou a
+ * troca), Trocar, Desvincular e Remover ficam indisponíveis com aria-disabled (RIFA-047): antes, eles fechavam a
+ * pergunta ou a escolha no meio da gravação.
  */
 function AfiliadoDaCelula({
   codigo,
@@ -201,7 +203,11 @@ function AfiliadoDaCelula({
   // Depois de remover, o afiliado sai do cartão: o foco vai para o título dele.
   const refFocoAposRemover = useRef<HTMLElement | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // A troca de célula sendo gravada (o "Salvando…" fica na escolha da célula, EscolherCelula).
+  const [trocando, setTrocando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const gravando = enviando || trocando;
+  const dicaGravando = enviando ? DICAS.desvinculando : DICAS.salvandoEscolha;
   const refTrocar = useRef<HTMLButtonElement>(null);
   const refDesvincular = useRef<HTMLButtonElement>(null);
   const idPergunta = useId();
@@ -248,13 +254,22 @@ function AfiliadoDaCelula({
         <p className="adesao-afiliado__codigo">Afiliado {codigo}</p>
         <div className="adesao-acoes">
           <ComDica
-            texto={acao === "trocar" ? DICAS.trocarAberto : DICAS.trocar}
+            texto={
+              gravando
+                ? dicaGravando
+                : acao === "trocar"
+                  ? DICAS.trocarAberto
+                  : DICAS.trocar
+            }
           >
             <Button
               ref={refTrocar}
               variante="secundario"
               aria-expanded={acao === "trocar"}
-              onClick={() => alternar("trocar", refTrocar)}
+              aria-disabled={gravando || undefined}
+              onClick={() => {
+                if (!gravando) alternar("trocar", refTrocar);
+              }}
             >
               Trocar{" "}
               <span className="visualmente-oculto">
@@ -264,26 +279,33 @@ function AfiliadoDaCelula({
           </ComDica>
           <ComDica
             texto={
-              acao === "desvincular"
-                ? DICAS.desvincularAberto
-                : DICAS.desvincular
+              gravando
+                ? dicaGravando
+                : acao === "desvincular"
+                  ? DICAS.desvincularAberto
+                  : DICAS.desvincular
             }
           >
             <Button
               ref={refDesvincular}
               variante="secundario"
               aria-expanded={acao === "desvincular"}
-              onClick={() => alternar("desvincular", refDesvincular)}
+              aria-disabled={gravando || undefined}
+              onClick={() => {
+                if (!gravando) alternar("desvincular", refDesvincular);
+              }}
             >
               Desvincular{" "}
               <span className="visualmente-oculto">o afiliado {codigo}</span>
             </Button>
           </ComDica>
           {aoRemover && (
-            <ComDica texto={DICAS.removerAfiliado}>
+            <ComDica texto={gravando ? dicaGravando : DICAS.removerAfiliado}>
               <Button
                 variante="secundario"
+                aria-disabled={gravando || undefined}
                 onClick={() => {
+                  if (gravando) return;
                   refFocoAposRemover.current = null;
                   setRemovendo(true);
                 }}
@@ -321,14 +343,19 @@ function AfiliadoDaCelula({
           legenda={`Nova célula do afiliado ${codigo}`}
           textoConfirmar={(nova) => `Trocar para: ${nova.celula_nome}`}
           aoConfirmar={async (nova) => {
-            await aoSalvar({
-              affiliateId: codigo,
-              celulaId: nova.celula_id,
-              sucesso: `Afiliado ${codigo} trocado para: ${nova.celula_nome}.`,
-              local,
-            });
-            setAcao(null);
-            aoConcluir();
+            setTrocando(true);
+            try {
+              await aoSalvar({
+                affiliateId: codigo,
+                celulaId: nova.celula_id,
+                sucesso: `Afiliado ${codigo} trocado para: ${nova.celula_nome}.`,
+                local,
+              });
+              setAcao(null);
+              aoConcluir();
+            } finally {
+              setTrocando(false);
+            }
           }}
           aoCancelar={() => fechar(refTrocar)}
         />
@@ -484,7 +511,11 @@ function FormCodigo({
               autoComplete="off"
               value={codigo}
               erro={erro ?? undefined}
+              // Gravando, o campo fica só leitura (RIFA-047): digitar limpava a pergunta da troca no meio da gravação.
+              // O motivo está à vista ("Salvando…" ao lado).
+              readOnly={enviando}
               onChange={(evento) => {
+                if (enviando) return;
                 setCodigo(evento.target.value);
                 setErro(null);
                 setTroca(null);

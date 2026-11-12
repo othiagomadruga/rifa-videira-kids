@@ -195,6 +195,9 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
         slugAnterior: salva.slug_rifei,
       });
     } else {
+      // O Enter num campo também envia, e o campo fica desabilitado enquanto salva (o foco cairia no <body>): o foco
+      // vai para "Salvando…", que continua focável (RIFA-047). No clique, ele já está lá.
+      refSalvar.current?.focus();
       void gravar(corpo, "salvar");
     }
   }
@@ -271,9 +274,11 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
         }
       />
 
-      <form noValidate onSubmit={aoEnviar}>
-        {/* Enquanto salva, nada se edita: a resposta da API substitui o formulário. */}
-        <fieldset className="campanha-formulario" disabled={salvando}>
+      <form className="campanha-formulario" noValidate onSubmit={aoEnviar}>
+        {/* Enquanto salva, nada se edita: a resposta da API substitui o formulário. Os botões de salvar e da
+            confirmação ficam fora do fieldset: gravando, eles ficam indisponíveis com aria-disabled (RIFA-047), no
+            Tab e com a dica dizendo por quê, e o foco fica neles (o disabled do fieldset o jogava no <body>). */}
+        <fieldset className="campanha-formulario__campos" disabled={salvando}>
           <Card titulo="Identificação">
             <div className="campanha-campos">
               <ComDica texto={DICAS.nome}>
@@ -600,70 +605,83 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
               alterarMensagem(tipo, MENSAGENS_PADRAO[tipo])
             }
           />
-
-          <div className="campanha-acoes">
-            {(chavesComErro.length > 0 || erroGeral) && (
-              <div
-                ref={refResumoErros}
-                className="campanha-erros"
-                role="alert"
-                tabIndex={-1}
-              >
-                <p className="campanha-erros__titulo">
-                  {erroGeral ?? "Não foi possível salvar. Confira:"}
-                </p>
-                {chavesComErro.length > 0 && (
-                  <ul>
-                    {chavesComErro.map((chave) => (
-                      <li key={chave}>
-                        <a
-                          href={`#${idDoCampo(chave)}`}
-                          onClick={(evento) => {
-                            evento.preventDefault();
-                            document.getElementById(idDoCampo(chave))?.focus();
-                          }}
-                        >
-                          {rotuloDoCampo(chave)}
-                        </a>
-                        : {erros[chave]}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
-            {sucesso && (
-              <p role="status" className="campanha-sucesso">
-                {sucesso}
-              </p>
-            )}
-
-            {confirmacao ? (
-              <PainelConfirmacao
-                confirmacao={confirmacao}
-                salvando={salvando}
-                refVoltar={refVoltar}
-                aoConfirmar={() =>
-                  void gravar(confirmacao.corpo, confirmacao.tipo)
-                }
-                aoVoltar={cancelarConfirmacao}
-              />
-            ) : (
-              <div>
-                <ComDica texto={salva ? DICAS.salvar : DICAS.ativar}>
-                  <Button ref={refSalvar} type="submit" disabled={salvando}>
-                    {salvando
-                      ? "Salvando…"
-                      : salva
-                        ? "Salvar alterações"
-                        : "Ativar a campanha"}
-                  </Button>
-                </ComDica>
-              </div>
-            )}
-          </div>
         </fieldset>
+
+        <div className="campanha-acoes">
+          {(chavesComErro.length > 0 || erroGeral) && (
+            <div
+              ref={refResumoErros}
+              className="campanha-erros"
+              role="alert"
+              tabIndex={-1}
+            >
+              <p className="campanha-erros__titulo">
+                {erroGeral ?? "Não foi possível salvar. Confira:"}
+              </p>
+              {chavesComErro.length > 0 && (
+                <ul>
+                  {chavesComErro.map((chave) => (
+                    <li key={chave}>
+                      <a
+                        href={`#${idDoCampo(chave)}`}
+                        onClick={(evento) => {
+                          evento.preventDefault();
+                          document.getElementById(idDoCampo(chave))?.focus();
+                        }}
+                      >
+                        {rotuloDoCampo(chave)}
+                      </a>
+                      : {erros[chave]}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {sucesso && (
+            <p role="status" className="campanha-sucesso">
+              {sucesso}
+            </p>
+          )}
+
+          {confirmacao ? (
+            <PainelConfirmacao
+              confirmacao={confirmacao}
+              salvando={salvando}
+              refVoltar={refVoltar}
+              aoConfirmar={() =>
+                void gravar(confirmacao.corpo, confirmacao.tipo)
+              }
+              aoVoltar={cancelarConfirmacao}
+            />
+          ) : (
+            <div>
+              <ComDica
+                texto={
+                  salvando
+                    ? DICAS.salvando
+                    : salva
+                      ? DICAS.salvar
+                      : DICAS.ativar
+                }
+              >
+                {/* Gravando: o envio é barrado no aoEnviar (o clique, o Enter e o espaço nele e o Enter num campo). */}
+                <Button
+                  ref={refSalvar}
+                  type="submit"
+                  aria-disabled={salvando || undefined}
+                >
+                  {salvando
+                    ? "Salvando…"
+                    : salva
+                      ? "Salvar alterações"
+                      : "Ativar a campanha"}
+                </Button>
+              </ComDica>
+            </div>
+          )}
+        </div>
       </form>
     </>
   );
@@ -745,9 +763,20 @@ function PainelConfirmacao({
       </div>
       <div className="campanha-confirmacao__botoes">
         <ComDica
-          texto={ativar ? DICAS.confirmarAtivar : DICAS.confirmarTrocaDoSlug}
+          texto={
+            salvando
+              ? DICAS.salvando
+              : ativar
+                ? DICAS.confirmarAtivar
+                : DICAS.confirmarTrocaDoSlug
+          }
         >
-          <Button onClick={aoConfirmar} disabled={salvando}>
+          <Button
+            aria-disabled={salvando || undefined}
+            onClick={() => {
+              if (!salvando) aoConfirmar();
+            }}
+          >
             {salvando
               ? "Salvando…"
               : ativar
@@ -755,12 +784,14 @@ function PainelConfirmacao({
                 : "Sim, trocar o slug"}
           </Button>
         </ComDica>
-        <ComDica texto={DICAS.voltarERevisar}>
+        <ComDica texto={salvando ? DICAS.salvando : DICAS.voltarERevisar}>
           <Button
             ref={refVoltar}
             variante="secundario"
-            onClick={aoVoltar}
-            disabled={salvando}
+            aria-disabled={salvando || undefined}
+            onClick={() => {
+              if (!salvando) aoVoltar();
+            }}
           >
             Voltar e revisar
           </Button>

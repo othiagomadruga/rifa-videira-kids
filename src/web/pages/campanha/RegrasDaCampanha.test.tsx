@@ -19,6 +19,7 @@ import {
   TIPOS_MENSAGEM,
   preencherMensagem,
 } from "../../../shared/contracts";
+import { conferirIndisponivel, lerCss } from "../../test/indisponivel";
 import {
   ADMIN_DE_TESTE,
   USUARIO_DE_TESTE,
@@ -30,6 +31,7 @@ import {
   linkDeExemplo,
 } from "./RegrasDoAdmin";
 import { CONFIGURADA, simularApi } from "./teste-apoio";
+import { DICAS } from "./textos";
 
 async function abrirTela(usuario = ADMIN_DE_TESTE) {
   const resultado = renderizarRota("/coordenacao/campanha", { usuario });
@@ -230,6 +232,16 @@ describe("CA1: as mensagens do link pessoal", () => {
     expect(
       screen.getAllByText(/de 1\.000 caracteres · é o texto padrão/),
     ).toHaveLength(4);
+    // RIFA-047: no Tab, com a dica do motivo e a cara do disabled (a regra geral do Button.css); nada muda.
+    await conferirIndisponivel(voltar, {
+      dica: DICAS.voltarAoPadraoJaEstaNele,
+      semEfeito: () =>
+        expect(campo).toHaveValue(MENSAGENS_PADRAO.link_coordenacao),
+      css: [
+        lerCss("components/ui/Button.css"),
+        lerCss("pages/campanha/campanha.css"),
+      ],
+    });
   });
 
   it("modelo inválido: os problemas aparecem enquanto digita e o 'Salvar' é barrado, sem chamar a API", async () => {

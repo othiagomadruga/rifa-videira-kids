@@ -30,15 +30,6 @@
   gap: var(--espaco-3);
 }
 
-/* Indisponível (RIFA-045): "Conferir com estas colunas", "Recuperar", "Carregar mais" e, gravando, os botões do
-   diálogo do Recuperar (num portal, fora da tela: classe própria) continuam focáveis (aria-disabled), com a dica dizendo
-   por quê, mas com a cara do :disabled do Button.css. */
-.conferencia-acoes button[aria-disabled="true"],
-.conferencia-dialogo-botao[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* Título e aviso que recebem o foco quando o resultado ou a falha chegam. */
 .conferencia-titulo-foco,
 .conferencia-foco {

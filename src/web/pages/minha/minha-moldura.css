@@ -37,13 +37,6 @@
   gap: var(--espaco-2) var(--espaco-4);
 }
 
-/* "Saindo…" (RIFA-045): continua focável (aria-disabled), com a dica dizendo por quê, mas com a cara do :disabled do
-   Button.css. */
-.minha-moldura__barra button[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .minha-moldura__erro {
   margin-top: var(--espaco-2);
   color: var(--cor-perigo);

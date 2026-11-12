@@ -296,6 +296,30 @@ describe("CA1: a lista de pedidos", () => {
     );
   });
 
+  it("a página seguinte vem vazia (RIFA-047): o botão some e o foco vai para a linha do fim, sem cair no <body>", async () => {
+    const api = simularApi({ pedidos: pedidosVariados(60) });
+    abrir();
+    expect(await linhas()).toHaveLength(50);
+    api.proxima(ROTA_PEDIDOS, () =>
+      respostaJson({ itens: [], proximo: null, totais: null }),
+    );
+
+    acionar(botaoCarregarMais());
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("50 pedidos; não há pedidos mais antigos."),
+      ).toHaveFocus(),
+    );
+    expect(
+      screen.queryByRole("button", { name: /^(Carregar mais|Carregando…)$/ }),
+    ).not.toBeInTheDocument();
+    expect(anuncio()).toHaveTextContent(
+      "0 pedidos a mais na lista. Não há pedidos mais antigos.",
+    );
+    expect(await linhas()).toHaveLength(50);
+  });
+
   it.each([
     [
       "cursor_invalido (docs/api.md)",

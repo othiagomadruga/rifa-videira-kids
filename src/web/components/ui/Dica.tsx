@@ -26,6 +26,8 @@ import "./Dica.css";
 //   com a dica (ela pode dizer por que estão indisponíveis).
 // - Fica num portal no fim do <body>, acima do controle (ou abaixo, se não couber), sempre dentro da tela: nunca cria
 //   rolagem lateral. A posição vem do JS pelo CSSOM (o CSP proíbe style="..." no HTML, não o CSSOM).
+// - Uma dica por vez (RIFA-047): a que abre fecha a que estava aberta (ex.: a do foco do teclado, quando o mouse para
+//   em outro controle). Sem isso, as duas ficavam na tela, uma por cima da outra.
 
 /** Tempo com o mouse parado em cima do controle até a dica aparecer. */
 export const ATRASO_DA_DICA_MS = 600;
@@ -80,6 +82,9 @@ function escutarOTeclado() {
     true,
   );
 }
+
+// A dica aberta agora (uma por vez): a que abre fecha esta antes, ainda antes de pintar.
+let dicaAberta: { fechar: () => void } | null = null;
 
 function focoVeioDoTeclado(): boolean {
   return performance.now() - navegouPeloTecladoEm <= JANELA_DO_TECLADO_MS;
@@ -197,6 +202,27 @@ function DicaAtiva({
     };
     document.addEventListener("keydown", aoTeclar, true);
     return () => document.removeEventListener("keydown", aoTeclar, true);
+  }, [aberta]);
+
+  // Uma dica por vez: ao abrir, fecha a que estava aberta (antes de pintar: as duas nunca aparecem juntas). A outra
+  // esquece os tempos pendentes; o foco ou o mouse que a seguravam só a abrem de novo ao voltar (sair e entrar).
+  useLayoutEffect(() => {
+    if (!aberta) return;
+    const pendencias = refPendencias.current;
+    const esta = {
+      fechar: () => {
+        clearTimeout(pendencias.abrir);
+        clearTimeout(pendencias.fechar);
+        pendencias.abrir = undefined;
+        pendencias.fechar = undefined;
+        setAberta(false);
+      },
+    };
+    dicaAberta?.fechar();
+    dicaAberta = esta;
+    return () => {
+      if (dicaAberta === esta) dicaAberta = null;
+    };
   }, [aberta]);
 
   // Aberta: posiciona antes de pintar (a cada renderização: o texto pode mudar) e acompanha rolagem e tamanho da tela.

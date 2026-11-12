@@ -401,6 +401,11 @@ describe("estados do link de vendas", () => {
     expect(
       within(cartao).getByText("Carregando o link de vendas…"),
     ).toBeInTheDocument();
+    // O "Carregando…" aparece também enquanto o pacote da seção chega (lazy), antes do GET: sob carga, o `liberar`
+    // chegava antes do pedido e a resposta nunca vinha. Espera o pedido sair (RIFA-047).
+    await waitFor(() =>
+      expect(api.chamadasA("GET", CAMINHO_LINKS)).toHaveLength(1),
+    );
 
     await act(async () =>
       liberar(respostaErro(503, "indisponivel", "Serviço indisponível")),

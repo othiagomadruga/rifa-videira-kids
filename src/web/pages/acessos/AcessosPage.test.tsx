@@ -8,8 +8,13 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  conferirIndisponivel,
+  esperarDisponivel,
+  lerCss,
+} from "../../test/indisponivel";
 import { ADMIN_DE_TESTE, renderizarRota } from "../../test/renderizar";
-import { MENSAGENS_EM_USO, mensagemWhatsApp } from "./textos";
+import { DICAS, MENSAGENS_EM_USO, mensagemWhatsApp } from "./textos";
 import {
   criarApiFalsa,
   link,
@@ -809,5 +814,156 @@ describe("CA5: desativar e reativar", () => {
       "Esta pessoa é o último admin ativo: crie ou reative outro admin antes de desativá-la.",
     );
     expect(api.pessoas[1].ativo).toBe(true);
+  });
+});
+
+describe("RIFA-047: gravando, os botões dos diálogos ficam indisponíveis com aria-disabled", () => {
+  /** O CSS que vale nos botões dos diálogos (num portal): a cara de indisponível vem do Button.css. */
+  const CSS = [
+    lerCss("components/ui/Button.css"),
+    lerCss("pages/acessos/acessos.css"),
+  ];
+
+  /** Segura a resposta de `metodo caminho` até `responder` (a falha simulada, para o diálogo ficar aberto). */
+  function segurar(api: ApiFalsa, metodo: string, caminho: string) {
+    let responder: ((resposta: Response) => void) | null = null;
+    api.proxima(
+      metodo,
+      caminho,
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+    return {
+      chegou: () => responder !== null,
+      falhar: () =>
+        act(async () =>
+          responder?.(respostaErro(500, "erro_interno", "Falha simulada")),
+        ),
+    };
+  }
+
+  /**
+   * Com a gravação segurada: a ação e o Cancelar continuam no Tab, com a dica do motivo, e o clique, o Enter, o
+   * espaço e o Esc não repetem a chamada nem fecham o diálogo; o foco fica na ação (com o disabled, caía fora dele).
+   */
+  async function conferirGravando({
+    dialogo,
+    acao,
+    texto,
+    dica,
+    chamadas,
+  }: {
+    dialogo: HTMLElement;
+    acao: HTMLElement;
+    texto: string;
+    dica: string;
+    chamadas: () => unknown[];
+  }) {
+    expect(acao).toHaveTextContent(texto);
+    expect(acao).toHaveFocus();
+    const semEfeito = () => {
+      expect(chamadas()).toHaveLength(1);
+      expect(dialogo).toBeInTheDocument();
+    };
+    await conferirIndisponivel(acao, { dica, semEfeito, css: CSS });
+    await conferirIndisponivel(
+      within(dialogo).getByRole("button", { name: "Cancelar" }),
+      { dica, semEfeito, css: CSS },
+    );
+    // Esc: o primeiro fecha a dica aberta pelo Tab; o segundo chega ao diálogo, que ignora enquanto grava.
+    fireEvent.keyDown(document.activeElement ?? dialogo, { key: "Escape" });
+    fireEvent.keyDown(document.activeElement ?? dialogo, { key: "Escape" });
+    semEfeito();
+  }
+
+  it("Nova pessoa: 'Criando…' e Cancelar (o Enter num campo também é barrado)", async () => {
+    const { api } = await abrirTela();
+    const gravacao = segurar(api, "POST", "/api/admin/usuarios");
+    acionar(screen.getByRole("button", { name: "Nova pessoa" }));
+    const dialogo = screen.getByRole("dialog", { name: "Nova pessoa" });
+    digitar(dialogo, "Nome", "Fábio Fictício");
+    const criar = within(dialogo).getByRole("button", {
+      name: "Criar e gerar link",
+    });
+    esperarDisponivel(criar);
+
+    acionar(criar);
+    await waitFor(() => expect(gravacao.chegou()).toBe(true));
+    const posts = () => api.chamadasA("POST", "/api/admin/usuarios");
+    await conferirGravando({
+      dialogo,
+      acao: criar,
+      texto: "Criando…",
+      dica: DICAS.criando,
+      chamadas: posts,
+    });
+    fireEvent.submit(criar.closest("form")!);
+    expect(posts()).toHaveLength(1);
+
+    await gravacao.falhar();
+    expect(await within(dialogo).findByText("Falha simulada")).toBeVisible();
+    esperarDisponivel(criar);
+    esperarDisponivel(
+      within(dialogo).getByRole("button", { name: "Cancelar" }),
+    );
+  });
+
+  it("Revogar: 'Revogando…' e Cancelar (o Cancelar fechava o diálogo no meio da gravação)", async () => {
+    const { api } = await abrirTela();
+    const gravacao = segurar(api, "DELETE", "/api/admin/links/3");
+    acionar(
+      within(cartao("Felipe Coordenador")).getByRole("button", {
+        name: "Revogar link de Felipe Coordenador criado em 10/11/2026 20:00",
+      }),
+    );
+    const dialogo = screen.getByRole("alertdialog", {
+      name: "Revogar este link?",
+    });
+    const revogar = within(dialogo).getByRole("button", {
+      name: "Revogar link",
+    });
+
+    acionar(revogar);
+    await waitFor(() => expect(gravacao.chegou()).toBe(true));
+    await conferirGravando({
+      dialogo,
+      acao: revogar,
+      texto: "Revogando…",
+      dica: DICAS.revogando,
+      chamadas: () => api.chamadasA("DELETE", "/api/admin/links/3"),
+    });
+
+    await gravacao.falhar();
+    expect(await within(dialogo).findByText("Falha simulada")).toBeVisible();
+    esperarDisponivel(revogar);
+  });
+
+  it("Desativar: 'Desativando…' e Cancelar", async () => {
+    const { api } = await abrirTela();
+    const gravacao = segurar(api, "PATCH", "/api/admin/usuarios/902");
+    acionar(
+      within(cartao("Felipe Coordenador")).getByRole("button", {
+        name: "Desativar acesso de Felipe Coordenador",
+      }),
+    );
+    const dialogo = screen.getByRole("alertdialog", {
+      name: "Desativar o acesso de Felipe Coordenador?",
+    });
+    const desativar = within(dialogo).getByRole("button", {
+      name: "Desativar acesso",
+    });
+
+    acionar(desativar);
+    await waitFor(() => expect(gravacao.chegou()).toBe(true));
+    await conferirGravando({
+      dialogo,
+      acao: desativar,
+      texto: "Desativando…",
+      dica: DICAS.desativando,
+      chamadas: () => api.chamadasA("PATCH", "/api/admin/usuarios/902"),
+    });
+
+    await gravacao.falhar();
+    expect(await within(dialogo).findByText("Falha simulada")).toBeVisible();
+    esperarDisponivel(desativar);
   });
 });

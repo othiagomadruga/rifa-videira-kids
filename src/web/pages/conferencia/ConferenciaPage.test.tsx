@@ -110,6 +110,19 @@ const CORPO_EXEMPLO = {
   instante: [Date.parse("2026-11-27T13:00:00.000Z"), null],
 };
 
+/** Foca e clica, como o Enter faz no navegador (o jsdom não foca no clique). */
+function acionar(elemento: HTMLElement) {
+  act(() => elemento.focus());
+  fireEvent.click(elemento);
+}
+
+/** A região viva fixa do histórico (anuncia o que o "Carregar mais" trouxe). */
+const anuncioDoHistorico = () =>
+  screen
+    .getByRole("heading", { level: 2, name: "Recuperações feitas" })
+    .closest(".ui-card")
+    ?.querySelector(".visualmente-oculto[role='status']");
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -173,7 +186,7 @@ describe("CA4: a tela da conferência", () => {
       screen.getByText(/^As 2 recuperações mais recentes; as anteriores/),
     ).toBeInTheDocument();
 
-    fireEvent.click(botao("Carregar mais"));
+    acionar(botao("Carregar mais"));
 
     expect(await within(historico).findByText("R-0401")).toBeInTheDocument();
     expect(within(historico).getByText("R-0901")).toBeInTheDocument();
@@ -183,6 +196,72 @@ describe("CA4: a tela da conferência", () => {
     expect(
       screen.getByText(/^3 recuperações, a mais recente primeiro\./),
     ).toBeInTheDocument();
+    // RIFA-047: o botão sumiu e o foco foi para a primeira recuperação nova (antes, caía no <body>), com o anúncio.
+    const novaLinha = within(historico)
+      .getByText("R-0401")
+      .closest("tr") as HTMLElement;
+    await waitFor(() =>
+      expect(
+        within(novaLinha).getAllByRole("cell")[0].firstElementChild,
+      ).toHaveFocus(),
+    );
+    expect(anuncioDoHistorico()).toHaveTextContent(
+      "1 recuperação a mais na lista. Não há recuperações mais antigas.",
+    );
+  });
+
+  it("“Carregar mais” com a página seguinte cheia: o foco vai para a primeira recuperação nova e o botão fica (RIFA-047)", async () => {
+    const recuperacao = (id: number, pedido: string) => ({
+      ...RECUPERACOES[0],
+      id,
+      pedidos: [pedido],
+    });
+    await abrir(
+      criarApiFalsa({
+        recuperacoes: (antesDe) =>
+          antesDe === null
+            ? { itens: [recuperacao(9, "R-0901")], proximo: 9 }
+            : antesDe === "9"
+              ? {
+                  itens: [recuperacao(8, "R-0801"), recuperacao(7, "R-0701")],
+                  proximo: 7,
+                }
+              : { itens: [], proximo: null },
+      }),
+    );
+    const historico = await screen.findByRole("table", {
+      name: "Recuperações feitas",
+    });
+
+    acionar(botao("Carregar mais"));
+    const segunda = (await within(historico).findByText("R-0801")).closest(
+      "tr",
+    ) as HTMLElement;
+    await waitFor(() =>
+      expect(
+        within(segunda).getAllByRole("cell")[0].firstElementChild,
+      ).toHaveFocus(),
+    );
+    expect(anuncioDoHistorico()).toHaveTextContent(
+      "2 recuperações a mais na lista.",
+    );
+
+    // A página seguinte vem vazia: o botão some e o foco vai para o fim da lista (a última recuperação).
+    acionar(botao("Carregar mais"));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Carreg/ })).toBeNull(),
+    );
+    const ultima = within(historico)
+      .getByText("R-0701")
+      .closest("tr") as HTMLElement;
+    await waitFor(() =>
+      expect(
+        within(ultima).getAllByRole("cell")[0].firstElementChild,
+      ).toHaveFocus(),
+    );
+    expect(anuncioDoHistorico()).toHaveTextContent(
+      "0 recuperações a mais na lista. Não há recuperações mais antigas.",
+    );
   });
 
   it("escolher o arquivo confere com as colunas detectadas e mostra o resumo e as diferenças por tipo", async () => {
@@ -811,17 +890,11 @@ describe("CA4: problemas do arquivo", () => {
 // continuam no Tab e a dica diz por quê (com o disabled, o foco nunca chegava, e no diálogo do Recuperar o foco caía
 // fora dele durante a gravação); o clique, o Enter e o espaço não fazem nada; a cara continua a do disabled.
 describe("RIFA-045: os indisponíveis da Conferência, pelo teclado", () => {
-  /** A cara de indisponível vem do conferencia.css (o Button.css só a dá ao disabled). */
+  /** A cara de indisponível vem do Button.css (RIFA-047), e o conferencia.css não a desfaz (a cascata, em caraDeIndisponivel). */
   const CSS = [
     lerCss("components/ui/Button.css"),
     lerCss("pages/conferencia/conferencia.css"),
   ];
-
-  /** Foca e clica, como o Enter faz no navegador (o jsdom não foca no clique). */
-  function acionar(elemento: HTMLElement) {
-    act(() => elemento.focus());
-    fireEvent.click(elemento);
-  }
 
   /** Segura as respostas de `quais` chamadas até `liberar()` (a chamada já fica registrada). */
   function trava(quais: (chamada: Chamada) => boolean) {
@@ -933,6 +1006,15 @@ describe("RIFA-045: os indisponíveis da Conferência, pelo teclado", () => {
       ).toBeNull(),
     );
     expect(api.de("/recuperacoes")).toHaveLength(2);
+    // RIFA-047: a página veio vazia e o botão sumiu: o foco vai para o fim da lista, e não para o <body>.
+    await waitFor(() =>
+      expect(document.activeElement).toHaveTextContent(
+        /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/,
+      ),
+    );
+    expect(document.activeElement?.closest("table")).toHaveAccessibleName(
+      "Recuperações feitas",
+    );
   });
 
   it("diálogo do Recuperar, gravando: o foco não sai do diálogo, Cancelar e Gravar não fazem nada e o Esc não fecha", async () => {

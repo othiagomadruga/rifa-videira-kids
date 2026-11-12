@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderizarRota } from "../../test/renderizar";
+import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   ROTA_ENTREGAS,
   ROTA_PEDIDOS,
@@ -317,6 +317,27 @@ describe("CA2: entregas com o resultado em português e o erro e os avisos legí
     expect(
       screen.queryByRole("button", { name: "Carregar mais" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("a página seguinte vem vazia (RIFA-047): o botão some e o foco vai para a linha do fim, sem cair no <body>", async () => {
+    const api = simularApi({ entregas: entregasEmSequencia(60) });
+    renderizarRota(CAMINHO);
+    expect(await linhas()).toHaveLength(50);
+    api.proxima(ROTA_ENTREGAS, () =>
+      respostaJson({ itens: [], proximo: null }),
+    );
+
+    acionar(screen.getByRole("button", { name: "Carregar mais" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("50 entregas; não há entregas mais antigas."),
+      ).toHaveFocus(),
+    );
+    expect(
+      screen.queryByRole("button", { name: /^(Carregar mais|Carregando…)$/ }),
+    ).not.toBeInTheDocument();
+    expect(await linhas()).toHaveLength(50);
   });
 
   it("a aba só carrega quando é aberta; trocar de aba guarda a escolha na URL e não perde a outra", async () => {

@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { conferirIndisponivel, lerCss } from "../../test/indisponivel";
 import { ADMIN_DE_TESTE, renderizarRota } from "../../test/renderizar";
 import { respostaErro } from "./teste-apoio";
 import {
@@ -17,8 +18,15 @@ import {
   criarApiWebhook,
   type ApiWebhook,
 } from "./teste-apoio-webhook";
+import { DICAS } from "./textos";
 
 const CAMINHO = "/coordenacao/acessos";
+/** O CSS que vale nos botões da aba e da confirmação (a cara de indisponível vem do Button.css). */
+const CSS_DO_WEBHOOK = [
+  lerCss("components/ui/Button.css"),
+  lerCss("pages/acessos/acessos.css"),
+  lerCss("pages/acessos/acessos-webhook.css"),
+];
 const ABA = "Webhook da Rifei";
 const URL_WEBHOOK = `${window.location.origin}/api/webhooks/rifei`;
 
@@ -555,6 +563,12 @@ describe("CA5: um POST por vez", () => {
     expect(botao).toHaveTextContent("Gerando…");
     expect(botao).toHaveFocus();
     expect(api.chamadasAoToken("POST")).toHaveLength(1);
+    // RIFA-047: no Tab, com a dica do motivo e a cara do disabled (a regra geral do Button.css).
+    await conferirIndisponivel(botao, {
+      dica: DICAS.gerandoToken,
+      semEfeito: () => expect(api.chamadasAoToken("POST")).toHaveLength(1),
+      css: CSS_DO_WEBHOOK,
+    });
 
     fireEvent.click(botao);
     liberar();
@@ -581,10 +595,26 @@ describe("CA5: um POST por vez", () => {
       expect(confirmar).toHaveAttribute("aria-disabled", "true"),
     );
     expect(confirmar).toHaveTextContent("Gerando…");
+    expect(confirmar).toHaveFocus();
     const cancelar = within(confirmacao).getByRole("button", {
       name: "Cancelar",
     });
-    expect(cancelar).toHaveAttribute("aria-disabled", "true");
+    // RIFA-047: "Gerando…" e Cancelar, no Tab, com a dica do motivo e a cara do disabled (o diálogo fica num portal,
+    // fora da tela: a regra geral do Button.css é que dá a cara).
+    const semEfeito = () => {
+      expect(api.chamadasAoToken("POST")).toHaveLength(1);
+      expect(screen.getByRole("alertdialog")).toBe(confirmacao);
+    };
+    await conferirIndisponivel(confirmar, {
+      dica: DICAS.gerandoToken,
+      semEfeito,
+      css: CSS_DO_WEBHOOK,
+    });
+    await conferirIndisponivel(cancelar, {
+      dica: DICAS.gerandoToken,
+      semEfeito,
+      css: CSS_DO_WEBHOOK,
+    });
     // Nem o Cancelar, nem o Esc, nem outro toque mexem no que está em andamento.
     fireEvent.click(cancelar);
     fireEvent.keyDown(confirmacao, { key: "Escape" });
