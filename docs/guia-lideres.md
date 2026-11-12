@@ -45,7 +45,7 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 - **Meta da campanha:** quanto a sua célula já fez da meta, em %, e os bilhetes vendidos.
 - **Em dia** ou **Abaixo do esperado:** o ritmo da célula até ontem. Logo abaixo: "No ritmo atual, chega a …% da meta".
 - **Hoje:** quanto falta para a meta de hoje.
-- O período atual (ex.: **Semana 2**) e a **Curva da campanha**: o que a célula vendeu e o esperado, dia a dia.
+- O período atual (ex.: **Período 2**) e a **Curva da campanha**: o que a célula vendeu e o esperado, dia a dia.
 - **Ranking:** a posição da célula **Na sua divisão** (jovens ou adultos) e no **Geral**, quem está **Logo acima** e **Logo abaixo** e **Os primeiros** da sua divisão. A sua célula aparece com a marca **Você**.
 - Apareceu o aviso **"Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação."**? Fale com a coordenação. Quando ela ligar o link, as vendas que você já fez entram na célula.
 - **Sair:** só se o celular for emprestado.
