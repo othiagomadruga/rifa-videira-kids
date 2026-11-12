@@ -36,6 +36,9 @@ export function Mapeamento({
   const usaveis = colunas.filter((coluna) => !coluna.dado_pessoal);
   const pessoais = colunas.filter((coluna) => coluna.dado_pessoal);
   const porPedido = mapeamento.pedido_id !== null;
+  // Sem troca ou conferindo, o "Conferir com estas colunas" fica indisponível com aria-disabled (RIFA-045): continua
+  // no Tab e a dica diz por quê; o clique é barrado aqui. Os selects podem ficar disabled: "Conferindo…" está à vista.
+  const conferirIndisponivel = !alterado || ocupado;
 
   return (
     <Card titulo="Colunas do arquivo">
@@ -98,8 +101,10 @@ export function Mapeamento({
           >
             <Button
               variante="secundario"
-              disabled={!alterado || ocupado}
-              onClick={aoConferir}
+              aria-disabled={conferirIndisponivel || undefined}
+              onClick={() => {
+                if (!conferirIndisponivel) aoConferir();
+              }}
             >
               {ocupado ? "Conferindo…" : "Conferir com estas colunas"}
             </Button>

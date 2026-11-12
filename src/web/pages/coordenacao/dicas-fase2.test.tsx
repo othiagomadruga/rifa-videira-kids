@@ -25,6 +25,7 @@ import {
   passarOMouse,
   tirarOMouse,
 } from "../../test/dicas";
+import { esperarDisponivel } from "../../test/indisponivel";
 import {
   ADMIN_DE_TESTE,
   renderizarRota,
@@ -278,10 +279,10 @@ describe("Hierarquia", () => {
         files: [new File([csv], "hierarquia.csv", { type: "text/csv" })],
       },
     });
-    await waitFor(() => expect(botao("Conferir")).toBeEnabled());
+    await waitFor(() => esperarDisponivel(botao("Conferir")));
     fireEvent.click(botao("Conferir"));
     await screen.findByText("Nenhum erro encontrado");
-    expect(botao("Importar")).toBeEnabled();
+    esperarDisponivel(botao("Importar"));
     conferirDicas(10);
 
     fireEvent.click(botao("Importar"));
@@ -329,7 +330,7 @@ describe("Conferência", () => {
     );
     conferirDicas(10);
 
-    // A próxima página fica pendente: o botão vira "Carregando…" (desabilitado, com a dica de indisponível).
+    // A próxima página fica pendente: o botão vira "Carregando…" (indisponível com aria-disabled, com a dica).
     api.fetch.mockImplementationOnce(
       () =>
         new Promise<Response>((resolver) => {
