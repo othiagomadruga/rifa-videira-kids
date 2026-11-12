@@ -4,7 +4,7 @@
 // desconsiderar antes.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router";
-import { Aviso, Button, Dialogo } from "../../components/ui";
+import { Aviso, Button, ComDica, Dialogo } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import {
   linkDoPedido,
@@ -12,6 +12,7 @@ import {
   type PedidosQueContam,
 } from "./adesao-api";
 import { quantidade } from "./formatos";
+import { DICAS } from "./textos";
 
 type Falha =
   | { tipo: "com_pedidos"; pedidos: PedidosQueContam }
@@ -93,25 +94,34 @@ export function DialogoRemoverAfiliado({
         if (!removendo) aoFechar();
       }}
       focoAoFechar={focoAoFechar}
+      dicaFechar={DICAS.cancelarRemocao}
       rodape={
         <>
-          <Button
-            ref={refEntendi}
-            variante="secundario"
-            onClick={aoFechar}
-            disabled={removendo}
+          <ComDica
+            texto={comPedidos ? DICAS.entendiRemocao : DICAS.cancelarRemocao}
           >
-            {comPedidos ? "Entendi" : "Cancelar"}
-          </Button>
-          {!comPedidos && (
             <Button
-              ref={refRemover}
-              variante="perigo"
+              ref={refEntendi}
+              variante="secundario"
+              onClick={aoFechar}
               disabled={removendo}
-              onClick={() => void confirmar()}
             >
-              {removendo ? "Removendo…" : "Remover afiliado"}
+              {comPedidos ? "Entendi" : "Cancelar"}
             </Button>
+          </ComDica>
+          {!comPedidos && (
+            <ComDica
+              texto={removendo ? DICAS.removendo : DICAS.confirmarRemocao}
+            >
+              <Button
+                ref={refRemover}
+                variante="perigo"
+                disabled={removendo}
+                onClick={() => void confirmar()}
+              >
+                {removendo ? "Removendo…" : "Remover afiliado"}
+              </Button>
+            </ComDica>
           )}
         </>
       }

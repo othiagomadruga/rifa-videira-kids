@@ -1,5 +1,6 @@
 // RIFA-045 fase 2a: as telas da coordenação que faltavam (Visão geral, Hierarquia, Conferência, Bumbo, Rankings,
-// Mapa e Trilha) têm dica em todos os botões e campos. Mesma varredura da fase 1 (dicas.test.tsx): passa o mouse em
+// Mapa e Trilha) têm dica em todos os botões e campos; na fase 2b, a Adesão inteira (a seção "Links de vendas" veio
+// com a RIFA-046). As telas fora da coordenação ficam em pages/dicas-fora-da-coordenacao.test.tsx. Mesma varredura da fase 1 (dicas.test.tsx): passa o mouse em
 // cada botão, campo, aba, link com cara de botão, <summary> e link do menu visível (com um diálogo aberto, só nele),
 // espera o tempo da dica e confere a dica e que ela some ao tirar o mouse. Cada tela entra nos estados que mostram
 // os outros botões (diálogos, confirmações, "Carregar mais", filtros sem resultado, carregando, falhas).
@@ -29,6 +30,8 @@ import {
   renderizarRota,
   respostaJson,
 } from "../../test/renderizar";
+import { celulaDeTeste, simularApiAdesao } from "../adesao/teste-apoio";
+import { DICAS as DICAS_ADESAO } from "../adesao/textos";
 import { simularApi as simularBumbo } from "../bumbo/teste-apoio";
 import { DICAS as DICAS_BUMBO } from "../bumbo/textos";
 import {
@@ -539,5 +542,277 @@ describe("Trilha", () => {
       ),
     );
     await screen.findByText(/não há registros mais antigos/);
+  });
+});
+
+describe("Adesão", () => {
+  let api: ReturnType<typeof simularApiAdesao> | null = null;
+
+  /**
+   * Abre a tela (com a coordenação, se não vier o `usuario`) e espera o painel e a seção "Links de vendas" (que vem
+   * num pacote à parte).
+   */
+  async function abrir(
+    opcoes: Parameters<typeof simularApiAdesao>[0] = {},
+    usuario?: typeof ADMIN_DE_TESTE,
+  ) {
+    api = simularApiAdesao(opcoes);
+    renderizarRota("/coordenacao/adesao", usuario ? { usuario } : {});
+    await screen.findByText(/^Atualizado às/, undefined, { timeout: 5000 });
+    const links = await screen.findByRole(
+      "region",
+      { name: "Links de vendas" },
+      { timeout: 5000 },
+    );
+    await within(links).findByRole(
+      "button",
+      { name: /^Imprimir os QR codes/ },
+      { timeout: 5000 },
+    );
+    return api;
+  }
+
+  /** O cartão da célula na lista "Todas as células" (a célula sem afiliado também aparece em "Quem falta"). */
+  const naLista = (nome: string) =>
+    within(
+      within(screen.getByRole("region", { name: "Todas as células" }))
+        .getByRole("heading", { level: 3, name: nome })
+        .closest("article") as HTMLElement,
+    );
+
+  afterEach(() => {
+    expect(api?.inesperadas ?? []).toEqual([]);
+    api = null;
+  });
+
+  it("o painel: Atualizar agora, Vincular de cada órfão, ligar e Copiar em 'Quem falta', as buscas, Trocar, Desvincular, Adicionar outro código e o código de afiliado", async () => {
+    await abrir();
+    expect(botao("Vincular o afiliado 1044")).toBeInTheDocument();
+    expect(
+      naLista("Célula Betel").getByRole("button", {
+        name: "Adicionar outro código em Célula Betel",
+      }),
+    ).toBeInTheDocument();
+    conferirDicas(38);
+
+    expect(textoDaDica(botao("Atualizar agora"))).toBe(
+      DICAS_ADESAO.atualizarAgora,
+    );
+    expect(textoDaDica(botao("Vincular o afiliado 1043"))).toBe(
+      DICAS_ADESAO.vincular,
+    );
+    expect(textoDaDica(botao("Copiar o telefone de Lider Ágape"))).toBe(
+      DICAS_ADESAO.copiarTelefone,
+    );
+    expect(
+      textoDaDica(
+        naLista("Célula Ágape").getByRole("textbox", {
+          name: "Código de afiliado (Célula Ágape)",
+        }),
+      ),
+    ).toBe(DICAS_ADESAO.codigoAfiliado);
+    // O número do líder é um link comum (tel:), que a varredura não pega: a dica confere à parte.
+    const ligar = screen.getByRole("link", { name: "(91) 90000-0001" });
+    expect(ligar).toHaveAttribute("href", "tel:91900000001");
+    expect(textoDaDica(ligar)).toBe(DICAS_ADESAO.ligar);
+  });
+
+  it("admin: 'Remover' em cada órfão e em cada afiliado das células", async () => {
+    await abrir({}, ADMIN_DE_TESTE);
+    expect(
+      screen.getAllByRole("button", { name: /^Remover o afiliado/ }),
+    ).toHaveLength(4);
+    conferirDicas(45);
+    expect(textoDaDica(botao("Remover o afiliado 1001"))).toBe(
+      DICAS_ADESAO.removerAfiliado,
+    );
+  });
+
+  it("Vincular aberto: a busca, as células para marcar, Confirmar e Cancelar; gravando, 'Salvando…' diz por que está indisponível", async () => {
+    const api = await abrir();
+    acionar(botao("Vincular o afiliado 1044"));
+    const escolha = await screen.findByRole("group", {
+      name: "Célula do afiliado 1044",
+    });
+    expect(within(escolha).getAllByRole("radio")).toHaveLength(4);
+    conferirDicas(45);
+    expect(textoDaDica(botao("Vincular o afiliado 1044"))).toBe(
+      DICAS_ADESAO.vincularAberto,
+    );
+    expect(textoDaDica(botao("Confirmar"))).toBe(
+      DICAS_ADESAO.confirmarSemEscolha,
+    );
+    // O rádio tem a dica no fim da descrição (a dica fica na linha toda).
+    const debora = within(escolha).getByRole("radio", {
+      name: /^Célula Débora/,
+    });
+    expect(textoDaDica(debora)).toBe(DICAS_ADESAO.opcaoCelula);
+
+    fireEvent.click(debora);
+    expect(textoDaDica(botao("Vincular: Célula Débora"))).toBe(
+      DICAS_ADESAO.confirmarEscolha,
+    );
+    const soltar = api.segurarGravacoes();
+    fireEvent.click(botao("Vincular: Célula Débora"));
+    const salvando = await screen.findByRole("button", { name: "Salvando…" });
+    expect(salvando).toBeDisabled();
+    expect(textoDaDica(salvando)).toBe(DICAS_ADESAO.salvandoEscolha);
+    conferirDicas(45);
+    soltar();
+    // O aviso aparece na seção e na região viva da tela.
+    expect(
+      await screen.findAllByText("Afiliado 1044 vinculado: Célula Débora."),
+    ).not.toHaveLength(0);
+  });
+
+  it("Trocar aberto e a pergunta do Desvincular; desvinculando, 'Desvinculando…' diz por que está indisponível", async () => {
+    const api = await abrir();
+    const trocar = naLista("Célula Betel").getByRole("button", {
+      name: "Trocar a célula do afiliado 1001",
+    });
+    acionar(trocar);
+    await naLista("Célula Betel").findByRole("group", {
+      name: "Nova célula do afiliado 1001",
+    });
+    expect(textoDaDica(trocar)).toBe(DICAS_ADESAO.trocarAberto);
+    conferirDicas(44);
+    fireEvent.click(
+      naLista("Célula Betel").getByRole("button", { name: "Cancelar" }),
+    );
+
+    acionar(
+      naLista("Célula Betel").getByRole("button", {
+        name: "Desvincular o afiliado 1001",
+      }),
+    );
+    const confirmar = await naLista("Célula Betel").findByRole("button", {
+      name: "Confirmar desvínculo",
+    });
+    expect(textoDaDica(confirmar)).toBe(DICAS_ADESAO.confirmarDesvinculo);
+    conferirDicas(40);
+
+    const soltar = api.segurarGravacoes();
+    fireEvent.click(confirmar);
+    const desvinculando = await naLista("Célula Betel").findByRole("button", {
+      name: "Desvinculando…",
+    });
+    expect(textoDaDica(desvinculando)).toBe(DICAS_ADESAO.desvinculando);
+    conferirDicas(40);
+    soltar();
+    expect(
+      await screen.findAllByText(
+        "Afiliado 1001 desvinculado. Ele voltou para “Sem célula”.",
+      ),
+    ).not.toHaveLength(0);
+  });
+
+  it("pré-cadastro de um código que está em outra célula: a pergunta da troca; gravando, 'Salvando…'", async () => {
+    const api = await abrir();
+    const agape = naLista("Célula Ágape");
+    fireEvent.change(
+      agape.getByRole("textbox", { name: "Código de afiliado (Célula Ágape)" }),
+      { target: { value: "1002" } },
+    );
+    fireEvent.click(agape.getByRole("button", { name: "Salvar código" }));
+    const trocarPara = await agape.findByRole("button", {
+      name: "Trocar para esta célula",
+    });
+    expect(textoDaDica(trocarPara)).toBe(DICAS_ADESAO.trocarParaEstaCelula);
+    expect(textoDaDica(agape.getByRole("button", { name: "Cancelar" }))).toBe(
+      DICAS_ADESAO.cancelarTroca,
+    );
+    conferirDicas(40);
+
+    const soltar = api.segurarGravacoes();
+    fireEvent.click(trocarPara);
+    const salvando = await agape.findByRole("button", { name: "Salvando…" });
+    expect(textoDaDica(salvando)).toBe(DICAS_ADESAO.salvandoCodigo);
+    conferirDicas(40);
+    soltar();
+    expect(
+      await screen.findAllByText("Afiliado 1002 trocado para: Célula Ágape."),
+    ).not.toHaveLength(0);
+  });
+
+  it("a confirmação de remover (admin): removendo, 'Removendo…'; com pedidos que ainda contam, 'Entendi'", async () => {
+    const api = await abrir(
+      { comPedidos: { 1044: ["PED-1"] } },
+      ADMIN_DE_TESTE,
+    );
+    acionar(botao("Remover o afiliado 1044"));
+    const dialogo = await screen.findByRole("alertdialog", {
+      name: "Remover o afiliado 1044?",
+    });
+    // O ×, Cancelar e Remover afiliado (o resto da página fica inert).
+    expect(contarControles(dialogo)).toBe(3);
+    conferirDicas(3);
+    expect(
+      textoDaDica(
+        within(dialogo).getByRole("button", { name: "Remover afiliado" }),
+      ),
+    ).toBe(DICAS_ADESAO.confirmarRemocao);
+    // O × diz o que acontece ao fechar (no lugar da dica padrão do Dialogo).
+    expect(
+      textoDaDica(within(dialogo).getByRole("button", { name: "Fechar" })),
+    ).toBe(DICAS_ADESAO.cancelarRemocao);
+
+    const soltar = api.segurarGravacoes();
+    fireEvent.click(
+      within(dialogo).getByRole("button", { name: "Remover afiliado" }),
+    );
+    const removendo = await within(dialogo).findByRole("button", {
+      name: "Removendo…",
+    });
+    expect(textoDaDica(removendo)).toBe(DICAS_ADESAO.removendo);
+    conferirDicas(3);
+    soltar();
+
+    const entendi = await within(dialogo).findByRole("button", {
+      name: "Entendi",
+    });
+    expect(textoDaDica(entendi)).toBe(DICAS_ADESAO.entendiRemocao);
+    conferirDicas(2);
+  });
+
+  it("falha na primeira carga: 'Tentar de novo'", async () => {
+    api = simularApiAdesao({ falhas: 1 });
+    renderizarRota("/coordenacao/adesao");
+    await screen.findByRole(
+      "button",
+      { name: "Tentar de novo" },
+      { timeout: 5000 },
+    );
+    conferirDicas(13);
+  });
+
+  it("sem células: o aviso que leva à Hierarquia e a fila 'Sem célula'", async () => {
+    await abrir({ celulas: [] });
+    expect(screen.getByText("Nenhuma célula cadastrada.")).toBeInTheDocument();
+    conferirDicas(18);
+  });
+
+  it("uma célula só, já com afiliado: 'Quem falta' vazio e a busca sem resultado", async () => {
+    await abrir({
+      celulas: [
+        celulaDeTeste(2, "Célula Betel", {
+          afiliados: [1001],
+          vinculada: true,
+        }),
+      ],
+      orfaos: [],
+    });
+    expect(
+      screen.getByText("Todas as células já têm afiliado."),
+    ).toBeInTheDocument();
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Buscar célula, líder ou código" }),
+      { target: { value: "nenhuma célula assim" } },
+    );
+    expect(
+      within(
+        screen.getByRole("region", { name: "Todas as células" }),
+      ).getByText("Nenhuma célula encontrada."),
+    ).toBeInTheDocument();
+    conferirDicas(21);
   });
 });

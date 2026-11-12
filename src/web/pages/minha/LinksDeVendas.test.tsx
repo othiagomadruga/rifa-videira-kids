@@ -468,8 +468,9 @@ describe("estados do link de vendas", () => {
   });
 });
 
-// RIFA-045 nos controles da RIFA-046: o resto da /minha é da fase 2 das dicas, então a varredura fica no cartão do
-// link de vendas (e no diálogo do "Ver QR", que deixa o resto da página `inert`).
+// RIFA-045 nos controles da RIFA-046: aqui a varredura fica no cartão do link de vendas (e no diálogo do "Ver QR", que
+// deixa o resto da página `inert`), com os textos de cada dica; a página inteira (fase 2b) é varrida em
+// pages/dicas-fora-da-coordenacao.test.tsx.
 describe("dicas nos botões e campos do link de vendas", () => {
   it("líder com dois códigos: o campo, Copiar, WhatsApp, Baixar imagem, Imprimir e Ver QR; no diálogo, Pronto e o ×", async () => {
     const { cartao } = await abrir(

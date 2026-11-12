@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
-import { Button, ErrorState, Loading, Marca } from "../../components/ui";
+import {
+  Button,
+  ComDica,
+  ErrorState,
+  Loading,
+  Marca,
+} from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
+import { DICAS_DA_MOLDURA } from "./textos-moldura";
 import "./minha-moldura.css";
 
 type Saida = { saindo: boolean; erro: string | null };
@@ -36,13 +43,15 @@ export function MinhaLayout() {
             complemento={usuario ? ROTULO_PAPEL[usuario.papel] : undefined}
           />
           {usuario && (
-            <Button
-              variante="secundario"
-              disabled={saida.saindo}
-              onClick={() => void sairDoSistema()}
-            >
-              {saida.saindo ? "Saindo…" : "Sair"}
-            </Button>
+            <ComDica texto={DICAS_DA_MOLDURA.sair}>
+              <Button
+                variante="secundario"
+                disabled={saida.saindo}
+                onClick={() => void sairDoSistema()}
+              >
+                {saida.saindo ? "Saindo…" : "Sair"}
+              </Button>
+            </ComDica>
           )}
         </div>
         {saida.erro && (

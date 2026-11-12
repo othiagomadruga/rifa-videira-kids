@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from "react";
 import { Link } from "react-router";
 import {
   Button,
+  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -16,6 +17,7 @@ import {
   type PainelAdesao,
 } from "./adesao-api";
 import { formatarHoraComSegundos } from "./formatos";
+import { DICAS } from "./textos";
 import { QuemFalta } from "./QuemFalta";
 import { ResumoAdesao } from "./ResumoAdesao";
 import { SemCelula } from "./SemCelula";
@@ -134,9 +136,11 @@ export function AdesaoPage() {
                   : `Atualizado às ${formatarHoraComSegundos(estado.painel.obtidoEm)}.`}{" "}
                 Atualiza sozinho a cada {SEGUNDOS_ENTRE_ATUALIZACOES} s.
               </p>
-              <Button variante="secundario" onClick={atualizarAgora}>
-                Atualizar agora
-              </Button>
+              <ComDica texto={DICAS.atualizarAgora}>
+                <Button variante="secundario" onClick={atualizarAgora}>
+                  Atualizar agora
+                </Button>
+              </ComDica>
             </div>
             <p className="adesao-status__falha" role="status">
               {estado.falha !== null &&

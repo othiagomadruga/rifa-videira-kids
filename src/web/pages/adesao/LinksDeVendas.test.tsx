@@ -659,8 +659,9 @@ describe("estados da seção Links de vendas", () => {
   });
 });
 
-// RIFA-045 nos controles da RIFA-046: o resto da Adesão é da fase 2 das dicas, então a varredura fica na seção
-// "Links de vendas" (e no diálogo do "Ver QR", que deixa o resto da página `inert`).
+// RIFA-045 nos controles da RIFA-046: aqui a varredura fica na seção "Links de vendas" (e no diálogo do "Ver QR", que
+// deixa o resto da página `inert`), com os textos de cada dica; a tela inteira (fase 2b) é varrida em
+// pages/coordenacao/dicas-fase2.test.tsx.
 describe("dicas nos botões e campos dos links de vendas", () => {
   it("admin com o modelo gravado: o campo, Salvar (indisponível), Imprimir os QR codes, a busca e os links de cada célula; no Ver QR, o diálogo", async () => {
     const { secao } = await abrir(ADMIN_DE_TESTE, { modelo: MODELO_DE_TESTE });

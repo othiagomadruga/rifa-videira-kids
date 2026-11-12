@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
-import { Aviso, Button, Card, PageHeader } from "../../components/ui";
+import { Aviso, Button, Card, ComDica, PageHeader } from "../../components/ui";
 import {
   ehAcessoDesligado,
   textoAcessoDesligado,
 } from "../../lib/acesso-desligado";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { destinoDoPapel, retirarDestino, useSessao } from "../../lib/sessao";
+import { DICAS } from "./textos";
 import "./acesso.css";
 
 /** PREFIXO_LINK_ACESSO sem a barra final: o endereço que fica no lugar do link (cópia do contrato). */
@@ -140,13 +141,15 @@ export function AcessoPage() {
             )}
           </div>
           {podeEntrar && (
-            <Button
-              larguraTotal
-              disabled={entrando}
-              onClick={() => void aoEntrar()}
-            >
-              {entrando ? "Entrando…" : "Entrar"}
-            </Button>
+            <ComDica texto={entrando ? DICAS.entrando : DICAS.entrar}>
+              <Button
+                larguraTotal
+                disabled={entrando}
+                onClick={() => void aoEntrar()}
+              >
+                {entrando ? "Entrando…" : "Entrar"}
+              </Button>
+            </ComDica>
           )}
           <p className="acesso-nota">
             O link é só seu: não repasse. Quem tiver o link entra como você.
