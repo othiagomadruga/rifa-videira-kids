@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import type { RespostaMapaDdd } from "../../../shared/contracts/api";
 import { NOME_DA_UF, type Uf } from "../../../shared/contracts/ddd";
-import { DataTable, type ColunaTabela } from "../../components/ui";
+import { ComDica, DataTable, type ColunaTabela } from "../../components/ui";
 import { formatarMoeda, formatarNumero } from "../../lib/formatadores";
 import {
   POSICAO_DA_UF,
@@ -10,6 +10,7 @@ import {
   type Direcao,
 } from "./grade";
 import {
+  DICAS,
   ROTULO_DA_FAIXA,
   faixaDaUf,
   listaDeNomes,
@@ -157,27 +158,28 @@ export function MapaDoBrasil({ resposta }: { resposta: RespostaMapaDdd }) {
             const [linha, coluna] = POSICAO_DA_UF[uf];
             const totais = porUf.get(uf);
             return (
-              <button
-                key={uf}
-                type="button"
-                className="mapa-uf"
-                data-linha={linha}
-                data-coluna={coluna}
-                data-faixa={faixaDaUf(totais)}
-                data-uf={uf}
-                data-ativa={ativa === uf ? "" : undefined}
-                tabIndex={uf === parada ? 0 : -1}
-                aria-label={rotuloDaUf(uf, totais)}
-                onPointerEnter={() => setAtiva(uf)}
-                onFocus={() => {
-                  setAtiva(uf);
-                  setFocada(uf);
-                }}
-                onClick={() => setAtiva(uf)}
-                onKeyDown={(evento) => andar(evento, uf)}
-              >
-                <span aria-hidden="true">{uf}</span>
-              </button>
+              <ComDica key={uf} texto={DICAS.uf}>
+                <button
+                  type="button"
+                  className="mapa-uf"
+                  data-linha={linha}
+                  data-coluna={coluna}
+                  data-faixa={faixaDaUf(totais)}
+                  data-uf={uf}
+                  data-ativa={ativa === uf ? "" : undefined}
+                  tabIndex={uf === parada ? 0 : -1}
+                  aria-label={rotuloDaUf(uf, totais)}
+                  onPointerEnter={() => setAtiva(uf)}
+                  onFocus={() => {
+                    setAtiva(uf);
+                    setFocada(uf);
+                  }}
+                  onClick={() => setAtiva(uf)}
+                  onKeyDown={(evento) => andar(evento, uf)}
+                >
+                  <span aria-hidden="true">{uf}</span>
+                </button>
+              </ComDica>
             );
           })}
           <Quadro uf={ativa} totais={ativa ? porUf.get(ativa) : undefined} />
@@ -188,7 +190,9 @@ export function MapaDoBrasil({ resposta }: { resposta: RespostaMapaDdd }) {
         </div>
       </div>
       <details className="mapa-detalhes">
-        <summary>Ver os estados em tabela</summary>
+        <ComDica texto={DICAS.tabelaDosEstados}>
+          <summary>Ver os estados em tabela</summary>
+        </ComDica>
         <div className="mapa-detalhes__conteudo">
           <DataTable
             colunas={COLUNAS_UFS}

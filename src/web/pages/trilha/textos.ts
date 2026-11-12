@@ -67,3 +67,14 @@ export function textoDoAlvo(alvo: string): string {
 export function registros(quantidade: number): string {
   return quantidade === 1 ? "1 registro" : `${quantidade} registros`;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão da tela.
+// Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  carregarMais: "Traz os registros mais antigos para o fim da lista.",
+  carregando:
+    "Indisponível enquanto a próxima parte da lista chega. Espere um instante.",
+} as const;

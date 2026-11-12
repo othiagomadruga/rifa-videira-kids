@@ -164,3 +164,18 @@ export function avisoDaMensagem({
     };
   return null;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  dia: "Mostra a mensagem de outro dia da campanha, para conferir ou mandar de novo. Hoje vem escolhido.",
+  enviarNoWhatsApp:
+    "Abre o WhatsApp com a mensagem já escrita. Lá você escolhe o grupo dos líderes e envia.",
+  copiar:
+    "Copia a mensagem para colar no grupo. Se o aparelho não deixar, ela fica selecionada para copiar à mão.",
+  configurarCampanha:
+    "Abre a tela Campanha, onde ela é configurada. Depois disso, a mensagem do dia aparece aqui.",
+} as const;

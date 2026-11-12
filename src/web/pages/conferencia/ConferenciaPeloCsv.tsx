@@ -22,7 +22,7 @@ import { DialogoRecuperar } from "./DialogoRecuperar";
 import { Historico } from "./Historico";
 import { Mapeamento } from "./Mapeamento";
 import { Resultado } from "./Resultado";
-import { CAMPOS, plural } from "./textos";
+import { CAMPOS, DICAS, plural } from "./textos";
 import "./conferencia.css";
 
 const CAMPOS_EM_ORDEM = Object.keys(CAMPOS) as CampoReconciliacao[];
@@ -407,6 +407,11 @@ export function ConferenciaPeloCsv() {
               arquivo={arquivo}
               aoEscolher={(novo) => void escolher(novo)}
               desabilitado={ocupado !== null}
+              dicaEscolher={
+                ocupado !== null
+                  ? DICAS.escolherArquivoOcupado
+                  : DICAS.escolherArquivo
+              }
             />
             {ocupado === "lendo" && <Loading texto="Lendo o arquivo…" />}
             {ocupado === "conferindo" && (
