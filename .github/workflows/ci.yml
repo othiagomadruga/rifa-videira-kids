@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  # Publicar a main de novo sem commit (RIFA-035, D22): Actions → CI → Run workflow, na main. Refaz o build e a
+  # publicação, como um push; noutra branch, só o job ci.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -52,7 +55,8 @@ jobs:
           # assets, e dist/rifa_videira_kids/.vite/manifest.json); a conferência acima barra .dev.vars e .env.
           include-hidden-files: true
           if-no-files-found: error
-          # O publicar baixa o artefato do mesmo run, minutos depois. Para publicar de novo: Re-run all jobs.
+          # O publicar baixa o artefato do mesmo run, minutos depois. Para publicar de novo: Run workflow na main
+          # (ou Re-run all jobs).
           retention-days: 1
           # No "Re-run all jobs" o build é refeito e substitui o artefato da tentativa anterior.
           overwrite: true
@@ -60,7 +64,7 @@ jobs:
   publicar:
     name: publicar na Cloudflare
     needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Sem `environment:` (revisão da RIFA-021, D18): o repositório é privado e, no plano Free do GitHub, ambientes

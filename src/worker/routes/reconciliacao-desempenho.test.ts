@@ -4,6 +4,12 @@
 // Worker: ler e conferir o corpo, juntar os pedidos, comparar e montar o JSON). O corpo é o que o navegador
 // manda (corpoDe: a mesma leitura da tela). Os números saem no log; o limite do teste é folgado e não é o do
 // plano: pega regressão grosseira, como a leitura do CSV no Worker, que gastava 300 ms com 7 mil pedidos.
+//
+// A trava usa o MELHOR de 7 medidas (RIFA-035), não a mediana nem uma medida só. O relógio do workerd é de parede:
+// com a máquina carregada (a suíte em paralelo, outro processo), ele soma a espera pelos núcleos, e a gravação,
+// medida uma vez só, já falhou com 53 ms. A carga só acrescenta tempo, nunca tira: o menor tempo é o que mais se
+// aproxima do trabalho do Worker, e uma regressão de verdade (ler o CSV no Worker de novo) aparece em TODAS as
+// medidas, inclusive na melhor. A mediana continua no log, para comparar entre execuções.
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
@@ -25,9 +31,11 @@ import { bancoQueConta } from "../test/painel-apoio";
 /**
  * Folgado de propósito: a máquina do CI varia; o medido sai no log (de 8 a 11 ms com 7 mil pedidos na integração
  * com a main). Não é o limite do plano (no Workers Paid são segundos): é a trava contra regressão grosseira, como
- * voltar a ler o CSV no Worker.
+ * voltar a ler o CSV no Worker. Vale para a melhor das medidas (veja o topo).
  */
 const LIMITE_WORKER_MS = 30;
+/** Medidas por rota, depois de 1 rodada de aquecimento: a trava usa a melhor, o log mostra a mediana também. */
+const RODADAS = 7;
 /** Pedidos do arquivo que não estão no banco (vendas perdidas). */
 const PERDIDOS = 50;
 const AFILIADOS = [101, 102, 103, 104, 105];
@@ -100,18 +108,32 @@ const mediana = (valores: number[]) =>
   [...valores].sort((a, b) => a - b)[Math.floor(valores.length / 2)];
 const ms = (valor: number) => valor.toFixed(1).padStart(5);
 
-/** Mede uma rota: 1 rodada de aquecimento e 5 medidas; devolve a mediana do Worker (total − D1). */
+/** O que a medida de uma rota devolve (em ms): medianas e a melhor medida do Worker. */
+interface Medida {
+  total: number;
+  banco: number;
+  /** Mediana do Worker (total − D1): só no log. */
+  worker: number;
+  /** A melhor medida do Worker: a da trava. */
+  melhor: number;
+}
+
+/**
+ * Mede uma rota: 1 rodada de aquecimento e RODADAS medidas. `depois` roda no fim de cada rodada, fora da medida
+ * (a gravação desfaz o que gravou, para a rodada seguinte gravar de novo os mesmos pedidos).
+ */
 async function medir(
   caminho: string,
   corpo: object,
   validar: (corpo: unknown) => void,
-): Promise<{ total: number; banco: number; worker: number }> {
+  depois?: () => Promise<void>,
+): Promise<Medida> {
   const texto = JSON.stringify(corpo);
   // Como o navegador manda (o fetch com texto põe o Content-Length).
   const tamanho = String(new TextEncoder().encode(texto).length);
   const totais: number[] = [];
   const bancos: number[] = [];
-  for (let rodada = 0; rodada < 6; rodada++) {
+  for (let rodada = 0; rodada <= RODADAS; rodada++) {
     const { db, contagem } = bancoQueConta();
     const inicio = performance.now();
     const res = await app.request(
@@ -134,13 +156,31 @@ async function medir(
       totais.push(total);
       bancos.push(contagem.ms);
     }
+    await depois?.();
   }
+  const workers = totais.map((total, indice) => total - bancos[indice]);
   return {
     total: mediana(totais),
     banco: mediana(bancos),
-    worker: mediana(totais.map((total, indice) => total - bancos[indice])),
+    worker: mediana(workers),
+    melhor: Math.min(...workers),
   };
 }
+
+/** Desfaz a gravação do "Recuperar" (os pedidos recuperados, a auditoria e a linha da trilha), fora da medida. */
+async function desfazerGravacao(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM pedidos WHERE origem = 'conferencia'"),
+    env.DB.prepare(
+      "DELETE FROM auditoria WHERE acao = 'conferencia.recuperar'",
+    ),
+    env.DB.prepare("DELETE FROM recuperacoes"),
+  ]);
+}
+
+/** Uma linha do log: as medianas e a melhor medida do Worker (a da trava). */
+const linhaDoLog = (rota: string, medida: Medida) =>
+  `  ${rota.padEnd(19)} total ${ms(medida.total)} ms | D1 ${ms(medida.banco)} ms | Worker mediana ${ms(medida.worker)} ms, melhor ${ms(medida.melhor)} ms`;
 
 const analise = (corpo: unknown) =>
   respostaAnaliseReconciliacaoSchema.parse(corpo);
@@ -182,41 +222,30 @@ describe("desempenho da conferência no workerd (CPU do Worker por requisição)
         (resposta) =>
           expect(recuperacao(resposta).recuperados).toHaveLength(PERDIDOS),
       );
-      // A gravação mede uma vez só (depois dela, os pedidos já existem).
-      const { db, contagem } = bancoQueConta();
-      const inicio = performance.now();
-      const gravacao = JSON.stringify({
-        ...corpo,
-        pedidos: perdidos(quantidade),
-        simular: false,
-      } satisfies CorpoConferencia & { pedidos: string[]; simular: boolean });
-      const res = await app.request(
+      // A gravação grava de verdade: cada rodada desfaz o que gravou, e a seguinte grava os mesmos pedidos.
+      const gravar = await medir(
         "/api/admin/reconciliacao/recuperar",
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": String(new TextEncoder().encode(gravacao).length),
-          },
-          body: gravacao,
-        },
-        { ...env, DB: db },
+          ...corpo,
+          pedidos: perdidos(quantidade),
+          simular: false,
+        } satisfies CorpoConferencia & { pedidos: string[]; simular: boolean },
+        (resposta) =>
+          expect(recuperacao(resposta).recuperados).toHaveLength(PERDIDOS),
+        desfazerGravacao,
       );
-      const gravado = recuperacao(await res.json());
-      const gravar = performance.now() - inicio - contagem.ms;
-      expect(gravado.recuperados).toHaveLength(PERDIDOS);
 
       console.log(
         [
           `Conferência: ${quantidade.toLocaleString("pt-BR")} pedidos no banco, ${(quantidade + PERDIDOS).toLocaleString("pt-BR")} no arquivo (corpo de ${(bytes / 1024).toFixed(0)} KB)`,
-          `  /analisar           total ${ms(analisar.total)} ms | D1 ${ms(analisar.banco)} ms | Worker ${ms(analisar.worker)} ms`,
-          `  /recuperar simular  total ${ms(simular.total)} ms | D1 ${ms(simular.banco)} ms | Worker ${ms(simular.worker)} ms`,
-          `  /recuperar gravar   Worker ${ms(gravar)} ms (uma vez)`,
+          linhaDoLog("/analisar", analisar),
+          linhaDoLog("/recuperar simular", simular),
+          linhaDoLog("/recuperar gravar", gravar),
         ].join("\n"),
       );
-      expect(analisar.worker).toBeLessThan(LIMITE_WORKER_MS);
-      expect(simular.worker).toBeLessThan(LIMITE_WORKER_MS);
-      expect(gravar).toBeLessThan(LIMITE_WORKER_MS);
+      expect(analisar.melhor).toBeLessThan(LIMITE_WORKER_MS);
+      expect(simular.melhor).toBeLessThan(LIMITE_WORKER_MS);
+      expect(gravar.melhor).toBeLessThan(LIMITE_WORKER_MS);
     });
   }
 
@@ -239,8 +268,8 @@ describe("desempenho da conferência no workerd (CPU do Worker por requisição)
       },
     );
     console.log(
-      `Conferência, um bilhete por linha: ${corpo.linhas.toLocaleString("pt-BR")} linhas, ${corpo.vezes.length.toLocaleString("pt-BR")} posições | /analisar Worker ${ms(analisar.worker)} ms (D1 ${ms(analisar.banco)} ms)`,
+      `Conferência, um bilhete por linha: ${corpo.linhas.toLocaleString("pt-BR")} linhas, ${corpo.vezes.length.toLocaleString("pt-BR")} posições\n${linhaDoLog("/analisar", analisar)}`,
     );
-    expect(analisar.worker).toBeLessThan(LIMITE_WORKER_MS);
+    expect(analisar.melhor).toBeLessThan(LIMITE_WORKER_MS);
   });
 });
