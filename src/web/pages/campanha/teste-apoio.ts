@@ -83,10 +83,21 @@ export const NAO_ENCONTRADA = () =>
     404,
   );
 
-/** Troca o fetch: GET devolve a campanha (ou 404); PUT responde com `aoSalvar` (padrão: a API). */
+/**
+ * Troca o fetch: GET devolve a campanha (ou 404); PUT responde com `aoSalvar` (padrão: a API, em que o grupo
+ * `pedidos`, `acesso` ou `mensagens` ausente mantém o gravado; o PUT da coordenação não os manda, RIFA-042).
+ */
 export function simularApi({
   campanha = null,
-  aoSalvar = (corpo) => respostaJson(campanhaDaEntrada(corpo)),
+  aoSalvar = (corpo) =>
+    respostaJson(
+      campanhaDaEntrada({
+        ...corpo,
+        pedidos: corpo.pedidos ?? campanha?.pedidos,
+        acesso: corpo.acesso ?? campanha?.acesso,
+        mensagens: corpo.mensagens ?? campanha?.mensagens,
+      }),
+    ),
   aoCarregar,
 }: {
   campanha?: Campanha | null;

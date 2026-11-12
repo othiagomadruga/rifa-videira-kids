@@ -289,6 +289,27 @@ describe("RIFA-041: o {link} colado em outro endereço não sai na mensagem", ()
     );
   });
 
+  it("RIFA-042: um modelo gravado com outro endereço (sem o {link} colado) também dá lugar ao padrão", () => {
+    for (const modelo of [
+      "{saudacao} Antes, veja https://outro-site.example\n{link}",
+      "{saudacao} Antes, veja www.outro-site.example\n{link}",
+      "{saudacao} Antes, veja outro-site.example/oferta\n{link}",
+    ])
+      expect({
+        modelo,
+        mensagem: mensagemWhatsApp("Ana", URL_FICTICIA, {
+          ...MENSAGENS_PADRAO,
+          link_coordenacao: modelo,
+        }),
+      }).toEqual({
+        modelo,
+        mensagem: preencherMensagem(MENSAGENS_PADRAO.link_coordenacao, {
+          pessoaNome: "Ana",
+          url: URL_FICTICIA,
+        }),
+      });
+  });
+
   it.each([
     ["no começo", "{link}\n{saudacao}"],
     ["depois de espaço", "{saudacao} Entre: {link}"],
