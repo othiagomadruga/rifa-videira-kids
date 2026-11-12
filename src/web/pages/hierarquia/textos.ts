@@ -200,9 +200,9 @@ export const DICAS = {
     rede: "Como a rede aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outra rede.",
   } satisfies Record<Entidade, string>,
   discipuladorDaCelula:
-    "Quem acompanha a célula. Nos rankings, ela passa a contar para este discipulador e para a rede dele.",
+    "Quem acompanha a célula. Nos rankings e no painel, ela passa a contar, com as vendas de antes, para este discipulador e a rede dele.",
   pessoas:
-    "Quantas pessoas a célula tem. Nas metas por pessoa, mudar este número muda a meta da célula.",
+    "Quantas pessoas a célula tem. A meta da célula sai deste número, a não ser que seja igual para todas; na meta total dividida pelas células, mudar aqui muda também a das outras.",
   liderNome:
     "Quem lidera a célula. Aparece na tabela das células e no relatório por célula.",
   liderEmail:

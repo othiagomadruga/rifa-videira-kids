@@ -413,7 +413,7 @@ export const DICAS = {
   verCampanhaToda:
     "Tira o recorte e volta a mostrar o painel da campanha inteira.",
   dadosDaCurva:
-    "Abre uma tabela com o esperado, o realizado e o vendido em cada dia da campanha.",
+    "Abre uma tabela, dia a dia, com o esperado e o realizado acumulados e o vendido no dia.",
   /** Um rádio por tipo do relatório: para que serve a planilha (a linha embaixo do nome diz o que ela traz). */
   tipoRelatorio: {
     totais:
