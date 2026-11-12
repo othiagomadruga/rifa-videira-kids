@@ -932,7 +932,7 @@ em todos os servidores (o webhook não guarda o token em cache).
   o anterior para de valer na hora, e as entregas recebem 401 (e se perdem) até o token novo ser colado na Rifei.
   Também é a resposta quando outra aba gerou um token no meio. Sem credencial vigente, `substituir` não importa.
 - **Erros**: primeiro o login (401 sem sessão; 403 da coordenação, da hierarquia e de outra origem); depois 400
-  `requisicao_invalida` (corpo) e 409 `em_uso`.
+  `json_invalido` (corpo que não é JSON) ou `requisicao_invalida` (corpo fora do formato) e 409 `em_uso`.
 - Trilha: `webhook.gerar_token`, no mesmo lote da gravação, sem o token nem o hash.
 
 ---
