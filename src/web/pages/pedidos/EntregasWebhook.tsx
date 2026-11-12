@@ -7,6 +7,7 @@ import {
   Aviso,
   Badge,
   Button,
+  ComDica,
   DataTable,
   EmptyState,
   ErrorState,
@@ -31,6 +32,7 @@ import {
   type FiltrosEntregas,
 } from "./pedidos-api";
 import {
+  DICAS,
   RESULTADO,
   ROTULO_FILTRO_RESULTADO,
   ROTULO_RECUSA,
@@ -104,26 +106,28 @@ export function EntregasWebhook({ filtros, aoMudar }: Props) {
         dias da campanha, ou quando chega pedido com erro.
       </p>
       <div className="pedidos-filtros">
-        <Select
-          ref={filtroResultado}
-          rotulo="Resultado"
-          value={filtros.resultado ?? ""}
-          onChange={(evento) =>
-            aoMudar({
-              resultado:
-                RESULTADOS_ENTREGA.find(
-                  (resultado) => resultado === evento.target.value,
-                ) ?? null,
-            })
-          }
-        >
-          <option value="">Todos os resultados</option>
-          {RESULTADOS_ENTREGA.map((resultado) => (
-            <option key={resultado} value={resultado}>
-              {ROTULO_FILTRO_RESULTADO[resultado]}
-            </option>
-          ))}
-        </Select>
+        <ComDica texto={DICAS.filtroResultado}>
+          <Select
+            ref={filtroResultado}
+            rotulo="Resultado"
+            value={filtros.resultado ?? ""}
+            onChange={(evento) =>
+              aoMudar({
+                resultado:
+                  RESULTADOS_ENTREGA.find(
+                    (resultado) => resultado === evento.target.value,
+                  ) ?? null,
+              })
+            }
+          >
+            <option value="">Todos os resultados</option>
+            {RESULTADOS_ENTREGA.map((resultado) => (
+              <option key={resultado} value={resultado}>
+                {ROTULO_FILTRO_RESULTADO[resultado]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
       </div>
       <Conteudo
         estado={estado}
@@ -178,9 +182,11 @@ function Conteudo({
       <EmptyState
         titulo="Nenhuma entrega com este resultado."
         acao={
-          <Button variante="secundario" onClick={aoLimpar}>
-            Ver todas as entregas
-          </Button>
+          <ComDica texto={DICAS.verTodasAsEntregas}>
+            <Button variante="secundario" onClick={aoLimpar}>
+              Ver todas as entregas
+            </Button>
+          </ComDica>
         }
       />
     ) : (
@@ -206,13 +212,19 @@ function Conteudo({
           </Aviso>
         )}
         {proximo !== null && (
-          <Button
-            variante="secundario"
-            aria-disabled={mais.carregando || undefined}
-            onClick={aoCarregarMais}
+          <ComDica
+            texto={
+              mais.carregando ? DICAS.carregando : DICAS.carregarMaisEntregas
+            }
           >
-            {mais.carregando ? "Carregando…" : "Carregar mais"}
-          </Button>
+            <Button
+              variante="secundario"
+              aria-disabled={mais.carregando || undefined}
+              onClick={aoCarregarMais}
+            >
+              {mais.carregando ? "Carregando…" : "Carregar mais"}
+            </Button>
+          </ComDica>
         )}
       </div>
     </>

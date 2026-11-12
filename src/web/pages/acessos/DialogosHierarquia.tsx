@@ -7,6 +7,7 @@ import type {
 import {
   Aviso,
   Button,
+  ComDica,
   Dialogo,
   Textarea,
   classesBotao,
@@ -15,6 +16,7 @@ import { formatarData } from "../../lib/formatadores";
 import { gerarLinksHierarquia } from "./acessos-api";
 import { ehAcaoDesligada, type Mensagens } from "./regras";
 import {
+  DICAS,
   RESPONSAVEL_DO_ALVO,
   ehEmUso,
   ehNaoEncontrado,
@@ -82,16 +84,20 @@ export function DialogoTrocarAcesso({
       }}
       rodape={
         <>
-          <Button variante="secundario" onClick={aoFechar}>
-            Cancelar
-          </Button>
-          <Button
-            variante="perigo"
-            disabled={trocando}
-            onClick={() => void confirmar()}
-          >
-            {trocando ? "Trocando…" : "Trocar acesso"}
-          </Button>
+          <ComDica texto={DICAS.cancelarTrocar}>
+            <Button variante="secundario" onClick={aoFechar}>
+              Cancelar
+            </Button>
+          </ComDica>
+          <ComDica texto={DICAS.confirmarTrocar}>
+            <Button
+              variante="perigo"
+              disabled={trocando}
+              onClick={() => void confirmar()}
+            >
+              {trocando ? "Trocando…" : "Trocar acesso"}
+            </Button>
+          </ComDica>
         </>
       }
     >
@@ -163,10 +169,13 @@ export function DialogoLinksGerados({
       titulo={titulo}
       descricao="Estes links só aparecem agora: mande cada um antes de fechar."
       aoFechar={pedirParaFechar}
+      dicaFechar={DICAS.prontoLinks}
       rodape={
-        <Button variante="secundario" onClick={pedirParaFechar}>
-          Pronto
-        </Button>
+        <ComDica texto={DICAS.prontoLinks}>
+          <Button variante="secundario" onClick={pedirParaFechar}>
+            Pronto
+          </Button>
+        </ComDica>
       }
     >
       <div className="acessos-link-criado">
@@ -220,24 +229,29 @@ export function DialogoLinksGerados({
               : `${pendentes.length} links ainda não foram copiados nem abertos no WhatsApp.`
           }
           aoFechar={() => setConfirmando(false)}
+          dicaFechar={DICAS.voltarAosLinks}
           rodape={
             <>
-              <Button
-                variante="secundario"
-                onClick={() => setConfirmando(false)}
-              >
-                Voltar aos links
-              </Button>
+              <ComDica texto={DICAS.voltarAosLinks}>
+                <Button
+                  variante="secundario"
+                  onClick={() => setConfirmando(false)}
+                >
+                  Voltar aos links
+                </Button>
+              </ComDica>
               {/* Os dois diálogos saem juntos: a trava da rolagem do Dialogo é contada entre eles. */}
-              <Button
-                variante="perigo"
-                onClick={() => {
-                  setConfirmando(false);
-                  aoFechar();
-                }}
-              >
-                Fechar mesmo assim
-              </Button>
+              <ComDica texto={DICAS.fecharMesmoAssim}>
+                <Button
+                  variante="perigo"
+                  onClick={() => {
+                    setConfirmando(false);
+                    aoFechar();
+                  }}
+                >
+                  Fechar mesmo assim
+                </Button>
+              </ComDica>
             </>
           }
         >
@@ -318,25 +332,29 @@ function LinkGerado({
         <p className="acessos-suave">{motivoSemWhatsApp(item.telefone)}</p>
       )}
       <div className="acessos-link-acoes">
-        <Button onClick={() => void copiar()}>
-          Copiar mensagem{" "}
-          <span className="visualmente-oculto">para {destinatario}</span>
-        </Button>
+        <ComDica texto={DICAS.copiarMensagem}>
+          <Button onClick={() => void copiar()}>
+            Copiar mensagem{" "}
+            <span className="visualmente-oculto">para {destinatario}</span>
+          </Button>
+        </ComDica>
         {numero !== null && (
-          <a
-            className={classesBotao({ variante: "secundario" })}
-            href={linkWhatsAppDoNumero(numero, mensagem)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={aoAbrirWhatsApp}
-            onAuxClick={(evento) => {
-              // Só o botão do meio abre o link (numa aba nova); o direito só abre o menu do navegador.
-              if (evento.button === 1) aoAbrirWhatsApp();
-            }}
-          >
-            Abrir no WhatsApp{" "}
-            <span className="visualmente-oculto">de {destinatario}</span>
-          </a>
+          <ComDica texto={DICAS.abrirNoWhatsApp}>
+            <a
+              className={classesBotao({ variante: "secundario" })}
+              href={linkWhatsAppDoNumero(numero, mensagem)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={aoAbrirWhatsApp}
+              onAuxClick={(evento) => {
+                // Só o botão do meio abre o link (numa aba nova); o direito só abre o menu do navegador.
+                if (evento.button === 1) aoAbrirWhatsApp();
+              }}
+            >
+              Abrir no WhatsApp{" "}
+              <span className="visualmente-oculto">de {destinatario}</span>
+            </a>
+          </ComDica>
         )}
       </div>
       {copia !== "nada" && (
@@ -347,19 +365,23 @@ function LinkGerado({
         </p>
       )}
       <details ref={refDetalhes} className="acessos-gerado__mensagem">
-        <summary>
-          Ver a mensagem{" "}
-          <span className="visualmente-oculto">para {destinatario}</span>
-        </summary>
-        <Textarea
-          ref={refCampo}
-          rotulo={`Mensagem para ${destinatario}`}
-          value={mensagem}
-          readOnly
-          rows={6}
-          className="acessos-url"
-          onFocus={(evento) => evento.currentTarget.select()}
-        />
+        <ComDica texto={DICAS.verAMensagem}>
+          <summary>
+            Ver a mensagem{" "}
+            <span className="visualmente-oculto">para {destinatario}</span>
+          </summary>
+        </ComDica>
+        <ComDica texto={DICAS.campoMensagem}>
+          <Textarea
+            ref={refCampo}
+            rotulo={`Mensagem para ${destinatario}`}
+            value={mensagem}
+            readOnly
+            rows={6}
+            className="acessos-url"
+            onFocus={(evento) => evento.currentTarget.select()}
+          />
+        </ComDica>
       </details>
     </li>
   );

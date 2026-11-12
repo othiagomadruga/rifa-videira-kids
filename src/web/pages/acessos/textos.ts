@@ -334,3 +334,106 @@ export function camposRecusados(erro: unknown): string[] {
   }
   return [...campos];
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+/** Por que "Gerar links para quem ainda não tem" está indisponível (null: disponível). */
+export type MotivoLoteIndisponivel = "desligado" | "ocupado" | "ninguem" | null;
+
+const DICA_INDISPONIVEL_OCUPADO =
+  "Indisponível enquanto a ação em andamento termina. Espere um instante.";
+const DICA_INDISPONIVEL_DESLIGADO =
+  "Indisponível: o acesso deste papel está desligado na tela Campanha.";
+
+export const DICAS = {
+  abaCoordenacao:
+    "As pessoas que entram na área da coordenação (admin e coordenação), com os links de cada uma.",
+  abaHierarquia:
+    "Os links pessoais dos líderes, discipuladores e redes. Quem entra por eles vê só a própria visão, sem valores em R$.",
+  abaWebhook:
+    "O token que a Rifei usa para mandar as vendas ao sistema. Ele é gerado aqui e colado na Rifei.",
+  novaPessoa:
+    "Cadastra alguém da coordenação e já mostra o link pessoal dela, para mandar pelo WhatsApp.",
+  tentarDeNovoLista:
+    "Busca a lista de novo. Enquanto isso, a tela continua mostrando a que já tinha.",
+  ocupado: DICA_INDISPONIVEL_OCUPADO,
+  revogarLink:
+    "Faz este link parar de funcionar, e quem entrou com ele sai do sistema. Antes, pede confirmação.",
+  revogarLinkDesteAparelho:
+    "É o link pelo qual você entrou neste aparelho: revogar tira você do sistema aqui. Antes, pede confirmação.",
+  gerarLinkNovo:
+    "Cria mais um link pessoal para esta pessoa. Os links que ela já tem continuam valendo.",
+  desativarAcesso:
+    "Tira a pessoa do sistema em todos os aparelhos e bloqueia os links dela. Antes, pede confirmação. Dá para reativar.",
+  reativarAcesso:
+    "Deixa a pessoa entrar de novo, com os links dela que ainda valem.",
+  nome: "O nome da pessoa, como aparece nos acessos e na mensagem do WhatsApp.",
+  email: "Só para saber quem é. A pessoa não usa o e-mail para entrar.",
+  papel:
+    "O que a pessoa pode fazer no sistema: o admin também cuida dos acessos e das regras.",
+  cancelarNovaPessoa: "Fecha sem cadastrar ninguém.",
+  criarEGerarLink:
+    "Cadastra a pessoa e mostra o link pessoal dela uma vez, para copiar ou mandar.",
+  campoLink:
+    "O link pessoal: quem abrir entra no sistema como esta pessoa. Mande só para ela.",
+  copiarLink:
+    "Copia o link para você colar onde quiser, como numa conversa do WhatsApp.",
+  enviarPeloWhatsApp:
+    "Abre o WhatsApp com a mensagem pronta e o link. Você escolhe para quem mandar.",
+  fecharLink:
+    "Fecha esta janela. Depois disso, o link não aparece de novo: copie ou envie antes.",
+  cancelarRevogar: "Fecha sem revogar. O link continua valendo.",
+  confirmarRevogar:
+    "O link para de funcionar agora, e quem entrou com ele sai do sistema.",
+  confirmarRevogarESair:
+    "O link para de funcionar agora, e você sai do sistema neste aparelho.",
+  cancelarDesativar: "Fecha sem desativar. A pessoa continua entrando.",
+  confirmarDesativar:
+    "A pessoa sai do sistema em todos os aparelhos agora. Dá para reativar depois.",
+  papelDaHierarquia:
+    "Escolha de quem ver os acessos: dos líderes de célula, dos discipuladores ou das redes.",
+  gerarLote:
+    "Cria de uma vez o link de quem está sem link válido. Os links aparecem uma vez, para mandar a cada um.",
+  loteIndisponivel: {
+    desligado: DICA_INDISPONIVEL_DESLIGADO,
+    ocupado: DICA_INDISPONIVEL_OCUPADO,
+    ninguem: "Indisponível: todos os ativos já têm link válido.",
+  } satisfies Record<NonNullable<MotivoLoteIndisponivel>, string>,
+  novoLink:
+    "Cria mais um link para esta pessoa e mostra uma vez, para mandar. Os links que ela já tem continuam valendo.",
+  trocarAcesso:
+    "Cria um link novo e cancela os anteriores: o aparelho antigo sai do sistema. Antes, pede confirmação.",
+  semLinkDesligado: DICA_INDISPONIVEL_DESLIGADO,
+  cancelarTrocar: "Fecha sem trocar. Os links atuais continuam valendo.",
+  confirmarTrocar:
+    "Cria o link novo agora e cancela os anteriores. O link novo aparece em seguida, para mandar.",
+  prontoLinks:
+    "Fecha esta janela. Se algum link ainda não foi mandado, pede confirmação antes.",
+  copiarMensagem:
+    "Copia a mensagem pronta, com o link, para colar no WhatsApp da pessoa.",
+  abrirNoWhatsApp:
+    "Abre a conversa com o número da pessoa e a mensagem pronta, com o link.",
+  verAMensagem:
+    "Mostra o texto da mensagem, com o link, que vai para a pessoa.",
+  campoMensagem:
+    "A mensagem pronta, com o link pessoal. Mande só para esta pessoa.",
+  voltarAosLinks: "Volta para a lista de links, para mandar os que faltam.",
+  fecharMesmoAssim:
+    "Fecha sem mandar: os links que faltam não aparecem de novo. Para mandar depois, só gerando outro.",
+  campoUrl: "O endereço do sistema que recebe os avisos de venda da Rifei.",
+  copiarUrl: "Copia o endereço para você colar na Rifei.",
+  gerarToken:
+    "Cria o token que a Rifei usa para mandar as vendas. Ele aparece uma vez, para colar na Rifei.",
+  gerarTokenComVigente:
+    "Cria um token novo. O que vale hoje para de valer: antes, pede confirmação.",
+  gerandoToken: "Indisponível enquanto o token é gerado. Espere um instante.",
+  campoToken:
+    "A senha que a Rifei manda junto com cada venda. Cole na Rifei e não guarde cópia.",
+  copiarToken: "Copia o token para você colar na Rifei.",
+  cancelarTroca: "Fecha sem gerar. O que vale hoje continua valendo.",
+  confirmarTroca:
+    "Cria o token novo agora. O de hoje para de valer na hora e as vendas param até colar o novo na Rifei.",
+} as const;

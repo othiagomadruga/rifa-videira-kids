@@ -115,13 +115,23 @@ type Props = {
   texto?: ReactNode;
   /** Um elemento só: botão, campo, link (Button, Input, Select, Textarea, Link, <button>, <input>...). */
   children: ReactElement<PropsDoAlvo>;
+  /**
+   * Id da dica, para quando o filho não é o próprio controle: o `<label>` que envolve uma caixa de marcar (o mouse
+   * no texto também abre a dica). Aí o envoltório não mexe no `aria-describedby` do filho, e quem usa põe este id
+   * no `aria-describedby` do controle (com a dica fechada, o id não aponta para nada e fica de fora da descrição).
+   */
+  id?: string;
 };
 
 /** Põe uma dica (tooltip) no controle filho. Veja o comentário do topo deste arquivo. */
-export function ComDica({ texto, children }: Props) {
+export function ComDica({ texto, children, id }: Props) {
   if (texto === undefined || texto === null || texto === "" || texto === false)
     return children;
-  return <DicaAtiva texto={texto}>{children}</DicaAtiva>;
+  return (
+    <DicaAtiva texto={texto} id={id}>
+      {children}
+    </DicaAtiva>
+  );
 }
 
 type Pendencias = {
@@ -135,11 +145,14 @@ type Pendencias = {
 function DicaAtiva({
   texto,
   children,
+  id: idDeFora,
 }: {
   texto: ReactNode;
   children: ReactElement<PropsDoAlvo>;
+  id: string | undefined;
 }) {
-  const id = useId();
+  const idAutomatico = useId();
+  const id = idDeFora ?? idAutomatico;
   const [aberta, setAberta] = useState(false);
   const refAlvo = useRef<HTMLElement | null>(null);
   const refDica = useRef<HTMLDivElement>(null);
@@ -288,7 +301,11 @@ function DicaAtiva({
     <>
       <Filho
         {...doFilho}
-        aria-describedby={juntarIds(doFilho["aria-describedby"], aberta && id)}
+        aria-describedby={
+          idDeFora === undefined
+            ? juntarIds(doFilho["aria-describedby"], aberta && id)
+            : doFilho["aria-describedby"]
+        }
         onPointerEnter={aoEntrar}
         onPointerMove={aoMover}
         onPointerLeave={aoSair}

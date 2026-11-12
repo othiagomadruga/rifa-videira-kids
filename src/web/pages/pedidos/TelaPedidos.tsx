@@ -12,6 +12,7 @@ import {
   type FiltrosEntregas,
   type FiltrosPedidos,
 } from "./pedidos-api";
+import { DICAS } from "./textos";
 import "./pedidos.css";
 
 type AbaPedidos = "pedidos" | "entregas";
@@ -83,6 +84,7 @@ export function TelaPedidos() {
         {
           id: "pedidos",
           rotulo: "Pedidos",
+          dica: DICAS.abaPedidos,
           conteudo: montada("pedidos") ? (
             <ListaPedidos
               filtros={filtrosDosPedidos(params)}
@@ -93,6 +95,7 @@ export function TelaPedidos() {
         {
           id: "entregas",
           rotulo: "Entregas do webhook",
+          dica: DICAS.abaEntregas,
           conteudo: montada("entregas") ? (
             <EntregasWebhook
               filtros={filtrosDasEntregas(params)}
