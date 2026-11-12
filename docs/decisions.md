@@ -897,7 +897,7 @@ dos números, proteção contra fórmula, o arquivo, o nome e os cabeçalhos) e 
   - o Excel em português abre o CSV com dois cliques pelo separador de lista do Windows, que lá é `;` (a vírgula é o
     decimal); sem o BOM, ele lê o arquivo como Windows-1252 e quebra os acentos ("CÃ©lula"). É o formato do modelo
     da planilha da hierarquia (`public/modelos/hierarquia-modelo.csv`), que a coordenação já usou;
-  - no Google Planilhas: Arquivo → Importar → Fazer upload, separador "Detectar automaticamente"; numa planilha com
+  - no Google Planilhas: Arquivo → Importar → Fazer upload, "Tipo de separador" em "Personalizado" com `;` (a tela diz assim; "Detectar automaticamente" também costuma servir); numa planilha com
     a localidade Brasil (o padrão de uma conta em português), `1234,56` vira número. No Excel em inglês: Dados → De
     Texto/CSV, escolhendo `;`;
   - sem a linha `sep=;`: o Google Planilhas a mostraria como dado e, com ela, o Excel deixa de olhar o BOM;
