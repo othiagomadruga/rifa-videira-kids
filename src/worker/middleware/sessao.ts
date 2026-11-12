@@ -168,9 +168,10 @@ export function exigirSessao(
     if (!papeis.includes(usuario.papel)) {
       return responderErro(c, "proibido", "Seu acesso não permite esta ação");
     }
+    // Falha fechada: só passa a chave lida como ligada (`acessoLigado` é gravado junto com o usuário).
     if (
       opcoes.acessoDaCampanha === true &&
-      c.get("acessoLigado") === false &&
+      c.get("acessoLigado") !== true &&
       (usuario.papel === "discipulador" || usuario.papel === "rede")
     ) {
       c.header("Cache-Control", "no-store");
