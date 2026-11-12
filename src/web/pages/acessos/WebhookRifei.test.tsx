@@ -78,11 +78,18 @@ function simularAreaDeTransferencia(
   return espiao;
 }
 
-/** Gera direto (sem credencial vigente) e devolve o token que apareceu. */
+/**
+ * Gera direto (sem credencial vigente) e devolve o token que apareceu, depois de o efeito da tela dar o foco a
+ * "Copiar token". O `findBy...` volta assim que o campo aparece, e o efeito pode rodar um instante depois: sem esta
+ * espera (docs/frontend.md, "Testes"), o foco do efeito chegou uma vez, sob carga, depois do que o teste fez em
+ * seguida (o foco que a cópia sem área de transferência põe no campo ficou em "Copiar token").
+ */
 async function gerarDireto(api: ApiWebhook) {
   acionar(botaoGerar());
   const campo = await within(painel()).findByLabelText("Token do webhook");
   expect(api.tokens).toHaveLength(1);
+  const copiar = within(painel()).getByRole("button", { name: "Copiar token" });
+  await waitFor(() => expect(copiar).toHaveFocus());
   return { campo, token: api.tokens[0] };
 }
 
@@ -278,7 +285,8 @@ describe("CA3: a geração direta mostra o token uma vez", () => {
       throw new Error("sem permissão");
     });
     const { campo, token } = await gerarDireto(api);
-    act(() => campo.blur());
+    // O foco está em "Copiar token" (gerarDireto esperou o efeito): o do campo só pode vir da cópia que falhou.
+    expect(campo).not.toHaveFocus();
 
     fireEvent.click(
       within(painel()).getByRole("button", { name: "Copiar token" }),

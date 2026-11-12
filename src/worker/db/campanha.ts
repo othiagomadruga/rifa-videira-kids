@@ -17,10 +17,13 @@
 //   `acesso.discipuladores` e `acesso.redes` e os modelos das mensagens. No PUT, o grupo AUSENTE mantém o gravado
 //   (no primeiro PUT, o padrão das colunas) e o grupo presente substitui o grupo inteiro. Um modelo igual ao padrão
 //   do contrato (MENSAGENS_PADRAO) é gravado como NULL (= o padrão): se o padrão mudar um dia, quem nunca editou
-//   acompanha. Na leitura, NULL volta como o padrão.
+//   acompanha. Na leitura, NULL volta como o padrão. Esses três grupos são só do admin (RIFA-042, adendo da D20):
+//   a rota confere com gruposDoAdminAlterados e grava o PUT da coordenação com semGruposDoAdmin.
 import type { z } from "zod";
 import {
+  ACESSO_PADRAO,
   MENSAGENS_PADRAO,
+  PEDIDOS_PADRAO,
   TIPOS_MENSAGEM,
   calcularCalendario,
   respostaCampanhaSchema,
@@ -176,6 +179,63 @@ export async function buscarCampanhaAtiva(
   return campanhaDaLinha(
     await db.prepare(SELECIONAR_CAMPANHA_ATIVA).first<LinhaCampanhaAtiva>(),
   );
+}
+
+/** Os grupos da campanha que só o admin muda (RIFA-042, adendo da D20). */
+export const GRUPOS_DO_ADMIN = ["pedidos", "acesso", "mensagens"] as const;
+export type GrupoDoAdmin = (typeof GRUPOS_DO_ADMIN)[number];
+
+/**
+ * Os grupos só do admin que o corpo do PUT muda em relação ao gravado (sem campanha, aos padrões, que é o que o
+ * primeiro PUT grava com o grupo ausente). Grupo ausente não muda nada. Os modelos comparados são os que valem
+ * (NULL = o padrão do contrato), já sem os espaços das pontas (o schema da entrada tira).
+ */
+export function gruposDoAdminAlterados(
+  antes: CampanhaAtiva | null,
+  depois: DadosCampanha,
+): GrupoDoAdmin[] {
+  const gravado = {
+    desconsiderar:
+      antes === null
+        ? PEDIDOS_PADRAO.desconsiderar
+        : antes.pedidos_desconsiderar === 1,
+    discipuladores:
+      antes === null
+        ? ACESSO_PADRAO.discipuladores
+        : antes.acesso_discipuladores === 1,
+    redes: antes === null ? ACESSO_PADRAO.redes : antes.acesso_redes === 1,
+    modelo: (tipo: TipoMensagem) =>
+      antes === null ? MENSAGENS_PADRAO[tipo] : modeloGravado(antes, tipo),
+  };
+  const { pedidos, acesso, mensagens } = depois;
+  const alterados: GrupoDoAdmin[] = [];
+  if (pedidos !== undefined && pedidos.desconsiderar !== gravado.desconsiderar)
+    alterados.push("pedidos");
+  if (
+    acesso !== undefined &&
+    (acesso.discipuladores !== gravado.discipuladores ||
+      acesso.redes !== gravado.redes)
+  )
+    alterados.push("acesso");
+  if (
+    mensagens !== undefined &&
+    TIPOS_MENSAGEM.some((tipo) => mensagens[tipo] !== gravado.modelo(tipo))
+  )
+    alterados.push("mensagens");
+  return alterados;
+}
+
+/**
+ * O corpo sem os grupos só do admin. Na gravação, grupo ausente mantém o gravado (D20): o PUT da coordenação que
+ * passou na conferência (grupos ausentes ou iguais ao gravado) nunca escreve essas colunas, nem desfaz o que um admin
+ * gravar entre a leitura e o lote.
+ */
+export function semGruposDoAdmin(dados: DadosCampanha): DadosCampanha {
+  const resto = { ...dados };
+  delete resto.pedidos;
+  delete resto.acesso;
+  delete resto.mensagens;
+  return resto;
 }
 
 /**

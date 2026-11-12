@@ -73,7 +73,7 @@ Toda resposta que não é 2xx tem este corpo:
 | `csv_invalido` | 400 | arquivo da importação da hierarquia que não dá para ler: vazio ou sem cabeçalho, sem coluna obrigatória, com coluna repetida, aspas abertas, fora de UTF-8, ou acima do limite de linhas ou de tamanho (`detalhes`: `detalhesCsvInvalidoSchema`, com o `motivo`). A conferência (RIFA-012) lê o CSV no navegador: os mesmos problemas aparecem na tela, sem chamar a API |
 | `referencia_invalida` | 400 | `rede_id`, `discipulador_id` ou `celula_id` inexistente no corpo |
 | `nao_autenticado` | 401 | sem credencial ou credencial inválida |
-| `proibido` | 403 | autenticado, sem permissão; ou escrita de outra origem (CSRF) |
+| `proibido` | 403 | autenticado, sem permissão (inclusive a coordenação que muda `pedidos`, `acesso` ou `mensagens` no `PUT /api/admin/campanha`, RIFA-042); ou escrita de outra origem (CSRF) |
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
 | `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin; gerar o token do webhook com uma credencial vigente sem `substituir: true` (D21; `detalhes` = `{ "vigente": "tela" \| "segredo" }`, `detalhesTokenWebhookEmUsoSchema`) |
@@ -130,7 +130,7 @@ Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Contro
 - Caminho com ou sem barra no fim (`CAMINHOS_WEBHOOK_RIFEI`).
 - **Limite de tamanho do corpo: 1 MiB** (`LIMITE_CORPO_WEBHOOK_BYTES`), conferido **depois** da autenticação. Acima disso, a resposta é **413** `corpo_muito_grande`, e o evento é gravado como `erro_validacao`, sem payload.
 - `problemas` (no 400 e no 413) e `avisos` (no evento aceito) vêm agrupados por caminho sem índice, cada item com `ocorrencias`, no máximo 50 itens mais um item final `itens_omitidos` (`detalheResumidoSchema`).
-- **Plausibilidade** (RIFA-013b): o evento que **aprova** um pedido com mais de `TETO_BILHETES_POR_PEDIDO` (200) bilhetes, ou com `total` acima de bilhetes × `preco_bilhete_centavos` da campanha ou abaixo disso além de `TOLERANCIA_DESCONTO_BP` (50% de desconto), **grava o pedido normalmente e ele conta nas vendas**. Os motivos (`MOTIVOS_PEDIDO_SUSPEITO`, um item por motivo, sem o valor recebido) vão para os `avisos` do evento e o pedido entra na lista de revisão `GET /api/admin/pedidos/suspeitos`. A resposta do webhook não muda (200 `processado`).
+- **Plausibilidade** (RIFA-013b): o evento que **aprova** um pedido com mais de `TETO_BILHETES_POR_PEDIDO` (200) bilhetes, ou com `total` acima de bilhetes × `preco_bilhete_centavos` da campanha ou abaixo disso além de `TOLERANCIA_DESCONTO_BP` (50% de desconto), **grava o pedido normalmente e ele conta nas vendas**. Os motivos (`MOTIVOS_PEDIDO_SUSPEITO`, um item por motivo, sem o valor recebido) vão para os `avisos` do evento e o pedido entra na lista de revisão `GET /api/admin/pedidos/suspeitos`. A resposta do webhook não muda (200 `processado`). O "Recuperar" da conferência usa a mesma regra (RIFA-042).
 
 | Status | Corpo | Gravado em `webhook_eventos`? |
 |---|---|---|
@@ -156,6 +156,7 @@ Configuração da campanha ativa: tudo que é regra de campanha vive aqui, e nã
   - **200** `Campanha`, como ficou gravada.
   - **400** `json_invalido`: o corpo não é JSON, ou veio sem `Content-Type: application/json` (ou `application/<tipo>+json`), mesmo que o texto seja JSON.
   - **400** `requisicao_invalida`: fora do schema (`detalhes` = problemas).
+  - **403** `proibido` (RIFA-042, [adendo da D20](decisions.md#d20-regras-do-admin-na-campanha-desconsiderar-pedido-acesso-da-hierarquia-remover-afiliado-e-mensagens-rifa-028-029-031-e-032-contrato-2026-11-11)): quem não é `admin` (a coordenação) mandou `pedidos`, `acesso` ou `mensagens` diferente do gravado (sem campanha, dos padrões), e nada é gravado. Só `codigo` e `mensagem` (sem `detalhes`); a mensagem diz quais grupos mudavam: "Só o admin muda os grupos pedidos, acesso e mensagens da campanha (este salvamento mudava: acesso). Nada foi salvo: mande esses grupos como estão gravados, ou sem eles." Vem depois do 400 e antes do 409.
   - **409** `nome_duplicado`: o `slug_rifei` já é de outra campanha (inativa) do sistema, e nada é gravado. `detalhes` = `[{ "caminho": ["slug_rifei"], "codigo": "slug_duplicado", "mensagem": "Este slug já pertence a outra campanha (inativa) do sistema" }]`.
 
 Corpo do PUT:
@@ -190,9 +191,10 @@ Corpo do PUT:
 
 - `fuso_horario` (padrão `America/Belem`) e `publico` (padrão `{ false, 3 }`) são opcionais.
 - **Regras do admin** (Sprint 6, [D20](decisions.md#d20-regras-do-admin-na-campanha-desconsiderar-pedido-acesso-da-hierarquia-remover-afiliado-e-mensagens-rifa-028-029-031-e-032-contrato-2026-11-11)): `pedidos`, `acesso` e `mensagens` são opcionais e, diferente de `publico`, **o grupo ausente mantém o que está gravado** (no primeiro PUT, o padrão); o grupo presente vem inteiro e substitui o gravado.
+  - **Só o `admin` muda os três** (RIFA-042). A coordenação pode mandá-los ausentes ou iguais ao gravado (passa, e a gravação vai sem eles: o PUT dela nunca escreve essas colunas nem desfaz o que um admin gravar no meio); diferente do gravado, 403 `proibido`. O resto da campanha a coordenação continua mudando.
   - `pedidos.desconsiderar` (padrão `false`): libera desconsiderar e reconsiderar pedido ([abaixo](#regras-da-campanha-sprint-6-docsdecisionsmd-d20)). Desligar não devolve às contas o que já foi desconsiderado.
   - `acesso.discipuladores` e `acesso.redes` (padrão `true`): desligado, quem tem o papel não entra nem usa `/api/minha/*` (403 `acesso_desligado`) e não se gera link do papel (409 `acao_desligada`); nada é revogado, e tudo volta a valer quando a chave volta. O líder não tem chave.
-  - `mensagens`: o modelo da mensagem do WhatsApp de cada link pessoal (tela Acessos), até 1.000 caracteres, com os marcadores `{nome}` (primeiro nome), `{saudacao}` ("Olá, Maria!" ou, sem nome, "Olá!"), `{alvo}` (nome da célula, do discipulador ou da rede; não existe em `link_coordenacao`) e `{link}` (obrigatório). Marcador desconhecido ou a falta do `{link}`: 400 com a mensagem em português. O padrão (`MENSAGENS_PADRAO`) é o texto de hoje; o site preenche com `preencherMensagem` (`regras.ts`). O bumbo não entra (é montado pela API, sem texto livre no que é público).
+  - `mensagens`: o modelo da mensagem do WhatsApp de cada link pessoal (tela Acessos), até 1.000 caracteres, com os marcadores `{nome}` (primeiro nome), `{saudacao}` ("Olá, Maria!" ou, sem nome, "Olá!"), `{alvo}` (nome da célula, do discipulador ou da rede; não existe em `link_coordenacao`) e `{link}` (obrigatório). Marcador desconhecido ou a falta do `{link}`: 400 com a mensagem em português. Também 400 (RIFA-042): o `{link}` fora do começo e sem espaço, tabulação ou quebra de linha antes (ex.: `https://outro.site/?u={link}`, `x{link}`: o link pessoal viraria parte de outro endereço, e a prévia do WhatsApp levaria o token a esse site) e outro endereço no modelo (`://`, `www.` ou um domínio com barra, como `site.com/`). As regras e as mensagens estão em `problemasDoModelo` (`regras.ts`). O padrão (`MENSAGENS_PADRAO`) é o texto de hoje; o site preenche com `preencherMensagem` (`regras.ts`). O bumbo não entra (é montado pela API, sem texto livre no que é público).
 - `meta.regra`:
   - `por_pessoa`: `valor` × pessoas da célula;
   - `total_proporcional`: `valor` é o total da campanha, dividido pelas células na proporção das pessoas;
@@ -385,7 +387,7 @@ Painel de "quem falta": uma linha por célula.
 
 ### `GET /api/admin/pedidos/suspeitos` (`coordenacao`; Sprint 4, RIFA-013b)
 
-Lista de revisão dos pedidos aprovados que o webhook marcou como implausíveis (ver "Plausibilidade" no webhook). **Eles continuam contando** nas vendas, no painel e nos rankings: a lista é para a coordenação conferir na Rifei (ou pela conferência por CSV). Tirar um pedido das vendas é decisão do PO.
+Lista de revisão dos pedidos aprovados que o webhook marcou como implausíveis (ver "Plausibilidade" no webhook) e, desde a RIFA-042, dos recuperados pela conferência com a mesma regra (ver o "Recuperar"). **Eles continuam contando** nas vendas, no painel e nos rankings: a lista é para a coordenação conferir na Rifei (ou pela conferência por CSV). Tirar um pedido das vendas é decisão do PO.
 
 - **200** (`respostaPedidosSuspeitosSchema`): os da campanha ativa, o mais recente primeiro, no máximo `LIMITE_PEDIDOS_SUSPEITOS` (500); `total` conta todos.
 
@@ -411,6 +413,7 @@ Lista de revisão dos pedidos aprovados que o webhook marcou como implausíveis 
 - `motivos[].codigo` ∈ `MOTIVOS_PEDIDO_SUSPEITO`: `quantidade_acima_do_teto` (mais de 200 bilhetes), `total_acima_do_esperado` (total maior que bilhetes × preço), `total_abaixo_do_esperado` (mais de 50% abaixo).
 - **Sem nenhum dado do comprador**: nada de nome, e-mail, documento, telefone, DDD, país, UTM ou números dos bilhetes.
 - Só o evento que aprova é avaliado (aprovado é final, D4): a reentrega (`duplicado`) não marca de novo. Guardado em `pedidos_suspeitos` (migração `0005_auditoria.sql`).
+- O pedido recuperado pela conferência (RIFA-042) é avaliado com a mesma regra quando entra: `marcado_em` é o instante da recuperação, e `aprovado_em`, o que o "Recuperar" gravou.
 
 ### `GET /api/admin/auditoria` (**só admin**; Sprint 4, RIFA-013b)
 
@@ -1057,7 +1060,8 @@ Grava como **aprovadas** as vendas perdidas escolhidas, com os dados do arquivo.
 - Para cada código (sem repetir, na ordem pedida), entra só o pedido que está no arquivo, pago, sem linhas inconsistentes, com quantidade (pelo menos 1) e valor decidido, sem data no futuro, e que **não existe** no sistema (em nenhuma campanha). O resto vai para `nao_recuperados`, com o `motivo`: `ja_existe`, `nao_esta_no_arquivo`, `nao_aprovado_no_arquivo`, `inconsistente_no_arquivo`, `sem_quantidade`, `sem_valor`, `valor_ambiguo` ou `data_no_futuro`.
 - O pedido entra com `status = 'approved'`, `origem = 'conferencia'`, o `recuperacao_id` da auditoria, a quantidade, os centavos, o afiliado e `aprovado_em`: o instante do arquivo (`origem_data: "arquivo"`); o meio-dia do dia quando o arquivo só tem o dia, ou agora, se for hoje (`dia_do_arquivo`); ou o instante da recuperação, sem data (`recuperacao`). `numeros`, DDD, país e `criado_em` ficam nulos (os números e o telefone não saem do navegador). Um `affiliate_id` desconhecido entra na fila de órfãos (origem `webhook`, como os do webhook); um afiliado não reconhecido grava a venda sem afiliado.
 - O pedido recuperado conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um `paid_order` que chegue depois dá `duplicado` e não muda nada.
-- **Atômico e idempotente**: um único `db.batch` (auditoria, afiliados novos, pedidos com `INSERT ... ON CONFLICT (id) DO NOTHING`, as contagens tiradas do que entrou e a linha da trilha de auditoria da coordenação, ação `conferencia.recuperar`). Um pedido que já existe, inclusive um que o webhook gravou depois da prévia, nunca é sobrescrito; repetir não duplica nada nem cria outra auditoria.
+- **Plausibilidade** (RIFA-042, a mesma do webhook, D11): o pedido que entra com mais de 200 bilhetes, ou com o total acima de bilhetes × `preco_bilhete_centavos` da campanha ou abaixo disso além de 50%, continua contando e entra na lista de revisão `GET /api/admin/pedidos/suspeitos`, com os mesmos `motivos`. Só o que de fato entrou nesta gravação; a prévia não marca nada. A resposta e a trilha não mudam.
+- **Atômico e idempotente**: um único `db.batch` (auditoria, afiliados novos, pedidos com `INSERT ... ON CONFLICT (id) DO NOTHING`, a marcação dos fora do padrão em `pedidos_suspeitos`, as contagens tiradas do que entrou e a linha da trilha de auditoria da coordenação, ação `conferencia.recuperar`). Um pedido que já existe, inclusive um que o webhook gravou depois da prévia, nunca é sobrescrito; repetir não duplica nada nem cria outra auditoria.
 - **200** (`respostaRecuperarReconciliacaoSchema`): `{ simulado, aplicado, recuperacao_id, recuperados: [{ pedido_id, qtd_bilhetes, total_centavos, afiliado, affiliate_id, celula, aprovado_em, origem_data }], nao_recuperados: [{ pedido_id, motivo }], totais: { pedidos_aprovados, bilhetes, total_centavos }, avisos }`. `aplicado` = gravou pelo menos um pedido; `recuperacao_id` = a linha da auditoria (null na simulação ou se nada entrou).
 - **Erros**: os mesmos da análise, mais o da trava.
 

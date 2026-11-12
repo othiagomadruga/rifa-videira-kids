@@ -299,6 +299,20 @@
   font-weight: var(--peso-forte);
 }
 
+/* Só leitura para a coordenação (RIFA-042): a caixa continua focável (aria-disabled), mas parece desabilitada. */
+.campanha-opcao:has(input[aria-disabled="true"]) {
+  cursor: not-allowed;
+}
+
+.campanha-opcao input[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.campanha-mensagem textarea[readonly] {
+  background: var(--cor-fundo);
+}
+
 /* Mensagens do link pessoal */
 .campanha-mensagem {
   display: grid;

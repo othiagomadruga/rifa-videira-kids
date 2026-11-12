@@ -313,8 +313,8 @@ No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5):
 - **Datas e períodos:** "Data de início" `23/11/2026`, "Fuso horário" `America/Belem` e os períodos (o botão **Usar o modelo de Santo André** preenche 10/7/7 dias com 35/25/45%).
 - **Bilhete e meta:** preço do bilhete (R$), unidade, regra e valor da meta.
 - **Ranking e público:** critério do ranking e o que o público vê (o % da meta e quantas posições).
-- **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores" e "Acesso das redes".
-- **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição. Se editar, mantenha as palavras "link pessoal" no texto: o guia do líder ("Perdi o link") manda procurar por elas na conversa.
+- **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores" e "Acesso das redes". Só o admin muda estas regras e as mensagens (a coordenação as vê só leitura).
+- **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório, no começo ou depois de um espaço ou de uma quebra de linha; nenhum outro endereço na mensagem). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição. Se editar, mantenha as palavras "link pessoal" no texto: o guia do líder ("Perdi o link") manda procurar por elas na conversa.
 - **Ativar a campanha** (pede confirmação). A partir daí, as vendas da Rifei com esse slug contam.
 
 Cuidados:

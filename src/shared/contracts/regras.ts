@@ -113,7 +113,8 @@ export type TipoMensagem = (typeof TIPOS_MENSAGEM)[number];
  * - nome: o primeiro nome de quem recebe (vazio quando a hierarquia não tem o nome: só na rede sem responsável);
  * - saudacao: "Olá, <primeiro nome>!" ou, sem nome, "Olá!";
  * - alvo: o nome da célula, do discipulador ou da rede (só nas mensagens da hierarquia);
- * - link: o link pessoal (obrigatório: sem ele a mensagem não serve).
+ * - link: o link pessoal (obrigatório: sem ele a mensagem não serve; no começo ou depois de espaço, tabulação ou
+ *   quebra de linha, e nenhum outro endereço no modelo: `problemasDoModelo`).
  */
 export const MARCADORES_MENSAGEM = [
   "nome",
@@ -153,9 +154,26 @@ export const MENSAGENS_PADRAO = {
 const MARCADOR_NO_TEXTO = /\{([A-Za-z0-9_]+)\}/g;
 
 /**
- * Problemas de um modelo, em português, para a tela mostrar (lista vazia = válido): marcador que o modelo não aceita
- * (ex.: `{Nome}` ou `{alvo}` na mensagem da coordenação) e a falta do `{link}`. Não confere o tamanho (o schema
- * confere).
+ * Um `{link}` colado no texto de antes (ex.: `https://outro.site/?u={link}` ou `x{link}`): o link pessoal viraria o
+ * fim de um endereço de outro site, e o WhatsApp de quem envia busca a prévia desse endereço ao montar a mensagem,
+ * levando o token para lá sem ninguém tocar no link (revisão RIFA-041; no modelo da coordenação, o link de um admin).
+ * Só vale o `{link}` no começo ou depois de espaço, tabulação ou quebra de linha, como nos padrões (RIFA-042).
+ */
+// Um \r sozinho não separa: se o app de quem recebe descartar o \r, o link cola no texto de antes (revisão da RIFA-042).
+const LINK_COLADO = /[^ \t\n]\{link\}/;
+
+/**
+ * Outro endereço no modelo (RIFA-042): `://` (http://, https://...), `www.` ou um domínio seguido de barra
+ * (`site.com/`, `bit.ly/`). O único link da mensagem é o `{link}`: outro endereço levaria quem recebe (e a prévia do
+ * WhatsApp) a um site que não é o da rifa. É a regra mais simples que pega os casos comuns sem acusar os textos
+ * padrão (nenhum tem barra, `://` nem `www.`); um domínio solto, sem barra nem `www.` (`site.com`), passa.
+ */
+const OUTRO_ENDERECO = /:\/\/|www\.|[a-z0-9-]\.[a-z]{2,}\//i;
+
+/**
+ * Problemas de um modelo, em português, para a tela mostrar e a API recusar (lista vazia = válido): marcador que o
+ * modelo não aceita (ex.: `{Nome}` ou `{alvo}` na mensagem da coordenação), a falta do `{link}`, o `{link}` colado no
+ * texto de antes (LINK_COLADO) e outro endereço no modelo (OUTRO_ENDERECO). Não confere o tamanho (o schema confere).
  */
 export function problemasDoModelo(
   tipo: TipoMensagem,
@@ -173,6 +191,14 @@ export function problemasDoModelo(
   if (!modelo.includes("{link}"))
     problemas.push(
       "A mensagem precisa ter {link}: é por ele que a pessoa entra.",
+    );
+  else if (LINK_COLADO.test(modelo))
+    problemas.push(
+      "Deixe o {link} no começo da mensagem ou depois de um espaço ou de uma quebra de linha: colado no texto de antes, o link pessoal vira parte de outro endereço.",
+    );
+  if (OUTRO_ENDERECO.test(modelo))
+    problemas.push(
+      "Tire o outro endereço da mensagem (http://, www. ou site.com/): o único link dela é o {link}.",
     );
   return problemas;
 }

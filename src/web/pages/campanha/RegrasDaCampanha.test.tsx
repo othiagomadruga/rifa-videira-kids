@@ -3,6 +3,9 @@
 //   texto final (preencherMensagem) e o modelo inválido é barrado antes de salvar;
 // - CA2 (RIFA-030): o resumo "Regras da campanha" mostra cada decisão e o que falta preencher, e leva ao campo;
 // - CA8: rótulos, descrição das chaves e a lista de erros com foco.
+// - RIFA-042: pedidos, acesso e mensagens são só do admin: a coordenação os vê só leitura, com a explicação, e o PUT
+//   dela não os manda; o modelo com o {link} colado ou com outro endereço é barrado antes de salvar.
+// Os testes que editam as regras entram como admin (ADMIN_DE_TESTE); os da coordenação, com USUARIO_DE_TESTE.
 import {
   act,
   fireEvent,
@@ -16,12 +19,20 @@ import {
   TIPOS_MENSAGEM,
   preencherMensagem,
 } from "../../../shared/contracts";
-import { renderizarRota } from "../../test/renderizar";
-import { EXEMPLO_DA_MENSAGEM, linkDeExemplo } from "./RegrasDoAdmin";
+import {
+  ADMIN_DE_TESTE,
+  USUARIO_DE_TESTE,
+  renderizarRota,
+} from "../../test/renderizar";
+import {
+  EXEMPLO_DA_MENSAGEM,
+  TEXTO_SO_ADMIN,
+  linkDeExemplo,
+} from "./RegrasDoAdmin";
 import { CONFIGURADA, simularApi } from "./teste-apoio";
 
-async function abrirTela() {
-  const resultado = renderizarRota("/coordenacao/campanha");
+async function abrirTela(usuario = ADMIN_DE_TESTE) {
+  const resultado = renderizarRota("/coordenacao/campanha", { usuario });
   await screen.findByRole("heading", { level: 2, name: "Identificação" });
   return resultado;
 }
@@ -68,6 +79,12 @@ describe("CA1: as chaves da campanha", () => {
     );
     expect(caixa("Acesso das redes")).toHaveAccessibleDescription(
       /^Desligado: elas não entram nem recebem link novo; os links guardados voltam a valer quando religar\. Ligado: /,
+    );
+    // O admin edita: sem o aviso da coordenação, nada só leitura (RIFA-042).
+    expect(screen.queryByText(TEXTO_SO_ADMIN)).not.toBeInTheDocument();
+    expect(caixa("Acesso das redes")).not.toHaveAttribute("aria-disabled");
+    expect(campoMensagem("Mensagem do link da rede")).not.toHaveAttribute(
+      "readonly",
     );
   });
 
@@ -135,7 +152,9 @@ describe("o link para uma chave (aviso da tela Pedidos)", () => {
   it("abre a Campanha com o foco no campo do endereço (#campanha-pedidos-desconsiderar)", async () => {
     simularApi({ campanha: CONFIGURADA });
 
-    renderizarRota("/coordenacao/campanha#campanha-pedidos-desconsiderar");
+    renderizarRota("/coordenacao/campanha#campanha-pedidos-desconsiderar", {
+      usuario: ADMIN_DE_TESTE,
+    });
 
     const chave = await screen.findByRole("checkbox", {
       name: "Permitir desconsiderar pedidos",
@@ -369,5 +388,216 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
     expect(irPara("Mensagens do link pessoal")).toBe(
       campoMensagem("Mensagem do link da coordenação"),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-042: pedidos, acesso e mensagens só do admin; o {link} colado e outro endereço barrados na tela
+// ---------------------------------------------------------------------------------------------------
+
+const EXPLICACAO_SO_ADMIN =
+  "Só o admin muda estas regras. Aqui você vê como estão valendo. Para mudar, fale com o admin.";
+
+describe("RIFA-042 (CA2): para a coordenação, pedidos, acesso e mensagens ficam só leitura", () => {
+  const modeloLider = "{saudacao} A {alvo} acompanha a rifa por aqui:\n{link}";
+  const SALVA = {
+    ...CONFIGURADA,
+    pedidos: { desconsiderar: true },
+    acesso: { discipuladores: true, redes: false },
+    mensagens: { ...MENSAGENS_PADRAO, link_lider: modeloLider },
+  };
+
+  it("os três grupos aparecem como estão, só leitura, com a explicação 'Só o admin muda estas regras.'; o resumo continua", async () => {
+    simularApi({ campanha: SALVA });
+    await abrirTela(USUARIO_DE_TESTE);
+
+    // Um aviso em cada cartão: "Pedidos e acessos" (pedidos e acesso) e "Mensagens do link pessoal".
+    for (const titulo of ["Pedidos e acessos", "Mensagens do link pessoal"]) {
+      const cartao = screen
+        .getByRole("heading", { level: 2, name: titulo })
+        .closest(".ui-card") as HTMLElement;
+      expect(within(cartao).getByText(TEXTO_SO_ADMIN)).toBeInTheDocument();
+    }
+
+    // As chaves: como estão salvas, indisponíveis (focáveis) e descritas pelo aviso; o clique não muda nada.
+    const esperadas = [
+      ["Permitir desconsiderar pedidos", true],
+      ["Acesso dos discipuladores", true],
+      ["Acesso das redes", false],
+    ] as const;
+    for (const [nome, ligada] of esperadas) {
+      const elemento = caixa(nome);
+      expect({ nome, ligada: (elemento as HTMLInputElement).checked }).toEqual({
+        nome,
+        ligada,
+      });
+      expect(elemento).toHaveAttribute("aria-disabled", "true");
+      expect(elemento).not.toBeDisabled();
+      expect(elemento).toHaveAccessibleDescription(
+        new RegExp(
+          `^${EXPLICACAO_SO_ADMIN.replaceAll(".", "\\.")} (Ligad|Desligad)`,
+        ),
+      );
+      fireEvent.click(elemento);
+      expect({ nome, ligada: (elemento as HTMLInputElement).checked }).toEqual({
+        nome,
+        ligada,
+      });
+    }
+
+    // As mensagens: os modelos salvos, só leitura e descritos pelo aviso (com a dica), sem "Voltar ao texto padrão";
+    // a pré-visualização continua.
+    for (const tipo of TIPOS_MENSAGEM) {
+      const campo = screen.getByDisplayValue(
+        (_valor, elemento) =>
+          (elemento as HTMLTextAreaElement | null)?.value ===
+          SALVA.mensagens[tipo],
+      );
+      expect(campo).toHaveAttribute("readonly");
+      expect(campo).toHaveAccessibleDescription(
+        new RegExp(
+          `^${EXPLICACAO_SO_ADMIN.replaceAll(".", "\\.")} Marcadores: `,
+        ),
+      );
+    }
+    const lider = campoMensagem("Mensagem do link do líder de célula");
+    fireEvent.change(lider, { target: { value: "{link} editado" } });
+    expect(lider).toHaveValue(modeloLider);
+    expect(
+      screen.queryByRole("button", { name: /Voltar ao texto padrão/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(previa(/mensagem do link do líder de célula/)).getByText(
+        /Olá, Ana!/,
+      ).textContent,
+    ).toBe(
+      `Olá, Ana! A Célula Ágape acompanha a rifa por aqui:\n${linkDeExemplo()}`,
+    );
+
+    // O resumo "Regras da campanha" continua para a coordenação, com o que está valendo, e leva ao campo.
+    expect(linhasDoResumo()).toEqual(
+      expect.arrayContaining([
+        [
+          "Desconsiderar pedidos",
+          "Ligado: o admin pode tirar das contas um pedido de teste, fraude ou estorno.",
+        ],
+        ["Acesso de redes", "Desligado: não entram nem recebem link novo."],
+        [
+          "Mensagens do link pessoal",
+          "1 editada; as outras com o texto padrão.",
+        ],
+      ]),
+    );
+    fireEvent.click(screen.getByRole("link", { name: "Acesso de redes" }));
+    expect(caixa("Acesso das redes")).toHaveFocus();
+  });
+
+  it("o PUT da coordenação não manda os três (nem com um modelo gravado com problema, que não barra o resto); a resposta volta para a tela", async () => {
+    const comProblema = {
+      ...SALVA,
+      // Gravado fora das regras (ex.: antes da RIFA-042): a coordenação não o corrige, e salva o resto.
+      mensagens: { ...SALVA.mensagens, link_rede: "Oi {nomee}, sem o link" },
+    };
+    const { puts } = simularApi({ campanha: comProblema });
+    await abrirTela(USUARIO_DE_TESTE);
+
+    fireEvent.change(screen.getByLabelText("Preço do bilhete (R$)"), {
+      target: { value: "15" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
+    expect(puts()).toHaveLength(1);
+    const corpo = puts()[0].corpo as Record<string, unknown>;
+    expect(corpo).toMatchObject({ preco_bilhete_centavos: 1500 });
+    for (const grupo of ["pedidos", "acesso", "mensagens"])
+      expect({ grupo, enviado: grupo in corpo }).toEqual({
+        grupo,
+        enviado: false,
+      });
+    // A resposta (com os grupos como estão gravados) volta para a tela.
+    expect(caixa("Permitir desconsiderar pedidos")).toBeChecked();
+    expect(caixa("Acesso das redes")).not.toBeChecked();
+    expect(campoMensagem("Mensagem do link da rede")).toHaveValue(
+      "Oi {nomee}, sem o link",
+    );
+  });
+
+  it("o admin muda os três e o PUT dele os manda (o grupo inteiro)", async () => {
+    const { puts } = simularApi({ campanha: SALVA });
+    await abrirTela(ADMIN_DE_TESTE);
+
+    fireEvent.click(caixa("Permitir desconsiderar pedidos"));
+    fireEvent.click(caixa("Acesso das redes"));
+    fireEvent.change(campoMensagem("Mensagem do link da coordenação"), {
+      target: { value: "{saudacao} Seu acesso:\n{link}" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
+    expect(puts()[0].corpo).toMatchObject({
+      pedidos: { desconsiderar: false },
+      acesso: { discipuladores: true, redes: true },
+      mensagens: {
+        ...SALVA.mensagens,
+        link_coordenacao: "{saudacao} Seu acesso:\n{link}",
+      },
+    });
+  });
+});
+
+describe("RIFA-042 (CA3): o modelo com o {link} colado ou com outro endereço é barrado na tela", () => {
+  it("?u={link}, x{link} e outro endereço: o problema aparece enquanto digita e o 'Salvar' é barrado, sem chamar a API; os quatro padrões valem", async () => {
+    const { puts } = simularApi({ campanha: CONFIGURADA });
+    await abrirTela();
+
+    // Os quatro padrões, ao abrir, não têm problema.
+    for (const tipo of TIPOS_MENSAGEM)
+      expect(
+        screen.getByDisplayValue(
+          (_valor, elemento) =>
+            (elemento as HTMLTextAreaElement | null)?.value ===
+            MENSAGENS_PADRAO[tipo],
+        ),
+      ).not.toHaveAttribute("aria-invalid");
+
+    const COLADO =
+      /Deixe o \{link\} no começo da mensagem ou depois de um espaço ou de uma quebra de linha: colado no texto de antes, o link pessoal vira parte de outro endereço\./;
+    const ENDERECO =
+      /Tire o outro endereço da mensagem \(http:\/\/, www\. ou site\.com\/\): o único link dela é o \{link\}\./;
+    const coordenacao = campoMensagem("Mensagem do link da coordenação");
+    for (const [modelo, problemas] of [
+      [
+        "{saudacao} Seu acesso: https://outro.site/?u={link}",
+        [COLADO, ENDERECO],
+      ],
+      ["{saudacao} Seu acesso: ?u={link}", [COLADO]],
+      ["{saudacao} Seu acesso: x{link}", [COLADO]],
+      ["{saudacao} Veja www.outro.site antes:\n{link}", [ENDERECO]],
+    ] as const) {
+      fireEvent.change(coordenacao, { target: { value: modelo } });
+      expect(coordenacao).toHaveAttribute("aria-invalid", "true");
+      for (const problema of problemas)
+        expect(coordenacao).toHaveAccessibleDescription(problema);
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    const resumo = await screen.findByRole("alert");
+    expect(resumo).toHaveTextContent("Não foi possível salvar. Confira:");
+    expect(
+      within(resumo).getByRole("link", {
+        name: "Mensagem do link da coordenação",
+      }),
+    ).toBeInTheDocument();
+    expect(puts()).toEqual([]);
+
+    // De volta ao padrão, o problema some.
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Voltar ao texto padrão da mensagem do link da coordenação",
+      }),
+    );
+    expect(coordenacao).not.toHaveAttribute("aria-invalid");
   });
 });

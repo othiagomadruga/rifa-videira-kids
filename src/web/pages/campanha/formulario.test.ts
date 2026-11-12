@@ -104,8 +104,10 @@ describe("montarCorpo", () => {
     };
   }
 
+  const DO_ADMIN = { regrasDoAdmin: true };
+
   it("corpo do contrato: espaços tirados, centavos, pontos-base, padrões e limite vazio = todas", () => {
-    expect(montarCorpo(preenchido())).toEqual({
+    expect(montarCorpo(preenchido(), DO_ADMIN)).toEqual({
       ok: true,
       corpo: {
         nome: "Rifa de teste",
@@ -121,7 +123,7 @@ describe("montarCorpo", () => {
         ],
         ranking: { criterio: "arrecadacao" },
         publico: { mostra_percentual_meta: false, limite_ranking: null },
-        // Regras do admin (D20): os três grupos vão sempre, com o que está no formulário.
+        // Regras do admin (D20): do admin, os três grupos vão sempre, com o que está no formulário.
         pedidos: { ...PEDIDOS_PADRAO },
         acesso: { ...ACESSO_PADRAO },
         mensagens: { ...MENSAGENS_PADRAO },
@@ -129,23 +131,54 @@ describe("montarCorpo", () => {
     });
   });
 
+  it("RIFA-042: da coordenação, o corpo vai sem pedidos, acesso e mensagens (a API mantém o gravado), e um modelo com problema não barra o resto", () => {
+    const resultado = montarCorpo(
+      {
+        ...preenchido(),
+        pedidos_desconsiderar: true,
+        acesso_redes: false,
+        mensagens: { ...MENSAGENS_PADRAO, link_rede: "Oi {nomee}, sem o link" },
+      },
+      { regrasDoAdmin: false },
+    );
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    expect(Object.keys(resultado.corpo)).toEqual([
+      "nome",
+      "slug_rifei",
+      "fuso_horario",
+      "data_inicio",
+      "preco_bilhete_centavos",
+      "meta",
+      "periodos",
+      "ranking",
+      "publico",
+    ]);
+  });
+
   it("fuso vazio usa o padrão do contrato", () => {
-    const resultado = montarCorpo({ ...preenchido(), fuso_horario: " " });
+    const resultado = montarCorpo(
+      { ...preenchido(), fuso_horario: " " },
+      DO_ADMIN,
+    );
     expect(resultado.ok && resultado.corpo.fuso_horario).toBe("America/Belem");
   });
 
   it("erros de leitura e do contrato juntos, um por campo", () => {
-    const resultado = montarCorpo({
-      ...preenchido(),
-      preco: "0",
-      meta_unidade: "bilhetes",
-      meta_valor: "10,5",
-      periodos: [
-        { chave: "a", nome: "  ", dias: "", percentual: "35" },
-        { chave: "b", nome: "Período 2", dias: "400", percentual: "x" },
-      ],
-      publico_limite_ranking: "0",
-    });
+    const resultado = montarCorpo(
+      {
+        ...preenchido(),
+        preco: "0",
+        meta_unidade: "bilhetes",
+        meta_valor: "10,5",
+        periodos: [
+          { chave: "a", nome: "  ", dias: "", percentual: "35" },
+          { chave: "b", nome: "Período 2", dias: "400", percentual: "x" },
+        ],
+        publico_limite_ranking: "0",
+      },
+      DO_ADMIN,
+    );
 
     expect(resultado).toEqual({
       ok: false,

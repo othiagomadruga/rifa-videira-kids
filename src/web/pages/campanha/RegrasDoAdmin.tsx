@@ -1,6 +1,9 @@
 // As regras do admin na Campanha (D20): as três chaves (desconsiderar pedido e o acesso de discipuladores e de
 // redes) e os quatro modelos das mensagens do link pessoal, com a pré-visualização preenchida por
 // `preencherMensagem` (a mesma que a tela Acessos usa) e os problemas do modelo enquanto a pessoa digita.
+// Só o admin muda esses três grupos (RIFA-042): para a coordenação, os dois cartões ficam só leitura, com o aviso
+// "Só o admin muda estas regras." (as caixas com `aria-disabled` e os textos com `readOnly`, focáveis e descritos
+// pelo aviso; o resumo "Regras da campanha" continua levando o foco a eles).
 import { useId } from "react";
 import {
   LIMITE_CARACTERES_MENSAGEM,
@@ -12,7 +15,7 @@ import {
   type TipoMensagem,
   type ValoresMensagem,
 } from "../../../shared/contracts";
-import { Button, Card, Textarea } from "../../components/ui";
+import { Aviso, Button, Card, Textarea } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
 import {
   ROTULO_MENSAGEM,
@@ -65,8 +68,22 @@ const ORDEM_DAS_CHAVES: readonly ChaveDoFormulario[] = [
   "acesso_redes",
 ];
 
+/** O título do aviso dos grupos só do admin, para a coordenação (RIFA-042). */
+export const TEXTO_SO_ADMIN = "Só o admin muda estas regras.";
+
+/** O aviso no topo de cada cartão só leitura; os campos o têm como descrição (`id`). */
+function AvisoSoAdmin({ id }: { id: string }) {
+  return (
+    <Aviso id={id} tom="info" anuncio="nenhum" titulo={TEXTO_SO_ADMIN}>
+      Aqui você vê como estão valendo. Para mudar, fale com o admin.
+    </Aviso>
+  );
+}
+
 type PropsChaves = {
   formulario: Formulario;
+  /** Coordenação (RIFA-042): as chaves aparecem como estão, sem mudar. */
+  somenteLeitura: boolean;
   idDoCampo: (chave: string) => string;
   aoAlterar: (chave: ChaveDoFormulario, ligada: boolean) => void;
 };
@@ -74,15 +91,20 @@ type PropsChaves = {
 /** As três chaves: uma caixa de marcar cada, com o que acontece ligada e desligada. */
 export function ChavesDaCampanha({
   formulario,
+  somenteLeitura,
   idDoCampo,
   aoAlterar,
 }: PropsChaves) {
+  const idAviso = useId();
   return (
     <Card titulo="Pedidos e acessos">
       <div className="campanha-campos">
+        {somenteLeitura && <AvisoSoAdmin id={idAviso} />}
         <p className="campanha-texto-suave">
-          Ligue ou desligue o que a coordenação pode fazer e quem entra no
-          sistema. Os líderes de célula entram sempre.
+          {somenteLeitura
+            ? "O que se pode fazer com os pedidos e quem entra no sistema."
+            : "Ligue ou desligue o que a coordenação pode fazer e quem entra no sistema."}{" "}
+          Os líderes de célula entram sempre.
         </p>
         <ul className="campanha-chaves">
           {ORDEM_DAS_CHAVES.map((chave) => {
@@ -96,10 +118,18 @@ export function ChavesDaCampanha({
                     id={id}
                     type="checkbox"
                     checked={ligada}
-                    aria-describedby={`${id}-explicacao`}
-                    onChange={(evento) =>
-                      aoAlterar(chave, evento.target.checked)
+                    // Só leitura: continua focável (o resumo e o link da tela Pedidos levam o foco a ela), com o
+                    // aviso como descrição; o clique não muda nada (o React devolve a caixa ao valor dela).
+                    aria-disabled={somenteLeitura || undefined}
+                    aria-describedby={
+                      somenteLeitura
+                        ? `${idAviso} ${id}-explicacao`
+                        : `${id}-explicacao`
                     }
+                    onChange={(evento) => {
+                      if (!somenteLeitura)
+                        aoAlterar(chave, evento.target.checked);
+                    }}
                   />
                   <span>{texto.rotulo}</span>
                 </label>
@@ -174,6 +204,8 @@ export function problemasDaMensagem(
 
 type PropsMensagens = {
   mensagens: Formulario["mensagens"];
+  /** Coordenação (RIFA-042): os modelos aparecem como estão (com a pré-visualização), sem editar. */
+  somenteLeitura: boolean;
   /** Os erros do último "Salvar" (do contrato ou da API). */
   erros: ErrosFormulario;
   idDoCampo: (chave: string) => string;
@@ -184,25 +216,29 @@ type PropsMensagens = {
 /** Os quatro modelos, cada um com a dica dos marcadores, os problemas e a pré-visualização. */
 export function MensagensDoLink({
   mensagens,
+  somenteLeitura,
   erros,
   idDoCampo,
   aoAlterar,
   aoVoltarAoPadrao,
 }: PropsMensagens) {
+  const idAviso = useId();
   return (
     <Card titulo="Mensagens do link pessoal">
       <div className="campanha-campos">
+        {somenteLeitura && <AvisoSoAdmin id={idAviso} />}
         <p className="campanha-texto-suave">
-          O texto que vai pelo WhatsApp com o link de cada pessoa (tela
-          Acessos). Escreva os marcadores entre chaves, como estão na dica: o
-          sistema troca cada um pelo valor de quem recebe. O bumbo não muda
-          aqui.
+          {somenteLeitura
+            ? "O texto que vai pelo WhatsApp com o link de cada pessoa (tela Acessos): o sistema troca cada marcador entre chaves pelo valor de quem recebe."
+            : "O texto que vai pelo WhatsApp com o link de cada pessoa (tela Acessos). Escreva os marcadores entre chaves, como estão na dica: o sistema troca cada um pelo valor de quem recebe."}{" "}
+          O bumbo não muda aqui.
         </p>
         {TIPOS_MENSAGEM.map((tipo) => (
           <EditorMensagem
             key={tipo}
             tipo={tipo}
             texto={mensagens[tipo]}
+            idAvisoSoAdmin={somenteLeitura ? idAviso : null}
             erroAoSalvar={erros[`mensagens.${tipo}`]}
             id={idDoCampo(`mensagens.${tipo}`)}
             aoAlterar={(texto) => aoAlterar(tipo, texto)}
@@ -217,6 +253,7 @@ export function MensagensDoLink({
 function EditorMensagem({
   tipo,
   texto,
+  idAvisoSoAdmin,
   erroAoSalvar,
   id,
   aoAlterar,
@@ -224,11 +261,14 @@ function EditorMensagem({
 }: {
   tipo: TipoMensagem;
   texto: string;
+  /** O aviso "Só o admin muda estas regras." (só leitura), ou null (o admin edita). */
+  idAvisoSoAdmin: string | null;
   erroAoSalvar: string | undefined;
   id: string;
   aoAlterar: (texto: string) => void;
   aoVoltarAoPadrao: () => void;
 }) {
+  const somenteLeitura = idAvisoSoAdmin !== null;
   const idPrevia = useId();
   const idContagem = useId();
   const problemas = problemasDaMensagem(tipo, texto);
@@ -256,8 +296,12 @@ function EditorMensagem({
         erro={erro}
         value={texto}
         rows={5}
-        spellCheck
-        onChange={(evento) => aoAlterar(evento.target.value)}
+        spellCheck={!somenteLeitura}
+        readOnly={somenteLeitura}
+        aria-describedby={idAvisoSoAdmin ?? undefined}
+        onChange={(evento) => {
+          if (!somenteLeitura) aoAlterar(evento.target.value);
+        }}
       />
       <div className="campanha-mensagem__rodape">
         <p id={idContagem} className="campanha-texto-suave">
@@ -265,20 +309,22 @@ function EditorMensagem({
           {formatarNumero(LIMITE_CARACTERES_MENSAGEM)} caracteres
           {ehPadrao ? " · é o texto padrão" : ""}
         </p>
-        <Button
-          variante="discreto"
-          aria-disabled={ehPadrao || undefined}
-          // Indisponível: a contagem ao lado diz por quê ("é o texto padrão").
-          aria-describedby={ehPadrao ? idContagem : undefined}
-          onClick={() => {
-            if (!ehPadrao) voltar();
-          }}
-        >
-          Voltar ao texto padrão{" "}
-          <span className="visualmente-oculto">
-            da {ROTULO_MENSAGEM[tipo].toLowerCase()}
-          </span>
-        </Button>
+        {!somenteLeitura && (
+          <Button
+            variante="discreto"
+            aria-disabled={ehPadrao || undefined}
+            // Indisponível: a contagem ao lado diz por quê ("é o texto padrão").
+            aria-describedby={ehPadrao ? idContagem : undefined}
+            onClick={() => {
+              if (!ehPadrao) voltar();
+            }}
+          >
+            Voltar ao texto padrão{" "}
+            <span className="visualmente-oculto">
+              da {ROTULO_MENSAGEM[tipo].toLowerCase()}
+            </span>
+          </Button>
+        )}
       </div>
       <figure className="campanha-previa" aria-labelledby={idPrevia}>
         <figcaption id={idPrevia} className="campanha-previa__titulo">
