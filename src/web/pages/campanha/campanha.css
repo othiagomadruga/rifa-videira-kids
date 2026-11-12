@@ -175,11 +175,10 @@
   border-top: 1px solid var(--cor-borda);
 }
 
-/* Só a largura da caixa e do texto (não a linha toda): é onde o mouse abre a dica, que fica centrada nela. */
+/* Só a largura da caixa e do texto (não a linha toda; os pais são grades): é onde o mouse abre a dica, centrada nela. */
 .campanha-opcao {
   display: flex;
-  width: fit-content;
-  max-width: 100%;
+  justify-self: start;
   align-items: center;
   gap: var(--espaco-3);
   min-height: var(--alvo-toque);
