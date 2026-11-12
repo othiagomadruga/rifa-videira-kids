@@ -24,8 +24,9 @@ export function PedidosSuspeitosPage() {
       >
         <p>
           Cada pedido desta lista continua contando nas vendas, no painel e nos
-          rankings; tirar um pedido das vendas é decisão do PO, e esta tela só
-          aponta o que conferir.
+          rankings até o admin desconsiderá-lo na tela Pedidos (com “Permitir
+          desconsiderar pedidos” ligado na Campanha). O desconsiderado fica
+          aqui, com o selo. Esta tela só aponta o que conferir.
         </p>
       </Aviso>
       <Suspense fallback={<Loading texto="Carregando os pedidos marcados…" />}>

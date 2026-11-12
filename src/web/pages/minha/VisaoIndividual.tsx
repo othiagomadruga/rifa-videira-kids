@@ -33,6 +33,14 @@ export function VisaoIndividual() {
           aoTentarDeNovo={tentarDeNovo}
         />
       )}
+      {estado.tipo === "desligado" && (
+        <Aviso tom="alerta" titulo={estado.texto}>
+          <p>
+            Os seus números voltam a aparecer aqui quando a coordenação ligar o
+            acesso de novo. A página confere sozinha a cada minuto.
+          </p>
+        </Aviso>
+      )}
       {estado.tipo === "sem_campanha" && (
         <EmptyState
           titulo="A campanha ainda não está ativa."

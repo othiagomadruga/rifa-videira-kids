@@ -38,6 +38,7 @@ import {
   mensagemAoRevogar,
   primeiroNome,
 } from "./textos";
+import type { Mensagens } from "./regras";
 
 // ---------------------------------------------------------------------------------------------------
 // Nova pessoa
@@ -233,10 +234,13 @@ const TEXTO_COPIA: Record<Copia, string> = {
 export function DialogoLink({
   nome,
   link,
+  mensagens,
   aoFechar,
 }: {
   nome: string;
   link: LinkAcessoCriado;
+  /** Os modelos da campanha (D20): o do link da coordenação vai no "Enviar pelo WhatsApp". */
+  mensagens?: Mensagens;
   aoFechar: () => void;
 }) {
   const refCopiar = useRef<HTMLButtonElement>(null);
@@ -294,7 +298,7 @@ export function DialogoLink({
           </Button>
           <a
             className={classesBotao({ variante: "secundario" })}
-            href={linkWhatsApp(nome, link.url)}
+            href={linkWhatsApp(nome, link.url, mensagens)}
             target="_blank"
             rel="noopener noreferrer"
           >

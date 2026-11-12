@@ -434,7 +434,7 @@ const QUEM: Record<TipoAlvo, string> = {
 };
 
 const CHAMADA: Record<TipoAlvo, string> = {
-  celula: "Compartilhe o link de vendas da célula com amigos e familiares!",
+  celula: "Compartilhe o seu link de afiliado com amigos e familiares!",
   discipulador: "Anime os líderes das suas células!",
   rede: "Anime os discipuladores e os líderes da rede!",
 };

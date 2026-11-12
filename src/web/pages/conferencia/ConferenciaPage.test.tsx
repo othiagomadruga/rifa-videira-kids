@@ -8,6 +8,7 @@ import { renderizarRota } from "../../test/renderizar";
 import {
   ANALISE_AGREGADA,
   ANALISE_AMBIGUA,
+  ANALISE_COM_DESCONSIDERADOS,
   ANALISE_DEPOIS,
   ANALISE_POR_PEDIDO,
   ANALISE_SEM_DIFERENCA,
@@ -571,9 +572,48 @@ describe("CA4: a tela da conferência", () => {
     expect(
       screen.queryByRole("region", { name: "Vendas perdidas" }),
     ).toBeNull();
+    // Sem desconsiderados (quantidade 0, como a API manda), o grupo não aparece.
+    expect(
+      screen.queryByRole("region", { name: "Desconsiderados" }),
+    ).toBeNull();
     expect(
       screen.getAllByRole("status").map((item) => item.textContent),
     ).toContain("Conferência pronta: tudo confere.");
+  });
+});
+
+describe("RIFA-028 (D20), CA7: o pedido desconsiderado no arquivo", () => {
+  it("aparece num grupo à parte, 'Desconsiderados', nunca como faltando nem como diferença", async () => {
+    await abrir(criarApiFalsa({ analises: [ANALISE_COM_DESCONSIDERADOS] }));
+    await escolher();
+
+    // O resto confere: o desconsiderado não vira diferença.
+    expect(screen.getByText("Tudo confere")).toBeInTheDocument();
+    const desconsiderados = grupo("Desconsiderados");
+    expect(within(desconsiderados).getByText("1 pedido")).toBeInTheDocument();
+    expect(desconsiderados).toHaveTextContent(
+      "Estão no arquivo e no sistema, mas o admin os tirou das contas (teste, fraude ou estorno). Não são diferença nem venda faltando",
+    );
+    const tabela = within(desconsiderados).getByRole("table", {
+      name: "Desconsiderados",
+    });
+    expect(
+      within(tabela)
+        .getAllByRole("cell")
+        .map((celula) => celula.textContent?.replace(/\u00a0/g, " ")),
+    ).toEqual([
+      "Pedido R-0300",
+      "Pago · 1 bilhete · R$ 20,00 · Célula Ágape (afiliado 101) · 24/11/2026",
+      "Pago · 1 bilhete · R$ 20,00 · Célula Ágape (afiliado 101) · 24/11/2026 19:00",
+      "Desconsiderado (teste) em 24/11/2026 20:00. Observação: compra de teste na reunião.",
+    ]);
+    // Nenhum grupo de diferença o lista (nem "Vendas perdidas", nem "Só no sistema").
+    for (const regiao of screen.getAllByRole("region"))
+      if (regiao !== desconsiderados)
+        expect(regiao).not.toHaveTextContent("R-0300");
+    expect(
+      screen.queryByRole("region", { name: "Vendas perdidas" }),
+    ).toBeNull();
   });
 });
 

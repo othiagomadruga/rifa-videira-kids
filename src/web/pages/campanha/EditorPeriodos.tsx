@@ -2,6 +2,7 @@ import { percentuaisNormalizados } from "../../../shared/contracts";
 import { Button, EmptyState, Input } from "../../components/ui";
 import { formatarData } from "../../lib/formatadores";
 import {
+  ID_MODELO_SANTO_ANDRE,
   LIMITE_PERIODOS,
   MODELO_SANTO_ANDRE,
   textoPercentual,
@@ -67,6 +68,7 @@ export function EditorPeriodos({
         </div>
         <div className="campanha-modelo">
           <Button
+            id={ID_MODELO_SANTO_ANDRE}
             variante="secundario"
             onClick={aoUsarModelo}
             aria-describedby="campanha-modelo-descricao"

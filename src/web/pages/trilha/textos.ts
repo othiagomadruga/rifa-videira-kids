@@ -17,7 +17,7 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "link.revogar": "Link de acesso revogado",
   "acessos_hierarquia.gerar_links": "Links da hierarquia gerados",
   "conferencia.recuperar": "Vendas recuperadas na conferência",
-  // Sprint 6 (D20): as ações novas do contrato (a tela das regras vem na tarefa -web).
+  // Sprint 6 (D20): desconsiderar e desfazer pedido (tela Pedidos) e remover afiliado (tela Adesão).
   "pedido.desconsiderar": "Pedido desconsiderado",
   "pedido.reconsiderar": "Pedido voltou a contar",
   "afiliado.remover": "Afiliado removido",
@@ -42,6 +42,8 @@ const TIPO_DO_ALVO: Record<string, string> = {
   rede: "Rede",
   discipulador: "Discipulador",
   celula: "Célula",
+  // D20: pedido.desconsiderar e pedido.reconsiderar (`pedido:<id>`, ou só `pedido` quando o id não cabe).
+  pedido: "Pedido",
 };
 
 /**

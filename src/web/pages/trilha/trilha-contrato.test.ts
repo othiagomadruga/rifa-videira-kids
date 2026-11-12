@@ -10,6 +10,7 @@ import {
   consultaAuditoriaSchema,
 } from "../../../shared/contracts";
 import { TELAS_COORDENACAO } from "../coordenacao/telas";
+import { alvoDoPedidoNaAuditoria } from "../../../shared/contracts";
 import { ROTULO_ACAO, rotuloDaAcao, textoDoAlvo } from "./textos";
 import {
   CAMINHO_AUDITORIA,
@@ -89,6 +90,10 @@ describe("alvo legível", () => {
     ["papel:lider", "Papel: Líder"],
     ["papel:discipulador", "Papel: Discipulador"],
     ["papel:rede", "Papel: Rede"],
+    // D20: o pedido desconsiderado ou reconsiderado (só "pedido" quando o id não cabe nos 64 caracteres).
+    ["pedido:PEDTESTE0001", "Pedido PEDTESTE0001"],
+    ["pedido:PED:com:dois-pontos", "Pedido PED:com:dois-pontos"],
+    [alvoDoPedidoNaAuditoria("P".repeat(128)), "Pedido"],
   ])("%s → %s", (alvo, texto) => {
     expect(textoDoAlvo(alvo)).toBe(texto);
   });

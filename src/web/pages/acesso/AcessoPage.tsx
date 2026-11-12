@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { Aviso, Button, Card, PageHeader } from "../../components/ui";
+import {
+  ehAcessoDesligado,
+  textoAcessoDesligado,
+} from "../../lib/acesso-desligado";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { destinoDoPapel, retirarDestino, useSessao } from "../../lib/sessao";
 import "./acesso.css";
@@ -15,6 +19,11 @@ type Estado =
   | { tipo: "entrando" }
   /** 401: link inexistente, vencido, revogado ou de alguém desativado. */
   | { tipo: "invalido" }
+  /**
+   * 403 `acesso_desligado` (D20): o link vale, mas a coordenação desligou o acesso do papel na Campanha. Não é link
+   * inválido: o "Entrar" continua, para quando o acesso voltar.
+   */
+  | { tipo: "desligado"; texto: string }
   /** Sem resposta ou outra falha: dá para tocar em Entrar de novo. */
   | { tipo: "falha"; erro: unknown };
 
@@ -42,7 +51,11 @@ export function AcessoPage() {
 
   // Falhou ao entrar: o foco vai para a mensagem (com o link inválido, o botão some).
   useEffect(() => {
-    if (estado.tipo === "invalido" || estado.tipo === "falha") {
+    if (
+      estado.tipo === "invalido" ||
+      estado.tipo === "desligado" ||
+      estado.tipo === "falha"
+    ) {
       refResultado.current?.focus();
     }
   }, [estado.tipo]);
@@ -63,7 +76,9 @@ export function AcessoPage() {
       setEstado(
         erro instanceof ErroApi && erro.status === 401
           ? { tipo: "invalido" }
-          : { tipo: "falha", erro },
+          : ehAcessoDesligado(erro)
+            ? { tipo: "desligado", texto: textoAcessoDesligado(erro) }
+            : { tipo: "falha", erro },
       );
     }
   }
@@ -104,6 +119,14 @@ export function AcessoPage() {
                 <p>
                   Ele pode ter vencido ou sido revogado, ou o acesso pode ter
                   sido desativado.
+                </p>
+              </Aviso>
+            )}
+            {estado.tipo === "desligado" && (
+              <Aviso tom="alerta" titulo={estado.texto}>
+                <p>
+                  O seu link continua valendo: quando a coordenação ligar o
+                  acesso de novo, toque em Entrar.
                 </p>
               </Aviso>
             )}

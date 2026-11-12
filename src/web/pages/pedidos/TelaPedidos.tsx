@@ -17,7 +17,13 @@ import "./pedidos.css";
 type AbaPedidos = "pedidos" | "entregas";
 
 /** Os parâmetros da URL de cada lista (os mesmos nomes da consulta da API). */
-const PARAMS_PEDIDOS = ["status", "celula_id", "sem_celula", "id"] as const;
+const PARAMS_PEDIDOS = [
+  "status",
+  "celula_id",
+  "sem_celula",
+  "id",
+  "desconsiderado",
+] as const;
 const PARAMS_ENTREGAS = ["resultado"] as const;
 
 // A tela Pedidos em duas abas (vem num pacote à parte, com o próprio CSS): os pedidos e as entregas do webhook. A

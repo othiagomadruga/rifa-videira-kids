@@ -2,6 +2,7 @@ import { useId, type ReactNode, type RefObject } from "react";
 import type {
   AvisoReconciliacao,
   Divergencia,
+  PedidoDesconsideradoNaConferencia,
   GrupoDivergencia,
   RespostaAnaliseAgregada,
   RespostaAnalisePorPedido,
@@ -25,7 +26,14 @@ import {
   textoDoSistema,
   textoDosTotais,
 } from "./formatos";
-import { DIVERGENCIAS, OBSERVACOES, plural, tomDoAviso } from "./textos";
+import {
+  DESCONSIDERADOS,
+  DIVERGENCIAS,
+  MOTIVO_DESCONSIDERACAO,
+  OBSERVACOES,
+  plural,
+  tomDoAviso,
+} from "./textos";
 
 type Props = {
   analise: RespostaAnaliseReconciliacao;
@@ -236,9 +244,81 @@ function PorPedido({
           {semCasos.map((grupo) => DIVERGENCIAS[grupo.tipo].titulo).join(", ")}.
         </p>
       )}
+      {analise.desconsiderados && analise.desconsiderados.quantidade > 0 && (
+        <GrupoDesconsiderados grupo={analise.desconsiderados} />
+      )}
     </>
   );
 }
+
+/**
+ * Os pedidos do arquivo que o sistema tem desconsiderados (D20): num grupo à parte, depois das diferenças. Eles
+ * existem no sistema e, de propósito, não contam: nunca aparecem como "faltando" nem como diferença.
+ */
+function GrupoDesconsiderados({
+  grupo,
+}: {
+  grupo: NonNullable<RespostaAnalisePorPedido["desconsiderados"]>;
+}) {
+  const id = useId();
+  return (
+    <section className="conferencia-grupo" aria-labelledby={id}>
+      <div className="conferencia-grupo__cabecalho">
+        <h3 id={id} className="conferencia-subtitulo">
+          {DESCONSIDERADOS.titulo}
+        </h3>
+        <Badge tom="neutro">
+          {plural(grupo.quantidade, "pedido", "pedidos")}
+        </Badge>
+      </div>
+      <p>{DESCONSIDERADOS.explicacao}</p>
+      <DataTable
+        colunas={COLUNAS_DESCONSIDERADO}
+        linhas={grupo.itens}
+        chaveDaLinha={(item) => item.pedido_id}
+        legenda={DESCONSIDERADOS.titulo}
+      />
+      {grupo.itens_omitidos > 0 && (
+        <p className="conferencia-suave">
+          Mostrando os primeiros {grupo.itens.length.toLocaleString("pt-BR")} de{" "}
+          {plural(grupo.quantidade, "pedido", "pedidos")}.
+        </p>
+      )}
+    </section>
+  );
+}
+
+const COLUNAS_DESCONSIDERADO: ColunaTabela<PedidoDesconsideradoNaConferencia>[] =
+  [
+    {
+      chave: "pedido",
+      titulo: "Pedido",
+      principal: true,
+      celula: (item) => (
+        <span className="conferencia-codigo">Pedido {item.pedido_id}</span>
+      ),
+    },
+    {
+      chave: "arquivo",
+      titulo: "Na Rifei (arquivo)",
+      celula: (item) => textoDoArquivo(item.arquivo),
+    },
+    {
+      chave: "sistema",
+      titulo: "No sistema",
+      celula: (item) => textoDoSistema(item.sistema),
+    },
+    {
+      chave: "desconsiderado",
+      titulo: "Desconsiderado",
+      celula: ({ desconsiderado }) =>
+        `Desconsiderado (${MOTIVO_DESCONSIDERACAO[desconsiderado.motivo]}) em ${formatarDataHora(desconsiderado.em)}${
+          desconsiderado.observacao
+            ? `. Observação: ${desconsiderado.observacao}`
+            : ""
+        }.`,
+    },
+  ];
 
 function totaisDoGrupo(grupo: GrupoDivergencia): string {
   // O lado do arquivo traz `sem_quantidade` e `sem_valor`: "R$ 120,00 (+1 sem valor)".

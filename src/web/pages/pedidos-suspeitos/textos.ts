@@ -2,6 +2,7 @@
 // por pedidos-suspeitos-contrato.test.ts) e o detalhe, com os números do próprio pedido. Área da coordenação:
 // os valores em R$ podem aparecer.
 import type {
+  MotivoDesconsideracao,
   MotivoPedidoSuspeito,
   PedidoSuspeito,
 } from "../../../shared/contracts";
@@ -67,4 +68,20 @@ export function pedidosMarcados(quantidade: number): string {
   return quantidade === 1
     ? "1 pedido marcado"
     : `${formatarNumero(quantidade)} pedidos marcados`;
+}
+
+/** O motivo da desconsideração (D20), como no selo da tela Pedidos. */
+export const ROTULO_MOTIVO_DESCONSIDERACAO: Record<
+  MotivoDesconsideracao,
+  string
+> = {
+  teste: "teste",
+  fraude: "fraude",
+  estorno: "estorno",
+  outro: "outro",
+};
+
+/** O selo do pedido que o admin já desconsiderou: "Desconsiderado (fraude)". */
+export function seloDesconsiderado(motivo: MotivoDesconsideracao): string {
+  return `Desconsiderado (${ROTULO_MOTIVO_DESCONSIDERACAO[motivo]})`;
 }

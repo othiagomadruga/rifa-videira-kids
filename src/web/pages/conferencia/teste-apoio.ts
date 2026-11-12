@@ -205,6 +205,16 @@ const COMUM = {
   conferido_em: "2026-12-01T15:00:00.000Z",
 };
 
+/**
+ * O grupo `desconsiderados` vazio (D20): a API manda sempre, também sem nenhum (o `.optional()` do contrato é só da
+ * transição). Toda fixture por pedido o traz, para o contrato poder deixá-lo obrigatório sem quebrar o site.
+ */
+export const SEM_DESCONSIDERADOS = {
+  quantidade: 0,
+  itens: [],
+  itens_omitidos: 0,
+} as const;
+
 export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
   respostaAnalisePorPedidoSchema.parse({
     modo: "por_pedido",
@@ -231,6 +241,7 @@ export const ANALISE_POR_PEDIDO: RespostaAnalisePorPedido =
       ausentes_fora_do_periodo: 1,
     },
     divergencias: TIPOS.map((tipo) => grupo(tipo, ITENS_POR_TIPO[tipo] ?? [])),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 /** A mesma conferência depois de recuperar R-0101 e R-0102: elas saem das vendas perdidas. */
@@ -246,6 +257,7 @@ export const ANALISE_DEPOIS: RespostaAnalisePorPedido =
           : (ITENS_POR_TIPO[tipo] ?? []),
       ),
     ),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 export const ANALISE_SEM_DIFERENCA: RespostaAnalisePorPedido =
@@ -254,6 +266,48 @@ export const ANALISE_SEM_DIFERENCA: RespostaAnalisePorPedido =
     avisos: [],
     resumo: { ...ANALISE_POR_PEDIDO.resumo, conferem: 8, com_divergencia: 0 },
     divergencias: TIPOS.map((tipo) => grupo(tipo, [])),
+    desconsiderados: SEM_DESCONSIDERADOS,
+  });
+
+/**
+ * D20: o arquivo traz um pedido que o admin desconsiderou (a compra de teste da reunião). Ele vai para o grupo à
+ * parte `desconsiderados` e não entra em nenhuma diferença nem nos totais do sistema: o resto confere.
+ */
+export const ANALISE_COM_DESCONSIDERADOS: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_SEM_DIFERENCA,
+    desconsiderados: {
+      quantidade: 1,
+      itens: [
+        {
+          pedido_id: "R-0300",
+          arquivo: {
+            status: "aprovado",
+            qtd_bilhetes: 1,
+            total_centavos: 2000,
+            afiliado: "reconhecido",
+            affiliate_id: 101,
+            celula: ATAPE,
+            data: "2026-11-24",
+          },
+          sistema: {
+            status: "approved",
+            qtd_bilhetes: 1,
+            total_centavos: 2000,
+            affiliate_id: 101,
+            celula: ATAPE,
+            aprovado_em: "2026-11-24T22:00:00.000Z",
+            origem: "webhook",
+          },
+          desconsiderado: {
+            motivo: "teste",
+            observacao: "compra de teste na reunião",
+            em: "2026-11-24T23:00:00.000Z",
+          },
+        },
+      ],
+      itens_omitidos: 0,
+    },
   });
 
 /** A coluna escolhida como código não confere (B3): nada pode ser recuperado. */
@@ -281,6 +335,7 @@ export const ANALISE_TRAVADA: RespostaAnalisePorPedido =
           : [],
       ),
     ),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 /**
@@ -308,6 +363,7 @@ export const ANALISE_AMBIGUA: RespostaAnalisePorPedido =
           : [],
       ),
     ),
+    desconsiderados: SEM_DESCONSIDERADOS,
   });
 
 export const ANALISE_AGREGADA: RespostaAnaliseAgregada =

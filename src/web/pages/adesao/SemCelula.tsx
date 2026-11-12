@@ -1,11 +1,20 @@
-import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Aviso, Button, Card } from "../../components/ui";
 import { formatarDataHora, formatarMoeda } from "../../lib/formatadores";
 import type { AfiliadoResumo, CelulaAdesao } from "./adesao-api";
 import { EscolherCelula } from "./EscolherCelula";
 import { quantidade, tempoRelativo } from "./formatos";
+import { DialogoRemoverAfiliado } from "./RemoverAfiliado";
 import {
   avisoDaFila,
+  type AoRemoverAfiliado,
   type AoSalvarVinculo,
   type AvisoDeSucesso,
 } from "./vinculo";
@@ -19,11 +28,20 @@ type Props = {
   /** Último vínculo salvo: aparece aqui se foi feito nesta seção. */
   aviso: AvisoDeSucesso | null;
   aoSalvar: AoSalvarVinculo;
+  /** Só para o admin (RIFA-031): remover afiliado de teste. */
+  aoRemover: AoRemoverAfiliado | null;
 };
 
 // Fila de órfãos: códigos que a Rifei mandou (o líder iniciou uma compra pelo próprio link) e que ainda
 // não têm célula. O mais recente fica no topo.
-export function SemCelula({ orfaos, celulas, agora, aviso, aoSalvar }: Props) {
+export function SemCelula({
+  orfaos,
+  celulas,
+  agora,
+  aviso,
+  aoSalvar,
+  aoRemover,
+}: Props) {
   const idTitulo = useId();
   const refTitulo = useRef<HTMLSpanElement>(null);
   const refAviso = useRef<HTMLDivElement>(null);
@@ -73,6 +91,38 @@ export function SemCelula({ orfaos, celulas, agora, aviso, aoSalvar }: Props) {
       });
     } catch (falha) {
       focoPendente.current = null;
+      throw falha;
+    }
+  }
+
+  /**
+   * Remove o órfão (admin): o foco vai para o próximo da fila (ou para o título), como depois de vincular. Quem dá
+   * o foco é o diálogo, ao sair (`focoAoFechar`): enquanto ele está aberto, o resto da página é `inert` e não
+   * recebe foco, e o efeito do aviso roda antes de o diálogo sair.
+   */
+  async function remover(
+    afiliado: AfiliadoResumo,
+    focoAoFechar: RefObject<HTMLElement | null>,
+  ) {
+    if (!aoRemover) return;
+    const posicao = orfaos.findIndex(
+      (orfao) => orfao.affiliate_id === afiliado.affiliate_id,
+    );
+    const abaixo = orfaos[posicao + 1];
+    const proximo = abaixo ?? orfaos[posicao - 1];
+    focoPendente.current = { affiliateId: proximo?.affiliate_id ?? null };
+    focoAoFechar.current =
+      (proximo && botoes.current.get(proximo.affiliate_id)) ||
+      refTitulo.current;
+    try {
+      await aoRemover({
+        affiliateId: afiliado.affiliate_id,
+        sucesso: `Afiliado ${afiliado.affiliate_id} removido.`,
+        local: { secao: "sem-celula", antesDe: abaixo?.affiliate_id ?? null },
+      });
+    } catch (falha) {
+      focoPendente.current = null;
+      focoAoFechar.current = null;
       throw falha;
     }
   }
@@ -131,6 +181,7 @@ export function SemCelula({ orfaos, celulas, agora, aviso, aoSalvar }: Props) {
                         agora={agora}
                         registrarBotao={registrarBotao}
                         aoVincular={vincular}
+                        aoRemover={aoRemover ? remover : null}
                       />
                     </li>
                   </Fragment>
@@ -156,6 +207,13 @@ type PropsItem = {
     botao: HTMLButtonElement | null,
   ) => void;
   aoVincular: (afiliado: AfiliadoResumo, celula: CelulaAdesao) => Promise<void>;
+  /** Só para o admin: remover o afiliado de teste (e onde o foco fica quando o diálogo sai). */
+  aoRemover:
+    | ((
+        afiliado: AfiliadoResumo,
+        focoAoFechar: RefObject<HTMLElement | null>,
+      ) => Promise<void>)
+    | null;
 };
 
 function ItemOrfao({
@@ -164,8 +222,12 @@ function ItemOrfao({
   agora,
   registrarBotao,
   aoVincular,
+  aoRemover,
 }: PropsItem) {
   const [aberto, setAberto] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
+  // Depois de remover, este cartão sai da tela: o foco vai para o próximo da fila (veja `remover`).
+  const refFocoAposRemover = useRef<HTMLElement | null>(null);
   const refBotao = useRef<HTMLButtonElement | null>(null);
   const idPainel = useId();
   const { affiliate_id: codigo, vendas } = afiliado;
@@ -212,6 +274,28 @@ function ItemOrfao({
       >
         Vincular <span className="visualmente-oculto">o afiliado {codigo}</span>
       </Button>
+      {aoRemover && (
+        <Button
+          variante="discreto"
+          larguraTotal
+          onClick={() => {
+            refFocoAposRemover.current = null;
+            setRemovendo(true);
+          }}
+        >
+          Remover{" "}
+          <span className="visualmente-oculto">o afiliado {codigo}</span>
+        </Button>
+      )}
+      {removendo && aoRemover && (
+        <DialogoRemoverAfiliado
+          affiliateId={codigo}
+          celulaNome={null}
+          focoAoFechar={refFocoAposRemover}
+          aoRemover={() => aoRemover(afiliado, refFocoAposRemover)}
+          aoFechar={() => setRemovendo(false)}
+        />
+      )}
       {aberto && (
         <div id={idPainel}>
           <EscolherCelula

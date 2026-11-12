@@ -123,6 +123,35 @@ describe("RIFA-024: sem rolagem lateral em 390 px (CSS dos Pedidos suspeitos)", 
     expect(blocos).toBe(colunas + 1);
   });
 
+  it("na tabela, a data e o valor não quebram; o selo do desconsiderado (D20) vale no celular e na tabela", () => {
+    /** As partes de uma lista de seletores ("a, b"). */
+    const partes = (bloco: string | undefined) =>
+      (bloco ?? "").split(",").map((parte) => parte.trim());
+    const naTabelaSemQuebra = (seletor: string) =>
+      DECLARACOES.some(
+        (declaracao) =>
+          naTabela(declaracao) &&
+          declaracao.propriedade === "white-space" &&
+          declaracao.valor === "nowrap" &&
+          partes(declaracao.blocos.at(-1)).includes(seletor),
+      );
+    expect(naTabelaSemQuebra(".suspeitos time")).toBe(true);
+    expect(naTabelaSemQuebra(".suspeitos-valor")).toBe(true);
+    // As regras do selo ficam fora do @media (sem uma cópia colada no seletor de outra regra da tabela).
+    for (const seletor of [
+      ".suspeitos-pedido",
+      ".suspeitos-pedido__id",
+      ".suspeitos-desconsiderado",
+    ]) {
+      const doSelo = DECLARACOES.filter(({ blocos }) =>
+        blocos.some((bloco) => partes(bloco).includes(seletor)),
+      );
+      expect(doSelo.length, seletor).toBeGreaterThan(0);
+      for (const declaracao of doSelo)
+        expect(naTabela(declaracao), seletor).toBe(false);
+    }
+  });
+
   it("os motivos ficam abaixo do rótulo no celular (não espremidos na metade da largura)", () => {
     expect(regra(".suspeitos td:has(> .suspeitos-motivos)")).toMatch(
       /flex-direction:\s*column/,

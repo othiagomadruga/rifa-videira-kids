@@ -3,6 +3,7 @@
 // que todo motivo do contrato tem um texto em português.
 import { describe, expect, it } from "vitest";
 import {
+  MOTIVOS_DESCONSIDERACAO,
   MOTIVOS_PEDIDO_SUSPEITO,
   ROTAS,
   TETO_BILHETES_POR_PEDIDO as TETO_DO_CONTRATO,
@@ -14,7 +15,7 @@ import {
   TETO_BILHETES_POR_PEDIDO,
   TOLERANCIA_DESCONTO_BP,
 } from "./pedidos-suspeitos-api";
-import { ROTULO_MOTIVO } from "./textos";
+import { ROTULO_MOTIVO, ROTULO_MOTIVO_DESCONSIDERACAO } from "./textos";
 
 describe("cópias do contrato dos pedidos suspeitos no site", () => {
   it("caminho e método da rota; rota e tela abertas a toda a coordenação", () => {
@@ -43,5 +44,11 @@ describe("cópias do contrato dos pedidos suspeitos no site", () => {
     const textos = Object.values(ROTULO_MOTIVO);
     expect(new Set(textos).size).toBe(textos.length);
     for (const texto of textos) expect(texto).toMatch(/^[A-Z][^_]+$/);
+  });
+
+  it("todo motivo da desconsideração (D20) tem o texto do selo", () => {
+    expect(Object.keys(ROTULO_MOTIVO_DESCONSIDERACAO)).toEqual([
+      ...MOTIVOS_DESCONSIDERACAO,
+    ]);
   });
 });

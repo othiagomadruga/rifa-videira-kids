@@ -13,6 +13,7 @@ import {
 } from "../../components/ui";
 import { formatarData } from "../../lib/formatadores";
 import { gerarLinksHierarquia } from "./acessos-api";
+import { ehAcaoDesligada, type Mensagens } from "./regras";
 import {
   RESPONSAVEL_DO_ALVO,
   ehEmUso,
@@ -35,6 +36,7 @@ export function DialogoTrocarAcesso({
   aoFechar,
   aoConcluir,
   aoDesatualizar,
+  aoDesligada,
 }: {
   papel: PapelHierarquia;
   item: ItemAcessoHierarquia;
@@ -43,6 +45,8 @@ export function DialogoTrocarAcesso({
   aoConcluir: (gerados: LinkGeradoHierarquia[]) => void;
   /** A lista está velha (404/409): recarregue. */
   aoDesatualizar: () => void;
+  /** 409 `acao_desligada`: o acesso do papel foi desligado na Campanha. */
+  aoDesligada?: () => void;
 }) {
   const [trocando, setTrocando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -58,8 +62,9 @@ export function DialogoTrocarAcesso({
     try {
       aoConcluir(await gerarLinksHierarquia(papel, [item.alvo.id], true));
     } catch (falha) {
-      setErro(mensagemAoGerarLinks(falha));
+      setErro(mensagemAoGerarLinks(falha, papel));
       if (ehNaoEncontrado(falha) || ehEmUso(falha)) aoDesatualizar();
+      if (ehAcaoDesligada(falha)) aoDesligada?.();
     } finally {
       emAndamento.current = false;
       setTrocando(false);
@@ -120,9 +125,12 @@ type Copia = "nada" | "copiada" | "falhou";
  */
 export function DialogoLinksGerados({
   itens,
+  mensagens,
   aoFechar,
 }: {
   itens: LinkGeradoHierarquia[];
+  /** Os modelos da campanha (D20, RIFA-032): a mensagem de cada link sai do modelo do tipo de alvo. */
+  mensagens?: Mensagens;
   aoFechar: () => void;
 }) {
   const [anuncio, setAnuncio] = useState("");
@@ -183,6 +191,7 @@ export function DialogoLinksGerados({
             <LinkGerado
               key={item.link.id}
               item={item}
+              mensagens={mensagens}
               aoCopiar={(copia, destinatario) => {
                 if (copia === "copiada") marcarEntregue(item.link.id);
                 setAnuncio(
@@ -257,10 +266,12 @@ export function DialogoLinksGerados({
 
 function LinkGerado({
   item,
+  mensagens,
   aoCopiar,
   aoAbrirWhatsApp,
 }: {
   item: LinkGeradoHierarquia;
+  mensagens?: Mensagens;
   aoCopiar: (copia: Exclude<Copia, "nada">, destinatario: string) => void;
   /** O admin abriu a conversa do WhatsApp com a mensagem pronta (conta como mandado). */
   aoAbrirWhatsApp: () => void;
@@ -269,11 +280,10 @@ function LinkGerado({
   const refDetalhes = useRef<HTMLDetailsElement>(null);
   const refCampo = useRef<HTMLTextAreaElement>(null);
   const destinatario = item.pessoa_nome ?? item.alvo.nome;
-  const mensagem = mensagemHierarquia({
-    alvo: item.alvo,
-    pessoaNome: item.pessoa_nome,
-    url: item.link.url,
-  });
+  const mensagem = mensagemHierarquia(
+    { alvo: item.alvo, pessoaNome: item.pessoa_nome, url: item.link.url },
+    mensagens,
+  );
   const numero = telefoneParaWhatsApp(item.telefone);
 
   // Sem a área de transferência: a mensagem aparece selecionada no campo, para copiar pelo menu do celular.

@@ -322,3 +322,24 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Remover afiliado de teste (RIFA-031, só admin): o diálogo e a lista dos pedidos que ainda contam. */
+.adesao-remover {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.adesao-remover__pedidos {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: var(--espaco-2) 0;
+  padding-left: var(--espaco-5);
+}
+
+.adesao-remover__pedidos a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+}

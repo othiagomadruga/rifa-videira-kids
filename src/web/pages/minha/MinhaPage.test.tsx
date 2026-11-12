@@ -16,7 +16,7 @@ import type {
   RespostaVisaoIndividual,
   UsuarioSessao,
 } from "../../../shared/contracts";
-import { renderizarRota } from "../../test/renderizar";
+import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   criarApiFalsa,
   respostaErro,
@@ -426,7 +426,7 @@ describe("fases, primeira venda e alvo sem células", () => {
 
     const ranking = regiao("Ranking");
     expect(ranking).toHaveTextContent(
-      "Falta só a primeira venda para a sua célula entrar na disputa. Compartilhe o link de vendas da célula com amigos e familiares!",
+      "Falta só a primeira venda para a sua célula entrar na disputa. Compartilhe o seu link de afiliado com amigos e familiares!",
     );
     expect(
       screen.queryByRole("heading", { name: "Na sua divisão" }),
@@ -582,6 +582,64 @@ describe("estados e atualização", () => {
       screen.getByRole("heading", { level: 1, name: "Célula Ágape" }),
     ).toBeInTheDocument();
   });
+
+  it.each([
+    [
+      "discipulador",
+      "A coordenação desligou o acesso de discipuladores por enquanto.",
+    ],
+    ["rede", "A coordenação desligou o acesso de redes por enquanto."],
+  ] as const)(
+    "403 acesso_desligado (%s, D20): o texto da coordenação no lugar dos números, sem sair da sessão; volta quando a chave volta",
+    async (papel, texto) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const visao = visaoDe({ papel });
+      const api = criarApiFalsa(visao);
+      const desligado = () =>
+        respostaJson(
+          {
+            erro: {
+              codigo: "acesso_desligado",
+              mensagem: "O acesso deste papel está desligado na campanha",
+              detalhes: { papel },
+            },
+          },
+          403,
+        );
+      api.proxima("GET", CAMINHO_VISAO, desligado);
+      vi.stubGlobal("fetch", api.fetch);
+      const { roteador } = renderizarRota("/minha", {
+        usuario: sessaoDaVisao(visao),
+      });
+
+      const alerta = await screen.findByRole("alert");
+      expect(alerta).toHaveTextContent(texto);
+      expect(alerta).toHaveTextContent(
+        "Os seus números voltam a aparecer aqui quando a coordenação ligar o acesso de novo. A página confere sozinha a cada minuto.",
+      );
+      expect(alerta).not.toHaveTextContent(/link/i);
+      expect(
+        screen.queryByRole("heading", { level: 2, name: "Ranking" }),
+      ).not.toBeInTheDocument();
+      expect(roteador.state.location.pathname).toBe("/minha");
+      expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
+
+      // A chave volta: a próxima consulta (1 minuto depois) traz os números de novo.
+      await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+      expect(
+        await screen.findByRole("heading", { level: 2, name: "Ranking" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(texto)).not.toBeInTheDocument();
+
+      // Desligada com a tela aberta: os números saem e o texto volta.
+      api.proxima("GET", CAMINHO_VISAO, desligado);
+      await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+      expect(await screen.findByText(texto)).toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { level: 2, name: "Ranking" }),
+      ).not.toBeInTheDocument();
+    },
+  );
 
   it("atualiza sozinha a cada minuto; uma falha mantém os números e avisa; com a aba oculta, para", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

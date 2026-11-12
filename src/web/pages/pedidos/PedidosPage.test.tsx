@@ -229,7 +229,9 @@ describe("CA1: a lista de pedidos", () => {
     ];
     expect(totais()).toEqual(esperados);
     expect(
-      screen.getByText("Só os aprovados contam nas vendas."),
+      screen.getByText(
+        "Só os aprovados contam nas vendas. Os desconsiderados ficam fora dos totais.",
+      ),
     ).toBeInTheDocument();
 
     acionar(botaoCarregarMais());

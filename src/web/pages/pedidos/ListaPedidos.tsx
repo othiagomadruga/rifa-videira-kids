@@ -20,6 +20,7 @@ import {
   type ColunaTabela,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
+import { useUsuarioConectado } from "../../lib/sessao";
 import {
   LOCALIDADE,
   formatarDataHora,
@@ -27,10 +28,16 @@ import {
   formatarNumero,
 } from "../../lib/formatadores";
 import {
+  AvisoChaveDesligada,
+  DialogoDesconsiderar,
+  DialogoDesfazer,
+} from "./Desconsiderar";
+import {
   SEM_FILTROS,
   STATUS_PEDIDO,
   TAMANHO_MAXIMO_ID,
   carregarCelulas,
+  carregarDesconsiderarLigado,
   carregarPedidos,
   ehCursorInvalido,
   ehSemPermissao,
@@ -42,11 +49,14 @@ import {
   type FiltrosPedidos,
 } from "./pedidos-api";
 import {
+  MARCA_RECUPERADO,
   ROTULO_STATUS,
   ROTULO_STATUS_PLURAL,
   TOM_STATUS,
   pedidos,
+  seloDesconsiderado,
   textoDaCelula,
+  totaisDepoisDe,
 } from "./textos";
 import {
   usePaginas,
@@ -88,12 +98,57 @@ type Props = {
 // antigo, com "Carregar mais" pelo cursor. Sem dado pessoal: do comprador, a API manda só o DDD.
 export function ListaPedidos({ filtros, aoMudar }: Props) {
   const consulta = new URLSearchParams(paramsDosPedidos(filtros)).toString();
-  const { estado, mais, anuncio, carregarMais, tentarDeNovo } = usePaginas(
-    consulta,
-    CONFIG,
-  );
+  const { estado, mais, anuncio, carregarMais, tentarDeNovo, substituirItem } =
+    usePaginas(consulta, CONFIG);
   const celulas = useCelulas();
   const primeiroFiltro = useRef<HTMLSelectElement>(null);
+  const admin = useUsuarioConectado().papel === "admin";
+  const [chave, setChave] = useChaveDesconsiderar(admin);
+  const [acao, setAcao] = useState<{
+    tipo: "desconsiderar" | "desfazer";
+    pedido: ItemPedido;
+  } | null>(null);
+  const [resultado, setResultado] = useState<string | null>(null);
+  // Depois da ação, o botão troca de nome ("Desconsiderar" ↔ "Desfazer"): o foco vai para o id do pedido.
+  const refFocoAposAcao = useRef<HTMLElement | null>(null);
+
+  function abrirAcao(tipo: "desconsiderar" | "desfazer", pedido: ItemPedido) {
+    refFocoAposAcao.current = null;
+    setResultado(null);
+    setAcao({ tipo, pedido });
+  }
+
+  function aoConcluirAcao(antes: ItemPedido, depois: ItemPedido) {
+    substituirItem(depois, (primeira) =>
+      primeira.totais
+        ? {
+            ...primeira,
+            totais: totaisDepoisDe(primeira.totais, antes, depois),
+          }
+        : primeira,
+    );
+    refFocoAposAcao.current = document.getElementById(idDoPedido(depois.id));
+    setAcao(null);
+    setResultado(
+      depois.desconsiderado
+        ? `Pedido ${depois.id} desconsiderado: saiu de todas as contas e dos totais.`
+        : `Pedido ${depois.id} voltou a contar em todas as contas.`,
+    );
+  }
+
+  /** 409 `acao_desligada`: as ações saem da lista, e com elas o botão que abriu o diálogo; o foco volta ao id. */
+  function aoDesligarNaAcao(pedido: ItemPedido) {
+    refFocoAposAcao.current = document.getElementById(idDoPedido(pedido.id));
+    setChave("desligada");
+  }
+
+  const acoes: AcoesDaTabela | null =
+    admin && chave === "ligada"
+      ? {
+          aoDesconsiderar: (pedido) => abrirAcao("desconsiderar", pedido),
+          aoDesfazer: (pedido) => abrirAcao("desfazer", pedido),
+        }
+      : null;
 
   function limparFiltros() {
     // O "Limpar filtros" some com a lista vazia: o foco vai para o primeiro filtro, pronto para outra escolha.
@@ -113,17 +168,80 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
         aoMudar={aoMudar}
         primeiroFiltro={primeiroFiltro}
       />
+      {admin && chave === "desligada" && <AvisoChaveDesligada />}
+      {/* Região viva fixa: anuncia o resultado de desconsiderar e de desfazer. */}
+      <p className="visualmente-oculto" role="status">
+        {resultado ?? ""}
+      </p>
+      {resultado && (
+        <Aviso
+          tom="sucesso"
+          anuncio="nenhum"
+          aoFechar={() => setResultado(null)}
+        >
+          <p>{resultado}</p>
+        </Aviso>
+      )}
       <Conteudo
         estado={estado}
         filtros={filtros}
         mais={mais}
+        acoes={acoes}
         aoCarregarMais={() => void carregarMais()}
         aoTentarDeNovo={tentarDeNovo}
         aoLimpar={limparFiltros}
       />
+      {acao?.tipo === "desconsiderar" && (
+        <DialogoDesconsiderar
+          pedido={acao.pedido}
+          aoFechar={() => setAcao(null)}
+          aoConcluir={(depois) => aoConcluirAcao(acao.pedido, depois)}
+          aoDesligada={() => aoDesligarNaAcao(acao.pedido)}
+          focoAoFechar={refFocoAposAcao}
+        />
+      )}
+      {acao?.tipo === "desfazer" && (
+        <DialogoDesfazer
+          pedido={acao.pedido}
+          aoFechar={() => setAcao(null)}
+          aoConcluir={(depois) => aoConcluirAcao(acao.pedido, depois)}
+          aoDesligada={() => aoDesligarNaAcao(acao.pedido)}
+          focoAoFechar={refFocoAposAcao}
+        />
+      )}
     </div>
   );
 }
+
+type Chave = "desconhecida" | "ligada" | "desligada";
+
+/**
+ * A chave `pedidos.desconsiderar` da campanha, só para o admin (as ações são só dele). Lida uma vez, ao abrir; um
+ * 409 `acao_desligada` numa ação a desliga aqui também. Falha ao ler: as ações ficam escondidas.
+ */
+function useChaveDesconsiderar(
+  admin: boolean,
+): [Chave, (chave: Chave) => void] {
+  const [chave, setChave] = useState<Chave>("desconhecida");
+  useEffect(() => {
+    if (!admin) return;
+    const controle = new AbortController();
+    carregarDesconsiderarLigado({ signal: controle.signal }).then(
+      (ligada) => {
+        if (!controle.signal.aborted) setChave(ligada ? "ligada" : "desligada");
+      },
+      () => undefined,
+    );
+    return () => controle.abort();
+  }, [admin]);
+  return [chave, setChave];
+}
+
+/** As ações de cada pedido (só admin, com a chave ligada). */
+type AcoesDaTabela = {
+  aoDesconsiderar: (pedido: ItemPedido) => void;
+  aoDesfazer: (pedido: ItemPedido) => void;
+};
 
 type EstadoCelulas =
   | { tipo: "carregando" }
@@ -261,6 +379,25 @@ function Filtros({
           </optgroup>
         ))}
       </Select>
+      <Select
+        rotulo="Desconsiderados"
+        value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
+        onChange={(evento) =>
+          aoMudar({
+            ...filtros,
+            desconsiderado:
+              evento.target.value === "so"
+                ? true
+                : evento.target.value === "sem"
+                  ? false
+                  : null,
+          })
+        }
+      >
+        <option value="todos">Todos os pedidos</option>
+        <option value="sem">Só os que contam</option>
+        <option value="so">Só os desconsiderados</option>
+      </Select>
       <BuscaPorId
         aplicada={filtros.id}
         aoBuscar={(id) => aoMudar({ ...filtros, id })}
@@ -268,6 +405,13 @@ function Filtros({
     </div>
   );
 }
+
+/** O valor do filtro "Desconsiderados" para cada valor de `desconsiderado`. */
+const VALOR_DESCONSIDERADO: Record<string, string> = {
+  null: "todos",
+  false: "sem",
+  true: "so",
+};
 
 function BuscaPorId({
   aplicada,
@@ -327,6 +471,7 @@ function Conteudo({
   estado,
   filtros,
   mais,
+  acoes,
   aoCarregarMais,
   aoTentarDeNovo,
   aoLimpar,
@@ -334,6 +479,7 @@ function Conteudo({
   estado: EstadoPaginas<ItemPedido, string, RespostaPedidos>;
   filtros: FiltrosPedidos;
   mais: { carregando: boolean; erro: unknown };
+  acoes: AcoesDaTabela | null;
   aoCarregarMais: () => void;
   aoTentarDeNovo: () => void;
   aoLimpar: () => void;
@@ -386,7 +532,11 @@ function Conteudo({
         )
       ) : (
         <>
-          <TabelaPedidos itens={itens} inicioDaUltima={inicioDaUltima} />
+          <TabelaPedidos
+            itens={itens}
+            inicioDaUltima={inicioDaUltima}
+            acoes={acoes}
+          />
           <div className="pedidos-rodape">
             <p
               id={ID_FIM_DOS_PEDIDOS}
@@ -438,7 +588,8 @@ function Totais({
         Totais por status
       </h2>
       <p className="pedidos-totais__nota">
-        Só os aprovados contam nas vendas.
+        Só os aprovados contam nas vendas. Os desconsiderados ficam fora dos
+        totais.
         {celulaOuBusca &&
           " Os totais seguem a célula e a busca escolhidas, com todos os status."}
       </p>
@@ -502,9 +653,11 @@ function Quando({ pedido }: { pedido: ItemPedido }) {
 function TabelaPedidos({
   itens,
   inicioDaUltima,
+  acoes,
 }: {
   itens: ItemPedido[];
   inicioDaUltima: number | null;
+  acoes: AcoesDaTabela | null;
 }) {
   const novos = new Set(
     inicioDaUltima === null
@@ -537,6 +690,25 @@ function TabelaPedidos({
                 (ver em Pedidos suspeitos)
               </span>
             </Link>
+          )}
+          {pedido.desconsiderado && (
+            <span className="pedidos-desconsiderado">
+              {seloDesconsiderado(pedido.desconsiderado.motivo)}
+            </span>
+          )}
+          {pedido.origem === "conferencia" && (
+            <span className="pedidos-recuperado">{MARCA_RECUPERADO}</span>
+          )}
+          {pedido.desconsiderado && (
+            <span className="pedidos-desconsiderado__detalhe">
+              Fora das contas desde{" "}
+              <time dateTime={pedido.desconsiderado.em}>
+                {formatarDataHora(pedido.desconsiderado.em)}
+              </time>
+              {pedido.desconsiderado.observacao &&
+                `. Observação: ${pedido.desconsiderado.observacao}`}
+              .
+            </span>
           )}
         </span>
       ),
@@ -609,6 +781,41 @@ function TabelaPedidos({
         </span>
       ),
     },
+    ...(acoes
+      ? [
+          {
+            chave: "acoes",
+            titulo: "Ações",
+            celula: (pedido: ItemPedido) => (
+              <span className={bloco(pedido)}>
+                {pedido.desconsiderado ? (
+                  <Button
+                    variante="secundario"
+                    tamanho="pequeno"
+                    onClick={() => acoes.aoDesfazer(pedido)}
+                  >
+                    Desfazer{" "}
+                    <span className="visualmente-oculto">
+                      a desconsideração do pedido {pedido.id}
+                    </span>
+                  </Button>
+                ) : (
+                  <Button
+                    variante="secundario"
+                    tamanho="pequeno"
+                    onClick={() => acoes.aoDesconsiderar(pedido)}
+                  >
+                    Desconsiderar{" "}
+                    <span className="visualmente-oculto">
+                      o pedido {pedido.id}
+                    </span>
+                  </Button>
+                )}
+              </span>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (

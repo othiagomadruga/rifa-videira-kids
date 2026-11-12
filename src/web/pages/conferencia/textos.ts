@@ -4,6 +4,7 @@
 import type {
   CampoReconciliacao,
   CodigoAvisoReconciliacao,
+  MotivoDesconsideracao,
   StatusArquivoReconciliacao,
   StatusPedido,
   TipoDivergencia,
@@ -162,3 +163,18 @@ export function tomDoAviso(codigo: string): TomAviso {
     ? "info"
     : "alerta";
 }
+
+/** O motivo da desconsideração (D20), como no selo da tela Pedidos: "Desconsiderado (teste)". */
+export const MOTIVO_DESCONSIDERACAO: Record<MotivoDesconsideracao, string> = {
+  teste: "teste",
+  fraude: "fraude",
+  estorno: "estorno",
+  outro: "outro",
+};
+
+/** O grupo dos pedidos do arquivo que o admin desconsiderou (D20): à parte, nunca "faltando". */
+export const DESCONSIDERADOS = {
+  titulo: "Desconsiderados",
+  explicacao:
+    "Estão no arquivo e no sistema, mas o admin os tirou das contas (teste, fraude ou estorno). Não são diferença nem venda faltando, não entram nos totais do sistema e o “Recuperar” não os grava de novo.",
+};

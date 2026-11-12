@@ -5,103 +5,15 @@ import {
   ACESSO_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
-  calcularCalendario,
-  somarPercentuais,
-  type Campanha,
   type CampanhaEntrada,
 } from "../../../shared/contracts";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
-
-type Chamada = { metodo: string; caminho: string; corpo: unknown };
-
-/** Resposta da API para um corpo de PUT (as datas saem do mesmo calendário que a API usa). */
-function campanhaDaEntrada(
-  entrada: CampanhaEntrada,
-  extra: Partial<Campanha> = {},
-): Campanha {
-  const calendario = calcularCalendario(entrada.data_inicio, entrada.periodos);
-  return {
-    id: 1,
-    nome: entrada.nome.trim(),
-    slug_rifei: entrada.slug_rifei.trim(),
-    fuso_horario: entrada.fuso_horario ?? "America/Belem",
-    data_inicio: entrada.data_inicio,
-    data_fim: calendario.data_fim,
-    preco_bilhete_centavos: entrada.preco_bilhete_centavos,
-    meta: entrada.meta,
-    periodos: entrada.periodos.map((periodo, indice) => ({
-      ordem: indice + 1,
-      ...periodo,
-      ...calendario.periodos[indice],
-    })),
-    soma_percentuais_bp: somarPercentuais(entrada.periodos),
-    ranking: entrada.ranking,
-    publico: entrada.publico ?? {
-      mostra_percentual_meta: false,
-      limite_ranking: 3,
-    },
-    // Regras do admin (D20): a API devolve sempre; o formulário de hoje ainda não as mostra.
-    pedidos: { ...PEDIDOS_PADRAO },
-    acesso: { ...ACESSO_PADRAO },
-    mensagens: { ...MENSAGENS_PADRAO },
-    criado_em: "2026-11-06T18:00:00.000Z",
-    atualizado_em: "2026-11-06T18:00:00.000Z",
-    ...extra,
-  };
-}
-
-/** Campanha já configurada (valores fictícios de teste). */
-const CONFIGURADA = campanhaDaEntrada({
-  nome: "Rifa de teste",
-  slug_rifei: "rifa-teste",
-  data_inicio: "2026-11-23",
-  preco_bilhete_centavos: 1234,
-  meta: { unidade: "centavos", regra: "total_proporcional", valor: 456789 },
-  periodos: [
-    { nome: "Período 1", dias: 10, percentual_bp: 3500 },
-    { nome: "Período 2", dias: 7, percentual_bp: 2500 },
-    { nome: "Período 3", dias: 7, percentual_bp: 4500 },
-  ],
-  ranking: { criterio: "bilhetes" },
-  publico: { mostra_percentual_meta: true, limite_ranking: null },
-});
-
-const NAO_ENCONTRADA = () =>
-  respostaJson(
-    {
-      erro: {
-        codigo: "nao_encontrado",
-        mensagem: "A campanha ainda não foi configurada",
-      },
-    },
-    404,
-  );
-
-/** Troca o fetch: GET devolve a campanha (ou 404); PUT responde com `aoSalvar` (padrão: a API). */
-function simularApi({
-  campanha = null,
-  aoSalvar = (corpo) => respostaJson(campanhaDaEntrada(corpo)),
-  aoCarregar,
-}: {
-  campanha?: Campanha | null;
-  aoSalvar?: (corpo: CampanhaEntrada) => Response | Promise<Response>;
-  aoCarregar?: () => Response;
-} = {}) {
-  const chamadas: Chamada[] = [];
-  const fetchMock = vi.fn(async (caminho: string, init?: RequestInit) => {
-    const metodo = init?.method ?? "GET";
-    const corpo = init?.body ? JSON.parse(String(init.body)) : undefined;
-    chamadas.push({ metodo, caminho, corpo });
-    if (metodo === "PUT") return aoSalvar(corpo as CampanhaEntrada);
-    if (aoCarregar) return aoCarregar();
-    return campanha ? respostaJson(campanha) : NAO_ENCONTRADA();
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  return {
-    chamadas,
-    puts: () => chamadas.filter((chamada) => chamada.metodo === "PUT"),
-  };
-}
+import {
+  CONFIGURADA,
+  NAO_ENCONTRADA,
+  campanhaDaEntrada,
+  simularApi,
+} from "./teste-apoio";
 
 async function abrirTela() {
   const resultado = renderizarRota("/coordenacao/campanha");
@@ -145,6 +57,10 @@ const CORPO_DO_FORMULARIO_VALIDO = {
   ],
   ranking: { criterio: "percentual_meta" },
   publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+  // Regras do admin (D20): sem campanha, o formulário manda os padrões.
+  pedidos: { ...PEDIDOS_PADRAO },
+  acesso: { ...ACESSO_PADRAO },
+  mensagens: { ...MENSAGENS_PADRAO },
 };
 
 function periodo(numero: number) {

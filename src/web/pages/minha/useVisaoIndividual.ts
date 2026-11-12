@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RespostaVisaoIndividual } from "../../../shared/contracts/api";
 import type { FaseCampanha } from "../../../shared/contracts/calculos";
+import {
+  ehAcessoDesligado,
+  textoAcessoDesligado,
+} from "../../lib/acesso-desligado";
 import { carregarVisao, ehSemCampanha } from "./minha-api";
 
 /** De quanto em quanto tempo a visão se atualiza sozinha, com a aba visível. */
@@ -10,6 +14,11 @@ export type EstadoVisao =
   | { tipo: "carregando" }
   /** 404: ainda não há campanha ativa. */
   | { tipo: "sem_campanha" }
+  /**
+   * 403 `acesso_desligado` (D20): a coordenação desligou o acesso do papel na Campanha. Os números saem da tela; a
+   * consulta continua a cada minuto e a visão volta sozinha quando a chave volta.
+   */
+  | { tipo: "desligado"; texto: string }
   | { tipo: "erro"; erro: unknown }
   /** `falha`: a última atualização falhou e a tela mostra os dados da anterior (null quando deu certo). */
   | { tipo: "ok"; visao: RespostaVisaoIndividual; falha: unknown };
@@ -65,6 +74,8 @@ export function useVisaoIndividual() {
       (erro: unknown) => {
         if (controle.signal.aborted) return;
         setEstado((anterior) => {
+          if (ehAcessoDesligado(erro))
+            return { tipo: "desligado", texto: textoAcessoDesligado(erro) };
           if (anterior.tipo === "ok") return { ...anterior, falha: erro };
           return ehSemCampanha(erro)
             ? { tipo: "sem_campanha" }

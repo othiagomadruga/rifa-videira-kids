@@ -188,6 +188,47 @@
   text-decoration: underline;
 }
 
+/* D20: o pedido desconsiderado (fora de todas as contas) e o recuperado na conferência. O texto diz o que é, sem
+   depender da cor. */
+.pedidos-desconsiderado,
+.pedidos-recuperado {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--espaco-1) var(--espaco-2);
+  border-radius: var(--raio-2);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.pedidos-desconsiderado {
+  border: 1px solid var(--cor-perigo);
+  background: var(--cor-perigo-suave);
+  color: var(--cor-perigo);
+}
+
+.pedidos-recuperado {
+  border: 1px solid var(--cor-info);
+  background: var(--cor-info-suave);
+  color: var(--cor-info);
+}
+
+.pedidos-desconsiderado__detalhe {
+  flex-basis: 100%;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-normal);
+  overflow-wrap: anywhere;
+}
+
+/* Diálogos de desconsiderar e desfazer */
+.pedidos-dialogo {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .pedidos-quando__mudou {
   display: block;
   color: var(--cor-texto-suave);
@@ -311,6 +352,11 @@
   .pedidos-quando,
   .pedidos-valor {
     white-space: nowrap;
+  }
+
+  /* "Aprovado em ..." quebra a linha: com a coluna das ações do admin (D20), a tabela cabe em 1366 px. */
+  .pedidos-quando__mudou {
+    white-space: normal;
   }
 
   .pedidos-resultado {

@@ -267,3 +267,130 @@
     grid-column: auto;
   }
 }
+
+/* Regras do admin (D20): as chaves */
+.campanha-chaves {
+  display: grid;
+  gap: var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.campanha-chave {
+  display: grid;
+  gap: var(--espaco-1);
+  min-width: 0;
+  padding-bottom: var(--espaco-3);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.campanha-chave:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.campanha-chave__explicacao {
+  font-size: var(--texto-sm);
+  overflow-wrap: anywhere;
+}
+
+.campanha-chave__estado {
+  font-weight: var(--peso-forte);
+}
+
+/* Mensagens do link pessoal */
+.campanha-mensagem {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.campanha-mensagem__rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-3);
+}
+
+/* "Voltar ao texto padrão" com o texto padrão: continua focável (aria-disabled), mas parece desabilitado. */
+.campanha-mensagem__rodape button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.campanha-previa {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  border-left: 4px solid var(--cor-primaria);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie-2);
+}
+
+.campanha-previa__titulo {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+/* As quebras de linha do modelo aparecem como no WhatsApp; o link longo quebra em qualquer ponto. */
+.campanha-previa__texto {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Resumo "Regras da campanha" (RIFA-030) */
+.campanha-regras {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.campanha-regras__lista {
+  display: grid;
+  margin: 0;
+}
+
+.campanha-regra {
+  display: grid;
+  gap: var(--espaco-1);
+  min-width: 0;
+  padding: var(--espaco-3) 0;
+  border-top: 1px solid var(--cor-borda);
+}
+
+/* O que falta preencher: um traço de alerta à esquerda (o selo "Falta preencher" diz o mesmo sem a cor). */
+.campanha-regra[data-falta] {
+  padding-left: var(--espaco-3);
+  border-left: 4px solid var(--cor-alerta);
+}
+
+.campanha-regra__nome {
+  font-weight: var(--peso-forte);
+}
+
+.campanha-regra__nome a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+  color: var(--cor-primaria);
+}
+
+.campanha-regra__valor {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 48rem) {
+  .campanha-regra {
+    grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--espaco-4);
+  }
+}

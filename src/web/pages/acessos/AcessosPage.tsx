@@ -24,6 +24,7 @@ import {
   type PessoaCriada,
 } from "./Dialogos";
 import { PessoaCartao, idBotaoAtivo, idBotaoGerar } from "./PessoaCartao";
+import { useRegrasDosAcessos, type Mensagens } from "./regras";
 import "./acessos.css";
 
 /** Pessoas carregadas e o erro da última carga (com dados, o erro é de uma recarga). */
@@ -48,6 +49,8 @@ const AcessosHierarquia = lazy(() =>
 // fechar. As listas (GET) nunca trazem o token. A aba da hierarquia só carrega quando é aberta.
 export function AcessosPage() {
   const [aba, setAba] = useState<AbaAcessos>("coordenacao");
+  // As regras da campanha (D20): o acesso de discipuladores e de redes e os modelos das mensagens.
+  const { regras, desligar } = useRegrasDosAcessos();
   const [hierarquiaAberta, setHierarquiaAberta] = useState(false);
 
   function mudarAba(nova: AbaAcessos) {
@@ -69,14 +72,14 @@ export function AcessosPage() {
           {
             id: "coordenacao",
             rotulo: "Coordenação",
-            conteudo: <AcessosCoordenacao />,
+            conteudo: <AcessosCoordenacao mensagens={regras.mensagens} />,
           },
           {
             id: "hierarquia",
             rotulo: "Líderes, discipuladores e redes",
             conteudo: hierarquiaAberta ? (
               <Suspense fallback={<Loading texto="Carregando os acessos…" />}>
-                <AcessosHierarquia />
+                <AcessosHierarquia regras={regras} aoDesligar={desligar} />
               </Suspense>
             ) : null,
           },
@@ -87,7 +90,7 @@ export function AcessosPage() {
 }
 
 // Pessoas da coordenação (admin e coordenação): um cartão por pessoa, com os links e as ações.
-function AcessosCoordenacao() {
+function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
   const eu = useUsuarioConectado();
   const [carga, setCarga] = useState<Carga>({ dados: null, erro: null });
   const [versao, setVersao] = useState(0);
@@ -274,6 +277,7 @@ function AcessosCoordenacao() {
         <DialogoLink
           nome={linkMostrado.nome}
           link={linkMostrado.link}
+          mensagens={mensagens}
           aoFechar={() => setLinkMostrado(null)}
         />
       )}

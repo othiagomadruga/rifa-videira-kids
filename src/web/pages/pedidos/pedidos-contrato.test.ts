@@ -5,6 +5,13 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
+  CHAVES_REGRAS,
+  LIMITE_OBSERVACAO_DESCONSIDERACAO,
+  MOTIVOS_DESCONSIDERACAO as MOTIVOS_DO_CONTRATO,
+  ROTAS_REGRAS_CAMPANHA,
+  corpoDesconsiderarPedidoSchema,
+  corpoReconsiderarPedidoSchema,
+  observacaoTemContato as observacaoTemContatoDoContrato,
   CODIGOS_RECUSA_WEBHOOK,
   HORA_FIM_ALERTA as HORA_FIM_DO_CONTRATO,
   HORA_INICIO_ALERTA as HORA_INICIO_DO_CONTRATO,
@@ -35,10 +42,17 @@ import {
   linkDasEntregas,
 } from "./alerta-webhook";
 import { CAMINHO_PEDIDOS_SUSPEITOS } from "./ListaPedidos";
+import { CAMINHO_CHAVE_NA_CAMPANHA } from "./Desconsiderar";
 import {
+  CAMINHO_CAMPANHA,
   CAMINHO_CELULAS,
+  CAMINHO_DESCONSIDERAR,
   CAMINHO_ENTREGAS,
   CAMINHO_PEDIDOS,
+  CAMINHO_RECONSIDERAR,
+  LIMITE_OBSERVACAO,
+  MOTIVOS_DESCONSIDERACAO,
+  observacaoTemContato,
   ENTREGAS_POR_PAGINA,
   PEDIDOS_POR_PAGINA,
   RESULTADOS_ENTREGA,
@@ -52,6 +66,7 @@ import {
   type FiltrosPedidos,
 } from "./pedidos-api";
 import {
+  ROTULO_MOTIVO,
   RESULTADO,
   ROTULO_FILTRO_RESULTADO,
   ROTULO_RECUSA,
@@ -144,7 +159,12 @@ describe("as consultas que a tela monta passam pelos schemas das rotas", () => {
     ["sem filtro", SEM_FILTROS, null, { limite: 50 }],
     [
       "status, célula e busca, na página seguinte",
-      { status: "approved", celula: { tipo: "id", id: 3 }, id: "PED 1" },
+      {
+        status: "approved",
+        celula: { tipo: "id", id: 3 },
+        id: "PED 1",
+        desconsiderado: null,
+      },
       "Y3Vyc29y",
       {
         limite: 50,
@@ -153,6 +173,18 @@ describe("as consultas que a tela monta passam pelos schemas das rotas", () => {
         id: "PED 1",
         antes_de: "Y3Vyc29y",
       },
+    ],
+    [
+      "só os desconsiderados (D20)",
+      { ...SEM_FILTROS, desconsiderado: true },
+      null,
+      { limite: 50, desconsiderado: true },
+    ],
+    [
+      "só os que contam (D20)",
+      { ...SEM_FILTROS, desconsiderado: false },
+      null,
+      { limite: 50, desconsiderado: false },
     ],
     [
       "só sem célula",
@@ -185,6 +217,7 @@ describe("as consultas que a tela monta passam pelos schemas das rotas", () => {
       "status=pago&celula_id=0&id=",
       "sem_celula=true&id=" + "x".repeat(200),
       "celula_id=12345678901&status=approved",
+      "desconsiderado=sim",
     ]) {
       const filtros = filtrosDosPedidos(new URLSearchParams(busca));
       expect(
@@ -264,5 +297,58 @@ describe("todo valor do contrato tem texto em português", () => {
       expect(TEXTO_DO_CODIGO, codigo).toHaveProperty(codigo);
       expect(TEXTO_DO_CODIGO[codigo], codigo).not.toContain("_");
     }
+  });
+});
+
+describe("cópias do contrato das regras da campanha (RIFA-028, D20)", () => {
+  it("caminhos e papéis das rotas de desconsiderar e desfazer (só admin), e o da campanha", () => {
+    expect(ROTAS_REGRAS_CAMPANHA.desconsiderarPedido).toMatchObject({
+      metodo: "POST",
+      caminho: CAMINHO_DESCONSIDERAR,
+      papeis: ["admin"],
+    });
+    expect(ROTAS_REGRAS_CAMPANHA.reconsiderarPedido).toMatchObject({
+      metodo: "POST",
+      caminho: CAMINHO_RECONSIDERAR,
+      papeis: ["admin"],
+    });
+    expect(ROTAS.obterCampanha.caminho).toBe(CAMINHO_CAMPANHA);
+    expect(CAMINHO_CHAVE_NA_CAMPANHA).toMatch(/^\/coordenacao\/campanha#/);
+    expect(CHAVES_REGRAS).toContain("pedidos.desconsiderar");
+  });
+
+  it("motivos (com texto em português), limite da observação e a trava do contato do comprador", () => {
+    expect(MOTIVOS_DESCONSIDERACAO).toEqual(MOTIVOS_DO_CONTRATO);
+    expect(Object.keys(ROTULO_MOTIVO)).toEqual([...MOTIVOS_DO_CONTRATO]);
+    expect(LIMITE_OBSERVACAO).toBe(LIMITE_OBSERVACAO_DESCONSIDERACAO);
+    for (const texto of [
+      "compra de teste na reunião",
+      "comprador@exemplo.com",
+      "@",
+      "(91) 98888-7777",
+      "91 9888 87777",
+      "123.456.789-00",
+      "pedido 1234567 do dia 25",
+      "12345678",
+      "1234 5678",
+      "1234/5678",
+      "",
+    ])
+      expect(observacaoTemContato(texto), texto).toBe(
+        observacaoTemContatoDoContrato(texto),
+      );
+  });
+
+  it("os corpos que a tela manda passam nos schemas das rotas", () => {
+    expect(
+      corpoDesconsiderarPedidoSchema.parse({
+        pedido_id: "PED-1",
+        motivo: "teste",
+        observacao: null,
+      }),
+    ).toEqual({ pedido_id: "PED-1", motivo: "teste", observacao: null });
+    expect(corpoReconsiderarPedidoSchema.parse({ pedido_id: "PED-1" })).toEqual(
+      { pedido_id: "PED-1" },
+    );
   });
 });

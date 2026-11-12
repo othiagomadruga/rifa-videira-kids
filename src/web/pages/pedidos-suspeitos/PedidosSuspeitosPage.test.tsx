@@ -126,8 +126,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("RIFA-028 (D20): o pedido suspeito já desconsiderado", () => {
+  it("fica na lista (e no total) com o mesmo selo da tela Pedidos: 'Desconsiderado (motivo)'", async () => {
+    simularApi({
+      itens: [
+        pedido({
+          desconsiderado: {
+            motivo: "fraude",
+            observacao: null,
+            em: "2026-12-01T13:00:00.000Z",
+          },
+        }),
+        pagoAMais,
+      ],
+      total: 2,
+    });
+    renderizarRota(CAMINHO);
+
+    const [primeiro, segundo] = await linhas();
+    expect(celula(primeiro, "Pedido")).toHaveTextContent(
+      "PEDTESTE0001Desconsiderado (fraude)",
+    );
+    expect(
+      within(celula(segundo, "Pedido")).queryByText(/Desconsiderado/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("2 pedidos marcados.")).toBeInTheDocument();
+  });
+});
+
 describe("RIFA-024: a lista dos pedidos suspeitos", () => {
-  it("explica que o pedido conta nas vendas e que tirá-lo é decisão do PO", async () => {
+  it("explica que o pedido conta nas vendas até o admin desconsiderá-lo (D20)", async () => {
     simularApi({ itens: [pedido()], total: 1 });
     renderizarRota(CAMINHO);
 
@@ -138,7 +166,7 @@ describe("RIFA-024: a lista dos pedidos suspeitos", () => {
     expect(screen.getByText("Estes pedidos contam nas vendas")).toBeVisible();
     expect(
       screen.getByText(
-        "Cada pedido desta lista continua contando nas vendas, no painel e nos rankings; tirar um pedido das vendas é decisão do PO, e esta tela só aponta o que conferir.",
+        "Cada pedido desta lista continua contando nas vendas, no painel e nos rankings até o admin desconsiderá-lo na tela Pedidos (com “Permitir desconsiderar pedidos” ligado na Campanha). O desconsiderado fica aqui, com o selo. Esta tela só aponta o que conferir.",
       ),
     ).toBeInTheDocument();
     await tabela();

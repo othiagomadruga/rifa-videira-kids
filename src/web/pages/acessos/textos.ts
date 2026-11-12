@@ -7,22 +7,45 @@ import type {
   ItemAcessoHierarquia,
   PapelHierarquia,
 } from "../../../shared/contracts";
+import {
+  MENSAGENS_PADRAO,
+  preencherMensagem,
+  type TipoMensagem,
+} from "../../../shared/contracts/regras";
 import type { TomBadge } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarDataHora, formatarNumero } from "../../lib/formatadores";
+import {
+  ACESSO_DO_PAPEL,
+  ehAcaoDesligada,
+  modeloDaMensagem,
+  type Mensagens,
+} from "./regras";
 
-export function primeiroNome(nome: string): string {
-  return nome.trim().split(/\s+/)[0] ?? nome;
-}
+export { primeiroNome } from "../../../shared/contracts/regras";
 
-/** Mensagem curta para mandar o link pelo WhatsApp. */
-export function mensagemWhatsApp(nome: string, url: string): string {
-  return `Olá, ${primeiroNome(nome)}! Este é o seu link pessoal para entrar no sistema da Rifa Videira Kids. Ele é só seu, não repasse:\n${url}`;
+/**
+ * Mensagem curta para mandar o link da coordenação pelo WhatsApp: o modelo `link_coordenacao` da campanha (D20,
+ * RIFA-032), preenchido; com o modelo gravado com problema, o padrão (o texto de antes).
+ */
+export function mensagemWhatsApp(
+  nome: string,
+  url: string,
+  mensagens: Mensagens = MENSAGENS_PADRAO,
+): string {
+  return preencherMensagem(modeloDaMensagem("link_coordenacao", mensagens), {
+    pessoaNome: nome,
+    url,
+  });
 }
 
 /** wa.me sem número: o WhatsApp abre com a mensagem pronta e a pessoa escolhe a conversa. */
-export function linkWhatsApp(nome: string, url: string): string {
-  return `https://wa.me/?text=${encodeURIComponent(mensagemWhatsApp(nome, url))}`;
+export function linkWhatsApp(
+  nome: string,
+  url: string,
+  mensagens: Mensagens = MENSAGENS_PADRAO,
+): string {
+  return `https://wa.me/?text=${encodeURIComponent(mensagemWhatsApp(nome, url, mensagens))}`;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -50,28 +73,34 @@ export const RESPONSAVEL_DO_ALVO: Record<PapelHierarquia, string> = {
   rede: "quem responde pela rede",
 };
 
-/** Para que é o link, conforme o alvo. */
-const PARA_QUE_SERVE: Record<Alvo["tipo"], (nome: string) => string> = {
-  celula: (nome) => `acompanhar a sua célula (${nome})`,
-  discipulador: (nome) => `acompanhar as suas células (discipulador ${nome})`,
-  rede: (nome) => `acompanhar a sua rede (${nome})`,
+/** O modelo de mensagem de cada tipo de alvo (o link do líder, do discipulador ou da rede). */
+const MENSAGEM_DO_ALVO: Record<Alvo["tipo"], TipoMensagem> = {
+  celula: "link_lider",
+  discipulador: "link_discipulador",
+  rede: "link_rede",
 };
 
 /**
- * Mensagem do link de um líder, discipulador ou rede: cumprimenta a pessoa (sem nome na hierarquia, só
- * "Olá!"), diz para que é o link e avisa que ele é pessoal e não deve ser repassado.
+ * Mensagem do link de um líder, discipulador ou rede: o modelo da campanha para o tipo de alvo (D20, RIFA-032),
+ * preenchido com o primeiro nome da pessoa (sem nome na hierarquia, só "Olá!"), o nome do alvo e o link. Com o
+ * modelo gravado com problema, o padrão: cumprimenta, diz para que é o link e avisa que ele é pessoal.
  */
-export function mensagemHierarquia({
-  alvo,
-  pessoaNome,
-  url,
-}: {
-  alvo: Pick<Alvo, "tipo" | "nome">;
-  pessoaNome: string | null;
-  url: string;
-}): string {
-  const saudacao = pessoaNome ? `Olá, ${primeiroNome(pessoaNome)}!` : "Olá!";
-  return `${saudacao} Este é o seu link pessoal para ${PARA_QUE_SERVE[alvo.tipo](alvo.nome)} na campanha da rifa do Videira Kids: as vendas, a meta e a posição no ranking.\nO link é só seu: não repasse para ninguém, porque quem tiver o link entra como você.\n${url}`;
+export function mensagemHierarquia(
+  {
+    alvo,
+    pessoaNome,
+    url,
+  }: {
+    alvo: Pick<Alvo, "tipo" | "nome">;
+    pessoaNome: string | null;
+    url: string;
+  },
+  mensagens: Mensagens = MENSAGENS_PADRAO,
+): string {
+  return preencherMensagem(
+    modeloDaMensagem(MENSAGEM_DO_ALVO[alvo.tipo], mensagens),
+    { pessoaNome, alvoNome: alvo.nome, url },
+  );
 }
 
 /** Número do Brasil com o código do país: 55, o DDD (2 dígitos) e o telefone (8 ou 9 dígitos). */
@@ -225,8 +254,25 @@ export function precisaDeLink(item: ItemAcessoHierarquia): boolean {
   return tipo === "sem_link" || tipo === "sem_link_valido";
 }
 
-/** Falha ao gerar links: os 404 e 409 do lote em português (a lista é recarregada nos dois casos). */
-export function mensagemAoGerarLinks(erro: unknown): string {
+/**
+ * O acesso do papel está desligado na Campanha (D20): o que a tela diz no lugar de gerar links. O líder não tem
+ * chave.
+ */
+export function textoAcessoDesligado(papel: "discipulador" | "rede"): string {
+  const acesso = ACESSO_DO_PAPEL[papel];
+  return `${acesso.charAt(0).toUpperCase()}${acesso.slice(1)} está desligado na Campanha.`;
+}
+
+/** Falha ao gerar links: o 409 da chave desligada e os 404 e 409 do lote em português (a lista é recarregada). */
+export function mensagemAoGerarLinks(
+  erro: unknown,
+  papel?: PapelHierarquia,
+): string {
+  if (ehAcaoDesligada(erro)) {
+    return papel === "discipulador" || papel === "rede"
+      ? `${ACESSO_DO_PAPEL[papel].charAt(0).toUpperCase()}${ACESSO_DO_PAPEL[papel].slice(1)} foi desligado na Campanha: não dá para gerar links agora.`
+      : "Este acesso foi desligado na Campanha: não dá para gerar links agora.";
+  }
   if (ehEmUso(erro)) {
     return "Algum alvo tem o acesso desativado: reative antes de gerar o link. A lista foi atualizada.";
   }

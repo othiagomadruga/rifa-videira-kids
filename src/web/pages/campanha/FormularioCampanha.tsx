@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -6,14 +7,17 @@ import {
   type Ref,
 } from "react";
 import { flushSync } from "react-dom";
+import { useLocation } from "react-router";
 import {
   CRITERIOS_RANKING,
+  MENSAGENS_PADRAO,
   REGRAS_META,
   UNIDADES_META,
   diaDoCalendario,
   type Campanha,
   type CriterioRanking,
   type RegraMeta,
+  type TipoMensagem,
   type UnidadeMeta,
 } from "../../../shared/contracts";
 import { Button, Card, Input, Select } from "../../components/ui";
@@ -26,6 +30,7 @@ import {
   type CampoPeriodo,
 } from "./EditorPeriodos";
 import {
+  ID_MODELO_SANTO_ANDRE,
   LIMITE_PERIODOS,
   detalhesDoErro,
   errosDosDetalhes,
@@ -45,56 +50,15 @@ import {
   type ErrosFormulario,
   type Formulario,
 } from "./formulario";
+import {
+  CAMINHO_DA_CHAVE,
+  ChavesDaCampanha,
+  MensagensDoLink,
+  type ChaveDoFormulario,
+} from "./RegrasDoAdmin";
+import { ResumoRegras } from "./ResumoRegras";
 import { SituacaoCampanha } from "./SituacaoCampanha";
-
-const TEXTO_UNIDADE: Record<UnidadeMeta, string> = {
-  bilhetes: "Bilhetes vendidos",
-  centavos: "Valor arrecadado (R$)",
-};
-
-const TEXTO_REGRA: Record<
-  RegraMeta,
-  { opcao: string; explicacao: string; campo: string }
-> = {
-  por_pessoa: {
-    opcao: "Por pessoa da célula",
-    explicacao:
-      "A meta de cada célula é este valor vezes o número de pessoas dela.",
-    campo: "Meta por pessoa",
-  },
-  total_proporcional: {
-    opcao: "Total da campanha, dividido pelas células",
-    explicacao:
-      "O valor é a meta da campanha inteira. Cada célula fica com uma parte proporcional ao número de pessoas.",
-    campo: "Meta total da campanha",
-  },
-  fixa_por_celula: {
-    opcao: "Igual para todas as células",
-    explicacao:
-      "Todas as células têm a mesma meta, qualquer que seja o tamanho.",
-    campo: "Meta de cada célula",
-  },
-};
-
-const TEXTO_CRITERIO: Record<
-  CriterioRanking,
-  { opcao: string; explicacao: string }
-> = {
-  percentual_meta: {
-    opcao: "Percentual da meta atingido",
-    explicacao:
-      "Compara células de tamanhos diferentes pelo quanto já fizeram da própria meta.",
-  },
-  bilhetes: {
-    opcao: "Bilhetes vendidos",
-    explicacao: "Fica na frente quem vendeu mais bilhetes.",
-  },
-  arrecadacao: {
-    opcao: "Valor arrecadado",
-    explicacao:
-      "Fica na frente quem arrecadou mais. O público continua sem ver valores em R$.",
-  },
-};
+import { TEXTO_CRITERIO, TEXTO_REGRA, TEXTO_UNIDADE } from "./textos";
 
 type Confirmacao =
   | { tipo: "ativar"; corpo: CorpoCampanha }
@@ -116,6 +80,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
   const [avisoModelo, setAvisoModelo] = useState<string | null>(null);
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const { hash } = useLocation();
   const refResumoErros = useRef<HTMLDivElement>(null);
   const refVoltar = useRef<HTMLButtonElement>(null);
   const refSalvar = useRef<HTMLButtonElement>(null);
@@ -134,6 +99,12 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
     }
     return `campanha-${chave.replaceAll(".", "-")}`;
   }
+
+  // Um link para um campo (ex.: "#campanha-pedidos-desconsiderar", do aviso da tela Pedidos) leva o foco a ele: o
+  // navegador não faz isso sozinho, porque o formulário só aparece depois de a campanha carregar.
+  useEffect(() => {
+    if (hash.length > 1) document.getElementById(hash.slice(1))?.focus();
+  }, [hash]);
 
   /** Qualquer edição fecha a confirmação e as mensagens, e tira os erros dos campos mexidos. */
   function aposEditar(saiDosErros: (chave: string) => boolean) {
@@ -171,6 +142,18 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
     aposEditar(
       (chave) => chave === "periodos" || chave.startsWith("periodos."),
     );
+  }
+
+  function alterarChave(chave: ChaveDoFormulario, ligada: boolean) {
+    alterar({ [chave]: ligada }, CAMINHO_DA_CHAVE[chave]);
+  }
+
+  function alterarMensagem(tipo: TipoMensagem, texto: string) {
+    setFormulario((atual) => ({
+      ...atual,
+      mensagens: { ...atual.mensagens, [tipo]: texto },
+    }));
+    aposEditar((chave) => chave === `mensagens.${tipo}`);
   }
 
   function usarModeloSantoAndre() {
@@ -273,6 +256,15 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
   return (
     <>
       <SituacaoCampanha campanha={salva} />
+      <ResumoRegras
+        campanha={salva}
+        idDoCampo={idDoCampo}
+        idDosPercentuais={
+          formulario.periodos.length > 0
+            ? idDoCampo("periodos.0.percentual_bp")
+            : ID_MODELO_SANTO_ANDRE
+        }
+      />
 
       <form noValidate onSubmit={aoEnviar}>
         {/* Enquanto salva, nada se edita: a resposta da API substitui o formulário. */}
@@ -548,6 +540,22 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
               </div>
             </div>
           </Card>
+
+          <ChavesDaCampanha
+            formulario={formulario}
+            idDoCampo={idDoCampo}
+            aoAlterar={alterarChave}
+          />
+
+          <MensagensDoLink
+            mensagens={formulario.mensagens}
+            erros={erros}
+            idDoCampo={idDoCampo}
+            aoAlterar={alterarMensagem}
+            aoVoltarAoPadrao={(tipo) =>
+              alterarMensagem(tipo, MENSAGENS_PADRAO[tipo])
+            }
+          />
 
           <div className="campanha-acoes">
             {(chavesComErro.length > 0 || erroGeral) && (

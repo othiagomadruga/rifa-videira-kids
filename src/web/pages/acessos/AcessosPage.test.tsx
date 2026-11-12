@@ -138,8 +138,10 @@ describe("CA5: lista de pessoas", () => {
     ).not.toBeInTheDocument();
 
     expect(document.body.innerHTML).not.toContain("/acesso/");
+    // A lista e as regras da campanha (D20: os modelos das mensagens e o acesso de cada papel).
     expect(api.chamadas).toEqual([
       { metodo: "GET", caminho: "/api/admin/usuarios", corpo: undefined },
+      { metodo: "GET", caminho: "/api/admin/campanha", corpo: undefined },
     ]);
   });
 
