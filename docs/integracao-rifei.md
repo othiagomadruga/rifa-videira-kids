@@ -274,6 +274,7 @@ Se a coluna escolhida como código do pedido não é o código da Rifei (por exe
 - Só a venda perdida: um pedido que já existe nunca é mudado. O pendente que está pago na Rifei (`pagamento_nao_registrado`) aparece na conferência, mas corrigi-lo fica fora desta versão.
 - O "Recuperar" recebe o mesmo corpo da análise (não relê o arquivo) e aplica as mesmas regras com o banco de agora.
 - Atômico (um `db.batch`) e idempotente (`ON CONFLICT DO NOTHING`): repetir não grava de novo nem cria outra auditoria.
+- A mesma plausibilidade do webhook (RIFA-042, D11): o recuperado com mais de 200 bilhetes, ou com o valor fora de bilhetes × preço do bilhete (acima, ou mais de 50% abaixo), continua contando e entra nos pedidos suspeitos, na mesma gravação.
 - `pedidos.origem = 'conferencia'` e `pedidos.recuperacao_id` → `recuperacoes` (quem, quando, quantos, o SHA-256 e as colunas usadas). A mesma gravação deixa uma linha na trilha de auditoria da coordenação (`conferencia.recuperar`, alvo `campanha:<id>`, com o id da recuperação e as contagens). Um `paid_order` que chegue depois para o mesmo pedido dá `duplicado`.
 - Instante gravado em `aprovado_em`: o do arquivo; com só o dia, o meio-dia (ou agora, se for hoje); sem data, o instante da recuperação.
 
