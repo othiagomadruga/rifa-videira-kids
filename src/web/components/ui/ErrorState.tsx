@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "./Button";
+import { ComDica } from "./Dica";
 import "./Estados.css";
 
 type Props = {
@@ -22,9 +23,11 @@ export function ErrorState({
       {mensagem && <p className="ui-estado__descricao">{mensagem}</p>}
       {aoTentarDeNovo && (
         <div className="ui-estado__acao">
-          <Button variante="secundario" onClick={aoTentarDeNovo}>
-            Tentar de novo
-          </Button>
+          <ComDica texto="Busca de novo o que não carregou. Se continuar falhando, confira a internet.">
+            <Button variante="secundario" onClick={aoTentarDeNovo}>
+              Tentar de novo
+            </Button>
+          </ComDica>
         </div>
       )}
     </div>

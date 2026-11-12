@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { Aviso, classesBotao } from "../../components/ui";
+import { Aviso, ComDica, classesBotao } from "../../components/ui";
 import {
   CAMINHO_TELA_PEDIDOS,
   horaDaConferencia,
@@ -37,12 +37,14 @@ export function AlertaWebhook() {
             anuncio="nenhum"
             acao={
               texto.link && (
-                <Link
-                  to={texto.link.para}
-                  className={classesBotao({ variante: "secundario" })}
-                >
-                  {texto.link.texto}
-                </Link>
+                <ComDica texto={texto.link.dica}>
+                  <Link
+                    to={texto.link.para}
+                    className={classesBotao({ variante: "secundario" })}
+                  >
+                    {texto.link.texto}
+                  </Link>
+                </ComDica>
               )
             }
           >

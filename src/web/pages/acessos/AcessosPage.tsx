@@ -8,6 +8,7 @@ import {
   Abas,
   Aviso,
   Button,
+  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -30,6 +31,7 @@ import {
 } from "./Dialogos";
 import { PessoaCartao, idBotaoAtivo, idBotaoGerar } from "./PessoaCartao";
 import { useRegrasDosAcessos, type Mensagens } from "./regras";
+import { DICAS } from "./textos";
 import "./acessos.css";
 
 /** Pessoas carregadas e o erro da última carga (com dados, o erro é de uma recarga). */
@@ -86,11 +88,13 @@ export function AcessosPage() {
           {
             id: "coordenacao",
             rotulo: "Coordenação",
+            dica: DICAS.abaCoordenacao,
             conteudo: <AcessosCoordenacao mensagens={regras.mensagens} />,
           },
           {
             id: "hierarquia",
             rotulo: "Líderes, discipuladores e redes",
+            dica: DICAS.abaHierarquia,
             conteudo: hierarquiaAberta ? (
               <Suspense fallback={<Loading texto="Carregando os acessos…" />}>
                 <AcessosHierarquia regras={regras} aoDesligar={desligar} />
@@ -100,6 +104,7 @@ export function AcessosPage() {
           {
             id: "webhook",
             rotulo: "Webhook da Rifei",
+            dica: DICAS.abaWebhook,
             conteudo: webhookAberta ? (
               <Suspense
                 fallback={<Loading texto="Carregando o token do webhook…" />}
@@ -267,7 +272,9 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
         <p className="acessos-suave">
           Quem entra na área da coordenação: admin e coordenação.
         </p>
-        <Button onClick={() => setCriando(true)}>Nova pessoa</Button>
+        <ComDica texto={DICAS.novaPessoa}>
+          <Button onClick={() => setCriando(true)}>Nova pessoa</Button>
+        </ComDica>
       </div>
       {/* Região viva fixa: anuncia o resultado de cada ação. */}
       <p className="visualmente-oculto" role="status">
@@ -295,9 +302,11 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
           tom="perigo"
           titulo="Não foi possível atualizar a lista"
           acao={
-            <Button variante="secundario" onClick={recarregar}>
-              Tentar de novo
-            </Button>
+            <ComDica texto={DICAS.tentarDeNovoLista}>
+              <Button variante="secundario" onClick={recarregar}>
+                Tentar de novo
+              </Button>
+            </ComDica>
           }
         >
           <p>{mensagemDoErro(erro)}</p>

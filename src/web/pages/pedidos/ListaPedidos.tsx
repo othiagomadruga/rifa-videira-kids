@@ -11,6 +11,7 @@ import {
   Aviso,
   Badge,
   Button,
+  ComDica,
   DataTable,
   EmptyState,
   ErrorState,
@@ -49,6 +50,7 @@ import {
   type FiltrosPedidos,
 } from "./pedidos-api";
 import {
+  DICAS,
   MARCA_RECUPERADO,
   ROTULO_STATUS,
   ROTULO_STATUS_PLURAL,
@@ -332,72 +334,79 @@ function Filtros({
 
   return (
     <div className="pedidos-filtros">
-      <Select
-        ref={primeiroFiltro}
-        rotulo="Status"
-        value={filtros.status ?? ""}
-        onChange={(evento) =>
-          aoMudar({
-            ...filtros,
-            status:
-              STATUS_PEDIDO.find((status) => status === evento.target.value) ??
-              null,
-          })
-        }
-      >
-        <option value="">Todos os status</option>
-        {STATUS_PEDIDO.map((status) => (
-          <option key={status} value={status}>
-            {ROTULO_STATUS[status]}
-          </option>
-        ))}
-      </Select>
-      <Select
-        rotulo="Célula"
-        value={valorDoFiltroCelula(celulaAtual)}
-        onChange={(evento) =>
-          aoMudar({ ...filtros, celula: celulaDoValor(evento.target.value) })
-        }
-        dica={
-          celulas.tipo === "erro"
-            ? "Não foi possível carregar as células; recarregue a página para tentar de novo."
-            : undefined
-        }
-      >
-        <option value={VALOR_TODAS}>Todas as células</option>
-        <option value={VALOR_SEM_CELULA}>Só os sem célula</option>
-        {avulsa !== null && (
-          <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
-        )}
-        {grupos.map((grupo) => (
-          <optgroup key={grupo.rede} label={grupo.rede}>
-            {grupo.celulas.map((celula) => (
-              <option key={celula.id} value={valorDaCelula(celula.id)}>
-                {celula.nome}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </Select>
-      <Select
-        rotulo="Desconsiderados"
-        value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
-        onChange={(evento) =>
-          aoMudar({
-            ...filtros,
-            desconsiderado:
-              evento.target.value === "so"
-                ? true
-                : evento.target.value === "sem"
-                  ? false
-                  : null,
-          })
-        }
-      >
-        <option value="todos">Todos os pedidos</option>
-        <option value="sem">Só os que contam</option>
-        <option value="so">Só os desconsiderados</option>
-      </Select>
+      <ComDica texto={DICAS.filtroStatus}>
+        <Select
+          ref={primeiroFiltro}
+          rotulo="Status"
+          value={filtros.status ?? ""}
+          onChange={(evento) =>
+            aoMudar({
+              ...filtros,
+              status:
+                STATUS_PEDIDO.find(
+                  (status) => status === evento.target.value,
+                ) ?? null,
+            })
+          }
+        >
+          <option value="">Todos os status</option>
+          {STATUS_PEDIDO.map((status) => (
+            <option key={status} value={status}>
+              {ROTULO_STATUS[status]}
+            </option>
+          ))}
+        </Select>
+      </ComDica>
+      <ComDica texto={DICAS.filtroCelula}>
+        <Select
+          rotulo="Célula"
+          value={valorDoFiltroCelula(celulaAtual)}
+          onChange={(evento) =>
+            aoMudar({ ...filtros, celula: celulaDoValor(evento.target.value) })
+          }
+          dica={
+            celulas.tipo === "erro"
+              ? "Não foi possível carregar as células; recarregue a página para tentar de novo."
+              : undefined
+          }
+        >
+          <option value={VALOR_TODAS}>Todas as células</option>
+          <option value={VALOR_SEM_CELULA}>Só os sem célula</option>
+          {avulsa !== null && (
+            <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
+          )}
+          {grupos.map((grupo) => (
+            <optgroup key={grupo.rede} label={grupo.rede}>
+              {grupo.celulas.map((celula) => (
+                <option key={celula.id} value={valorDaCelula(celula.id)}>
+                  {celula.nome}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </Select>
+      </ComDica>
+      <ComDica texto={DICAS.filtroDesconsiderados}>
+        <Select
+          rotulo="Desconsiderados"
+          value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
+          onChange={(evento) =>
+            aoMudar({
+              ...filtros,
+              desconsiderado:
+                evento.target.value === "so"
+                  ? true
+                  : evento.target.value === "sem"
+                    ? false
+                    : null,
+            })
+          }
+        >
+          <option value="todos">Todos os pedidos</option>
+          <option value="sem">Só os que contam</option>
+          <option value="so">Só os desconsiderados</option>
+        </Select>
+      </ComDica>
       <BuscaPorId
         aplicada={filtros.id}
         aoBuscar={(id) => aoMudar({ ...filtros, id })}
@@ -443,24 +452,30 @@ function BuscaPorId({
 
   return (
     <form className="pedidos-busca" role="search" onSubmit={buscar}>
-      <Input
-        ref={campo}
-        rotulo="Buscar pelo id do pedido"
-        dica="O id completo, como aparece na Rifei."
-        value={texto}
-        maxLength={TAMANHO_MAXIMO_ID}
-        autoComplete="off"
-        spellCheck={false}
-        onChange={(evento) => setTexto(evento.target.value)}
-      />
+      <ComDica texto={DICAS.campoBusca}>
+        <Input
+          ref={campo}
+          rotulo="Buscar pelo id do pedido"
+          dica="O id completo, como aparece na Rifei."
+          value={texto}
+          maxLength={TAMANHO_MAXIMO_ID}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(evento) => setTexto(evento.target.value)}
+        />
+      </ComDica>
       <div className="pedidos-busca__botoes">
-        <Button type="submit" variante="secundario">
-          Buscar
-        </Button>
-        {aplicada !== null && (
-          <Button variante="discreto" onClick={limpar}>
-            Limpar busca
+        <ComDica texto={DICAS.buscar}>
+          <Button type="submit" variante="secundario">
+            Buscar
           </Button>
+        </ComDica>
+        {aplicada !== null && (
+          <ComDica texto={DICAS.limparBusca}>
+            <Button variante="discreto" onClick={limpar}>
+              Limpar busca
+            </Button>
+          </ComDica>
         )}
       </div>
     </form>
@@ -519,9 +534,11 @@ function Conteudo({
           <EmptyState
             titulo="Nenhum pedido com estes filtros."
             acao={
-              <Button variante="secundario" onClick={aoLimpar}>
-                Limpar filtros
-              </Button>
+              <ComDica texto={DICAS.limparFiltros}>
+                <Button variante="secundario" onClick={aoLimpar}>
+                  Limpar filtros
+                </Button>
+              </ComDica>
             }
           />
         ) : (
@@ -556,13 +573,19 @@ function Conteudo({
               </Aviso>
             )}
             {proximo !== null && (
-              <Button
-                variante="secundario"
-                aria-disabled={mais.carregando || undefined}
-                onClick={aoCarregarMais}
+              <ComDica
+                texto={
+                  mais.carregando ? DICAS.carregando : DICAS.carregarMaisPedidos
+                }
               >
-                {mais.carregando ? "Carregando…" : "Carregar mais"}
-              </Button>
+                <Button
+                  variante="secundario"
+                  aria-disabled={mais.carregando || undefined}
+                  onClick={aoCarregarMais}
+                >
+                  {mais.carregando ? "Carregando…" : "Carregar mais"}
+                </Button>
+              </ComDica>
             )}
           </div>
         </>
@@ -684,12 +707,14 @@ function TabelaPedidos({
             {pedido.id}
           </span>
           {pedido.suspeito && (
-            <Link to={CAMINHO_PEDIDOS_SUSPEITOS} className="pedidos-selo">
-              Suspeito{" "}
-              <span className="visualmente-oculto">
-                (ver em Pedidos suspeitos)
-              </span>
-            </Link>
+            <ComDica texto={DICAS.seloSuspeito}>
+              <Link to={CAMINHO_PEDIDOS_SUSPEITOS} className="pedidos-selo">
+                Suspeito{" "}
+                <span className="visualmente-oculto">
+                  (ver em Pedidos suspeitos)
+                </span>
+              </Link>
+            </ComDica>
           )}
           {pedido.desconsiderado && (
             <span className="pedidos-desconsiderado">
@@ -789,27 +814,31 @@ function TabelaPedidos({
             celula: (pedido: ItemPedido) => (
               <span className={bloco(pedido)}>
                 {pedido.desconsiderado ? (
-                  <Button
-                    variante="secundario"
-                    tamanho="pequeno"
-                    onClick={() => acoes.aoDesfazer(pedido)}
-                  >
-                    Desfazer{" "}
-                    <span className="visualmente-oculto">
-                      a desconsideração do pedido {pedido.id}
-                    </span>
-                  </Button>
+                  <ComDica texto={DICAS.desfazer}>
+                    <Button
+                      variante="secundario"
+                      tamanho="pequeno"
+                      onClick={() => acoes.aoDesfazer(pedido)}
+                    >
+                      Desfazer{" "}
+                      <span className="visualmente-oculto">
+                        a desconsideração do pedido {pedido.id}
+                      </span>
+                    </Button>
+                  </ComDica>
                 ) : (
-                  <Button
-                    variante="secundario"
-                    tamanho="pequeno"
-                    onClick={() => acoes.aoDesconsiderar(pedido)}
-                  >
-                    Desconsiderar{" "}
-                    <span className="visualmente-oculto">
-                      o pedido {pedido.id}
-                    </span>
-                  </Button>
+                  <ComDica texto={DICAS.desconsiderar}>
+                    <Button
+                      variante="secundario"
+                      tamanho="pequeno"
+                      onClick={() => acoes.aoDesconsiderar(pedido)}
+                    >
+                      Desconsiderar{" "}
+                      <span className="visualmente-oculto">
+                        o pedido {pedido.id}
+                      </span>
+                    </Button>
+                  </ComDica>
                 )}
               </span>
             ),

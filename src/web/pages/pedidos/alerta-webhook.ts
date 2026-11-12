@@ -98,8 +98,8 @@ export type TextoAlerta =
       tom: "perigo" | "alerta" | "info";
       titulo: string;
       paragrafos: string[];
-      /** O próximo passo: as entregas com erro ou a conferência pelo CSV. */
-      link: { para: string; texto: string } | null;
+      /** O próximo passo: as entregas com erro ou a conferência pelo CSV, com a dica do link (RIFA-045). */
+      link: { para: string; texto: string; dica: string } | null;
     }
   | { tipo: "linha"; texto: string }
   | { tipo: "nada" };
@@ -157,6 +157,7 @@ export function textoDoAlerta(
         link: {
           para: linkDasEntregas("erro_validacao", naTelaPedidos),
           texto: "Ver as entregas com erro",
+          dica: "Abre a lista dos avisos de venda da Rifei que deram erro, para conferir cada pedido lá.",
         },
       };
     }
@@ -173,7 +174,11 @@ export function textoDoAlerta(
           `${CONFIRA_NA_RIFEI} Se faltar alguma venda, use a conferência pelo CSV da Rifei.`,
           ...paragrafoDoSlug(estado),
         ],
-        link: { para: CAMINHO_CONFERENCIA, texto: "Abrir a Conferência" },
+        link: {
+          para: CAMINHO_CONFERENCIA,
+          texto: "Abrir a Conferência",
+          dica: "Abre a tela que compara as vendas da Rifei com as do sistema e recupera as que faltaram.",
+        },
       };
     }
     case "nunca_recebeu":
