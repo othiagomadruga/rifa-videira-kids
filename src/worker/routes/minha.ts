@@ -1,6 +1,8 @@
 /**
  * Visão individual (RIFA-014, RF08, D12; docs/api.md): GET /api/minha/visao, do grupo `hierarquia` (líder,
- * discipulador e rede). O index.ts monta este sub-app sob /api/minha, DEPOIS do login desses papéis:
+ * discipulador e rede). Também GET /api/minha/links-vendas (RIFA-046, D24): os links de vendas (o link de afiliado da
+ * Rifei) das células do alvo, para o líder divulgar e o QR code. O index.ts monta este sub-app sob /api/minha, DEPOIS
+ * do login desses papéis:
  *   app.use("/api/minha/*", exigirSessao(["lider", "discipulador", "rede"]));
  * e o sub-app exige o mesmo login (mesmo que o app esqueça). Sem sessão: 401; sessão da coordenação: 403.
  *
@@ -12,15 +14,26 @@
  * db/visao-individual.ts, com cache de até 30 s por isolate. A resposta, que é por pessoa, nunca fica em cache
  * (`no-store`) e passa pelo schema ESTRITO do contrato antes de sair, como nas rotas abertas: um campo a mais
  * (um valor que vazasse) vira 500 `erro_interno` e nunca chega ao usuário.
+ *
+ * Os links de vendas: o escopo é o da visão (o líder, a célula dele; o discipulador, as células dele; a rede, as dos
+ * discipuladores dela), do alvo da sessão; a consulta da URL é ignorada (um `?celula_id=` não muda nada). Um lote do
+ * D1 por requisição (db/links-vendas.ts), sem cache: o modelo novo ou o afiliado vinculado valem na hora. Sem
+ * campanha ativa, 404. Com o acesso do papel desligado (D20), o login daqui já deu 403 `acesso_desligado`.
  */
 import { Hono } from "hono";
-import { ROTAS, type UsuarioSessao } from "../../shared/contracts";
+import {
+  ROTAS,
+  ROTAS_LINK_VENDAS,
+  type UsuarioSessao,
+} from "../../shared/contracts";
+import { lerLinksVendas } from "../db/links-vendas";
 import {
   criarCacheDaBase,
   lerBaseDaVisao,
   type CacheDaBase,
 } from "../db/visao-individual";
 import { relogioDoSistema, type Relogio } from "../db/painel";
+import { montarRespostaMeusLinksVendas } from "../lib/links-vendas";
 import { responderErro } from "../lib/respostas-erro";
 import {
   MONTADORES_DA_VISAO,
@@ -34,6 +47,7 @@ import { validarConsulta } from "../middleware/validacao";
 export const PREFIXO_MINHA = "/api/minha";
 
 const ROTA = ROTAS.visaoIndividual;
+const LINKS = ROTAS_LINK_VENDAS.meusLinksVendas;
 
 export interface OpcoesMinha {
   /** "Agora" (os testes fixam o instante); padrão: o relógio do sistema. */
@@ -86,6 +100,32 @@ export function criarMinha({
       return c.json(ROTA.sucesso.corpo.parse(visao), 200);
     },
   );
+
+  // Sem validar a consulta: nada dela é lido (o alvo vem só da sessão).
+  minha.get(LINKS.caminho.slice(PREFIXO_MINHA.length), async (c) => {
+    const usuario: UsuarioSessao = c.var.usuario;
+    if (usuario.alvo == null)
+      return responderErro(
+        c,
+        "proibido",
+        "Seu acesso não tem células para ver os links de vendas",
+      );
+    const { alvo } = usuario;
+    const leitura = await lerLinksVendas(c.env.DB, {
+      tipo: alvo.tipo,
+      id: alvo.id,
+    });
+    if (leitura === null)
+      return responderErro(
+        c,
+        "nao_encontrado",
+        "A campanha ainda não foi configurada",
+      );
+    return c.json(
+      LINKS.sucesso.corpo.parse(montarRespostaMeusLinksVendas(leitura, alvo)),
+      200,
+    );
+  });
 
   return minha;
 }
