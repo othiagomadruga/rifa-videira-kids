@@ -13,6 +13,7 @@ import {
   Badge,
   Button,
   Card,
+  ComDica,
   DataTable,
   Stat,
   type ColunaTabela,
@@ -28,6 +29,7 @@ import {
 } from "./formatos";
 import {
   DESCONSIDERADOS,
+  DICAS,
   DIVERGENCIAS,
   MOTIVO_DESCONSIDERACAO,
   OBSERVACOES,
@@ -457,53 +459,68 @@ function VendasPerdidas({
       </legend>
       {recuperaveis.length > 1 && (
         <div className="conferencia-acoes">
-          <Button
-            variante="discreto"
-            tamanho="pequeno"
-            onClick={() => aoSelecionar(recuperaveis, true)}
-          >
-            Marcar todas
-          </Button>
-          <Button
-            variante="discreto"
-            tamanho="pequeno"
-            onClick={() => aoSelecionar(recuperaveis, false)}
-          >
-            Desmarcar todas
-          </Button>
+          <ComDica texto={DICAS.marcarTodas}>
+            <Button
+              variante="discreto"
+              tamanho="pequeno"
+              onClick={() => aoSelecionar(recuperaveis, true)}
+            >
+              Marcar todas
+            </Button>
+          </ComDica>
+          <ComDica texto={DICAS.desmarcarTodas}>
+            <Button
+              variante="discreto"
+              tamanho="pequeno"
+              onClick={() => aoSelecionar(recuperaveis, false)}
+            >
+              Desmarcar todas
+            </Button>
+          </ComDica>
         </div>
       )}
       <ul className="conferencia-lista">
-        {itens.map((item) => (
+        {itens.map((item, indice) => (
           <li key={item.pedido_id}>
-            <label
-              className="conferencia-escolha"
-              data-desabilitado={item.recuperavel ? undefined : ""}
+            {/* A dica fica na linha toda (caixa e textos); a caixa a tem no fim da descrição (`id` da dica). */}
+            <ComDica
+              id={`${idDica}-${indice}`}
+              texto={
+                item.recuperavel
+                  ? DICAS.vendaRecuperavel
+                  : DICAS.vendaNaoRecuperavel
+              }
             >
-              <input
-                type="checkbox"
-                className="conferencia-escolha__caixa"
-                checked={item.recuperavel && selecionados.has(item.pedido_id)}
-                disabled={!item.recuperavel}
-                onChange={(evento) =>
-                  aoSelecionar([item.pedido_id], evento.currentTarget.checked)
-                }
-              />
-              <span className="conferencia-escolha__textos">
-                <span className="conferencia-codigo">
-                  Pedido {item.pedido_id}
-                </span>
-                {item.arquivo && <span>{textoDoArquivo(item.arquivo)}</span>}
-                {item.observacoes.map((codigo) => (
-                  <span
-                    key={codigo}
-                    className="conferencia-escolha__observacao"
-                  >
-                    {OBSERVACOES[codigo]}
+              <label
+                className="conferencia-escolha"
+                data-desabilitado={item.recuperavel ? undefined : ""}
+              >
+                <input
+                  type="checkbox"
+                  className="conferencia-escolha__caixa"
+                  checked={item.recuperavel && selecionados.has(item.pedido_id)}
+                  disabled={!item.recuperavel}
+                  aria-describedby={`${idDica}-${indice}`}
+                  onChange={(evento) =>
+                    aoSelecionar([item.pedido_id], evento.currentTarget.checked)
+                  }
+                />
+                <span className="conferencia-escolha__textos">
+                  <span className="conferencia-codigo">
+                    Pedido {item.pedido_id}
                   </span>
-                ))}
-              </span>
-            </label>
+                  {item.arquivo && <span>{textoDoArquivo(item.arquivo)}</span>}
+                  {item.observacoes.map((codigo) => (
+                    <span
+                      key={codigo}
+                      className="conferencia-escolha__observacao"
+                    >
+                      {OBSERVACOES[codigo]}
+                    </span>
+                  ))}
+                </span>
+              </label>
+            </ComDica>
           </li>
         ))}
       </ul>
@@ -511,15 +528,23 @@ function VendasPerdidas({
         {dica}
       </p>
       <div className="conferencia-acoes">
-        <Button
-          disabled={marcadas.length === 0 || demais}
-          aria-describedby={idDica}
-          onClick={aoRecuperar}
+        <ComDica
+          texto={
+            marcadas.length === 0 || demais
+              ? DICAS.recuperarIndisponivel
+              : DICAS.recuperar
+          }
         >
-          {marcadas.length === 0
-            ? "Recuperar"
-            : `Recuperar ${plural(marcadas.length, "venda", "vendas")}`}
-        </Button>
+          <Button
+            disabled={marcadas.length === 0 || demais}
+            aria-describedby={idDica}
+            onClick={aoRecuperar}
+          >
+            {marcadas.length === 0
+              ? "Recuperar"
+              : `Recuperar ${plural(marcadas.length, "venda", "vendas")}`}
+          </Button>
+        </ComDica>
       </div>
     </fieldset>
   );

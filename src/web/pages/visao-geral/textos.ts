@@ -399,3 +399,38 @@ export const TEXTOS_TIPO_RELATORIO = {
   TipoRelatorio,
   { rotulo: string; descricao: string }
 >;
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  filtro:
+    "Mostra o painel de uma divisão, rede, discipulador ou célula. A escolha fica no endereço da página.",
+  atualizar:
+    "Busca os números agora, sem esperar a próxima atualização automática.",
+  verCampanhaToda:
+    "Tira o recorte e volta a mostrar o painel da campanha inteira.",
+  dadosDaCurva:
+    "Abre uma tabela, dia a dia, com o esperado e o realizado acumulados e o vendido no dia.",
+  /** Um rádio por tipo do relatório: para que serve a planilha (a linha embaixo do nome diz o que ela traz). */
+  tipoRelatorio: {
+    totais:
+      "Para prestar contas ou mostrar o resultado geral. A planilha tem uma linha só.",
+    celulas:
+      "Para comparar as células entre si. A planilha tem uma linha por célula, para ordenar e filtrar no Excel.",
+    discipuladores:
+      "Para acompanhar cada discipulador. A planilha tem uma linha por discipulador.",
+    redes: "Para comparar as redes. A planilha tem uma linha por rede.",
+    periodos:
+      "Para comparar os períodos da campanha entre si. A planilha tem uma linha por período.",
+    dias: "Para ver o ritmo das vendas, dia a dia. A planilha tem uma linha por dia.",
+    ddd: "Para saber de que regiões vêm as vendas. A planilha tem uma linha por DDD, como a tabela da tela Mapa.",
+  } satisfies Record<TipoRelatorio, string>,
+  baixarRelatorio:
+    "Gera a planilha do tipo escolhido com os números de agora e salva no aparelho.",
+  baixando: "Indisponível enquanto o relatório baixa. Espere um instante.",
+  tentarBaixarDeNovo:
+    "Pede o mesmo relatório de novo. Se continuar falhando, confira a internet.",
+} as const;

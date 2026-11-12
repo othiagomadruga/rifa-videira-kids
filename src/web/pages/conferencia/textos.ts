@@ -178,3 +178,47 @@ export const DESCONSIDERADOS = {
   explicacao:
     "Estão no arquivo e no sistema, mas o admin os tirou das contas (teste, fraude ou estorno). Não são diferença nem venda faltando, não entram nos totais do sistema e o “Recuperar” não os grava de novo.",
 };
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+const ESPERE = "Espere um instante.";
+
+export const DICAS = {
+  escolherArquivo:
+    "Abre a escolha do arquivo no aparelho. A tela lê o arquivo aqui e já compara com as vendas do sistema; nada é gravado.",
+  escolherArquivoOcupado: `Indisponível enquanto o arquivo é lido e conferido. ${ESPERE}`,
+  // Colunas do arquivo
+  coluna:
+    "A coluna do arquivo que tem este dado. Trocou? Confira de novo para ver o resultado com a coluna nova.",
+  colunaOcupada: `Indisponível enquanto a conferência roda. ${ESPERE}`,
+  conferirColunas:
+    "Compara o arquivo de novo com as vendas do sistema, usando as colunas escolhidas. Nada é gravado.",
+  conferirSemTroca:
+    "Indisponível: as colunas são as da última conferência. Troque alguma para conferir de novo.",
+  conferindo: `Conferindo agora. ${ESPERE}`,
+  desfazerTrocas:
+    "Volta as colunas para as da última conferência, sem conferir de novo.",
+  // Vendas perdidas
+  marcarTodas: "Marca todas as vendas perdidas que dá para recuperar.",
+  desmarcarTodas: "Tira a marca de todas as vendas perdidas.",
+  vendaRecuperavel:
+    "Marque para incluir esta venda no “Recuperar”. Nada é gravado antes da confirmação.",
+  vendaNaoRecuperavel:
+    "Esta venda não pode ser recuperada agora: o motivo aparece logo abaixo do pedido ou no aviso do topo do resultado.",
+  recuperar:
+    "Abre a confirmação com o que vai entrar no sistema. Só grava depois que você confirmar.",
+  recuperarIndisponivel: "Indisponível agora: a frase logo acima diz por quê.",
+  // Confirmação do "Recuperar"
+  cancelarRecuperar:
+    "Fecha sem gravar nada. As vendas continuam marcadas na conferência.",
+  fecharRecuperar: "Fecha esta janela. Nada foi gravado.",
+  gravar:
+    "Grava agora as vendas da lista, num lote só. Depois, a conferência é refeita e a gravação entra nas recuperações feitas.",
+  gravando: `Gravando as vendas. ${ESPERE}`,
+  // Recuperações feitas
+  carregarMais: "Traz as recuperações mais antigas para o fim da lista.",
+  carregando: `Indisponível enquanto a próxima parte da lista chega. ${ESPERE}`,
+} as const;

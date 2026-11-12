@@ -11,6 +11,7 @@ import {
   Aviso,
   Button,
   Card,
+  ComDica,
   DataTable,
   SeletorArquivo,
   classesBotao,
@@ -24,7 +25,7 @@ import {
   mensagemDaImportacao,
   type LeituraPlanilha,
 } from "./planilha";
-import { plural } from "./textos";
+import { DICAS, plural } from "./textos";
 
 /** Quantos erros a tabela mostra (o resto é contado num aviso). */
 export const LIMITE_ERROS_NA_TELA = 200;
@@ -129,6 +130,7 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
   }
 
   const podeConferir = leitura?.tipo === "ok" && ocupado === null;
+  const seletorOcupado = ocupado === "conferindo" || ocupado === "importando";
   const conferidaSemErros =
     conferencia !== null &&
     conferencia.erros.length === 0 &&
@@ -165,16 +167,20 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
               os nomes das colunas.
             </p>
             <div>
-              <a
-                className={classesBotao({ variante: "secundario" })}
-                href={CAMINHO_MODELO_CSV}
-                download="hierarquia-modelo.csv"
-              >
-                Baixar modelo
-              </a>
+              <ComDica texto={DICAS.baixarModelo}>
+                <a
+                  className={classesBotao({ variante: "secundario" })}
+                  href={CAMINHO_MODELO_CSV}
+                  download="hierarquia-modelo.csv"
+                >
+                  Baixar modelo
+                </a>
+              </ComDica>
             </div>
             <details className="hierarquia-detalhes">
-              <summary>O que vai em cada coluna</summary>
+              <ComDica texto={DICAS.colunasDaPlanilha}>
+                <summary>O que vai em cada coluna</summary>
+              </ComDica>
               <dl className="hierarquia-colunas">
                 {Object.entries(COLUNAS_DA_PLANILHA).map(([coluna, info]) => (
                   <div key={coluna} className="hierarquia-colunas__item">
@@ -202,8 +208,11 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
               aceitar=".csv,text/csv"
               arquivo={arquivo}
               aoEscolher={(novo) => void escolher(novo)}
-              desabilitado={
-                ocupado === "conferindo" || ocupado === "importando"
+              desabilitado={seletorOcupado}
+              dicaEscolher={
+                seletorOcupado
+                  ? DICAS.escolherPlanilhaOcupado
+                  : DICAS.escolherPlanilha
               }
             />
             {ocupado === "lendo" && (
@@ -224,13 +233,19 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
               Nada é gravado.
             </p>
             <div>
-              <Button
-                variante="secundario"
-                disabled={!podeConferir}
-                onClick={() => void enviar("conferir")}
+              <ComDica
+                texto={
+                  podeConferir ? DICAS.conferir : DICAS.conferirIndisponivel
+                }
               >
-                {ocupado === "conferindo" ? "Conferindo…" : "Conferir"}
-              </Button>
+                <Button
+                  variante="secundario"
+                  disabled={!podeConferir}
+                  onClick={() => void enviar("conferir")}
+                >
+                  {ocupado === "conferindo" ? "Conferindo…" : "Conferir"}
+                </Button>
+              </ComDica>
             </div>
             {falha?.etapa === "conferir" && (
               <FalhaDaImportacao
@@ -252,13 +267,15 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
             <TituloDoPasso numero={4}>Importe</TituloDoPasso>
             <p id={idDicaImportar}>{dicaImportar}</p>
             <div>
-              <Button
-                disabled={!podeImportar}
-                aria-describedby={idDicaImportar}
-                onClick={() => void enviar("importar")}
-              >
-                {ocupado === "importando" ? "Importando…" : "Importar"}
-              </Button>
+              <ComDica texto={DICAS.importar}>
+                <Button
+                  disabled={!podeImportar}
+                  aria-describedby={idDicaImportar}
+                  onClick={() => void enviar("importar")}
+                >
+                  {ocupado === "importando" ? "Importando…" : "Importar"}
+                </Button>
+              </ComDica>
             </div>
             {falha?.etapa === "importar" && (
               <FalhaDaImportacao
@@ -423,9 +440,11 @@ function Relatorio({
         titulo="Planilha importada"
         acao={
           aoVerCelulas && (
-            <Button variante="secundario" onClick={aoVerCelulas}>
-              Ver células
-            </Button>
+            <ComDica texto={DICAS.verCelulas}>
+              <Button variante="secundario" onClick={aoVerCelulas}>
+                Ver células
+              </Button>
+            </ComDica>
           )
         }
       >

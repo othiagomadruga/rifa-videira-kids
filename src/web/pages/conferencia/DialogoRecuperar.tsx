@@ -3,12 +3,12 @@ import type {
   CorpoConferencia,
   RespostaRecuperarReconciliacao,
 } from "../../../shared/contracts";
-import { Aviso, Button, Dialogo, Loading } from "../../components/ui";
+import { Aviso, Button, ComDica, Dialogo, Loading } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/formatadores";
 import { recuperar } from "./conferencia-api";
 import { textoDoAfiliado, textoDosTotais } from "./formatos";
-import { MOTIVOS, ORIGEM_DA_DATA, plural, tomDoAviso } from "./textos";
+import { DICAS, MOTIVOS, ORIGEM_DA_DATA, plural, tomDoAviso } from "./textos";
 
 type Props = {
   /** O mesmo corpo da conferência (as colunas mapeadas, sem os dados pessoais). */
@@ -79,17 +79,40 @@ export function DialogoRecuperar({
       aoFechar={() => {
         if (!gravando) aoFechar();
       }}
+      dicaFechar={
+        gravando
+          ? DICAS.gravando
+          : aGravar > 0
+            ? DICAS.cancelarRecuperar
+            : DICAS.fecharRecuperar
+      }
       rodape={
         <>
-          <Button variante="secundario" disabled={gravando} onClick={aoFechar}>
-            {aGravar > 0 ? "Cancelar" : "Fechar"}
-          </Button>
-          {aGravar > 0 && (
-            <Button disabled={gravando} onClick={() => void gravar()}>
-              {gravando
-                ? "Gravando…"
-                : `Gravar ${plural(aGravar, "venda", "vendas")}`}
+          <ComDica
+            texto={
+              gravando
+                ? DICAS.gravando
+                : aGravar > 0
+                  ? DICAS.cancelarRecuperar
+                  : DICAS.fecharRecuperar
+            }
+          >
+            <Button
+              variante="secundario"
+              disabled={gravando}
+              onClick={aoFechar}
+            >
+              {aGravar > 0 ? "Cancelar" : "Fechar"}
             </Button>
+          </ComDica>
+          {aGravar > 0 && (
+            <ComDica texto={gravando ? DICAS.gravando : DICAS.gravar}>
+              <Button disabled={gravando} onClick={() => void gravar()}>
+                {gravando
+                  ? "Gravando…"
+                  : `Gravar ${plural(aGravar, "venda", "vendas")}`}
+              </Button>
+            </ComDica>
           )}
         </>
       }

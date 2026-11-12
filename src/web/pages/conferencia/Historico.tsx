@@ -3,6 +3,7 @@ import type { Recuperacao } from "../../../shared/contracts";
 import {
   Button,
   Card,
+  ComDica,
   DataTable,
   EmptyState,
   ErrorState,
@@ -16,7 +17,7 @@ import {
   formatarNumero,
 } from "../../lib/formatadores";
 import { listarRecuperacoes } from "./conferencia-api";
-import { plural } from "./textos";
+import { DICAS, plural } from "./textos";
 
 type Estado =
   | { tipo: "carregando" }
@@ -145,13 +146,17 @@ export function Historico({ versao }: { versao: number }) {
           />
           {proximo !== null && (
             <div className="conferencia-acoes">
-              <Button
-                variante="secundario"
-                disabled={carregandoMais}
-                onClick={() => void carregarMais(proximo)}
+              <ComDica
+                texto={carregandoMais ? DICAS.carregando : DICAS.carregarMais}
               >
-                {carregandoMais ? "Carregando…" : "Carregar mais"}
-              </Button>
+                <Button
+                  variante="secundario"
+                  disabled={carregandoMais}
+                  onClick={() => void carregarMais(proximo)}
+                >
+                  {carregandoMais ? "Carregando…" : "Carregar mais"}
+                </Button>
+              </ComDica>
               {erroDoMais !== null && (
                 <p role="alert">Não foi possível carregar mais: {erroDoMais}</p>
               )}

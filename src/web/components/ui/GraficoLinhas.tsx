@@ -5,8 +5,10 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   type RefObject,
 } from "react";
+import { ComDica } from "./Dica";
 import { indicesDoEixoX, marcasDoEixoY } from "./escalaGrafico";
 import "./GraficoLinhas.css";
 
@@ -54,6 +56,11 @@ type Props = {
   indiceAtual?: number | null;
   /** Como o ponto atual é chamado na dica e na tabela (ex.: "hoje"). */
   rotuloAtual?: string;
+  /**
+   * Dica (tooltip, RIFA-045) do "Ver os dados em tabela": o que a tabela traz. Sem ela, o `<summary>` fica sem dica
+   * (a tela que usa o gráfico diz o texto, no `textos.ts` dela).
+   */
+  dicaDados?: ReactNode;
 };
 
 // Medidas em px (o SVG é desenhado na largura real, para o texto não encolher no celular).
@@ -224,6 +231,7 @@ export function GraficoLinhas({
   formatarEixo = formatarValor,
   indiceAtual = null,
   rotuloAtual = "atual",
+  dicaDados,
 }: Props) {
   const idTitulo = useId();
   const idDescricao = useId();
@@ -623,7 +631,9 @@ export function GraficoLinhas({
       </p>
 
       <details className="ui-grafico__dados">
-        <summary>Ver os dados em tabela</summary>
+        <ComDica texto={dicaDados}>
+          <summary>Ver os dados em tabela</summary>
+        </ComDica>
         <div
           className="ui-grafico__rolagem"
           role="region"

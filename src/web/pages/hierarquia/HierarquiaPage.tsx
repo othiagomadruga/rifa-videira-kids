@@ -3,6 +3,7 @@ import {
   Abas,
   Aviso,
   Button,
+  ComDica,
   ErrorState,
   Loading,
   PageHeader,
@@ -21,7 +22,7 @@ import {
 import { carregarHierarquia, type Hierarquia } from "./hierarquia-api";
 import { ImportarPlanilha } from "./ImportarPlanilha";
 import { TabelaCelulas, TabelaDiscipuladores, TabelaRedes } from "./Tabelas";
-import type { Entidade } from "./textos";
+import { DICAS, type Entidade } from "./textos";
 import "./hierarquia.css";
 
 const ID_ABAS = "hierarquia";
@@ -129,9 +130,11 @@ export function HierarquiaPage() {
               tom="perigo"
               titulo="Não foi possível atualizar as tabelas"
               acao={
-                <Button variante="secundario" onClick={recarregar}>
-                  Tentar de novo
-                </Button>
+                <ComDica texto={DICAS.tentarDeNovo}>
+                  <Button variante="secundario" onClick={recarregar}>
+                    Tentar de novo
+                  </Button>
+                </ComDica>
               }
             >
               <p>{mensagemDoErro(erro)}</p>
@@ -156,6 +159,7 @@ export function HierarquiaPage() {
               {
                 id: "celulas",
                 rotulo: "Células",
+                dica: DICAS.abaCelulas,
                 conteudo: (
                   <TabelaCelulas
                     celulas={dados.celulas}
@@ -171,6 +175,7 @@ export function HierarquiaPage() {
               {
                 id: "discipuladores",
                 rotulo: "Discipuladores",
+                dica: DICAS.abaDiscipuladores,
                 conteudo: (
                   <TabelaDiscipuladores
                     discipuladores={dados.discipuladores}
@@ -187,6 +192,7 @@ export function HierarquiaPage() {
               {
                 id: "redes",
                 rotulo: "Redes",
+                dica: DICAS.abaRedes,
                 conteudo: (
                   <TabelaRedes
                     redes={dados.redes}
@@ -202,6 +208,7 @@ export function HierarquiaPage() {
               {
                 id: "importar",
                 rotulo: "Importar planilha",
+                dica: DICAS.abaImportar,
                 conteudo: (
                   <ImportarPlanilha
                     aoImportar={recarregar}

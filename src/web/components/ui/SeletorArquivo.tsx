@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { classesBotao } from "./Button";
+import { ComDica } from "./Dica";
 import "./Campos.css";
 import "./SeletorArquivo.css";
 
@@ -17,6 +18,11 @@ type Props = {
   textoBotao?: string;
   textoSemArquivo?: string;
   desabilitado?: boolean;
+  /**
+   * Dica (tooltip, RIFA-045) do botão de escolher: para que serve o arquivo e o que acontece ao escolher. Abre com
+   * o mouse no botão e com o foco do teclado no campo (o `<input>` escondido), e entra na descrição do campo.
+   */
+  dicaEscolher?: ReactNode;
   id?: string;
 };
 
@@ -34,6 +40,7 @@ export function SeletorArquivo({
   textoBotao = "Escolher arquivo",
   textoSemArquivo = "Nenhum arquivo escolhido",
   desabilitado = false,
+  dicaEscolher,
   id,
 }: Props) {
   const idAutomatico = useId();
@@ -41,7 +48,14 @@ export function SeletorArquivo({
   const idDica = `${idCampo}-dica`;
   const idErro = `${idCampo}-erro`;
   const idNome = `${idCampo}-nome`;
-  const descritoPor = [dica && idDica, erro && idErro, idNome]
+  const idDicaEscolher = `${idCampo}-dica-escolher`;
+  // A dica do botão vai por último (fechada, o id não aponta para nada e fica de fora da descrição).
+  const descritoPor = [
+    dica && idDica,
+    erro && idErro,
+    idNome,
+    dicaEscolher && idDicaEscolher,
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -64,29 +78,34 @@ export function SeletorArquivo({
         </p>
       )}
       <div className="ui-seletor-arquivo__linha">
-        <input
-          id={idCampo}
-          type="file"
-          className="ui-seletor-arquivo__input"
-          accept={aceitar}
-          disabled={desabilitado}
-          aria-invalid={erro ? true : undefined}
-          aria-describedby={descritoPor}
-          onChange={(evento) => {
-            const escolhido = evento.currentTarget.files?.[0];
-            evento.currentTarget.value = "";
-            if (escolhido) aoEscolher(escolhido);
-          }}
-        />
-        <label
-          htmlFor={idCampo}
-          className={classesBotao(
-            { variante: "secundario" },
-            "ui-seletor-arquivo__botao",
-          )}
-        >
-          {textoBotao}
-        </label>
+        {/* O campo e o botão juntos: a dica abre com o mouse no botão e com o foco do teclado no campo. */}
+        <ComDica id={idDicaEscolher} texto={dicaEscolher}>
+          <span className="ui-seletor-arquivo__controle">
+            <input
+              id={idCampo}
+              type="file"
+              className="ui-seletor-arquivo__input"
+              accept={aceitar}
+              disabled={desabilitado}
+              aria-invalid={erro ? true : undefined}
+              aria-describedby={descritoPor}
+              onChange={(evento) => {
+                const escolhido = evento.currentTarget.files?.[0];
+                evento.currentTarget.value = "";
+                if (escolhido) aoEscolher(escolhido);
+              }}
+            />
+            <label
+              htmlFor={idCampo}
+              className={classesBotao(
+                { variante: "secundario" },
+                "ui-seletor-arquivo__botao",
+              )}
+            >
+              {textoBotao}
+            </label>
+          </span>
+        </ComDica>
         <span id={idNome} className="ui-seletor-arquivo__nome">
           {arquivo ? arquivo.name : textoSemArquivo}
         </span>

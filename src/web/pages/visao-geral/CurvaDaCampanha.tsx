@@ -2,6 +2,7 @@ import type { RespostaPainelResumo } from "../../../shared/contracts/calculos";
 import { Card, GraficoLinhas } from "../../components/ui";
 import { formatarData, formatarNumero } from "../../lib/formatadores";
 import {
+  DICAS,
   NOME_DA_UNIDADE,
   dataCurta,
   descricaoDaCurva,
@@ -59,6 +60,7 @@ export function CurvaDaCampanha({ resumo }: Props) {
             : null
         }
         rotuloAtual="hoje"
+        dicaDados={DICAS.dadosDaCurva}
       />
     </Card>
   );

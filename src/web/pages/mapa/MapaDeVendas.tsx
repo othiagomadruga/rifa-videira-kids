@@ -8,6 +8,7 @@ import {
 import {
   Aviso,
   Button,
+  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -33,6 +34,7 @@ import {
 import { MapaDoBrasil } from "./MapaDoBrasil";
 import { TabelaDdd } from "./TabelaDdd";
 import {
+  DICAS,
   TEXTO_PERIODO,
   temVenda,
   textoBilhetes,
@@ -130,33 +132,37 @@ export function MapaDeVendas() {
         {atual && respondido ? anuncio(atual) : ""}
       </p>
       <div className="mapa-filtros">
-        <Select
-          rotulo="Período"
-          value={filtros.periodo}
-          onChange={(evento) =>
-            mudarFiltros({ periodo: lerPeriodo(evento.target.value) })
-          }
-        >
-          {PERIODOS.map((periodo) => (
-            <option key={periodo} value={periodo}>
-              {TEXTO_PERIODO[periodo]}
-            </option>
-          ))}
-        </Select>
-        <Select
-          rotulo="Divisão"
-          value={filtros.divisao ?? ""}
-          onChange={(evento) =>
-            mudarFiltros({ divisao: lerDivisao(evento.target.value) })
-          }
-        >
-          <option value="">Todas</option>
-          {ORDEM_DIVISOES.map((divisao) => (
-            <option key={divisao} value={divisao}>
-              {NOMES_DIVISAO[divisao]}
-            </option>
-          ))}
-        </Select>
+        <ComDica texto={DICAS.periodo}>
+          <Select
+            rotulo="Período"
+            value={filtros.periodo}
+            onChange={(evento) =>
+              mudarFiltros({ periodo: lerPeriodo(evento.target.value) })
+            }
+          >
+            {PERIODOS.map((periodo) => (
+              <option key={periodo} value={periodo}>
+                {TEXTO_PERIODO[periodo]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.divisao}>
+          <Select
+            rotulo="Divisão"
+            value={filtros.divisao ?? ""}
+            onChange={(evento) =>
+              mudarFiltros({ divisao: lerDivisao(evento.target.value) })
+            }
+          >
+            <option value="">Todas</option>
+            {ORDEM_DIVISOES.map((divisao) => (
+              <option key={divisao} value={divisao}>
+                {NOMES_DIVISAO[divisao]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
       </div>
       {filtros.divisao && (
         <p className="mapa-nota-divisao">
@@ -170,16 +176,18 @@ export function MapaDeVendas() {
         aoTentarDeNovo={pedirDeNovo}
         botaoAtualizar={
           // Sem atualização automática (D17): só este botão pede de novo, sem tirar os números da tela.
-          <Button
-            variante="secundario"
-            className="mapa-atualizar"
-            aria-disabled={respondido ? undefined : true}
-            onClick={() => {
-              if (respondido) pedirDeNovo();
-            }}
-          >
-            {respondido ? "Atualizar" : "Atualizando…"}
-          </Button>
+          <ComDica texto={respondido ? DICAS.atualizar : DICAS.atualizando}>
+            <Button
+              variante="secundario"
+              className="mapa-atualizar"
+              aria-disabled={respondido ? undefined : true}
+              onClick={() => {
+                if (respondido) pedirDeNovo();
+              }}
+            >
+              {respondido ? "Atualizar" : "Atualizando…"}
+            </Button>
+          </ComDica>
         }
       />
     </div>

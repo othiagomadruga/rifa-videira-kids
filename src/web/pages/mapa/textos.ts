@@ -115,3 +115,22 @@ export function listaDeNomes(nomes: readonly string[]): string {
   if (nomes.length <= 1) return nomes.join("");
   return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
+// tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
+// ---------------------------------------------------------------------------------------------------
+
+export const DICAS = {
+  periodo:
+    "Mostra as vendas da campanha inteira ou só do período de agora. As datas aparecem logo abaixo.",
+  divisao:
+    "Mostra só as vendas das células de Jovens ou de Adultos. As vendas sem célula ficam de fora.",
+  atualizar:
+    "Busca os números de novo. Os de agora ficam na tela até chegar a resposta.",
+  atualizando:
+    "Indisponível enquanto os números novos chegam. Espere um instante.",
+  uf: "Mostra no quadro do canto os pedidos, os bilhetes, o valor e a parte deste estado.",
+  tabelaDosEstados:
+    "Abre os números de todos os estados numa tabela, do que mais vendeu ao que menos vendeu.",
+} as const;

@@ -3,6 +3,7 @@ import type { RegistroAuditoria } from "../../../shared/contracts";
 import {
   Aviso,
   Button,
+  ComDica,
   DataTable,
   EmptyState,
   ErrorState,
@@ -12,7 +13,7 @@ import {
 import { mensagemDoErro } from "../../lib/api";
 import { formatarDataHora } from "../../lib/formatadores";
 import { carregarPagina, ehSemPermissao } from "./trilha-api";
-import { registros, rotuloDaAcao, textoDoAlvo } from "./textos";
+import { DICAS, registros, rotuloDaAcao, textoDoAlvo } from "./textos";
 import "./trilha.css";
 
 type PrimeiraPagina =
@@ -235,13 +236,17 @@ export function TrilhaDeAuditoria() {
           </Aviso>
         )}
         {proximo !== null && (
-          <Button
-            variante="secundario"
-            aria-disabled={mais.carregando || undefined}
-            onClick={() => void carregarMais()}
+          <ComDica
+            texto={mais.carregando ? DICAS.carregando : DICAS.carregarMais}
           >
-            {mais.carregando ? "Carregando…" : "Carregar mais"}
-          </Button>
+            <Button
+              variante="secundario"
+              aria-disabled={mais.carregando || undefined}
+              onClick={() => void carregarMais()}
+            >
+              {mais.carregando ? "Carregando…" : "Carregar mais"}
+            </Button>
+          </ComDica>
         )}
       </div>
     </div>
