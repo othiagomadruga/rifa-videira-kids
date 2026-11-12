@@ -277,7 +277,7 @@ Depois, no site **[Admin]**: **Acessos → Coordenação → Nova pessoa** (nome
 
 ### 3.2 Token do webhook e webhook na Rifei [Thiago]
 
-<!-- RIFA-039 -->O token do webhook sai do site: não precisa de Node nem de terminal (`docs/decisions.md`, D21). Faça com o site e a Rifei abertos ao mesmo tempo (no computador, em duas abas; no celular, alternando entre o navegador e a Rifei): o token vai da tela direto para a Rifei, sem passar por WhatsApp, e-mail ou chat.
+O token do webhook sai do site: não precisa de Node nem de terminal (`docs/decisions.md`, D21). Faça com o site e a Rifei abertos ao mesmo tempo (no computador, em duas abas; no celular, alternando entre o navegador e a Rifei): o token vai da tela direto para a Rifei, sem passar por WhatsApp, e-mail ou chat.
 
 1. **No site [Admin]:** **Acessos → Webhook da Rifei → Gerar token do webhook**. O token aparece **uma vez só**, com **Copiar**, junto com a URL do webhook.
    - Se já houver um token (ou o segredo do Worker da alternativa abaixo), gerar outro pede confirmação: o anterior para de valer na hora, e as vendas que chegarem antes de você colar o novo na Rifei se perdem (recupere pela conferência, 6.4). Faça a troca fora do horário de pico.
@@ -570,4 +570,4 @@ O que o sistema ainda não faz e o lançamento precisaria (ou faria melhor com):
 8. **Rifei e Efí:** o passo a passo está na [seção 12 de integracao-rifei.md](integracao-rifei.md#12-rifei-e-efí-passo-a-passo-para-o-po). Ainda NÃO DOCUMENTADO pela Rifei: onde ligar os afiliados e gerar o convite, o formato do link de afiliado, onde ver o código de cada afiliado, onde adicionar a Efí e o nome do campo da chave Pix. Vão para o suporte (12.7) e para a compra de teste (seção 9). As mesmas respostas fecham os trechos `[confirmar com a Rifei]` do [guia do líder](guia-lideres.md) (seção 1 e "Perdi o link") e do [convite](convite-reuniao.md) (seções 2 e 3): troque-os antes de mandar (5.1, item 5).
 9. **Vínculo afiliado → célula sem data:** trocar ou desvincular é retroativo (7.4).
 10. ~~Volta do código só pelo terminal~~: resolvido na RIFA-035 (workflow **Voltar o site para a versão anterior**, pelo celular; 2.4 e 7.2). Continua: na primeira publicação não há versão anterior para voltar; só o Time Travel do banco.
-11. **Token do webhook pelo site (RIFA-039) em construção:** até a tela **Webhook da Rifei** entrar no ar, o token só sai pela alternativa do wrangler (3.2), que pede o Node na máquina de quem grava o segredo. <!-- RIFA-039 -->
+11. ~~**Token do webhook pelo site (RIFA-039) em construção**~~: resolvido na RIFA-039 (Acessos → **Webhook da Rifei**, só admin). A alternativa do wrangler (3.2) continua valendo.
