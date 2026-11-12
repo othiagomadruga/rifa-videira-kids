@@ -115,7 +115,9 @@ export function DialogoRecuperar({
               <Button
                 className="conferencia-dialogo-botao"
                 aria-disabled={gravando || undefined}
-                onClick={() => void gravar()}
+                onClick={() => {
+                  if (!gravando) void gravar();
+                }}
               >
                 {gravando
                   ? "Gravando…"

@@ -1008,10 +1008,11 @@ describe("RIFA-045: os indisponíveis da Conferência, pelo teclado", () => {
     semEfeito();
     expect(dialogo).toContainElement(document.activeElement as HTMLElement);
 
-    // A gravação termina: o diálogo fecha e a tela mostra o resultado.
+    // A gravação termina: o diálogo fecha, a tela mostra o resultado e o foco volta a quem abriu o diálogo.
     gravacao.liberar();
     expect(await screen.findByText("2 vendas recuperadas")).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(gravacoes()).toHaveLength(1);
+    await waitFor(() => expect(botao("Recuperar 3 vendas")).toHaveFocus());
   });
 });
