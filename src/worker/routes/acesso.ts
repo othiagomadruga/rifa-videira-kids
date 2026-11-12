@@ -3,7 +3,9 @@
  *
  * - POST /api/sessao { token }: o link pessoal vira uma sessão (cookie `__Host-sessao`). Link inválido → 401.
  *   O mesmo link pode abrir outras sessões (outro aparelho, ou de novo) até expirar ou ser revogado, e
- *   nenhuma sessão dura mais que o link que a abriu.
+ *   nenhuma sessão dura mais que o link que a abriu. Link VÁLIDO de discipulador ou rede com o acesso do papel
+ *   desligado na campanha (RIFA-029, D20) → 403 `acesso_desligado` com `{ papel }`, sem criar a sessão (o link
+ *   continua valendo: entra quando a chave volta). A chave é lida na mesma consulta do link, na hora.
  * - GET /api/sessao: quem está conectado (401 sem sessão válida).
  * - POST /api/sessao/sair: encerra a sessão deste navegador e expira o cookie (204, mesmo sem sessão).
  *
@@ -33,6 +35,7 @@ import {
   exigirSessao,
   gravarCookieSessao,
   lerCookieSessao,
+  mensagemAcessoDesligado,
   type AmbienteSessao,
 } from "../middleware/sessao";
 import { validarJson } from "../middleware/validacao";
@@ -67,6 +70,14 @@ sessao.post(
       agora.toISOString(),
     );
     if (link === null) return respostaLinkInvalido(c);
+    const { papel } = link.usuario;
+    if (!link.acessoLigado && (papel === "discipulador" || papel === "rede"))
+      return responderErro(
+        c,
+        "acesso_desligado",
+        mensagemAcessoDesligado(papel),
+        { papel },
+      );
 
     const idSessao = gerarSegredo();
     const anterior = lerCookieSessao(c);

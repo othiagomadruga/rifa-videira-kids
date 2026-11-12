@@ -11,7 +11,8 @@
  *   desativar encerra as sessões dele; 409 `em_uso` ao desativar a si mesmo ou o último admin ativo (não há
  *   troca de papel, então não há como rebaixá-lo);
  * - POST /api/admin/usuarios/:id/links → 201 { link }: link novo (os anteriores continuam valendo), para um
- *   usuário de qualquer papel;
+ *   usuário de qualquer papel; 409 `acao_desligada` (RIFA-029, D20) se ele é discipulador ou rede e o acesso do
+ *   papel está desligado na campanha (depois do 404: o papel é o do usuário encontrado);
  * - DELETE /api/admin/links/:id → 204: revoga o link (de qualquer papel) e encerra as sessões abertas por ele;
  *   409 `em_uso` se nenhum admin ativo ficaria com link válido (a equipe perderia o acesso de admin).
  *
@@ -33,6 +34,11 @@ import {
   listarUsuarios,
   revogarLink,
 } from "../db/acessos";
+import {
+  CHAVE_DO_PAPEL,
+  mensagemChaveDeAcessoDesligada,
+  papelEAcessoDoUsuario,
+} from "../db/regras-campanha";
 import { gerarLink, linkCriado } from "../lib/links-acesso";
 import { responderErro } from "../lib/respostas-erro";
 import {
@@ -129,6 +135,19 @@ adminUsuarios.post(
   validarParametros(parametroIdSchema),
   async (c) => {
     const { id } = c.req.valid("param");
+    // RIFA-029 (D20): o papel do usuário e a chave dele, lidos na hora; o 404 vem antes do 409.
+    const dono = await papelEAcessoDoUsuario(c.env.DB, id);
+    if (dono === null) return respostaUsuarioNaoEncontrado(c);
+    if (
+      !dono.ligado &&
+      (dono.papel === "discipulador" || dono.papel === "rede")
+    )
+      return responderErro(
+        c,
+        "acao_desligada",
+        mensagemChaveDeAcessoDesligada(dono.papel),
+        { chave: CHAVE_DO_PAPEL[dono.papel] },
+      );
     const agora = new Date();
     const link = await gerarLink(agora);
     const linkId = await criarLink(
