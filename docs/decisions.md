@@ -1056,3 +1056,218 @@ mostram uma janela (a semana ou a campanha) e um nível por vez, e o relatório 
 3. Os pedidos desconsiderados aparecem só como um número. Querem separados por motivo (teste, fraude, estorno,
    outro)? (Assumido: só o total.)
 4. Na planilha por rede, incluir o nome do responsável (pastor)? (Assumido: não, só o que foi pedido.)
+
+## D24. Link de vendas e QR code de cada célula (RIFA-046; contrato, 2026-11-12)
+
+O PO perguntou: "Nos Pix que a galera for vendendo, como vamos saber de qual célula veio? Dá para gerar um link ou QR
+code para cada célula?" Hoje a venda só conta para uma célula se for feita na Rifei pelo **link de afiliado** do líder:
+o Pix é pago dentro do checkout da Rifei, que já sabe o afiliado, o pedido chega pelo webhook com o `affiliate_id`, e
+a coordenação liga o afiliado à célula na Adesão (D7 da integração). **Pix mandado direto para uma chave, fora da
+Rifei, nunca entra no sistema.** Então o "link da célula" é o link de afiliado do líder, e o QR code é dele. Contrato
+em `src/shared/contracts/link-vendas.ts` (sem zod: o modelo, a montagem, a conferência do endereço e o nome do arquivo
+do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-vendas.test.ts`.
+
+- **O problema**: o formato do link de afiliado da Rifei NÃO está documentado (integracao-rifei.md 12.3, pergunta 2 da
+  12.7). Duas saídas, pesadas assim:
+
+  | | (a) modelo único, só do admin | (b) colar o link de cada afiliado |
+  |---|---|---|
+  | Formato desconhecido | serve se o link levar o `affiliate_id` num lugar fixo; senão, não serve | serve com qualquer formato |
+  | Coerência com a atribuição | **por construção**: o link leva o `affiliate_id` que o webhook liga à célula | depende de quem cola: o link de um afiliado colado no outro desvia as vendas sem o sistema perceber |
+  | Segurança (D20: link para fora) | um campo, só admin, endereço fixo, um lugar para auditar | um campo por afiliado; a coordenação (ou o líder, uma escrita nova da hierarquia, que hoje só lê) poderia pôr o link de outra campanha da Rifei |
+  | Esforço do PO | um campo, uma vez, depois de confirmar com a Rifei | um link por afiliado (36 ou mais), na reunião dos líderes ou depois |
+  | Célula com mais de um código | cada código ganha o link dele, sozinho | cada um precisa ser colado; o que faltar fica invisível para o líder |
+
+  **Escolha: (a)**, vazio até o PO confirmar o formato. É reversível: as respostas trazem `url` por afiliado nas duas
+  opções. Se a Rifei confirmar que o link de afiliado NÃO leva o `affiliate_id` (ex.: um código aleatório por
+  afiliado), a troca para (b) é uma coluna `link_vendas` em `afiliados`, colada pela coordenação na Adesão, com a
+  mesma conferência de endereço (`eLinkDeVendas`): as rotas e as telas continuam iguais, muda só a origem do `url`.
+- **O modelo**: um texto com os marcadores `{slug}` (o `slug_rifei` da campanha ativa, com `encodeURIComponent`) e
+  `{afiliado}` (o `affiliate_id`, obrigatório), até 300 caracteres. Ex. (o formato real ainda é desconhecido):
+  `https://rifei.com.br/{slug}?afiliado={afiliado}`. Regras executáveis (`problemasDoModeloLinkVendas`, as mensagens
+  em português que a tela mostra enquanto o admin digita e que o 400 traz):
+  - começa EXATAMENTE por `https://rifei.com.br/` (`HOSTS_LINK_VENDAS`; sem `www.`, subdomínio, porta, usuário ou
+    maiúsculas): o endereço fica fixo e os marcadores só entram depois da barra, então nenhum valor muda o site de
+    destino. `rifei.com.br.golpe.example`, `rifei.com.br@golpe.example` e `http://` são recusados (testado);
+  - sem espaço, tabulação, quebra de linha ou caractere de controle; só `{slug}` e `{afiliado}`; nenhuma chave solta;
+  - preenchido com valores de exemplo, forma um link válido (`eLinkDeVendas`).
+- **A montagem** (`montarLinkDeVendas(modelo, { slug, affiliateId })`): preenche numa passada só (um slug com
+  "{afiliado}" não é trocado de novo), devolve a forma canônica (`URL.href`) e confere de novo com `eLinkDeVendas`
+  (`https:`, endereço de `HOSTS_LINK_VENDAS`, sem usuário, senha nem porta, canônico, até 2.048 caracteres). Null sem
+  modelo, com modelo com problema (gravado à mão), slug vazio, "." ou ".." (o URL apagaria o segmento) ou
+  `affiliate_id` que não é inteiro positivo. Null nunca vira erro: a resposta sai com `configurado: false` ou sem o
+  link daquele afiliado. Os schemas das respostas também recusam qualquer `url` fora de `eLinkDeVendas`: nenhum outro
+  endereço chega aos líderes, aos compradores ou ao QR code.
+- **Onde fica e quem muda**: coluna `campanhas.link_vendas_modelo` (migração `0010_link_vendas.sql`, abaixo), numa
+  **rota própria só de admin**, `PUT /api/admin/links-vendas/modelo { modelo }` (null ou vazio apaga), e não num grupo
+  do `PUT /api/admin/campanha` como as regras da D20. Por quê:
+  - o modelo decide para onde vai o dinheiro de todo comprador: a regra "só admin" fica na própria rota (`papeis:
+    ["admin"]`), conferida pelo `protecao.test.ts` (403 da coordenação), e não na conferência "diferente do gravado"
+    do PUT da campanha (RIFA-042), que precisaria de mais um grupo em `gruposDoAdminAlterados` e `semGruposDoAdmin`;
+  - a campanha é lida pelo painel, pelas rotas abertas, pelo bumbo e pela `/minha` (`montarCampanha`): o modelo não
+    serve a nenhuma delas, e o `campanhaSchema` e as fixtures não mudam (a `main` continua verde sem tocar no Worker
+    nem nas telas). O UPSERT do PUT da campanha nomeia as colunas, então não apaga o modelo (conferido em
+    `db/campanha.ts`; a -db trava com teste).
+  - Trilha: `campanha.salvar` (sem ação nova), alvo `campanha:<id>`, com o antes e o depois do modelo
+    ("Modelo do link de vendas: (vazio) → https://rifei.com.br/{slug}?afiliado={afiliado}"); o mesmo modelo de novo
+    não registra (RIFA-018). O modelo não tem dado pessoal nem segredo.
+- **As rotas** (catálogo à parte `ROTAS_LINK_VENDAS`, como o `ROTAS_REGRAS_CAMPANHA`: o `protecao.test.ts` exige o 403
+  da coordenação na rota só de admin, que uma rota não montada não dá, e confere que `ROTAS` tem só a visão em
+  `/api/minha`; a -api põe o catálogo no teste no merge que monta as rotas). Sem campanha ativa, 404 nas três.
+  - `GET /api/minha/links-vendas` (líder, discipulador e rede): `{ alvo, configurado, itens }`. O alvo vem só da sessão
+    (a rota não aceita id) e o escopo é o da visão individual (D12): o líder, a célula dele (sempre uma); o
+    discipulador, as células dele; a rede, as dos discipuladores dela (conferido pelo schema). Com o acesso do papel
+    desligado (D20), 403 `acesso_desligado`, como todo `/api/minha/*`.
+  - `GET /api/admin/links-vendas` (admin e coordenação): `{ modelo, configurado, itens }`, com TODAS as células
+    (inclusive as sem afiliado, com `links` vazia), para a Adesão.
+  - `PUT /api/admin/links-vendas/modelo` (só admin): grava e responde 200 com a lista do GET, já montada com o modelo
+    novo.
+  - Cada célula (`celulaLinksVendasSchema`): ids e nomes da célula, do líder, do discipulador e da rede, a divisão e
+    `links: [{ affiliate_id, url }]`. Nunca telefone, e-mail, o `rotulo` do afiliado (nota interna) ou número de
+    venda. Ordem das células: pelo caminho na hierarquia, como os acessos (rede, discipulador e célula, em ordem de
+    português; empate, pelo id).
+  - `configurado` = o modelo gravado serve (`modeloLinkVendasValido`). False (vazio, ou gravado com problema): nenhuma
+    célula tem link, e a tela diz que a coordenação ainda não liberou o link.
+- **Célula com mais de um código** (o líder tem duas contas, a célula tem dois líderes, um afiliado de teste ficou
+  vinculado): todos os links vêm, um por afiliado vinculado, do vínculo mais recente para o mais antigo
+  (`vinculado_em` decrescente; empate, `affiliate_id` decrescente). Todos contam para a célula. A tela destaca o
+  primeiro ("Seu link de vendas", com o QR) e lista os outros ("Também contam para a sua célula"). Afiliado de teste
+  se remove na Adesão (D20, RIFA-031) ou se desvincula.
+- **Discipulador e rede veem os links das células deles** (proposta; pergunta ao PO): só ver, copiar, mandar e o QR.
+  O link não é número nem dinheiro (D12), é feito para ser divulgado, e o discipulador costuma ajudar o líder a
+  vender; dos pares e de fora da equipe, nada. O líder vê só o dele.
+- **Coordenação: na Adesão** (não na Hierarquia): é onde o afiliado se liga à célula, e uma célula sem afiliado é ao
+  mesmo tempo "quem falta" e "sem link". Lá ficam o modelo (o admin edita; a coordenação vê, com "Só o admin muda o
+  modelo"), o link e o QR de cada célula (Copiar, WhatsApp para o telefone do líder, que a Adesão já tem) e "Imprimir os
+  QR codes" de todas as células com link.
+- **O QR code**, gerado no navegador, sem rede e sem serviço de terceiros (o link não sai para ninguém além da Rifei):
+  correção M (`NIVEL_CORRECAO_QR_LINK_VENDAS`), margem de 4 módulos (`MARGEM_QR_LINK_VENDAS_MODULOS`), sempre escuro
+  sobre claro (muitos leitores não leem o QR invertido), também no tema escuro. Avaliação, com os pacotes baixados do
+  npm em 12/11/2026 (tamanho: o arquivo do pacote minificado com o esbuild do projeto e comprimido com gzip):
+
+  | | `qr` 0.7.2 | `uqr` 0.1.3 | `lean-qr` 2.7.4 | `qrcode` 1.5.4 | gerador próprio |
+  |---|---|---|---|---|---|
+  | Licença | MIT ou Apache-2.0 | MIT | MIT | MIT | nossa |
+  | Dependências | nenhuma | nenhuma | nenhuma | 3 (pngjs, yargs, dijkstrajs) | nenhuma |
+  | Tamanho (min + gzip) | ~6,9 KB (5,4 KB só o `encodeQR`, pelo README) | ~4,5 KB | ~3,7 KB | maior, feito para Node | ~3 a 4 KB (estimado) |
+  | Manutenção | ativa (4 versões em 2026; a última em 28/09/2026) | esparsa (0.1.2 em 2023; 0.1.3 em 04/2026) | ativa (2.7.4 em 07/09/2026), um mantenedor | 1.5.4 de 08/2024 | nossa |
+  | Uso (downloads na semana) | ~520 mil | ~10 milhões | ~220 mil | ~40 milhões | |
+  | Decodificador para os testes | **sim, no mesmo pacote** (`qr/decode.js`) | não | não | não | precisaria de outro |
+
+  **Recomendação: `qr` 0.7.2, com versão fixa** (é 0.x). Zero dependência, licença permissiva, ativo, e o decodificador
+  do mesmo pacote deixa o teste provar que o QR desenhado pela tela abre exatamente o link (gerar → rasterizar →
+  decodificar), sem dependência a mais. Custo: ~6 a 7 KB comprimidos num pedaço carregado só quando o QR aparece
+  (`lazy`), nunca no pacote inicial (hoje ~108 KB comprimidos; o pedaço da visão individual, ~6 KB); nenhum na API. Usar a saída `raw` (a matriz) e desenhar o `<svg>` com elementos do
+  React (nada de `dangerouslySetInnerHTML` nem da saída `svg` em texto). Alternativa, se o SM preferir o menor: `uqr`
+  (porte do gerador de referência do Nayuki), com o decodificador do `qr` só nos testes. **Gerador próprio** (versões 1
+  a 10, modo byte, correção M): ~350 a 450 linhas (Reed-Solomon, tabelas das 10 versões, padrões, máscaras e a
+  penalidade, informação de formato e de versão), um lote de agente mais a revisão, e o risco de um erro sutil que
+  só aparece em alguns celulares; ainda pediria um decodificador nos testes e um teto de 213 bytes no link (a versão
+  10-M). Só se o SM recusar a dependência.
+- **Segurança**: o endereço é fixo no modelo e conferido de novo na montagem e na saída da API (acima); só o admin
+  muda o modelo (rota com `papeis: ["admin"]`, sessão, CSRF da mesma origem e trilha); a rota da hierarquia não aceita
+  id; o link não tem segredo (leva o slug e o `affiliate_id`, que o comprador vê) e as respostas autenticadas saem com
+  `no-store`. Na tela: o QR é desenhado com elementos do React (o `url` nunca vira HTML), a imagem para baixar sai de
+  um `<canvas>` (`toBlob` → link temporário com `download`, como o relatório da D23) e nunca vira `<img src="blob:">`
+  (a CSP só deixa `img-src 'self' data:`); a CSP não muda. O QR impresso leva o link em texto embaixo, para quem
+  quiser conferir que é `rifei.com.br`. Risco que continua: um admin pode apontar o modelo para outra campanha da
+  Rifei (o endereço fixo não impede); por isso só admin, com trilha, e a tela mostra a prévia do link para abrir e
+  conferir antes de salvar.
+- **Orçamento do D1 (D10)**: um `db.batch` por requisição com três leituras (a campanha ativa, as células do escopo
+  com a hierarquia e os afiliados vinculados delas pelo índice `afiliados_por_celula`), sem pedidos: o líder lê
+  poucas linhas; a lista da coordenação, ~1 + 3 por célula + 1 por afiliado (~150 com 36 células). Sem cache: mudar o
+  modelo ou vincular um afiliado vale na hora. A tela pede uma vez ao abrir, sem atualizar a cada 60 s.
+
+### OBRIGATÓRIO NA IMPLEMENTAÇÃO
+
+1. **Migração `0010_link_vendas.sql`** (-db): `ALTER TABLE campanhas ADD COLUMN link_vendas_modelo TEXT CHECK
+   (link_vendas_modelo IS NULL OR length(link_vendas_modelo) BETWEEN 1 AND 300)`. **Só o tamanho**, como as mensagens
+   da 0008: o endereço e os marcadores ficam no contrato, que muda sem migração (o SQLite não troca o CHECK de uma
+   coluna sem recriar `campanhas`, que tem chaves estrangeiras de pedidos, períodos e recuperações). O número 0010 fica
+   reservado; se outra migração entrar antes, o SM renumera. Teste em `src/worker/test/migrations.test.ts`: a 0010
+   sobre dados das anteriores (a coluna nasce NULL) e o CHECK. Plano em modelo-de-dados.md, seção 11.
+2. **Leitura** (-db/-api, `db/links-vendas.ts`): um `db.batch` com (a) `SELECT id, slug_rifei, link_vendas_modelo FROM
+   campanhas WHERE ativa = 1`; (b) as células do escopo com a célula, o `lider_nome`, o discipulador, a rede e a
+   divisão (todas; `c.id = ?` no líder; `c.discipulador_id = ?` no discipulador; `d.rede_id = ?` na rede), nunca
+   `lider_telefone` nem `lider_email`; (c) `SELECT affiliate_id, celula_id FROM afiliados WHERE celula_id IN (as do
+   escopo) ORDER BY celula_id, vinculado_em DESC, affiliate_id DESC`. A montagem num módulo puro (`lib/links-vendas.ts`,
+   testado sem banco), com `montarLinkDeVendas` (nunca juntar texto à mão) e a ordem das células de
+   `db/acessos-hierarquia.ts` (`Intl.Collator("pt-BR")`, rede → discipulador → célula, empate pelo id); afiliado cujo
+   link sai null fica de fora. Travar as idas ao D1 e as linhas lidas (`meta.rows_read`) no líder, no discipulador, na
+   rede e na coordenação, e o plano dos afiliados com `EXPLAIN QUERY PLAN` (`afiliados_por_celula`). Sem cache.
+3. **Rotas** (-api): `GET /api/minha/links-vendas` no sub-app de `routes/minha.ts` (já exige os papéis e marca
+   `no-store`), com o alvo só da sessão (um `?celula_id=` na URL é ignorado); `GET /api/admin/links-vendas` e `PUT
+   /api/admin/links-vendas/modelo` sob `/api/admin` (depois do login, passo 4 do `index.ts`), num sub-app novo ou em
+   `routes/afiliados-adesao.ts`. O "só admin" do PUT fica no handler (ou num `use` do caminho EXATO), antes de ler o
+   corpo: a coordenação leva 403, nunca 400; nunca num `use` de `/api/admin/links-vendas/*` que pegue o GET. Toda
+   resposta passa pelo schema do catálogo antes de sair (estrito: um campo a mais vira 500, como a visão).
+4. **PUT** (-api): 400 `json_invalido` (não é JSON, ou sem `Content-Type` JSON, como os outros PUT) ou
+   `requisicao_invalida` (com os problemas do modelo nos `detalhes`); 404 sem campanha ativa. Um `db.batch`: o
+   registro na trilha ANTES e com a mesma condição do UPDATE (`WHERE ativa = 1 AND link_vendas_modelo IS NOT ?`, que
+   compara também o NULL), o `UPDATE campanhas SET link_vendas_modelo = ?, atualizado_em = <agora> WHERE ...` e a
+   leitura da lista. Nada mudou: 200 sem trilha.
+5. **Testes da -api**: o PUT da campanha (coordenação e admin) não apaga o modelo, e trocar o `slug_rifei` muda os
+   links com `{slug}` na hora; a coordenação leva 403 no PUT do modelo e nada muda; o líder vê só a célula dele e o
+   discipulador e a rede só as da equipe (também com id na consulta); `configurado: false` sem modelo e com um modelo
+   gravado à mão fora das regras (sem 500); a célula com dois afiliados traz os dois, na ordem; nenhuma resposta
+   contém o telefone, o e-mail ou o rótulo (varredura, com eles preenchidos no banco).
+6. **Proteção** (`src/worker/protecao.test.ts`, no merge que monta as rotas): `ROTAS_LINK_VENDAS.linksVendas` e
+   `.salvarModeloLinkVendas` em `ROTAS_DA_COORDENACAO` (401 sem cookie; 403 da coordenação só no PUT; 403 da
+   hierarquia; 403 no PUT de outra origem), com as contagens do primeiro teste; `meusLinksVendas` na seção g) (401 sem
+   sessão; 403 da coordenação; 200 nos três papéis, pelo schema; 403 `acesso_desligado` no discipulador e na rede com
+   a chave desligada).
+7. **Dependência** (-web, depois do ok do SM): `qr` com versão fixa (`"qr": "0.7.2"`), no `package.json` e no
+   `package-lock.json`; só em pedaços `lazy` (o QR da `/minha` e o da Adesão); conferir no `npm run build` que não
+   entrou no pacote inicial. `encodeQR(url, "raw", { ecc: "medium", border: 0 })` e a margem desenhada pela tela.
+8. **Componente do QR** (-web, ex.: `src/web/components/qr/`, fora de `components/ui`): `<svg>` com `viewBox`, um
+   `<path>` dos módulos, `shape-rendering="crispEdges"`, preto sobre branco fixos (exceção documentada aos tokens do
+   tema), `role="img"` e `aria-label` com o nome da célula; nada de `dangerouslySetInnerHTML`. "Baixar imagem": PNG de
+   um `<canvas>` (10 px por módulo, fundo branco), nome `nomeDoArquivoQrLinkVendas(celula_nome)`, `URL.revokeObjectURL`
+   depois. "Imprimir": `window.print()` com `@media print` que mostra só o QR, o nome da célula e o link em texto
+   (QR com 4 cm ou mais). "Copiar link" (sem a área de transferência, seleciona o campo) e "Compartilhar no WhatsApp"
+   (`https://wa.me/?text=` com `encodeURIComponent`; na Adesão, `wa.me/<telefone do líder>`).
+9. **Teste do QR** (-web): gerar → rasterizar a matriz em pixels (função pura) → `decodeQR` de `qr/decode.js` devolve
+   EXATAMENTE o `url`, com um link curto (~45 caracteres), um médio (~150) e um longo (~600). E no aparelho de
+   verdade: a câmera de um Android e de um iPhone lê o QR na tela da `/minha` (360 px), no PNG baixado e numa folha
+   impressa, e abre o link certo (anotar no relatório).
+10. **`/minha`** (-web): o cartão "Seu link de vendas" (líder) e "Links de vendas das suas células" (discipulador e
+    rede, com "Ver QR" num diálogo), pedidos uma vez ao abrir (sem a atualização de 60 s). Estados: carregando; erro com
+    "Tentar de novo"; `configurado: false` ("A coordenação ainda não liberou o link de vendas. Enquanto isso, use o
+    link da sua Área de afiliados na Rifei."); célula sem afiliado ("Sua célula ainda não tem cadastro de afiliado
+    ligado: fale com a coordenação."); um link ou mais (o primeiro em destaque); 403 `acesso_desligado` e 404 como a
+    visão. 360 px sem rolagem lateral (o link quebra a linha). O `guarda-minha.test.ts` passa a aceitar
+    `src/shared/contracts/link-vendas` (sem zod) e continua sem dinheiro.
+11. **Adesão** (-web): a seção "Links de vendas" (acima): o campo do modelo só para o admin, com os problemas ao vivo
+    (`problemasDoModeloLinkVendas`), a prévia do link de um afiliado de exemplo para abrir e conferir, e "Salvar"
+    (PUT); para a coordenação, só leitura. Caminhos e constantes copiados conferidos pelo teste de contrato da pasta,
+    como nas outras telas. Docs: `docs/frontend.md`.
+12. **Docs** (-docs): `docs/lancamento.md` (depois de confirmar o formato com a Rifei: o admin preenche o modelo e faz
+    a compra de teste pelo QR de uma célula, conferindo que a venda cai nela; na reunião dos líderes, mostrar o link e
+    o QR na `/minha`), `docs/guia-lideres.md` e `.html` ("Seu link de vendas") e, com a resposta da Rifei, a seção 12.3
+    de integracao-rifei.md.
+
+**Suposições** (decisões do contrato, simples e reversíveis):
+
+1. Opção (a): o modelo com `{slug}` e `{afiliado}` (= o `affiliate_id` do webhook), vazio até o PO confirmar o formato.
+2. Só `https://rifei.com.br/` (sem `www.` e sem subdomínio); outro endereço confirmado entra em `HOSTS_LINK_VENDAS`.
+3. O modelo numa rota própria só de admin, guardado em `campanhas.link_vendas_modelo`; trilha `campanha.salvar`.
+4. Célula com mais de um código: todos os links, o vínculo mais recente primeiro.
+5. Discipulador e rede veem os links e os QR das células deles; o líder, só o dele.
+6. Na coordenação, a Adesão (não a Hierarquia), com "Imprimir os QR codes".
+7. QR com a dependência `qr` 0.7.2 (**precisa do ok do SM**); correção M, margem de 4 módulos, preto no branco.
+8. Texto do "Compartilhar no WhatsApp" fixo no site (ex.: "Compre seus bilhetes da rifa do Videira Kids pelo link da
+   Célula Ágape: <link>"), não editável como as mensagens da D20.
+
+**Perguntas ao PO** (com a opção que o contrato assumiu, reversível):
+
+1. Qual é o formato do link de afiliado da Rifei, e ele leva o número do afiliado (o mesmo que chega no webhook)?
+   Pergunte ao suporte (integracao-rifei.md 12.7, pergunta 2) ou veja na compra de teste. (Assumido: o modelo fica
+   vazio, e o líder vê "ainda não liberado", até a resposta.)
+2. O discipulador e o responsável pela rede podem ver os links e os QR das células deles? (Assumido: sim, só ver,
+   copiar e mandar.)
+3. Quando uma célula tem mais de um cadastro de afiliado, mostramos todos, com o mais recente em destaque? (Assumido:
+   sim.)
+4. Qual texto vai na mensagem do WhatsApp quando o líder compartilha o link? (Assumido: o da suposição 8.)
+5. Venda por fora (dinheiro ou Pix direto para o líder) não entra no sistema. Orientamos o líder a fazer a compra na
+   Rifei pelo próprio link, em nome do comprador, para contar para a célula? (Assumido: o guia dos líderes diz só
+   que conta o que passa pela Rifei pelo link dele.)

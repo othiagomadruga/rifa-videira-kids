@@ -14,6 +14,7 @@ O contrato executável está em `src/shared/contracts/`:
 | `regras.ts` | regras do admin (Sprint 6, D20), sem zod: motivos da desconsideração, padrões das chaves, a chave de acesso de cada papel e os modelos das mensagens do WhatsApp com `preencherMensagem` |
 | `token-webhook.ts` | token do webhook gerado pela tela (RIFA-039, D21), sem zod: formato do token, as credenciais e as regras `credencialVigenteDoWebhook` e `ultimoUsoDoWebhook` (os schemas e `ROTAS_TOKEN_WEBHOOK` ficam em `api.ts`) |
 | `relatorio.ts` | relatório da campanha para baixar (RIFA-038, D23), sem zod: os tipos, as colunas de cada um, o formato dos números, a proteção contra fórmula, o arquivo CSV, o nome e os cabeçalhos (a consulta e `ROTAS_RELATORIO` ficam em `api.ts`) |
+| `link-vendas.ts` | link de vendas de cada célula e o QR code dele (RIFA-046, D24), sem zod: o modelo do link de afiliado da Rifei (`{slug}` e `{afiliado}`), `problemasDoModeloLinkVendas`, `montarLinkDeVendas`, a conferência do endereço (`eLinkDeVendas`, só `https://rifei.com.br/`) e o nome do arquivo do QR (os schemas e `ROTAS_LINK_VENDAS` ficam em `api.ts`) |
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
@@ -50,7 +51,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 - Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. Link válido de `discipulador` ou `rede` com o acesso do papel desligado na campanha (`acesso.discipuladores` ou `acesso.redes`, D20): 403 `acesso_desligado`, sem criar a sessão. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`), as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, em `ROTAS_TOKEN_WEBHOOK`, D21); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`), as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, em `ROTAS_TOKEN_WEBHOOK`, D21) e o modelo do link de vendas (`PUT /api/admin/links-vendas/modelo`, em `ROTAS_LINK_VENDAS`, D24); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` (a visão e, na RIFA-046, os links de vendas das células deles) e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -994,6 +995,87 @@ em todos os servidores (o webhook não guarda o token em cache).
 - **Erros**: primeiro o login (401 sem sessão; 403 da coordenação, da hierarquia e de outra origem); depois 400
   `json_invalido` (corpo que não é JSON) ou `requisicao_invalida` (corpo fora do formato) e 409 `em_uso`.
 - Trilha: `webhook.gerar_token`, no mesmo lote da gravação, sem o token nem o hash.
+
+---
+
+## Link de vendas e QR code de cada célula (RIFA-046; docs/decisions.md D24)
+
+A venda só conta para uma célula quando é feita na Rifei pelo **link de afiliado** do líder (o pedido chega com o
+`affiliate_id`, ligado à célula na Adesão; D7 da integração). Pix mandado direto para uma chave, fora da Rifei, não
+entra no sistema. Estas rotas dão a cada célula esse link pronto e a tela gera o QR code dele no navegador.
+
+O formato do link de afiliado da Rifei NÃO está documentado ([integracao-rifei.md, 12.3](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes)):
+o link sai de um **modelo** que só o admin grava, vazio até o PO confirmar o formato, com os marcadores `{slug}` (o
+`slug_rifei` da campanha ativa, codificado) e `{afiliado}` (o `affiliate_id`, obrigatório). Ex. (o formato real ainda
+é desconhecido): `https://rifei.com.br/{slug}?afiliado={afiliado}` → `https://rifei.com.br/videira-kids?afiliado=1042`.
+
+Rotas no catálogo `ROTAS_LINK_VENDAS` de `api.ts` (à parte de `ROTAS` até a API montá-las, como
+`ROTAS_REGRAS_CAMPANHA`). Sem campanha ativa: 404 `nao_encontrado` nas três. Sem cache: mudar o modelo ou vincular um
+afiliado vale na hora. Custo no D1: um lote com a campanha, as células do escopo e os afiliados delas (nenhum pedido).
+
+**O modelo** (`problemasDoModeloLinkVendas`, `link-vendas.ts`; mensagens em português, que a tela mostra e o 400 traz):
+
+- começa exatamente por `https://rifei.com.br/` (`HOSTS_LINK_VENDAS`): sem `www.`, subdomínio, porta, usuário ou
+  maiúsculas, e os marcadores só depois da barra, então nenhum valor muda o site de destino;
+- sem espaço, tabulação ou quebra de linha; só `{slug}` e `{afiliado}`, com o `{afiliado}` obrigatório; nenhuma chave
+  solta; até 300 caracteres.
+
+**O link** (`montarLinkDeVendas`): o modelo preenchido numa passada só, na forma canônica (`URL.href`) e conferido de
+novo (`eLinkDeVendas`: `https:`, `rifei.com.br`, sem usuário, senha nem porta). Os schemas das respostas recusam
+qualquer `url` fora disso.
+
+### `GET /api/minha/links-vendas` (`hierarquia`)
+
+Papéis `lider`, `discipulador` e `rede`. O alvo vem **só da sessão** (a rota não aceita id; um id na consulta é
+ignorado). **200** (`respostaMeusLinksVendasSchema`, estrito):
+
+```json
+{
+  "alvo": { "tipo": "celula", "id": 3, "nome": "Célula Ficticia 03", "divisao": "jovens" },
+  "configurado": true,
+  "itens": [
+    {
+      "celula_id": 3, "celula_nome": "Célula Ficticia 03", "lider_nome": "Lider Ficticio 03",
+      "discipulador_id": 2, "discipulador_nome": "Discipulador Ficticio B",
+      "rede_id": 1, "rede_nome": "Rede Jovem Ficticia", "divisao": "jovens",
+      "links": [{ "affiliate_id": 1042, "url": "https://rifei.com.br/videira-kids?afiliado=1042" }]
+    }
+  ]
+}
+```
+
+- Escopo (o da visão individual, D12; o schema confere): o líder recebe a célula dele (sempre uma); o discipulador, as
+  células dele; a rede, as células dos discipuladores dela. Ordem: rede, discipulador e célula, em ordem de português.
+- `configurado`: o modelo da campanha serve para montar os links. False (vazio ou gravado com problema): nenhuma
+  célula tem link, e a tela diz que a coordenação ainda não liberou o link.
+- `links`: um por afiliado vinculado à célula, do vínculo mais recente para o mais antigo; todos contam para a célula,
+  e a tela destaca o primeiro. Vazia: a célula ainda não tem afiliado vinculado.
+- Nada de dinheiro, número de venda, telefone, e-mail ou o `rotulo` do afiliado; nem o modelo.
+- **Erros**: 401; 403 `proibido` (coordenação); 403 `acesso_desligado` (discipulador ou rede com o acesso do papel
+  desligado na campanha, D20); 404 (sem campanha ativa).
+
+### `GET /api/admin/links-vendas` (`coordenacao`)
+
+Admin e coordenação, para a tela Adesão. **200** (`respostaLinksVendasSchema`, estrito): `{ "modelo", "configurado",
+"itens" }`, com `modelo` como está gravado (ou null) e **todas** as células, no mesmo formato da `/minha` (a sem
+afiliado, com `links` vazia), na mesma ordem. **Erros**: 401; 403 (hierarquia); 404.
+
+### `PUT /api/admin/links-vendas/modelo` (**só admin**)
+
+- **Corpo** (`corpoSalvarModeloLinkVendasSchema`): `{ "modelo": "https://rifei.com.br/{slug}?afiliado={afiliado}" }`, ou
+  `{ "modelo": null }` para apagar (vazio também apaga). `modelo` é obrigatório; outro campo dá 400.
+- **200**: a lista do GET, já montada com o modelo novo.
+- **Erros**: primeiro o login (401 sem sessão; 403 da coordenação, da hierarquia e de outra origem, antes de ler o
+  corpo); depois 400 `json_invalido` (corpo que não é JSON, ou sem `Content-Type: application/json`) ou
+  `requisicao_invalida` (fora do schema; os problemas do modelo vêm nos `detalhes`, em português, ex.: "O link de vendas
+  começa com https://rifei.com.br/, o endereço da Rifei."); 404 sem campanha ativa.
+- Guardado em `campanhas.link_vendas_modelo` (migração 0010); o `PUT /api/admin/campanha` não mexe nele. Trilha:
+  `campanha.salvar`, alvo `campanha:<id>`, com o antes e o depois do modelo; o mesmo modelo de novo responde 200 e não
+  registra.
+
+**O QR code** é gerado no navegador, sem rede, a partir do `url`: correção M (`NIVEL_CORRECAO_QR_LINK_VENDAS`), margem
+de 4 módulos (`MARGEM_QR_LINK_VENDAS_MODULOS`), preto no branco; a imagem para baixar se chama
+`nomeDoArquivoQrLinkVendas(celula_nome)` (ex.: `link-de-vendas-celula-agape.png`).
 
 ---
 

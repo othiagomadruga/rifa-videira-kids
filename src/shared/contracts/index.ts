@@ -14,3 +14,4 @@ export * from "./ddd";
 export * from "./regras";
 export * from "./token-webhook";
 export * from "./relatorio";
+export * from "./link-vendas";
