@@ -73,6 +73,9 @@ Registro curto das decisões técnicas (a mais nova no fim). Cada item diz o que
   contrato ganhou `desta_sessao` no link da lista (`linkAcessoSchema`, autorizado pelo SM): true só no link que abriu
   a sessão de quem pede, calculado pela API do `sessoes.link_id` que a 0002 já gravava (sem migração). A tela marca
   "Este aparelho" e, ao revogá-lo, pede a confirmação "Revogar o link deste aparelho?", que avisa que a sessão cai.
+  A marca é a da leitura da lista: na revisão, uma aba aberta antes de entrar pelo link novo ainda marcava o antigo, e
+  o "Revogar e sair" derrubava a sessão do link novo. Por isso a tela confere `GET /api/sessao` antes de sair (só sai
+  com 401) e pede a lista de novo quando a aba volta a ficar visível.
 
 ## D9. Ordem de montagem das rotas e teste de proteção (INT-1, 2026-11-06)
 
