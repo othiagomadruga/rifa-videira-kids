@@ -571,7 +571,7 @@ ranking e o que o público vê já estavam na Campanha; faltavam as quatro regra
 5. **Orçamento do D1 (D10).** O painel continua com ~1 linha lida por pedido aprovado que conta (o desconsiderado
    sai do índice); a view, o mapa e os totais da lista leem a coluna na linha que já leem (nenhuma linha a mais); a
    página da lista com `desconsiderado=true` usa o índice parcial novo e lê só os desconsiderados (com `false`, o
-   da 0007); desconsiderar e reconsiderar leem menos de 10 linhas; remover afiliado lê os pedidos dele (índice por
+   da 0007); desconsiderar lê até 10 linhas e reconsiderar, 9 (medido e travado em regras-campanha.test.ts); remover afiliado lê os pedidos dele (índice por
    afiliado). A chave do acesso custa +1 linha (a campanha ativa) em cada `/api/minha/*` e em cada `POST
    /api/sessao` de discipulador e rede: lida na mesma consulta da sessão (subconsulta), sem ida a mais. O índice
    novo pode desviar o planejador (D16): travar os planos e as linhas lidas em `db/painel.test.ts`,

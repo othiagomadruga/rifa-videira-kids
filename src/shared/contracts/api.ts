@@ -1943,7 +1943,7 @@ export const respostaAnalisePorPedidoSchema = z.strictObject({
    * diferença de valor, quantidade ou afiliado). A tarefa -api passa a mandar sempre (sem nenhum: quantidade 0);
    * `.optional()` só na transição, porque o montador de hoje ainda não o monta.
    */
-  desconsiderados: grupoDesconsideradosSchema.optional(),
+  desconsiderados: grupoDesconsideradosSchema,
 });
 export type RespostaAnalisePorPedido = z.infer<
   typeof respostaAnalisePorPedidoSchema
