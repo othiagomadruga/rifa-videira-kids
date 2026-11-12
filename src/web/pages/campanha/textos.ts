@@ -96,7 +96,7 @@ export const DICAS = {
   adicionarPeriodoNoLimite: (limite: number) =>
     `Indisponível: a campanha já tem o máximo de ${limite} períodos.`,
   preco:
-    "Quanto custa cada bilhete na Rifei. Serve para conferir os pedidos e para a meta em reais.",
+    "Quanto custa cada bilhete na Rifei. O sistema usa para conferir se o valor de cada pedido bate com os bilhetes.",
   unidadeMeta:
     "Escolha se a meta conta bilhetes vendidos ou reais arrecadados.",
   regraMeta:
@@ -126,7 +126,8 @@ export const DICAS = {
   voltarAoPadrao:
     "Troca o texto do campo pelo texto padrão do sistema. Só vale depois de salvar.",
   voltarAoPadraoJaEstaNele: "Indisponível: o campo já está com o texto padrão.",
-  salvar: "Grava as mudanças. Elas passam a valer na hora em todo o sistema.",
+  salvar:
+    "Grava as mudanças. Aqui valem na hora; no telão, no ranking aberto e nos links pessoais, em até 2 minutos.",
   ativar:
     "Grava a campanha e começa a contar as vendas da Rifei com este slug. Antes, pede para você confirmar.",
   confirmarAtivar:

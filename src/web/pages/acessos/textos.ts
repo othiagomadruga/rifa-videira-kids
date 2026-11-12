@@ -435,5 +435,5 @@ export const DICAS = {
   copiarToken: "Copia o token para você colar na Rifei.",
   cancelarTroca: "Fecha sem gerar. O que vale hoje continua valendo.",
   confirmarTroca:
-    "Cria o token novo agora. O de hoje para de valer na hora e as vendas param até colar o novo na Rifei.",
+    "Cria o token novo agora. O de hoje para de valer na hora, e as vendas param de chegar ao sistema até você colar o novo na Rifei.",
 } as const;

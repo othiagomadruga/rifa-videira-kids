@@ -208,7 +208,7 @@ Os valores de `status_detail` em `new_order` (`"pending"`) e em `expired_order` 
 
 Antes do primeiro dia de vendas, com uma campanha de teste, uma segunda conta como afiliada e compras de valor mínimo:
 
-1. **Link de afiliado** (como o líder vira afiliado: seção 12.3): o formato do link e se o id do afiliado aparece nele. NÃO DOCUMENTADO pela Rifei.
+1. **Link de afiliado** (como o líder vira afiliado: seção 12.3): o formato do link e se o id do afiliado aparece nele. NÃO DOCUMENTADO pela Rifei. O formato confirmado vira o modelo do link de vendas (seção 12.3, D24).
 2. **affiliate_id de cada líder**: onde o organizador vê esse número no painel (NÃO DOCUMENTADO; seção 12.3) e se é o mesmo que chega no webhook. Sem isso, o vínculo da reunião de cadastro dos líderes depende de uma compra iniciada por líder (lançamento, seção 5.2).
 3. Se `affiliate_id` chega mesmo como inteiro (a doc diz integer) e se é `null` quando não há afiliado.
 4. `status` e `status_detail` reais em `new_order` e `expired_order`, se `expired_at` vem preenchido e se `fbp`/`fbc` aparecem.
@@ -468,6 +468,11 @@ Ainda NÃO DOCUMENTADO, para conferir com o suporte ou com a campanha de teste (
 - onde o organizador gera o convite, e se o cadastro "só por convite" é uma escolha dele;
 - o formato do link de afiliado e se o id aparece nele;
 - onde o organizador vê o identificador de cada afiliado e se é o mesmo `affiliate_id` do webhook.
+
+**Onde o formato confirmado entra (RIFA-046, [decisions.md D24](decisions.md#d24-link-de-vendas-e-qr-code-de-cada-célula-rifa-046-contrato-2026-11-12)).** O sistema monta o link de vendas de cada célula (e o QR code dele, na `/minha` do líder e na Adesão) a partir de um **modelo** que só o admin grava, com `{slug}` (o slug da campanha) e `{afiliado}` (o `affiliate_id`). Ele fica vazio até o formato ser confirmado. Com a resposta do suporte ou a compra de teste:
+
+- se o link de afiliado leva o mesmo número do `affiliate_id` do webhook, o admin escreve o modelo trocando o slug por `{slug}` e o número por `{afiliado}` (ex.: `https://rifei.com.br/videira-kids?ref=1042` vira `https://rifei.com.br/{slug}?ref={afiliado}`) e confere com a compra de teste pelo QR de uma célula: a venda tem de cair nela;
+- se o link fica noutro endereço que não `https://rifei.com.br/` (ex.: `app.rifei.com.br`), ou não leva o `affiliate_id` (ex.: um código próprio de cada afiliado), passe ao SM: o endereço entra em `HOSTS_LINK_VENDAS` (`src/shared/contracts/link-vendas.ts`), ou o desenho muda para a opção (b) da D24 (o link de cada afiliado colado na Adesão).
 
 ### 12.4 Webhook: caminho conferido
 

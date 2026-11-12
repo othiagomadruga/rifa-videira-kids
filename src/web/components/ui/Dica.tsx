@@ -18,12 +18,12 @@ import "./Dica.css";
 //
 // - Aparece com o mouse parado por ATRASO_DA_DICA_MS e, na hora, com o foco que veio do teclado (Tab, setas, Home e
 //   End); o foco de um clique ou de um toque não abre. No toque (celular), nada muda: o toque segue para o controle.
-// - WCAG 1.4.13: dispensável (Esc fecha, sem mover o mouse nem o foco), dá para passar o mouse por cima dela (há uma
-//   folga para ir do controle até ela) e persistente (só some ao tirar o mouse, ao perder o foco, com Esc ou ao
-//   clicar no controle).
-// - Acessível: role="tooltip" e, aberta, o id dela entra no fim do `aria-describedby` do controle, junto com a
-//   descrição que ele já tinha. Controles com `aria-disabled` continuam com a dica (ela pode dizer por que estão
-//   indisponíveis).
+// - WCAG 1.4.13: dispensável (Esc fecha, sem mover o mouse nem o foco; esse Esc não chega ao diálogo nem ao menu,
+//   que fecham no Esc seguinte), dá para passar o mouse por cima dela (há uma folga para ir do controle até ela) e
+//   persistente (só some ao tirar o mouse, ao perder o foco, com Esc ou ao clicar no controle).
+// - Acessível: role="tooltip" e, aberta, o id dela entra no `aria-describedby` do controle, depois da descrição que
+//   ele já tinha (nos campos, o Campos põe a dica visível e o erro depois). Controles com `aria-disabled` continuam
+//   com a dica (ela pode dizer por que estão indisponíveis).
 // - Fica num portal no fim do <body>, acima do controle (ou abaixo, se não couber), sempre dentro da tela: nunca cria
 //   rolagem lateral. A posição vem do JS pelo CSSOM (o CSP proíbe style="..." no HTML, não o CSSOM).
 
@@ -180,12 +180,15 @@ function DicaAtiva({
     };
   }, []);
 
-  // Esc fecha (na captura: o Esc que fecha um diálogo também fecha a dica dele, e a dica não o segura).
+  // Esc fecha. A dica aberta é a camada de cima: este Esc (na captura, no document) só fecha a dica e não segue para
+  // o diálogo nem para o menu, que fecham no Esc seguinte. Sem isso, o Esc para tirar a dica da frente fechava o
+  // diálogo junto (perdendo o que foi digitado) e o foco saía do controle (WCAG 1.4.13: dispensável sem mover o foco).
   useEffect(() => {
     if (!aberta) return;
     const pendencias = refPendencias.current;
     const aoTeclar = (evento: KeyboardEvent) => {
-      if (evento.key !== "Escape") return;
+      if (evento.key !== "Escape" || evento.isComposing) return;
+      evento.stopPropagation();
       clearTimeout(pendencias.abrir);
       clearTimeout(pendencias.fechar);
       pendencias.abrir = undefined;
