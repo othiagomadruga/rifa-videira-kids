@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ROTAS,
+  CREDENCIAIS_WEBHOOK,
   FORMATO_TOKEN_ACESSO,
   LIMITE_ALVOS_POR_LOTE as LIMITE_DO_CONTRATO,
   PAPEIS,
@@ -12,7 +13,9 @@ import {
   PREFIXO_LINK_ACESSO,
   ROTAS_ACESSO,
   ROTAS_ACESSO_HIERARQUIA,
+  ROTAS_TOKEN_WEBHOOK,
   consultaAcessosHierarquiaSchema,
+  corpoGerarTokenWebhookSchema,
   corpoGerarLinksHierarquiaSchema,
   corpoCriarUsuarioSchema,
   usuarioSchema,
@@ -32,6 +35,14 @@ import {
 } from "./acessos-api";
 import { CAMINHO_CAMPANHA, CAMINHO_TELA_CAMPANHA } from "./regras";
 import { ALVO_DO_PAPEL, PAPEL_NO_PLURAL, RESPONSAVEL_DO_ALVO } from "./textos";
+import { TELAS_COORDENACAO } from "../coordenacao/telas";
+import {
+  CAMINHO_TOKEN_WEBHOOK,
+  CREDENCIAIS,
+  credencialEmUso,
+  gerarTokenWebhook,
+} from "./webhook-api";
+import { ErroApi } from "../../lib/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -135,6 +146,64 @@ describe("cópias do contrato dos acessos da hierarquia (RIFA-014)", () => {
   });
 });
 
+describe("cópias do contrato do token do webhook (RIFA-039, D21)", () => {
+  it("caminho, métodos e papel das duas rotas (só admin, como a tela Acessos)", () => {
+    expect(ROTAS_TOKEN_WEBHOOK.obterTokenWebhook).toMatchObject({
+      metodo: "GET",
+      caminho: CAMINHO_TOKEN_WEBHOOK,
+      papeis: ["admin"],
+    });
+    expect(ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook).toMatchObject({
+      metodo: "POST",
+      caminho: CAMINHO_TOKEN_WEBHOOK,
+      papeis: ["admin"],
+    });
+    const tela = TELAS_COORDENACAO.find(
+      ({ segmento }) => segmento === "acessos",
+    );
+    expect(tela?.papeis).toEqual(ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook.papeis);
+  });
+
+  it("as credenciais e o 409 em_uso com a credencial do detalhe", () => {
+    expect([...CREDENCIAIS].sort()).toEqual([...CREDENCIAIS_WEBHOOK].sort());
+    const emUso = (detalhes: unknown) =>
+      new ErroApi({
+        codigo: "em_uso",
+        mensagem: "Em uso",
+        status: 409,
+        detalhes,
+      });
+    expect(credencialEmUso(emUso({ vigente: "segredo" }))).toBe("segredo");
+    expect(credencialEmUso(emUso({ vigente: "tela" }))).toBe("tela");
+    expect(credencialEmUso(emUso(undefined))).toBe("tela");
+    expect(
+      credencialEmUso(
+        new ErroApi({ codigo: "em_uso", mensagem: "Em uso", status: 400 }),
+      ),
+    ).toBeNull();
+    expect(credencialEmUso(new Error("outro"))).toBeNull();
+  });
+
+  it("os corpos que a tela manda passam no schema do POST", async () => {
+    const corpos: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        corpos.push(JSON.parse(String(init?.body)));
+        return respostaJson({}, 201);
+      }),
+    );
+
+    await gerarTokenWebhook(false);
+    await gerarTokenWebhook(true);
+
+    expect(
+      corpos.map((corpo) => corpoGerarTokenWebhookSchema.parse(corpo)),
+    ).toEqual([{ substituir: false }, { substituir: true }]);
+    expect(corpos).toEqual([{}, { substituir: true }]);
+  });
+});
+
 describe("as regras da campanha na tela Acessos (D20)", () => {
   it("o caminho da campanha é o do contrato, e o aviso leva à tela Campanha", () => {
     expect(ROTAS.obterCampanha).toMatchObject({
@@ -146,7 +215,7 @@ describe("as regras da campanha na tela Acessos (D20)", () => {
 
   it("do contrato, valores só dos módulos sem zod (regras.ts e calculos.ts); do resto, só tipos", () => {
     const fontes = import.meta.glob<string>(
-      ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+      ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio*.ts"],
       { query: "?raw", import: "default", eager: true },
     );
     expect(Object.keys(fontes)).toContain("./regras.ts");

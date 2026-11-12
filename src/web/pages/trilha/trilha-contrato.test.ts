@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACOES_AUDITORIA,
+  ALVO_AUDITORIA_TOKEN_WEBHOOK,
   PAGINA_AUDITORIA_MAXIMA,
   PAGINA_AUDITORIA_PADRAO,
   ROTAS,
@@ -94,6 +95,8 @@ describe("alvo legível", () => {
     ["pedido:PEDTESTE0001", "Pedido PEDTESTE0001"],
     ["pedido:PED:com:dois-pontos", "Pedido PED:com:dois-pontos"],
     [alvoDoPedidoNaAuditoria("P".repeat(128)), "Pedido"],
+    // D21: o token do webhook gerado pela tela (webhook.gerar_token), sem id.
+    [ALVO_AUDITORIA_TOKEN_WEBHOOK, "Webhook da Rifei"],
   ])("%s → %s", (alvo, texto) => {
     expect(textoDoAlvo(alvo)).toBe(texto);
   });

@@ -34,28 +34,37 @@ type LinkMostrado = { nome: string; link: LinkAcessoCriado };
 type Ocupada = { usuarioId: number; acao: "gerando" | "reativando" };
 type Resultado = { tom: "sucesso" | "perigo"; texto: string };
 
-type AbaAcessos = "coordenacao" | "hierarquia";
+type AbaAcessos = "coordenacao" | "hierarquia" | "webhook";
 
-// A aba da hierarquia vem num pacote à parte, carregado quando o admin a abre pela primeira vez.
+// As abas da hierarquia e do webhook vêm cada uma num pacote à parte, carregado quando o admin a abre pela primeira
+// vez.
 const AcessosHierarquia = lazy(() =>
   import("./AcessosHierarquia").then((modulo) => ({
     default: modulo.AcessosHierarquia,
   })),
 );
+const WebhookRifei = lazy(() =>
+  import("./WebhookRifei").then((modulo) => ({
+    default: modulo.WebhookRifei,
+  })),
+);
 
-// Gestão dos acessos (só admin), em duas abas: a coordenação (pessoas, cada uma com o próprio link) e os
-// líderes, discipuladores e redes (um acesso por alvo da hierarquia, com links em lote; RIFA-014). O link
-// (com o token) só aparece na resposta que o cria: a tela o mostra uma vez, num diálogo, e o esquece ao
-// fechar. As listas (GET) nunca trazem o token. A aba da hierarquia só carrega quando é aberta.
+// Gestão dos acessos (só admin), em três abas: a coordenação (pessoas, cada uma com o próprio link), os
+// líderes, discipuladores e redes (um acesso por alvo da hierarquia, com links em lote; RIFA-014) e o webhook da
+// Rifei (o token que a Rifei usa para entregar as vendas; RIFA-039, D21). O link (com o token) só aparece na
+// resposta que o cria: a tela o mostra uma vez, num diálogo, e o esquece ao fechar. As listas (GET) nunca trazem
+// o token. As abas da hierarquia e do webhook só carregam quando são abertas.
 export function AcessosPage() {
   const [aba, setAba] = useState<AbaAcessos>("coordenacao");
   // As regras da campanha (D20): o acesso de discipuladores e de redes e os modelos das mensagens.
   const { regras, desligar } = useRegrasDosAcessos();
   const [hierarquiaAberta, setHierarquiaAberta] = useState(false);
+  const [webhookAberta, setWebhookAberta] = useState(false);
 
   function mudarAba(nova: AbaAcessos) {
     setAba(nova);
     if (nova === "hierarquia") setHierarquiaAberta(true);
+    if (nova === "webhook") setWebhookAberta(true);
   }
 
   return (
@@ -80,6 +89,17 @@ export function AcessosPage() {
             conteudo: hierarquiaAberta ? (
               <Suspense fallback={<Loading texto="Carregando os acessos…" />}>
                 <AcessosHierarquia regras={regras} aoDesligar={desligar} />
+              </Suspense>
+            ) : null,
+          },
+          {
+            id: "webhook",
+            rotulo: "Webhook da Rifei",
+            conteudo: webhookAberta ? (
+              <Suspense
+                fallback={<Loading texto="Carregando o token do webhook…" />}
+              >
+                <WebhookRifei />
               </Suspense>
             ) : null,
           },
