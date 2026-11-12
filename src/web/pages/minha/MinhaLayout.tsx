@@ -24,6 +24,8 @@ export function MinhaLayout() {
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
 
   async function sairDoSistema() {
+    // Saindo, o botão fica com aria-disabled (RIFA-045: continua no Tab, com a dica dizendo por quê): barra aqui.
+    if (saida.saindo) return;
     setSaida({ saindo: true, erro: null });
     try {
       await sair();
@@ -43,10 +45,14 @@ export function MinhaLayout() {
             complemento={usuario ? ROTULO_PAPEL[usuario.papel] : undefined}
           />
           {usuario && (
-            <ComDica texto={DICAS_DA_MOLDURA.sair}>
+            <ComDica
+              texto={
+                saida.saindo ? DICAS_DA_MOLDURA.saindo : DICAS_DA_MOLDURA.sair
+              }
+            >
               <Button
                 variante="secundario"
-                disabled={saida.saindo}
+                aria-disabled={saida.saindo || undefined}
                 onClick={() => void sairDoSistema()}
               >
                 {saida.saindo ? "Saindo…" : "Sair"}

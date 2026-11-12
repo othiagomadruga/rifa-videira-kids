@@ -14,6 +14,13 @@
   gap: var(--espaco-4);
 }
 
+/* "Entrando…" (RIFA-045): continua focável (aria-disabled), com a dica dizendo por quê, mas com a cara do :disabled do
+   Button.css. */
+.acesso-cartao button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .acesso-resultado:empty {
   display: none;
 }

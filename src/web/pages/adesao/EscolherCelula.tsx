@@ -47,6 +47,9 @@ export function EscolherCelula({
 
   async function confirmar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    // Gravando, o botão fica com aria-disabled (RIFA-045: continua no Tab, com a dica dizendo por quê) e o envio é
+    // barrado aqui: o clique, o Enter e o espaço nele e o Enter no campo de busca chegam como envio do formulário.
+    if (enviando) return;
     if (!escolhida) {
       setErro("Escolha a célula na lista.");
       return;
@@ -134,7 +137,7 @@ export function EscolherCelula({
                 : DICAS.confirmarSemEscolha
           }
         >
-          <Button type="submit" disabled={enviando}>
+          <Button type="submit" aria-disabled={enviando || undefined}>
             {enviando
               ? "Salvando…"
               : escolhida
@@ -142,11 +145,15 @@ export function EscolherCelula({
                 : "Confirmar"}
           </Button>
         </ComDica>
-        <ComDica texto={DICAS.cancelarEscolha}>
+        <ComDica
+          texto={enviando ? DICAS.salvandoEscolha : DICAS.cancelarEscolha}
+        >
           <Button
             variante="secundario"
-            onClick={aoCancelar}
-            disabled={enviando}
+            aria-disabled={enviando || undefined}
+            onClick={() => {
+              if (!enviando) aoCancelar();
+            }}
           >
             Cancelar
           </Button>

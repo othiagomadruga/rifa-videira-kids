@@ -16,6 +16,7 @@ import type {
   RespostaVisaoIndividual,
   UsuarioSessao,
 } from "../../../shared/contracts";
+import { esperarDisponivel } from "../../test/indisponivel";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   criarApiFalsa,
@@ -96,7 +97,7 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
     const topo = document.querySelector<HTMLElement>(".minha-moldura__topo");
     if (!topo) throw new Error("sem a barra do topo");
     expect(topo).toHaveTextContent("Líder");
-    expect(within(topo).getByRole("button", { name: "Sair" })).toBeEnabled();
+    esperarDisponivel(within(topo).getByRole("button", { name: "Sair" }));
 
     const destaque = regiao("Meta da campanha");
     expect(destaque).toHaveTextContent(

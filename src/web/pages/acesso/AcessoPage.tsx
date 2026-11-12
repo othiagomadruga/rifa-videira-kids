@@ -140,11 +140,12 @@ export function AcessoPage() {
               </Aviso>
             )}
           </div>
+          {/* Entrando: aria-disabled (RIFA-045), no Tab e com a dica dizendo por quê; aoEntrar barra o segundo toque. */}
           {podeEntrar && (
             <ComDica texto={entrando ? DICAS.entrando : DICAS.entrar}>
               <Button
                 larguraTotal
-                disabled={entrando}
+                aria-disabled={entrando || undefined}
                 onClick={() => void aoEntrar()}
               >
                 {entrando ? "Entrando…" : "Entrar"}

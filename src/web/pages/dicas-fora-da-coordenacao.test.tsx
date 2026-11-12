@@ -21,6 +21,7 @@ import {
   passarOMouse,
   tirarOMouse,
 } from "../test/dicas";
+import { esperarIndisponivel } from "../test/indisponivel";
 import { renderizarRota, respostaJson } from "../test/renderizar";
 import { DICAS as DICAS_ACESSO } from "./acesso/textos";
 import {
@@ -122,14 +123,14 @@ describe("/minha (visão individual, com a moldura)", () => {
     conferirDicas(14);
   });
 
-  it("saindo: 'Saindo…' continua com a dica do Sair", async () => {
+  it("saindo: 'Saindo…' diz por que está indisponível", async () => {
     const api = criarApiFalsa(visaoDe());
     api.proxima("POST", "/api/sessao/sair", pendente);
     await abrir("lider", api);
     fireEvent.click(botao("Sair"));
     const saindo = await screen.findByRole("button", { name: "Saindo…" });
-    expect(saindo).toBeDisabled();
-    expect(textoDaDica(saindo)).toBe(DICAS_DA_MOLDURA.sair);
+    esperarIndisponivel(saindo);
+    expect(textoDaDica(saindo)).toBe(DICAS_DA_MOLDURA.saindo);
     conferirDicas(7);
   });
 
@@ -199,6 +200,7 @@ describe("/acesso (link pessoal)", () => {
 
     fireEvent.click(entrar);
     const entrando = await screen.findByRole("button", { name: "Entrando…" });
+    esperarIndisponivel(entrando);
     expect(textoDaDica(entrando)).toBe(DICAS_ACESSO.entrando);
     conferirDicas(1);
   });

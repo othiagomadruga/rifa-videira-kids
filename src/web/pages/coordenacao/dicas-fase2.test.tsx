@@ -25,7 +25,10 @@ import {
   passarOMouse,
   tirarOMouse,
 } from "../../test/dicas";
-import { esperarDisponivel } from "../../test/indisponivel";
+import {
+  esperarDisponivel,
+  esperarIndisponivel,
+} from "../../test/indisponivel";
 import {
   ADMIN_DE_TESTE,
   renderizarRota,
@@ -664,7 +667,7 @@ describe("Adesão", () => {
     const soltar = api.segurarGravacoes();
     fireEvent.click(botao("Vincular: Célula Débora"));
     const salvando = await screen.findByRole("button", { name: "Salvando…" });
-    expect(salvando).toBeDisabled();
+    esperarIndisponivel(salvando);
     expect(textoDaDica(salvando)).toBe(DICAS_ADESAO.salvandoEscolha);
     conferirDicas(45);
     soltar();

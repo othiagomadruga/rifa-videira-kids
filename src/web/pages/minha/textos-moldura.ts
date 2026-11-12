@@ -3,4 +3,6 @@
 
 export const DICAS_DA_MOLDURA = {
   sair: "Encerra o seu acesso neste aparelho. Para voltar, abra de novo o seu link pessoal.",
+  saindo:
+    "Indisponível enquanto o seu acesso é encerrado neste aparelho. Espere um instante.",
 } as const;

@@ -345,24 +345,31 @@ function AfiliadoDaCelula({
             </p>
           )}
           <div className="adesao-acoes">
+            {/* Gravando: aria-disabled (RIFA-045), no Tab e com a dica dizendo por quê; o clique é barrado aqui. */}
             <ComDica
               texto={enviando ? DICAS.desvinculando : DICAS.confirmarDesvinculo}
             >
               <Button
                 variante="perigo"
                 aria-describedby={idPergunta}
-                onClick={() => void desvincular()}
-                disabled={enviando}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) void desvincular();
+                }}
                 autoFocus
               >
                 {enviando ? "Desvinculando…" : "Confirmar desvínculo"}
               </Button>
             </ComDica>
-            <ComDica texto={DICAS.cancelarDesvinculo}>
+            <ComDica
+              texto={enviando ? DICAS.desvinculando : DICAS.cancelarDesvinculo}
+            >
               <Button
                 variante="secundario"
-                onClick={() => fechar(refDesvincular)}
-                disabled={enviando}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) fechar(refDesvincular);
+                }}
               >
                 Cancelar
               </Button>
@@ -422,6 +429,9 @@ function FormCodigo({
 
   function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    // Gravando, "Salvar código" fica com aria-disabled (RIFA-045) e o envio é barrado aqui: o clique, o Enter e o espaço
+    // nele e o Enter no campo chegam como envio do formulário.
+    if (enviando) return;
     const id = lerCodigoAfiliado(codigo);
     if (id === null) {
       setErro("Digite só os números do código de afiliado (ex.: 1043).");
@@ -483,7 +493,7 @@ function FormCodigo({
           </ComDica>
         </div>
         <ComDica texto={enviando ? DICAS.salvandoCodigo : DICAS.salvarCodigo}>
-          <Button type="submit" disabled={enviando}>
+          <Button type="submit" aria-disabled={enviando || undefined}>
             {enviando ? "Salvando…" : "Salvar código"}
           </Button>
         </ComDica>
@@ -502,23 +512,28 @@ function FormCodigo({
             >
               <Button
                 aria-describedby={idPergunta}
-                onClick={() =>
-                  void salvar(
-                    troca.codigo,
-                    `Afiliado ${troca.codigo} trocado para: ${celula.celula_nome}.`,
-                  )
-                }
-                disabled={enviando}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando)
+                    void salvar(
+                      troca.codigo,
+                      `Afiliado ${troca.codigo} trocado para: ${celula.celula_nome}.`,
+                    );
+                }}
                 autoFocus
               >
                 Trocar para esta célula
               </Button>
             </ComDica>
-            <ComDica texto={DICAS.cancelarTroca}>
+            <ComDica
+              texto={enviando ? DICAS.salvandoCodigo : DICAS.cancelarTroca}
+            >
               <Button
                 variante="secundario"
-                onClick={() => setTroca(null)}
-                disabled={enviando}
+                aria-disabled={enviando || undefined}
+                onClick={() => {
+                  if (!enviando) setTroca(null);
+                }}
               >
                 Cancelar
               </Button>

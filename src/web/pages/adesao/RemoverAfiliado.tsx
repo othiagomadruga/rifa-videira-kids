@@ -43,9 +43,10 @@ export function DialogoRemoverAfiliado({
   const refEntendi = useRef<HTMLButtonElement>(null);
   const refRemover = useRef<HTMLButtonElement>(null);
 
-  // Depois de uma falha, o foco fica no diálogo (o botão que o tinha estava desabilitado): no 409, em "Entendi"
-  // ("Remover afiliado" some: daria o mesmo 409) e, no 404, em "Cancelar"; nas outras, em "Remover afiliado", para
-  // tentar de novo.
+  // Removendo, os dois botões ficam com aria-disabled (RIFA-045), não disabled: o foco fica em "Removendo…" (dentro do
+  // diálogo), o Tab passa por eles com a dica dizendo por quê e o clique, o Esc e o × são ignorados até a resposta.
+  // Depois de uma falha, o foco vai para: no 409, "Entendi" ("Remover afiliado" some: daria o mesmo 409) e, no 404,
+  // "Cancelar"; nas outras, "Remover afiliado", para tentar de novo.
   useEffect(() => {
     if (!falha) return;
     const repetir = falha.tipo === "outra" && falha.tentarDeNovo;
@@ -94,17 +95,26 @@ export function DialogoRemoverAfiliado({
         if (!removendo) aoFechar();
       }}
       focoAoFechar={focoAoFechar}
-      dicaFechar={DICAS.cancelarRemocao}
+      dicaFechar={removendo ? DICAS.removendo : DICAS.cancelarRemocao}
       rodape={
         <>
           <ComDica
-            texto={comPedidos ? DICAS.entendiRemocao : DICAS.cancelarRemocao}
+            texto={
+              removendo
+                ? DICAS.removendo
+                : comPedidos
+                  ? DICAS.entendiRemocao
+                  : DICAS.cancelarRemocao
+            }
           >
             <Button
               ref={refEntendi}
               variante="secundario"
-              onClick={aoFechar}
-              disabled={removendo}
+              className="adesao-dialogo-botao"
+              aria-disabled={removendo || undefined}
+              onClick={() => {
+                if (!removendo) aoFechar();
+              }}
             >
               {comPedidos ? "Entendi" : "Cancelar"}
             </Button>
@@ -116,8 +126,11 @@ export function DialogoRemoverAfiliado({
               <Button
                 ref={refRemover}
                 variante="perigo"
-                disabled={removendo}
-                onClick={() => void confirmar()}
+                className="adesao-dialogo-botao"
+                aria-disabled={removendo || undefined}
+                onClick={() => {
+                  if (!removendo) void confirmar();
+                }}
               >
                 {removendo ? "Removendo…" : "Remover afiliado"}
               </Button>
