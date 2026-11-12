@@ -13,6 +13,7 @@ O contrato executável está em `src/shared/contracts/`:
 | `calculos.ts` | regras de cálculo (metas, curva, ritmo, projeção, ranking, bumbo) e as funções que montam as respostas do painel e das rotas abertas ([regras-de-calculo.md](regras-de-calculo.md)) |
 | `regras.ts` | regras do admin (Sprint 6, D20), sem zod: motivos da desconsideração, padrões das chaves, a chave de acesso de cada papel e os modelos das mensagens do WhatsApp com `preencherMensagem` |
 | `token-webhook.ts` | token do webhook gerado pela tela (RIFA-039, D21), sem zod: formato do token, as credenciais e as regras `credencialVigenteDoWebhook` e `ultimoUsoDoWebhook` (os schemas e `ROTAS_TOKEN_WEBHOOK` ficam em `api.ts`) |
+| `relatorio.ts` | relatório da campanha para baixar (RIFA-038, D23), sem zod: os tipos, as colunas de cada um, o formato dos números, a proteção contra fórmula, o arquivo CSV, o nome e os cabeçalhos (a consulta e `ROTAS_RELATORIO` ficam em `api.ts`) |
 
 Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas, e a divergência é um bug que o SM corrige. Só o SM altera o contrato depois que ele estiver na `main`.
 
@@ -21,7 +22,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 
 ## Convenções
 
-- Base `/api`. Corpos em JSON UTF-8 (`Content-Type: application/json`). Respostas 204 vêm sem corpo.
+- Base `/api`. Corpos em JSON UTF-8 (`Content-Type: application/json`). Respostas 204 vêm sem corpo. A exceção é o 200 do relatório para baixar (`GET /api/painel/relatorio`, D23), um CSV (`tipoConteudo` no catálogo); os erros dele são JSON, como todos.
 - Campos em português, snake_case. O payload da Rifei mantém os nomes originais dela.
 - **Dinheiro em centavos inteiros** (`*_centavos`), nunca reais com casas decimais (D2).
 - **Percentuais em pontos-base inteiros** (`*_bp`: 3500 = 35%).
@@ -758,6 +759,57 @@ fora, como no painel). Só a coordenação; a versão aberta depende do PO.
   (8.172 com jovens na campanha inteira, 2.796 com adultos numa semana).
 - **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404
   `nao_encontrado` (sem campanha ativa).
+
+## Relatório da campanha para baixar (RIFA-038; docs/decisions.md D23)
+
+### `GET /api/painel/relatorio?tipo=totais|celulas|discipuladores|redes|periodos|dias|ddd` (`coordenacao`)
+
+Uma planilha por tipo, para guardar, prestar contas e mostrar o resultado, a qualquer momento e no fim da campanha.
+Admin e coordenação (sem `papeis`; a hierarquia leva 403 pelo prefixo). No catálogo `ROTAS_RELATORIO` de `api.ts` (à
+parte de `ROTAS` até a API montá-la, como `ROTAS_REGRAS_CAMPANHA`; já conferido pelo `src/worker/protecao.test.ts`).
+
+- **Consulta** (`consultaRelatorioSchema`): `tipo` **obrigatório**, um de `TIPOS_RELATORIO`. Sem `data`: é sempre o
+  retrato de agora (hoje no fuso da campanha); depois do fim, o resultado final.
+- **200**: o CSV (`respostaRelatorioCsvSchema`: texto que começa pelo BOM), com os cabeçalhos de
+  `cabecalhosDoRelatorio(tipo, data)`:
+
+```http
+Content-Type: text/csv; charset=utf-8
+Content-Disposition: attachment; filename="rifa-videira-kids-celulas-2026-12-04.csv"
+Cache-Control: no-store
+```
+
+- **Formato** (`relatorio.ts`): UTF-8 com BOM, `;` entre as colunas, CRLF no fim de cada linha (também da última), a
+  primeira linha é o cabeçalho (`cabecalhoDoRelatorio(tipo, unidade)`); aspas só com `;`, aspas, quebra de linha ou
+  espaço nas pontas. Quantidades só com dígitos (`1234`); R$ com vírgula e 2 casas, sem "R$" e sem milhar
+  (`2780,00`); percentuais com 2 casas, sem "%" (`38,61`; sem meta, vazio); datas `AAAA-MM-DD`. Texto que começa
+  como fórmula (`=`, `+`, `-`, `@`, tabulação…) ganha um apóstrofo na frente (`'=1+1`). Abre com dois cliques no
+  Excel em português; no Google Planilhas, por Arquivo → Importar.
+- **Tipos e colunas** (`COLUNAS_RELATORIO`, na ordem; a meta sai como "Meta (bilhetes)" ou "Meta (R$)", conforme a
+  unidade da meta da campanha):
+
+| `tipo` | Linhas | Colunas |
+|---|---|---|
+| `totais` | uma | Campanha; Data de referência; Situação da campanha; Início; Fim; Meta; Pedidos aprovados; Bilhetes; Arrecadação (R$); % da meta; Pedidos sem célula; Bilhetes sem célula; Arrecadação sem célula (R$); Pedidos fora das datas da campanha; Bilhetes fora das datas da campanha; Arrecadação fora das datas da campanha (R$); Pedidos desconsiderados; Critério do ranking |
+| `celulas` | uma por célula, por divisão (jovens, depois adultos) e na ordem do ranking da divisão | Divisão; Rede; Discipulador; Célula; Líder; Meta; Pedidos aprovados; Bilhetes; Arrecadação (R$); % da meta; Posição na divisão |
+| `discipuladores` | uma por discipulador com célula, como acima | Divisão; Rede; Discipulador; Meta; Pedidos aprovados; Bilhetes; Arrecadação (R$); % da meta; Posição na divisão |
+| `redes` | uma por rede com célula, como acima | Divisão; Rede; Meta; Pedidos aprovados; Bilhetes; Arrecadação (R$); % da meta; Posição na divisão |
+| `periodos` | uma por período já começado | Período; Início; Fim; Pedidos aprovados; Bilhetes; Arrecadação (R$) |
+| `dias` | uma por dia, do 1º até hoje (ou o último) | Data; Dia da campanha; Período; Pedidos aprovados; Bilhetes; Arrecadação (R$) |
+| `ddd` | uma por DDD com venda, mais "Exterior" e "Sem DDD" | UF; DDD; Pedidos aprovados; Bilhetes; Arrecadação (R$); % dos bilhetes |
+
+- Mesmas regras e mesmos números do painel, dos rankings e do mapa (as mesmas leituras e os mesmos montadores; a
+  fonte de cada coluna está na D23): só pedidos aprovados que contam, na janela da campanha até hoje (R6); os
+  **desconsiderados** (D20) não contam em nada, e só o número deles aparece nos totais. A posição é a do ranking da
+  divisão na campanha inteira, pelo critério configurado (empates dividem a posição). As contas fecham: períodos =
+  dias = totais; células + sem célula = totais; DDD (com Exterior e Sem DDD) = totais.
+- **Nada pessoal**: do comprador, só o DDD agregado; do líder, só o nome (nunca telefone nem e-mail); nenhum id de
+  pedido, de afiliado ou de usuário.
+- **Custo no D1** (D10, D23): duas idas por download (a campanha e um lote), sem cache. Os tipos do painel leem ~1,3
+  linha por pedido aprovado (~9 mil com 7 mil pedidos), mais ~36 em `celulas` (os líderes) e ~1 por desconsiderado
+  em `totais`; o `ddd` lê ~2 por pedido aprovado (~11 mil), como o mapa.
+- **Erros** (JSON, com `no-store`): 400 `requisicao_invalida` (`tipo` ausente ou fora da lista), 401
+  `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404 `nao_encontrado` (sem campanha ativa).
 
 ## Pedidos e entregas do webhook (Sprint 5, RIFA-025; docs/decisions.md D16)
 
