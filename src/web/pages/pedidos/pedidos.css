@@ -148,7 +148,7 @@
 .pedidos-total {
   display: grid;
   align-content: start;
-  gap: var(--espaco-2);
+  gap: var(--espaco-1);
   min-width: 0;
   padding: var(--espaco-3) var(--espaco-4);
   border: 1px solid var(--cor-borda);
