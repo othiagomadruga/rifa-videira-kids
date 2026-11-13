@@ -1,5 +1,5 @@
 /*
- * Comemoração da meta batida (RIFA-049, lib/useComemoracao.ts): a camada das partículas, por cima do elemento que
+ * Comemoração da meta batida (RIFA-049, lib/useComemoracao.tsx): a camada das partículas, por cima do elemento que
  * comemora, sem receber toque nem foco. Sem animação de CSS aqui: as partículas se movem pela Web Animations API (só
  * transform e opacity, só sem prefers-reduced-motion) e ficam invisíveis fora dela (opacity: 0). Quem usa põe
  * overflow: clip no item em volta, para nada criar rolagem lateral.

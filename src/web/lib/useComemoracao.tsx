@@ -10,7 +10,6 @@
 // - umaVezPor "dia": a data (no fuso da campanha) fica no sessionStorage com a `chave`; sem armazenamento, uma vez por
 //   montagem.
 import {
-  createElement,
   useLayoutEffect,
   useRef,
   useState,
@@ -193,24 +192,23 @@ export function useComemoracao<T extends HTMLElement>(
   }, [rodada]);
 
   const confete =
-    rodada === null
-      ? null
-      : createElement(
-          "span",
-          {
-            key: rodada,
-            ref: camada,
-            className: "mov-comemoracao",
-            "aria-hidden": "true",
-          },
-          PARTICULAS.map((particula, indice) =>
-            createElement("span", {
-              key: indice,
-              className: `mov-confete mov-confete--${particula.cor}`,
-              "data-forma": particula.forma,
-            }),
-          ),
-        );
+    rodada === null ? null : (
+      <span
+        key={rodada}
+        ref={camada}
+        className="mov-comemoracao"
+        aria-hidden="true"
+      >
+        {PARTICULAS.map((particula, indice) => (
+          <span
+            // As partículas são fixas (o mesmo desenho sempre): o índice é a identidade.
+            key={indice}
+            className={`mov-confete mov-confete--${particula.cor}`}
+            data-forma={particula.forma}
+          />
+        ))}
+      </span>
+    );
 
   return { ref, confete };
 }
