@@ -55,14 +55,20 @@ export const TEXTO_CARREGANDO_VISAO = "Carregando os seus números…";
 // destaque com 503 px e o período com 266 px; no computador, o destaque tem ~480 px e o período estica até ele). Entre
 // os blocos, o mesmo espaço dos cartões (--espaco-3).
 // O destaque: a fase (2 linhas no celular), "Meta da campanha", o número grande, a barra, a situação, a projeção e a
-// meta de hoje.
+// meta de hoje. O número tem a altura do número grande (o mesmo clamp do font-size em minha.css, line-height 1: cresce
+// com a tela); a fase, a situação e a projeção cabem numa linha a menos no computador (as variáveis vêm de
+// minha-moldura.css, a partir de 64rem; a medida do celular é a reserva). Revisão da RIFA-051: antes, o esqueleto
+// ficava ~40 px mais alto que o destaque no computador.
 const BLOCOS_DO_DESTAQUE: readonly BlocoEsqueleto[] = [
-  { altura: "2.625rem", largura: "90%" },
+  { altura: "var(--minha-esqueleto-fase, 2.625rem)", largura: "90%" },
   { altura: "1.375rem", largura: "50%" },
-  { altura: "3rem", largura: "55%" },
+  {
+    altura: "clamp(var(--texto-4xl), 1.5rem + 6vw, calc(2 * var(--texto-4xl)))",
+    largura: "55%",
+  },
   { altura: "2.75rem" },
-  { altura: "5.25rem" },
-  { altura: "2.625rem", largura: "85%" },
+  { altura: "var(--minha-esqueleto-situacao, 5.25rem)" },
+  { altura: "var(--minha-esqueleto-projecao, 2.625rem)", largura: "85%" },
   { altura: "7.125rem" },
 ];
 // O período atual: o título, o dia dentro dele, a situação, a barra e os vendidos no período.

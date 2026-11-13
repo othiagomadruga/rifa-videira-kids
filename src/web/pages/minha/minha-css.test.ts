@@ -219,6 +219,33 @@ describe("RIFA-051: nada pula e nada vaza", () => {
     ).toMatch(/border:\s*2px solid var\(--cor-primaria\);/);
   });
 
+  it("o esqueleto do destaque no tamanho do que vem também no computador (revisão da RIFA-051)", () => {
+    const cabecalho = lerArquivo("./Cabecalho.tsx");
+    // O número do esqueleto tem a altura do número grande: o mesmo clamp do font-size (line-height 1).
+    const tamanhoDoNumero = /font-size:\s*([^;]+);/.exec(
+      regra(visaoCss, ".minha-destaque__numero"),
+    )?.[1];
+    expect(tamanhoDoNumero).toBeTruthy();
+    expect(regra(visaoCss, ".minha-destaque__numero")).toMatch(
+      /line-height:\s*1;/,
+    );
+    expect(cabecalho).toContain(`"${tamanhoDoNumero}"`);
+    // A fase, a situação e a projeção: a variável no Cabecalho (com a medida do celular de reserva) e o valor do
+    // computador em minha-moldura.css, a partir de 64rem.
+    const computador =
+      /@media \(min-width: 64rem\)\s*\{\s*\.minha-moldura__esqueleto-destaque\s*\{([^}]*)\}/.exec(
+        molduraCss,
+      )?.[1] ?? "";
+    for (const nome of ["fase", "situacao", "projecao"]) {
+      expect(cabecalho).toMatch(
+        new RegExp(`altura: "var\\(--minha-esqueleto-${nome}, [\\d.]+rem\\)"`),
+      );
+      expect(computador).toMatch(
+        new RegExp(`--minha-esqueleto-${nome}:\\s*[\\d.]+rem;`),
+      );
+    }
+  });
+
   it("os dois cartões de cima com a mesma altura no computador, e o destaque recorta as partículas da comemoração", () => {
     expect(regra(visaoCss, ".minha-cartoes")).toMatch(
       /align-items:\s*stretch;/,

@@ -589,7 +589,13 @@ describe("estados e atualização", () => {
       expect(blocos.length).toBeGreaterThanOrEqual(10);
       for (const bloco of blocos) {
         expect(bloco).toHaveAttribute("aria-hidden", "true");
-        expect((bloco as HTMLElement).style.height).toMatch(/^\d+(\.\d+)?rem$/);
+        // Em rem (acompanha o tamanho do texto), direto ou como a reserva de uma variável do computador
+        // (minha-moldura.css); o número grande, no clamp do font-size dele (minha-css.test.ts). Nada em px.
+        const altura = (bloco as HTMLElement).style.height;
+        expect(altura).toMatch(
+          /^(\d+(\.\d+)?rem|var\(--minha-esqueleto-[a-z]+, \d+(\.\d+)?rem\)|clamp\(.+\))$/,
+        );
+        expect(altura).not.toMatch(/px/);
       }
       // A linha de texto de antes saiu.
       expect(document.querySelector(".ui-loading")).toBeNull();

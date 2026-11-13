@@ -92,6 +92,17 @@
   border: 2px solid var(--cor-primaria);
 }
 
+/* No computador, a fase, a situação e a projeção do destaque cabem numa linha a menos (medido na captura a 1024 e a
+   1366 px: o destaque com 481 px): os blocos do esqueleto encolhem junto (as variáveis de BLOCOS_DO_DESTAQUE, em
+   Cabecalho.tsx). */
+@media (min-width: 64rem) {
+  .minha-moldura__esqueleto-destaque {
+    --minha-esqueleto-fase: 1.3125rem;
+    --minha-esqueleto-situacao: 3.9375rem;
+    --minha-esqueleto-projecao: 1.3125rem;
+  }
+}
+
 /* Entrada da tela e de cada bloco que chega depois de carregar: fade e deslize curto (sem reduce). */
 @media (prefers-reduced-motion: no-preference) {
   .minha-moldura__pagina > * {
