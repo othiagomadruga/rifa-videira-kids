@@ -25,7 +25,7 @@
 
 /* Esqueleto: os blocos têm a altura do que vem (a fase com a linha do tempo, o título e os itens). */
 .ranking-publico__esqueleto-fase {
-  height: 6.5rem;
+  height: 6.75rem;
   border-radius: var(--raio-4);
 }
 
@@ -39,7 +39,11 @@
   border-radius: var(--raio-3);
 }
 
-/* Onde a campanha está: faixa no degradê forte da marca (branco em cima com 5:1 ou mais). */
+/*
+ * Onde a campanha está: a faixa no roxo suave da marca, com "Dia 12 de 24" no roxo forte (RIFA-050: o topo das telas
+ * abertas já é o degradê forte; a faixa num tom claro não repete o degradê logo abaixo dele). Pares de contraste do
+ * tokens.test.ts.
+ */
 .ranking-publico__fase {
   display: flex;
   flex-wrap: wrap;
@@ -47,14 +51,15 @@
   justify-content: space-between;
   gap: var(--espaco-1) var(--espaco-4);
   padding: var(--espaco-4) var(--espaco-5);
+  border: 1px solid var(--cor-borda);
   border-radius: var(--raio-4);
-  background: var(--cor-primaria);
-  background-image: var(--gradiente-marca-forte);
-  color: var(--cor-sobre-primaria);
-  box-shadow: var(--sombra-marca);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-texto);
+  box-shadow: var(--sombra-1);
 }
 
 .ranking-publico__fase-destaque {
+  color: var(--cor-primaria-forte);
   font-family: var(--fonte-titulo);
   font-size: var(--texto-2xl);
   font-weight: var(--peso-extra);
@@ -68,8 +73,8 @@
 }
 
 /*
- * A linha do tempo da campanha (RIFA-050), dentro da faixa: o trilho em branco translúcido (opacidade, sem cor nova),
- * os dias passados em branco e as datas das pontas. Decorativa (aria-hidden).
+ * A linha do tempo da campanha (RIFA-050), dentro da faixa: o trilho branco, os dias passados no degradê da marca
+ * (decorativo, sem texto em cima) e as datas das pontas. Decorativa (aria-hidden).
  */
 .ranking-publico__linha-do-tempo {
   display: flex;
@@ -78,31 +83,23 @@
   justify-content: space-between;
   gap: var(--espaco-1);
   margin-top: var(--espaco-2);
+  color: var(--cor-texto-suave);
   font-size: var(--texto-xs);
   font-weight: var(--peso-forte);
 }
 
 .ranking-publico__trilho {
-  position: relative;
   flex-basis: 100%;
-  height: 0.375rem;
+  height: 0.5rem;
   border-radius: var(--raio-pilula);
+  background: var(--cor-superficie);
   overflow: hidden;
 }
 
-.ranking-publico__trilho::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--cor-sobre-primaria);
-  opacity: 0.3;
-}
-
 .ranking-publico__percorrido {
-  position: relative;
   height: 100%;
   border-radius: var(--raio-pilula);
-  background: var(--cor-sobre-primaria);
+  background: var(--gradiente-marca);
   transform-origin: left;
 }
 

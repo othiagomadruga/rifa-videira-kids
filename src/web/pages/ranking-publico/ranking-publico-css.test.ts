@@ -1,5 +1,5 @@
 // RIFA-050 (P2.4 e P2.5): o CSS do ranking público, lido do disco. Só variáveis do tema que existem (nenhuma cor nem
-// medida solta: a linha do tempo usa o branco do tema com opacidade); a faixa do pódio dentro da borda (sem o
+// medida solta); a faixa da fase num tom claro, com contraste; a faixa do pódio dentro da borda (sem o
 // left: -1px de antes); o item corta as partículas da comemoração (overflow: clip, sem rolagem lateral); a pílula da
 // meta batida só fica amarela quando o número termina de contar; o movimento novo só sem prefers-reduced-motion. A
 // medida na tela de verdade (390 e 360 px no meio da comemoração, CLS) está nas capturas do Playwright.
@@ -21,6 +21,37 @@ const lerArquivo = (relativo: string) =>
 const semComentarios = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const tokensCss = lerArquivo("../../tema/tokens.css");
 const css = semComentarios(lerArquivo("./ranking-publico.css"));
+
+/** As cores do tema claro (:root), seguindo var(--x). */
+const TEMA = (() => {
+  const inicio = tokensCss.indexOf(":root {");
+  const bloco = tokensCss.slice(inicio, tokensCss.indexOf("}", inicio));
+  return new Map(
+    [...bloco.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((par) => [
+      par[1],
+      par[2].trim(),
+    ]),
+  );
+})();
+
+function cor(nome: string): string {
+  const valor = TEMA.get(nome);
+  if (!valor) throw new Error(`${nome} não está no tema`);
+  const referencia = /^var\((--[\w-]+)\)$/.exec(valor);
+  return referencia ? cor(referencia[1]) : valor;
+}
+
+function luminancia(hex: string): number {
+  const [r, g, b] = [1, 3, 5]
+    .map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contraste(a: string, b: string): number {
+  const [clara, escura] = [luminancia(a), luminancia(b)].sort((x, y) => y - x);
+  return (clara + 0.05) / (escura + 0.05);
+}
 
 /** Cada regra: os seletores (um por item da lista, sem quebras) e as declarações. */
 const REGRAS = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
@@ -85,15 +116,35 @@ describe("RIFA-050: o CSS do ranking público", () => {
     expect(valorDe(".ranking-publico__item", "overflow")).toBe("clip");
   });
 
-  it("P2.5: a linha do tempo é branca sobre a faixa (o trilho só com opacidade), e enche uma vez, só sem reduce", () => {
-    expect(valorDe(".ranking-publico__trilho::before", "background")).toBe(
-      "var(--cor-sobre-primaria)",
+  it("P2.5: a faixa da fase num tom claro (sem repetir o degradê forte do topo), com os pares de contraste do tema", () => {
+    expect(valorDe(".ranking-publico__fase", "background")).toBe(
+      "var(--cor-primaria-suave)",
     );
-    expect(Number(valorDe(".ranking-publico__trilho::before", "opacity"))).toBe(
-      0.3,
+    expect(valorDe(".ranking-publico__fase", "color")).toBe("var(--cor-texto)");
+    expect(valorDe(".ranking-publico__fase-destaque", "color")).toBe(
+      "var(--cor-primaria-forte)",
+    );
+    expect(valorDe(".ranking-publico__linha-do-tempo", "color")).toBe(
+      "var(--cor-texto-suave)",
+    );
+    for (const texto of [
+      "--cor-texto",
+      "--cor-primaria-forte",
+      "--cor-texto-suave",
+    ])
+      expect(
+        contraste(cor(texto), cor("--cor-primaria-suave")),
+        texto,
+      ).toBeGreaterThanOrEqual(4.5);
+    expect(css).not.toMatch(/gradiente-marca-forte/);
+  });
+
+  it("P2.5: a linha do tempo: o trilho branco e os dias passados no degradê da marca (decorativo), enchendo uma vez, só sem reduce", () => {
+    expect(valorDe(".ranking-publico__trilho", "background")).toBe(
+      "var(--cor-superficie)",
     );
     expect(valorDe(".ranking-publico__percorrido", "background")).toBe(
-      "var(--cor-sobre-primaria)",
+      "var(--gradiente-marca)",
     );
     const semReduce = blocosSemReduce(css);
     expect(semReduce).toMatch(
