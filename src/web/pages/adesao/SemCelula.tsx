@@ -280,8 +280,9 @@ function ItemOrfao({
       </ComDica>
       {aoRemover && (
         <ComDica texto={DICAS.removerAfiliado}>
+          {/* Ação destrutiva leve (RIFA-051, A-15): o vermelho do perigo discreto, não o roxo de um link. */}
           <Button
-            variante="discreto"
+            variante="perigo-discreto"
             larguraTotal
             onClick={() => {
               refFocoAposRemover.current = null;

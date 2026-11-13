@@ -485,8 +485,9 @@ function BotoesDaLinha({
           Editar <span className="visualmente-oculto">{nome}</span>
         </Button>
       </ComDica>
+      {/* Ação destrutiva (pede confirmação): o vermelho do perigo discreto, não o roxo de um link (RIFA-051, A-15). */}
       <ComDica texto={DICAS.excluir[entidade]}>
-        <Button variante="discreto" onClick={aoExcluir}>
+        <Button variante="perigo-discreto" onClick={aoExcluir}>
           Excluir <span className="visualmente-oculto">{nome}</span>
         </Button>
       </ComDica>

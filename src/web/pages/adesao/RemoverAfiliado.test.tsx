@@ -22,6 +22,7 @@ import {
   renderizarRota,
   respostaJson,
 } from "../../test/renderizar";
+import { lerCss } from "../../test/indisponivel";
 import type { CelulaAdesao } from "./adesao-api";
 
 const SEM_VENDAS = { pedidos_aprovados: 0, bilhetes: 0, total_centavos: 0 };
@@ -195,6 +196,90 @@ describe("CA5: quem vê 'Remover'", () => {
         name: "Remover o afiliado 1001",
       }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("RIFA-051 (P3.8, A-15 e A-16): as ações do afiliado", () => {
+  /** O bloco do afiliado na célula (a linha com o código e as ações). */
+  const blocoDoAfiliado = (codigo: number) => {
+    const bloco = within(regiaoTodas())
+      .getByText(`Afiliado ${codigo}`)
+      .closest<HTMLElement>(".adesao-afiliado");
+    if (!bloco) throw new Error(`sem o bloco do afiliado ${codigo}`);
+    return bloco;
+  };
+
+  it("admin: o 'Remover' ao lado do código, na cara do perigo discreto; 'Trocar' e 'Desvincular' juntos, em duas colunas iguais (nenhum botão sozinho numa linha)", async () => {
+    simularApi();
+    await abrir();
+    const bloco = blocoDoAfiliado(1001);
+    const linha = bloco.querySelector(".adesao-afiliado__linha");
+    const acoes = bloco.querySelector(".adesao-afiliado__acoes");
+    if (!linha || !acoes) throw new Error("sem a linha e as ações");
+
+    const remover = within(bloco).getByRole("button", {
+      name: "Remover o afiliado 1001",
+    });
+    expect(linha).toContainElement(remover);
+    expect(remover).toHaveClass("ui-button--perigo-discreto");
+    expect(
+      within(acoes as HTMLElement)
+        .getAllByRole("button")
+        .map((botao) => [
+          botao.textContent,
+          botao.classList.contains("ui-button--secundario"),
+        ]),
+    ).toEqual([
+      ["Trocar a célula do afiliado 1001", true],
+      ["Desvincular o afiliado 1001", true],
+    ]);
+    // Os três são do tamanho das ações de uma linha (36 px no mouse; 44 px no toque).
+    for (const botao of within(bloco).getAllByRole("button"))
+      expect(botao).toHaveClass("ui-button--pequeno");
+    // A ordem do Tab segue a da tela: o Remover (em cima, à direita), depois Trocar e Desvincular.
+    expect(
+      within(bloco)
+        .getAllByRole("button")
+        .map((botao) => botao.textContent),
+    ).toEqual([
+      "Remover o afiliado 1001",
+      "Trocar a célula do afiliado 1001",
+      "Desvincular o afiliado 1001",
+    ]);
+  });
+
+  it("coordenação (sem o 'Remover'): o código sozinho na linha e as duas ações embaixo", async () => {
+    simularApi();
+    await abrir(USUARIO_DE_TESTE);
+    const bloco = blocoDoAfiliado(1001);
+    expect(
+      within(
+        bloco.querySelector(".adesao-afiliado__linha") as HTMLElement,
+      ).queryAllByRole("button"),
+    ).toEqual([]);
+    expect(
+      within(
+        bloco.querySelector(".adesao-afiliado__acoes") as HTMLElement,
+      ).getAllByRole("button"),
+    ).toHaveLength(2);
+  });
+
+  it("o 'Remover' de cada órfão também é perigo discreto (não o roxo de um link)", async () => {
+    simularApi();
+    await abrir();
+    for (const botao of within(regiaoSemCelula()).getAllByRole("button", {
+      name: /^Remover o afiliado/,
+    }))
+      expect(botao).toHaveClass("ui-button--perigo-discreto");
+  });
+
+  it("as duas colunas são iguais e encolhem (nenhuma largura fixa)", () => {
+    const css = lerCss("pages/adesao/adesao.css");
+    const regra = /\.adesao-afiliado__acoes\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(regra).toMatch(/display:\s*grid;/);
+    expect(regra).toMatch(
+      /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+    );
   });
 });
 

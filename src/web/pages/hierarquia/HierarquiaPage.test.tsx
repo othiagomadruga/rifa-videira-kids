@@ -168,6 +168,12 @@ describe("CA1: visão da hierarquia", () => {
       "role",
       "status",
     );
+    // RIFA-051 (P3.8, A-15): "Excluir" é ação destrutiva: o vermelho do perigo discreto, não o roxo de um link;
+    // "Editar" continua secundário. Os nomes não mudam.
+    for (const botao of screen.getAllByRole("button", { name: /^Excluir / }))
+      expect(botao).toHaveClass("ui-button--perigo-discreto");
+    for (const botao of screen.getAllByRole("button", { name: /^Editar / }))
+      expect(botao).toHaveClass("ui-button--secundario");
   });
 
   it("e-mail e telefone do líder são links (tel: só com dígitos e o + inicial); telefone que não é um número só fica como texto", async () => {

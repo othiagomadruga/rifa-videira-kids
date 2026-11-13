@@ -250,72 +250,79 @@ function AfiliadoDaCelula({
 
   return (
     <div className="adesao-afiliado">
+      {/* RIFA-051 (P3.8, A-15 e A-16): o código e, à direita, o "Remover" (ação destrutiva leve, só do admin, com
+          confirmação), na cara do perigo discreto; embaixo, "Trocar" e "Desvincular" em duas colunas iguais. Antes, os
+          três numa linha que quebrava e deixava o "Remover" sozinho na segunda (três colunas iguais não cabem no
+          cartão: "Desvincular" pede ~106 px no botão pequeno, e cada coluna teria ~83 px a 390 e a 1366 px). */}
       <div className="adesao-afiliado__linha">
         <p className="adesao-afiliado__codigo">Afiliado {codigo}</p>
-        <div className="adesao-acoes">
-          <ComDica
-            texto={
-              gravando
-                ? dicaGravando
-                : acao === "trocar"
-                  ? DICAS.trocarAberto
-                  : DICAS.trocar
-            }
-          >
+        {aoRemover && (
+          <ComDica texto={gravando ? dicaGravando : DICAS.removerAfiliado}>
             <Button
-              ref={refTrocar}
-              variante="secundario"
-              aria-expanded={acao === "trocar"}
+              variante="perigo-discreto"
+              tamanho="pequeno"
               aria-disabled={gravando || undefined}
               onClick={() => {
-                if (!gravando) alternar("trocar", refTrocar);
+                if (gravando) return;
+                refFocoAposRemover.current = null;
+                setRemovendo(true);
               }}
             >
-              Trocar{" "}
-              <span className="visualmente-oculto">
-                a célula do afiliado {codigo}
-              </span>
-            </Button>
-          </ComDica>
-          <ComDica
-            texto={
-              gravando
-                ? dicaGravando
-                : acao === "desvincular"
-                  ? DICAS.desvincularAberto
-                  : DICAS.desvincular
-            }
-          >
-            <Button
-              ref={refDesvincular}
-              variante="secundario"
-              aria-expanded={acao === "desvincular"}
-              aria-disabled={gravando || undefined}
-              onClick={() => {
-                if (!gravando) alternar("desvincular", refDesvincular);
-              }}
-            >
-              Desvincular{" "}
+              Remover{" "}
               <span className="visualmente-oculto">o afiliado {codigo}</span>
             </Button>
           </ComDica>
-          {aoRemover && (
-            <ComDica texto={gravando ? dicaGravando : DICAS.removerAfiliado}>
-              <Button
-                variante="secundario"
-                aria-disabled={gravando || undefined}
-                onClick={() => {
-                  if (gravando) return;
-                  refFocoAposRemover.current = null;
-                  setRemovendo(true);
-                }}
-              >
-                Remover{" "}
-                <span className="visualmente-oculto">o afiliado {codigo}</span>
-              </Button>
-            </ComDica>
-          )}
-        </div>
+        )}
+      </div>
+      <div className="adesao-afiliado__acoes">
+        <ComDica
+          texto={
+            gravando
+              ? dicaGravando
+              : acao === "trocar"
+                ? DICAS.trocarAberto
+                : DICAS.trocar
+          }
+        >
+          <Button
+            ref={refTrocar}
+            variante="secundario"
+            tamanho="pequeno"
+            aria-expanded={acao === "trocar"}
+            aria-disabled={gravando || undefined}
+            onClick={() => {
+              if (!gravando) alternar("trocar", refTrocar);
+            }}
+          >
+            Trocar{" "}
+            <span className="visualmente-oculto">
+              a célula do afiliado {codigo}
+            </span>
+          </Button>
+        </ComDica>
+        <ComDica
+          texto={
+            gravando
+              ? dicaGravando
+              : acao === "desvincular"
+                ? DICAS.desvincularAberto
+                : DICAS.desvincular
+          }
+        >
+          <Button
+            ref={refDesvincular}
+            variante="secundario"
+            tamanho="pequeno"
+            aria-expanded={acao === "desvincular"}
+            aria-disabled={gravando || undefined}
+            onClick={() => {
+              if (!gravando) alternar("desvincular", refDesvincular);
+            }}
+          >
+            Desvincular{" "}
+            <span className="visualmente-oculto">o afiliado {codigo}</span>
+          </Button>
+        </ComDica>
       </div>
       {removendo && aoRemover && (
         <DialogoRemoverAfiliado
