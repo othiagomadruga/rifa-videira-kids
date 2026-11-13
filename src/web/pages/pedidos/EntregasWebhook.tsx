@@ -15,7 +15,7 @@ import {
   Select,
   type ColunaTabela,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarDataHora } from "../../lib/formatadores";
 import {
   HORA_FIM_ALERTA,
@@ -171,6 +171,7 @@ function Conteudo({
       <ErrorState
         titulo="Não foi possível carregar as entregas."
         mensagem={mensagemDoErro(estado.erro)}
+        conexao={ehFalhaDeConexao(estado.erro)}
         aoTentarDeNovo={aoTentarDeNovo}
       />
     );

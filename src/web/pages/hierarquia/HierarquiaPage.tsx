@@ -10,7 +10,7 @@ import {
   Stat,
   idDaAba,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarNumero } from "../../lib/formatadores";
 import {
   DialogoCelula,
@@ -120,6 +120,7 @@ export function HierarquiaPage() {
         <ErrorState
           titulo="Não foi possível carregar a hierarquia."
           mensagem={mensagemDoErro(erro)}
+          conexao={ehFalhaDeConexao(erro)}
           aoTentarDeNovo={tentarDeNovo}
         />
       )}

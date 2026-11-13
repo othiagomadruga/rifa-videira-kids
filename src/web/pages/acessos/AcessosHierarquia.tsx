@@ -19,7 +19,7 @@ import {
   type ColunaTabela,
 } from "../../components/ui";
 import { NOMES_DIVISAO } from "../../../shared/contracts/calculos";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarDataHora, formatarNumero } from "../../lib/formatadores";
 import {
   LIMITE_ALVOS_POR_LOTE,
@@ -390,6 +390,7 @@ export function AcessosHierarquia({ regras, aoDesligar }: Props) {
         <ErrorState
           titulo="Não foi possível carregar os acessos."
           mensagem={mensagemDoErro(erro)}
+          conexao={ehFalhaDeConexao(erro)}
           aoTentarDeNovo={tentarDeNovo}
         />
       )}

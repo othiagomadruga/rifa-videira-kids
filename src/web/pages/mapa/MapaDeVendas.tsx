@@ -14,7 +14,7 @@ import {
   Loading,
   Select,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import {
   formatarData,
   formatarHora,
@@ -215,6 +215,7 @@ function Conteudo({
       <ErrorState
         titulo="Não foi possível carregar o mapa."
         mensagem={mensagemDoErro(resultado.erro)}
+        conexao={ehFalhaDeConexao(resultado.erro)}
         aoTentarDeNovo={aoTentarDeNovo}
       />
     );

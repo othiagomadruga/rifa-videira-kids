@@ -24,7 +24,7 @@ import {
   type NomeIcone,
 } from "../../components/ui";
 import { TextoContado } from "../../components/movimento";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { useUsuarioConectado } from "../../lib/sessao";
 import {
   LOCALIDADE,
@@ -561,6 +561,7 @@ function Conteudo({
       <ErrorState
         titulo="Não foi possível carregar os pedidos."
         mensagem={mensagemDoErro(estado.erro)}
+        conexao={ehFalhaDeConexao(estado.erro)}
         aoTentarDeNovo={aoTentarDeNovo}
       />
     );

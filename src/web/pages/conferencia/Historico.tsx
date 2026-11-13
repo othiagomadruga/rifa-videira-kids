@@ -10,7 +10,7 @@ import {
   Loading,
   type ColunaTabela,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import {
   formatarDataHora,
   formatarMoeda,
@@ -23,7 +23,7 @@ type Estado =
   | { tipo: "carregando" }
   /** `proximo`: o cursor da página seguinte (null = não há mais). */
   | { tipo: "ok"; itens: Recuperacao[]; proximo: number | null }
-  | { tipo: "erro"; mensagem: string };
+  | { tipo: "erro"; mensagem: string; conexao: boolean };
 
 /** Id do "Quando" de uma recuperação: o foco vai para a primeira nova depois de "Carregar mais". */
 export const idDaRecuperacao = (id: number) => `conferencia-recuperacao-${id}`;
@@ -110,7 +110,11 @@ export function Historico({ versao }: { versao: number }) {
       },
       (erro: unknown) => {
         if (!controle.signal.aborted)
-          setEstado({ tipo: "erro", mensagem: mensagemDoErro(erro) });
+          setEstado({
+            tipo: "erro",
+            mensagem: mensagemDoErro(erro),
+            conexao: ehFalhaDeConexao(erro),
+          });
       },
     );
     return () => controle.abort();
@@ -167,6 +171,7 @@ export function Historico({ versao }: { versao: number }) {
         <ErrorState
           titulo="Não foi possível carregar as recuperações"
           mensagem={estado.mensagem}
+          conexao={estado.conexao}
           aoTentarDeNovo={() => {
             setEstado({ tipo: "carregando" });
             setTentativa((valor) => valor + 1);

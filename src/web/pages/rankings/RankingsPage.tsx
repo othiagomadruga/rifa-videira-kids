@@ -14,7 +14,7 @@ import {
   PageHeader,
   Select,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import {
   formatarData,
   formatarHora,
@@ -174,6 +174,7 @@ function ConteudoDoRanking({ resultado, aoTentarDeNovo }: PropsConteudo) {
       <ErrorState
         titulo="Não foi possível carregar o ranking."
         mensagem={mensagemDoErro(resultado.erro)}
+        conexao={ehFalhaDeConexao(resultado.erro)}
         aoTentarDeNovo={aoTentarDeNovo}
       />
     );

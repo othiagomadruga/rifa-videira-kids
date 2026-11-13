@@ -14,7 +14,7 @@ import {
   Select,
   classesBotao,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { TextoDoWhatsApp } from "./formatacao";
 import {
   DICAS,
@@ -76,6 +76,7 @@ export function BumboPage() {
               <ErrorState
                 titulo="Não foi possível carregar a mensagem."
                 mensagem={mensagemDoErro(estado.erro)}
+                conexao={ehFalhaDeConexao(estado.erro)}
                 aoTentarDeNovo={tentarDeNovo}
               />
             )}
