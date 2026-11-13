@@ -128,8 +128,17 @@
   font-size: var(--texto-sm);
 }
 
+/* Meta batida no cartão do celular (RIFA-051, achado da revisão da RIFA-049): o selo do troféu da ProgressBar
+   (1,375em) sai ~5 px para cima e para baixo do trilho (0,75em), com a pílula do % logo acima e o selo da situação
+   logo abaixo; a folga era de 3 a 4 px. Aqui ela vai a ~7 px dos dois lados (o vão da barra e um respiro embaixo),
+   em todos os cartões, para as linhas ficarem iguais. Na tabela (a partir de 48rem), como antes. */
 .rankings-linha__percentual {
   grid-area: percentual;
+  padding-bottom: var(--espaco-1);
+}
+
+.rankings-linha__percentual .ui-progress {
+  gap: var(--espaco-3);
 }
 
 .rankings-linha__sem-meta {
@@ -248,6 +257,11 @@
   .rankings-linha__percentual {
     width: 24%;
     min-width: 10rem;
+  }
+
+  /* Na tabela, a pílula fica à esquerda e o selo à direita: o vão da ProgressBar volta ao dela. */
+  .rankings-linha__percentual .ui-progress {
+    gap: var(--espaco-2);
   }
 
   /* Na tabela, o cabeçalho da coluna já diz "% da meta": o rótulo da barra fica só para o leitor de tela. */
