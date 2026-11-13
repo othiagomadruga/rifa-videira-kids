@@ -18,6 +18,8 @@ import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { TextoDoWhatsApp } from "./formatacao";
 import {
   DICAS,
+  NOTA_DA_PREVIA,
+  NOTA_DO_TEXTO_PURO,
   avisoDaMensagem,
   linkWhatsApp,
   opcoesDoSeletor,
@@ -239,8 +241,7 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
         </pre>
       </figure>
       <p className="bumbo__dica">
-        No WhatsApp, o que está entre *asteriscos* sai em negrito, e entre
-        _sublinhados_, em itálico.
+        {copia === "falhou" ? NOTA_DO_TEXTO_PURO : NOTA_DA_PREVIA}
       </p>
     </div>
   );

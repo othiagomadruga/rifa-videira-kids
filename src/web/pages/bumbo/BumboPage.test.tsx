@@ -18,7 +18,7 @@ import {
   simularApi,
   type ApiDoBumbo,
 } from "./teste-apoio";
-import { somarDias } from "./textos";
+import { NOTA_DA_PREVIA, NOTA_DO_TEXTO_PURO, somarDias } from "./textos";
 
 const CAMINHO = "/coordenacao/bumbo";
 const COPIADA = "Mensagem copiada. Agora é só colar no grupo dos líderes.";
@@ -389,6 +389,17 @@ describe("RIFA-051 (P3.9): a prévia como no WhatsApp", () => {
     // Copiado, a prévia continua desenhada.
     expect(texto.querySelector("strong")).not.toBeNull();
   });
+
+  it("RIFA-053: a nota embaixo da prévia não fala de asteriscos que não aparecem nela", async () => {
+    abrir();
+    await textoNaTela();
+    const nota = document.querySelector(".bumbo__dica");
+    expect(nota?.textContent).toBe(NOTA_DA_PREVIA);
+    expect(NOTA_DA_PREVIA).toBe(
+      "A prévia mostra a mensagem como ela chega no grupo: o negrito e o itálico aparecem como no WhatsApp.",
+    );
+    expect(nota?.textContent).not.toMatch(/asterisco|sublinhado|\*|_/);
+  });
 });
 
 describe("CA1: copiar e enviar", () => {
@@ -469,6 +480,10 @@ describe("CA1: copiar e enviar", () => {
     // RIFA-051 (P3.9): sem copiar sozinho, a prévia volta ao texto puro (com os * e _), que é o que fica selecionado.
     expect(texto.querySelector("strong, em")).toBeNull();
     expect(texto.textContent).toBe(respostaDoBumbo(INSTANTES.durante).texto);
+    // RIFA-053: aí os * e _ aparecem, e a nota explica o que eles fazem no WhatsApp.
+    expect(document.querySelector(".bumbo__dica")?.textContent).toBe(
+      NOTA_DO_TEXTO_PURO,
+    );
   });
 
   it("o navegador recusa a cópia (sem permissão): o mesmo caminho, a mensagem selecionada", async () => {
