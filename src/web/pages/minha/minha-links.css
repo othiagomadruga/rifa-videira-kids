@@ -31,19 +31,43 @@
   list-style: none;
 }
 
-.minha-links__celulas > li + li {
-  padding-top: var(--espaco-4);
-  border-top: 1px solid var(--cor-borda);
+/* Discipulador e rede: cada célula num bloco compacto, com a borda fina (A-16): os blocos iguais um embaixo do outro
+   ficam separados sem precisar de linha entre eles. */
+.minha-links__celulas {
+  gap: var(--espaco-3);
 }
 
 .minha-links__celula {
   display: grid;
   gap: var(--espaco-2);
   min-width: 0;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+}
+
+.minha-links__identidade {
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+/* No computador, o nome e o líder numa coluna à esquerda e o link com os botões ao lado: um bloco mais baixo. */
+@media (min-width: 48rem) {
+  .minha-links__celula {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    gap: var(--espaco-2) var(--espaco-5);
+  }
+
+  .minha-links__celula > :not(.minha-links__identidade) {
+    grid-column: 2;
+  }
 }
 
 .minha-links__nome {
   font-size: var(--texto-lg);
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 

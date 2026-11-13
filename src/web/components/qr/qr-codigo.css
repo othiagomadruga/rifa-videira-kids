@@ -31,6 +31,11 @@
   gap: var(--espaco-2);
 }
 
+/* "Baixar imagem" e "Imprimir" com os ícones: o mesmo respiro dos lados do "Copiar link" (compartilhar.css). */
+.qr-codigo__acoes > .ui-button {
+  padding-inline: var(--espaco-3);
+}
+
 .qr-codigo__retorno {
   max-width: 100%;
   font-size: var(--texto-sm);

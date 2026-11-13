@@ -414,6 +414,8 @@ describe("estados do link de vendas", () => {
     expect(alerta).toHaveTextContent(
       "Não foi possível carregar o link de vendas.",
     );
+    // Uma falha da API (503) é falha de verdade: o vermelho (RIFA-051).
+    expect(alerta).toHaveClass("ui-estado--erro");
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
     );
@@ -421,6 +423,25 @@ describe("estados do link de vendas", () => {
       await within(cartao).findByRole("textbox", { name: "Link de vendas" }),
     ).toHaveValue(urlDoAfiliado(1042));
     expect(api.chamadasA("GET", CAMINHO_LINKS)).toHaveLength(2);
+  });
+
+  it("sem conexão ao pedir o link: o cartão neutro (sem o vermelho), com Tentar de novo", async () => {
+    const api = criarApiFalsa(visaoDe());
+    api.proxima("GET", CAMINHO_LINKS, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const { cartao } = await abrir("lider", null, api, {
+      esperarOsLinks: false,
+    });
+    const alerta = await within(cartao).findByRole("alert");
+    expect(alerta).toHaveTextContent(
+      "Não foi possível carregar o link de vendas.",
+    );
+    expect(alerta).toHaveClass("ui-estado--conexao");
+    expect(alerta).not.toHaveClass("ui-estado--erro");
+    expect(
+      within(alerta).getByRole("button", { name: "Tentar de novo" }),
+    ).toBeInTheDocument();
   });
 
   it("403 acesso_desligado: o texto da coordenação, como na visão", async () => {
@@ -559,6 +580,86 @@ describe("estados do link de vendas", () => {
 // RIFA-045 nos controles da RIFA-046: aqui a varredura fica no cartão do link de vendas (e no diálogo do "Ver QR", que
 // deixa o resto da página `inert`), com os textos de cada dica; a página inteira (fase 2b) é varrida em
 // pages/dicas-fora-da-coordenacao.test.tsx.
+describe("ícones e bloco de leitura (RIFA-051, A-16)", () => {
+  /** O ícone (só visual) que vem antes do texto do controle. */
+  function iconeDe(controle: HTMLElement): string | null {
+    const icone = controle.firstElementChild;
+    if (icone?.tagName.toLowerCase() !== "svg") return null;
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    return icone.getAttribute("data-icone");
+  }
+
+  it("líder: cada botão com o seu ícone à esquerda do texto, e os nomes não mudam", async () => {
+    const { cartao } = await abrir("lider");
+    expect(
+      iconeDe(
+        within(cartao).getByRole("button", {
+          name: "Copiar link da Célula Ágape",
+        }),
+      ),
+    ).toBe("copiar");
+    expect(
+      iconeDe(
+        within(cartao).getByRole("link", {
+          name: "Enviar no WhatsApp o link da Célula Ágape",
+        }),
+      ),
+    ).toBe("conversa");
+    expect(
+      iconeDe(
+        await within(cartao).findByRole(
+          "button",
+          { name: "Baixar imagem do QR code da Célula Ágape" },
+          ESPERA_DO_PACOTE,
+        ),
+      ),
+    ).toBe("baixar");
+    expect(
+      iconeDe(
+        within(cartao).getByRole("button", {
+          name: "Imprimir o QR code da Célula Ágape",
+        }),
+      ),
+    ).toBe("imprimir");
+    // O título do cartão com o ícone do link (o nome do título não muda).
+    const titulo = within(cartao).getByRole("heading", {
+      level: 2,
+      name: "Seu link de vendas",
+    });
+    expect(titulo.querySelector("svg")).toHaveAttribute("data-icone", "link");
+    // O link continua num campo só leitura, selecionável e com a dica (a cara de bloco de leitura é do CSS).
+    const campo = within(cartao).getByRole("textbox", {
+      name: "Link de vendas",
+    });
+    expect(campo).toHaveAttribute("readonly");
+    expect(campo).toHaveClass("qr-compartilhar__campo");
+  });
+
+  it("discipulador: cada célula num bloco, com Copiar, Ver QR e WhatsApp nessa ordem (no celular, Copiar e Ver QR dividem a linha)", async () => {
+    const { cartao } = await abrir("discipulador");
+    const betel = within(cartao)
+      .getByRole("heading", { level: 3, name: "Célula Betel" })
+      .closest("article") as HTMLElement;
+    const acoes = betel.querySelector<HTMLElement>(".qr-compartilhar__acoes");
+    if (!acoes) throw new Error("sem as ações");
+    expect(
+      [...acoes.querySelectorAll<HTMLElement>("button, a")].map((controle) => [
+        controle.textContent?.replace(/\s+/g, " ").trim(),
+        iconeDe(controle),
+      ]),
+    ).toEqual([
+      ["Copiar link da Célula Betel", "copiar"],
+      ["Ver QR code da Célula Betel", "qr"],
+      ["Enviar no WhatsApp o link da Célula Betel", "conversa"],
+    ]);
+    // O nome e o líder juntos, no começo do bloco.
+    expect(betel.firstElementChild).toHaveClass("minha-links__identidade");
+    expect(betel.firstElementChild).toHaveTextContent(
+      "Célula BetelLíder: João Fictício",
+    );
+  });
+});
+
 describe("dicas nos botões e campos do link de vendas", () => {
   it("líder com dois códigos: o campo, Copiar, WhatsApp, Baixar imagem, Imprimir e Ver QR; no diálogo, Pronto e o ×", async () => {
     const { cartao } = await abrir(

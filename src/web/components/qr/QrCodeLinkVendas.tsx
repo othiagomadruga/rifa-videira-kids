@@ -1,12 +1,12 @@
 // O QR code do link de vendas de uma célula (RIFA-046, D24): carregado só com `lazy` (o `qr` fica fora do pacote
 // inicial; qr-lazy.test.ts confere). Desenhado com elementos do React (um <svg> com um <path>, nada de innerHTML:
 // o link nunca vira marcação), preto no branco fixos, com "Baixar imagem" (PNG de um <canvas>) e "Imprimir" (só o
-// QR, o nome da célula e o link em texto embaixo, para quem quiser conferir que é a Rifei).
+// QR, o nome da célula e o link em texto embaixo, para quem quiser conferir que é a Rifei), com os ícones à esquerda.
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { nomeDoArquivoQrLinkVendas } from "../../../shared/contracts/link-vendas";
 import { LIBERAR_ARQUIVO_DEPOIS_MS } from "../../lib/api";
-import { Button, ComDica } from "../ui";
+import { Button, ComDica, Icone } from "../ui";
 import {
   COR_CLARA_QR,
   COR_ESCURA_QR,
@@ -216,6 +216,7 @@ export function QrCodeLinkVendas({ url, celulaNome }: Props) {
       <div className="qr-codigo__acoes">
         <ComDica texto={DICAS.baixarImagem}>
           <Button variante="secundario" onClick={() => void baixar()}>
+            <Icone nome="baixar" />
             Baixar imagem{" "}
             <span className="visualmente-oculto">
               do QR code da {celulaNome}
@@ -227,6 +228,7 @@ export function QrCodeLinkVendas({ url, celulaNome }: Props) {
             variante="secundario"
             onClick={() => imprimir([{ celulaNome, url }])}
           >
+            <Icone nome="imprimir" />
             Imprimir{" "}
             <span className="visualmente-oculto">
               o QR code da {celulaNome}

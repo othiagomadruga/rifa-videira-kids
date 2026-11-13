@@ -1,5 +1,7 @@
 /* O link de vendas num campo só leitura, com "Copiar link" e "Enviar no WhatsApp" (RIFA-046). Celular primeiro: o
-   link quebra a linha (360 px sem rolagem lateral) e os botões descem para a linha de baixo quando não cabem. */
+   link quebra a linha (360 px sem rolagem lateral) e os botões descem para a linha de baixo quando não cabem. O campo
+   tem cara de bloco de leitura (RIFA-051, A-16): fundo suave, sem a borda de campo de digitar (que volta, roxa, no
+   foco); continua selecionável, com a dica. */
 
 .qr-compartilhar {
   display: grid;
@@ -7,15 +9,29 @@
   min-width: 0;
 }
 
-/* Mais justo que o textarea comum: o link tem de 2 a 4 linhas, sem alça de redimensionar. */
+/* Mais justo que o textarea comum: o link tem de 2 a 4 linhas, sem alça de redimensionar; onde o navegador sabe
+   (field-sizing), a altura do próprio link, sem linha vazia no computador. */
 .qr-compartilhar .qr-compartilhar__campo {
   min-height: 0;
+  field-sizing: content;
   resize: none;
+  background: var(--cor-superficie-2);
   font-family: var(--fonte-mono);
   font-size: var(--texto-md);
   line-height: 1.4;
   overflow-wrap: anywhere;
   word-break: break-all;
+}
+
+/* O rótulo ("Link de vendas") como legenda pequena do bloco: o que chama a atenção é o link e os botões. */
+.qr-compartilhar .ui-campo__rotulo {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* Sem a borda de campo (nem a do mouse por cima) fora do foco: o seletor é mais específico que os do Campos.css. */
+.qr-compartilhar .qr-compartilhar__campo.ui-campo__controle:not(:focus) {
+  border-color: var(--cor-superficie-2);
 }
 
 .qr-compartilhar__acoes {
@@ -24,9 +40,15 @@
   gap: var(--espaco-2);
 }
 
-/* Os botões ocupam a linha toda quando descem (no celular e nos cartões estreitos): linhas sem buraco. */
+/* Os botões ocupam a linha toda quando descem (no celular e nos cartões estreitos): linhas sem buraco. O respiro dos
+   lados menor que o do botão comum: no celular de 360 px, "Copiar link" e "Ver QR" dividem a linha (o WhatsApp vem
+   embaixo), cada um com o ícone. */
 .qr-compartilhar__acoes > * {
   flex: 1 1 auto;
+}
+
+.qr-compartilhar__acoes > .ui-button {
+  padding-inline: var(--espaco-3);
 }
 
 .qr-compartilhar__retorno {
