@@ -26,8 +26,9 @@
 }
 
 .ui-page-header__titulo {
+  font-family: var(--fonte-titulo);
   font-size: clamp(var(--texto-2xl), 1.25rem + 1.2vw, var(--texto-3xl));
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
   letter-spacing: -0.01em;
 }
 

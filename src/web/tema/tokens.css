@@ -98,10 +98,14 @@
   /* Brilho que passa pelo esqueleto do carregando */
   --cor-brilho-esqueleto: rgb(255 255 255 / 0.75);
 
-  /* Tipografia: fonte do sistema (sem fonte externa) */
+  /*
+   * Tipografia: o texto na fonte do sistema; os títulos e os números de destaque na Outfit 800, do próprio site
+   * (tema/base.css, RIFA-049), com a reserva ajustada enquanto ela chega.
+   */
   --fonte-base:
     system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif;
+  --fonte-titulo: "Outfit", "Outfit reserva", var(--fonte-base);
   --fonte-mono:
     ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --texto-xs: 0.8125rem;

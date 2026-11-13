@@ -36,7 +36,8 @@
 }
 
 .ui-marca__nome {
-  font-weight: var(--peso-negrito);
+  font-family: var(--fonte-titulo);
+  font-weight: var(--peso-extra);
   letter-spacing: -0.01em;
 }
 

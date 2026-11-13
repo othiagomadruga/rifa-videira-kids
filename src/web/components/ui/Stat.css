@@ -18,8 +18,9 @@
 }
 
 .ui-stat__valor {
+  font-family: var(--fonte-titulo);
   font-size: clamp(var(--texto-2xl), 1.25rem + 1vw, var(--texto-3xl));
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
   letter-spacing: -0.01em;
