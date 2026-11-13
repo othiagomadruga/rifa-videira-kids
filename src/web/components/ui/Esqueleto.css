@@ -28,3 +28,13 @@
     padding: var(--espaco-5);
   }
 }
+
+/*
+ * Cores forçadas (alto contraste do Windows): o fundo do bloco vira o da página e o esqueleto sumia (o carregando é
+ * só para o leitor de tela). A borda mostra o lugar do que vem; com o border-box, a altura continua a pedida.
+ */
+@media (forced-colors: active) {
+  .ui-esqueleto__bloco {
+    border: 1px solid GrayText;
+  }
+}

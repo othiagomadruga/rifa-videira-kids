@@ -86,4 +86,10 @@ describe("Esqueleto", () => {
       /\.ui-esqueleto\s*\{[^}]*position:\s*relative;/,
     );
   });
+
+  it("CSS: nas cores forçadas, o bloco ganha a borda do sistema (sem ela, o fundo some e o esqueleto não aparece)", () => {
+    expect(lerCss("./Esqueleto.css")).toMatch(
+      /@media \(forced-colors: active\)\s*\{\s*\.ui-esqueleto__bloco\s*\{\s*border:\s*1px solid GrayText;/,
+    );
+  });
 });
