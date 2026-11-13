@@ -142,10 +142,16 @@ async function atualizar() {
   await act(() => new Promise((resolver) => setTimeout(resolver, 0)));
 }
 
+/** O texto lido de cada item (sem o que é só visual: o "↑ subiu" e o número que conta por cima). */
 const lista = (divisao: "Jovens" | "Adultos") =>
   within(screen.getByRole("region", { name: divisao }))
     .getAllByRole("listitem")
-    .map((item) => item.textContent);
+    .map((item) => {
+      const copia = item.cloneNode(true) as Element;
+      for (const visual of copia.querySelectorAll('[aria-hidden="true"]'))
+        visual.remove();
+      return copia.textContent;
+    });
 
 /** As chamadas do element.animate num tipo de elemento: o nome do item, os quadros e as opções. */
 function chamadasEm(

@@ -88,6 +88,7 @@ describe("CA3: o código do telão não mostra dinheiro nem quantidades", () => 
         `${PUBLICO}ranking-publico-api`,
         `${PUBLICO}textos`,
         `${PUBLICO}useRankingPublico`,
+        `${PUBLICO}useSubiu`,
       ]),
     );
     // Os importados entram na varredura (e o ranking-publico-api traz a chamada da API).
@@ -96,6 +97,7 @@ describe("CA3: o código do telão não mostra dinheiro nem quantidades", () => 
         "../ranking-publico/ranking-publico-api.ts",
         "../ranking-publico/textos.ts",
         "../ranking-publico/useRankingPublico.ts",
+        "../ranking-publico/useSubiu.ts",
       ]),
     );
   });

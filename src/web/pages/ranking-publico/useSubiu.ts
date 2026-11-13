@@ -1,6 +1,7 @@
-// "↑ subiu" no telão (RIFA-050, P2.3; D25): quem subiu de posição na última atualização que mudou a ordem. O chip
-// fica até a próxima atualização com mudança (nenhum temporizador: o telão só se mexe quando os dados mudam). Uma
-// atualização igual não muda nada; a primeira lista (ao abrir a página, ou a primeira venda) não marca ninguém.
+// "↑ subiu" no telão e no ranking público (RIFA-050, P2.3; D25): quem subiu de posição na última atualização que
+// mudou a ordem. O chip fica até a próxima atualização com mudança (nenhum temporizador: o telão só se mexe quando os
+// dados mudam). Uma atualização igual não muda nada; a primeira lista (ao abrir a página, ou a primeira venda) não
+// marca ninguém. Mora aqui, com o useRankingPublico, porque as duas telas usam (o telão importa desta pasta).
 import { useState } from "react";
 
 /** Um item da lista: a chave estável (chavesPorNome) e a posição no ranking (empatados têm a mesma). */

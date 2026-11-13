@@ -24,8 +24,8 @@ import type {
 } from "../ranking-publico/ranking-publico-api";
 import { formatarPosicao, textoDaJanela } from "../ranking-publico/textos";
 import { useRankingPublico } from "../ranking-publico/useRankingPublico";
+import { useSubiu } from "../ranking-publico/useSubiu";
 import { faseDoTelao, listaDoTelao } from "./textos";
-import { useSubiu } from "./useSubiu";
 import { useCursorEscondidoParado, useRelogio } from "./useTelao";
 import "./telao.css";
 

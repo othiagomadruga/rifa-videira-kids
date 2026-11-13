@@ -285,8 +285,8 @@ describe("RIFA-050 (P2.4): comemoração da meta batida no telão", () => {
     ).toEqual(["Célula Betel"]);
     // Ágape já estava batida: só desliza, sem comemorar de novo.
     expect(pilula("Célula Ágape")?.querySelector(".mov-confete")).toBeNull();
-    // O item corta as partículas na borda (nada de rolagem lateral): a classe do item tem overflow: clip.
-    expect(pilula("Célula Betel")?.closest("li")).toHaveClass("telao__item");
+    // A lista em volta corta as partículas na borda dela (telao.css: overflow: clip na .telao__lista).
+    expect(pilula("Célula Betel")?.closest("ol")).toHaveClass("telao__lista");
     animate.mockClear();
 
     await atualizar();

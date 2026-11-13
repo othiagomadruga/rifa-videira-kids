@@ -146,15 +146,20 @@
   background: var(--gradiente-marca);
 }
 
+/*
+ * A lista corta, nos lados, as partículas da comemoração (nada de rolagem lateral). O corte fica na lista, e não no
+ * item: com overflow: clip no item que o FLIP desliza, o Chrome conta a troca de lugar como layout shift (RIFA-050:
+ * 0,02 por troca). A lista passa 8 px de cada lado dos itens (padding e margem negativa) para não cortar a sombra.
+ */
 .ranking-publico__lista {
   display: grid;
   gap: var(--espaco-2);
-  margin: 0;
-  padding: 0;
+  margin: 0 calc(-1 * var(--espaco-2));
+  padding: 0 var(--espaco-2);
   list-style: none;
+  overflow-x: clip;
 }
 
-/* overflow: clip: a faixa do pódio segue o raio do cartão e as partículas da comemoração não passam da borda. */
 .ranking-publico__item {
   position: relative;
   display: grid;
@@ -166,30 +171,24 @@
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio-3);
   box-shadow: var(--sombra-1);
-  overflow: clip;
 }
 
 /*
- * Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. A faixa fica
- * dentro da borda, de cima a baixo (o overflow: clip do item a arredonda junto com o cartão).
+ * Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. A faixa é uma
+ * camada do fundo, de 4 px, dentro da borda e de cima a baixo: o fundo segue o raio do cartão (antes, um ::before em
+ * left: -1px, por cima da borda arredondada, parecia uma borda quebrada; A-07).
  */
 .ranking-publico__item[data-destaque] {
   border-color: var(--cor-primaria);
+  background:
+    linear-gradient(
+        var(--marca-verde-agua-forte),
+        var(--marca-azul-forte),
+        var(--marca-roxo)
+      )
+      left / 4px 100% no-repeat,
+    var(--cor-superficie);
   box-shadow: var(--sombra-2);
-}
-
-.ranking-publico__item[data-destaque]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 4px;
-  background: linear-gradient(
-    var(--marca-verde-agua-forte),
-    var(--marca-azul-forte),
-    var(--marca-roxo)
-  );
 }
 
 .ranking-publico__posicao {
@@ -216,6 +215,30 @@
   border-color: var(--cor-comemoracao);
   background: var(--cor-comemoracao);
   color: var(--cor-sobre-comemoracao);
+}
+
+/* O nome e, embaixo dele, o "↑ subiu" (cabe na altura do selo da posição: a linha não cresce). */
+.ranking-publico__celula {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+
+/*
+ * Quem subiu na última mudança de ordem (useSubiu, RIFA-050): o chip verde, que fica até a próxima mudança. Só
+ * visual (aria-hidden).
+ */
+.ranking-publico__subiu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-sucesso-suave);
+  color: var(--cor-sucesso);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-negrito);
+  line-height: 1.4;
 }
 
 .ranking-publico__nome {
@@ -295,6 +318,7 @@
   .ranking-publico__janela,
   .ranking-publico__legenda,
   .ranking-publico__divisao-titulo,
+  .ranking-publico__subiu,
   .ranking-publico__sem-vendas {
     animation: ui-surgir var(--duracao-media) var(--curva-suave) backwards;
   }

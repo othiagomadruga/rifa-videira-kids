@@ -1,6 +1,6 @@
 // RIFA-050 (P2.4 e P2.5): o CSS do ranking público, lido do disco. Só variáveis do tema que existem (nenhuma cor nem
 // medida solta); a faixa da fase num tom claro, com contraste; a faixa do pódio dentro da borda (sem o
-// left: -1px de antes); o item corta as partículas da comemoração (overflow: clip, sem rolagem lateral); a pílula da
+// left: -1px de antes); a lista corta as partículas da comemoração nos lados (sem rolagem lateral); a pílula da
 // meta batida só fica amarela quando o número termina de contar; o movimento novo só sem prefers-reduced-motion. A
 // medida na tela de verdade (390 e 360 px no meio da comemoração, CLS) está nas capturas do Playwright.
 import { describe, expect, it } from "vitest";
@@ -107,13 +107,28 @@ describe("RIFA-050: o CSS do ranking público", () => {
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   });
 
-  it("P2.5: a faixa do pódio fica dentro da borda, de cima a baixo, e o item a arredonda (overflow: clip)", () => {
-    const faixa = ".ranking-publico__item[data-destaque]::before";
-    expect(valorDe(faixa, "left")).toBe("0");
-    expect(valorDe(faixa, "top")).toBe("0");
-    expect(valorDe(faixa, "bottom")).toBe("0");
+  it("P2.5: a faixa do pódio é uma camada do fundo, dentro da borda e de cima a baixo (segue o raio do cartão), sem o left: -1px de antes", () => {
+    const fundo = valorDe(
+      ".ranking-publico__item[data-destaque]",
+      "background",
+    );
+    expect(fundo).toMatch(
+      /^linear-gradient\(\s*var\(--marca-verde-agua-forte\),\s*var\(--marca-azul-forte\),\s*var\(--marca-roxo\)\s*\)\s*left \/ 4px 100% no-repeat,\s*var\(--cor-superficie\)$/,
+    );
+    expect(css).not.toMatch(/data-destaque\]::before/);
     expect(css).not.toMatch(/left:\s*-/);
-    expect(valorDe(".ranking-publico__item", "overflow")).toBe("clip");
+  });
+
+  it("P2.4: a lista (não o item) corta as partículas nos lados, sem cortar a sombra dos itens", () => {
+    // No item que o FLIP desliza, o overflow: clip faz o Chrome contar a troca de lugar como layout shift.
+    expect(valorDe(".ranking-publico__item", "overflow")).toBeUndefined();
+    expect(valorDe(".ranking-publico__lista", "overflow-x")).toBe("clip");
+    expect(valorDe(".ranking-publico__lista", "padding")).toBe(
+      "0 var(--espaco-2)",
+    );
+    expect(valorDe(".ranking-publico__lista", "margin")).toBe(
+      "0 calc(-1 * var(--espaco-2))",
+    );
   });
 
   it("P2.5: a faixa da fase num tom claro (sem repetir o degradê forte do topo), com os pares de contraste do tema", () => {

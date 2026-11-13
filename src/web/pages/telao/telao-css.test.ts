@@ -257,7 +257,7 @@ describe("RIFA-050 (P2.1): o telão escala pela quantidade de itens (data-itens)
     expect(valorDe(".telao__subiu-texto", "display")).toBe("none");
   });
 
-  it("a disputa e as divisões esticam até o fim da tela; o nome continua em até 2 linhas; o item corta as partículas", () => {
+  it("a disputa e as divisões esticam até o fim da tela; o nome continua em até 2 linhas; a lista (não o item) corta as partículas", () => {
     expect(valorDe(".telao__disputa", "grid-template-rows")).toBe(
       "auto minmax(0, 1fr)",
     );
@@ -266,7 +266,9 @@ describe("RIFA-050 (P2.1): o telão escala pela quantidade de itens (data-itens)
     );
     expect(valorDe(".telao__nome", "line-clamp")).toBe("2");
     expect(valorDe(".telao__nome", "-webkit-line-clamp")).toBe("2");
-    expect(valorDe(".telao__item", "overflow")).toBe("clip");
+    // O corte fica na lista: no item que o FLIP desliza, o Chrome contaria a troca de lugar como layout shift.
+    expect(valorDe(".telao__lista", "overflow")).toBe("clip");
+    expect(valorDe(".telao__item", "overflow")).toBeUndefined();
     // 1º lugar: a borda amarela de 3 px.
     expect(valorDe(".telao__item[data-primeiro]", "border")).toBe(
       "3px solid var(--cor-comemoracao)",

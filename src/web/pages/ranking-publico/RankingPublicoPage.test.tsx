@@ -206,12 +206,18 @@ function abrir(
 const caminho = (divisao: Divisao, periodo: JanelaRanking) =>
   `/api/publico/ranking?nivel=celula&divisao=${divisao}&periodo=${periodo}`;
 
+/** O texto que o leitor de tela lê num elemento: sem o que é só visual (aria-hidden, ex.: o "↑ subiu"). */
+function textoLido(elemento: Element): string {
+  const copia = elemento.cloneNode(true) as Element;
+  for (const visual of copia.querySelectorAll('[aria-hidden="true"]'))
+    visual.remove();
+  return copia.textContent ?? "";
+}
+
 /** Os itens da lista de uma divisão, como texto ("1º Célula Ágape", "1º Célula Ágape 75% da meta"). */
 function lista(divisao: "Jovens" | "Adultos"): string[] {
   const secao = screen.getByRole("region", { name: divisao });
-  return within(secao)
-    .queryAllByRole("listitem")
-    .map((item) => item.textContent ?? "");
+  return within(secao).queryAllByRole("listitem").map(textoLido);
 }
 
 const destaques = (divisao: "Jovens" | "Adultos") =>
@@ -492,6 +498,12 @@ describe("CA2: atualização automática e falhas", () => {
     await waitFor(() =>
       expect(lista("Jovens")).toEqual(["1º Célula Betel", "2º Célula Ágape"]),
     );
+    // RIFA-050: Betel subiu: o chip "↑ subiu" (só visual) fica até a próxima mudança de ordem.
+    const chips = document.querySelectorAll(".ranking-publico__subiu");
+    expect(chips).toHaveLength(1);
+    expect(chips[0]).toHaveAttribute("aria-hidden", "true");
+    expect(chips[0]).toHaveTextContent("subiu");
+    expect(chips[0].closest("li")).toHaveTextContent(/^1º Célula Betel/);
 
     // Aba oculta: nenhuma consulta, por mais tempo que passe.
     definirVisibilidade("hidden");

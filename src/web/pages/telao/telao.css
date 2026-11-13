@@ -266,6 +266,10 @@
  * 5 linhas iguais; até 3 (o limite público), 3 linhas, e a do 1º lugar com 1,2× a altura das outras. A grade é a
  * mesma nas duas divisões: as linhas ficam alinhadas mesmo quando uma tem menos itens.
  */
+/*
+ * A lista corta as partículas da comemoração na borda dela (nada passa para a outra divisão). O corte fica na lista, e
+ * não no item: com overflow: clip no item que o FLIP desliza, o Chrome conta a troca de lugar como layout shift.
+ */
 .telao__lista {
   display: grid;
   grid-template-rows: repeat(4, minmax(0, 1fr));
@@ -274,6 +278,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow: clip;
 }
 
 .telao__disputa[data-itens="4"] .telao__lista,
@@ -288,7 +293,6 @@
   grid-template-rows: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
 }
 
-/* overflow: clip: as partículas da comemoração não passam da borda do item. */
 .telao__item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -299,7 +303,6 @@
   border: 2px solid var(--cor-borda);
   border-radius: 0.4em;
   background: var(--cor-superficie);
-  overflow: clip;
 }
 
 /* Pódio (até o 3º lugar, empatados inclusive): borda e selo no verde-água da Videira. */

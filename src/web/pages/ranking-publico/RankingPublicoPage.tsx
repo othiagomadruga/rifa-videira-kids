@@ -7,6 +7,7 @@ import { TextoContado } from "../../components/movimento";
 import {
   EmptyState,
   ErrorState,
+  Icone,
   Loading,
   PageHeader,
 } from "../../components/ui";
@@ -30,6 +31,7 @@ import {
   textoDaJanela,
 } from "./textos";
 import { useRankingPublico } from "./useRankingPublico";
+import { useSubiu } from "./useSubiu";
 import "./ranking-publico.css";
 
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
@@ -44,7 +46,8 @@ const META_BATIDA_BP = 10_000;
 // Movimento (RIFA-020, sem prefers-reduced-motion): os itens entram em sequência, quem muda de posição
 // desliza para o lugar novo, o % conta até o valor e a meta batida pulsa de leve (e comemora, quando passa a
 // ser batida numa atualização: RIFA-050). RIFA-050 (A-07, A-18, A-19): a linha do tempo da campanha na faixa
-// da fase, a falha de conexão neutra e o vazio com o convite do primeiro dia.
+// da fase, a falha de conexão neutra, o vazio com o convite do primeiro dia e o "↑ subiu" (como no telão: até a
+// próxima atualização que muda a ordem).
 export function RankingPublicoPage() {
   const { estado, tentarDeNovo } = useRankingPublico();
   return (
@@ -207,6 +210,9 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   const refLista = useListaAnimada<HTMLOListElement>(
     comChaves.map(({ chave }) => chave).join("|"),
   );
+  const subiram = useSubiu(
+    comChaves.map(({ chave, item }) => ({ chave, posicao: item.posicao })),
+  );
   return (
     <section className="ranking-publico__divisao" aria-labelledby={idTitulo}>
       <h3 id={idTitulo} className="ranking-publico__divisao-titulo">
@@ -220,7 +226,12 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
         // role="list": com list-style none, o Safari deixaria de anunciar a lista.
         <ol ref={refLista} className="ranking-publico__lista" role="list">
           {comChaves.map(({ chave, item }) => (
-            <Item key={chave} chave={chave} item={item} />
+            <Item
+              key={chave}
+              chave={chave}
+              item={item}
+              subiu={subiram.has(chave)}
+            />
           ))}
         </ol>
       )}
@@ -228,7 +239,14 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   );
 }
 
-function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
+type PropsItem = {
+  chave: string;
+  item: ItemRankingPublico;
+  /** Subiu de posição na última atualização que mudou a ordem (useSubiu). */
+  subiu: boolean;
+};
+
+function Item({ chave, item, subiu }: PropsItem) {
   const metaBatida =
     item.percentual_meta_bp !== undefined &&
     item.percentual_meta_bp >= META_BATIDA_BP;
@@ -249,7 +267,16 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
       <span className="ranking-publico__posicao">
         {formatarPosicao(item.posicao)}
       </span>{" "}
-      <span className="ranking-publico__nome">{item.nome}</span>
+      <span className="ranking-publico__celula">
+        <span className="ranking-publico__nome">{item.nome}</span>
+        {/* Só visual: a lista já diz a posição de cada um. */}
+        {subiu && (
+          <span className="ranking-publico__subiu" aria-hidden="true">
+            <Icone nome="subiu" />
+            subiu
+          </span>
+        )}
+      </span>
       {item.percentual_meta_bp !== undefined && (
         <>
           {" "}
