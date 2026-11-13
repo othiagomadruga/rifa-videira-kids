@@ -87,7 +87,6 @@
   /* Barra de progresso */
   --cor-trilho: #e2e4ee;
   --cor-progresso: var(--cor-primaria);
-  --cor-progresso-completo: #1e7a46;
   --gradiente-progresso: var(--gradiente-marca-forte);
 
   /* Fundo ambiente das telas públicas: brilhos claros da marca, em movimento lento */
@@ -214,7 +213,6 @@
 
   --cor-trilho: #2b3058;
   --cor-progresso: #5fd1ca;
-  --cor-progresso-completo: #5fdc8f;
   --gradiente-progresso: linear-gradient(
     90deg,
     var(--cor-primaria),

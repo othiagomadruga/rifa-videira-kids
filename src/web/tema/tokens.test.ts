@@ -169,7 +169,6 @@ const BORDAS_CLARO: [string, string][] = [
   ["--cor-foco", "--cor-fundo"],
   ["--cor-primaria", "--cor-superficie"],
   ["--cor-primaria", "--cor-primaria-suave"],
-  ["--cor-progresso-completo", "--cor-trilho"],
 ];
 
 describe("CA1: tema claro (site): texto AA e bordas e foco com 3:1", () => {
