@@ -1,0 +1,51 @@
+/*
+ * Comemoração da meta batida (RIFA-049, lib/useComemoracao.ts): a camada das partículas, por cima do elemento que
+ * comemora, sem receber toque nem foco. Sem animação de CSS aqui: as partículas se movem pela Web Animations API (só
+ * transform e opacity, só sem prefers-reduced-motion) e ficam invisíveis fora dela (opacity: 0). Quem usa põe
+ * overflow: clip no item em volta, para nada criar rolagem lateral.
+ */
+.mov-comemora {
+  position: relative;
+}
+
+.mov-comemoracao {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mov-confete {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: -0.25rem 0 0 -0.25rem;
+  border-radius: 2px;
+  opacity: 0;
+}
+
+.mov-confete[data-forma="circulo"] {
+  border-radius: 50%;
+}
+
+.mov-confete--amarelo {
+  background: var(--kids-amarelo);
+}
+
+.mov-confete--verde-agua {
+  background: var(--marca-verde-agua);
+}
+
+.mov-confete--azul {
+  background: var(--marca-azul);
+}
+
+.mov-confete--roxo {
+  background: var(--marca-roxo);
+}
+
+/* No telão (fundo marinho), o roxo some: o verde-água claro do tema no lugar dele. */
+[data-tema="telao"] .mov-confete--roxo {
+  background: var(--cor-primaria);
+}
