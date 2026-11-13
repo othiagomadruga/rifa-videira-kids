@@ -14,6 +14,7 @@ import type {
   RespostaRankingPublico,
 } from "../../../shared/contracts/calculos";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
+import { CONVITE_PRIMEIRA_VENDA } from "../ranking-publico/textos";
 import { INTERVALO_ATUALIZACAO_MS } from "../ranking-publico/useRankingPublico";
 import { LINHAS_POR_DIVISAO } from "./textos";
 import { CURSOR_PARADO_MS } from "./useTelao";
@@ -369,8 +370,11 @@ describe("CA2: o telão (/telao)", () => {
       expect(
         screen.getByText("O ranking aparece aqui depois da primeira venda."),
       ).toBeInTheDocument();
+      // RIFA-053: com o convite do ranking público.
       expect(
-        screen.getByText("As vendas começam em 23/11/2026."),
+        screen.getByText(
+          "As vendas começam em 23/11/2026. Qual célula vai ser a primeira?",
+        ),
       ).toBeInTheDocument();
       expect(screen.queryByRole("list")).not.toBeInTheDocument();
       esperarSemNavegacao();
@@ -412,7 +416,26 @@ describe("CA2: o telão (/telao)", () => {
     expect(
       screen.getByText("O ranking aparece aqui depois da primeira venda."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Semana 2: ainda sem vendas.")).toBeInTheDocument();
+    // RIFA-053: com o convite do ranking público (a mesma constante).
+    expect(
+      screen.getByText(`Semana 2: ainda sem vendas. ${CONVITE_PRIMEIRA_VENDA}`),
+    ).toBeInTheDocument();
+    expect(CONVITE_PRIMEIRA_VENDA).toBe("Qual célula vai ser a primeira?");
+    // O telão continua sem controles.
+    esperarSemNavegacao();
+  });
+
+  it("RIFA-053: depois do fim, sem venda: o aviso, sem o convite (não há primeira venda a esperar)", async () => {
+    abrir({ referencia: ENCERRADA, itens: { jovens: [], adultos: [] } });
+    await esperarRanking();
+
+    expect(
+      screen.getByText("O ranking aparece aqui depois da primeira venda."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(CONVITE_PRIMEIRA_VENDA, { exact: false }),
+    ).not.toBeInTheDocument();
+    esperarSemNavegacao();
   });
 
   it("uma divisão ainda sem vendas: a coluna diz isso, a outra mostra o ranking", async () => {

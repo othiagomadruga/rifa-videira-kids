@@ -6,11 +6,7 @@ import {
 import { TextoContado } from "../../components/movimento";
 import { Icone, Marca } from "../../components/ui";
 import { ehFalhaDeConexao } from "../../lib/api";
-import {
-  formatarData,
-  formatarHora,
-  formatarPercentual,
-} from "../../lib/formatadores";
+import { formatarHora, formatarPercentual } from "../../lib/formatadores";
 import {
   ATRIBUTO_CHAVE,
   chavesPorNome,
@@ -22,7 +18,11 @@ import type {
   RankingDaDivisao,
   RankingPublico,
 } from "../ranking-publico/ranking-publico-api";
-import { formatarPosicao, textoDaJanela } from "../ranking-publico/textos";
+import {
+  descricaoSemVendas,
+  formatarPosicao,
+  textoDaJanela,
+} from "../ranking-publico/textos";
 import { useRankingPublico } from "../ranking-publico/useRankingPublico";
 import { useSubiu } from "../ranking-publico/useSubiu";
 import { faseDoTelao, listaDoTelao } from "./textos";
@@ -196,11 +196,8 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
         <p className="telao__mensagem-titulo">
           O ranking aparece aqui depois da primeira venda.
         </p>
-        <p className="telao__mensagem-detalhe">
-          {ranking.referencia.fase === "antes"
-            ? `As vendas começam em ${formatarData(ranking.referencia.data_inicio)}.`
-            : `${ranking.janela.nome}: ainda sem vendas.`}
-        </p>
+        {/* O mesmo texto do ranking público, com o convite do primeiro dia (RIFA-053); depois do fim, sem convite. */}
+        <p className="telao__mensagem-detalhe">{descricaoSemVendas(ranking)}</p>
       </div>
     );
 
