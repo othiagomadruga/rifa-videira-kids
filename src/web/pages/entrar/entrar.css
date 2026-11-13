@@ -9,7 +9,7 @@
   gap: var(--espaco-3);
 }
 
-.entrar-explicacao > :not(.icone-da-tela) {
+.entrar-explicacao > :not(.ui-icone-da-tela) {
   align-self: stretch;
 }
 

@@ -1,13 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
-import { Aviso, Button, Card, ComDica, PageHeader } from "../../components/ui";
+import {
+  Aviso,
+  Button,
+  Card,
+  ComDica,
+  IconeDaTela,
+  PageHeader,
+} from "../../components/ui";
 import {
   ehAcessoDesligado,
   textoAcessoDesligado,
 } from "../../lib/acesso-desligado";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { destinoDoPapel, retirarDestino, useSessao } from "../../lib/sessao";
-import { IconeDaTela } from "../entrar/IconeDaTela";
 import { DICAS } from "./textos";
 import "./acesso.css";
 

@@ -126,7 +126,7 @@ describe("CA1: o link no navegador (barra de endereço e histórico)", () => {
       screen.getByRole("heading", { level: 1, name: TITULO }),
     ).toBeInTheDocument();
     // RIFA-050: a chave no topo do cartão, só visual.
-    const icone = document.querySelector(".ui-card .icone-da-tela");
+    const icone = document.querySelector(".ui-card .ui-icone-da-tela");
     expect(icone).toHaveAttribute("aria-hidden", "true");
     expect(icone?.querySelector("svg")).toHaveAttribute("data-icone", "chave");
     esperarDisponivel(botaoEntrar());

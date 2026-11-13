@@ -1,6 +1,7 @@
 /* O ícone grande da tela (IconeDaTela): o roxo da marca no círculo suave (3:1 ou mais, tokens.test.ts). */
-.icone-da-tela {
+.ui-icone-da-tela {
   display: grid;
+  flex: none;
   place-items: center;
   width: 3.5rem;
   height: 3.5rem;
@@ -9,7 +10,7 @@
   color: var(--cor-primaria);
 }
 
-.icone-da-tela .ui-icone {
+.ui-icone-da-tela .ui-icone {
   width: 1.75rem;
   height: 1.75rem;
 }

@@ -25,6 +25,27 @@
   background: var(--gradiente-marca);
 }
 
+/*
+ * Com o ícone da tela (RIFA-053: a 404 e o erro de rota): o círculo à esquerda, na altura do traço e do título; o
+ * traço, o título e a descrição na coluna da direita (antes, o ícone ficava sozinho acima do traço).
+ */
+.ui-page-header--com-icone .ui-page-header__textos {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--espaco-4);
+}
+
+.ui-page-header--com-icone .ui-page-header__textos::before,
+.ui-page-header--com-icone .ui-page-header__titulo,
+.ui-page-header--com-icone .ui-page-header__descricao {
+  grid-column: 2;
+}
+
+.ui-page-header--com-icone .ui-icone-da-tela {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: end;
+}
+
 .ui-page-header__titulo {
   font-family: var(--fonte-titulo);
   font-size: clamp(var(--texto-2xl), 1.25rem + 1.2vw, var(--texto-3xl));

@@ -60,7 +60,8 @@ export const ICONES = {
     "M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4",
   // Acabamento (RIFA-053): para não repetir um ícone com outro sentido.
   // A célula: uma casa (a célula se reúne numa casa); "pessoas" fica para gente.
-  celula: "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM9.5 21v-5.5h5V21",
+  celula:
+    "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM9.5 21v-5.5h5V21",
   // Abrir (o chevron para baixo de um <details>; gira para cima quando aberto).
   abrir: "M6 9l6 6 6-6",
   // A curva: os eixos e a linha de tendência subindo.

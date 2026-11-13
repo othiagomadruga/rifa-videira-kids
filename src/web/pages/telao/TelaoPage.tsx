@@ -4,7 +4,7 @@ import {
   type ItemRankingPublico,
 } from "../../../shared/contracts/calculos";
 import { TextoContado } from "../../components/movimento";
-import { Icone, Marca } from "../../components/ui";
+import { Icone, Marca, TITULO_SEM_CONEXAO } from "../../components/ui";
 import { ehFalhaDeConexao } from "../../lib/api";
 import { formatarHora, formatarPercentual } from "../../lib/formatadores";
 import {
@@ -127,8 +127,11 @@ export function TelaoPage() {
                 nome={ehFalhaDeConexao(estado.erro) ? "sem-conexao" : "alerta"}
               />
             </span>
+            {/* Sem conexão, o título neutro, como no ranking (RIFA-053); as outras falhas, o de sempre. */}
             <p className="telao__mensagem-titulo">
-              Não foi possível carregar o ranking.
+              {ehFalhaDeConexao(estado.erro)
+                ? TITULO_SEM_CONEXAO
+                : "Não foi possível carregar o ranking."}
             </p>
             <p className="telao__mensagem-detalhe">
               A tela tenta de novo sozinha a cada minuto.
