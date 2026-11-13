@@ -288,6 +288,13 @@ describe("RIFA-051 (P3.8, A-15 e A-16): as ações do afiliado", () => {
     // Só o recuo: a altura (o alvo de toque) continua a do Button.css.
     expect(botao).not.toMatch(/height|padding-(top|bottom)|padding:/);
   });
+
+  it("revisão: os números do resumo com o valor no pé do cartão (alinhados quando um rótulo ocupa duas linhas)", () => {
+    const css = lerCss("pages/adesao/adesao.css");
+    expect(
+      /\.adesao-resumo__numeros > \.ui-stat\s*\{([^}]*)\}/.exec(css)?.[1],
+    ).toMatch(/align-content:\s*space-between;/);
+  });
 });
 
 describe("CA5: remover", () => {

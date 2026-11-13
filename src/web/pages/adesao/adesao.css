@@ -48,6 +48,12 @@
   --grade-min: 12rem;
 }
 
+/* O valor no pé do cartão (RIFA-051, revisão): a 768 e a 1024 px, "Células que já venderam" ocupa duas linhas e o
+   número dele descia 10 px em relação aos vizinhos. */
+.adesao-resumo__numeros > .ui-stat {
+  align-content: space-between;
+}
+
 /* Celular: os três números numa linha de etiquetas, para a fila "Sem célula" caber na primeira tela. */
 .adesao-resumo-compacto {
   display: flex;

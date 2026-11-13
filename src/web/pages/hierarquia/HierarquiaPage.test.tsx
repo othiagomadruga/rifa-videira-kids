@@ -6,6 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { lerCss } from "../../test/indisponivel";
 import { renderizarRota } from "../../test/renderizar";
 import {
   criarApiFalsa,
@@ -845,5 +846,26 @@ describe("CA2: editar e excluir", () => {
         )?.[1],
       ).toBe("Rede Adulta Sul"),
     );
+  });
+});
+
+describe("RIFA-051 (revisão): os números com o chip no cartão estreito", () => {
+  // O jsdom não faz layout: o CSS é a prova. Medido no Chromium (revisão da RIFA-051): de 360 a 768 px e a 1024 px,
+  // o cartão tem 156 a 182 px e, com o chip ao lado, "Discipuladores" (99 px) quebrava no meio ("Discipulado/res").
+  const css = lerCss("pages/hierarquia/hierarquia.css").replace(/\s+/g, " ");
+
+  it("o cartão é um contêiner; abaixo de 9,5rem por dentro, o chip vai para cima do rótulo (nada de quebrar a palavra)", () => {
+    const cartao = /\.hierarquia-resumo > \.ui-stat \{([^}]*)\}/.exec(css)?.[1];
+    expect(cartao).toMatch(/container-type: inline-size;/);
+    // 9,5rem = 152 px: o chip (32), o vão (8) e "Discipuladores" (99) cabem com folga para a fonte do aparelho.
+    expect(css).toMatch(
+      /@container \(max-width: 9\.5rem\) \{ \.hierarquia-resumo \.ui-stat__topo \{ flex-direction: column; align-items: flex-start; \} \}/,
+    );
+  });
+
+  it("o valor fica no pé do cartão, alinhado com o dos vizinhos quando um rótulo ocupa duas linhas", () => {
+    expect(
+      /\.hierarquia-resumo > \.ui-stat \{([^}]*)\}/.exec(css)?.[1],
+    ).toMatch(/align-content: space-between;/);
   });
 });

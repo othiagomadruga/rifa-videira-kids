@@ -3,6 +3,23 @@
   --grade-min: 9rem;
 }
 
+/* Os números com o chip do ícone (RIFA-051, revisão): no cartão estreito (dois por linha no celular, quatro a 1024 px),
+   o chip ao lado do rótulo deixava ~70 px para o texto e "Discipuladores" (99 px) quebrava no meio da palavra
+   ("Discipulado/res"). Abaixo de 9,5rem por dentro (o chip, o vão e o rótulo mais longo, com folga para a fonte do
+   aparelho), o chip vai para cima do rótulo; e o valor fica no pé do cartão, alinhado com o dos vizinhos mesmo
+   quando um rótulo ocupa duas linhas. */
+.hierarquia-resumo > .ui-stat {
+  container-type: inline-size;
+  align-content: space-between;
+}
+
+@container (max-width: 9.5rem) {
+  .hierarquia-resumo .ui-stat__topo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .hierarquia-painel,
 .hierarquia-importar,
 .hierarquia-formulario,
