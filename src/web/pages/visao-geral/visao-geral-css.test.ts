@@ -109,3 +109,31 @@ describe("CSS do relatório da campanha (RIFA-038)", () => {
     }
   });
 });
+
+describe("RIFA-051 (P3.5 e P3.6): os cartões de cima e a meta de hoje", () => {
+  /** O corpo da regra com exatamente este seletor (fora das regras do relatório). */
+  const regra = (seletor: string) => {
+    const achado = new RegExp(
+      `(^|\\})\\s*${seletor.replace(/[.*+?^${}()|[\]\\>]/g, "\\$&")}\\s*\\{([^}]*)\\}`,
+    ).exec(CSS);
+    if (!achado) throw new Error(`regra ${seletor} não encontrada`);
+    return achado[2].replace(/\s+/g, " ");
+  };
+
+  it("os cartões de cima com a altura do mais alto da linha (A-05): stretch, não start", () => {
+    expect(regra(".visao-cartoes")).toMatch(/align-items: stretch;/);
+    expect(regra(".visao-cartoes")).not.toMatch(/align-items: start/);
+  });
+
+  it("a meta de hoje usa o Stat sem a moldura dele (o cartão já é a moldura), sem regra própria de número", () => {
+    const semMoldura = regra(".visao-cartao__numero > .ui-stat");
+    for (const declaracao of [
+      "padding: 0;",
+      "border: 0;",
+      "background: none;",
+      "box-shadow: none;",
+    ])
+      expect(semMoldura).toContain(declaracao);
+    expect(CSS).not.toMatch(/\.visao-cartao__destaque|\.visao-cartao__rotulo/);
+  });
+});

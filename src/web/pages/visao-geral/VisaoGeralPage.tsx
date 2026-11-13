@@ -9,7 +9,7 @@ import {
   Loading,
   PageHeader,
 } from "../../components/ui";
-import { ErroApi, mensagemDoErro } from "../../lib/api";
+import { ErroApi, ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
 import { AlertaWebhook } from "../pedidos/AlertaWebhook";
 import { AvisosVendas } from "./AvisosVendas";
@@ -142,6 +142,7 @@ function Conteudo({
         return (
           <ErrorState
             mensagem={mensagemDoErro(estado.erro)}
+            conexao={ehFalhaDeConexao(estado.erro)}
             aoTentarDeNovo={tentarDeNovo}
           />
         );

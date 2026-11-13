@@ -4,6 +4,7 @@ import type {
   RespostaPainelResumo,
   TotaisVendas,
 } from "../../../shared/contracts/calculos";
+import { Icone } from "../../components/ui";
 import { textoDosTotais } from "./textos";
 
 type Props = { resumo: RespostaPainelResumo };
@@ -74,7 +75,7 @@ export function AvisosVendas({ resumo }: Props) {
         {avisos.map((aviso) => (
           <li key={aviso.chave}>
             <span className="visao-avisos__icone" aria-hidden="true">
-              i
+              <Icone nome="info" />
             </span>
             <p>{aviso.texto}</p>
           </li>
