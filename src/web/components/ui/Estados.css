@@ -1,4 +1,8 @@
-/* EmptyState, ErrorState e Loading. */
+/*
+ * EmptyState, ErrorState e Loading. O vazio e a falha de conexão são cartões neutros (superfície, borda suave), com o
+ * ícone num círculo (RIFA-049, A-18 e A-19): o vazio no roxo suave da marca; a conexão no amarelo suave do alerta
+ * (passageira, não é erro). O vermelho fica só para a falha de verdade (.ui-estado--erro).
+ */
 .ui-estado {
   display: grid;
   justify-items: center;
@@ -9,9 +13,11 @@
   overflow-wrap: anywhere;
 }
 
-.ui-estado--vazio {
+.ui-estado--vazio,
+.ui-estado--conexao {
   background: var(--cor-superficie);
-  border: 1px dashed var(--cor-borda-forte);
+  border: 1px solid var(--cor-borda);
+  box-shadow: var(--sombra-1);
   color: var(--cor-texto-suave);
 }
 
@@ -33,6 +39,27 @@
 
 .ui-estado__descricao {
   max-width: 36rem;
+}
+
+.ui-estado__icone {
+  display: inline-grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: var(--espaco-1);
+  border-radius: 50%;
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+}
+
+.ui-estado__icone .ui-icone {
+  width: 1.625rem;
+  height: 1.625rem;
+}
+
+.ui-estado--conexao .ui-estado__icone {
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
 }
 
 .ui-estado__acao {

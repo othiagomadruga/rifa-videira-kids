@@ -3,9 +3,10 @@ import { MARCA } from "../../tema/marca";
 import { Marca } from "./Marca";
 import "./PublicShell.css";
 
-// Layout das telas abertas (ranking público, entrar, acesso, status, 404): a marca da Videira no topo, o
-// conteúdo centralizado, sem navegação, e no rodapé o selo discreto do Kids (a campanha é para o espaço
-// Videira Kids). Atrás de tudo, o fundo ambiente: brilhos da marca em movimento lento (só sem
+// Layout das telas abertas (ranking público, entrar, acesso, status, 404): a marca da Videira no topo, na faixa do
+// degradê forte da marca (RIFA-049: o logo no selo claro, como no telão, e o nome em branco), o conteúdo
+// centralizado, sem navegação, e no rodapé o selo discreto do Kids (a campanha é para o espaço Videira Kids; D15:
+// nunca no cabeçalho). Atrás de tudo, o fundo ambiente: brilhos da marca em movimento lento (só sem
 // prefers-reduced-motion; PublicShell.css).
 export function PublicShell({ children }: { children: ReactNode }) {
   const { kids } = MARCA;
@@ -14,7 +15,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
       <div className="ui-public-shell__ambiente" aria-hidden="true" />
       <header className="ui-public-shell__topo">
         <div className="ui-public-shell__limite">
-          <Marca />
+          <Marca fundo="escuro" />
         </div>
       </header>
       <main id="conteudo" className="ui-public-shell__conteudo">

@@ -68,6 +68,13 @@ describe("nomes longos quebram nos componentes base", () => {
     );
   });
 
+  it("RIFA-049: o rótulo do Stat ao lado do chip do ícone (flex) encolhe e quebra", () => {
+    expect(regra("./Stat.css", ".ui-stat__topo")).toMatch(/min-width:\s*0;/);
+    const rotulo = regra("./Stat.css", ".ui-stat__topo .ui-stat__rotulo");
+    expect(rotulo).toMatch(/min-width:\s*0;/);
+    expect(rotulo).toMatch(/overflow-wrap:\s*anywhere;/);
+  });
+
   it("nenhum componente usa break-word (que não deixa o bloco encolher)", () => {
     for (const arquivo of [...new Set(COM_NOMES.map(([arquivo]) => arquivo))])
       expect(lerCss(arquivo), arquivo).not.toMatch(

@@ -37,6 +37,24 @@
   box-shadow: var(--sombra-3);
 }
 
+/*
+ * Véu atrás do menu aberto no celular (RIFA-049, A-20): o marinho do texto a 40%, só cor e opacidade (nada de
+ * desfoque). Fixo na janela (não cria rolagem), abaixo da barra (z-index 10) e sem foco; o toque nele fecha o menu
+ * como o toque fora (AppShell.tsx).
+ */
+.ui-app-shell__veu {
+  display: none;
+}
+
+.ui-app-shell[data-menu-aberto] .ui-app-shell__veu {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: var(--cor-texto);
+  opacity: 0.4;
+}
+
 .ui-app-shell__topo {
   display: flex;
   align-items: center;
@@ -124,6 +142,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  gap: var(--espaco-3);
   min-height: var(--alvo-toque);
   padding: var(--espaco-2) var(--espaco-3);
   border-radius: var(--raio-2);
@@ -138,6 +157,17 @@
 .ui-app-shell__link:hover {
   background: var(--cor-superficie-2);
   color: var(--cor-texto);
+}
+
+/* O ícone da tela (RIFA-049): no tom suave; no item atual, a cor do texto dele. */
+.ui-app-shell__link .ui-icone {
+  color: var(--cor-texto-suave);
+  transition: color var(--transicao);
+}
+
+.ui-app-shell__link:hover .ui-icone,
+.ui-app-shell__link[aria-current="page"] .ui-icone {
+  color: inherit;
 }
 
 /* Tela atual: fundo, peso e a barra do degradê forte da marca (>= 4,5:1 sobre o fundo): não só a cor. */
@@ -235,10 +265,17 @@
    * lateral é mais alta que a janela, e o topo encolhido deixava "Coordenação" por cima do primeiro item. O que
    * não cabe rola a barra lateral inteira (o overflow-y acima).
    */
+  /* O topo da barra lateral num fundo suave da marca (RIFA-049, A-01), que se desfaz no branco do menu. */
   .ui-app-shell__topo {
     flex-shrink: 0;
     min-height: 0;
+    margin-bottom: var(--espaco-3);
     padding: var(--espaco-5) var(--espaco-4) var(--espaco-4);
+    background: linear-gradient(
+      to bottom,
+      var(--cor-lateral-topo),
+      var(--cor-superficie)
+    );
   }
 
   /* Na barra lateral, o logo em cima e o nome embaixo. */
@@ -261,6 +298,10 @@
   }
 
   .ui-app-shell__botao-menu {
+    display: none;
+  }
+
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__veu {
     display: none;
   }
 
@@ -307,6 +348,22 @@
   /* O menu do celular desce ao abrir; a barra da tela atual cresce ao trocar de tela. */
   .ui-app-shell[data-menu-aberto] .ui-app-shell__painel {
     animation: ui-entrar var(--duracao-media) var(--curva-saida);
+  }
+
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__veu {
+    animation: ui-surgir var(--duracao-media) var(--curva-saida);
+  }
+
+  /* Ao tocar num item do menu, ele afunda um pouco (RIFA-049). */
+  .ui-app-shell__link {
+    transition:
+      background-color var(--transicao),
+      color var(--transicao),
+      transform var(--duracao-rapida) var(--curva-saida);
+  }
+
+  .ui-app-shell__link:active {
+    transform: scale(0.98);
   }
 
   .ui-app-shell__link[aria-current="page"]::before {

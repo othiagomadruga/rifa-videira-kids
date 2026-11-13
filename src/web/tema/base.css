@@ -1,4 +1,38 @@
-/* Base do site: reset leve, foco visível, movimento reduzido e utilitários. */
+/* Base do site: reset leve, a fonte dos títulos, foco visível, movimento reduzido e utilitários. */
+
+/*
+ * Fonte dos títulos (RIFA-049, D25): Outfit 800, só o subconjunto latino (tem á, ã, ç, º, ª), um arquivo do próprio
+ * site (@fontsource/outfit 5.2.6, licença OFL-1.1 em tema/fontes/OFL.txt), com preload no index.html. Só em títulos e
+ * números de destaque (--fonte-titulo); o texto corrido continua na fonte do sistema.
+ */
+@font-face {
+  font-family: "Outfit";
+  src: url("./fontes/outfit-latin-800-normal.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+ * Reserva enquanto a Outfit chega (font-display: swap): a Arial em negrito (ou a Liberation Sans, de métricas iguais)
+ * ajustada à largura e à altura da Outfit, para a troca não mudar a quebra dos títulos. Medido no Chromium com os
+ * textos das telas (RIFA-049): a Outfit 800 é 96,4% da largura da Arial em negrito; sobe 100% e desce 26% do em.
+ */
+@font-face {
+  font-family: "Outfit reserva";
+  src:
+    local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"),
+    local("LiberationSans-Bold");
+  font-weight: 800;
+  size-adjust: 96.4%;
+  ascent-override: 103.7%;
+  descent-override: 27%;
+  line-gap-override: 0%;
+}
 
 *,
 *::before,
@@ -43,6 +77,12 @@ h3,
 h4 {
   font-weight: var(--peso-forte);
   line-height: var(--altura-linha-titulo);
+}
+
+/* O título da tela na fonte dos títulos (a Outfit só tem o 800). */
+h1 {
+  font-family: var(--fonte-titulo);
+  font-weight: var(--peso-extra);
 }
 
 img,

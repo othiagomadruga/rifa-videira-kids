@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { juntarClasses } from "./classes";
 import { ComDica } from "./Dica";
+import { Icone } from "./Icone";
+import type { NomeIcone } from "./icones";
 import "./Aviso.css";
 
 export type TomAviso = "info" | "sucesso" | "alerta" | "perigo";
@@ -42,11 +44,11 @@ const PAPEL: Record<AnuncioAviso, "alert" | "status" | undefined> = {
   nenhum: undefined,
 };
 
-const ICONE: Record<TomAviso, string> = {
-  info: "i",
-  sucesso: "✓",
-  alerta: "!",
-  perigo: "!",
+const ICONE: Record<TomAviso, NomeIcone> = {
+  info: "info",
+  sucesso: "check",
+  alerta: "alerta",
+  perigo: "alerta",
 };
 
 // Mensagem na própria tela (não flutua nem some sozinha): resultado de uma ação, aviso ou erro.
@@ -69,7 +71,7 @@ export function Aviso({
       className={juntarClasses("ui-aviso", `ui-aviso--${tom}`, className)}
     >
       <span className="ui-aviso__icone" aria-hidden="true">
-        {ICONE[tom]}
+        <Icone nome={ICONE[tom]} />
       </span>
       <div className="ui-aviso__textos">
         {titulo && <p className="ui-aviso__titulo">{titulo}</p>}
@@ -84,21 +86,7 @@ export function Aviso({
             aria-label={rotuloFechar}
             onClick={aoFechar}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path
-                d="M4 4l8 8M12 4l-8 8"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
+            <Icone nome="fechar" tamanho="1rem" />
           </button>
         </ComDica>
       )}

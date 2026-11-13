@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router";
 import { Button } from "./Button";
 import { ComDica } from "./Dica";
+import { Icone } from "./Icone";
+import type { NomeIcone } from "./icones";
 import { Marca } from "./Marca";
 import "./AppShell.css";
 
@@ -13,6 +15,8 @@ export type ItemNavegacao = {
   exato?: boolean;
   /** Dica do link (RIFA-045): o que a tela faz. */
   dica?: ReactNode;
+  /** Ícone à esquerda do texto (RIFA-049; só visual: o nome do link continua o rótulo). */
+  icone?: NomeIcone;
 };
 
 /** Dicas dos botões da moldura (RIFA-045). */
@@ -124,6 +128,8 @@ export function AppShell({ area, itens, conta, children }: Props) {
       <a className="ui-app-shell__pular" href="#conteudo">
         Pular para o conteúdo
       </a>
+      {/* O véu atrás do menu aberto no celular (só visual; o toque nele fecha o menu, como o toque fora). */}
+      <div className="ui-app-shell__veu" aria-hidden="true" />
       <div className="ui-app-shell__lateral" ref={refAreaMenu}>
         <header className="ui-app-shell__topo">
           <Marca complemento={area} />
@@ -136,7 +142,11 @@ export function AppShell({ area, itens, conta, children }: Props) {
               aria-controls={idPainel}
               onClick={() => setMenuAberto((aberto) => !aberto)}
             >
-              <IconeMenu aberto={menuAberto} />
+              <Icone
+                nome={menuAberto ? "fechar" : "menu"}
+                tamanho="1.25rem"
+                className="ui-app-shell__icone"
+              />
               Menu
             </button>
           </ComDica>
@@ -153,6 +163,7 @@ export function AppShell({ area, itens, conta, children }: Props) {
                       className="ui-app-shell__link"
                       onClick={aoEscolherTela}
                     >
+                      {item.icone && <Icone nome={item.icone} />}
                       {item.rotulo}
                     </NavLink>
                   </ComDica>
@@ -206,26 +217,5 @@ function Conta({ nome, detalhe, aoSair, saindo = false, erro }: ContaAppShell) {
         </p>
       )}
     </div>
-  );
-}
-
-function IconeMenu({ aberto }: { aberto: boolean }) {
-  return (
-    <svg
-      className="ui-app-shell__icone"
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d={aberto ? "M5 5l10 10M15 5L5 15" : "M3 5.5h14M3 10h14M3 14.5h14"}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
   );
 }

@@ -4,21 +4,28 @@ import { Aviso, Button } from ".";
 
 describe("Aviso", () => {
   it.each([
-    ["perigo", "alert"],
-    ["alerta", "alert"],
-    ["info", "status"],
-    ["sucesso", "status"],
-  ] as const)("tom %s é anunciado como %s", (tom, papel) => {
-    render(
-      <Aviso tom={tom} titulo="Título do aviso">
-        <p>Texto do aviso.</p>
-      </Aviso>,
-    );
+    ["perigo", "alert", "alerta"],
+    ["alerta", "alert", "alerta"],
+    ["info", "status", "info"],
+    ["sucesso", "status", "check"],
+  ] as const)(
+    "tom %s é anunciado como %s, com o ícone %s",
+    (tom, papel, icone) => {
+      render(
+        <Aviso tom={tom} titulo="Título do aviso">
+          <p>Texto do aviso.</p>
+        </Aviso>,
+      );
 
-    const aviso = screen.getByRole(papel);
-    expect(aviso).toHaveClass("ui-aviso", `ui-aviso--${tom}`);
-    expect(aviso).toHaveTextContent("Título do avisoTexto do aviso.");
-  });
+      const aviso = screen.getByRole(papel);
+      expect(aviso).toHaveClass("ui-aviso", `ui-aviso--${tom}`);
+      // O ícone é SVG (só visual): o texto lido é só o do aviso, sem caractere a mais.
+      expect(aviso).toHaveTextContent(/^Título do avisoTexto do aviso\.$/);
+      const chip = aviso.querySelector(".ui-aviso__icone");
+      expect(chip).toHaveAttribute("aria-hidden", "true");
+      expect(chip?.querySelector("svg")).toHaveAttribute("data-icone", icone);
+    },
+  );
 
   it("anuncio='nenhum' não cria região viva (para quem já tem uma fixa na tela)", () => {
     const { container } = render(
@@ -47,7 +54,11 @@ describe("Aviso", () => {
     expect(
       screen.getByRole("button", { name: "Tentar de novo" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
+    const fechar = screen.getByRole("button", { name: "Fechar aviso" });
+    // O × é o Icone (aria-hidden): o nome do botão continua o rótulo.
+    expect(fechar.querySelector("svg")).toHaveAttribute("data-icone", "fechar");
+    expect(fechar.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    fireEvent.click(fechar);
     expect(aoFechar).toHaveBeenCalledOnce();
   });
 

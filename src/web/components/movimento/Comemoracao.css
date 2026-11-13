@@ -1,0 +1,54 @@
+/*
+ * Comemoração da meta batida (RIFA-049, lib/useComemoracao.tsx): a camada das partículas, por cima do elemento que
+ * comemora, sem receber toque nem foco. Sem animação de CSS aqui: as partículas se movem pela Web Animations API (só
+ * transform e opacity, só sem prefers-reduced-motion) e ficam invisíveis fora dela (opacity: 0). Quem usa põe
+ * overflow: clip no item em volta, para nada criar rolagem lateral.
+ */
+.mov-comemora {
+  position: relative;
+}
+
+.mov-comemoracao {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Do tamanho do texto do elemento (o % do celular, o número grande da /minha, o % do telão), entre 7 e 14 px. */
+.mov-confete {
+  --confete-lado: clamp(0.4375rem, 0.3em, 0.875rem);
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--confete-lado);
+  height: var(--confete-lado);
+  margin: calc(var(--confete-lado) / -2) 0 0 calc(var(--confete-lado) / -2);
+  border-radius: 2px;
+  opacity: 0;
+}
+
+.mov-confete[data-forma="circulo"] {
+  border-radius: 50%;
+}
+
+.mov-confete--amarelo {
+  background: var(--kids-amarelo);
+}
+
+.mov-confete--verde-agua {
+  background: var(--marca-verde-agua);
+}
+
+.mov-confete--azul {
+  background: var(--marca-azul);
+}
+
+.mov-confete--roxo {
+  background: var(--marca-roxo);
+}
+
+/* No telão (fundo marinho), o roxo some: o verde-água claro do tema no lugar dele. */
+[data-tema="telao"] .mov-confete--roxo {
+  background: var(--cor-primaria);
+}

@@ -98,3 +98,17 @@
     animation: ui-brilho 1.6s var(--curva-suave) infinite;
   }
 }
+
+/*
+ * Toque (RIFA-049): a classe utilitária para o que se toca e não é botão (ex.: um cartão de opção). Ao pressionar,
+ * afunda um pouco; só sem prefers-reduced-motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .mov-toque {
+    transition: transform var(--duracao-rapida) var(--curva-saida);
+  }
+
+  .mov-toque:active {
+    transform: scale(0.98);
+  }
+}

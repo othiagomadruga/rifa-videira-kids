@@ -65,6 +65,8 @@
   --cor-foco: #3f6fae;
   /* Selo claro onde o logo da Videira fica em fundo escuro (o logo foi feito para fundo branco) */
   --cor-selo-marca: #ffffff;
+  /* Fundo suave da marca no topo da barra lateral da coordenação (texto e texto suave por cima: AA) */
+  --cor-lateral-topo: #e4f1f1;
 
   /* Comemoração (amarelo do Kids): 1º lugar e meta batida, sempre com texto marinho em cima */
   --cor-comemoracao: var(--kids-amarelo);
@@ -87,7 +89,6 @@
   /* Barra de progresso */
   --cor-trilho: #e2e4ee;
   --cor-progresso: var(--cor-primaria);
-  --cor-progresso-completo: #1e7a46;
   --gradiente-progresso: var(--gradiente-marca-forte);
 
   /* Fundo ambiente das telas públicas: brilhos claros da marca, em movimento lento */
@@ -97,10 +98,14 @@
   /* Brilho que passa pelo esqueleto do carregando */
   --cor-brilho-esqueleto: rgb(255 255 255 / 0.75);
 
-  /* Tipografia: fonte do sistema (sem fonte externa) */
+  /*
+   * Tipografia: o texto na fonte do sistema; os títulos e os números de destaque na Outfit 800, do próprio site
+   * (tema/base.css, RIFA-049), com a reserva ajustada enquanto ela chega.
+   */
   --fonte-base:
     system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif;
+  --fonte-titulo: "Outfit", "Outfit reserva", var(--fonte-base);
   --fonte-mono:
     ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --texto-xs: 0.8125rem;
@@ -214,7 +219,6 @@
 
   --cor-trilho: #2b3058;
   --cor-progresso: #5fd1ca;
-  --cor-progresso-completo: #5fdc8f;
   --gradiente-progresso: linear-gradient(
     90deg,
     var(--cor-primaria),

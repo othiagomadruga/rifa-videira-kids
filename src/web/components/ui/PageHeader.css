@@ -14,14 +14,33 @@
   overflow-wrap: anywhere;
 }
 
+/* O traço curto do degradê da marca acima do título (RIFA-049, A-01): decorativo, fora do <h1>. */
+.ui-page-header__textos::before {
+  content: "";
+  justify-self: start;
+  width: 2.5rem;
+  height: 4px;
+  margin-bottom: var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--gradiente-marca);
+}
+
 .ui-page-header__titulo {
+  font-family: var(--fonte-titulo);
   font-size: clamp(var(--texto-2xl), 1.25rem + 1.2vw, var(--texto-3xl));
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
   letter-spacing: -0.01em;
 }
 
 .ui-page-header__descricao {
   color: var(--cor-texto-suave);
+}
+
+/* No celular, a descrição menor: o conteúdo da tela aparece antes (RIFA-049, A-04). */
+@media (max-width: 47.9375rem) {
+  .ui-page-header__descricao {
+    font-size: var(--texto-sm);
+  }
 }
 
 .ui-page-header__acoes {

@@ -1,5 +1,5 @@
 /*
- * Telas abertas: topo branco com a faixa da marca, conteúdo sobre o fundo ambiente e, no pé da página, o
+ * Telas abertas: topo na faixa do degradê forte da marca, conteúdo sobre o fundo ambiente e, no pé da página, o
  * selo do Kids. O rodapé fica no fim da janela quando o conteúdo é curto (nada pula quando ele chega).
  */
 .ui-public-shell {
@@ -49,13 +49,15 @@
   background: radial-gradient(closest-side, var(--cor-ambiente-2), transparent);
 }
 
-/* Topo: a faixa do degradê da marca (4 px) em cima do branco. */
+/*
+ * Topo (RIFA-049, A-02): a faixa do degradê forte da marca, com o logo no selo claro e o nome em branco (>= 5:1 em
+ * todos os pontos, tokens.test.ts). A altura é fixa desde o início (o selo reserva o lugar antes de o logo chegar):
+ * 74 px no Chromium (o selo de 48 px na linha do texto), 1 a menos que o topo branco de antes, com a borda.
+ */
 .ui-public-shell__topo {
-  padding: calc(var(--espaco-3) + 4px) var(--margem-pagina) var(--espaco-3);
-  background:
-    var(--gradiente-marca) top / 100% 4px no-repeat,
-    var(--cor-superficie);
-  border-bottom: 1px solid var(--cor-borda);
+  padding: var(--espaco-3) var(--margem-pagina);
+  background: var(--gradiente-marca-forte);
+  color: var(--cor-sobre-primaria);
 }
 
 .ui-public-shell__topo .ui-marca {

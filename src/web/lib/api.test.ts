@@ -6,8 +6,11 @@ import {
   api,
   baixarArquivo,
   CODIGOS_CLIENTE,
+  ehFalhaDeConexao,
   ErroApi,
   LIBERAR_ARQUIVO_DEPOIS_MS,
+  MENSAGEM_SEM_CONEXAO,
+  MENSAGEM_TEMPO_ESGOTADO,
   mensagemDoErro,
   requisitarJson,
   TAMANHO_MAXIMO_NOME_ARQUIVO,
@@ -169,9 +172,10 @@ describe("cliente da API: erros tipados", () => {
 
     expect(erro).toMatchObject({
       codigo: CODIGOS_CLIENTE.semConexao,
-      mensagem: "Não foi possível conectar à API.",
+      mensagem: MENSAGEM_SEM_CONEXAO,
       status: null,
     });
+    expect(ehFalhaDeConexao(erro)).toBe(true);
     expect((erro as ErroApi).cause).toBe(falha);
   });
 });
@@ -184,6 +188,7 @@ describe("cliente da API: tempo limite e cancelamento", () => {
     const promessa = api.get("/api/lenta", { tempoLimiteMs: 2_000 });
     const verificacao = expect(promessa).rejects.toMatchObject({
       codigo: CODIGOS_CLIENTE.tempoEsgotado,
+      mensagem: MENSAGEM_TEMPO_ESGOTADO,
       status: null,
     });
     await vi.advanceTimersByTimeAsync(2_000);
@@ -613,5 +618,39 @@ describe("cliente da API: arquivo para baixar (baixarArquivo, RIFA-038)", () => 
       }),
     ).rejects.toBeInstanceOf(TypeError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// RIFA-049 (P1.12): as falhas sem resposta falam a língua de quem usa (o público e os líderes leem), sem "API".
+describe("cliente da API: mensagens de falha sem jargão", () => {
+  it("os textos combinados; os códigos não mudam", () => {
+    expect(MENSAGEM_SEM_CONEXAO).toBe(
+      "Sem conexão com a internet. Confira o sinal e tente de novo.",
+    );
+    expect(MENSAGEM_TEMPO_ESGOTADO).toBe(
+      "O sistema demorou para responder. Tente de novo.",
+    );
+    expect(CODIGOS_CLIENTE).toMatchObject({
+      semConexao: "SEM_CONEXAO",
+      tempoEsgotado: "TEMPO_ESGOTADO",
+    });
+    for (const mensagem of [MENSAGEM_SEM_CONEXAO, MENSAGEM_TEMPO_ESGOTADO])
+      expect(mensagem).not.toMatch(/\bAPI\b|HTTP/);
+  });
+
+  it("ehFalhaDeConexao: só sem conexão e tempo esgotado (a falha passageira), nunca a resposta de erro", () => {
+    const erro = (codigo: string, status: number | null = null) =>
+      new ErroApi({ codigo, mensagem: "x", status });
+    expect(ehFalhaDeConexao(erro(CODIGOS_CLIENTE.semConexao))).toBe(true);
+    expect(ehFalhaDeConexao(erro(CODIGOS_CLIENTE.tempoEsgotado))).toBe(true);
+    for (const codigo of [
+      CODIGOS_CLIENTE.cancelada,
+      CODIGOS_CLIENTE.respostaInvalida,
+      CODIGOS_CLIENTE.erroHttp,
+      "nao_encontrado",
+    ])
+      expect(ehFalhaDeConexao(erro(codigo, 500)), codigo).toBe(false);
+    expect(ehFalhaDeConexao(new Error(MENSAGEM_SEM_CONEXAO))).toBe(false);
+    expect(ehFalhaDeConexao(null)).toBe(false);
   });
 });

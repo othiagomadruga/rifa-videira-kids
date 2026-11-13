@@ -1,6 +1,55 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Input, Select, Textarea } from "./Campos";
+
+type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
+const { process } = globalThis as unknown as {
+  process: { getBuiltinModule(nome: "node:fs"): ModuloFs };
+};
+// O caminho vai numa variável: com um texto fixo, o Vite trocaria o new URL(..., import.meta.url) pela URL do asset.
+const lerCss = (relativo: string) =>
+  process
+    .getBuiltinModule("node:fs")
+    .readFileSync(
+      decodeURIComponent(new URL(relativo, import.meta.url).pathname),
+      "utf8",
+    )
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+
+// RIFA-049 (P1.10, A-12): no foco, a borda do campo vira o roxo da marca (além do anel do foco); o campo com erro
+// continua com a borda vermelha. O jsdom não aplica CSS: o seletor da regra é conferido com matches.
+describe("campos: a borda no foco", () => {
+  const regras = [
+    ...lerCss("./Campos.css").matchAll(/([^{}]+)\{([^{}]*)\}/g),
+  ].map(([, seletor, corpo]) => ({ seletor: seletor.trim(), corpo }));
+  const doFoco = regras.filter(
+    ({ seletor, corpo }) =>
+      /:focus/.test(seletor) &&
+      /border-color:\s*var\(--cor-primaria\)/.test(corpo),
+  );
+
+  it("o campo focado ganha a borda roxa; o com erro, não", () => {
+    expect(doFoco).toHaveLength(1);
+    const { seletor } = doFoco[0];
+    render(
+      <>
+        <Input rotulo="Nome" />
+        <Input rotulo="Telefone" erro="Telefone inválido." />
+      </>,
+    );
+    const nome = screen.getByLabelText("Nome");
+    const telefone = screen.getByLabelText("Telefone");
+    expect(nome.matches(seletor)).toBe(false);
+    act(() => nome.focus());
+    expect(nome.matches(seletor)).toBe(true);
+    act(() => telefone.focus());
+    expect(telefone.matches(seletor)).toBe(false);
+    // O anel do foco continua (o global do base.css).
+    expect(lerCss("../../tema/base.css")).toMatch(
+      /:focus-visible\s*\{[^}]*outline:\s*var\(--foco-anel\);/,
+    );
+  });
+});
 
 describe("campos de formulário", () => {
   it("Input: rótulo ligado ao campo e repassa as props nativas", () => {

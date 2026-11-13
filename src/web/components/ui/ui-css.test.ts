@@ -173,8 +173,8 @@ describe("Button: o indisponível não reage ao mouse (RIFA-045)", () => {
     seletor.includes(':not([aria-disabled="true"])');
 
   it('com aria-disabled="true" (ex.: "Baixando…", "Carregar mais" carregando), nem o passar do mouse nem o pressionar mudam o botão', () => {
-    // Os quatro :hover das variantes, o subir 1 px no mouse e o afundar ao pressionar.
-    expect(seletores.length).toBeGreaterThanOrEqual(6);
+    // Os cinco :hover das variantes, o subir 1 px no mouse e o afundar ao pressionar.
+    expect(seletores.length).toBeGreaterThanOrEqual(7);
     expect(seletores.filter((seletor) => !pulaOIndisponivel(seletor))).toEqual(
       [],
     );
@@ -209,7 +209,13 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
 
   it('.ui-button[aria-disabled="true"]: a opacidade e o cursor do :disabled, em todas as variantes, só com o Button.css', () => {
     const button = lerCss("components/ui/Button.css");
-    for (const variante of ["primario", "secundario", "discreto", "perigo"]) {
+    for (const variante of [
+      "primario",
+      "secundario",
+      "discreto",
+      "perigo",
+      "perigo-discreto",
+    ]) {
       expect(
         caraDeIndisponivel(
           indisponivel(`ui-button ui-button--${variante}`),
@@ -356,5 +362,208 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
         repete: true,
       },
     ]);
+  });
+});
+
+// RIFA-049 (P1.3, A-18): a falha de conexão é passageira, não é erro. O cartão dela e o círculo do ícone não usam
+// nenhuma cor de perigo (o vermelho fica só no .ui-estado--erro); o vazio tem borda sólida suave (antes, tracejada).
+describe("Estados: a falha de conexão sem vermelho e o vazio sem tracejado", () => {
+  const estados = declaracoes(lerArquivo("./Estados.css"));
+  const doSeletor = (parte: string) =>
+    estados.filter(({ blocos }) =>
+      blocos
+        .at(-1)!
+        .split(/\s*,\s*/)
+        .some((seletor) => seletor.includes(parte)),
+    );
+
+  it("o .ui-estado--conexao (e o que vale dentro dele) não usa --cor-perigo*", () => {
+    const conexao = doSeletor(".ui-estado--conexao");
+    expect(conexao.length).toBeGreaterThanOrEqual(4);
+    for (const { propriedade, valor, blocos } of conexao)
+      expect(valor, `${blocos.at(-1)} { ${propriedade} }`).not.toMatch(
+        /--cor-perigo/,
+      );
+    // O vermelho continua, mas só na falha de verdade.
+    expect(
+      doSeletor(".ui-estado--erro").some(({ valor }) =>
+        /--cor-perigo/.test(valor),
+      ),
+    ).toBe(true);
+    // O círculo do ícone da conexão: o amarelo suave do alerta.
+    expect(
+      Object.fromEntries(
+        doSeletor(".ui-estado--conexao .ui-estado__icone").map(
+          ({ propriedade, valor }) => [propriedade, valor],
+        ),
+      ),
+    ).toEqual({
+      background: "var(--cor-alerta-suave)",
+      color: "var(--cor-alerta)",
+    });
+  });
+
+  it("o vazio: borda sólida suave, sem tracejado", () => {
+    const vazio = Object.fromEntries(
+      doSeletor(".ui-estado--vazio").map(({ propriedade, valor }) => [
+        propriedade,
+        valor,
+      ]),
+    );
+    expect(vazio.border).toBe("1px solid var(--cor-borda)");
+    expect(lerArquivo("./Estados.css")).not.toMatch(/dashed/);
+  });
+});
+
+// RIFA-049 (P1.4, A-14 e A-15): o botão pequeno tem o alvo de toque de 44 px numa tela de toque (o mouse continua com
+// 36 px), e a variante perigo-discreto (ação destrutiva leve) segue as regras das outras.
+describe("Button: o pequeno com 44 px no toque e a variante perigo-discreto", () => {
+  const button = declaracoes(lerArquivo("./Button.css"));
+  const daRegra = (media: string | null, seletor: string) =>
+    Object.fromEntries(
+      button
+        .filter(
+          ({ blocos }) =>
+            blocos.length === (media ? 2 : 1) &&
+            (media === null || blocos[0] === media) &&
+            blocos
+              .at(-1)!
+              .split(/\s*,\s*/)
+              .includes(seletor),
+        )
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+
+  it("no toque (pointer: coarse), o pequeno tem o alvo de toque; no mouse, 36 px", () => {
+    expect(daRegra(null, ".ui-button--pequeno")["min-height"]).toBe("2.25rem");
+    expect(daRegra("@media (pointer: coarse)", ".ui-button--pequeno")).toEqual({
+      "min-height": "var(--alvo-toque)",
+    });
+    // O alvo de toque é 44 px (2,75rem).
+    expect(lerArquivo("../../tema/tokens.css")).toMatch(
+      /--alvo-toque:\s*2\.75rem;/,
+    );
+  });
+
+  it("perigo-discreto: texto do perigo sem fundo; o hover pula o indisponível e não repete a regra dele", () => {
+    expect(daRegra(null, ".ui-button--perigo-discreto")).toEqual({
+      background: "transparent",
+      color: "var(--cor-perigo)",
+    });
+    const hover = daRegra(
+      null,
+      '.ui-button--perigo-discreto:hover:not(:disabled):not([aria-disabled="true"])',
+    );
+    expect(hover).toEqual({
+      background: "var(--cor-perigo-suave)",
+      color: "var(--cor-perigo)",
+    });
+    // Nenhuma regra própria do indisponível nesta variante (a de .ui-button[aria-disabled="true"] vale para todas).
+    expect(
+      button.filter(({ blocos }) =>
+        /perigo-discreto[^,]*\[aria-disabled="true"\](?!\))/.test(
+          blocos.at(-1)!,
+        ),
+      ),
+    ).toEqual([]);
+  });
+});
+
+// RIFA-049 (P1.7, A-02): o topo das telas abertas é a faixa do degradê forte da marca, com o texto branco (o contraste
+// de cada ponto está no tokens.test.ts); a altura é fixa (padding fixo e o selo do logo reservado desde o início).
+describe("PublicShell: o topo na faixa da marca", () => {
+  const topo = Object.fromEntries(
+    declaracoes(lerArquivo("./PublicShell.css"))
+      .filter(
+        ({ blocos }) =>
+          blocos.length === 1 && blocos[0] === ".ui-public-shell__topo",
+      )
+      .map(({ propriedade, valor }) => [propriedade, valor]),
+  );
+
+  it("o fundo é o --gradiente-marca-forte e o texto, o --cor-sobre-primaria", () => {
+    expect(topo.background).toBe("var(--gradiente-marca-forte)");
+    expect(topo.color).toBe("var(--cor-sobre-primaria)");
+    // Nada de altura que depende do logo ter chegado: o padding é fixo.
+    expect(topo.padding).toBe("var(--espaco-3) var(--margem-pagina)");
+  });
+
+  it("o selo do logo (fundo escuro) tem o lugar reservado em rem, com ou sem o logo carregado", () => {
+    const selo = Object.fromEntries(
+      declaracoes(lerArquivo("./Marca.css"))
+        .filter(
+          ({ blocos }) =>
+            blocos.at(-1) === '.ui-marca[data-fundo="escuro"] .ui-marca__selo',
+        )
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+    expect(selo.padding).toBe("var(--espaco-1) var(--espaco-2)");
+  });
+});
+
+// RIFA-049 (P1.8, A-01 e A-20): a marca na coordenação. O véu atrás do menu do celular é só cor e opacidade (nada de
+// desfoque nem de movimento fora do no-preference), fixo na janela (não cria rolagem) e some no computador; o traço do
+// título é decorativo (::before, sem texto).
+describe("AppShell e PageHeader: o véu do menu e o traço da marca", () => {
+  const appShell = declaracoes(lerArquivo("./AppShell.css"));
+  const doVeu = appShell.filter(({ blocos }) =>
+    blocos.at(-1)!.includes("ui-app-shell__veu"),
+  );
+
+  it("o véu: fixo, cor do texto com opacidade, sem desfoque; no computador, nenhum", () => {
+    const aberto = Object.fromEntries(
+      doVeu
+        .filter(({ blocos }) => blocos.length === 1)
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+    expect(aberto).toMatchObject({
+      position: "fixed",
+      inset: "0",
+      background: "var(--cor-texto)",
+      opacity: "0.4",
+    });
+    expect(
+      regra(
+        lerArquivo("./AppShell.css"),
+        COMPUTADOR,
+        ".ui-app-shell[data-menu-aberto] .ui-app-shell__veu",
+      ),
+    ).toEqual({ display: "none" });
+    for (const { propriedade, valor } of doVeu) {
+      expect(propriedade).not.toMatch(/filter|transform|transition/);
+      expect(valor).not.toMatch(/blur/);
+    }
+    expect(lerArquivo("./AppShell.css")).not.toMatch(/backdrop-filter/);
+    // A animação do véu é só o fade (ui-surgir), dentro do no-preference.
+    const animacoes = doVeu.filter(
+      ({ propriedade }) => propriedade === "animation",
+    );
+    expect(animacoes).toHaveLength(1);
+    expect(animacoes[0].blocos[0]).toBe(
+      "@media (prefers-reduced-motion: no-preference)",
+    );
+    expect(animacoes[0].valor).toMatch(/^ui-surgir /);
+  });
+
+  it("o topo da barra lateral no fundo suave da marca (o token novo)", () => {
+    expect(
+      regra(lerArquivo("./AppShell.css"), COMPUTADOR, ".ui-app-shell__topo")
+        .background,
+    ).toMatch(/var\(--cor-lateral-topo\)/);
+  });
+
+  it("o traço do título: decorativo (::before vazio) com o degradê da marca, fora do <h1>", () => {
+    const traco = Object.fromEntries(
+      declaracoes(lerArquivo("./PageHeader.css"))
+        .filter(
+          ({ blocos }) => blocos.at(-1) === ".ui-page-header__textos::before",
+        )
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+    expect(traco).toMatchObject({
+      content: '""',
+      background: "var(--gradiente-marca)",
+    });
+    expect(traco.width).toMatch(/rem$/);
   });
 });

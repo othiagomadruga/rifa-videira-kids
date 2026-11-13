@@ -1,11 +1,16 @@
-/* Situação de um indicador: cores dos estados do tema (texto sobre o fundo "suave", AA conferido). */
+/*
+ * Situação de um indicador: cores dos estados do tema (texto sobre o fundo "suave", AA conferido). Mais leve que o
+ * Aviso (RIFA-049, A-10): fundo suave e borda de 1 px, sem a faixa de 4 px (a faixa é do alerta); o chip redondo
+ * leva o ícone no fundo suave sobre a cor do estado (o mesmo par do texto, invertido: >= 4,5:1).
+ */
 .ui-situacao {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--espaco-3);
   padding: var(--espaco-2) var(--espaco-3);
-  border-left: 4px solid var(--situacao-cor);
+  border: 1px solid
+    color-mix(in srgb, var(--situacao-cor) 28%, var(--situacao-fundo));
   border-radius: var(--raio-2);
   background: var(--situacao-fundo);
   color: var(--cor-texto);
@@ -43,6 +48,12 @@
   line-height: 1;
 }
 
+.ui-situacao__icone .ui-icone {
+  width: 1.125rem;
+  height: 1.125rem;
+  stroke-width: 2.75;
+}
+
 .ui-situacao__textos {
   display: grid;
   min-width: 0;
@@ -61,6 +72,5 @@
 @media (forced-colors: active) {
   .ui-situacao {
     border: 1px solid CanvasText;
-    border-left-width: 4px;
   }
 }

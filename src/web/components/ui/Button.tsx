@@ -2,7 +2,12 @@ import type { ComponentProps } from "react";
 import { juntarClasses } from "./classes";
 import "./Button.css";
 
-export type VarianteBotao = "primario" | "secundario" | "discreto" | "perigo";
+/**
+ * `perigo-discreto` (RIFA-049): ação destrutiva leve (ex.: "Excluir" numa linha), texto vermelho sem fundo; o `perigo`
+ * cheio fica para a confirmação.
+ */
+export type VarianteBotao =
+  "primario" | "secundario" | "discreto" | "perigo" | "perigo-discreto";
 export type TamanhoBotao = "normal" | "pequeno";
 
 type OpcoesBotao = {
