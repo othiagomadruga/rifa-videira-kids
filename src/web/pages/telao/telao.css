@@ -293,7 +293,9 @@
   grid-template-rows: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
 }
 
+/* position: relative: o FLIP põe quem sobe por cima (z-index) enquanto as linhas trocam de lugar. */
 .telao__item {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
