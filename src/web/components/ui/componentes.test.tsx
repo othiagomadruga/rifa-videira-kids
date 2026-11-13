@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
+import { TITULO_SEM_CONEXAO } from "./ErrorState";
 import {
   AppShell,
   Badge,
@@ -165,6 +166,82 @@ describe("estados: vazio, erro e carregando", () => {
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
     );
     expect(aoTentarDeNovo).toHaveBeenCalledOnce();
+  });
+
+  it("ErrorState conexao (RIFA-049): neutro, com o ícone e 'Sem conexão agora'; o botão e a dica não mudam", () => {
+    const aoTentarDeNovo = vi.fn();
+    const { container } = render(
+      <ErrorState
+        conexao
+        mensagem={MENSAGEM_SEM_CONEXAO}
+        aoTentarDeNovo={aoTentarDeNovo}
+      />,
+    );
+
+    // Continua um alerta (o leitor de tela ouve), mas sem a cara de erro: nenhuma classe de perigo.
+    const alerta = screen.getByRole("alert");
+    expect(alerta).toHaveClass("ui-estado", "ui-estado--conexao");
+    expect(alerta.className).not.toMatch(/--erro|perigo/);
+    expect(alerta).toHaveTextContent(
+      `${TITULO_SEM_CONEXAO}${MENSAGEM_SEM_CONEXAO}Tentar de novo`,
+    );
+    expect(TITULO_SEM_CONEXAO).toBe("Sem conexão agora");
+    const icone = container.querySelector(".ui-estado__icone");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(icone?.querySelector("svg")).toHaveAttribute(
+      "data-icone",
+      "sem-conexao",
+    );
+    const botao = within(alerta).getByRole("button", {
+      name: "Tentar de novo",
+    });
+    expect(botao).toHaveClass("ui-button--secundario");
+    fireEvent.click(botao);
+    expect(aoTentarDeNovo).toHaveBeenCalledOnce();
+  });
+
+  it("ErrorState conexao aceita outro título (o da tela); sem conexao, igual a antes (vermelho, sem ícone)", () => {
+    const { container, rerender } = render(
+      <ErrorState conexao titulo="Não foi possível carregar o ranking." />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /^Não foi possível carregar o ranking\.$/,
+    );
+    rerender(<ErrorState mensagem="Falhou." />);
+    const alerta = screen.getByRole("alert");
+    expect(alerta).toHaveClass("ui-estado", "ui-estado--erro");
+    expect(alerta).toHaveTextContent(
+      /^Não foi possível carregar os dados\.Falhou\.$/,
+    );
+    expect(container.querySelector(".ui-estado__icone")).toBeNull();
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("EmptyState com icone: o círculo de marca com o ícone, só visual; sem icone, o mesmo texto de antes", () => {
+    const { container, rerender } = render(
+      <EmptyState
+        titulo="O ranking aparece com a primeira venda."
+        icone="trofeu"
+      />,
+    );
+    const icone = container.querySelector(".ui-estado__icone");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(icone?.querySelector("svg")).toHaveAttribute("data-icone", "trofeu");
+    expect(container.firstElementChild).toHaveTextContent(
+      /^O ranking aparece com a primeira venda\.$/,
+    );
+
+    rerender(
+      <EmptyState titulo="Nenhum pedido ainda." descricao="Volte depois." />,
+    );
+    expect(container.querySelector(".ui-estado__icone")).toBeNull();
+    expect(container.firstElementChild).toHaveClass(
+      "ui-estado",
+      "ui-estado--vazio",
+    );
+    expect(container.firstElementChild).toHaveTextContent(
+      /^Nenhum pedido ainda\.Volte depois\.$/,
+    );
   });
 
   it("ErrorState sem aoTentarDeNovo não mostra botão", () => {

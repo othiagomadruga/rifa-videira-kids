@@ -358,3 +358,53 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
     ]);
   });
 });
+
+// RIFA-049 (P1.3, A-18): a falha de conexão é passageira, não é erro. O cartão dela e o círculo do ícone não usam
+// nenhuma cor de perigo (o vermelho fica só no .ui-estado--erro); o vazio tem borda sólida suave (antes, tracejada).
+describe("Estados: a falha de conexão sem vermelho e o vazio sem tracejado", () => {
+  const estados = declaracoes(lerArquivo("./Estados.css"));
+  const doSeletor = (parte: string) =>
+    estados.filter(({ blocos }) =>
+      blocos
+        .at(-1)!
+        .split(/\s*,\s*/)
+        .some((seletor) => seletor.includes(parte)),
+    );
+
+  it("o .ui-estado--conexao (e o que vale dentro dele) não usa --cor-perigo*", () => {
+    const conexao = doSeletor(".ui-estado--conexao");
+    expect(conexao.length).toBeGreaterThanOrEqual(4);
+    for (const { propriedade, valor, blocos } of conexao)
+      expect(valor, `${blocos.at(-1)} { ${propriedade} }`).not.toMatch(
+        /--cor-perigo/,
+      );
+    // O vermelho continua, mas só na falha de verdade.
+    expect(
+      doSeletor(".ui-estado--erro").some(({ valor }) =>
+        /--cor-perigo/.test(valor),
+      ),
+    ).toBe(true);
+    // O círculo do ícone da conexão: o amarelo suave do alerta.
+    expect(
+      Object.fromEntries(
+        doSeletor(".ui-estado--conexao .ui-estado__icone").map(
+          ({ propriedade, valor }) => [propriedade, valor],
+        ),
+      ),
+    ).toEqual({
+      background: "var(--cor-alerta-suave)",
+      color: "var(--cor-alerta)",
+    });
+  });
+
+  it("o vazio: borda sólida suave, sem tracejado", () => {
+    const vazio = Object.fromEntries(
+      doSeletor(".ui-estado--vazio").map(({ propriedade, valor }) => [
+        propriedade,
+        valor,
+      ]),
+    );
+    expect(vazio.border).toBe("1px solid var(--cor-borda)");
+    expect(lerArquivo("./Estados.css")).not.toMatch(/dashed/);
+  });
+});
