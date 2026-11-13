@@ -55,7 +55,7 @@ describe("IndicadorSituacao", () => {
     expect(desenho()).toBe("alerta");
     expect(container.querySelector(".ui-situacao__detalhe")).toBeNull();
 
-    // As telas passam "↓" (pages/minha e pages/visao-geral): vira o desenho, igual em todo celular.
+    // O caractere de antes ("↓"; as telas passam "caiu" desde a RIFA-053) ainda vira o desenho, igual em todo celular.
     rerender(
       <IndicadorSituacao tom="alerta" titulo="Abaixo do esperado" icone="↓" />,
     );

@@ -404,8 +404,12 @@ describe("CA1: copiar e enviar", () => {
     );
     expect(escrever).toHaveBeenCalledExactlyOnceWith(texto.textContent);
     const confirmacao = document.querySelector(".bumbo__copia");
-    expect(confirmacao).toHaveTextContent(`✓ ${COPIADA}`);
+    // RIFA-053: o check é o ícone (só visual), e o texto fica sem o caractere.
+    expect(confirmacao?.textContent).toBe(COPIADA);
     expect(confirmacao).toHaveAttribute("data-resultado", "copiada");
+    const icone = confirmacao?.querySelector(".bumbo__copia-icone");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(icone?.querySelector("svg")).toHaveAttribute("data-icone", "check");
   });
 
   it("copiar de novo volta a anunciar; trocar de dia apaga a confirmação", async () => {
@@ -453,6 +457,14 @@ describe("CA1: copiar e enviar", () => {
     expect(document.querySelector(".bumbo__copia")).toHaveAttribute(
       "data-resultado",
       "falhou",
+    );
+    // RIFA-053: o alerta é o ícone (antes, o caractere "!"); o texto é o mesmo da região viva.
+    expect(document.querySelector(".bumbo__copia")?.textContent).toBe(
+      NAO_COPIOU,
+    );
+    expect(document.querySelector(".bumbo__copia-icone svg")).toHaveAttribute(
+      "data-icone",
+      "alerta",
     );
     // RIFA-051 (P3.9): sem copiar sozinho, a prévia volta ao texto puro (com os * e _), que é o que fica selecionado.
     expect(texto.querySelector("strong, em")).toBeNull();

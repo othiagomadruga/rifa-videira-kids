@@ -251,7 +251,7 @@ describe("situação, projeção e período", () => {
       situacaoDaCampanha(ritmo({ diferenca: -1 }), DURANTE, "bilhetes"),
     ).toEqual({
       tom: "alerta",
-      icone: "↓",
+      icone: "caiu",
       titulo: "Abaixo do esperado",
       detalhe: "Falta 1 bilhete para o esperado até ontem",
     });

@@ -51,6 +51,11 @@
   color: var(--cor-alerta);
 }
 
+/* O check do "Imagem baixada" (RIFA-053: antes, o caractere ✓), na linha do texto. */
+.qr-codigo__retorno .ui-icone {
+  margin-right: var(--espaco-1);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .qr-codigo__retorno {
     animation: ui-surgir var(--duracao-media) var(--curva-saida);

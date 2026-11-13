@@ -12,7 +12,7 @@ import type {
   UnidadeMeta,
 } from "../../../shared/contracts/calculos";
 import type { TipoRelatorio } from "../../../shared/contracts/relatorio";
-import type { TomSituacao } from "../../components/ui";
+import type { NomeIcone, TomSituacao } from "../../components/ui";
 import {
   formatarData,
   formatarMoeda,
@@ -137,7 +137,8 @@ export type TextoSituacao = {
   tom: TomSituacao;
   titulo: string;
   detalhe: string;
-  icone?: string;
+  /** O ícone do chip (um nome de icones.ts; RIFA-053: antes, o caractere "↓"). Padrão: o do tom. */
+  icone?: NomeIcone;
 };
 
 /** "Falta 1 bilhete", "Faltam 20 bilhetes", "Faltam R$ 60,00". */
@@ -169,7 +170,7 @@ export function situacaoDaJanela(
     case "abaixo":
       return {
         tom: "alerta",
-        icone: "↓",
+        icone: "caiu",
         titulo: "Abaixo do esperado",
         detalhe: `${faltam(-ritmo.diferenca, unidade)} para o esperado até ontem`,
       };
@@ -209,7 +210,7 @@ export function situacaoDaCampanha(
         }
       : {
           tom: "alerta",
-          icone: "↓",
+          icone: "caiu",
           titulo: "Abaixo da meta",
           detalhe: `${concordar(-campanha.diferenca, unidade, "Faltou", "Faltaram")} ${quantidade(-campanha.diferenca, unidade)} para a meta`,
         };

@@ -8,6 +8,7 @@ import {
   ComDica,
   EmptyState,
   ErrorState,
+  Icone,
   Loading,
   PageHeader,
   Select,
@@ -214,9 +215,10 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
       </p>
       {copia !== "nada" && (
         <p className="bumbo__copia" data-resultado={copia}>
+          {/* O ícone (RIFA-053: antes, os caracteres ✓ e !), só visual: o texto diz o que houve. */}
           <span className="bumbo__copia-icone" aria-hidden="true">
-            {copia === "copiada" ? "✓" : "!"}
-          </span>{" "}
+            <Icone nome={copia === "copiada" ? "check" : "alerta"} />
+          </span>
           {TEXTO_DA_COPIA[copia]}
         </p>
       )}
