@@ -1,7 +1,8 @@
 // RIFA-049 (P1.5, D25): a comemoração da meta batida. false → true comemora uma vez (o pulso e as partículas);
 // true → true não; "ao-bater" não comemora no primeiro aparecimento já batido (só pulsa); com reduce (ou sem
 // matchMedia), nenhum animate e nenhuma partícula no DOM; cada partícula anima só transform e opacity, até 450 ms,
-// atraso até 300 ms, e sai do DOM no fim; umaVezPor "dia" guarda a data no sessionStorage.
+// uma depois da outra em até 300 ms, e sai do DOM no fim; umaVezPor "dia" guarda a data no sessionStorage.
+// RIFA-053: as partículas saem junto com o pulso (quando o % termina de contar), nunca antes do 100%.
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -9,10 +10,13 @@ import {
   espiarAnimate,
   simularPreferencia,
 } from "../test/movimento";
+import { DURACAO_CONTAGEM_MS } from "./movimento";
 import {
   ATRASO_PARTICULA_MAXIMO_MS,
   CLASSE_COMEMORA,
   DURACAO_COMEMORACAO_MS,
+  DURACAO_PARTICULA_MAXIMA_MS,
+  INICIO_PARTICULAS_MS,
   PARTICULAS,
   PREFIXO_ARMAZENAMENTO,
   useComemoracao,
@@ -203,7 +207,7 @@ describe("useComemoracao: sem movimento, nada", () => {
 });
 
 describe("useComemoracao: as partículas", () => {
-  it("10 a 14, cada uma só com transform e opacity, até 450 ms, atraso até 300 ms, uma vez", () => {
+  it("10 a 14, cada uma só com transform e opacity, até 450 ms, uma depois da outra em até 300 ms, uma vez", () => {
     simularPreferencia(false);
     const animate = espiarAnimate();
     const { rerender } = render(<Pilula batida={false} texto="96%" />);
@@ -214,7 +218,11 @@ describe("useComemoracao: as partículas", () => {
     expect(chamadas.length).toBeLessThanOrEqual(14);
     for (const { quadros, opcoes } of chamadas) {
       expect(opcoes.duration).toBeLessThanOrEqual(450);
-      expect(opcoes.delay ?? 0).toBeLessThanOrEqual(300);
+      // RIFA-053: o atraso é o do pulso mais o da vez dela (até 300 ms).
+      expect(opcoes.delay).toBeGreaterThanOrEqual(INICIO_PARTICULAS_MS);
+      expect(Number(opcoes.delay) - INICIO_PARTICULAS_MS).toBeLessThanOrEqual(
+        300,
+      );
       expect(opcoes.iterations ?? 1).toBe(1);
       for (const quadro of quadros)
         for (const propriedade of Object.keys(quadro))
@@ -226,11 +234,43 @@ describe("useComemoracao: as partículas", () => {
     expect(ATRASO_PARTICULA_MAXIMO_MS).toBe(
       Math.max(...PARTICULAS.map(({ atraso }) => atraso)),
     );
-    expect(DURACAO_COMEMORACAO_MS).toBeLessThanOrEqual(300 + 450);
+    expect(DURACAO_PARTICULA_MAXIMA_MS).toBe(
+      Math.max(...PARTICULAS.map(({ duracao }) => duracao)),
+    );
+    // Da primeira partícula ao fim da última: até 300 + 450 ms; e saem do DOM quando a última termina.
+    expect(
+      ATRASO_PARTICULA_MAXIMO_MS + DURACAO_PARTICULA_MAXIMA_MS,
+    ).toBeLessThanOrEqual(300 + 450);
+    expect(DURACAO_COMEMORACAO_MS).toBe(
+      INICIO_PARTICULAS_MS +
+        ATRASO_PARTICULA_MAXIMO_MS +
+        DURACAO_PARTICULA_MAXIMA_MS,
+    );
     // O amarelo do Kids e as cores da marca.
     expect(new Set(PARTICULAS.map(({ cor }) => cor))).toEqual(
       new Set(["amarelo", "verde-agua", "azul", "roxo"]),
     );
+  });
+
+  it("RIFA-053: chegam com o 100%: a primeira sai junto com o pulso, quando o % termina de contar; nenhuma antes", () => {
+    simularPreferencia(false);
+    const animate = espiarAnimate();
+    const { rerender } = render(<Pilula batida={false} texto="96%" />);
+    rerender(<Pilula batida texto="104%" />);
+
+    const atrasos = chamadasDasParticulas(animate).map(({ opcoes }) =>
+      Number(opcoes.delay),
+    );
+    const [pulso] = animate.mock.calls.filter((_, indice) =>
+      (animate.mock.contexts[indice] as Element).classList.contains("pilula"),
+    );
+    // A contagem do % (DURACAO_CONTAGEM_MS) acaba antes do pulso; a primeira partícula sai com ele.
+    expect(INICIO_PARTICULAS_MS).toBe(ATRASO_PULSO_MS);
+    expect(INICIO_PARTICULAS_MS).toBeGreaterThanOrEqual(DURACAO_CONTAGEM_MS);
+    expect(Math.min(...atrasos)).toBe(INICIO_PARTICULAS_MS);
+    expect(pulso[1]).toMatchObject({ delay: INICIO_PARTICULAS_MS });
+    for (const atraso of atrasos)
+      expect(atraso).toBeGreaterThanOrEqual(DURACAO_CONTAGEM_MS);
   });
 
   it("saem do DOM quando a última termina (o React tira os nós)", () => {
@@ -264,6 +304,27 @@ describe("useComemoracao: as partículas", () => {
     for (const animacao of devolvidas)
       expect(animacao.cancel).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("RIFA-053: sair da tela enquanto as partículas esperam o pulso ou voam: nenhum temporizador fica vivo", () => {
+    simularPreferencia(false);
+    vi.useFakeTimers();
+    espiarAnimate();
+    for (const ms of [
+      INICIO_PARTICULAS_MS - 1,
+      INICIO_PARTICULAS_MS + 100,
+      DURACAO_COMEMORACAO_MS - 1,
+    ]) {
+      const { rerender, unmount } = render(
+        <Pilula batida={false} texto="96%" />,
+      );
+      rerender(<Pilula batida texto="104%" />);
+      act(() => vi.advanceTimersByTime(ms));
+      expect(particulas()).toHaveLength(PARTICULAS.length);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(camada()).toBeNull();
+    }
   });
 
   it("CSS: a camada não recebe toque, cobre o elemento e não tem animação de CSS", () => {

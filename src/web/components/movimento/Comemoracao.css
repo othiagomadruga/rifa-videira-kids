@@ -1,8 +1,9 @@
 /*
  * Comemoração da meta batida (RIFA-049, lib/useComemoracao.tsx): a camada das partículas, por cima do elemento que
  * comemora, sem receber toque nem foco. Sem animação de CSS aqui: as partículas se movem pela Web Animations API (só
- * transform e opacity, só sem prefers-reduced-motion) e ficam invisíveis fora dela (opacity: 0). Quem usa põe
- * overflow: clip no item em volta, para nada criar rolagem lateral.
+ * transform e opacity, só sem prefers-reduced-motion) e ficam invisíveis fora dela (opacity: 0), também enquanto
+ * esperam o fim da contagem. O corte (overflow: clip), para nada criar rolagem lateral, fica num ancestral que não se
+ * mexe (a lista); nunca no item que o FLIP move, porque o Chrome conta cada troca de lugar como layout shift.
  */
 .mov-comemora {
   position: relative;

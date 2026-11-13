@@ -1,10 +1,14 @@
 // Comemoração da meta batida (RIFA-049, D25): o pulso de sempre (usePulsoDaMeta) e, uma vez, 12 partículas no amarelo
 // do Kids e nas cores da marca que saem do elemento e somem. Regras (docs/frontend.md, "Movimento"):
 // - cada partícula anima só transform e opacity, pela Web Animations API (animar, que não faz nada com reduce nem
-//   sem matchMedia), com até 450 ms e atraso de até 300 ms; com reduce, nenhuma partícula entra no DOM;
+//   sem matchMedia), com até 450 ms e, uma depois da outra, até 300 ms; com reduce, nenhuma partícula entra no DOM;
+// - as partículas saem junto com o pulso (ATRASO_PULSO_MS: quando o % termina de contar), com o 100% e a pílula
+//   amarela na tela (RIFA-053; antes, saíam na hora da atualização e chegavam ~450 ms antes do número);
 // - as partículas são <span> criados pelo React, numa camada `position: absolute; inset: 0; pointer-events: none`
 //   (Comemoracao.css), e saem do DOM no fim. Quem usa põe `confete` dentro do elemento do `ref` (com position:
-//   relative, ou a classe CLASSE_COMEMORA) e `overflow: clip` no item em volta (nada de rolagem lateral);
+//   relative, ou a classe CLASSE_COMEMORA) e o corte (`overflow: clip`) num ancestral que não se mexe (a lista);
+//   nunca no item que o FLIP move, porque o Chrome conta cada troca de lugar como layout shift. Nada de rolagem
+//   lateral;
 // - "ao-bater": só quando a meta passa a estar batida depois de aparecer (o telão e o ranking: abrir a página com a
 //   meta já batida só pulsa); "ao-aparecer-e-ao-bater": também ao aparecer já batida (a /minha);
 // - umaVezPor "dia": a data (no fuso da campanha) fica no sessionStorage com a `chave`; sem armazenamento, uma vez por
@@ -19,7 +23,7 @@ import {
 import "../components/movimento/Comemoracao.css";
 import { FUSO_HORARIO } from "./formatadores";
 import { CURVA_SAIDA, animar, prefereMenosMovimento } from "./movimento";
-import { pulsarMeta } from "./usePulsoDaMeta";
+import { ATRASO_PULSO_MS, pulsarMeta } from "./usePulsoDaMeta";
 
 export type QuandoComemorar = "ao-bater" | "ao-aparecer-e-ao-bater";
 
@@ -37,11 +41,16 @@ export type OpcoesComemoracao = {
 export const CLASSE_COMEMORA = "mov-comemora";
 /** Duração de cada partícula (no máximo 450 ms, a regra do movimento). */
 export const DURACAO_PARTICULA_MAXIMA_MS = 440;
-/** O atraso da última partícula a sair (no máximo 300 ms). */
+/** O atraso da última partícula a sair, depois da primeira (no máximo 300 ms). */
 export const ATRASO_PARTICULA_MAXIMO_MS = 264;
+/**
+ * Quando a primeira partícula sai: junto com o pulso, depois que o % termina de contar (RIFA-053). O confete chega com
+ * o 100% e com a pílula amarela, que só pinta quando a contagem acaba.
+ */
+export const INICIO_PARTICULAS_MS = ATRASO_PULSO_MS;
 /** Quando as partículas saem do DOM: a última termina. */
 export const DURACAO_COMEMORACAO_MS =
-  ATRASO_PARTICULA_MAXIMO_MS + DURACAO_PARTICULA_MAXIMA_MS;
+  INICIO_PARTICULAS_MS + ATRASO_PARTICULA_MAXIMO_MS + DURACAO_PARTICULA_MAXIMA_MS;
 /** Prefixo da chave no sessionStorage. */
 export const PREFIXO_ARMAZENAMENTO = "rifa-comemoracao:";
 
@@ -173,7 +182,8 @@ export function useComemoracao<T extends HTMLElement>(
         const particula = PARTICULAS[indice];
         return animar(elemento, quadrosDa(particula, escala), {
           duration: particula.duracao,
-          delay: particula.atraso,
+          // Até o pulso, a partícula fica como o CSS a deixa: invisível (opacity: 0).
+          delay: INICIO_PARTICULAS_MS + particula.atraso,
           easing: CURVA_SAIDA,
         });
       },
