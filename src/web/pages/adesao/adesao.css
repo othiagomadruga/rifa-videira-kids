@@ -284,11 +284,18 @@
   gap: var(--espaco-2);
 }
 
-/* "Trocar" e "Desvincular" em duas colunas iguais, na largura do bloco (RIFA-051, P3.8). */
+/* "Trocar" e "Desvincular" em duas colunas iguais, na largura do bloco (RIFA-051, P3.8), com o alvo de toque de
+   sempre. O recuo dos lados fica menor: com o do botão (--espaco-5), "Desvincular" pediria 134 px e cada coluna tem
+   ~129 px (o bloco tem 266 px por dentro a 390 e a 1366 px). */
 .adesao-afiliado__acoes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--espaco-2);
+}
+
+.adesao-afiliado__acoes > .ui-button {
+  padding-right: var(--espaco-3);
+  padding-left: var(--espaco-3);
 }
 
 .adesao-afiliado__codigo {

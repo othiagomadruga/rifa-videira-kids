@@ -233,9 +233,9 @@ describe("RIFA-051 (P3.8, A-15 e A-16): as ações do afiliado", () => {
       ["Trocar a célula do afiliado 1001", true],
       ["Desvincular o afiliado 1001", true],
     ]);
-    // Os três são do tamanho das ações de uma linha (36 px no mouse; 44 px no toque).
+    // Os três com o alvo de toque de sempre (44 px também no mouse): nenhum no tamanho pequeno.
     for (const botao of within(bloco).getAllByRole("button"))
-      expect(botao).toHaveClass("ui-button--pequeno");
+      expect(botao).not.toHaveClass("ui-button--pequeno");
     // A ordem do Tab segue a da tela: o Remover (em cima, à direita), depois Trocar e Desvincular.
     expect(
       within(bloco)
@@ -273,13 +273,20 @@ describe("RIFA-051 (P3.8, A-15 e A-16): as ações do afiliado", () => {
       expect(botao).toHaveClass("ui-button--perigo-discreto");
   });
 
-  it("as duas colunas são iguais e encolhem (nenhuma largura fixa)", () => {
+  it("as duas colunas são iguais e encolhem (nenhuma largura fixa); o botão nelas tem o recuo dos lados menor", () => {
     const css = lerCss("pages/adesao/adesao.css");
     const regra = /\.adesao-afiliado__acoes\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(regra).toMatch(/display:\s*grid;/);
     expect(regra).toMatch(
       /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
     );
+    const botao =
+      /\.adesao-afiliado__acoes > \.ui-button\s*\{([^}]*)\}/.exec(css)?.[1] ??
+      "";
+    expect(botao).toMatch(/padding-right:\s*var\(--espaco-3\);/);
+    expect(botao).toMatch(/padding-left:\s*var\(--espaco-3\);/);
+    // Só o recuo: a altura (o alvo de toque) continua a do Button.css.
+    expect(botao).not.toMatch(/height|padding-(top|bottom)|padding:/);
   });
 });
 

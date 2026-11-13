@@ -253,14 +253,13 @@ function AfiliadoDaCelula({
       {/* RIFA-051 (P3.8, A-15 e A-16): o código e, à direita, o "Remover" (ação destrutiva leve, só do admin, com
           confirmação), na cara do perigo discreto; embaixo, "Trocar" e "Desvincular" em duas colunas iguais. Antes, os
           três numa linha que quebrava e deixava o "Remover" sozinho na segunda (três colunas iguais não cabem no
-          cartão: "Desvincular" pede ~106 px no botão pequeno, e cada coluna teria ~83 px a 390 e a 1366 px). */}
+          cartão: "Desvincular" pede ~106 px até no botão pequeno, e cada coluna teria ~83 px a 390 e a 1366 px). */}
       <div className="adesao-afiliado__linha">
         <p className="adesao-afiliado__codigo">Afiliado {codigo}</p>
         {aoRemover && (
           <ComDica texto={gravando ? dicaGravando : DICAS.removerAfiliado}>
             <Button
               variante="perigo-discreto"
-              tamanho="pequeno"
               aria-disabled={gravando || undefined}
               onClick={() => {
                 if (gravando) return;
@@ -287,7 +286,6 @@ function AfiliadoDaCelula({
           <Button
             ref={refTrocar}
             variante="secundario"
-            tamanho="pequeno"
             aria-expanded={acao === "trocar"}
             aria-disabled={gravando || undefined}
             onClick={() => {
@@ -312,7 +310,6 @@ function AfiliadoDaCelula({
           <Button
             ref={refDesvincular}
             variante="secundario"
-            tamanho="pequeno"
             aria-expanded={acao === "desvincular"}
             aria-disabled={gravando || undefined}
             onClick={() => {
