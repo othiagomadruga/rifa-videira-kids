@@ -6,7 +6,6 @@ import {
   ComDica,
   EmptyState,
   ErrorState,
-  Loading,
   PageHeader,
 } from "../../components/ui";
 import { ErroApi, ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
@@ -15,6 +14,7 @@ import { AlertaWebhook } from "../pedidos/AlertaWebhook";
 import { AvisosVendas } from "./AvisosVendas";
 import { CartaoCampanha, CartaoHoje, CartaoPeriodo } from "./Cartoes";
 import { CurvaDaCampanha } from "./CurvaDaCampanha";
+import { EsqueletoDoPainel } from "./EsqueletoDoPainel";
 import { FiltroEscopo } from "./FiltroEscopo";
 import { Referencia } from "./Referencia";
 import { RelatorioCampanha } from "./RelatorioCampanha";
@@ -136,7 +136,7 @@ function Conteudo({
 }: PropsConteudo) {
   switch (estado.tipo) {
     case "carregando":
-      return <Loading texto="Carregando o painel…" />;
+      return <EsqueletoDoPainel />;
     case "erro":
       if (!ehNaoEncontrado(estado.erro)) {
         return (

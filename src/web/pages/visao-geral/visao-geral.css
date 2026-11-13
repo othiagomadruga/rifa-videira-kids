@@ -181,10 +181,33 @@
   color: var(--cor-texto-suave);
 }
 
+/* Os dois números com a cara dos números (RIFA-053): a fonte, o peso e os algarismos do valor do Stat, no tamanho
+   que deixa "254 bilhetes" numa linha na coluna do cartão (138 px a 1366, 156 px a 390). */
 .visao-comparacao dd {
   margin: 0;
+  font-family: var(--fonte-titulo);
   font-size: var(--texto-xl);
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * O carregando do painel (EsqueletoDoPainel, RIFA-053): a referência com o espaço dela (o --espaco-1 entre as linhas)
+ * e, no computador (a partir de 64rem, com o menu ao lado), a fase numa linha, a barra da Campanha com o rótulo em 2
+ * linhas (o cartão fica estreito) e a curva mais alta. Medido na captura a 1366 px.
+ */
+.visao-esqueleto__referencia {
+  gap: var(--espaco-1);
+}
+
+@media (min-width: 64rem) {
+  .visao-esqueleto {
+    --visao-esqueleto-fase: 1.8rem;
+    --visao-esqueleto-barra: 4.25rem;
+    --visao-esqueleto-grafico: 19.66rem;
+  }
 }
 
 /* Avisos discretos: texto suave, sem cor de alerta (não são erro, são para conferir). */

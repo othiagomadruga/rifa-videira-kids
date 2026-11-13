@@ -328,15 +328,24 @@ describe("RIFA-051 (P3.5, A-09): os totais com a cara do Stat", () => {
       );
   });
 
-  it("o chip tem o tamanho do chip do Stat (2rem) sem largura fixa: o ícone de 1rem e o respiro de --espaco-2 em volta", () => {
+  it("o chip tem o tamanho do chip do Stat (2rem) sem largura fixa, com o ícone do Stat (1,125rem, RIFA-053) e o respiro em volta", () => {
     const chip = regra(css, ".pedidos-total__icone");
-    expect(chip).toMatch(/padding:\s*var\(--espaco-2\);/);
     expect(chip).toMatch(/border-radius:\s*50%;/);
-    expect(regra(css, ".pedidos-total__icone .ui-icone")).toMatch(
-      /width:\s*1rem;/,
+    // O ícone do mesmo tamanho do ícone do Stat (antes, 1rem).
+    const iconeDoStat = declaracao(
+      regra(stat, ".ui-stat__icone .ui-icone"),
+      "width",
     );
-    expect(TOKENS).toMatch(/--espaco-2:\s*0\.5rem;/);
-    expect(regra(stat, ".ui-stat__icone")).toMatch(/width:\s*2rem;/);
+    expect(iconeDoStat).toBe("1.125rem");
+    const icone = regra(css, ".pedidos-total__icone .ui-icone");
+    expect(declaracao(icone, "width")).toBe(iconeDoStat);
+    expect(declaracao(icone, "height")).toBe(iconeDoStat);
+    // O respiro completa o chip do Stat: (2rem - 1.125rem) / 2 de cada lado.
+    const chipDoStat = declaracao(regra(stat, ".ui-stat__icone"), "width");
+    expect(chipDoStat).toBe("2rem");
+    expect(declaracao(chip, "padding")).toBe(
+      `calc((${chipDoStat} - ${iconeDoStat}) / 2)`,
+    );
   });
 });
 

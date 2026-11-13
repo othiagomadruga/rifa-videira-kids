@@ -168,20 +168,20 @@
   min-width: 0;
 }
 
-/* O chip redondo do Stat (2rem): o ícone de 1rem com o respiro em volta (sem largura fixa). */
+/* O chip redondo do Stat (2rem): o ícone do Stat (1.125rem, RIFA-053) com o respiro em volta (sem largura fixa). */
 .pedidos-total__icone {
   flex: none;
   display: inline-grid;
   place-items: center;
-  padding: var(--espaco-2);
+  padding: calc((2rem - 1.125rem) / 2);
   border-radius: 50%;
   background: var(--total-fundo);
   color: var(--total-cor);
 }
 
 .pedidos-total__icone .ui-icone {
-  width: 1rem;
-  height: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .pedidos-total__icone--sucesso {

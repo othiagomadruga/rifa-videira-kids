@@ -781,6 +781,26 @@ describe("CA5: estados", () => {
       "role",
       "status",
     );
+    // RIFA-053 (D25): o esqueleto no formato do painel (a referência, os três cartões na grade deles e a curva), só
+    // visual, com um anúncio só; nada da linha de "carregando" de antes.
+    const esqueleto = document.querySelector(".visao-painel.visao-esqueleto");
+    expect(esqueleto).not.toBeNull();
+    const cartoes = esqueleto?.querySelectorAll(
+      ".visao-cartoes > .ui-esqueleto.ui-esqueleto--cartao",
+    );
+    expect(cartoes).toHaveLength(3);
+    expect(
+      esqueleto?.querySelectorAll(":scope > .ui-esqueleto--cartao"),
+    ).toHaveLength(1);
+    for (const bloco of esqueleto?.querySelectorAll(".ui-esqueleto__bloco") ??
+      [])
+      expect(bloco).toHaveAttribute("aria-hidden", "true");
+    expect(
+      [...document.querySelectorAll('[role="status"]')].filter((regiao) =>
+        /Carregando/.test(regiao.textContent ?? ""),
+      ),
+    ).toHaveLength(1);
+    expect(document.querySelector(".ui-loading")).toBeNull();
   });
 
   it("erro: a mensagem e Tentar de novo, que volta a carregar", async () => {
