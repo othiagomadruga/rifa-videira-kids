@@ -196,6 +196,41 @@ describe("Pedidos", () => {
     conferirDicas(10);
   });
 
+  it("no celular (RIFA-051, P3.7): o <summary> 'Filtros', fechado e aberto, e os filtros dentro dele", async () => {
+    const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    // Tela estreita (abaixo de 48rem): os filtros ficam recolhidos num <details>.
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (consulta: string) => ({
+        matches: false,
+        media: consulta,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+    try {
+      simularPedidos({ pedidos: pedidosVariados(3) });
+      abrir("/coordenacao/pedidos?status=approved");
+      await tabela();
+      const caixa = document.querySelector("details.pedidos-filtros-caixa");
+      const resumo = caixa?.querySelector("summary");
+      if (!caixa || !resumo) throw new Error("sem os filtros recolhidos");
+      expect(caixa).not.toHaveAttribute("open");
+      expect(resumo).toHaveTextContent("Filtros 1 ativo");
+      expect(controlesSemDica(resumo.parentElement ?? resumo)).toEqual([]);
+      conferirDicas(8);
+
+      fireEvent.click(resumo);
+      expect(caixa).toHaveAttribute("open");
+      expect(contarControles(caixa)).toBeGreaterThanOrEqual(6);
+      expect(controlesSemDica(caixa)).toEqual([]);
+    } finally {
+      if (original) Object.defineProperty(window, "matchMedia", original);
+      else Reflect.deleteProperty(window, "matchMedia");
+    }
+  });
+
   it("entregas do webhook: o filtro, 'Carregar mais' e, sem resultado, 'Ver todas as entregas'", async () => {
     simularPedidos({ entregas: entregasEmSequencia(60) });
     abrir("/coordenacao/pedidos?aba=entregas");

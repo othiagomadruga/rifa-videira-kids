@@ -6,6 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { lerCss } from "../../test/indisponivel";
 import { renderizarRota } from "../../test/renderizar";
 import {
   criarApiFalsa,
@@ -55,9 +56,13 @@ function nomesDe(nome: string): string[] {
   return linhasDe(nome).map((linha) => linha[0]);
 }
 
+/** O valor do indicador (Stat) com este rótulo. Com o ícone (RIFA-051), o rótulo fica ao lado do chip, no topo do Stat. */
 function indicador(rotulo: string): string | null | undefined {
   const resumo = screen.getByRole("region", { name: "Resumo" });
-  return within(resumo).getByText(rotulo).nextElementSibling?.textContent;
+  return within(resumo)
+    .getByText(rotulo)
+    .closest(".ui-stat")
+    ?.querySelector(".ui-stat__valor")?.textContent;
 }
 
 function escolherOpcao(rotulo: string, valor: string) {
@@ -84,6 +89,18 @@ describe("CA1: visão da hierarquia", () => {
     expect(indicador("Discipuladores")).toBe("3");
     expect(indicador("Células")).toBe("4");
     expect(indicador("Total de pessoas")).toBe("54");
+    // RIFA-051 (P3.5): a cara única dos números, com o chip do ícone no roxo da marca (só visual).
+    const chips = [
+      ...screen
+        .getByRole("region", { name: "Resumo" })
+        .querySelectorAll(".ui-stat"),
+    ].map((stat) => {
+      const chip = stat.querySelector(".ui-stat__icone");
+      expect(chip).toHaveAttribute("aria-hidden", "true");
+      expect(chip).toHaveClass("ui-stat__icone--marca");
+      return chip?.querySelector("svg")?.getAttribute("data-icone");
+    });
+    expect(chips).toEqual(["hierarquia", "adesao", "pessoas", "pessoas"]);
 
     expect(
       within(tabela("Células"))
@@ -152,6 +169,12 @@ describe("CA1: visão da hierarquia", () => {
       "role",
       "status",
     );
+    // RIFA-051 (P3.8, A-15): "Excluir" é ação destrutiva: o vermelho do perigo discreto, não o roxo de um link;
+    // "Editar" continua secundário. Os nomes não mudam.
+    for (const botao of screen.getAllByRole("button", { name: /^Excluir / }))
+      expect(botao).toHaveClass("ui-button--perigo-discreto");
+    for (const botao of screen.getAllByRole("button", { name: /^Editar / }))
+      expect(botao).toHaveClass("ui-button--secundario");
   });
 
   it("e-mail e telefone do líder são links (tel: só com dígitos e o + inicial); telefone que não é um número só fica como texto", async () => {
@@ -823,5 +846,26 @@ describe("CA2: editar e excluir", () => {
         )?.[1],
       ).toBe("Rede Adulta Sul"),
     );
+  });
+});
+
+describe("RIFA-051 (revisão): os números com o chip no cartão estreito", () => {
+  // O jsdom não faz layout: o CSS é a prova. Medido no Chromium (revisão da RIFA-051): de 360 a 768 px e a 1024 px,
+  // o cartão tem 156 a 182 px e, com o chip ao lado, "Discipuladores" (99 px) quebrava no meio ("Discipulado/res").
+  const css = lerCss("pages/hierarquia/hierarquia.css").replace(/\s+/g, " ");
+
+  it("o cartão é um contêiner; abaixo de 9,5rem por dentro, o chip vai para cima do rótulo (nada de quebrar a palavra)", () => {
+    const cartao = /\.hierarquia-resumo > \.ui-stat \{([^}]*)\}/.exec(css)?.[1];
+    expect(cartao).toMatch(/container-type: inline-size;/);
+    // 9,5rem = 152 px: o chip (32), o vão (8) e "Discipuladores" (99) cabem com folga para a fonte do aparelho.
+    expect(css).toMatch(
+      /@container \(max-width: 9\.5rem\) \{ \.hierarquia-resumo \.ui-stat__topo \{ flex-direction: column; align-items: flex-start; \} \}/,
+    );
+  });
+
+  it("o valor fica no pé do cartão, alinhado com o dos vizinhos quando um rótulo ocupa duas linhas", () => {
+    expect(
+      /\.hierarquia-resumo > \.ui-stat \{([^}]*)\}/.exec(css)?.[1],
+    ).toMatch(/align-content: space-between;/);
   });
 });

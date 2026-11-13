@@ -94,12 +94,13 @@
   color: var(--cor-texto-suave);
 }
 
-/* Cartões: um por linha no celular; dois ou três por linha conforme a largura. */
+/* Cartões: um por linha no celular; dois ou três por linha conforme a largura, todos com a altura do mais alto da
+   linha (RIFA-051, P3.6; A-05: a grade fica limpa no computador). */
 .visao-cartoes {
   display: grid;
   gap: var(--espaco-4);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  align-items: start;
+  align-items: stretch;
 }
 
 .visao-cartao__data {
@@ -123,18 +124,13 @@
   gap: var(--espaco-1);
 }
 
-.visao-cartao__rotulo {
-  font-size: var(--texto-sm);
-  font-weight: var(--peso-forte);
-  color: var(--cor-texto-suave);
-}
-
-/* O número do dia: grande, com algarismos proporcionais (número sozinho, não coluna). */
-.visao-cartao__destaque {
-  font-size: clamp(var(--texto-3xl), 1.5rem + 2vw, var(--texto-4xl));
-  font-weight: var(--peso-negrito);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+/* A meta de hoje é um Stat grande (RIFA-051, P3.5: a cara única dos números), sem a moldura dele: o cartão já é a
+   moldura (um cartão dentro do outro só somaria bordas). */
+.visao-cartao__numero > .ui-stat {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .visao-cartao__nota {
@@ -237,9 +233,13 @@
   border-radius: 50%;
   background: var(--cor-neutro-suave);
   color: var(--cor-neutro);
-  font-size: var(--texto-xs);
-  font-weight: var(--peso-negrito);
-  line-height: 1;
+}
+
+/* O "i" é o Icone (RIFA-051: nada de caractere como ícone), um pouco menor que o círculo e com o traço mais grosso. */
+.visao-avisos__icone .ui-icone {
+  width: 0.875rem;
+  height: 0.875rem;
+  stroke-width: 2.75;
 }
 
 .visao-curva__subtitulo {
@@ -338,10 +338,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--espaco-2) var(--espaco-4);
-}
-
-.visao-relatorio__icone {
-  flex: none;
 }
 
 /* Baixando: o botão continua focável (aria-disabled), mas parece ocupado. Com 0,75, o "Baixando…" branco ainda

@@ -18,7 +18,11 @@ export function CurvaDaCampanha({ resumo }: Props) {
   const nomeDaUnidade = NOME_DA_UNIDADE[unidade];
   const ultimo = curva.at(-1);
   return (
-    <Card titulo="Curva: esperado × realizado" className="visao-curva">
+    <Card
+      titulo="Curva: esperado × realizado"
+      icone="subiu"
+      className="visao-curva"
+    >
       <p className="visao-curva__subtitulo">
         Acumulado por dia, em {nomeDaUnidade}.
       </p>

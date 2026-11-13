@@ -4,7 +4,7 @@ import {
   TIPOS_RELATORIO,
   type TipoRelatorio,
 } from "../../../shared/contracts/relatorio";
-import { Aviso, Button, Card, ComDica } from "../../components/ui";
+import { Aviso, Button, Card, ComDica, Icone } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { DICAS, TEXTOS_TIPO_RELATORIO } from "./textos";
 import { baixarRelatorio } from "./visao-geral-api";
@@ -99,7 +99,11 @@ export function RelatorioCampanha() {
   }
 
   return (
-    <Card titulo="Relatório da campanha" className="visao-relatorio">
+    <Card
+      titulo="Relatório da campanha"
+      icone="baixar"
+      className="visao-relatorio"
+    >
       <div className="visao-relatorio__corpo">
         <p className="visao-relatorio__intro">
           Baixe uma planilha com os números de agora para guardar, prestar
@@ -158,13 +162,13 @@ export function RelatorioCampanha() {
               onClick={() => void baixar()}
               aria-disabled={baixando || undefined}
             >
-              <IconeBaixar />
+              <Icone nome="baixar" />
               {baixando ? "Baixando…" : "Baixar relatório"}
             </Button>
           </ComDica>
           {resultado.tipo === "baixado" && (
             <p className="visao-relatorio__baixado">
-              <span aria-hidden="true">✓</span> Baixado:{" "}
+              <Icone nome="check" /> Baixado:{" "}
               <span className="visao-relatorio__arquivo">{resultado.nome}</span>
               . Fica na pasta de downloads do aparelho.
             </p>
@@ -231,26 +235,4 @@ function Caminho({ passos }: { passos: readonly string[] }) {
       {passo}
     </span>
   ));
-}
-
-function IconeBaixar() {
-  return (
-    <svg
-      className="visao-relatorio__icone"
-      width="18"
-      height="18"
-      viewBox="0 0 18 18"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M9 2.5v9M5 8l4 4 4-4M3 15.5h12"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
-  );
 }

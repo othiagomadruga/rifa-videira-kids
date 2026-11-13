@@ -183,6 +183,11 @@ export function textoDaCelula(
     : `Sem célula (afiliado ${pedido.affiliate_id})`;
 }
 
+/** O que o <summary> "Filtros" diz no celular (RIFA-051, P3.7): "1 ativo" / "3 ativos". */
+export function filtrosAtivos(quantidade: number): string {
+  return quantidade === 1 ? "1 ativo" : `${formatarNumero(quantidade)} ativos`;
+}
+
 /** "1 pedido" / "1.234 pedidos". */
 export function pedidos(quantidade: number): string {
   return quantidade === 1
@@ -262,6 +267,8 @@ export const DICAS = {
     "Os pedidos que chegaram da Rifei, do mais novo para o mais antigo, com os totais por status.",
   abaEntregas:
     "Cada aviso de venda que a Rifei mandou e o que o sistema fez com ele. Serve para achar pedido com erro.",
+  filtros:
+    "Mostra ou esconde os filtros da lista: status, célula, desconsiderados e a busca pelo id do pedido.",
   filtroStatus:
     "Mostra só os pedidos com o status escolhido. Só os aprovados contam nas vendas.",
   filtroCelula:

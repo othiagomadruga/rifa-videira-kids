@@ -361,6 +361,36 @@ describe("CA1: a mensagem do dia", () => {
   });
 });
 
+describe("RIFA-051 (P3.9): a prévia como no WhatsApp", () => {
+  it("a mensagem num balão, com o *negrito* e o _itálico_ desenhados; o texto (o que se copia e vai para o wa.me) não muda", async () => {
+    const escrever = simularAreaDeTransferencia(async () => {});
+    abrir();
+    const texto = await textoNaTela();
+    const esperado = respostaDoBumbo(INSTANTES.durante).texto;
+    expect(texto.textContent).toBe(esperado);
+    expect(texto).toHaveClass("bumbo__texto");
+    expect(
+      [...texto.querySelectorAll("strong")].map((negrito) =>
+        negrito.textContent?.replace(/^\*|\*$/g, ""),
+      ),
+    ).toContain("Rifa Videira Kids · Dia 9 de 21");
+    expect(texto.querySelectorAll(".bumbo__marca").length).toBeGreaterThan(0);
+
+    expect(
+      screen.getByRole("link", { name: /^Enviar no WhatsApp/ }),
+    ).toHaveAttribute(
+      "href",
+      `https://wa.me/?text=${encodeURIComponent(esperado)}`,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copiar mensagem" }));
+    await waitFor(() =>
+      expect(escrever).toHaveBeenCalledExactlyOnceWith(esperado),
+    );
+    // Copiado, a prévia continua desenhada.
+    expect(texto.querySelector("strong")).not.toBeNull();
+  });
+});
+
 describe("CA1: copiar e enviar", () => {
   it("Copiar mensagem: o texto exato vai para a área de transferência, com a confirmação na tela e o anúncio", async () => {
     const escrever = simularAreaDeTransferencia(async () => {});
@@ -424,6 +454,9 @@ describe("CA1: copiar e enviar", () => {
       "data-resultado",
       "falhou",
     );
+    // RIFA-051 (P3.9): sem copiar sozinho, a prévia volta ao texto puro (com os * e _), que é o que fica selecionado.
+    expect(texto.querySelector("strong, em")).toBeNull();
+    expect(texto.textContent).toBe(respostaDoBumbo(INSTANTES.durante).texto);
   });
 
   it("o navegador recusa a cópia (sem permissão): o mesmo caminho, a mensagem selecionada", async () => {

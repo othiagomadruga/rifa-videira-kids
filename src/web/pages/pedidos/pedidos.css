@@ -16,6 +16,69 @@
   line-height: var(--altura-linha);
 }
 
+/* Filtros recolhidos no celular (RIFA-051, P3.7; A-04): o <summary> "Filtros", com a cara de um botão secundário e
+   a contagem dos escolhidos numa pílula; a seta é desenhada com a borda (decorativa) e vira para cima aberto. No
+   computador (abaixo, no @media), o <summary> some e o <details> fica sempre aberto. */
+.pedidos-filtros-caixa {
+  min-width: 0;
+}
+
+.pedidos-filtros-caixa__resumo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-4);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  font-weight: var(--peso-forte);
+  list-style: none;
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao);
+}
+
+.pedidos-filtros-caixa__resumo::-webkit-details-marker {
+  display: none;
+}
+
+.pedidos-filtros-caixa__resumo::after {
+  content: "";
+  width: var(--espaco-2);
+  height: var(--espaco-2);
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+}
+
+.pedidos-filtros-caixa[open] > .pedidos-filtros-caixa__resumo::after {
+  transform: translateY(25%) rotate(-135deg);
+}
+
+.pedidos-filtros-caixa__resumo:hover {
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-primaria);
+}
+
+.pedidos-filtros-caixa__ativos {
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  line-height: 1.6;
+}
+
+.pedidos-filtros-caixa__resumo + .pedidos-filtros {
+  margin-top: var(--espaco-3);
+}
+
 /* Filtros: um por linha no celular; lado a lado quando cabem. */
 .pedidos-filtros {
   display: flex;
@@ -80,39 +143,71 @@
   list-style: none;
 }
 
+/* Cada total com a cara do Stat (RIFA-051, P3.5; A-09): o chip do ícone no tom ao lado do status (no lugar da borda
+   colorida de cima) e o número de pedidos na fonte dos números; bilhetes e valor ao lado, menores. */
 .pedidos-total {
-  --total-cor: var(--cor-neutro);
-
   display: grid;
-  gap: var(--espaco-2);
+  align-content: start;
+  gap: var(--espaco-1);
   min-width: 0;
   padding: var(--espaco-3) var(--espaco-4);
   border: 1px solid var(--cor-borda);
-  border-top: 4px solid var(--total-cor);
   border-radius: var(--raio-3);
   background: var(--cor-superficie);
   box-shadow: var(--sombra-1);
 }
 
-.pedidos-total--approved {
-  --total-cor: var(--cor-sucesso);
+.pedidos-total__topo {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-width: 0;
 }
 
-.pedidos-total--in_process {
-  --total-cor: var(--cor-info);
+/* O chip redondo do Stat (2rem): o ícone de 1rem com o respiro em volta (sem largura fixa). */
+.pedidos-total__icone {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: var(--espaco-2);
+  border-radius: 50%;
+  background: var(--total-fundo);
+  color: var(--total-cor);
+}
+
+.pedidos-total__icone .ui-icone {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pedidos-total__icone--sucesso {
+  --total-cor: var(--cor-sucesso);
+  --total-fundo: var(--cor-sucesso-suave);
+}
+
+.pedidos-total__icone--marca {
+  --total-cor: var(--cor-primaria);
+  --total-fundo: var(--cor-primaria-suave);
+}
+
+.pedidos-total__icone--neutro {
+  --total-cor: var(--cor-neutro);
+  --total-fundo: var(--cor-neutro-suave);
 }
 
 .pedidos-total__status {
+  min-width: 0;
   margin: 0;
   font-size: var(--texto-md);
   font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
 }
 
 .pedidos-total__numeros {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--espaco-2) var(--espaco-5);
+  gap: var(--espaco-1) var(--espaco-5);
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -134,8 +229,13 @@
   overflow-wrap: anywhere;
 }
 
+/* O número de pedidos: a fonte, o peso e o tamanho do valor do Stat. */
 .pedidos-total__principal {
-  font-size: var(--texto-xl);
+  font-family: var(--fonte-titulo);
+  font-size: clamp(var(--texto-2xl), 1.25rem + 1vw, var(--texto-3xl));
+  font-weight: var(--peso-extra);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
 /* O conteúdo de cada célula num bloco só: no celular, a célula vira "rótulo: valor". */
@@ -342,6 +442,15 @@
 }
 
 @media (min-width: 48rem) {
+  /* No computador, os filtros à mostra como antes: sem o <summary> (o <details> fica sempre aberto). */
+  .pedidos-filtros-caixa__resumo {
+    display: none;
+  }
+
+  .pedidos-filtros-caixa__resumo + .pedidos-filtros {
+    margin-top: 0;
+  }
+
   /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Aprovado" e o id do
      pedido, que fica num bloco próprio dentro da célula, em "PEDTESTE00 / 70"). */
   .pedidos-celula,
@@ -382,5 +491,10 @@
   /* Os itens que chegam com "Carregar mais" entram com fade e deslize curto. */
   .pedidos-celula--nova {
     animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
+  }
+
+  /* A seta do "Filtros" gira ao abrir e fechar. */
+  .pedidos-filtros-caixa__resumo::after {
+    transition: transform var(--duracao-rapida) var(--curva-saida);
   }
 }

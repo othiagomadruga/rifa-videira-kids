@@ -5,7 +5,12 @@ import type {
   Ritmo,
   UnidadeMeta,
 } from "../../../shared/contracts/calculos";
-import { Card, IndicadorSituacao, ProgressBar } from "../../components/ui";
+import {
+  Card,
+  IndicadorSituacao,
+  ProgressBar,
+  Stat,
+} from "../../components/ui";
 import { formatarNumero, formatarPercentual } from "../../lib/formatadores";
 import {
   dataCurta,
@@ -46,6 +51,7 @@ export function CartaoHoje({ hoje, unidade, ultimoDia }: PropsHoje) {
   return (
     <Card
       className="visao-cartao"
+      icone="calendario"
       titulo={
         <>
           Hoje{" "}
@@ -54,11 +60,13 @@ export function CartaoHoje({ hoje, unidade, ultimoDia }: PropsHoje) {
       }
     >
       <div className="visao-cartao__corpo">
+        {/* O número do dia com a cara única dos números (o Stat, RIFA-051), sem a moldura dele: o cartão já é. */}
         <div className="visao-cartao__numero">
-          <p className="visao-cartao__rotulo">Meta de hoje</p>
-          <p className="visao-cartao__destaque">
-            {quantidade(hoje.meta, unidade)}
-          </p>
+          <Stat
+            rotulo="Meta de hoje"
+            valor={quantidade(hoje.meta, unidade)}
+            tamanho="grande"
+          />
           <p className="visao-cartao__nota">
             {explicacaoDaMetaDoDia(hoje, unidade, ultimoDia)}
           </p>
@@ -95,7 +103,7 @@ export function CartaoCampanha({ resumo }: { resumo: RespostaPainelResumo }) {
   const { fase } = referencia;
   const ritmo = fase === "durante" ? textoDoRitmo(campanha.ritmo_bp) : null;
   return (
-    <Card titulo="Campanha" className="visao-cartao">
+    <Card titulo="Campanha" icone="campanha" className="visao-cartao">
       <div className="visao-cartao__corpo">
         <p className="visao-cartao__subtitulo">
           {fase === "antes"
@@ -155,7 +163,7 @@ type PropsPeriodo = {
 export function CartaoPeriodo({ periodo, info, unidade }: PropsPeriodo) {
   const ritmo = textoDoRitmo(periodo.ritmo_bp);
   return (
-    <Card titulo={info.nome} className="visao-cartao">
+    <Card titulo={info.nome} icone="trilha" className="visao-cartao">
       <div className="visao-cartao__corpo">
         <p className="visao-cartao__subtitulo">
           Dia {formatarNumero(info.dia_no_periodo)} de{" "}

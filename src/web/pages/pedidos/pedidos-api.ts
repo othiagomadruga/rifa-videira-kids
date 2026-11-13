@@ -172,6 +172,15 @@ export function paramsDasEntregas(
 export const temFiltro = (filtros: FiltrosPedidos) =>
   paramsDosPedidos(filtros).length > 0;
 
+/** Quantos filtros estão escolhidos: o status, a célula (ou "só os sem célula"), os desconsiderados e a busca. */
+export const quantosFiltros = (filtros: FiltrosPedidos) =>
+  [
+    filtros.status !== null,
+    filtros.celula.tipo !== "todas",
+    filtros.desconsiderado !== null,
+    filtros.id !== null,
+  ].filter(Boolean).length;
+
 /** "/api/admin/pedidos?limite=50&status=..." e, da segunda página em diante, "&antes_de=<proximo>". */
 export function caminhoDosPedidos(
   filtros: FiltrosPedidos,

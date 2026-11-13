@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { RespostaBumbo } from "../../../shared/contracts/calculos";
 import {
@@ -14,6 +14,7 @@ import {
   classesBotao,
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
+import { TextoDoWhatsApp } from "./formatacao";
 import {
   DICAS,
   avisoDaMensagem,
@@ -152,6 +153,12 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
   const referencia = textoDaReferencia(bumbo.referencia, hoje);
   const aviso = avisoDaMensagem(bumbo);
 
+  // Sem copiar sozinho, a prévia volta ao texto puro (com os * e _), selecionado: é ele que a pessoa copia à mão.
+  // A seleção vem depois de a prévia trocar (a troca desfaria a seleção feita antes dela).
+  useLayoutEffect(() => {
+    if (copia === "falhou") selecionarTexto(refTexto.current);
+  }, [copia]);
+
   async function copiar() {
     // Zera antes: copiar de novo volta a anunciar.
     setCopia("nada");
@@ -213,13 +220,19 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
           {TEXTO_DA_COPIA[copia]}
         </p>
       )}
+      {/* A prévia como os líderes vão ver no grupo (RIFA-051, P3.9): a mensagem num balão de conversa, com o
+          *negrito* e o _itálico_ do WhatsApp desenhados. O texto (textContent) é exatamente o da API, com as quebras
+          de linha (white-space: pre-wrap) e as marcas, escondidas da vista. */}
       <figure className="bumbo__figura" aria-labelledby={idLegenda}>
         <figcaption id={idLegenda} className="visualmente-oculto">
           Texto da mensagem
         </figcaption>
-        {/* Exatamente como a API devolve: as quebras de linha ficam (white-space: pre-wrap). */}
         <pre ref={refTexto} className="bumbo__texto">
-          {bumbo.texto}
+          {copia === "falhou" ? (
+            bumbo.texto
+          ) : (
+            <TextoDoWhatsApp texto={bumbo.texto} />
+          )}
         </pre>
       </figure>
       <p className="bumbo__dica">

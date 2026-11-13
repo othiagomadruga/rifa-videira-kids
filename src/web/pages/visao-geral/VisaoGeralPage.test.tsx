@@ -6,6 +6,8 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TITULO_SEM_CONEXAO } from "../../components/ui";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   CENARIOS,
@@ -341,9 +343,15 @@ describe("CA2: cartões Hoje, Campanha e período", () => {
     const avisos = screen.getByRole("region", { name: "Para conferir" });
     const itens = within(avisos).getAllByRole("listitem");
     expect(itens.map((item) => item.textContent)).toEqual([
-      "i3 bilhetes (2 pedidos) sem célula: contam na campanha, mas em nenhuma divisão, rede ou célula. Vincule os afiliados em Adesão.",
-      "i1 bilhete (1 pedido) antes do início: não conta em nada (ex.: compra de teste na reunião de cadastro).",
+      "3 bilhetes (2 pedidos) sem célula: contam na campanha, mas em nenhuma divisão, rede ou célula. Vincule os afiliados em Adesão.",
+      "1 bilhete (1 pedido) antes do início: não conta em nada (ex.: compra de teste na reunião de cadastro).",
     ]);
+    // RIFA-051: o "i" de cada aviso é o Icone (só visual), não um caractere.
+    for (const item of itens) {
+      const icone = item.querySelector("svg");
+      expect(icone).toHaveAttribute("data-icone", "info");
+      expect(icone).toHaveAttribute("aria-hidden", "true");
+    }
     expect(
       within(avisos).getByRole("link", { name: "Adesão" }),
     ).toHaveAttribute("href", "/coordenacao/adesao");
@@ -410,6 +418,35 @@ describe("CA2: cartões Hoje, Campanha e período", () => {
         name: "Esperado e realizado acumulados por dia, em R$",
       }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("RIFA-051 (P3.5 e P3.6): a cara dos cartões", () => {
+  it("cada cartão com o ícone antes do título (só visual: o nome do título não muda)", async () => {
+    await abrir(CENARIOS.emDia);
+    const titulos = [
+      ["Hoje · 04/12", "calendario"],
+      ["Campanha", "campanha"],
+      ["Semana 2", "trilha"],
+      ["Curva: esperado × realizado", "subiu"],
+      ["Relatório da campanha", "baixar"],
+    ] as const;
+    for (const [titulo, icone] of titulos) {
+      const cabecalho = screen.getByRole("heading", { level: 2, name: titulo });
+      const desenho = cabecalho.querySelector("svg");
+      expect(desenho, titulo).toHaveAttribute("data-icone", icone);
+      expect(desenho, titulo).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
+  it("a meta de hoje é o Stat grande (a cara única dos números), com o mesmo rótulo e o mesmo valor", async () => {
+    await abrir(CENARIOS.emDia);
+    const rotulo = cartao("Hoje · 04/12").getByText("Meta de hoje");
+    const stat = rotulo.closest(".ui-stat");
+    expect(stat).toHaveClass("ui-stat--grande");
+    expect(stat?.querySelector(".ui-stat__valor")).toHaveTextContent(
+      /^11 bilhetes$/,
+    );
   });
 });
 
@@ -749,6 +786,29 @@ describe("CA5: estados", () => {
     expect(alerta).toHaveTextContent(
       "Erro interno. Tente de novo em instantes.",
     );
+    // Falha de verdade (a API respondeu com erro): o vermelho continua (RIFA-051).
+    expect(alerta).toHaveClass("ui-estado--erro");
+
+    fireEvent.click(
+      within(alerta).getByRole("button", { name: "Tentar de novo" }),
+    );
+    await esperarAtualizacao();
+    expect(cartao("Campanha").getByText("Em dia")).toBeInTheDocument();
+  });
+
+  it("RIFA-051 (P3.6): sem conexão, a falha fica neutra ('Sem conexão agora', sem o vermelho) e Tentar de novo volta a carregar", async () => {
+    const api = simularApi(CENARIOS.emDia);
+    api.resumo = () => {
+      api.resumo = undefined;
+      throw new TypeError("Failed to fetch");
+    };
+    renderizarRota("/coordenacao");
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveClass("ui-estado--conexao");
+    expect(alerta).not.toHaveClass("ui-estado--erro");
+    expect(alerta).toHaveTextContent(TITULO_SEM_CONEXAO);
+    expect(alerta).toHaveTextContent(MENSAGEM_SEM_CONEXAO);
 
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
