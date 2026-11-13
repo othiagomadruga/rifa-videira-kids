@@ -137,6 +137,20 @@ describe("o CSS do link de vendas", () => {
     }
   });
 
+  it("'Baixar imagem' e 'Imprimir' ocupam a linha toda quando descem (360 px), como os botões do link", () => {
+    for (const [arquivo, seletor] of [
+      ["compartilhar.css", ".qr-compartilhar__acoes > *"],
+      ["qr-codigo.css", ".qr-codigo__acoes > .ui-button"],
+    ] as const) {
+      const css = ARQUIVOS[arquivo];
+      const inicio = css.indexOf(`${seletor} {`);
+      expect(inicio, seletor).toBeGreaterThanOrEqual(0);
+      expect(css.slice(inicio, css.indexOf("}", inicio))).toMatch(
+        /flex:\s*1 1 auto;/,
+      );
+    }
+  });
+
   it("o movimento só no no-preference", () => {
     for (const [arquivo, css] of Object.entries(ARQUIVOS)) {
       const fora = css.replace(
