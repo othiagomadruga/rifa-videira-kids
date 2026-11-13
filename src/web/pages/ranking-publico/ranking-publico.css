@@ -11,19 +11,21 @@
 
 /*
  * O conteúdo desta tela tem pelo menos a altura da janela, carregando ou não: o rodapé (o selo do Kids) começa
- * abaixo da dobra e fica lá quando o ranking chega, em vez de ser empurrado para dentro ou para fora da tela.
+ * abaixo da dobra e fica lá quando o ranking (ou a falha da primeira carga) chega, em vez de ser empurrado para
+ * dentro ou para fora da tela.
  */
 .ui-public-shell__conteudo:has(
   .ranking-publico__carregando,
-  .ranking-publico__fase
+  .ranking-publico__fase,
+  .ranking-publico__falhou
 ) {
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-/* Esqueleto: os blocos têm a altura do que vem (a fase, o título e os itens). */
+/* Esqueleto: os blocos têm a altura do que vem (a fase com a linha do tempo, o título e os itens). */
 .ranking-publico__esqueleto-fase {
-  height: 5.25rem;
+  height: 6.5rem;
   border-radius: var(--raio-4);
 }
 
@@ -53,6 +55,7 @@
 }
 
 .ranking-publico__fase-destaque {
+  font-family: var(--fonte-titulo);
   font-size: var(--texto-2xl);
   font-weight: var(--peso-extra);
   line-height: var(--altura-linha-titulo);
@@ -62,6 +65,45 @@
 .ranking-publico__fase-detalhe {
   font-size: var(--texto-lg);
   font-weight: var(--peso-forte);
+}
+
+/*
+ * A linha do tempo da campanha (RIFA-050), dentro da faixa: o trilho em branco translúcido (opacidade, sem cor nova),
+ * os dias passados em branco e as datas das pontas. Decorativa (aria-hidden).
+ */
+.ranking-publico__linha-do-tempo {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--espaco-1);
+  margin-top: var(--espaco-2);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+}
+
+.ranking-publico__trilho {
+  position: relative;
+  flex-basis: 100%;
+  height: 0.375rem;
+  border-radius: var(--raio-pilula);
+  overflow: hidden;
+}
+
+.ranking-publico__trilho::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--cor-sobre-primaria);
+  opacity: 0.3;
+}
+
+.ranking-publico__percorrido {
+  position: relative;
+  height: 100%;
+  border-radius: var(--raio-pilula);
+  background: var(--cor-sobre-primaria);
+  transform-origin: left;
 }
 
 .ranking-publico__disputa {
@@ -115,6 +157,7 @@
   list-style: none;
 }
 
+/* overflow: clip: a faixa do pódio segue o raio do cartão e as partículas da comemoração não passam da borda. */
 .ranking-publico__item {
   position: relative;
   display: grid;
@@ -126,9 +169,13 @@
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio-3);
   box-shadow: var(--sombra-1);
+  overflow: clip;
 }
 
-/* Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. */
+/*
+ * Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. A faixa fica
+ * dentro da borda, de cima a baixo (o overflow: clip do item a arredonda junto com o cartão).
+ */
 .ranking-publico__item[data-destaque] {
   border-color: var(--cor-primaria);
   box-shadow: var(--sombra-2);
@@ -137,11 +184,10 @@
 .ranking-publico__item[data-destaque]::before {
   content: "";
   position: absolute;
-  top: var(--espaco-2);
-  bottom: var(--espaco-2);
-  left: -1px;
+  top: 0;
+  bottom: 0;
+  left: 0;
   width: 4px;
-  border-radius: 0 var(--raio-pilula) var(--raio-pilula) 0;
   background: linear-gradient(
     var(--marca-verde-agua-forte),
     var(--marca-azul-forte),
@@ -182,19 +228,28 @@
   overflow-wrap: anywhere;
 }
 
-/* O % numa pílula (o espaço dela vale sempre, então a meta batida não muda o tamanho de nada). */
+/*
+ * O % numa pílula (o espaço dela vale sempre, então a meta batida não muda o tamanho de nada), na fonte dos títulos
+ * (RIFA-050).
+ */
 .ranking-publico__percentual {
   padding: var(--espaco-1) var(--espaco-2);
   border-radius: var(--raio-pilula);
+  font-family: var(--fonte-titulo);
   font-size: var(--texto-lg);
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
   font-variant-numeric: tabular-nums;
   text-align: end;
   white-space: nowrap;
 }
 
-/* Meta batida (100% ou mais): a pílula no amarelo do Kids. O número continua dizendo o percentual. */
-.ranking-publico__item[data-meta-batida] .ranking-publico__percentual {
+/*
+ * Meta batida (100% ou mais): a pílula no amarelo do Kids quando o número termina de contar (enquanto conta, há um
+ * .mov-contagem dentro): a comemoração chega junto com o 100% (RIFA-050, A-08). O número continua dizendo o
+ * percentual. Sem :has, o navegador antigo pinta antes, como era.
+ */
+.ranking-publico__item[data-meta-batida]
+  .ranking-publico__percentual:not(:has(.mov-contagem)) {
   background: var(--cor-comemoracao);
   color: var(--cor-sobre-comemoracao);
 }
@@ -228,11 +283,16 @@
 /*
  * Movimento (sem prefers-reduced-motion). Os itens entram em sequência e deslizam ao trocar de lugar pelo
  * useListaAnimada (JS); por isso a seção da disputa não entra junto com a tela (o fade dela somaria ao dos
- * itens): só os títulos aparecem com um fade curto. A meta batida pulsa 2 vezes depois que o % conta.
+ * itens): só os títulos aparecem com um fade curto. A meta batida pulsa 2 vezes depois que o % conta (e
+ * comemora, quando passa a ser batida: useComemoracao). A linha do tempo enche da esquerda, uma vez.
  */
 @media (prefers-reduced-motion: no-preference) {
   .ui-public-shell__pagina > .ranking-publico__disputa {
     animation: none;
+  }
+
+  .ranking-publico__percorrido {
+    animation: ui-encher var(--duracao-lenta) var(--curva-saida) backwards;
   }
 
   .ranking-publico__janela,

@@ -2,7 +2,8 @@
 // atualização pede jovens e adultos). Com movimento: os itens entram em sequência, uma atualização sem mudança não
 // mexe em nada, e a que muda a ordem faz quem trocou de lugar deslizar (FLIP) e o % contar até o valor novo.
 // Com prefers-reduced-motion: reduce, nada anima e o % já aparece final. O jsdom não faz layout: o lugar de cada
-// item é simulado (60 px por linha).
+// item é simulado (60 px por linha). RIFA-050 (P2.4): a comemoração (pulso e partículas) só quando uma célula passa
+// a bater a meta numa atualização; abrir a página com células batidas só pulsa.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { respostaRankingPublicoSchema } from "../../../shared/contracts/api";
@@ -393,5 +394,77 @@ describe("1º lugar e meta batida", () => {
       false,
     ]);
     expect(itens[0]).toHaveTextContent("1º Célula Ágape 112% da meta");
+  });
+});
+
+describe("RIFA-050 (P2.4): comemoração da meta batida no ranking público", () => {
+  /** As animações das partículas (só visuais) e em qual célula estão. */
+  const particulas = (animate: ReturnType<typeof espiarAnimate>) =>
+    chamadasEm(animate, (elemento) =>
+      elemento.classList.contains("mov-confete"),
+    );
+
+  it("abrir a página com células já batidas: só o pulso, nenhuma partícula", async () => {
+    simularPreferencia(false);
+    const animate = espiarAnimate();
+    controlarQuadros();
+    simularApi(DUAS_BATIDAS);
+    renderizarRota("/");
+    await screen.findByText(/^Atualizado às/);
+
+    expect(pulsos(animate)).toHaveLength(2);
+    expect(particulas(animate)).toEqual([]);
+    expect(document.querySelector(".mov-comemoracao")).toBeNull();
+  });
+
+  it("quem passa a bater a meta numa atualização comemora uma vez, na pílula dele; a atualização igual não", async () => {
+    simularPreferencia(false);
+    const animate = espiarAnimate();
+    const quadros = controlarQuadros();
+    simularApi(PRIMEIRA, BETEL_PASSA, BETEL_PASSA);
+    renderizarRota("/");
+    await screen.findByText(/^Atualizado às/);
+    animate.mockClear();
+
+    await atualizar();
+    // Betel: de 96% para 118%. As partículas saem da pílula dela, numa camada só visual.
+    const voando = particulas(animate);
+    expect(voando.length).toBeGreaterThanOrEqual(10);
+    expect(voando.length).toBeLessThanOrEqual(14);
+    expect(new Set(voando.map(({ item }) => item))).toEqual(
+      new Set(["Célula Betel"]),
+    );
+    for (const { quadros: passos, opcoes } of voando) {
+      expect(Number(opcoes.duration)).toBeLessThanOrEqual(450);
+      for (const passo of passos)
+        expect(
+          Object.keys(passo).filter((chave) => chave !== "offset"),
+        ).toEqual(["transform", "opacity"]);
+    }
+    const camada = document.querySelector(".mov-comemoracao");
+    expect(camada).toHaveAttribute("aria-hidden", "true");
+    expect(camada?.closest(".ranking-publico__percentual")).not.toBeNull();
+    // Ágape já tinha batido: não comemora de novo.
+    expect(pulsos(animate).map(({ item }) => item)).toEqual(["Célula Betel"]);
+    // O texto da lista não muda (as partículas não têm texto), depois que o % termina de contar.
+    act(() => quadros.quadro(10_000));
+    act(() => quadros.quadro(10_000 + DURACAO_CONTAGEM_MS));
+    expect(lista("Jovens")[0]).toBe("1º Célula Betel 118% da meta");
+    animate.mockClear();
+
+    await atualizar();
+    expect(particulas(animate)).toEqual([]);
+    expect(pulsos(animate)).toEqual([]);
+  });
+
+  it("com prefers-reduced-motion: reduce, nenhuma partícula no DOM", async () => {
+    simularPreferencia(true);
+    espiarAnimate();
+    simularApi(PRIMEIRA, BETEL_PASSA);
+    renderizarRota("/");
+    await screen.findByText(/^Atualizado às/);
+    await atualizar();
+    expect(lista("Jovens")[0]).toBe("1º Célula Betel 118% da meta");
+    expect(document.querySelector(".mov-comemoracao")).toBeNull();
   });
 });

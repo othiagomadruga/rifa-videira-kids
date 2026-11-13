@@ -15,6 +15,7 @@ import type {
   ReferenciaCampanha,
   RespostaRankingPublico,
 } from "../../../shared/contracts/calculos";
+import { TITULO_SEM_CONEXAO } from "../../components/ui";
 import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import { INTERVALO_ATUALIZACAO_MS } from "./useRankingPublico";
@@ -258,6 +259,14 @@ describe("CA2: ranking público (/)", () => {
     ]);
     expect(screen.getByText("Dia 12 de 24")).toBeInTheDocument();
     expect(screen.getByText("Faltam 13 dias")).toBeInTheDocument();
+    // RIFA-050: a linha do tempo da campanha na faixa (dia 12 de 24 = metade), só visual: o texto já diz o dia.
+    const linha = document.querySelector(".ranking-publico__linha-do-tempo");
+    expect(linha).toHaveAttribute("aria-hidden", "true");
+    expect(linha).toHaveTextContent("23/1116/12");
+    expect(
+      linha?.querySelector<HTMLElement>(".ranking-publico__percorrido")?.style
+        .width,
+    ).toBe("50%");
     expect(
       screen.getByRole("heading", {
         level: 2,
@@ -369,7 +378,7 @@ describe("CA2: ranking público (/)", () => {
     expect(within(adultos).queryByRole("list")).not.toBeInTheDocument();
   });
 
-  it("antes da primeira venda: estado vazio, com a contagem regressiva antes do início", async () => {
+  it("antes da primeira venda: estado vazio (com o troféu e o convite do primeiro dia), com a contagem regressiva antes do início", async () => {
     const vazio = {
       atual: { jovens: [], adultos: [] },
       campanha: { jovens: [], adultos: [] },
@@ -381,12 +390,22 @@ describe("CA2: ranking público (/)", () => {
     expect(
       screen.getByText("Vendas de 23/11/2026 a 16/12/2026"),
     ).toBeInTheDocument();
+    const titulo = screen.getByText("O ranking aparece com a primeira venda.");
     expect(
-      screen.getByText("O ranking aparece depois da primeira venda."),
+      screen.getByText(
+        "As vendas começam em 23/11/2026. Qual célula vai ser a primeira?",
+      ),
     ).toBeInTheDocument();
+    // RIFA-050: o troféu (só visual) no estado vazio; antes do início, sem a linha do tempo.
+    const estadoVazio = titulo.closest(".ui-estado");
     expect(
-      screen.getByText("As vendas começam em 23/11/2026."),
-    ).toBeInTheDocument();
+      estadoVazio?.querySelector(
+        '[aria-hidden="true"] svg[data-icone="trofeu"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      document.querySelector(".ranking-publico__linha-do-tempo"),
+    ).toBeNull();
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
     unmount();
 
@@ -401,7 +420,9 @@ describe("CA2: ranking público (/)", () => {
     // Durante, mas ninguém vendeu ainda na semana.
     abrir({ itens: vazio });
     expect(
-      await screen.findByText("Semana 2: ainda sem vendas."),
+      await screen.findByText(
+        "Semana 2: ainda sem vendas. Qual célula vai ser a primeira?",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Dia 12 de 24")).toBeInTheDocument();
   });
@@ -506,15 +527,20 @@ describe("CA2: atualização automática e falhas", () => {
     expect(lista("Jovens")).toHaveLength(3);
   });
 
-  it("erro na primeira carga: mensagem com 'Tentar de novo', e nova tentativa sozinha depois de 60 s", async () => {
+  it("erro de conexão na primeira carga: o estado neutro 'Sem conexão agora' (sem o vermelho), com 'Tentar de novo', e nova tentativa sozinha depois de 60 s", async () => {
     // Cada carga pede jovens e adultos: 4 falhas = a 1ª carga e o "Tentar de novo".
     abrir({ falhas: 4 });
 
     const alerta = await screen.findByRole("alert");
-    expect(alerta).toHaveTextContent("Não foi possível carregar o ranking.");
+    expect(alerta).toHaveTextContent(TITULO_SEM_CONEXAO);
+    expect(alerta).not.toHaveTextContent(
+      "Não foi possível carregar o ranking.",
+    );
     expect(alerta).toHaveTextContent(
       `${MENSAGEM_SEM_CONEXAO} A página tenta de novo sozinha a cada minuto.`,
     );
+    expect(alerta).toHaveClass("ui-estado--conexao");
+    expect(alerta).not.toHaveClass("ui-estado--erro");
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
     expect(screen.getByText("Carregando o ranking…")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -524,6 +550,22 @@ describe("CA2: atualização automática e falhas", () => {
     await esperarRanking();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(lista("Adultos")).toEqual(["1º Célula Dorcas", "2º Célula Éfeso"]);
+  });
+
+  it("outra falha na primeira carga (500): o erro de verdade, em vermelho, com 'Tentar de novo'", async () => {
+    abrir({
+      erro: { status: 500, codigo: "erro_interno", mensagem: "Falhou." },
+    });
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent("Não foi possível carregar o ranking.");
+    expect(alerta).toHaveTextContent(
+      "Falhou. A página tenta de novo sozinha a cada minuto.",
+    );
+    expect(alerta).toHaveClass("ui-estado--erro");
+    expect(
+      screen.getByRole("button", { name: "Tentar de novo" }),
+    ).toBeInTheDocument();
   });
 
   it("campanha encerrada: mostra o resultado final da campanha inteira; as atualizações seguintes já vão direto nele", async () => {
@@ -551,6 +593,10 @@ describe("CA2: atualização automática e falhas", () => {
     ]);
     expect(screen.getByText("Campanha encerrada")).toBeInTheDocument();
     expect(screen.getByText("Terminou em 16/12/2026")).toBeInTheDocument();
+    // Depois do fim, sem a linha do tempo (o texto da faixa já diz tudo).
+    expect(
+      document.querySelector(".ranking-publico__linha-do-tempo"),
+    ).toBeNull();
     expect(
       screen.getByRole("heading", {
         level: 2,
