@@ -266,6 +266,19 @@ describe("RIFA-050 (P2.1): o telão escala pela quantidade de itens (data-itens)
     );
     expect(valorDe(".telao__nome", "line-clamp")).toBe("2");
     expect(valorDe(".telao__nome", "-webkit-line-clamp")).toBe("2");
+    // Com a linha justa (1 a 1,05), o overflow: hidden do corte cortaria as pernas do g, p, q, j, y e o acento de
+    // uma maiúscula na 1ª linha ("Ágape"): o padding em cima e embaixo dá esse lugar dentro da caixa (revisão).
+    expect(valorDe(".telao__nome", "overflow")).toBe("hidden");
+    expect(emDe(".telao__nome", "padding-block")).toBeGreaterThanOrEqual(0.1);
+    expect(
+      REGRAS.filter(
+        ({ seletores, declaracoes }) =>
+          seletores.some((seletor) => seletor.endsWith(".telao__nome")) &&
+          [...declaracoes.keys()].some((propriedade) =>
+            propriedade.startsWith("padding"),
+          ),
+      ),
+    ).toHaveLength(1);
     // O corte fica na lista: no item que o FLIP desliza, o Chrome contaria a troca de lugar como layout shift.
     expect(valorDe(".telao__lista", "overflow")).toBe("clip");
     expect(valorDe(".telao__item", "overflow")).toBeUndefined();

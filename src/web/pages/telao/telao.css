@@ -347,7 +347,11 @@
   min-width: 0;
 }
 
-/* Nome longo quebra em até duas linhas (o resto vira reticências): a lista cabe sempre. */
+/*
+ * Nome longo quebra em até duas linhas (o resto vira reticências): a lista cabe sempre. A linha é justa (1 a 1,05) e o
+ * overflow: hidden do corte cortaria as pernas do g, p, q, j e y e o acento de uma maiúscula na 1ª linha ("Ágape"):
+ * o padding em cima e embaixo dá esse lugar dentro da caixa (RIFA-050, revisão).
+ */
 .telao__nome {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -355,6 +359,7 @@
   line-clamp: 2;
   overflow: hidden;
   min-width: 0;
+  padding-block: 0.12em;
   font-size: 1.1em;
   font-weight: var(--peso-negrito);
   line-height: 1.05;
