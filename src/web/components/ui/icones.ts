@@ -58,6 +58,19 @@ export const ICONES = {
     "M15.5 20v-1a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4v1M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20.5 20v-1a4 4 0 0 0-3-3.9M15.5 4.2a3.5 3.5 0 0 1 0 6.6",
   calendario:
     "M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4",
+  // Acabamento (RIFA-053): para não repetir um ícone com outro sentido.
+  // A célula: uma casa (a célula se reúne numa casa); "pessoas" fica para gente.
+  celula: "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM9.5 21v-5.5h5V21",
+  // Abrir (o chevron para baixo de um <details>; gira para cima quando aberto).
+  abrir: "M6 9l6 6 6-6",
+  // A curva: os eixos e a linha de tendência subindo.
+  grafico: "M4 4v15a1 1 0 0 0 1 1h15M7.5 15.5l4-4.5 3 3L20 8M15.5 8H20v4.5",
+  // Um documento: a folha com o canto dobrado e as linhas (o "pedidos" é o recibo, com o pé serrilhado).
+  documento:
+    "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6M9 9h1.5",
+  // Um período (semana): o calendário com o intervalo marcado.
+  periodo:
+    "M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4M8 15.5h8M8 14v3M16 14v3",
 } as const satisfies Record<string, string>;
 
 /** O nome de um ícone (ex.: "copiar"): a chave de ICONES. */

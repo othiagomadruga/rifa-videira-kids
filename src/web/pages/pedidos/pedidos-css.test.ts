@@ -362,20 +362,35 @@ describe("RIFA-051 (P3.7, A-04): os filtros recolhidos no celular", () => {
     ).toBe("0");
   });
 
-  it("no celular, o <summary> tem o alvo de toque, a cara de botão secundário e a seta desenhada com a borda (nenhum caractere)", () => {
+  it("no celular, o <summary> tem o alvo de toque e a cara de botão secundário (do tamanho do texto, não de select), com o Icone abrir (nenhum caractere nem seta de borda)", () => {
     const resumo = ".pedidos-filtros-caixa__resumo";
+    const seta = ".pedidos-filtros-caixa__seta";
     expect(valor(resumo, "min-height")).toBe("var(--alvo-toque)");
     expect(valor(resumo, "border")).toBe("1px solid var(--cor-borda-forte)");
     expect(valor(resumo, "list-style")).toBe("none");
-    expect(valor(`${resumo}::after`, "content")).toBe('""');
     expect(valor(`${resumo}::-webkit-details-marker`, "display")).toBe("none");
-    // A seta gira só com movimento (a transição fica no @media de movimento).
+    // RIFA-053: a cara do botão (o mesmo respiro do .ui-button), do tamanho do conteúdo e centrada.
+    expect(valor(resumo, "display")).toBe("inline-flex");
+    expect(valor(resumo, "max-width")).toBe("100%");
+    expect(valor(resumo, "justify-content")).toBe("center");
+    expect(valor(resumo, "padding")).toBe("var(--espaco-2) var(--espaco-5)");
+    // A seta feita com a borda saiu: nada de ::after no <summary>.
     expect(
-      todas.find(
-        (d) =>
-          d.blocos.at(-1) === `${resumo}::after` &&
-          d.propriedade === "transition",
-      )?.blocos[0],
-    ).toBe("@media (prefers-reduced-motion: no-preference)");
+      todas.filter((d) =>
+        d.blocos.some(
+          (bloco) => bloco.includes(resumo) && bloco.includes("::after"),
+        ),
+      ),
+    ).toEqual([]);
+    // O chevron gira 180° aberto; o giro anima só com movimento (a transição fica no @media de movimento).
+    expect(valor(`.pedidos-filtros-caixa[open] ${seta}`, "transform")).toBe(
+      "rotate(180deg)",
+    );
+    const transicoes = todas.filter(
+      (d) => d.blocos.at(-1) === seta && d.propriedade === "transition",
+    );
+    expect(transicoes.map((d) => d.blocos[0])).toEqual([
+      "@media (prefers-reduced-motion: no-preference)",
+    ]);
   });
 });

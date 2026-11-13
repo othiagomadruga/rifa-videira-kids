@@ -43,6 +43,18 @@ describe("Icone", () => {
     expect(NOMES_ICONES).toEqual(expect.arrayContaining(NOMES_DO_PLANO));
     for (const extra of ["menu", "chave", "link", "bussola", "pessoas"])
       expect(ehNomeDeIcone(extra), extra).toBe(true);
+    // RIFA-053: os do acabamento, cada um com um desenho próprio (a célula não é "pessoas", o documento não é o
+    // recibo dos pedidos, o período não é o calendário do dia).
+    for (const [novo, parecido] of [
+      ["celula", "pessoas"],
+      ["abrir", "caiu"],
+      ["grafico", "ranking"],
+      ["documento", "pedidos"],
+      ["periodo", "calendario"],
+    ] as const) {
+      expect(ehNomeDeIcone(novo), novo).toBe(true);
+      expect(ICONES[novo], novo).not.toBe(ICONES[parecido]);
+    }
     expect(ehNomeDeIcone("↓")).toBe(false);
     expect(ehNomeDeIcone("toString")).toBe(false);
   });
@@ -71,6 +83,19 @@ describe("Icone", () => {
       expect(caminhos[0].getAttribute("d")).toBe(ICONES[nome]);
     },
   );
+
+  it("nenhum desenho repetido com outro nome (fora o da chave, que é o do menu Acessos)", () => {
+    const porDesenho = new Map<string, NomeIcone[]>();
+    for (const nome of NOMES_ICONES)
+      porDesenho.set(ICONES[nome], [
+        ...(porDesenho.get(ICONES[nome]) ?? []),
+        nome,
+      ]);
+    const repetidos = [...porDesenho.values()].filter(
+      (nomes) => nomes.length > 1,
+    );
+    expect(repetidos).toEqual([["acessos", "chave"]]);
+  });
 
   it.each(NOMES_ICONES)("%s: o `d` tem só comandos e números", (nome) => {
     const d = ICONES[nome];

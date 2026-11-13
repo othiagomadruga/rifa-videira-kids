@@ -101,7 +101,7 @@ export function RelatorioCampanha() {
   return (
     <Card
       titulo="Relatório da campanha"
-      icone="baixar"
+      icone="documento"
       className="visao-relatorio"
     >
       <div className="visao-relatorio__corpo">

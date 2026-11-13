@@ -427,10 +427,20 @@ describe("RIFA-051 (P3.5 e P3.6): a cara dos cartões", () => {
     const titulos = [
       ["Hoje · 04/12", "calendario"],
       ["Campanha", "campanha"],
-      ["Semana 2", "trilha"],
-      ["Curva: esperado × realizado", "subiu"],
-      ["Relatório da campanha", "baixar"],
+      ["Semana 2", "periodo"],
+      ["Curva: esperado × realizado", "grafico"],
+      ["Relatório da campanha", "documento"],
     ] as const;
+    // RIFA-053: nenhum ícone repetido entre os cartões da tela.
+    expect(new Set(titulos.map(([, icone]) => icone)).size).toBe(
+      titulos.length,
+    );
+    // O botão do relatório continua com o de baixar.
+    expect(
+      screen
+        .getByRole("button", { name: "Baixar relatório" })
+        .querySelector("svg"),
+    ).toHaveAttribute("data-icone", "baixar");
     for (const [titulo, icone] of titulos) {
       const cabecalho = screen.getByRole("heading", { level: 2, name: titulo });
       const desenho = cabecalho.querySelector("svg");

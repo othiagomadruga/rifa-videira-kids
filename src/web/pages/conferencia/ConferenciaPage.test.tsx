@@ -702,7 +702,7 @@ describe("RIFA-051 (P3.5): os totais com a cara única do Stat", () => {
     await escolher();
     expect(indicadorDosTotais("Pagos no arquivo").slice(0, 2)).toEqual([
       "ui-stat__icone--marca",
-      "baixar",
+      "documento",
     ]);
     expect(indicadorDosTotais("Pagos no sistema").slice(0, 2)).toEqual([
       "ui-stat__icone--marca",
@@ -734,7 +734,7 @@ describe("RIFA-051 (P3.5): os totais com a cara única do Stat", () => {
     await escolher(arquivoCsv(CSV_SEM_CODIGO, "sem-codigo.csv"));
     expect(indicadorDosTotais("Pagos no arquivo").slice(0, 2)).toEqual([
       "ui-stat__icone--marca",
-      "baixar",
+      "documento",
     ]);
     expect(indicadorDosTotais("Pagos no sistema").slice(0, 2)).toEqual([
       "ui-stat__icone--marca",

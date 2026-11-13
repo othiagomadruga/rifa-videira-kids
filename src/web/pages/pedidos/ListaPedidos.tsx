@@ -372,6 +372,8 @@ function Filtros({
               </span>
             </>
           )}
+          {/* O chevron (RIFA-053): para baixo fechado, para cima aberto; só visual (o <details> diz se está aberto). */}
+          <Icone nome="abrir" className="pedidos-filtros-caixa__seta" />
         </summary>
       </ComDica>
       <div className="pedidos-filtros">

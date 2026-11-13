@@ -282,7 +282,7 @@ function Resumo({ dados }: { dados: Hierarquia }) {
       <Stat
         rotulo="Células"
         valor={formatarNumero(dados.celulas.length)}
-        icone="pessoas"
+        icone="celula"
         tom="marca"
       />
       <Stat

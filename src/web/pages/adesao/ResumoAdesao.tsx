@@ -51,7 +51,7 @@ export function ResumoAdesao({ resumo, afiliadosSemCelula, compacto }: Props) {
             <Stat
               rotulo="Células que já venderam"
               valor={formatarNumero(resumo.com_venda)}
-              icone="check"
+              icone="pedidos"
               tom="sucesso"
             />
             <Stat
