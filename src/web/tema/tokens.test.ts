@@ -174,7 +174,35 @@ const BORDAS_CLARO: [string, string][] = [
   ["--cor-primaria", "--cor-primaria-suave"],
 ];
 
+// RIFA-049: os ícones nos chips (Stat, estados, IndicadorSituacao, Aviso, troféu da barra): cor do ícone sobre o
+// fundo do chip, 3:1 ou mais (objeto gráfico; o texto ao lado diz o que é).
+const ICONES_CLARO: [string, string][] = [
+  ["--cor-neutro", "--cor-neutro-suave"],
+  ["--cor-primaria", "--cor-primaria-suave"],
+  ["--cor-sucesso", "--cor-sucesso-suave"],
+  ["--cor-alerta", "--cor-alerta-suave"],
+  ["--cor-sucesso-suave", "--cor-sucesso"],
+  ["--cor-alerta-suave", "--cor-alerta"],
+  ["--cor-perigo-suave", "--cor-perigo"],
+  ["--cor-neutro-suave", "--cor-neutro"],
+  ["--cor-sobre-primaria", "--cor-info"],
+  ["--cor-sobre-primaria", "--cor-sucesso"],
+  ["--cor-sobre-primaria", "--cor-alerta"],
+  ["--cor-sobre-primaria", "--cor-perigo"],
+  ["--cor-sobre-comemoracao", "--cor-comemoracao"],
+  ["--cor-primaria", "--cor-superficie"],
+];
+
 describe("CA1: tema claro (site): texto AA e bordas e foco com 3:1", () => {
+  it.each(ICONES_CLARO)(
+    "ícone %s sobre o chip %s: 3:1 ou mais",
+    (icone, fundo) => {
+      expect(
+        contraste(cor(CLARO, icone), cor(CLARO, fundo)),
+      ).toBeGreaterThanOrEqual(3);
+    },
+  );
+
   it.each(TEXTO_CLARO)("%s sobre %s: %d:1 ou mais", (texto, fundo, minimo) => {
     expect(
       contraste(cor(CLARO, texto), cor(CLARO, fundo)),

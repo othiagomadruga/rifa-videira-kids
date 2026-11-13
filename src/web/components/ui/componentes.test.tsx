@@ -165,6 +165,69 @@ describe("Stat", () => {
     );
   });
 
+  it("a seta da variação é o ícone do sentido (RIFA-049), só visual", () => {
+    const { container, rerender } = render(
+      <Stat
+        rotulo="Bilhetes"
+        valor="10"
+        variacao={{ texto: "-3", sentido: "caiu" }}
+      />,
+    );
+    const icone = () =>
+      container
+        .querySelector(".ui-stat__variacao svg")
+        ?.getAttribute("data-icone");
+    expect(icone()).toBe("caiu");
+    expect(container.querySelector(".ui-stat__variacao")).toHaveTextContent(
+      /^Caiu: -3$/,
+    );
+    rerender(
+      <Stat
+        rotulo="Bilhetes"
+        valor="10"
+        variacao={{ texto: "igual", sentido: "estavel" }}
+      />,
+    );
+    expect(icone()).toBe("estavel");
+  });
+
+  it("tamanho, icone e tom (RIFA-049): o chip no tom ao lado do rótulo; o rótulo diz o que é", () => {
+    const { container } = render(
+      <Stat
+        rotulo="Pedidos aprovados"
+        valor="1.234"
+        tamanho="grande"
+        icone="pedidos"
+        tom="sucesso"
+      />,
+    );
+    const stat = container.firstElementChild;
+    expect(stat).toHaveClass("ui-stat", "ui-stat--grande");
+    const chip = container.querySelector(".ui-stat__icone");
+    expect(chip).toHaveClass("ui-stat__icone--sucesso");
+    expect(chip).toHaveAttribute("aria-hidden", "true");
+    expect(chip?.querySelector("svg")).toHaveAttribute("data-icone", "pedidos");
+    expect(stat).toHaveTextContent(/^Pedidos aprovados1\.234$/);
+    expect(screen.getByText("1.234")).toHaveClass("ui-stat__valor");
+  });
+
+  it("sem as props novas: o mesmo HTML de antes (rótulo e valor direto no cartão)", () => {
+    const { container } = render(<Stat rotulo="Células" valor="36" />);
+    const stat = container.firstElementChild as HTMLElement;
+    expect(stat.className).toBe("ui-stat");
+    expect([...stat.children].map((filho) => filho.className)).toEqual([
+      "ui-stat__rotulo",
+      "ui-stat__valor",
+    ]);
+    // Com ícone sem tom: o neutro.
+    const { container: comIcone } = render(
+      <Stat rotulo="Células" valor="36" icone="hierarquia" />,
+    );
+    expect(comIcone.querySelector(".ui-stat__icone")).toHaveClass(
+      "ui-stat__icone--neutro",
+    );
+  });
+
   it("sem variação, mostra só rótulo e valor", () => {
     const { container } = render(<Stat rotulo="Células" valor="36" />);
     expect(screen.getByText("36")).toBeInTheDocument();

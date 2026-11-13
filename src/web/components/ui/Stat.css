@@ -25,7 +25,64 @@
   letter-spacing: -0.01em;
 }
 
+/* O número em destaque (RIFA-049). */
+.ui-stat--grande .ui-stat__valor {
+  font-size: clamp(var(--texto-3xl), 1.5rem + 1.6vw, var(--texto-4xl));
+}
+
+/* Com ícone (RIFA-049): o chip redondo no tom e o rótulo ao lado, na mesma linha. */
+.ui-stat__topo {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.ui-stat__topo .ui-stat__rotulo {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui-stat__icone {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--stat-fundo);
+  color: var(--stat-cor);
+}
+
+.ui-stat__icone .ui-icone {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.ui-stat__icone--neutro {
+  --stat-cor: var(--cor-neutro);
+  --stat-fundo: var(--cor-neutro-suave);
+}
+
+.ui-stat__icone--marca {
+  --stat-cor: var(--cor-primaria);
+  --stat-fundo: var(--cor-primaria-suave);
+}
+
+.ui-stat__icone--sucesso {
+  --stat-cor: var(--cor-sucesso);
+  --stat-fundo: var(--cor-sucesso-suave);
+}
+
+.ui-stat__icone--alerta {
+  --stat-cor: var(--cor-alerta);
+  --stat-fundo: var(--cor-alerta-suave);
+}
+
 .ui-stat__variacao {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-1);
   font-size: var(--texto-sm);
   font-weight: var(--peso-forte);
 }
