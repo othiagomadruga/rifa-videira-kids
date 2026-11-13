@@ -57,6 +57,7 @@
 @media (min-width: 48rem) {
   .minha-links__celula {
     grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    align-items: start;
     gap: var(--espaco-2) var(--espaco-5);
   }
 
