@@ -4,7 +4,7 @@
  * font-size fica só nos textos (os blocos herdam o do .telao), então cada em vale o texto-base: nenhum
  * texto abaixo de 0,9em (≥ 40 px em 1920×1080) e as posições com 1,5em (~69 px) ou mais. telao-css.test.ts confere.
  * RIFA-050 (A-24): a disputa ocupa a altura que sobra e a lista escala pela quantidade de itens da maior divisão
- * (data-itens): até 3 (o limite público), nome e % com 1,45em (~67 px) e o 1º com 1,6em; até 5, 1,25em; acima, os
+ * (data-itens): até 3 (o limite público), nome e % com 1,45em (~67 px) e o 1º com 1,6em; até 5, 1,2em; acima, os
  * tamanhos de base. Com os dados da demonstração, a disputa ocupa mais de 60% da altura (capturas).
  * Cores da Videira (RIFA-020): fundo marinho, verde-água nos títulos e no pódio, o amarelo do Kids no 1º
  * lugar e na meta batida; texto com 7:1 ou mais (tokens.test.ts).
