@@ -123,6 +123,20 @@ function Esqueleto() {
   );
 }
 
+/**
+ * O texto do vazio (ninguém vendeu na janela). A data do início vem da campanha (`referencia`), nunca do código. Antes
+ * do início e durante, o convite do primeiro dia; depois do fim não há primeira venda a esperar, só o aviso.
+ */
+function descricaoSemVendas({ referencia, janela }: RankingPublico): string {
+  const semVendas = `${janela.nome}: ainda sem vendas.`;
+  if (referencia.fase === "encerrada") return semVendas;
+  const contexto =
+    referencia.fase === "antes"
+      ? `As vendas começam em ${formatarData(referencia.data_inicio)}.`
+      : semVendas;
+  return `${contexto} Qual célula vai ser a primeira?`;
+}
+
 type PropsRanking = {
   ranking: RankingPublico;
   /** A última atualização automática falhou (a tela continua com os dados anteriores). */
@@ -161,11 +175,7 @@ function Ranking({ ranking, falhou }: PropsRanking) {
         <EmptyState
           icone="trofeu"
           titulo="O ranking aparece com a primeira venda."
-          descricao={`${
-            ranking.referencia.fase === "antes"
-              ? `As vendas começam em ${formatarData(ranking.referencia.data_inicio)}.`
-              : `${ranking.janela.nome}: ainda sem vendas.`
-          } Qual célula vai ser a primeira?`}
+          descricao={descricaoSemVendas(ranking)}
         />
       ) : (
         <section

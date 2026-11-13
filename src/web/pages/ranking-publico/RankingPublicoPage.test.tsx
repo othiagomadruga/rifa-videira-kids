@@ -423,14 +423,40 @@ describe("CA2: ranking público (/)", () => {
     expect(await screen.findByText("Começa amanhã")).toBeInTheDocument();
     fechar();
 
+    // A data do início vem da campanha (a referencia da resposta), não do código.
+    const { unmount: fecharOutra } = abrir({
+      referencia: {
+        ...ANTES,
+        data_inicio: "2027-03-01",
+        data_fim: "2027-03-24",
+      },
+      itens: vazio,
+    });
+    expect(
+      await screen.findByText(
+        "As vendas começam em 01/03/2027. Qual célula vai ser a primeira?",
+      ),
+    ).toBeInTheDocument();
+    fecharOutra();
+
     // Durante, mas ninguém vendeu ainda na semana.
-    abrir({ itens: vazio });
+    const { unmount: fecharDurante } = abrir({ itens: vazio });
     expect(
       await screen.findByText(
         "Semana 2: ainda sem vendas. Qual célula vai ser a primeira?",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Dia 12 de 24")).toBeInTheDocument();
+    fecharDurante();
+
+    // Depois do fim, sem nenhuma venda: o aviso, sem o convite (não há primeira venda a esperar).
+    abrir({ referencia: ENCERRADA, itens: vazio });
+    expect(
+      await screen.findByText("Campanha inteira: ainda sem vendas."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Qual célula vai ser a primeira\?/),
+    ).not.toBeInTheDocument();
   });
 
   it("no último dia: 'Hoje é o último dia'", async () => {
