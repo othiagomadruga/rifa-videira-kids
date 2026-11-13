@@ -4,6 +4,7 @@
 // e a atualização automática.
 import {
   act,
+  cleanup,
   fireEvent,
   screen,
   waitFor,
@@ -980,6 +981,48 @@ describe("RIFA-006b: no celular, a fila logo no topo; depois de vincular, aviso 
       "Quem falta (2)",
       "Todas as células",
       "Links de vendas",
+    ]);
+  });
+
+  it("RIFA-051 (P3.5): no computador, os indicadores com a cara única do Stat (o chip do ícone no tom; o rótulo diz o que é)", async () => {
+    /** O chip (tom e desenho) do Stat com este rótulo, no resumo; e se o Stat é o normal (não o grande). */
+    const chip = (rotulo: string) => {
+      const stat = within(regiao(/^Resumo$/))
+        .getByText(rotulo)
+        .closest(".ui-stat");
+      const icone = stat?.querySelector(".ui-stat__icone");
+      expect(icone).toHaveAttribute("aria-hidden", "true");
+      expect(stat).not.toHaveClass("ui-stat--grande");
+      return [
+        [...(icone?.classList ?? [])].find((classe) =>
+          classe.startsWith("ui-stat__icone--"),
+        ),
+        icone?.querySelector("svg")?.getAttribute("data-icone"),
+      ];
+    };
+    simularTela("computador");
+    await abrirTela();
+    expect(chip("Células vinculadas")).toEqual([
+      "ui-stat__icone--marca",
+      "link",
+    ]);
+    expect(chip("Células que já venderam")).toEqual([
+      "ui-stat__icone--sucesso",
+      "check",
+    ]);
+    // Com órfãos, o alerta (o número diz quantos); sem nenhum, neutro.
+    expect(chip("Afiliados sem célula")).toEqual([
+      "ui-stat__icone--alerta",
+      "alerta",
+    ]);
+    expect(regiao(/^Resumo$/)).toHaveTextContent("Afiliados sem célula2");
+    cleanup();
+
+    await abrirTela({ ...cenarioDaReuniao(), orfaos: [] });
+    expect(regiao(/^Resumo$/)).toHaveTextContent("Afiliados sem célula0");
+    expect(chip("Afiliados sem célula")).toEqual([
+      "ui-stat__icone--neutro",
+      "check",
     ]);
   });
 

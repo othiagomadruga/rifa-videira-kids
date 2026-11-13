@@ -15,11 +15,14 @@ import {
   DataTable,
   EmptyState,
   ErrorState,
+  Icone,
   Input,
   Loading,
   Select,
   type ColunaTabela,
+  type NomeIcone,
 } from "../../components/ui";
+import { TextoContado } from "../../components/movimento";
 import { mensagemDoErro } from "../../lib/api";
 import { useUsuarioConectado } from "../../lib/sessao";
 import {
@@ -597,6 +600,19 @@ function Conteudo({
 /** Ordem dos totais: o que conta nas vendas primeiro. */
 const ORDEM_TOTAIS = ["approved", "in_process", "expired"] as const;
 
+/**
+ * O chip de cada total (RIFA-051, P3.5): o ícone e o tom, como o `tom` do Stat (no lugar da borda colorida de cima).
+ * Nunca é só cor: o título do cartão diz o status.
+ */
+const CHIP_DO_TOTAL: Record<
+  (typeof ORDEM_TOTAIS)[number],
+  { icone: NomeIcone; tom: "sucesso" | "marca" | "neutro" }
+> = {
+  approved: { icone: "check", tom: "sucesso" },
+  in_process: { icone: "atualizar", tom: "marca" },
+  expired: { icone: "menos", tom: "neutro" },
+};
+
 function Totais({
   totais,
   celulaOuBusca,
@@ -619,19 +635,25 @@ function Totais({
       <ul className="pedidos-totais__lista">
         {ORDEM_TOTAIS.map((status) => {
           const total = totais[status];
+          const { icone, tom } = CHIP_DO_TOTAL[status];
           return (
-            <li
-              key={status}
-              className={`pedidos-total pedidos-total--${status}`}
-            >
-              <h3 className="pedidos-total__status">
-                {ROTULO_STATUS_PLURAL[status]}
-              </h3>
+            <li key={status} className="pedidos-total">
+              <div className="pedidos-total__topo">
+                <span
+                  className={`pedidos-total__icone pedidos-total__icone--${tom}`}
+                  aria-hidden="true"
+                >
+                  <Icone nome={icone} />
+                </span>
+                <h3 className="pedidos-total__status">
+                  {ROTULO_STATUS_PLURAL[status]}
+                </h3>
+              </div>
               <dl className="pedidos-total__numeros">
                 <div>
                   <dt>Pedidos</dt>
                   <dd className="pedidos-total__principal">
-                    {formatarNumero(total.pedidos)}
+                    <TextoContado texto={formatarNumero(total.pedidos)} />
                   </dd>
                 </div>
                 <div>

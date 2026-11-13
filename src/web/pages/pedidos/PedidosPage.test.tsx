@@ -242,6 +242,34 @@ describe("CA1: a lista de pedidos", () => {
     expect(totais()).toEqual(esperados);
   });
 
+  it("RIFA-051 (P3.5): cada total com a cara do Stat: o chip do ícone no tom do status (no lugar da borda colorida) e o número de pedidos em destaque", async () => {
+    simularApi({ pedidos: pedidosVariados(9) });
+    abrir();
+    expect(await linhas()).toHaveLength(9);
+    const secao = screen.getByRole("region", { name: "Totais por status" });
+    const cartoes = within(secao).getAllByRole("listitem");
+    expect(
+      cartoes.map((cartao) => {
+        // Sem a classe da borda colorida de cada status (A-09): só o chip diz o tom, e o título diz o status.
+        expect(cartao.className).toBe("pedidos-total");
+        const chip = cartao.querySelector(".pedidos-total__icone");
+        expect(chip).toHaveAttribute("aria-hidden", "true");
+        return [
+          within(cartao).getByRole("heading", { level: 3 }).textContent,
+          [...(chip?.classList ?? [])].find((classe) =>
+            classe.startsWith("pedidos-total__icone--"),
+          ),
+          chip?.querySelector("svg")?.getAttribute("data-icone"),
+          cartao.querySelector(".pedidos-total__principal")?.textContent,
+        ];
+      }),
+    ).toEqual([
+      ["Aprovados", "pedidos-total__icone--sucesso", "check", "3"],
+      ["Aguardando pagamento", "pedidos-total__icone--marca", "atualizar", "3"],
+      ["Expirados", "pedidos-total__icone--neutro", "menos", "3"],
+    ]);
+  });
+
   it("Carregar mais pede a página seguinte com o cursor da API, acrescenta no fim sem repetir nem pular, leva o foco ao primeiro pedido novo e anuncia; na última página, o botão some", async () => {
     const api = simularApi({ pedidos: pedidosVariados(120) });
     abrir();

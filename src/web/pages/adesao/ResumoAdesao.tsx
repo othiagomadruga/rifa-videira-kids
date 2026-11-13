@@ -40,15 +40,25 @@ export function ResumoAdesao({ resumo, afiliadosSemCelula, compacto }: Props) {
         </ul>
       ) : (
         <>
+          {/* A cara única dos números (RIFA-051, P3.5): o chip do ícone no tom; o rótulo diz o que é. */}
           <div className="grade adesao-resumo__numeros">
-            <Stat rotulo="Células vinculadas" valor={vinculadas} />
+            <Stat
+              rotulo="Células vinculadas"
+              valor={vinculadas}
+              icone="link"
+              tom="marca"
+            />
             <Stat
               rotulo="Células que já venderam"
               valor={formatarNumero(resumo.com_venda)}
+              icone="check"
+              tom="sucesso"
             />
             <Stat
               rotulo="Afiliados sem célula"
               valor={formatarNumero(afiliadosSemCelula)}
+              icone={afiliadosSemCelula > 0 ? "alerta" : "check"}
+              tom={afiliadosSemCelula > 0 ? "alerta" : "neutro"}
             />
           </div>
           <ProgressBar

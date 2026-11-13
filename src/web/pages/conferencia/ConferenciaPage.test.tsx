@@ -679,6 +679,70 @@ describe("CA4: a tela da conferência", () => {
   });
 });
 
+/** O chip (tom e desenho) do Stat com este rótulo; o Stat é o normal (o "R$ 99.999,99" cabe, RIFA-043). */
+function indicadorDosTotais(rotulo: string) {
+  const stat = screen
+    .getByText(rotulo, { selector: ".ui-stat__rotulo" })
+    .closest(".ui-stat");
+  expect(stat).not.toHaveClass("ui-stat--grande");
+  const chip = stat?.querySelector(".ui-stat__icone");
+  expect(chip).toHaveAttribute("aria-hidden", "true");
+  return [
+    [...(chip?.classList ?? [])].find((classe) =>
+      classe.startsWith("ui-stat__icone--"),
+    ),
+    chip?.querySelector("svg")?.getAttribute("data-icone"),
+    stat?.querySelector(".ui-stat__valor")?.textContent,
+  ];
+}
+
+describe("RIFA-051 (P3.5): os totais com a cara única do Stat", () => {
+  it("por pedido: o chip do ícone no tom de cada total; 'Com diferença' em alerta quando há diferença", async () => {
+    await abrir();
+    await escolher();
+    expect(indicadorDosTotais("Pagos no arquivo").slice(0, 2)).toEqual([
+      "ui-stat__icone--marca",
+      "baixar",
+    ]);
+    expect(indicadorDosTotais("Pagos no sistema").slice(0, 2)).toEqual([
+      "ui-stat__icone--marca",
+      "pedidos",
+    ]);
+    expect(indicadorDosTotais("Conferem").slice(0, 2)).toEqual([
+      "ui-stat__icone--sucesso",
+      "check",
+    ]);
+    expect(indicadorDosTotais("Com diferença")).toEqual([
+      "ui-stat__icone--alerta",
+      "alerta",
+      `${ANALISE_POR_PEDIDO.resumo.com_divergencia} pedidos`,
+    ]);
+  });
+
+  it("tudo confere: 'Com diferença' neutro, com o check", async () => {
+    await abrir(criarApiFalsa({ analises: [ANALISE_SEM_DIFERENCA] }));
+    await escolher();
+    expect(indicadorDosTotais("Com diferença")).toEqual([
+      "ui-stat__icone--neutro",
+      "check",
+      "0 pedidos",
+    ]);
+  });
+
+  it("por totais (sem o código): os dois totais com o mesmo chip", async () => {
+    await abrir(criarApiFalsa({ analises: [ANALISE_AGREGADA] }));
+    await escolher(arquivoCsv(CSV_SEM_CODIGO, "sem-codigo.csv"));
+    expect(indicadorDosTotais("Pagos no arquivo").slice(0, 2)).toEqual([
+      "ui-stat__icone--marca",
+      "baixar",
+    ]);
+    expect(indicadorDosTotais("Pagos no sistema").slice(0, 2)).toEqual([
+      "ui-stat__icone--marca",
+      "pedidos",
+    ]);
+  });
+});
+
 describe("RIFA-028 (D20), CA7: o pedido desconsiderado no arquivo", () => {
   it("aparece num grupo à parte, 'Desconsiderados', nunca como faltando nem como diferença", async () => {
     await abrir(criarApiFalsa({ analises: [ANALISE_COM_DESCONSIDERADOS] }));

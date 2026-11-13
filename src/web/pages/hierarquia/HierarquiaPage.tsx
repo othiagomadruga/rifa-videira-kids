@@ -265,14 +265,32 @@ function Resumo({ dados }: { dados: Hierarquia }) {
     0,
   );
   return (
+    // Os números com a cara única do Stat (RIFA-051, P3.5): o chip do ícone diz o que é cada um, no roxo da marca.
     <section aria-label="Resumo" className="grade hierarquia-resumo">
-      <Stat rotulo="Redes" valor={formatarNumero(dados.redes.length)} />
+      <Stat
+        rotulo="Redes"
+        valor={formatarNumero(dados.redes.length)}
+        icone="hierarquia"
+        tom="marca"
+      />
       <Stat
         rotulo="Discipuladores"
         valor={formatarNumero(dados.discipuladores.length)}
+        icone="adesao"
+        tom="marca"
       />
-      <Stat rotulo="Células" valor={formatarNumero(dados.celulas.length)} />
-      <Stat rotulo="Total de pessoas" valor={formatarNumero(pessoas)} />
+      <Stat
+        rotulo="Células"
+        valor={formatarNumero(dados.celulas.length)}
+        icone="pessoas"
+        tom="marca"
+      />
+      <Stat
+        rotulo="Total de pessoas"
+        valor={formatarNumero(pessoas)}
+        icone="pessoas"
+        tom="marca"
+      />
     </section>
   );
 }

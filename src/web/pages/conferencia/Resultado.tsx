@@ -201,22 +201,32 @@ function PorPedido({
   return (
     <>
       {manchete}
+      {/* A cara única dos números (RIFA-051, P3.5): o chip do ícone no tom, no tamanho normal (o "R$ 99.999,99"
+          cabe no cartão, conferencia-css.test.ts). */}
       <div className="grade conferencia-totais">
         <Stat
           rotulo="Pagos no arquivo"
           valor={textoDosTotais(resumo.aprovados_no_arquivo)}
+          icone="baixar"
+          tom="marca"
         />
         <Stat
           rotulo="Pagos no sistema"
           valor={textoDosTotais(resumo.aprovados_no_sistema)}
+          icone="pedidos"
+          tom="marca"
         />
         <Stat
           rotulo="Conferem"
           valor={plural(resumo.conferem, "pedido", "pedidos")}
+          icone="check"
+          tom="sucesso"
         />
         <Stat
           rotulo="Com diferença"
           valor={plural(resumo.com_divergencia, "pedido", "pedidos")}
+          icone={resumo.com_divergencia > 0 ? "alerta" : "check"}
+          tom={resumo.com_divergencia > 0 ? "alerta" : "neutro"}
         />
       </div>
       {resumo.ausentes_fora_do_periodo > 0 && (
@@ -652,8 +662,18 @@ function Agregado({
         </Aviso>
       )}
       <div className="grade conferencia-totais">
-        <Stat rotulo="Pagos no arquivo" valor={textoDosTotais(total.arquivo)} />
-        <Stat rotulo="Pagos no sistema" valor={textoDosTotais(total.sistema)} />
+        <Stat
+          rotulo="Pagos no arquivo"
+          valor={textoDosTotais(total.arquivo)}
+          icone="baixar"
+          tom="marca"
+        />
+        <Stat
+          rotulo="Pagos no sistema"
+          valor={textoDosTotais(total.sistema)}
+          icone="pedidos"
+          tom="marca"
+        />
       </div>
       {analise.recorte && (
         <p className="conferencia-suave">

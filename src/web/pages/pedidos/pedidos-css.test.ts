@@ -301,3 +301,41 @@ describe("pacotes: a tela carrega à parte; o alerta, no pacote inicial", () => 
     }
   });
 });
+
+describe("RIFA-051 (P3.5, A-09): os totais com a cara do Stat", () => {
+  const css = CSS["./pedidos.css"];
+  const stat = semComentarios(lerArquivo("../../components/ui/Stat.css"));
+  const declaracao = (corpo: string, propriedade: string) =>
+    new RegExp(`${propriedade}:\\s*([^;]+);`).exec(corpo)?.[1].trim();
+
+  it("o cartão do total sem a borda colorida de cima (nem as classes por status): o tom fica no chip", () => {
+    const total = regra(css, ".pedidos-total");
+    expect(total).not.toMatch(/border-top/);
+    expect(total).toMatch(/border:\s*1px solid var\(--cor-borda\);/);
+    expect(css).not.toMatch(/\.pedidos-total--/);
+    for (const tom of ["sucesso", "marca", "neutro"])
+      expect(regra(css, `.pedidos-total__icone--${tom}`)).toContain(
+        `var(--cor-${tom === "marca" ? "primaria" : tom}-suave)`,
+      );
+  });
+
+  it("o número de pedidos com a fonte, o peso e o tamanho do valor do Stat", () => {
+    const principal = regra(css, ".pedidos-total__principal");
+    const valor = regra(stat, ".ui-stat__valor");
+    for (const propriedade of ["font-family", "font-size", "font-weight"])
+      expect(declaracao(principal, propriedade), propriedade).toBe(
+        declaracao(valor, propriedade),
+      );
+  });
+
+  it("o chip tem o tamanho do chip do Stat (2rem) sem largura fixa: o ícone de 1rem e o respiro de --espaco-2 em volta", () => {
+    const chip = regra(css, ".pedidos-total__icone");
+    expect(chip).toMatch(/padding:\s*var\(--espaco-2\);/);
+    expect(chip).toMatch(/border-radius:\s*50%;/);
+    expect(regra(css, ".pedidos-total__icone .ui-icone")).toMatch(
+      /width:\s*1rem;/,
+    );
+    expect(TOKENS).toMatch(/--espaco-2:\s*0\.5rem;/);
+    expect(regra(stat, ".ui-stat__icone")).toMatch(/width:\s*2rem;/);
+  });
+});

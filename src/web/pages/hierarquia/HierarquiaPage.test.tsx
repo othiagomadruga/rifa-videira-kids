@@ -55,9 +55,13 @@ function nomesDe(nome: string): string[] {
   return linhasDe(nome).map((linha) => linha[0]);
 }
 
+/** O valor do indicador (Stat) com este rótulo. Com o ícone (RIFA-051), o rótulo fica ao lado do chip, no topo do Stat. */
 function indicador(rotulo: string): string | null | undefined {
   const resumo = screen.getByRole("region", { name: "Resumo" });
-  return within(resumo).getByText(rotulo).nextElementSibling?.textContent;
+  return within(resumo)
+    .getByText(rotulo)
+    .closest(".ui-stat")
+    ?.querySelector(".ui-stat__valor")?.textContent;
 }
 
 function escolherOpcao(rotulo: string, valor: string) {
@@ -84,6 +88,18 @@ describe("CA1: visão da hierarquia", () => {
     expect(indicador("Discipuladores")).toBe("3");
     expect(indicador("Células")).toBe("4");
     expect(indicador("Total de pessoas")).toBe("54");
+    // RIFA-051 (P3.5): a cara única dos números, com o chip do ícone no roxo da marca (só visual).
+    const chips = [
+      ...screen
+        .getByRole("region", { name: "Resumo" })
+        .querySelectorAll(".ui-stat"),
+    ].map((stat) => {
+      const chip = stat.querySelector(".ui-stat__icone");
+      expect(chip).toHaveAttribute("aria-hidden", "true");
+      expect(chip).toHaveClass("ui-stat__icone--marca");
+      return chip?.querySelector("svg")?.getAttribute("data-icone");
+    });
+    expect(chips).toEqual(["hierarquia", "adesao", "pessoas", "pessoas"]);
 
     expect(
       within(tabela("Células"))

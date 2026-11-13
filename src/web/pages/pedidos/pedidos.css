@@ -80,39 +80,71 @@
   list-style: none;
 }
 
+/* Cada total com a cara do Stat (RIFA-051, P3.5; A-09): o chip do ícone no tom ao lado do status (no lugar da borda
+   colorida de cima) e o número de pedidos na fonte dos números; bilhetes e valor ao lado, menores. */
 .pedidos-total {
-  --total-cor: var(--cor-neutro);
-
   display: grid;
+  align-content: start;
   gap: var(--espaco-2);
   min-width: 0;
   padding: var(--espaco-3) var(--espaco-4);
   border: 1px solid var(--cor-borda);
-  border-top: 4px solid var(--total-cor);
   border-radius: var(--raio-3);
   background: var(--cor-superficie);
   box-shadow: var(--sombra-1);
 }
 
-.pedidos-total--approved {
-  --total-cor: var(--cor-sucesso);
+.pedidos-total__topo {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-width: 0;
 }
 
-.pedidos-total--in_process {
-  --total-cor: var(--cor-info);
+/* O chip redondo do Stat (2rem): o ícone de 1rem com o respiro em volta (sem largura fixa). */
+.pedidos-total__icone {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: var(--espaco-2);
+  border-radius: 50%;
+  background: var(--total-fundo);
+  color: var(--total-cor);
+}
+
+.pedidos-total__icone .ui-icone {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pedidos-total__icone--sucesso {
+  --total-cor: var(--cor-sucesso);
+  --total-fundo: var(--cor-sucesso-suave);
+}
+
+.pedidos-total__icone--marca {
+  --total-cor: var(--cor-primaria);
+  --total-fundo: var(--cor-primaria-suave);
+}
+
+.pedidos-total__icone--neutro {
+  --total-cor: var(--cor-neutro);
+  --total-fundo: var(--cor-neutro-suave);
 }
 
 .pedidos-total__status {
+  min-width: 0;
   margin: 0;
   font-size: var(--texto-md);
   font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
 }
 
 .pedidos-total__numeros {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--espaco-2) var(--espaco-5);
+  gap: var(--espaco-1) var(--espaco-5);
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -134,8 +166,13 @@
   overflow-wrap: anywhere;
 }
 
+/* O número de pedidos: a fonte, o peso e o tamanho do valor do Stat. */
 .pedidos-total__principal {
-  font-size: var(--texto-xl);
+  font-family: var(--fonte-titulo);
+  font-size: clamp(var(--texto-2xl), 1.25rem + 1vw, var(--texto-3xl));
+  font-weight: var(--peso-extra);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
 /* O conteúdo de cada célula num bloco só: no celular, a célula vira "rótulo: valor". */
