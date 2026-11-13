@@ -33,6 +33,7 @@ import {
   visaoDe,
   type ApiFalsa,
 } from "./teste-apoio";
+import { COMPLEMENTO_RESERVADO } from "./MinhaLayout";
 import { DICAS_DA_MOLDURA } from "./textos-moldura";
 
 /** Token fictício no formato do contrato (43 caracteres base64url). */
@@ -285,6 +286,38 @@ describe("CA1: /minha sem sessão segue o fluxo da coordenação", () => {
     );
   });
 
+  it("o topo já tem o lugar da linha do papel enquanto a sessão chega (RIFA-051: nada pula quando ela chega)", async () => {
+    const api = criarApiFalsa(VISOES.lider, LIDER);
+    let responder: ((resposta: Response) => void) | null = null;
+    api.proxima(
+      "GET",
+      "/api/sessao",
+      () => new Promise<Response>((resolver) => (responder = resolver)),
+    );
+    vi.stubGlobal("fetch", api.fetch);
+    renderizarRota("/minha", { usuario: null });
+
+    const topo = document.querySelector<HTMLElement>(".minha-moldura__topo");
+    if (!topo) throw new Error("sem a barra do topo");
+    const complemento = () =>
+      topo.querySelector(".ui-marca__complemento")?.textContent;
+    // Um espaço que não quebra (o leitor de tela não lê) no lugar do papel, e ainda sem o "Sair".
+    expect(complemento()).toBe(COMPLEMENTO_RESERVADO);
+    expect(COMPLEMENTO_RESERVADO).toBe("\u00a0");
+    expect(within(topo).queryByRole("button")).toBeNull();
+    await waitFor(() => expect(responder).not.toBeNull());
+
+    await act(async () =>
+      responder?.(
+        new Response(JSON.stringify({ usuario: LIDER }), { status: 200 }),
+      ),
+    );
+    await waitFor(() => expect(complemento()).toBe("Líder"));
+    expect(
+      within(topo).getByRole("button", { name: "Sair" }),
+    ).toBeInTheDocument();
+  });
+
   it("falha ao conferir a sessão: avisa com 'Tentar de novo', sem sair de /minha", async () => {
     const api = criarApiFalsa(VISOES.lider, LIDER);
     api.proxima("GET", "/api/sessao", () => {
@@ -295,6 +328,9 @@ describe("CA1: /minha sem sessão segue o fluxo da coordenação", () => {
 
     const alerta = await screen.findByRole("alert");
     expect(alerta).toHaveTextContent("Não foi possível conferir o seu acesso.");
+    // Sem conexão (RIFA-051): o cartão neutro, sem o vermelho.
+    expect(alerta).toHaveClass("ui-estado--conexao");
+    expect(alerta).toHaveTextContent(MENSAGEM_SEM_CONEXAO);
     expect(roteador.state.location.pathname).toBe("/minha");
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),

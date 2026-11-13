@@ -29,12 +29,15 @@
   margin: 0 auto;
 }
 
+/* A altura do "Sair" desde o primeiro quadro (RIFA-051, CLS): o botão só aparece quando a sessão chega, e a barra
+   não cresce nessa hora (a linha do papel na marca também fica reservada, em MinhaLayout.tsx). */
 .minha-moldura__barra {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--espaco-2) var(--espaco-4);
+  min-height: var(--alvo-toque);
 }
 
 .minha-moldura__erro {
@@ -68,6 +71,18 @@
 
 .minha-cabecalho__pessoa strong {
   color: var(--cor-texto);
+}
+
+/* O carregando da visão (EsqueletoDaVisao, em Cabecalho.tsx): os dois cartões de cima na mesma grade de minha.css
+   (.minha-cartoes), com a borda roxa do destaque. Fica aqui (pacote inicial): aparece antes do pacote da visão. */
+.minha-moldura__esqueleto {
+  display: grid;
+  gap: var(--espaco-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+
+.minha-moldura__esqueleto > .minha-moldura__esqueleto-destaque {
+  border: 2px solid var(--cor-primaria);
 }
 
 /* Entrada da tela e de cada bloco que chega depois de carregar: fade e deslize curto (sem reduce). */

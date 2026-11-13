@@ -152,6 +152,37 @@ describe("/minha (visão individual, com a moldura)", () => {
     conferirDicas(2);
   });
 
+  it("sem conexão ao carregar os números (RIFA-051): o cartão neutro, com 'Tentar de novo' e o Sair", async () => {
+    const api = criarApiFalsa(visaoDe());
+    api.proxima("GET", "/api/minha/visao", () => {
+      throw new TypeError("Failed to fetch");
+    });
+    vi.stubGlobal("fetch", api.fetch);
+    renderizarRota("/minha", { usuario: sessaoDaVisao(visaoDe()) });
+    const tentar = await screen.findByRole(
+      "button",
+      { name: "Tentar de novo" },
+      ESPERA_DO_PACOTE,
+    );
+    expect(tentar.closest(".ui-estado--conexao")).not.toBeNull();
+    expect(botao("Sair")).toBeInTheDocument();
+    conferirDicas(2);
+  });
+
+  it("carregando os números (RIFA-051, o esqueleto): só o Sair, com a dica", async () => {
+    const api = criarApiFalsa(visaoDe());
+    api.proxima("GET", "/api/minha/visao", pendente);
+    vi.stubGlobal("fetch", api.fetch);
+    renderizarRota("/minha", { usuario: sessaoDaVisao(visaoDe()) });
+    await waitFor(() =>
+      expect(api.chamadasA("GET", "/api/minha/visao")).toHaveLength(1),
+    );
+    expect(document.querySelector(".minha-moldura__esqueleto")).not.toBeNull();
+    expect(contarControles()).toBe(1);
+    conferirDicas(1);
+    expect(textoDaDica(botao("Sair"))).toBe(DICAS_DA_MOLDURA.sair);
+  });
+
   it("falha ao conferir a sessão: 'Tentar de novo' na moldura", async () => {
     const visao = visaoDe();
     const api = criarApiFalsa(visao, sessaoDaVisao(visao));

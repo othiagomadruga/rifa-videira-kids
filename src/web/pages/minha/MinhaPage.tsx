@@ -1,7 +1,6 @@
 import { Suspense, lazy } from "react";
-import { Loading } from "../../components/ui";
 import { useUsuarioConectado } from "../../lib/sessao";
-import { Cabecalho } from "./Cabecalho";
+import { Cabecalho, EsqueletoDaVisao } from "./Cabecalho";
 
 // Visão individual (RIFA-014, RF08, D12): o líder vê a célula; o discipulador, ele e as células dele; a rede,
 // ela, os discipuladores e as células. Celular primeiro (360 px, legível ao sol): o % da meta e a meta de
@@ -11,7 +10,8 @@ import { Cabecalho } from "./Cabecalho";
 //
 // O conteúdo vem num pacote à parte, carregado só aqui (como a configuração da Campanha): o pacote principal
 // também serve as telas públicas e a coordenação, que nunca abrem esta tela. Enquanto ele chega, o
-// cabeçalho (da sessão) e o carregando.
+// cabeçalho (da sessão) e o esqueleto dos cartões de cima (o mesmo de quando os números estão chegando: nada muda
+// de desenho entre um e outro).
 const VisaoIndividual = lazy(() =>
   import("./VisaoIndividual").then((modulo) => ({
     default: modulo.VisaoIndividual,
@@ -25,7 +25,7 @@ export function MinhaPage() {
       fallback={
         <>
           <Cabecalho alvo={usuario.alvo ?? null} nome={usuario.nome} />
-          <Loading texto="Carregando os seus números…" />
+          <EsqueletoDaVisao />
         </>
       }
     >

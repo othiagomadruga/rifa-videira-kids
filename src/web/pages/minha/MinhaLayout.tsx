@@ -7,17 +7,25 @@ import {
   Loading,
   Marca,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
 import { DICAS_DA_MOLDURA } from "./textos-moldura";
 import "./minha-moldura.css";
 
 type Saida = { saindo: boolean; erro: string | null };
 
+/**
+ * O complemento da marca enquanto a sessão não chega: um espaço que não quebra, para a linha do papel ("Líder") já
+ * ocupar o lugar dela (RIFA-051, CLS: antes, a marca crescia de uma para duas linhas quando a sessão chegava e
+ * empurrava a tela para baixo). O leitor de tela não lê um espaço.
+ */
+export const COMPLEMENTO_RESERVADO = "\u00a0";
+
 // Moldura da visão individual (/minha), só com sessão de líder, discipulador ou rede (guarda): a marca com o
 // papel, o botão "Sair" e a tela (Outlet), sem menu: esses papéis só têm esta tela. Sem sessão (ao abrir ou
 // por um 401 no meio do uso), vai para /entrar e guarda a tela, como na coordenação; admin e coordenação vão
-// para a área deles (/coordenacao).
+// para a área deles (/coordenacao). O topo tem a altura final desde o primeiro quadro (a linha do papel reservada
+// e a barra com a altura do "Sair", minha-moldura.css): nada pula quando a sessão chega.
 export function MinhaLayout() {
   const { estado, verificar, sair } = useSessao();
   const usuario = useGuardaDaArea("hierarquia");
@@ -42,7 +50,9 @@ export function MinhaLayout() {
       <header className="minha-moldura__topo">
         <div className="minha-moldura__limite minha-moldura__barra">
           <Marca
-            complemento={usuario ? ROTULO_PAPEL[usuario.papel] : undefined}
+            complemento={
+              usuario ? ROTULO_PAPEL[usuario.papel] : COMPLEMENTO_RESERVADO
+            }
           />
           {usuario && (
             <ComDica
@@ -77,6 +87,7 @@ export function MinhaLayout() {
               titulo="Não foi possível conferir o seu acesso."
               mensagem={mensagemDoErro(estado.erro)}
               aoTentarDeNovo={verificar}
+              conexao={ehFalhaDeConexao(estado.erro)}
             />
           ) : (
             <Loading texto="Conferindo o seu acesso…" />
