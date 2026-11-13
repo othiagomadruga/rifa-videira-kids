@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { juntarClasses } from "./classes";
+import { Icone } from "./Icone";
+import { ehNomeDeIcone, type NomeIcone } from "./icones";
 import "./IndicadorSituacao.css";
 
 export type TomSituacao = "sucesso" | "alerta" | "perigo" | "neutro";
@@ -10,20 +12,40 @@ type Props = {
   titulo: string;
   /** O quanto (ex.: "6 bilhetes acima do esperado"). */
   children?: ReactNode;
-  /** Símbolo ao lado (só visual). Padrão: ✓ no sucesso, ! no alerta e no perigo, – no neutro. */
+  /**
+   * O ícone do chip (só visual): um nome de icones.ts (ex.: "caiu"). Padrão: check no sucesso, alerta no alerta e no
+   * perigo, menos no neutro. Os caracteres de antes (↓ ↑ ✓ ! –) viram o ícone equivalente; outro caractere aparece
+   * como texto.
+   */
   icone?: string;
   className?: string;
 };
 
-const ICONE_PADRAO: Record<TomSituacao, string> = {
-  sucesso: "✓",
-  alerta: "!",
-  perigo: "!",
-  neutro: "–",
+const ICONE_PADRAO: Record<TomSituacao, NomeIcone> = {
+  sucesso: "check",
+  alerta: "alerta",
+  perigo: "alerta",
+  neutro: "menos",
 };
 
-// Situação de um indicador (em dia, abaixo, sem meta...): ícone, título e detalhe. Não é região viva:
-// numa tela que se atualiza sozinha, anunciar a cada consulta seria ruído.
+/** Os caracteres que as telas passavam antes dos ícones (RIFA-049): o desenho não muda de celular para celular. */
+const ICONE_DO_CARACTERE: Record<string, NomeIcone> = {
+  "↓": "caiu",
+  "↑": "subiu",
+  "→": "estavel",
+  "✓": "check",
+  "!": "alerta",
+  "–": "menos",
+};
+
+function desenhoDoIcone(icone: string): ReactNode {
+  const nome = ehNomeDeIcone(icone) ? icone : ICONE_DO_CARACTERE[icone];
+  return nome ? <Icone nome={nome} /> : icone;
+}
+
+// Situação de um indicador (em dia, abaixo, sem meta...): o chip do ícone, o título e o detalhe, num bloco de fundo
+// suave (o Aviso, que é alerta, fica com a faixa). Não é região viva: numa tela que se atualiza sozinha, anunciar a
+// cada consulta seria ruído.
 export function IndicadorSituacao({
   tom,
   titulo,
@@ -36,7 +58,7 @@ export function IndicadorSituacao({
       className={juntarClasses("ui-situacao", `ui-situacao--${tom}`, className)}
     >
       <span className="ui-situacao__icone" aria-hidden="true">
-        {icone}
+        {desenhoDoIcone(icone)}
       </span>
       <div className="ui-situacao__textos">
         <p className="ui-situacao__titulo">{titulo}</p>

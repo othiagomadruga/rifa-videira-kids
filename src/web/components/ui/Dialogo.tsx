@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ComDica } from "./Dica";
+import { Icone } from "./Icone";
 import "./Dialogo.css";
 
 type Props = {
@@ -161,21 +162,7 @@ function DialogoAberto({
               aria-label={rotuloFechar}
               onClick={aoFechar}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path
-                  d="M5 5l10 10M15 5L5 15"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </svg>
+              <Icone nome="fechar" tamanho="1.25rem" />
             </button>
           </ComDica>
         </div>

@@ -1,0 +1,12 @@
+/*
+ * Ícone (RIFA-049): 1.25em por padrão (acompanha o texto em volta), sem encolher numa linha flex. Inline-block, para
+ * ficar na linha do texto (o base.css deixa todo svg em bloco); num flex, o alinhamento é o do flex.
+ */
+.ui-icone {
+  display: inline-block;
+  flex: none;
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: -0.25em;
+  overflow: visible;
+}

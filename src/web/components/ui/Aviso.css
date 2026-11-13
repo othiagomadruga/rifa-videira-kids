@@ -43,6 +43,12 @@
   line-height: 1;
 }
 
+.ui-aviso__icone .ui-icone {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2.75;
+}
+
 .ui-aviso__textos {
   display: grid;
   gap: var(--espaco-1);

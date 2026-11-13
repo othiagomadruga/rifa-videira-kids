@@ -114,6 +114,9 @@ describe("Dialogo", () => {
     render(<Exemplo />);
     const { dialogo } = abrir();
     const fechar = within(dialogo).getByRole("button", { name: "Fechar" });
+    // O × é o Icone (RIFA-049): só visual, o nome do botão continua "Fechar".
+    expect(fechar.querySelector("svg")).toHaveAttribute("data-icone", "fechar");
+    expect(fechar.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     const nome = within(dialogo).getByRole("textbox", { name: "Nome" });
     const salvar = within(dialogo).getByRole("button", { name: "Salvar" });
 

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router";
 import { Button } from "./Button";
 import { ComDica } from "./Dica";
+import { Icone } from "./Icone";
 import { Marca } from "./Marca";
 import "./AppShell.css";
 
@@ -136,7 +137,11 @@ export function AppShell({ area, itens, conta, children }: Props) {
               aria-controls={idPainel}
               onClick={() => setMenuAberto((aberto) => !aberto)}
             >
-              <IconeMenu aberto={menuAberto} />
+              <Icone
+                nome={menuAberto ? "fechar" : "menu"}
+                tamanho="1.25rem"
+                className="ui-app-shell__icone"
+              />
               Menu
             </button>
           </ComDica>
@@ -206,26 +211,5 @@ function Conta({ nome, detalhe, aoSair, saindo = false, erro }: ContaAppShell) {
         </p>
       )}
     </div>
-  );
-}
-
-function IconeMenu({ aberto }: { aberto: boolean }) {
-  return (
-    <svg
-      className="ui-app-shell__icone"
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d={aberto ? "M5 5l10 10M15 5L5 15" : "M3 5.5h14M3 10h14M3 14.5h14"}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
   );
 }
