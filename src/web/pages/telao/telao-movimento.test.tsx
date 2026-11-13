@@ -18,6 +18,7 @@ import {
   simularPreferencia,
 } from "../../test/movimento";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
+import { INTERVALO_ATUALIZACAO_MS } from "../ranking-publico/useRankingPublico";
 
 const DURANTE: ReferenciaCampanha = {
   data: "2026-12-04",
@@ -365,6 +366,10 @@ describe('RIFA-050 (P2.3): "↑ subiu" no telão', () => {
 
     // 59 s depois (antes da próxima atualização automática): o chip continua.
     await act(() => vi.advanceTimersByTimeAsync(59_000));
+    expect(subiram()).toEqual(["Célula Betel"]);
+    // E depois de 5 atualizações automáticas com os mesmos dados (5 min): continua (revisão: um temporizador mais
+    // longo que o minuto também falha aqui).
+    await act(() => vi.advanceTimersByTimeAsync(5 * INTERVALO_ATUALIZACAO_MS));
     expect(subiram()).toEqual(["Célula Betel"]);
     vi.useRealTimers();
   });
