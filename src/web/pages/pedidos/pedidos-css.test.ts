@@ -339,3 +339,43 @@ describe("RIFA-051 (P3.5, A-09): os totais com a cara do Stat", () => {
     expect(regra(stat, ".ui-stat__icone")).toMatch(/width:\s*2rem;/);
   });
 });
+
+describe("RIFA-051 (P3.7, A-04): os filtros recolhidos no celular", () => {
+  const todas = declaracoes(CSS["./pedidos.css"]);
+  const de = (seletor: string, noComputador = false) =>
+    todas.filter(
+      (d) => d.blocos.at(-1) === seletor && naTabela(d) === noComputador,
+    );
+  const valor = (seletor: string, propriedade: string, noComputador = false) =>
+    de(seletor, noComputador).find((d) => d.propriedade === propriedade)?.valor;
+
+  it("no computador (a partir de 48rem), o <summary> some e os filtros ficam à mostra, sem espaço a mais", () => {
+    expect(valor(".pedidos-filtros-caixa__resumo", "display", true)).toBe(
+      "none",
+    );
+    expect(
+      valor(
+        ".pedidos-filtros-caixa__resumo + .pedidos-filtros",
+        "margin-top",
+        true,
+      ),
+    ).toBe("0");
+  });
+
+  it("no celular, o <summary> tem o alvo de toque, a cara de botão secundário e a seta desenhada com a borda (nenhum caractere)", () => {
+    const resumo = ".pedidos-filtros-caixa__resumo";
+    expect(valor(resumo, "min-height")).toBe("var(--alvo-toque)");
+    expect(valor(resumo, "border")).toBe("1px solid var(--cor-borda-forte)");
+    expect(valor(resumo, "list-style")).toBe("none");
+    expect(valor(`${resumo}::after`, "content")).toBe('""');
+    expect(valor(`${resumo}::-webkit-details-marker`, "display")).toBe("none");
+    // A seta gira só com movimento (a transição fica no @media de movimento).
+    expect(
+      todas.find(
+        (d) =>
+          d.blocos.at(-1) === `${resumo}::after` &&
+          d.propriedade === "transition",
+      )?.blocos[0],
+    ).toBe("@media (prefers-reduced-motion: no-preference)");
+  });
+});

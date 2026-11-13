@@ -16,6 +16,69 @@
   line-height: var(--altura-linha);
 }
 
+/* Filtros recolhidos no celular (RIFA-051, P3.7; A-04): o <summary> "Filtros", com a cara de um botão secundário e
+   a contagem dos escolhidos numa pílula; a seta é desenhada com a borda (decorativa) e vira para cima aberto. No
+   computador (abaixo, no @media), o <summary> some e o <details> fica sempre aberto. */
+.pedidos-filtros-caixa {
+  min-width: 0;
+}
+
+.pedidos-filtros-caixa__resumo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-4);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  font-weight: var(--peso-forte);
+  list-style: none;
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao);
+}
+
+.pedidos-filtros-caixa__resumo::-webkit-details-marker {
+  display: none;
+}
+
+.pedidos-filtros-caixa__resumo::after {
+  content: "";
+  width: var(--espaco-2);
+  height: var(--espaco-2);
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+}
+
+.pedidos-filtros-caixa[open] > .pedidos-filtros-caixa__resumo::after {
+  transform: translateY(25%) rotate(-135deg);
+}
+
+.pedidos-filtros-caixa__resumo:hover {
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-primaria);
+}
+
+.pedidos-filtros-caixa__ativos {
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+  line-height: 1.6;
+}
+
+.pedidos-filtros-caixa__resumo + .pedidos-filtros {
+  margin-top: var(--espaco-3);
+}
+
 /* Filtros: um por linha no celular; lado a lado quando cabem. */
 .pedidos-filtros {
   display: flex;
@@ -379,6 +442,15 @@
 }
 
 @media (min-width: 48rem) {
+  /* No computador, os filtros à mostra como antes: sem o <summary> (o <details> fica sempre aberto). */
+  .pedidos-filtros-caixa__resumo {
+    display: none;
+  }
+
+  .pedidos-filtros-caixa__resumo + .pedidos-filtros {
+    margin-top: 0;
+  }
+
   /* Na tabela, a palavra só quebra se não couber (com anywhere, a coluna encolhia até partir "Aprovado" e o id do
      pedido, que fica num bloco próprio dentro da célula, em "PEDTESTE00 / 70"). */
   .pedidos-celula,
@@ -419,5 +491,10 @@
   /* Os itens que chegam com "Carregar mais" entram com fade e deslize curto. */
   .pedidos-celula--nova {
     animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
+  }
+
+  /* A seta do "Filtros" gira ao abrir e fechar. */
+  .pedidos-filtros-caixa__resumo::after {
+    transition: transform var(--duracao-rapida) var(--curva-saida);
   }
 }

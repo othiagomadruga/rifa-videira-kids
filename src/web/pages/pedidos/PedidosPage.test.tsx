@@ -865,3 +865,156 @@ describe("CA5: acessibilidade da tela", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("RIFA-051 (P3.7, A-04): no celular, os filtros num <details> 'Filtros', fechado ao abrir a tela", () => {
+  const matchMediaOriginal = Object.getOwnPropertyDescriptor(
+    window,
+    "matchMedia",
+  );
+  let mudarLargura: (larga: boolean) => void = () => {};
+
+  /** Simula a largura da tela para o matchMedia (o jsdom não tem matchMedia); `larga` = a partir de 48rem. */
+  function simularTela(inicial: "celular" | "computador") {
+    let larga = inicial === "computador";
+    const consultas: string[] = [];
+    const ouvintes = new Set<() => void>();
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (consulta: string) => {
+        consultas.push(consulta);
+        return {
+          get matches() {
+            return larga;
+          },
+          media: consulta,
+          onchange: null,
+          addEventListener: (_tipo: string, ouvinte: () => void) =>
+            ouvintes.add(ouvinte),
+          removeEventListener: (_tipo: string, ouvinte: () => void) =>
+            ouvintes.delete(ouvinte),
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        };
+      },
+    });
+    mudarLargura = (nova) => {
+      larga = nova;
+      act(() => ouvintes.forEach((ouvinte) => ouvinte()));
+    };
+    return consultas;
+  }
+
+  afterEach(() => {
+    if (matchMediaOriginal)
+      Object.defineProperty(window, "matchMedia", matchMediaOriginal);
+    else Reflect.deleteProperty(window, "matchMedia");
+  });
+
+  const caixa = () => {
+    const elemento = document.querySelector<HTMLDetailsElement>(
+      "details.pedidos-filtros-caixa",
+    );
+    if (!elemento) throw new Error("sem o <details> dos filtros");
+    return elemento;
+  };
+  const resumo = () => {
+    const elemento = caixa().querySelector("summary");
+    if (!elemento) throw new Error("sem o <summary> dos filtros");
+    return elemento;
+  };
+
+  it("abre fechado, com 'Filtros' no <summary> antes dos totais e da lista; aberto, os filtros e a busca funcionam igual e o <summary> conta os escolhidos", async () => {
+    const consultas = simularTela("celular");
+    const api = simularApi({ pedidos: pedidosVariados(12) });
+    const { roteador } = abrir();
+    expect(await linhas()).toHaveLength(12);
+    expect(consultas).toContain("(min-width: 48rem)");
+
+    expect(caixa().open).toBe(false);
+    expect(resumo()).toHaveTextContent(/^Filtros$/);
+    // O <summary> é o primeiro filho do <details> e vem antes dos totais e da lista.
+    expect(caixa().firstElementChild).toBe(resumo());
+    expect(
+      caixa().compareDocumentPosition(
+        screen.getByRole("region", { name: "Totais por status" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Os quatro filtros e a busca ficam dentro dele.
+    for (const campo of [campoStatus(), campoCelula(), campoBusca()])
+      expect(caixa()).toContainElement(campo);
+
+    fireEvent.click(resumo());
+    expect(caixa().open).toBe(true);
+    fireEvent.change(campoStatus(), { target: { value: "approved" } });
+    await waitFor(async () => expect(await linhas()).toHaveLength(4));
+    expect(api.pedidosA(ROTA_PEDIDOS).at(-1)).toBe(
+      `${ROTA_PEDIDOS}?limite=50&status=approved`,
+    );
+    expect(roteador.state.location.search).toBe("?status=approved");
+    expect(resumo()).toHaveTextContent(/^Filtros 1 ativo$/);
+    // Escolher não fecha os filtros (a pessoa pode escolher outro).
+    expect(caixa().open).toBe(true);
+
+    fireEvent.change(campoBusca(), { target: { value: "PED-NADA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    await waitFor(() =>
+      expect(roteador.state.location.search).toBe(
+        "?status=approved&id=PED-NADA",
+      ),
+    );
+    expect(resumo()).toHaveTextContent(/^Filtros 2 ativos$/);
+
+    fireEvent.click(resumo());
+    expect(caixa().open).toBe(false);
+  });
+
+  it("com os filtros na URL: fechado, o <summary> diz quantos estão escolhidos", async () => {
+    simularTela("celular");
+    simularApi({ pedidos: pedidosVariados(12) });
+    abrir(`${CAMINHO}?status=approved&sem_celula=true&desconsiderado=false`);
+    await screen.findByText(/pedidos?; não há pedidos mais antigos\.$/);
+    expect(caixa().open).toBe(false);
+    expect(resumo()).toHaveTextContent(/^Filtros 3 ativos$/);
+  });
+
+  it("'Limpar filtros' com os filtros fechados: eles abrem e o foco vai para o Status, como no computador", async () => {
+    simularTela("celular");
+    simularApi({ pedidos: pedidosVariados(3) });
+    abrir(`${CAMINHO}?id=NAOEXISTE`);
+    acionar(await screen.findByRole("button", { name: "Limpar filtros" }));
+    expect(caixa().open).toBe(true);
+    expect(campoStatus()).toHaveFocus();
+    expect(await linhas()).toHaveLength(3);
+    expect(resumo()).toHaveTextContent(/^Filtros$/);
+  });
+
+  it("girar o aparelho: na tela larga, os filtros abrem (e o <summary> some pelo CSS); de volta à estreita, fecham", async () => {
+    simularTela("celular");
+    simularApi({ pedidos: pedidosVariados(3) });
+    abrir();
+    await linhas();
+    expect(caixa().open).toBe(false);
+
+    mudarLargura(true);
+    expect(caixa().open).toBe(true);
+    mudarLargura(false);
+    expect(caixa().open).toBe(false);
+  });
+
+  it("no computador e sem matchMedia (navegador antigo): abertos, como antes", async () => {
+    simularTela("computador");
+    simularApi({ pedidos: pedidosVariados(3) });
+    const { unmount } = abrir();
+    await linhas();
+    expect(caixa().open).toBe(true);
+    unmount();
+
+    Reflect.deleteProperty(window, "matchMedia");
+    simularApi({ pedidos: pedidosVariados(3) });
+    abrir();
+    await linhas();
+    expect(caixa().open).toBe(true);
+  });
+});

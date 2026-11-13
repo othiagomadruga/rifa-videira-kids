@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type RefObject,
 } from "react";
+import { flushSync } from "react-dom";
 import { Link } from "react-router";
 import type { ItemPedido, RespostaPedidos } from "../../../shared/contracts";
 import {
@@ -48,6 +49,7 @@ import {
   filtrosDosPedidos,
   idDaBusca,
   paramsDosPedidos,
+  quantosFiltros,
   temFiltro,
   type CelulaDoFiltro,
   type FiltrosPedidos,
@@ -58,11 +60,16 @@ import {
   ROTULO_STATUS,
   ROTULO_STATUS_PLURAL,
   TOM_STATUS,
+  filtrosAtivos,
   pedidos,
   seloDesconsiderado,
   textoDaCelula,
   totaisDepoisDe,
 } from "./textos";
+import {
+  useFiltrosRecolhidos,
+  type FiltrosRecolhidos,
+} from "./useFiltrosRecolhidos";
 import {
   usePaginas,
   type ConfigPaginas,
@@ -106,6 +113,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
   const { estado, mais, anuncio, carregarMais, tentarDeNovo, substituirItem } =
     usePaginas(consulta, CONFIG);
   const celulas = useCelulas();
+  const recolhidos = useFiltrosRecolhidos();
   const primeiroFiltro = useRef<HTMLSelectElement>(null);
   const admin = useUsuarioConectado().papel === "admin";
   const [chave, setChave] = useChaveDesconsiderar(admin);
@@ -156,7 +164,9 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
       : null;
 
   function limparFiltros() {
-    // O "Limpar filtros" some com a lista vazia: o foco vai para o primeiro filtro, pronto para outra escolha.
+    // O "Limpar filtros" some com a lista vazia: o foco vai para o primeiro filtro, pronto para outra escolha. No
+    // celular, os filtros recolhidos abrem antes (fechados, o campo não recebe o foco).
+    if (!recolhidos.abertos) flushSync(() => recolhidos.mudar(true));
     primeiroFiltro.current?.focus();
     aoMudar(SEM_FILTROS);
   }
@@ -172,6 +182,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
         celulas={celulas}
         aoMudar={aoMudar}
         primeiroFiltro={primeiroFiltro}
+        recolhidos={recolhidos}
       />
       {admin && chave === "desligada" && <AvisoChaveDesligada />}
       {/* Região viva fixa: anuncia o resultado de desconsiderar e de desfazer. */}
@@ -317,13 +328,17 @@ function Filtros({
   celulas,
   aoMudar,
   primeiroFiltro,
+  recolhidos,
 }: {
   filtros: FiltrosPedidos;
   celulas: EstadoCelulas;
   aoMudar: (filtros: FiltrosPedidos) => void;
   /** O campo Status: recebe o foco depois de "Limpar filtros". */
   primeiroFiltro: RefObject<HTMLSelectElement | null>;
+  /** No celular, os filtros num <details> (RIFA-051, P3.7); no computador, sempre abertos, como antes. */
+  recolhidos: FiltrosRecolhidos;
 }) {
+  const ativos = quantosFiltros(filtros);
   const grupos = celulas.tipo === "ok" ? celulasPorRede(celulas.celulas) : [];
   const celulaAtual = filtros.celula;
   // A célula da URL ainda não está na lista (não chegou, falhou ou saiu da hierarquia): uma opção só para ela.
@@ -336,85 +351,112 @@ function Filtros({
       : null;
 
   return (
-    <div className="pedidos-filtros">
-      <ComDica texto={DICAS.filtroStatus}>
-        <Select
-          ref={primeiroFiltro}
-          rotulo="Status"
-          value={filtros.status ?? ""}
-          onChange={(evento) =>
-            aoMudar({
-              ...filtros,
-              status:
-                STATUS_PEDIDO.find(
-                  (status) => status === evento.target.value,
-                ) ?? null,
-            })
-          }
-        >
-          <option value="">Todos os status</option>
-          {STATUS_PEDIDO.map((status) => (
-            <option key={status} value={status}>
-              {ROTULO_STATUS[status]}
-            </option>
-          ))}
-        </Select>
-      </ComDica>
-      <ComDica texto={DICAS.filtroCelula}>
-        <Select
-          rotulo="Célula"
-          value={valorDoFiltroCelula(celulaAtual)}
-          onChange={(evento) =>
-            aoMudar({ ...filtros, celula: celulaDoValor(evento.target.value) })
-          }
-          dica={
-            celulas.tipo === "erro"
-              ? "Não foi possível carregar as células; recarregue a página para tentar de novo."
-              : undefined
-          }
-        >
-          <option value={VALOR_TODAS}>Todas as células</option>
-          <option value={VALOR_SEM_CELULA}>Só os sem célula</option>
-          {avulsa !== null && (
-            <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
+    // No celular (abaixo de 48rem), os filtros ficam recolhidos ao abrir a tela, para o primeiro pedido aparecer
+    // logo (A-04); o <summary> diz quantos estão escolhidos. No computador, o <summary> some (pedidos.css) e o
+    // <details> fica sempre aberto: igual a antes.
+    <details
+      className="pedidos-filtros-caixa"
+      open={recolhidos.abertos}
+      onToggle={(evento) => {
+        if (recolhidos.recolhiveis) recolhidos.mudar(evento.currentTarget.open);
+      }}
+    >
+      <ComDica texto={DICAS.filtros}>
+        <summary className="pedidos-filtros-caixa__resumo mov-toque">
+          Filtros
+          {ativos > 0 && (
+            <>
+              {" "}
+              <span className="pedidos-filtros-caixa__ativos">
+                {filtrosAtivos(ativos)}
+              </span>
+            </>
           )}
-          {grupos.map((grupo) => (
-            <optgroup key={grupo.rede} label={grupo.rede}>
-              {grupo.celulas.map((celula) => (
-                <option key={celula.id} value={valorDaCelula(celula.id)}>
-                  {celula.nome}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </Select>
+        </summary>
       </ComDica>
-      <ComDica texto={DICAS.filtroDesconsiderados}>
-        <Select
-          rotulo="Desconsiderados"
-          value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
-          onChange={(evento) =>
-            aoMudar({
-              ...filtros,
-              desconsiderado:
-                evento.target.value === "so"
-                  ? true
-                  : evento.target.value === "sem"
-                    ? false
-                    : null,
-            })
-          }
-        >
-          <option value="todos">Todos os pedidos</option>
-          <option value="sem">Só os que contam</option>
-          <option value="so">Só os desconsiderados</option>
-        </Select>
-      </ComDica>
-      <BuscaPorId
-        aplicada={filtros.id}
-        aoBuscar={(id) => aoMudar({ ...filtros, id })}
-      />
-    </div>
+      <div className="pedidos-filtros">
+        <ComDica texto={DICAS.filtroStatus}>
+          <Select
+            ref={primeiroFiltro}
+            rotulo="Status"
+            value={filtros.status ?? ""}
+            onChange={(evento) =>
+              aoMudar({
+                ...filtros,
+                status:
+                  STATUS_PEDIDO.find(
+                    (status) => status === evento.target.value,
+                  ) ?? null,
+              })
+            }
+          >
+            <option value="">Todos os status</option>
+            {STATUS_PEDIDO.map((status) => (
+              <option key={status} value={status}>
+                {ROTULO_STATUS[status]}
+              </option>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.filtroCelula}>
+          <Select
+            rotulo="Célula"
+            value={valorDoFiltroCelula(celulaAtual)}
+            onChange={(evento) =>
+              aoMudar({
+                ...filtros,
+                celula: celulaDoValor(evento.target.value),
+              })
+            }
+            dica={
+              celulas.tipo === "erro"
+                ? "Não foi possível carregar as células; recarregue a página para tentar de novo."
+                : undefined
+            }
+          >
+            <option value={VALOR_TODAS}>Todas as células</option>
+            <option value={VALOR_SEM_CELULA}>Só os sem célula</option>
+            {avulsa !== null && (
+              <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
+            )}
+            {grupos.map((grupo) => (
+              <optgroup key={grupo.rede} label={grupo.rede}>
+                {grupo.celulas.map((celula) => (
+                  <option key={celula.id} value={valorDaCelula(celula.id)}>
+                    {celula.nome}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        </ComDica>
+        <ComDica texto={DICAS.filtroDesconsiderados}>
+          <Select
+            rotulo="Desconsiderados"
+            value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
+            onChange={(evento) =>
+              aoMudar({
+                ...filtros,
+                desconsiderado:
+                  evento.target.value === "so"
+                    ? true
+                    : evento.target.value === "sem"
+                      ? false
+                      : null,
+              })
+            }
+          >
+            <option value="todos">Todos os pedidos</option>
+            <option value="sem">Só os que contam</option>
+            <option value="so">Só os desconsiderados</option>
+          </Select>
+        </ComDica>
+        <BuscaPorId
+          aplicada={filtros.id}
+          aoBuscar={(id) => aoMudar({ ...filtros, id })}
+        />
+      </div>
+    </details>
   );
 }
 
