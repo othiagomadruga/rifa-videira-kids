@@ -47,6 +47,30 @@ export function textoDaFase(referencia: ReferenciaCampanha): TextoDaFase {
   };
 }
 
+export type LinhaDoTempo = {
+  /** Quanto da campanha já passou, contando hoje (0 a 100): "Dia 12 de 24" → 50. */
+  percorrido: number;
+  /** As pontas: "23/11" e "16/12". */
+  inicio: string;
+  fim: string;
+};
+
+/**
+ * A linha do tempo da faixa da fase (RIFA-050), só durante a campanha: os dias passados sobre o total. Só a
+ * `referencia` (nenhum dado novo); antes do início e depois do fim, o texto da faixa já diz tudo.
+ */
+export function linhaDoTempo(
+  referencia: ReferenciaCampanha,
+): LinhaDoTempo | null {
+  if (referencia.fase !== "durante") return null;
+  const dia = referencia.dia_campanha ?? 1;
+  return {
+    percorrido: Math.min(100, (100 * dia) / referencia.duracao_dias),
+    inicio: diaEMes(referencia.data_inicio),
+    fim: diaEMes(referencia.data_fim),
+  };
+}
+
 /** Título da disputa: "Semana 2 · 03/12 a 09/12"; depois do fim, "Resultado final da campanha". */
 export function textoDaJanela(
   janela: JanelaRankingResposta,

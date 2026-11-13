@@ -185,11 +185,19 @@ const caminho = (divisao: Divisao, periodo: JanelaRanking) =>
 const esperarRanking = () =>
   screen.findByText(/^Atualizado às 15:30/, undefined, { timeout: 3000 });
 
+/** O texto que o leitor de tela lê num elemento: sem o que é só visual (aria-hidden, ex.: o "↑ subiu"). */
+function textoLido(elemento: Element): string {
+  const copia = elemento.cloneNode(true) as Element;
+  for (const visual of copia.querySelectorAll('[aria-hidden="true"]'))
+    visual.remove();
+  return copia.textContent ?? "";
+}
+
 /** Os itens da lista de uma divisão, como texto ("1º Célula Ágape", "1º Célula Ágape 75% da meta"). */
 function lista(divisao: "Jovens" | "Adultos"): string[] {
   return within(screen.getByRole("region", { name: divisao }))
     .queryAllByRole("listitem")
-    .map((item) => item.textContent ?? "");
+    .map(textoLido);
 }
 
 /** Sem navegação: nada para clicar nem para onde ir. */
@@ -227,6 +235,11 @@ describe("CA2: o telão (/telao)", () => {
     expect(document.title).toBe("Telão · Rifa Videira Kids");
     expect(screen.getByText("Carregando o ranking…")).toBeInTheDocument();
     await esperarRanking();
+    // Os dados da demonstração (3 por divisão, o limite público): a lista escala para ocupar a tela.
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      "3",
+    );
 
     expect(screen.getByText("Rifa Videira Kids")).toBeInTheDocument();
     expect(screen.getByText("Dia 12 de 24")).toBeInTheDocument();
@@ -297,6 +310,49 @@ describe("CA2: o telão (/telao)", () => {
       .getAllByRole("listitem")
       .map((item) => item.hasAttribute("data-destaque"));
     expect(destaques).toEqual([true, true, true, true]);
+  });
+
+  it("RIFA-050: data-itens é o tamanho da maior divisão (com 10, a lista mostra 4 e a linha 'e mais')", async () => {
+    const dez = (divisao: Divisao) =>
+      itens(
+        divisao,
+        ...Array.from({ length: 10 }, (_, indice): [number, string, number] => [
+          indice + 1,
+          `Célula ${divisao} ${indice + 1}`,
+          12_000 - indice * 500,
+        ]),
+      );
+    abrir({ itens: { jovens: dez("jovens"), adultos: ADULTOS } });
+    await esperarRanking();
+
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      "10",
+    );
+    expect(lista("Jovens")).toHaveLength(LINHAS_POR_DIVISAO - 1);
+    expect(screen.getByText("e mais 6 células")).toBeInTheDocument();
+    // A outra divisão segue a mesma grade (as linhas ficam alinhadas): o atributo é um só, na disputa.
+    expect(document.querySelectorAll("[data-itens]")).toHaveLength(1);
+  });
+
+  it("RIFA-050: o carregando é o esqueleto da disputa (o período e 3 linhas em cada divisão), só visual, e o leitor de tela ouve 'Carregando o ranking…'", async () => {
+    abrir();
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Carregando o ranking…");
+    expect(status).toHaveClass("visualmente-oculto");
+    const esqueleto = document.querySelector(".telao__disputa");
+    expect(esqueleto).toHaveAttribute("aria-hidden", "true");
+    expect(esqueleto).toHaveAttribute("data-itens", "3");
+    expect(
+      esqueleto?.querySelectorAll(".telao__divisao .mov-esqueleto"),
+    ).toHaveLength(2 * (1 + 3));
+    expect(esqueleto?.querySelectorAll(".telao__lista")).toHaveLength(2);
+    expect(esqueleto?.textContent).toBe("");
+    esperarSemNavegacao();
+
+    await esperarRanking();
+    expect(document.querySelector(".mov-esqueleto")).toBeNull();
+    expect(screen.queryByText("Carregando o ranking…")).not.toBeInTheDocument();
   });
 
   it.each([
@@ -444,6 +500,17 @@ describe("CA2: o telão (/telao)", () => {
     expect(screen.queryByText(/^e mais/)).not.toBeInTheDocument();
   });
 
+  it("RIFA-050: falha que não é de conexão (500): a mesma mensagem, com o ícone de alerta", async () => {
+    abrir({
+      erro: { status: 500, codigo: "erro_interno", mensagem: "Falhou" },
+    });
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent("Não foi possível carregar o ranking.");
+    expect(alerta.querySelector("svg")).toHaveAttribute("data-icone", "alerta");
+    esperarSemNavegacao();
+  });
+
   it("sem campanha (404): a mensagem, sem botão nem navegação", async () => {
     abrir({
       erro: {
@@ -557,6 +624,13 @@ describe("CA2: o telão se atualiza sozinho (timers falsos)", () => {
     expect(alerta).toHaveTextContent("Não foi possível carregar o ranking.");
     expect(alerta).toHaveTextContent(
       "A tela tenta de novo sozinha a cada minuto.",
+    );
+    // RIFA-050: sem conexão, o ícone dela (só visual), e nenhum botão.
+    const icone = alerta.querySelector(".telao__mensagem-icone");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(icone?.querySelector("svg")).toHaveAttribute(
+      "data-icone",
+      "sem-conexao",
     );
     esperarSemNavegacao();
 

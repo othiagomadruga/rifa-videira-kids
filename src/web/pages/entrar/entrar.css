@@ -1,8 +1,20 @@
-/* Como entrar: texto curto, passos numerados (os números no roxo da Videira, sem tirar a semântica da lista). */
+/*
+ * Como entrar: o ícone do link no topo do cartão (RIFA-050), o título, texto curto e passos numerados (os números no
+ * roxo da Videira, sem tirar a semântica da lista).
+ */
 .entrar-explicacao {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--espaco-3);
+}
+
+.entrar-explicacao > :not(.icone-da-tela) {
+  align-self: stretch;
+}
+
+.entrar-titulo {
+  font-size: var(--texto-lg);
 }
 
 .entrar-passos {

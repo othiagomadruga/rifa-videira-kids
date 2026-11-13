@@ -7,10 +7,11 @@ import { TextoContado } from "../../components/movimento";
 import {
   EmptyState,
   ErrorState,
+  Icone,
   Loading,
   PageHeader,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import {
   formatarData,
   formatarHora,
@@ -21,10 +22,16 @@ import {
   chavesPorNome,
   useListaAnimada,
 } from "../../lib/useListaAnimada";
-import { usePulsoDaMeta } from "../../lib/usePulsoDaMeta";
+import { CLASSE_COMEMORA, useComemoracao } from "../../lib/useComemoracao";
 import type { RankingDaDivisao, RankingPublico } from "./ranking-publico-api";
-import { formatarPosicao, textoDaFase, textoDaJanela } from "./textos";
+import {
+  formatarPosicao,
+  linhaDoTempo,
+  textoDaFase,
+  textoDaJanela,
+} from "./textos";
 import { useRankingPublico } from "./useRankingPublico";
+import { useSubiu } from "./useSubiu";
 import "./ranking-publico.css";
 
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
@@ -37,7 +44,10 @@ const META_BATIDA_BP = 10_000;
 // os devolve e esta pasta não os formata (regra em docs/frontend.md, conferida em rotas.test.tsx e em
 // guarda-publico.test.ts). Atualiza sozinha a cada minuto e não chama nenhuma rota da coordenação.
 // Movimento (RIFA-020, sem prefers-reduced-motion): os itens entram em sequência, quem muda de posição
-// desliza para o lugar novo, o % conta até o valor e a meta batida pulsa de leve.
+// desliza para o lugar novo, o % conta até o valor e a meta batida pulsa de leve (e comemora, quando passa a
+// ser batida numa atualização: RIFA-050). RIFA-050 (A-07, A-18, A-19): a linha do tempo da campanha na faixa
+// da fase, a falha de conexão neutra, o vazio com o convite do primeiro dia e o "↑ subiu" (como no telão: até a
+// próxima atualização que muda a ordem).
 export function RankingPublicoPage() {
   const { estado, tentarDeNovo } = useRankingPublico();
   return (
@@ -50,11 +60,7 @@ export function RankingPublicoPage() {
         </div>
       )}
       {estado.tipo === "erro" && (
-        <ErrorState
-          titulo="Não foi possível carregar o ranking."
-          mensagem={`${mensagemDoErro(estado.erro)} A página tenta de novo sozinha a cada minuto.`}
-          aoTentarDeNovo={tentarDeNovo}
-        />
+        <Falha erro={estado.erro} aoTentarDeNovo={tentarDeNovo} />
       )}
       {estado.tipo === "sem_campanha" && (
         <EmptyState
@@ -66,6 +72,32 @@ export function RankingPublicoPage() {
         <Ranking ranking={estado.ranking} falhou={estado.falha !== null} />
       )}
     </>
+  );
+}
+
+/**
+ * A primeira carga falhou. Sem conexão (o comum num celular com sinal fraco, e passageiro): o estado neutro "Sem
+ * conexão agora", sem o vermelho; outra falha, o erro de verdade.
+ */
+function Falha({
+  erro,
+  aoTentarDeNovo,
+}: {
+  erro: unknown;
+  aoTentarDeNovo: () => void;
+}) {
+  const conexao = ehFalhaDeConexao(erro);
+  // O invólucro segura a altura da tela (ranking-publico.css), como o carregando: o rodapé não sobe quando a falha
+  // chega.
+  return (
+    <div className="ranking-publico__falhou">
+      <ErrorState
+        conexao={conexao}
+        titulo={conexao ? undefined : "Não foi possível carregar o ranking."}
+        mensagem={`${mensagemDoErro(erro)} A página tenta de novo sozinha a cada minuto.`}
+        aoTentarDeNovo={aoTentarDeNovo}
+      />
+    </div>
   );
 }
 
@@ -91,6 +123,20 @@ function Esqueleto() {
   );
 }
 
+/**
+ * O texto do vazio (ninguém vendeu na janela). A data do início vem da campanha (`referencia`), nunca do código. Antes
+ * do início e durante, o convite do primeiro dia; depois do fim não há primeira venda a esperar, só o aviso.
+ */
+function descricaoSemVendas({ referencia, janela }: RankingPublico): string {
+  const semVendas = `${janela.nome}: ainda sem vendas.`;
+  if (referencia.fase === "encerrada") return semVendas;
+  const contexto =
+    referencia.fase === "antes"
+      ? `As vendas começam em ${formatarData(referencia.data_inicio)}.`
+      : semVendas;
+  return `${contexto} Qual célula vai ser a primeira?`;
+}
+
 type PropsRanking = {
   ranking: RankingPublico;
   /** A última atualização automática falhou (a tela continua com os dados anteriores). */
@@ -100,6 +146,7 @@ type PropsRanking = {
 function Ranking({ ranking, falhou }: PropsRanking) {
   const idDisputa = useId();
   const fase = textoDaFase(ranking.referencia);
+  const linha = linhaDoTempo(ranking.referencia);
   const semVendas = ranking.divisoes.every(({ itens }) => itens.length === 0);
   const comPercentual = ranking.divisoes.some(({ itens }) =>
     itens.some((item) => item.percentual_meta_bp !== undefined),
@@ -110,15 +157,25 @@ function Ranking({ ranking, falhou }: PropsRanking) {
       <div className="ranking-publico__fase">
         <p className="ranking-publico__fase-destaque">{fase.destaque}</p>
         <p className="ranking-publico__fase-detalhe">{fase.detalhe}</p>
+        {/* Os dias passados da campanha: decorativa (o texto acima já diz "Dia 12 de 24"). */}
+        {linha && (
+          <div className="ranking-publico__linha-do-tempo" aria-hidden="true">
+            <div className="ranking-publico__trilho">
+              <div
+                className="ranking-publico__percorrido"
+                style={{ width: `${linha.percorrido}%` }}
+              />
+            </div>
+            <span>{linha.inicio}</span>
+            <span>{linha.fim}</span>
+          </div>
+        )}
       </div>
       {semVendas ? (
         <EmptyState
-          titulo="O ranking aparece depois da primeira venda."
-          descricao={
-            ranking.referencia.fase === "antes"
-              ? `As vendas começam em ${formatarData(ranking.referencia.data_inicio)}.`
-              : `${ranking.janela.nome}: ainda sem vendas.`
-          }
+          icone="trofeu"
+          titulo="O ranking aparece com a primeira venda."
+          descricao={descricaoSemVendas(ranking)}
         />
       ) : (
         <section
@@ -163,6 +220,9 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   const refLista = useListaAnimada<HTMLOListElement>(
     comChaves.map(({ chave }) => chave).join("|"),
   );
+  const subiram = useSubiu(
+    comChaves.map(({ chave, item }) => ({ chave, posicao: item.posicao })),
+  );
   return (
     <section className="ranking-publico__divisao" aria-labelledby={idTitulo}>
       <h3 id={idTitulo} className="ranking-publico__divisao-titulo">
@@ -176,7 +236,12 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
         // role="list": com list-style none, o Safari deixaria de anunciar a lista.
         <ol ref={refLista} className="ranking-publico__lista" role="list">
           {comChaves.map(({ chave, item }) => (
-            <Item key={chave} chave={chave} item={item} />
+            <Item
+              key={chave}
+              chave={chave}
+              item={item}
+              subiu={subiram.has(chave)}
+            />
           ))}
         </ol>
       )}
@@ -184,11 +249,22 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   );
 }
 
-function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
+type PropsItem = {
+  chave: string;
+  item: ItemRankingPublico;
+  /** Subiu de posição na última atualização que mudou a ordem (useSubiu). */
+  subiu: boolean;
+};
+
+function Item({ chave, item, subiu }: PropsItem) {
   const metaBatida =
     item.percentual_meta_bp !== undefined &&
     item.percentual_meta_bp >= META_BATIDA_BP;
-  const refPercentual = usePulsoDaMeta<HTMLSpanElement>(metaBatida);
+  // Quem passa a bater a meta numa atualização comemora (pulso e partículas); quem já chega batido só pulsa.
+  const { ref: refPercentual, confete } = useComemoracao<HTMLSpanElement>(
+    metaBatida,
+    { quando: "ao-bater" },
+  );
   return (
     <li
       className="ranking-publico__item"
@@ -201,13 +277,26 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
       <span className="ranking-publico__posicao">
         {formatarPosicao(item.posicao)}
       </span>{" "}
-      <span className="ranking-publico__nome">{item.nome}</span>
+      <span className="ranking-publico__celula">
+        <span className="ranking-publico__nome">{item.nome}</span>
+        {/* Só visual: a lista já diz a posição de cada um. */}
+        {subiu && (
+          <span className="ranking-publico__subiu" aria-hidden="true">
+            <Icone nome="subiu" />
+            subiu
+          </span>
+        )}
+      </span>
       {item.percentual_meta_bp !== undefined && (
         <>
           {" "}
-          <span ref={refPercentual} className="ranking-publico__percentual">
+          <span
+            ref={refPercentual}
+            className={`ranking-publico__percentual ${CLASSE_COMEMORA}`}
+          >
             <TextoContado texto={formatarPercentual(item.percentual_meta_bp)} />{" "}
             <span className="visualmente-oculto">da meta</span>
+            {confete}
           </span>
         </>
       )}

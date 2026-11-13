@@ -7,6 +7,7 @@ import {
   lerEstadoEntrar,
   useSessao,
 } from "../../lib/sessao";
+import { IconeDaTela } from "./IconeDaTela";
 import "./entrar.css";
 
 // Como entrar (sem sessão): o acesso é pelo link pessoal que chega no WhatsApp, sem senha. Quem já tem
@@ -54,8 +55,11 @@ export function EntrarPage() {
               <p>Para continuar, entre de novo pelo seu link pessoal.</p>
             </Aviso>
           )}
-          <Card titulo="Como entrar">
+          <Card>
             <div className="entrar-explicacao">
+              {/* O ícone do link no topo do cartão (RIFA-050), acima do título. */}
+              <IconeDaTela nome="link" />
+              <h2 className="entrar-titulo">Como entrar</h2>
               <p>
                 O acesso é pelo seu <strong>link pessoal</strong>, sem senha. O
                 link chega pelo <strong>WhatsApp</strong>, mandado pela

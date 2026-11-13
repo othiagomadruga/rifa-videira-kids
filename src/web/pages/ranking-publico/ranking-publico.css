@@ -11,19 +11,21 @@
 
 /*
  * O conteúdo desta tela tem pelo menos a altura da janela, carregando ou não: o rodapé (o selo do Kids) começa
- * abaixo da dobra e fica lá quando o ranking chega, em vez de ser empurrado para dentro ou para fora da tela.
+ * abaixo da dobra e fica lá quando o ranking (ou a falha da primeira carga) chega, em vez de ser empurrado para
+ * dentro ou para fora da tela.
  */
 .ui-public-shell__conteudo:has(
   .ranking-publico__carregando,
-  .ranking-publico__fase
+  .ranking-publico__fase,
+  .ranking-publico__falhou
 ) {
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-/* Esqueleto: os blocos têm a altura do que vem (a fase, o título e os itens). */
+/* Esqueleto: os blocos têm a altura do que vem (a fase com a linha do tempo, o título e os itens). */
 .ranking-publico__esqueleto-fase {
-  height: 5.25rem;
+  height: 6.75rem;
   border-radius: var(--raio-4);
 }
 
@@ -37,7 +39,18 @@
   border-radius: var(--raio-3);
 }
 
-/* Onde a campanha está: faixa no degradê forte da marca (branco em cima com 5:1 ou mais). */
+/* Nas cores forçadas, o fundo some: a borda mostra o desenho (como o Esqueleto da P1). */
+@media (forced-colors: active) {
+  .ranking-publico__esqueleto .mov-esqueleto {
+    border: 1px solid GrayText;
+  }
+}
+
+/*
+ * Onde a campanha está: a faixa no roxo suave da marca, com "Dia 12 de 24" no roxo forte (RIFA-050: o topo das telas
+ * abertas já é o degradê forte; a faixa num tom claro não repete o degradê logo abaixo dele). Pares de contraste do
+ * tokens.test.ts.
+ */
 .ranking-publico__fase {
   display: flex;
   flex-wrap: wrap;
@@ -45,14 +58,16 @@
   justify-content: space-between;
   gap: var(--espaco-1) var(--espaco-4);
   padding: var(--espaco-4) var(--espaco-5);
+  border: 1px solid var(--cor-borda);
   border-radius: var(--raio-4);
-  background: var(--cor-primaria);
-  background-image: var(--gradiente-marca-forte);
-  color: var(--cor-sobre-primaria);
-  box-shadow: var(--sombra-marca);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-texto);
+  box-shadow: var(--sombra-1);
 }
 
 .ranking-publico__fase-destaque {
+  color: var(--cor-primaria-forte);
+  font-family: var(--fonte-titulo);
   font-size: var(--texto-2xl);
   font-weight: var(--peso-extra);
   line-height: var(--altura-linha-titulo);
@@ -62,6 +77,37 @@
 .ranking-publico__fase-detalhe {
   font-size: var(--texto-lg);
   font-weight: var(--peso-forte);
+}
+
+/*
+ * A linha do tempo da campanha (RIFA-050), dentro da faixa: o trilho branco, os dias passados no degradê da marca
+ * (decorativo, sem texto em cima) e as datas das pontas. Decorativa (aria-hidden).
+ */
+.ranking-publico__linha-do-tempo {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--espaco-1);
+  margin-top: var(--espaco-2);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+}
+
+.ranking-publico__trilho {
+  flex-basis: 100%;
+  height: 0.5rem;
+  border-radius: var(--raio-pilula);
+  background: var(--cor-superficie);
+  overflow: hidden;
+}
+
+.ranking-publico__percorrido {
+  height: 100%;
+  border-radius: var(--raio-pilula);
+  background: var(--gradiente-marca);
+  transform-origin: left;
 }
 
 .ranking-publico__disputa {
@@ -107,12 +153,18 @@
   background: var(--gradiente-marca);
 }
 
+/*
+ * A lista corta, nos lados, as partículas da comemoração (nada de rolagem lateral). O corte fica na lista, e não no
+ * item: com overflow: clip no item que o FLIP desliza, o Chrome conta a troca de lugar como layout shift (RIFA-050:
+ * 0,02 por troca). A lista passa 8 px de cada lado dos itens (padding e margem negativa) para não cortar a sombra.
+ */
 .ranking-publico__lista {
   display: grid;
   gap: var(--espaco-2);
-  margin: 0;
-  padding: 0;
+  margin: 0 calc(-1 * var(--espaco-2));
+  padding: 0 var(--espaco-2);
   list-style: none;
+  overflow-x: clip;
 }
 
 .ranking-publico__item {
@@ -128,25 +180,22 @@
   box-shadow: var(--sombra-1);
 }
 
-/* Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. */
+/*
+ * Pódio (até o 3º lugar, empatados inclusive): borda roxa, faixa do degradê forte e o selo cheio. A faixa é uma
+ * camada do fundo, de 4 px, dentro da borda e de cima a baixo: o fundo segue o raio do cartão (antes, um ::before em
+ * left: -1px, por cima da borda arredondada, parecia uma borda quebrada; A-07).
+ */
 .ranking-publico__item[data-destaque] {
   border-color: var(--cor-primaria);
+  background:
+    linear-gradient(
+        var(--marca-verde-agua-forte),
+        var(--marca-azul-forte),
+        var(--marca-roxo)
+      )
+      left / 4px 100% no-repeat,
+    var(--cor-superficie);
   box-shadow: var(--sombra-2);
-}
-
-.ranking-publico__item[data-destaque]::before {
-  content: "";
-  position: absolute;
-  top: var(--espaco-2);
-  bottom: var(--espaco-2);
-  left: -1px;
-  width: 4px;
-  border-radius: 0 var(--raio-pilula) var(--raio-pilula) 0;
-  background: linear-gradient(
-    var(--marca-verde-agua-forte),
-    var(--marca-azul-forte),
-    var(--marca-roxo)
-  );
 }
 
 .ranking-publico__posicao {
@@ -175,6 +224,30 @@
   color: var(--cor-sobre-comemoracao);
 }
 
+/* O nome e, embaixo dele, o "↑ subiu" (cabe na altura do selo da posição: a linha não cresce). */
+.ranking-publico__celula {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+
+/*
+ * Quem subiu na última mudança de ordem (useSubiu, RIFA-050): o chip verde, que fica até a próxima mudança. Só
+ * visual (aria-hidden).
+ */
+.ranking-publico__subiu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--cor-sucesso-suave);
+  color: var(--cor-sucesso);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-negrito);
+  line-height: 1.4;
+}
+
 .ranking-publico__nome {
   font-size: var(--texto-lg);
   font-weight: var(--peso-forte);
@@ -182,19 +255,28 @@
   overflow-wrap: anywhere;
 }
 
-/* O % numa pílula (o espaço dela vale sempre, então a meta batida não muda o tamanho de nada). */
+/*
+ * O % numa pílula (o espaço dela vale sempre, então a meta batida não muda o tamanho de nada), na fonte dos títulos
+ * (RIFA-050).
+ */
 .ranking-publico__percentual {
   padding: var(--espaco-1) var(--espaco-2);
   border-radius: var(--raio-pilula);
+  font-family: var(--fonte-titulo);
   font-size: var(--texto-lg);
-  font-weight: var(--peso-negrito);
+  font-weight: var(--peso-extra);
   font-variant-numeric: tabular-nums;
   text-align: end;
   white-space: nowrap;
 }
 
-/* Meta batida (100% ou mais): a pílula no amarelo do Kids. O número continua dizendo o percentual. */
-.ranking-publico__item[data-meta-batida] .ranking-publico__percentual {
+/*
+ * Meta batida (100% ou mais): a pílula no amarelo do Kids quando o número termina de contar (enquanto conta, há um
+ * .mov-contagem dentro): a comemoração chega junto com o 100% (RIFA-050, A-08). O número continua dizendo o
+ * percentual. Sem :has, o navegador antigo pinta antes, como era.
+ */
+.ranking-publico__item[data-meta-batida]
+  .ranking-publico__percentual:not(:has(.mov-contagem)) {
   background: var(--cor-comemoracao);
   color: var(--cor-sobre-comemoracao);
 }
@@ -228,16 +310,22 @@
 /*
  * Movimento (sem prefers-reduced-motion). Os itens entram em sequência e deslizam ao trocar de lugar pelo
  * useListaAnimada (JS); por isso a seção da disputa não entra junto com a tela (o fade dela somaria ao dos
- * itens): só os títulos aparecem com um fade curto. A meta batida pulsa 2 vezes depois que o % conta.
+ * itens): só os títulos aparecem com um fade curto. A meta batida pulsa 2 vezes depois que o % conta (e
+ * comemora, quando passa a ser batida: useComemoracao). A linha do tempo enche da esquerda, uma vez.
  */
 @media (prefers-reduced-motion: no-preference) {
   .ui-public-shell__pagina > .ranking-publico__disputa {
     animation: none;
   }
 
+  .ranking-publico__percorrido {
+    animation: ui-encher var(--duracao-lenta) var(--curva-saida) backwards;
+  }
+
   .ranking-publico__janela,
   .ranking-publico__legenda,
   .ranking-publico__divisao-titulo,
+  .ranking-publico__subiu,
   .ranking-publico__sem-vendas {
     animation: ui-surgir var(--duracao-media) var(--curva-suave) backwards;
   }

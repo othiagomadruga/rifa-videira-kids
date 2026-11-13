@@ -1,17 +1,24 @@
-/* Link pessoal (/acesso): confirmação curta, centralizada, com o botão grande. */
+/*
+ * Link pessoal (/acesso): confirmação curta, com o botão grande. Estreita e alinhada à esquerda do topo (o logo da
+ * Videira), como as outras telas abertas (RIFA-050, A-22: antes, centralizada, começava 112 px depois do logo).
+ */
 .acesso {
   display: flex;
   flex-direction: column;
   gap: var(--espaco-5);
   width: 100%;
   max-width: 34rem;
-  margin: 0 auto;
 }
 
 .acesso-cartao {
   display: flex;
   flex-direction: column;
   gap: var(--espaco-4);
+}
+
+/* A chave no topo do cartão, sem esticar na coluna. */
+.acesso-cartao > .icone-da-tela {
+  align-self: flex-start;
 }
 
 .acesso-resultado:empty {

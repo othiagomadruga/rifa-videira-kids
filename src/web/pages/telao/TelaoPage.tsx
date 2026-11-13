@@ -4,7 +4,8 @@ import {
   type ItemRankingPublico,
 } from "../../../shared/contracts/calculos";
 import { TextoContado } from "../../components/movimento";
-import { Marca } from "../../components/ui";
+import { Icone, Marca } from "../../components/ui";
+import { ehFalhaDeConexao } from "../../lib/api";
 import {
   formatarData,
   formatarHora,
@@ -15,7 +16,7 @@ import {
   chavesPorNome,
   useListaAnimada,
 } from "../../lib/useListaAnimada";
-import { usePulsoDaMeta } from "../../lib/usePulsoDaMeta";
+import { CLASSE_COMEMORA, useComemoracao } from "../../lib/useComemoracao";
 import { MARCA, tituloDaAba } from "../../tema/marca";
 import type {
   RankingDaDivisao,
@@ -23,6 +24,7 @@ import type {
 } from "../ranking-publico/ranking-publico-api";
 import { formatarPosicao, textoDaJanela } from "../ranking-publico/textos";
 import { useRankingPublico } from "../ranking-publico/useRankingPublico";
+import { useSubiu } from "../ranking-publico/useSubiu";
 import { faseDoTelao, listaDoTelao } from "./textos";
 import { useCursorEscondidoParado, useRelogio } from "./useTelao";
 import "./telao.css";
@@ -40,7 +42,10 @@ const META_BATIDA_BP = 10_000;
 // guarda-telao.test.ts) e só a rota aberta do ranking. Sem botões: falhas se resolvem sozinhas.
 // Marca (RIFA-020): o logo da Videira num selo claro no canto e um selo pequeno do Kids ao lado do relógio.
 // Movimento só quando os dados mudam (e o fundo ambiente, lento): os itens entram em sequência, quem troca
-// de posição desliza (FLIP) e o % conta até o valor. Nada disso com prefers-reduced-motion.
+// de posição desliza (FLIP), o % conta até o valor, quem passa a bater a meta comemora e quem subiu ganha
+// o "↑ subiu" até a próxima mudança de ordem. Nada disso com prefers-reduced-motion (o "↑ subiu" fica, parado).
+// RIFA-050 (A-24): a lista cresce para ocupar a altura (escala pela quantidade de itens, data-itens) e o
+// carregando mostra o esqueleto da disputa no lugar exato dela.
 export function TelaoPage() {
   const { estado } = useRankingPublico();
   const hora = useRelogio();
@@ -114,13 +119,14 @@ export function TelaoPage() {
       </header>
       <main className="telao__conteudo">
         <h1 className="visualmente-oculto">Telão</h1>
-        {estado.tipo === "carregando" && (
-          <p className="telao__mensagem telao__mensagem-detalhe" role="status">
-            Carregando o ranking…
-          </p>
-        )}
+        {estado.tipo === "carregando" && <EsqueletoDaDisputa />}
         {estado.tipo === "erro" && (
           <div className="telao__mensagem" role="alert">
+            <span className="telao__mensagem-icone" aria-hidden="true">
+              <Icone
+                nome={ehFalhaDeConexao(estado.erro) ? "sem-conexao" : "alerta"}
+              />
+            </span>
             <p className="telao__mensagem-titulo">
               Não foi possível carregar o ranking.
             </p>
@@ -145,6 +151,38 @@ export function TelaoPage() {
   );
 }
 
+/**
+ * O carregando: o desenho da disputa (o período e as duas divisões com 3 linhas, o limite público), na mesma
+ * grade dela, com o brilho do tema (só sem prefers-reduced-motion). Nada pula quando os dados chegam.
+ */
+function EsqueletoDaDisputa() {
+  return (
+    <>
+      <p className="visualmente-oculto" role="status">
+        Carregando o ranking…
+      </p>
+      <div className="telao__disputa" data-itens={3} aria-hidden="true">
+        <div className="mov-esqueleto telao__esqueleto-janela" />
+        <div className="telao__divisoes">
+          {[0, 1].map((divisao) => (
+            <div key={divisao} className="telao__divisao">
+              <div className="mov-esqueleto telao__esqueleto-topo" />
+              <div className="telao__lista">
+                {[0, 1, 2].map((linha) => (
+                  <div
+                    key={linha}
+                    className="mov-esqueleto telao__esqueleto-item"
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function Disputa({ ranking }: { ranking: RankingPublico }) {
   const idJanela = useId();
   const semVendas = ranking.divisoes.every(({ itens }) => itens.length === 0);
@@ -166,8 +204,17 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
       </div>
     );
 
+  // A lista escala pela maior divisão (telao.css): até 3 itens (o limite público), letras bem maiores.
+  const itensDaMaior = Math.max(
+    ...ranking.divisoes.map(({ itens }) => itens.length),
+  );
+
   return (
-    <section className="telao__disputa" aria-labelledby={idJanela}>
+    <section
+      className="telao__disputa"
+      aria-labelledby={idJanela}
+      data-itens={itensDaMaior}
+    >
       <h2 id={idJanela} className="telao__janela">
         {textoDaJanela(ranking.janela, ranking.referencia)}
       </h2>
@@ -196,6 +243,9 @@ function Divisao({
   const refLista = useListaAnimada<HTMLOListElement>(
     comChaves.map(({ chave }) => chave).join("|"),
   );
+  const subiram = useSubiu(
+    comChaves.map(({ chave, item }) => ({ chave, posicao: item.posicao })),
+  );
   return (
     <section className="telao__divisao" aria-labelledby={idTitulo}>
       <div className="telao__divisao-topo">
@@ -215,7 +265,12 @@ function Divisao({
           {/* role="list": com list-style none, o Safari deixaria de anunciar a lista. */}
           <ol ref={refLista} className="telao__lista" role="list">
             {comChaves.map(({ chave, item }) => (
-              <Item key={chave} chave={chave} item={item} />
+              <Item
+                key={chave}
+                chave={chave}
+                item={item}
+                subiu={subiram.has(chave)}
+              />
             ))}
           </ol>
           {lista.resto && <p className="telao__resto">{lista.resto}</p>}
@@ -225,11 +280,22 @@ function Divisao({
   );
 }
 
-function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
+type PropsItem = {
+  chave: string;
+  item: ItemRankingPublico;
+  /** Subiu de posição na última atualização que mudou a ordem (useSubiu). */
+  subiu: boolean;
+};
+
+function Item({ chave, item, subiu }: PropsItem) {
   const metaBatida =
     item.percentual_meta_bp !== undefined &&
     item.percentual_meta_bp >= META_BATIDA_BP;
-  const refPercentual = usePulsoDaMeta<HTMLSpanElement>(metaBatida);
+  // Quem passa a bater a meta numa atualização comemora (pulso e partículas); quem já chega batido só pulsa.
+  const { ref: refPercentual, confete } = useComemoracao<HTMLSpanElement>(
+    metaBatida,
+    { quando: "ao-bater" },
+  );
   return (
     <li
       className="telao__item"
@@ -240,13 +306,26 @@ function Item({ chave, item }: { chave: string; item: ItemRankingPublico }) {
     >
       {/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */}
       <span className="telao__posicao">{formatarPosicao(item.posicao)}</span>{" "}
-      <span className="telao__nome">{item.nome}</span>
+      <span className="telao__celula">
+        <span className="telao__nome">{item.nome}</span>
+        {/* Só visual: a lista já diz a posição de cada um. */}
+        {subiu && (
+          <span className="telao__subiu" aria-hidden="true">
+            <Icone nome="subiu" />
+            <span className="telao__subiu-texto">subiu</span>
+          </span>
+        )}
+      </span>
       {item.percentual_meta_bp !== undefined && (
         <>
           {" "}
-          <span ref={refPercentual} className="telao__percentual">
+          <span
+            ref={refPercentual}
+            className={`telao__percentual ${CLASSE_COMEMORA}`}
+          >
             <TextoContado texto={formatarPercentual(item.percentual_meta_bp)} />{" "}
             <span className="visualmente-oculto">da meta</span>
+            {confete}
           </span>
         </>
       )}
