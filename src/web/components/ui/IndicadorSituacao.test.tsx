@@ -82,6 +82,25 @@ describe("IndicadorSituacao", () => {
     rerender(<IndicadorSituacao tom="neutro" titulo="Sem meta" icone="★" />);
     expect(screen.getByText("★")).toHaveAttribute("aria-hidden", "true");
   });
+
+  it.each([
+    "toString",
+    "constructor",
+    "hasOwnProperty",
+    "__proto__",
+    "valueOf",
+  ])(
+    "RIFA-053: %s (um nome do protótipo de um objeto) não vira ícone: fica como texto, sem quebrar",
+    (nome) => {
+      const { container } = render(
+        <IndicadorSituacao tom="neutro" titulo="Sem meta" icone={nome} />,
+      );
+      const chip = iconeDe(container.firstElementChild);
+      expect(chip?.querySelector("svg")).toBeNull();
+      expect(chip).toHaveTextContent(new RegExp(`^${nome}$`));
+      expect(chip).toHaveAttribute("aria-hidden", "true");
+    },
+  );
 });
 
 // RIFA-049 (P1.10, A-10): a situação fica mais leve que o aviso. Sem a faixa de 4 px (ela é do Aviso, o alerta), com
