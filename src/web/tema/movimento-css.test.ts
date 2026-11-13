@@ -228,6 +228,31 @@ describe("CA5: só transform e opacity, curto e sem piscar", () => {
       );
   });
 
+  // RIFA-049 (P1.11): o painel das abas entra com o fade e o que se toca afunda (abas, links do menu, .mov-toque), só
+  // dentro do no-preference.
+  it("o painel que aparece entra com ui-surgir e o pressionar afunda com scale(0.98), só sem reduce", () => {
+    const doSeletor = (seletor: string) =>
+      TODAS.filter((d) => d.blocos.at(-1) === seletor);
+    const painel = doSeletor(".ui-abas__painel:not([hidden])");
+    expect(painel.map((d) => d.valor)).toEqual([
+      "ui-surgir var(--duracao-media) var(--curva-saida)",
+    ]);
+    for (const seletor of [
+      ".ui-abas__aba:active",
+      ".ui-app-shell__link:active",
+      ".mov-toque:active",
+    ]) {
+      const regras = doSeletor(seletor);
+      expect(
+        regras.map((d) => `${d.propriedade}: ${d.valor}`),
+        seletor,
+      ).toEqual(["transform: scale(0.98)"]);
+      expect(dentroDoMovimentoLiberado(regras[0]), seletor).toBe(true);
+    }
+    for (const declaracao of painel)
+      expect(dentroDoMovimentoLiberado(declaracao)).toBe(true);
+  });
+
   // A largura da barra de progresso é a exceção (docs/frontend.md): a barra fica num trilho de tamanho fixo e
   // com overflow hidden, então mudar a largura dela não empurra nada (e o scaleX achataria as pontas redondas).
   it("dentro dele, as transições animam só transform, opacity, cores e sombra (exceção: a largura da barra de progresso)", () => {

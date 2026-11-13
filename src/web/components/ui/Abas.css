@@ -57,3 +57,24 @@
     flex: none;
   }
 }
+
+/*
+ * Movimento (RIFA-049, só sem prefers-reduced-motion): o painel que aparece entra com o fade curto (o hidden → visível
+ * recomeça a animação; os painéis continuam montados) e a aba afunda um pouco ao ser tocada.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-abas__painel:not([hidden]) {
+    animation: ui-surgir var(--duracao-media) var(--curva-saida);
+  }
+
+  .ui-abas__aba {
+    transition:
+      background-color var(--transicao),
+      color var(--transicao),
+      transform var(--duracao-rapida) var(--curva-saida);
+  }
+
+  .ui-abas__aba:active {
+    transform: scale(0.98);
+  }
+}
