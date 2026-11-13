@@ -10,9 +10,9 @@
 }
 
 /* Mais justo que o textarea comum: o link tem de 2 a 4 linhas, sem alça de redimensionar; onde o navegador sabe
-   (field-sizing), a altura do próprio link, sem linha vazia no computador. */
+   (field-sizing), a altura do próprio link, sem linha vazia no computador, nunca abaixo do alvo de toque (44 px). */
 .qr-compartilhar .qr-compartilhar__campo {
-  min-height: 0;
+  min-height: var(--alvo-toque);
   field-sizing: content;
   resize: none;
   background: var(--cor-superficie-2);

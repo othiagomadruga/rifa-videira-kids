@@ -105,7 +105,6 @@ export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
       className="minha-destaque"
       aria-labelledby={idTitulo}
       data-fase={referencia.fase}
-      data-meta-batida={batida ? "" : undefined}
     >
       <Card variante="destaque" className="minha-destaque__cartao">
         <p className="minha-destaque__fase">

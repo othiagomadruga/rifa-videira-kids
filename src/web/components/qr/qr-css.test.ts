@@ -111,6 +111,8 @@ describe("o CSS do link de vendas", () => {
       )?.[1] ?? "";
     expect(campo).toMatch(/background:\s*var\(--cor-superficie-2\);/);
     expect(campo).toMatch(/resize:\s*none;/);
+    // Com a altura do próprio link (field-sizing), o campo continua um alvo de toque de 44 px.
+    expect(campo).toMatch(/min-height:\s*var\(--alvo-toque\);/);
     // A borda some só fora do foco (no foco, volta a borda roxa do Campos.css, além do anel), num seletor mais
     // específico que o :hover e o :focus do Campos.css (três classes ou pseudo-classes).
     const semBorda =
