@@ -50,7 +50,9 @@ export const ATRASO_PARTICULA_MAXIMO_MS = 264;
 export const INICIO_PARTICULAS_MS = ATRASO_PULSO_MS;
 /** Quando as partículas saem do DOM: a última termina. */
 export const DURACAO_COMEMORACAO_MS =
-  INICIO_PARTICULAS_MS + ATRASO_PARTICULA_MAXIMO_MS + DURACAO_PARTICULA_MAXIMA_MS;
+  INICIO_PARTICULAS_MS +
+  ATRASO_PARTICULA_MAXIMO_MS +
+  DURACAO_PARTICULA_MAXIMA_MS;
 /** Prefixo da chave no sessionStorage. */
 export const PREFIXO_ARMAZENAMENTO = "rifa-comemoracao:";
 
