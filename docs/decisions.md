@@ -1296,3 +1296,41 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
 5. Venda por fora (dinheiro ou Pix direto para o líder) não entra no sistema. Orientamos o líder a fazer a compra na
    Rifei pelo próprio link, em nome do comprador, para contar para a célula? (Assumido: o guia dos líderes diz só
    que conta o que passa pela Rifei pelo link dele.)
+
+## D25. Acabamento visual: ícones, estados, comemoração e telão (RIFA-048 a 051, 2026-11-13)
+
+O PO pediu o site "mais bonito, moderno e agradável, com efeitos suaves". A D15 continua valendo (paleta do logo,
+amarelo do Kids só na comemoração, logo sem redesenho, movimento só com `no-preference`, WAAPI só por
+`lib/movimento.ts`, sem View Transitions, telão só se mexe com dado novo). Esta decisão amplia o que a D15 permite,
+sem dependência nova. Decidido pelo SM em 13/11; o PO pode vetar ao ver a demonstração.
+
+- **Ícones SVG próprios** (`components/ui/Icone.tsx`): traço em `currentColor`, `aria-hidden`, dados em `icones.ts`;
+  nada de biblioteca nem de fonte de ícones; nada de logo de terceiros (o WhatsApp é um balão genérico). Os caracteres
+  ✓ ! – viram ícones.
+- **Esqueleto** em toda tela que carrega dados de que a pessoa depende (`/minha`, Visão geral, telão), no tamanho do
+  que vem: menos espera percebida e CLS ≤ 0,005.
+- **Falha de conexão não é erro vermelho**: estado neutro "Sem conexão agora" com "Tentar de novo"; o vermelho fica
+  para falha de verdade. As mensagens do cliente da API deixam de falar "API".
+- **Comemoração da meta batida** (`useComemoracao`): além do pulso, 10 a 14 partículas no amarelo do Kids e nas cores
+  da marca, cada uma com até 450 ms, só `transform` e `opacity`, uma vez: no telão e no ranking, só quando uma célula
+  passa a bater a meta numa atualização (abrir a página não solta confete); na `/minha`, uma vez por dia. Com
+  `reduce`, nada.
+- **Barra de progresso acima da meta** continua no degradê da marca, com o selo amarelo de troféu no fim e um brilho
+  único ao terminar de encher (antes: verde liso). O % aparece uma vez onde o número grande já está na tela.
+- **Telão escala pela quantidade de itens**: com o limite público de 3, a disputa ocupa pelo menos 60% da altura
+  (antes, 38%); o 1º lugar é maior; quem subiu ganha "↑ subiu" até a próxima atualização com mudança (sem
+  temporizador).
+- **Cabeçalho das telas abertas na faixa do degradê forte**, com o logo no selo claro (como no telão); o Kids continua
+  no rodapé.
+- **Alvo de toque**: o botão pequeno tem 44 px em tela de toque (`pointer: coarse`) e 36 px no mouse.
+- **Peso**: JS inicial ≤ 162 KiB e CSS inicial ≤ 16,5 KiB em gzip (eram 158,4 e 13,0 em 13/11), sem dependência nova;
+  medido pela ferramenta de capturas.
+- **Fonte de títulos**: Outfit 800, subconjunto latino, um arquivo woff2 de 13,7 KiB (`@fontsource/outfit` 5.2.6,
+  conferido pelo hash; licença OFL-1.1 ao lado), `font-display: swap`, preload e reserva com `size-adjust`; só em
+  títulos e números de destaque; o texto corrido continua na fonte do sistema. O arquivo fica em
+  `src/web/tema/fontes/` (e não em `public/fontes/`, como no plano): o `@font-face` usa `url()` relativa e o preload
+  do `index.html` aponta para o arquivo-fonte, e o Vite troca os dois pelo mesmo arquivo com hash e com qualquer
+  `base` (a demonstração é servida com `--base ./` sob um subcaminho, onde um caminho absoluto `/fontes/...` quebraria;
+  o hash também dá o cache longo).
+- **Fora**: `backdrop-filter`, animação infinita nova, carrossel no telão, texto em degradê, tema escuro no site, emoji
+  como ícone, biblioteca de ícones, animação ou fonte.

@@ -28,7 +28,8 @@ export {
 } from "./Dica";
 export { Dialogo } from "./Dialogo";
 export { EmptyState } from "./EmptyState";
-export { ErrorState } from "./ErrorState";
+export { ErrorState, TITULO_SEM_CONEXAO } from "./ErrorState";
+export { Esqueleto, type BlocoEsqueleto } from "./Esqueleto";
 export {
   GraficoLinhas,
   type ColunaExtraGrafico,
@@ -44,4 +45,9 @@ export { PageHeader } from "./PageHeader";
 export { ProgressBar } from "./ProgressBar";
 export { PublicShell } from "./PublicShell";
 export { SeletorArquivo } from "./SeletorArquivo";
-export { Stat, type SentidoVariacao, type TomVariacao } from "./Stat";
+export {
+  Stat,
+  type SentidoVariacao,
+  type TomStat,
+  type TomVariacao,
+} from "./Stat";

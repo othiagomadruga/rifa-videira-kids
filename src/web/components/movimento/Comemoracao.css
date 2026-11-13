@@ -14,13 +14,16 @@
   pointer-events: none;
 }
 
+/* Do tamanho do texto do elemento (o % do celular, o número grande da /minha, o % do telão), entre 7 e 14 px. */
 .mov-confete {
+  --confete-lado: clamp(0.4375rem, 0.3em, 0.875rem);
+
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin: -0.25rem 0 0 -0.25rem;
+  width: var(--confete-lado);
+  height: var(--confete-lado);
+  margin: calc(var(--confete-lado) / -2) 0 0 calc(var(--confete-lado) / -2);
   border-radius: 2px;
   opacity: 0;
 }

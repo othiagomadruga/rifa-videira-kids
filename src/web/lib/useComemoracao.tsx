@@ -101,17 +101,14 @@ function escalaDoElemento(elemento: Element | null): number {
 function quadrosDa(particula: Particula, escala: number): Keyframe[] {
   const dx = particula.dx * escala;
   const dy = particula.dy * escala;
+  const no = (parte: number, escalaDaParticula: number) =>
+    `translate(${dx * parte}px, ${dy * parte}px) rotate(${particula.giro * parte}deg) scale(${escalaDaParticula})`;
+  // Aparece logo, voa quase todo o caminho visível e some no fim.
   return [
-    { transform: "translate(0px, 0px) rotate(0deg) scale(0.4)", opacity: 0 },
-    {
-      transform: `translate(${dx * 0.35}px, ${dy * 0.35}px) rotate(${particula.giro * 0.3}deg) scale(1)`,
-      opacity: 1,
-      offset: 0.2,
-    },
-    {
-      transform: `translate(${dx}px, ${dy}px) rotate(${particula.giro}deg) scale(0.7)`,
-      opacity: 0,
-    },
+    { transform: no(0, 0.4), opacity: 0 },
+    { transform: no(0.3, 1), opacity: 1, offset: 0.15 },
+    { transform: no(0.85, 0.9), opacity: 1, offset: 0.7 },
+    { transform: no(1, 0.7), opacity: 0 },
   ];
 }
 

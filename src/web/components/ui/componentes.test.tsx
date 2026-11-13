@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
+import * as ui from ".";
 import { TITULO_SEM_CONEXAO } from "./ErrorState";
 import {
   AppShell,
@@ -462,5 +463,20 @@ describe("layouts", () => {
     expect(screen.getByRole("banner")).toHaveTextContent("Rifa Videira Kids");
     expect(screen.getByRole("main")).toHaveTextContent("Ranking");
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+});
+
+describe("índice (RIFA-049)", () => {
+  it('os componentes e as constantes novas saem de "components/ui"', () => {
+    for (const nome of [
+      "Icone",
+      "ICONES",
+      "NOMES_ICONES",
+      "ehNomeDeIcone",
+      "Esqueleto",
+      "TITULO_SEM_CONEXAO",
+    ])
+      expect(ui, nome).toHaveProperty(nome);
+    expect(ui.TITULO_SEM_CONEXAO).toBe(TITULO_SEM_CONEXAO);
   });
 });
