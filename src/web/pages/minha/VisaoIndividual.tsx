@@ -1,9 +1,9 @@
 import type { RespostaVisaoIndividual } from "../../../shared/contracts/api";
-import { Aviso, EmptyState, ErrorState, Loading } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { Aviso, EmptyState, ErrorState } from "../../components/ui";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
 import { useUsuarioConectado } from "../../lib/sessao";
-import { Cabecalho } from "./Cabecalho";
+import { Cabecalho, EsqueletoDaVisao } from "./Cabecalho";
 import { CurvaIndividual } from "./CurvaIndividual";
 import { CartaoPeriodo, Destaque } from "./Destaque";
 import { Equipe } from "./Equipe";
@@ -13,7 +13,7 @@ import { useVisaoIndividual } from "./useVisaoIndividual";
 import "./minha.css";
 
 // O conteúdo da visão individual (carregado à parte, só em /minha: veja MinhaPage.tsx): o cabeçalho, os
-// estados (carregando, erro, sem campanha) e a visão do alvo, que se atualiza sozinha a cada minuto, com o
+// estados (carregando, com o esqueleto; erro, neutro quando é a conexão; sem campanha) e a visão do alvo, que se atualiza sozinha a cada minuto, com o
 // link de vendas (RIFA-046), pedido uma vez (e de novo quando os vínculos do líder mudam).
 export function VisaoIndividual() {
   const usuario = useUsuarioConectado();
@@ -25,14 +25,13 @@ export function VisaoIndividual() {
   return (
     <>
       <Cabecalho alvo={alvo} nome={usuario.nome} />
-      {estado.tipo === "carregando" && (
-        <Loading texto="Carregando os seus números…" />
-      )}
+      {estado.tipo === "carregando" && <EsqueletoDaVisao />}
       {estado.tipo === "erro" && (
         <ErrorState
           titulo="Não foi possível carregar os seus números."
           mensagem={`${mensagemDoErro(estado.erro)} A página tenta de novo sozinha a cada minuto.`}
           aoTentarDeNovo={tentarDeNovo}
+          conexao={ehFalhaDeConexao(estado.erro)}
         />
       )}
       {estado.tipo === "desligado" && (

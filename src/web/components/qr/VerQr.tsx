@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, ComDica, Dialogo } from "../ui";
+import { Button, ComDica, Dialogo, Icone } from "../ui";
 import { QrCodeLinkVendasLazy } from "./QrCodeLazy";
 import { DICAS } from "./textos";
 import "./compartilhar.css";
@@ -23,6 +23,7 @@ export function VerQr({ url, celulaNome, affiliateId }: Props) {
     <>
       <ComDica texto={DICAS.verQr}>
         <Button variante="secundario" onClick={() => setAberto(true)}>
+          <Icone nome="qr" />
           Ver QR{" "}
           <span className="visualmente-oculto">
             code da {celulaNome}

@@ -16,9 +16,12 @@ import type {
   RespostaVisaoIndividual,
   UsuarioSessao,
 } from "../../../shared/contracts";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { esperarDisponivel } from "../../test/indisponivel";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
+  comHojeCoberto,
+  comPercentualDaCampanha,
   criarApiFalsa,
   respostaErro,
   sessaoDaVisao,
@@ -112,6 +115,13 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
       name: "Vendidos: 42 de 120 bilhetes",
     });
     expect(barra).toHaveAttribute("aria-valuenow", "35");
+    // RIFA-051: o % aparece uma vez, grande; a barra não o repete (só no aria-valuetext). Abaixo da meta, sem selo.
+    expect(barra).toHaveAttribute("aria-valuetext", "35%");
+    expect(within(destaque).getAllByText("35%")).toHaveLength(1);
+    expect(destaque.querySelector(".ui-progress__valor")).toBeNull();
+    expect(within(destaque).queryByText("Meta batida")).toBeNull();
+    // O destaque é um Card "destaque" (a borda roxa de 2 px do componente, não uma borda própria da tela).
+    expect(destaque.querySelector(".ui-card.ui-card--destaque")).not.toBeNull();
     expect(destaque).toHaveTextContent(
       "Abaixo do esperadoFaltam 3 bilhetes para o esperado até ontem",
     );
@@ -130,6 +140,47 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
         { metodo: "GET", caminho: `${CAMINHO_VISAO}?periodo=atual` },
         { metodo: "GET", caminho: "/api/minha/links-vendas" },
       ]),
+    );
+  });
+
+  it("meta batida (RIFA-051): o % uma vez, grande, com o selo 'Meta batida' e o troféu ao lado; a barra não repete o número", async () => {
+    await abrir(comPercentualDaCampanha(visaoDe(), 11_300));
+
+    const destaque = regiao("Meta da campanha");
+    const numero = within(destaque).getByText("113%", {
+      selector: ".minha-destaque__numero",
+    });
+    expect(within(destaque).getAllByText("113%")).toHaveLength(1);
+    const selo = within(destaque).getByText("Meta batida", {
+      selector: ".minha-destaque__selo",
+    });
+    // O selo fica ao lado do número (no mesmo bloco), com o troféu só visual.
+    expect(numero.parentElement).toContainElement(selo);
+    const trofeu = selo.querySelector("svg");
+    expect(trofeu).toHaveAttribute("data-icone", "trofeu");
+    expect(trofeu).toHaveAttribute("aria-hidden", "true");
+    expect(selo).toHaveTextContent(/^Meta batida$/);
+    const barra = within(destaque).getByRole("progressbar", {
+      name: "Vendidos: 42 de 120 bilhetes",
+    });
+    expect(barra).toHaveAttribute("aria-valuenow", "100");
+    expect(barra).toHaveAttribute("aria-valuetext", "113%");
+    expect(destaque.querySelector(".ui-progress__valor")).toBeNull();
+    // A barra continua com o selo do troféu no fim (P1); o selo amarelo da tela é outro, ao lado do número.
+    expect(destaque.querySelector(".ui-progress__trofeu")).not.toBeNull();
+  });
+
+  it("a meta de hoje coberta: o ícone de check (desenho, não caractere) e a frase, sem o verde no texto inteiro", async () => {
+    await abrir(comHojeCoberto(visaoDe()));
+    const hoje = regiao("Hoje · 04/12", 3);
+    expect(hoje).toHaveAttribute("data-batida");
+    const frase = within(hoje).getByText("Meta de hoje já coberta");
+    const icone = frase.querySelector("svg");
+    expect(icone).toHaveAttribute("data-icone", "check");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(hoje).not.toHaveTextContent("✓");
+    expect(hoje).toHaveTextContent(
+      "O que foi vendido até ontem já cobre a curva de hoje. Vendidos hoje: 2 bilhetes.",
     );
   });
 
@@ -514,26 +565,51 @@ describe("estados e atualização", () => {
     vi.stubGlobal("fetch", api.fetch);
     renderizarRota("/minha", { usuario: sessaoDaVisao(visao) });
 
-    // Desde o 1º quadro (enquanto o pacote da tela e a visão chegam): o cabeçalho da sessão e o carregando.
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Célula Ágape" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Carregando os seus números…",
-    );
+    // Desde o 1º quadro (enquanto o pacote da tela e a visão chegam): o cabeçalho da sessão e o carregando, com o
+    // esqueleto dos dois cartões de cima (RIFA-051): os blocos são só visuais e o leitor de tela ouve um anúncio só.
+    const conferirEsqueleto = () => {
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Célula Ágape" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Carregando os seus números…",
+      );
+      const esqueleto = document.querySelector(".minha-moldura__esqueleto");
+      expect(esqueleto?.querySelectorAll(".ui-esqueleto--cartao")).toHaveLength(
+        2,
+      );
+      expect(
+        esqueleto?.querySelector(
+          ".ui-esqueleto--cartao.minha-moldura__esqueleto-destaque",
+        ),
+      ).not.toBeNull();
+      const blocos = [
+        ...(esqueleto?.querySelectorAll(".ui-esqueleto__bloco") ?? []),
+      ];
+      expect(blocos.length).toBeGreaterThanOrEqual(10);
+      for (const bloco of blocos) {
+        expect(bloco).toHaveAttribute("aria-hidden", "true");
+        // Em rem (acompanha o tamanho do texto), direto ou como a reserva de uma variável do computador
+        // (minha-moldura.css); o número grande, no clamp do font-size dele (minha-css.test.ts). Nada em px.
+        const altura = (bloco as HTMLElement).style.height;
+        expect(altura).toMatch(
+          /^(\d+(\.\d+)?rem|var\(--minha-esqueleto-[a-z]+, \d+(\.\d+)?rem\)|clamp\(.+\))$/,
+        );
+        expect(altura).not.toMatch(/px/);
+      }
+      // A linha de texto de antes saiu.
+      expect(document.querySelector(".ui-loading")).toBeNull();
+    };
+    conferirEsqueleto();
     await waitFor(() => expect(responder).not.toBeNull());
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Célula Ágape" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Carregando os seus números…",
-    );
+    conferirEsqueleto();
     await act(async () =>
       responder?.(new Response(JSON.stringify(visao), { status: 200 })),
     );
     expect(
       await screen.findByRole("heading", { level: 2, name: "Ranking" }),
     ).toBeInTheDocument();
+    expect(document.querySelector(".minha-moldura__esqueleto")).toBeNull();
   });
 
   it("falha na primeira carga: o erro com 'Tentar de novo', que carrega", async () => {
@@ -552,6 +628,10 @@ describe("estados e atualização", () => {
     expect(alerta).toHaveTextContent(
       "A página tenta de novo sozinha a cada minuto.",
     );
+    // Sem conexão (RIFA-051): o cartão neutro, sem o vermelho da falha de verdade, e a mensagem sem jargão.
+    expect(alerta).toHaveClass("ui-estado--conexao");
+    expect(alerta).not.toHaveClass("ui-estado--erro");
+    expect(alerta).toHaveTextContent(MENSAGEM_SEM_CONEXAO);
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
     );
@@ -560,6 +640,28 @@ describe("estados e atualização", () => {
       await screen.findByRole("heading", { level: 2, name: "Ranking" }),
     ).toBeInTheDocument();
     expect(api.chamadasA("GET", CAMINHO_VISAO)).toHaveLength(2);
+  });
+
+  it("falha de verdade na primeira carga (500): o erro em vermelho, com 'Tentar de novo'", async () => {
+    const visao = visaoDe();
+    const api = criarApiFalsa(visao);
+    api.proxima(
+      "GET",
+      CAMINHO_VISAO,
+      respostaErro(500, "erro_interno", "Erro interno"),
+    );
+    vi.stubGlobal("fetch", api.fetch);
+    renderizarRota("/minha", { usuario: sessaoDaVisao(visao) });
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent(
+      "Não foi possível carregar os seus números.",
+    );
+    expect(alerta).toHaveClass("ui-estado--erro");
+    expect(alerta).not.toHaveClass("ui-estado--conexao");
+    expect(
+      within(alerta).getByRole("button", { name: "Tentar de novo" }),
+    ).toBeInTheDocument();
   });
 
   it("sem campanha ativa (404): explica que os números aparecem quando a campanha for ativada", async () => {

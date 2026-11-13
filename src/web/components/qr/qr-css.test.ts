@@ -103,6 +103,54 @@ describe("o CSS do link de vendas", () => {
     expect(imagem).toMatch(/height:\s*[\d.]+cm/);
   });
 
+  it("o link num bloco de leitura (RIFA-051): fundo suave e, fora do foco, sem a borda de campo de digitar", () => {
+    const compartilhar = ARQUIVOS["compartilhar.css"];
+    const campo =
+      /\.qr-compartilhar \.qr-compartilhar__campo\s*\{([^}]*)\}/.exec(
+        compartilhar,
+      )?.[1] ?? "";
+    expect(campo).toMatch(/background:\s*var\(--cor-superficie-2\);/);
+    expect(campo).toMatch(/resize:\s*none;/);
+    // Com a altura do próprio link (field-sizing), o campo continua um alvo de toque de 44 px.
+    expect(campo).toMatch(/min-height:\s*var\(--alvo-toque\);/);
+    // A borda some só fora do foco (no foco, volta a borda roxa do Campos.css, além do anel), num seletor mais
+    // específico que o :hover e o :focus do Campos.css (três classes ou pseudo-classes).
+    const semBorda =
+      /\.qr-compartilhar \.qr-compartilhar__campo\.ui-campo__controle:not\(:focus\)\s*\{([^}]*)\}/.exec(
+        compartilhar,
+      )?.[1] ?? "";
+    expect(semBorda).toMatch(/border-color:\s*var\(--cor-superficie-2\);/);
+    expect(compartilhar).not.toMatch(/outline:\s*(none|0)/);
+  });
+
+  it("os botões com ícone ganham o mesmo respiro dos lados (o Copiar e o Ver QR dividem a linha a 360 px)", () => {
+    for (const [arquivo, seletor] of [
+      ["compartilhar.css", ".qr-compartilhar__acoes > .ui-button"],
+      ["qr-codigo.css", ".qr-codigo__acoes > .ui-button"],
+    ] as const) {
+      const css = ARQUIVOS[arquivo];
+      const inicio = css.indexOf(`${seletor} {`);
+      expect(inicio, seletor).toBeGreaterThanOrEqual(0);
+      expect(css.slice(inicio, css.indexOf("}", inicio))).toMatch(
+        /padding-inline:\s*var\(--espaco-3\);/,
+      );
+    }
+  });
+
+  it("'Baixar imagem' e 'Imprimir' ocupam a linha toda quando descem (360 px), como os botões do link", () => {
+    for (const [arquivo, seletor] of [
+      ["compartilhar.css", ".qr-compartilhar__acoes > *"],
+      ["qr-codigo.css", ".qr-codigo__acoes > .ui-button"],
+    ] as const) {
+      const css = ARQUIVOS[arquivo];
+      const inicio = css.indexOf(`${seletor} {`);
+      expect(inicio, seletor).toBeGreaterThanOrEqual(0);
+      expect(css.slice(inicio, css.indexOf("}", inicio))).toMatch(
+        /flex:\s*1 1 auto;/,
+      );
+    }
+  });
+
   it("o movimento só no no-preference", () => {
     for (const [arquivo, css] of Object.entries(ARQUIVOS)) {
       const fora = css.replace(

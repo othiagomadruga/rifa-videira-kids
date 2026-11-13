@@ -14,7 +14,7 @@ import {
   ErrorState,
   Loading,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { linksDaCelula } from "./links-vendas-api";
 import { useMeusLinksVendas } from "./useMeusLinksVendas";
 import "./minha-links.css";
@@ -46,7 +46,10 @@ export function LinksDeVendas({
 
   return (
     <section className="minha-links" aria-labelledby={idTitulo}>
-      <Card titulo={<span id={idTitulo}>{tituloDoCartao(doAlvo)}</span>}>
+      <Card
+        icone="link"
+        titulo={<span id={idTitulo}>{tituloDoCartao(doAlvo)}</span>}
+      >
         {estado.tipo === "carregando" && (
           <Loading texto="Carregando o link de vendas…" />
         )}
@@ -55,6 +58,7 @@ export function LinksDeVendas({
             titulo="Não foi possível carregar o link de vendas."
             mensagem={mensagemDoErro(estado.erro)}
             aoTentarDeNovo={tentarDeNovo}
+            conexao={ehFalhaDeConexao(estado.erro)}
           />
         )}
         {estado.tipo === "desligado" && (
@@ -164,7 +168,10 @@ function LinkDoLider({ celula }: { celula: CelulaLinksVendas }) {
   );
 }
 
-/** Discipulador e rede: cada célula com o link mais recente, "Ver QR" e os outros links dela. */
+/**
+ * Discipulador e rede: cada célula num bloco compacto (o nome, o líder, o link e os botões numa linha só no
+ * computador), com o link mais recente, "Ver QR" e os outros links dela.
+ */
 function LinksDaCelula({
   celula,
   comDiscipulador,
@@ -175,11 +182,13 @@ function LinksDaCelula({
   const [principal, ...outros] = linksDaCelula(celula);
   return (
     <article className="minha-links__celula">
-      <h3 className="minha-links__nome">{celula.celula_nome}</h3>
-      <p className="minha-links__detalhe">
-        Líder: {celula.lider_nome}
-        {comDiscipulador && ` · Discipulador: ${celula.discipulador_nome}`}
-      </p>
+      <div className="minha-links__identidade">
+        <h3 className="minha-links__nome">{celula.celula_nome}</h3>
+        <p className="minha-links__detalhe">
+          Líder: {celula.lider_nome}
+          {comDiscipulador && ` · Discipulador: ${celula.discipulador_nome}`}
+        </p>
+      </div>
       {principal ? (
         <>
           <CompartilharLink

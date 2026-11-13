@@ -8,8 +8,14 @@ import type {
   PeriodoDaReferencia,
   UnidadeMeta,
 } from "../../../shared/contracts/calculos";
-import { Card, IndicadorSituacao, ProgressBar } from "../../components/ui";
+import {
+  Card,
+  Icone,
+  IndicadorSituacao,
+  ProgressBar,
+} from "../../components/ui";
 import { formatarNumero, formatarPercentual } from "../../lib/formatadores";
+import { CLASSE_COMEMORA, useComemoracao } from "../../lib/useComemoracao";
 import {
   bilhetes,
   dataCurta,
@@ -48,13 +54,29 @@ function rotuloDaBarra(
     : `Bilhetes vendidos: ${formatarNumero(desempenho.bilhetes.campanha)}`;
 }
 
-// O destaque da tela: antes do início, a contagem regressiva; depois, o % da meta da campanha (grande), a
-// situação contra a curva, a projeção e a meta de HOJE ("faltam N bilhetes hoje"; com a meta em centavos,
-// só o %).
+/** A chave da comemoração da /minha no sessionStorage (uma por dia nesta aba). */
+export const CHAVE_COMEMORACAO_MINHA = "minha";
+
+// O destaque da tela (num Card "destaque", a borda roxa de 2 px): antes do início, a contagem regressiva; depois, o %
+// da meta da campanha (grande, uma vez só: a barra não repete o número), a situação contra a curva, a projeção e a
+// meta de HOJE ("faltam N bilhetes hoje"; com a meta em centavos, só o %). Com a meta batida (100% ou mais), o selo
+// amarelo "Meta batida" ao lado do número e a comemoração (D25): o pulso e as partículas, ao aparecer já batida ou
+// ao bater numa atualização, uma vez por dia nesta aba (recarregar não repete); com reduce, nada se mexe.
 export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
   const idTitulo = useId();
   const { referencia, desempenho, unidade } = visao;
   const fase = textoDaFase(referencia);
+  const percentual = desempenho.campanha.percentual_meta_bp;
+  const batida =
+    referencia.fase !== "antes" && percentual !== null && percentual >= 10_000;
+  const { ref: refNumero, confete } = useComemoracao<HTMLParagraphElement>(
+    batida,
+    {
+      quando: "ao-aparecer-e-ao-bater",
+      umaVezPor: "dia",
+      chave: CHAVE_COMEMORACAO_MINHA,
+    },
+  );
 
   if (referencia.fase === "antes") {
     const meta = textoDaMetaAntes(desempenho.campanha, unidade);
@@ -64,11 +86,13 @@ export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
         aria-labelledby={idTitulo}
         data-fase="antes"
       >
-        <h2 id={idTitulo} className="minha-destaque__contagem">
-          {fase.destaque}
-        </h2>
-        <p className="minha-destaque__detalhe">{fase.detalhe}</p>
-        {meta && <p className="minha-destaque__meta">{meta}</p>}
+        <Card variante="destaque" className="minha-destaque__cartao">
+          <h2 id={idTitulo} className="minha-destaque__contagem">
+            {fase.destaque}
+          </h2>
+          <p className="minha-destaque__detalhe">{fase.detalhe}</p>
+          {meta && <p className="minha-destaque__meta">{meta}</p>}
+        </Card>
       </section>
     );
   }
@@ -82,34 +106,47 @@ export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
       aria-labelledby={idTitulo}
       data-fase={referencia.fase}
     >
-      <p className="minha-destaque__fase">
-        <strong>{fase.destaque}</strong> · {fase.detalhe}
-      </p>
-      <h2 id={idTitulo} className="minha-destaque__rotulo">
-        Meta da campanha
-      </h2>
-      <p className="minha-destaque__numero">
-        {campanha.percentual_meta_bp === null
-          ? "Sem meta"
-          : formatarPercentual(campanha.percentual_meta_bp)}
-      </p>
-      {campanha.percentual_meta_bp !== null && (
-        <ProgressBar
-          rotulo={rotuloDaBarra(desempenho, unidade)}
-          valor={campanha.percentual_meta_bp}
-          meta={10_000}
-        />
-      )}
-      {situacao && <Situacao situacao={situacao} />}
-      {projecao && <p className="minha-destaque__nota">{projecao}</p>}
-      {hoje && (
-        <Hoje
-          hoje={hoje}
-          bilhetesHoje={desempenho.bilhetes.hoje}
-          unidade={unidade}
-          semMeta={campanha.situacao === "sem_meta"}
-        />
-      )}
+      <Card variante="destaque" className="minha-destaque__cartao">
+        <p className="minha-destaque__fase">
+          <strong>{fase.destaque}</strong> · {fase.detalhe}
+        </p>
+        <h2 id={idTitulo} className="minha-destaque__rotulo">
+          Meta da campanha
+        </h2>
+        <div className="minha-destaque__valor">
+          <p
+            ref={refNumero}
+            className={`minha-destaque__numero ${CLASSE_COMEMORA}`}
+          >
+            {percentual === null ? "Sem meta" : formatarPercentual(percentual)}
+            {confete}
+          </p>
+          {batida && (
+            <p className="minha-destaque__selo">
+              <Icone nome="trofeu" />
+              Meta batida
+            </p>
+          )}
+        </div>
+        {percentual !== null && (
+          <ProgressBar
+            rotulo={rotuloDaBarra(desempenho, unidade)}
+            valor={percentual}
+            meta={10_000}
+            mostrarValor={false}
+          />
+        )}
+        {situacao && <Situacao situacao={situacao} />}
+        {projecao && <p className="minha-destaque__nota">{projecao}</p>}
+        {hoje && (
+          <Hoje
+            hoje={hoje}
+            bilhetesHoje={desempenho.bilhetes.hoje}
+            unidade={unidade}
+            semMeta={campanha.situacao === "sem_meta"}
+          />
+        )}
+      </Card>
     </section>
   );
 }
@@ -137,11 +174,7 @@ function Hoje({
         Hoje <span className="minha-hoje__data">· {dataCurta(hoje.data)}</span>
       </h3>
       <p className="minha-hoje__destaque">
-        {texto.batida && (
-          <span className="minha-hoje__icone" aria-hidden="true">
-            ✓
-          </span>
-        )}
+        {texto.batida && <Icone nome="check" className="minha-hoje__icone" />}
         {texto.destaque}
       </p>
       {texto.detalhe && <p className="minha-hoje__detalhe">{texto.detalhe}</p>}

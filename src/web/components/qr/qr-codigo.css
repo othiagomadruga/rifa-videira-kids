@@ -31,6 +31,14 @@
   gap: var(--espaco-2);
 }
 
+/* "Baixar imagem" e "Imprimir" com os ícones: o mesmo respiro dos lados do "Copiar link" (compartilhar.css). Quando
+   não cabem lado a lado (o celular de 360 px), cada um ocupa a linha toda, como o "Copiar link" e o WhatsApp logo
+   abaixo, em vez de dois botões de larguras diferentes centralizados um embaixo do outro. */
+.qr-codigo__acoes > .ui-button {
+  flex: 1 1 auto;
+  padding-inline: var(--espaco-3);
+}
+
 .qr-codigo__retorno {
   max-width: 100%;
   font-size: var(--texto-sm);

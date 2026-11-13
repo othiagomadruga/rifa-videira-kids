@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Button, ComDica, Textarea, classesBotao } from "../ui";
+import { Button, ComDica, Icone, Textarea, classesBotao } from "../ui";
 import {
   TEXTO_COPIA,
   copiarTexto,
@@ -19,7 +19,10 @@ type Props = {
   telefone?: string | null;
   /** "Copiar link" como botão principal (o link em destaque). */
   destaque?: boolean;
-  /** Botões a mais na mesma linha (ex.: "Ver QR"). */
+  /**
+   * Botões a mais na mesma linha (ex.: "Ver QR"), logo depois do "Copiar link": no celular, os dois dividem a linha e
+   * o "Enviar no WhatsApp" (o nome mais longo) fica com a linha de baixo inteira.
+   */
   extra?: ReactNode;
   /** Quando a célula tem mais de um código: o afiliado deste link (no nome dos botões, para o leitor de tela). */
   affiliateId?: number;
@@ -31,8 +34,10 @@ function linhasDoCampo(url: string): number {
 }
 
 /**
- * O link de vendas num campo só leitura (quebra a linha; seleciona tudo ao focar), com "Copiar link" (sem a área de
- * transferência, o link fica selecionado no campo) e "Enviar no WhatsApp" (a mensagem fixa da D24). Sem o `qr`.
+ * O link de vendas num campo só leitura com cara de bloco de leitura (fundo suave, sem a borda de campo de digitar;
+ * quebra a linha; seleciona tudo ao focar), com "Copiar link" (sem a área de transferência, o link fica selecionado no
+ * campo) e "Enviar no WhatsApp" (a mensagem fixa da D24), cada um com o seu ícone à esquerda (só visual: o nome do
+ * botão continua o texto). Sem o `qr`.
  */
 export function CompartilharLink({
   url,
@@ -73,9 +78,11 @@ export function CompartilharLink({
             variante={destaque ? "primario" : "secundario"}
             onClick={() => void copiar()}
           >
+            <Icone nome="copiar" />
             Copiar link <span className="visualmente-oculto">{doLink}</span>
           </Button>
         </ComDica>
+        {extra}
         <ComDica
           texto={
             numeroDoWhatsApp(telefone) === ""
@@ -89,11 +96,11 @@ export function CompartilharLink({
             target="_blank"
             rel="noopener noreferrer"
           >
+            <Icone nome="conversa" />
             Enviar no WhatsApp{" "}
             <span className="visualmente-oculto">o link {doLink}</span>
           </a>
         </ComDica>
-        {extra}
       </div>
       {/* Região viva fixa (anuncia o resultado de copiar) e o mesmo texto visível. */}
       <p className="visualmente-oculto" role="status">

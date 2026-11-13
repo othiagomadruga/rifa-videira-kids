@@ -7,7 +7,7 @@ import {
   Loading,
   Marca,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
 import { DICAS_DA_MOLDURA } from "./textos-moldura";
 import "./minha-moldura.css";
@@ -17,7 +17,9 @@ type Saida = { saindo: boolean; erro: string | null };
 // Moldura da visão individual (/minha), só com sessão de líder, discipulador ou rede (guarda): a marca com o
 // papel, o botão "Sair" e a tela (Outlet), sem menu: esses papéis só têm esta tela. Sem sessão (ao abrir ou
 // por um 401 no meio do uso), vai para /entrar e guarda a tela, como na coordenação; admin e coordenação vão
-// para a área deles (/coordenacao).
+// para a área deles (/coordenacao). O topo tem a altura final desde o primeiro quadro (a linha do papel reservada
+// e a barra com a altura do "Sair", só no CSS, em minha-moldura.css: nenhum texto de mentira na marca para o leitor
+// de tela): nada pula quando a sessão chega.
 export function MinhaLayout() {
   const { estado, verificar, sair } = useSessao();
   const usuario = useGuardaDaArea("hierarquia");
@@ -77,6 +79,7 @@ export function MinhaLayout() {
               titulo="Não foi possível conferir o seu acesso."
               mensagem={mensagemDoErro(estado.erro)}
               aoTentarDeNovo={verificar}
+              conexao={ehFalhaDeConexao(estado.erro)}
             />
           ) : (
             <Loading texto="Conferindo o seu acesso…" />
