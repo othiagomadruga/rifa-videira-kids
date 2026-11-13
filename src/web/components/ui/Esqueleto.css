@@ -1,0 +1,30 @@
+/*
+ * Esqueleto do carregando (RIFA-049): os blocos empilhados, cada um com a altura pedida (o brilho é o .mov-esqueleto
+ * do tema/movimento.css, só sem prefers-reduced-motion). position: relative segura o texto escondido do status
+ * (absoluto), para ele não escapar de uma caixa com rolagem.
+ */
+.ui-esqueleto {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.ui-esqueleto__bloco {
+  max-width: 100%;
+}
+
+.ui-esqueleto--cartao {
+  padding: var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  box-shadow: var(--sombra-1);
+}
+
+@media (min-width: 48rem) {
+  .ui-esqueleto--cartao {
+    padding: var(--espaco-5);
+  }
+}
