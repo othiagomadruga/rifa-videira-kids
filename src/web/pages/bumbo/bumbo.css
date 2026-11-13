@@ -31,24 +31,47 @@
   font-weight: var(--peso-negrito);
 }
 
+/* A prévia como os líderes vão ver no grupo (RIFA-051, P3.9): o fundo da conversa e a mensagem num balão branco,
+   com o rabicho no canto de cima (desenhado com a borda, decorativo). No lugar do bloco com a faixa de 4 px (A-10). */
 .bumbo__figura {
   margin: 0;
+  padding: var(--espaco-3) var(--espaco-3) var(--espaco-3) var(--espaco-4);
+  border-radius: var(--raio-3);
+  background: var(--cor-superficie-2);
 }
 
-/* A mensagem como sai da API: fonte do sistema, grande, sem rolagem lateral (palavras longas quebram). */
+/* A mensagem: fonte do sistema, grande, sem rolagem lateral (palavras longas quebram). */
 .bumbo__texto {
+  position: relative;
   margin: 0;
-  padding: var(--espaco-4);
-  border: 1px solid var(--cor-borda);
-  border-left: 4px solid var(--cor-primaria);
-  border-radius: var(--raio-2);
-  background: var(--cor-superficie-2);
+  padding: var(--espaco-3) var(--espaco-4);
+  border-radius: 0 var(--raio-3) var(--raio-3);
+  background: var(--cor-superficie);
+  box-shadow: var(--sombra-1);
   color: var(--cor-texto);
   font-family: var(--fonte-base);
   font-size: var(--texto-lg);
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.bumbo__texto::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 100%;
+  border-top: var(--espaco-3) solid var(--cor-superficie);
+  border-left: var(--espaco-3) solid transparent;
+}
+
+.bumbo__texto strong {
+  font-weight: var(--peso-negrito);
+}
+
+/* As marcas do WhatsApp (* e _) ficam no texto (o que se copia), mas não aparecem, como no WhatsApp. */
+.bumbo__marca {
+  display: none;
 }
 
 .bumbo__acoes {

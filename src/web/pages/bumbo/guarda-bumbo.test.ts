@@ -72,6 +72,14 @@ describe("CA3: o código do bumbo não formata dinheiro", () => {
   });
 });
 
+describe("RIFA-051 (P3.9): a prévia desenhada com elementos do React", () => {
+  it("nada de dangerouslySetInnerHTML nem de innerHTML no código da tela", () => {
+    expect(Object.keys(FONTES)).toContain("./formatacao.tsx");
+    for (const [arquivo, fonte] of Object.entries(FONTES))
+      expect(fonte, arquivo).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
+  });
+});
+
 describe("de onde o bumbo importa", () => {
   it("só da própria pasta, dos componentes base, de lib/ e do contrato sem zod (de api.ts, só tipos)", () => {
     const vistas: string[] = [];
