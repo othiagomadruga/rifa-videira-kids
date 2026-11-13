@@ -52,7 +52,7 @@
 /*
  * Topo (RIFA-049, A-02): a faixa do degradê forte da marca, com o logo no selo claro e o nome em branco (>= 5:1 em
  * todos os pontos, tokens.test.ts). A altura é fixa desde o início (o selo reserva o lugar antes de o logo chegar):
- * 72 px, 3 a mais que o topo branco de antes.
+ * 74 px no Chromium (o selo de 48 px na linha do texto), 1 a menos que o topo branco de antes, com a borda.
  */
 .ui-public-shell__topo {
   padding: var(--espaco-3) var(--margem-pagina);
