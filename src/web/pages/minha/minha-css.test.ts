@@ -154,8 +154,25 @@ describe("CA5: o CSS da visão individual", () => {
       4.5,
     ],
     ["falha ao sair", "--cor-perigo", "--cor-superficie", 4.5],
+    // RIFA-051: o selo "Meta batida" (amarelo do Kids, texto marinho) e a meta de hoje mais leve (o dia como rótulo
+    // suave; coberta, o fundo neutro com o texto escuro).
+    ["selo 'Meta batida'", "--cor-sobre-comemoracao", "--cor-comemoracao", 7],
+    ["dia da meta de hoje", "--cor-texto-suave", "--cor-primaria-suave", 4.5],
+    [
+      "dia da meta de hoje coberta",
+      "--cor-texto-suave",
+      "--cor-superficie-2",
+      4.5,
+    ],
+    ["meta de hoje coberta", "--cor-texto", "--cor-superficie-2", 7],
   ] as const)("%s: contraste suficiente", (_nome, texto, fundo, minimo) => {
     expect(contraste(cor(texto), cor(fundo))).toBeGreaterThanOrEqual(minimo);
+  });
+
+  it("o ícone de check da meta de hoje coberta se vê no fundo neutro (3:1)", () => {
+    expect(
+      contraste(cor("--cor-sucesso"), cor("--cor-superficie-2")),
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it("as bordas que marcam o destaque e o 'você' se veem (3:1)", () => {
@@ -165,6 +182,60 @@ describe("CA5: o CSS da visão individual", () => {
     expect(
       contraste(cor("--cor-primaria"), cor("--cor-primaria-suave")),
     ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/** As declarações da regra com exatamente este seletor (a primeira), como texto. */
+function regra(css: string, seletor: string): string {
+  const inicio = css.indexOf(`${seletor} {`);
+  if (inicio < 0) throw new Error(`regra ${seletor} não encontrada`);
+  return css.slice(inicio, css.indexOf("}", inicio));
+}
+
+describe("RIFA-051: nada pula e nada vaza", () => {
+  it("o topo tem a altura do 'Sair' desde o primeiro quadro (o botão só aparece quando a sessão chega)", () => {
+    expect(regra(molduraCss, ".minha-moldura__barra")).toMatch(
+      /min-height:\s*var\(--alvo-toque\);/,
+    );
+  });
+
+  it("o esqueleto dos cartões de cima usa a mesma grade dos cartões que chegam", () => {
+    const colunas = (bloco: string) =>
+      /grid-template-columns:\s*([^;]+);/.exec(bloco)?.[1];
+    expect(colunas(regra(molduraCss, ".minha-moldura__esqueleto"))).toBe(
+      colunas(regra(visaoCss, ".minha-cartoes")),
+    );
+    expect(
+      regra(
+        molduraCss,
+        ".minha-moldura__esqueleto > .minha-moldura__esqueleto-destaque",
+      ),
+    ).toMatch(/border:\s*2px solid var\(--cor-primaria\);/);
+  });
+
+  it("os dois cartões de cima com a mesma altura no computador, e o destaque recorta as partículas da comemoração", () => {
+    expect(regra(visaoCss, ".minha-cartoes")).toMatch(
+      /align-items:\s*stretch;/,
+    );
+    expect(regra(visaoCss, ".minha-destaque__cartao")).toMatch(
+      /overflow:\s*clip;/,
+    );
+  });
+
+  it("o destaque não tem borda própria (é o Card 'destaque') e a meta de hoje não tem a faixa da esquerda (que é do aviso)", () => {
+    expect(regra(visaoCss, ".minha-destaque")).not.toMatch(/border/);
+    expect(regra(visaoCss, ".minha-destaque__cartao")).not.toMatch(/border/);
+    expect(regra(visaoCss, ".minha-hoje")).not.toMatch(/border-left/);
+    expect(visaoCss).not.toMatch(/\.minha-hoje[^{]*\{[^}]*border-left/);
+  });
+
+  it("o número grande na fonte dos títulos e o selo no amarelo do Kids, com o texto marinho", () => {
+    expect(regra(visaoCss, ".minha-destaque__numero")).toMatch(
+      /font-family:\s*var\(--fonte-titulo\);/,
+    );
+    const selo = regra(visaoCss, ".minha-destaque__selo");
+    expect(selo).toMatch(/background:\s*var\(--cor-comemoracao\);/);
+    expect(selo).toMatch(/color:\s*var\(--cor-sobre-comemoracao\);/);
   });
 });
 

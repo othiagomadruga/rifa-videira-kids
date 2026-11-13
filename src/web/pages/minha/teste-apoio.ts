@@ -676,6 +676,54 @@ export function visaoDe(cenario: Cenario = {}): RespostaVisaoIndividual {
   });
 }
 
+/**
+ * A mesma visão com outro % da meta da campanha (RIFA-051: a meta batida, o selo e a comemoração), conferida pelo
+ * schema. Ex.: `comPercentualDaCampanha(visaoDe(), 11_300)` é a célula com 113% da meta.
+ */
+export function comPercentualDaCampanha(
+  visao: RespostaVisaoIndividual,
+  percentualBp: number,
+): RespostaVisaoIndividual {
+  const hoje = visao.referencia.dia_campanha;
+  return respostaVisaoIndividualSchema.parse({
+    ...visao,
+    desempenho: {
+      ...visao.desempenho,
+      campanha: {
+        ...visao.desempenho.campanha,
+        percentual_meta_bp: percentualBp,
+      },
+    },
+    // Durante a campanha, o ponto de hoje da curva é o % da meta (regra do schema).
+    curva: visao.curva.map((ponto) =>
+      visao.referencia.fase === "durante" && ponto.dia === hoje
+        ? { ...ponto, realizado_bp: percentualBp }
+        : ponto,
+    ),
+  });
+}
+
+/** A mesma visão com a meta de hoje já coberta pelo que foi vendido até ontem (a meta do dia é zero). */
+export function comHojeCoberto(
+  visao: RespostaVisaoIndividual,
+): RespostaVisaoIndividual {
+  const { hoje } = visao.desempenho;
+  if (!hoje) throw new Error("a visão não tem a meta de hoje");
+  return respostaVisaoIndividualSchema.parse({
+    ...visao,
+    desempenho: {
+      ...visao.desempenho,
+      hoje: {
+        ...hoje,
+        meta: 0,
+        falta: 0,
+        percentual_meta_bp: null,
+        batida: true,
+      },
+    },
+  });
+}
+
 function celulasDoDavi(
   desempenho: (numeros: Numeros) => DesempenhoIndividual,
 ): ItemEquipe[] {
