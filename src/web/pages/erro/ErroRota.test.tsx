@@ -37,6 +37,10 @@ describe("ErroRota", () => {
     expect(
       screen.getByRole("button", { name: "Tentar de novo" }),
     ).toBeInTheDocument();
+    // RIFA-050: o alerta grande acima do título, só visual (o título e o botão não mudam).
+    const icone = document.querySelector(".icone-da-tela");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(icone?.querySelector("svg")).toHaveAttribute("data-icone", "alerta");
   });
 
   it("com ErroApi, mostra a mensagem da API", () => {

@@ -7,6 +7,7 @@ import {
 } from "../../lib/acesso-desligado";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { destinoDoPapel, retirarDestino, useSessao } from "../../lib/sessao";
+import { IconeDaTela } from "../entrar/IconeDaTela";
 import { DICAS } from "./textos";
 import "./acesso.css";
 
@@ -96,6 +97,8 @@ export function AcessoPage() {
       />
       <Card>
         <div className="acesso-cartao">
+          {/* A chave no topo do cartão (RIFA-050). */}
+          <IconeDaTela nome="chave" />
           {podeEntrar && (
             <p>
               Toque em <strong>Entrar</strong> para continuar. Depois disso,
