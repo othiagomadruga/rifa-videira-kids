@@ -21,6 +21,15 @@ export const CODIGOS_CLIENTE = {
 
 export const TEMPO_LIMITE_PADRAO_MS = 10_000;
 
+/**
+ * Mensagens das falhas sem resposta (RIFA-049, sem jargão: o público e os líderes leem). As telas e os testes
+ * importam daqui, para a próxima troca de texto mudar um lugar só.
+ */
+export const MENSAGEM_SEM_CONEXAO =
+  "Sem conexão com a internet. Confira o sinal e tente de novo.";
+export const MENSAGEM_TEMPO_ESGOTADO =
+  "O sistema demorou para responder. Tente de novo.";
+
 type DadosErroApi = {
   codigo: string;
   mensagem: string;
@@ -184,6 +193,18 @@ export const api = {
     requisitarJson<T>(caminho, { ...opcoes, metodo: "DELETE" }),
 };
 
+/**
+ * A falha é da conexão (sem resposta ou tempo esgotado), não do sistema: a tela mostra o estado neutro
+ * "Sem conexão agora" (ErrorState com `conexao`), e não o vermelho de falha de verdade.
+ */
+export function ehFalhaDeConexao(erro: unknown): boolean {
+  return (
+    erro instanceof ErroApi &&
+    (erro.codigo === CODIGOS_CLIENTE.semConexao ||
+      erro.codigo === CODIGOS_CLIENTE.tempoEsgotado)
+  );
+}
+
 /** Texto para mostrar ao usuário a partir de qualquer erro capturado. */
 export function mensagemDoErro(erro: unknown): string {
   return erro instanceof ErroApi
@@ -338,7 +359,7 @@ function erroSemResposta(
   if (tempoEsgotado) {
     return new ErroApi({
       codigo: CODIGOS_CLIENTE.tempoEsgotado,
-      mensagem: "A API demorou demais para responder. Tente de novo.",
+      mensagem: MENSAGEM_TEMPO_ESGOTADO,
       causa,
     });
   }
@@ -351,7 +372,7 @@ function erroSemResposta(
   }
   return new ErroApi({
     codigo: CODIGOS_CLIENTE.semConexao,
-    mensagem: "Não foi possível conectar à API.",
+    mensagem: MENSAGEM_SEM_CONEXAO,
     causa,
   });
 }

@@ -1,5 +1,6 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 
 describe("StatusPage (/status)", () => {
@@ -44,7 +45,7 @@ describe("StatusPage (/status)", () => {
     renderizarRota("/status");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Erro na API: Não foi possível conectar à API.",
+      `Erro na API: ${MENSAGEM_SEM_CONEXAO}`,
     );
   });
 

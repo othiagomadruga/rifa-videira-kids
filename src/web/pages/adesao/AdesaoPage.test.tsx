@@ -18,6 +18,7 @@ import {
   respostaListaRecuperacoesSchema,
   type AfiliadoResumo,
 } from "../../../shared/contracts";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import type { CelulaAdesao } from "./adesao-api";
 import { respostaLinksDe } from "./teste-apoio-links";
@@ -496,7 +497,7 @@ describe("CA3: painel de adesão (/coordenacao/adesao)", () => {
     renderizarRota("/coordenacao/adesao");
 
     const alerta = await screen.findByRole("alert");
-    expect(alerta).toHaveTextContent("Não foi possível conectar à API.");
+    expect(alerta).toHaveTextContent(MENSAGEM_SEM_CONEXAO);
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
     );
@@ -896,8 +897,10 @@ describe("CA3/CA4: atualização automática", () => {
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
 
     expect(
-      await screen.findByText(
-        /^A última atualização falhou: Não foi possível conectar à API\./,
+      await screen.findByText((texto) =>
+        texto.startsWith(
+          `A última atualização falhou: ${MENSAGEM_SEM_CONEXAO}`,
+        ),
       ),
     ).toHaveAttribute("role", "status");
     expect(regiao(/^Sem célula \(2\)$/)).toBeInTheDocument();

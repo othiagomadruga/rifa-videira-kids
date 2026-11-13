@@ -11,6 +11,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { guardarDestino, retirarDestino } from "../../lib/sessao";
 import {
   conferirIndisponivel,
@@ -353,9 +354,7 @@ describe("CA1 e CA5: Sair e endereço desconhecido em /minha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
 
     expect(
-      await screen.findByText(
-        "Não foi possível sair: Não foi possível conectar à API.",
-      ),
+      await screen.findByText(`Não foi possível sair: ${MENSAGEM_SEM_CONEXAO}`),
     ).toHaveAttribute("role", "alert");
     expect(roteador.state.location.pathname).toBe("/minha");
     esperarDisponivel(screen.getByRole("button", { name: "Sair" }));

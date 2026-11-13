@@ -15,6 +15,7 @@ import type {
   ReferenciaCampanha,
   RespostaRankingPublico,
 } from "../../../shared/contracts/calculos";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import { INTERVALO_ATUALIZACAO_MS } from "./useRankingPublico";
 
@@ -512,7 +513,7 @@ describe("CA2: atualização automática e falhas", () => {
     const alerta = await screen.findByRole("alert");
     expect(alerta).toHaveTextContent("Não foi possível carregar o ranking.");
     expect(alerta).toHaveTextContent(
-      "Não foi possível conectar à API. A página tenta de novo sozinha a cada minuto.",
+      `${MENSAGEM_SEM_CONEXAO} A página tenta de novo sozinha a cada minuto.`,
     );
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
     expect(screen.getByText("Carregando o ranking…")).toBeInTheDocument();

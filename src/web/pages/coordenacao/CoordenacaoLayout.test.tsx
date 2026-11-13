@@ -11,6 +11,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsuarioSessao } from "../../../shared/contracts";
 import { DICA_BOTAO_SAINDO } from "../../components/ui/AppShell";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { guardarDestino, retirarDestino } from "../../lib/sessao";
 import {
   conferirIndisponivel,
@@ -280,7 +281,7 @@ describe("CA4: nome de quem está conectado, Sair e menu conforme o papel", () =
 
     // O aviso fica no painel do menu, junto do "Sair" (a tela pode ter os avisos dela).
     expect(await within(painelDoMenu()).findByRole("alert")).toHaveTextContent(
-      "Não foi possível sair: Não foi possível conectar à API.",
+      `Não foi possível sair: ${MENSAGEM_SEM_CONEXAO}`,
     );
     expect(roteador.state.location.pathname).toBe("/coordenacao/pedidos");
     esperarDisponivel(screen.getByRole("button", { name: "Sair" }));

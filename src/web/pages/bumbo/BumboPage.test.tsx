@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota } from "../../test/renderizar";
 import {
   CAMPANHA_EM_REAIS,
@@ -266,7 +267,7 @@ describe("CA1: a mensagem do dia", () => {
 
     const alerta = await screen.findByRole("alert");
     expect(alerta).toHaveTextContent("Não foi possível carregar a mensagem.");
-    expect(alerta).toHaveTextContent("Não foi possível conectar à API.");
+    expect(alerta).toHaveTextContent(MENSAGEM_SEM_CONEXAO);
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 
     fireEvent.click(

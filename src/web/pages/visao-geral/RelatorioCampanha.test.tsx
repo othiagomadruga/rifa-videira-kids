@@ -15,7 +15,7 @@ import {
   nomeDoArquivoRelatorio,
   type TipoRelatorio,
 } from "../../../shared/contracts/relatorio";
-import { LIBERAR_ARQUIVO_DEPOIS_MS } from "../../lib/api";
+import { LIBERAR_ARQUIVO_DEPOIS_MS, MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { espiarDownloads } from "../../test/download";
 import {
   ADMIN_DE_TESTE,
@@ -414,14 +414,12 @@ describe("CA3: erros, foco e região viva", () => {
 
     api.relatorio = () => Promise.reject(new TypeError("Failed to fetch"));
     clicar(botaoBaixar());
-    expect(
-      await cartao().findByText("Não foi possível conectar à API."),
-    ).toBeInTheDocument();
+    expect(await cartao().findByText(MENSAGEM_SEM_CONEXAO)).toBeInTheDocument();
     expect(
       cartao().getByRole("button", { name: "Tentar de novo" }),
     ).toBeInTheDocument();
     expect(regiaoViva()).toHaveTextContent(
-      "Não foi possível baixar o relatório. Não foi possível conectar à API.",
+      `Não foi possível baixar o relatório. ${MENSAGEM_SEM_CONEXAO}`,
     );
   });
 

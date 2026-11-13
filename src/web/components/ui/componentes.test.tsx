@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
+import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import {
   AppShell,
   Badge,
@@ -152,14 +153,14 @@ describe("estados: vazio, erro e carregando", () => {
     const aoTentarDeNovo = vi.fn();
     render(
       <ErrorState
-        mensagem="Não foi possível conectar à API."
+        mensagem={MENSAGEM_SEM_CONEXAO}
         aoTentarDeNovo={aoTentarDeNovo}
       />,
     );
 
     const alerta = screen.getByRole("alert");
     expect(alerta).toHaveTextContent("Não foi possível carregar os dados.");
-    expect(alerta).toHaveTextContent("Não foi possível conectar à API.");
+    expect(alerta).toHaveTextContent(MENSAGEM_SEM_CONEXAO);
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
     );
