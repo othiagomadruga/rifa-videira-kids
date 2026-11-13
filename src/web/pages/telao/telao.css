@@ -349,8 +349,9 @@
 
 /*
  * Nome longo quebra em até duas linhas (o resto vira reticências): a lista cabe sempre. A linha é justa (1 a 1,05) e o
- * overflow: hidden do corte cortaria as pernas do g, p, q, j e y e o acento de uma maiúscula na 1ª linha ("Ágape"):
- * o padding em cima e embaixo dá esse lugar dentro da caixa (RIFA-050, revisão).
+ * overflow: hidden do corte cortaria as pernas do g, p, q, j e y ("Ágape", "Jequié") e o acento de uma maiúscula na
+ * 1ª linha: o padding dá esse lugar dentro da caixa, mais embaixo, onde as pernas são comuns (RIFA-050, revisão). Com
+ * o "↑ subiu" embaixo de um nome de 2 linhas, cabe na linha em 1920×1080 e em 1280×720 (o ícone do chip tem 1em).
  */
 .telao__nome {
   display: -webkit-box;
@@ -359,7 +360,7 @@
   line-clamp: 2;
   overflow: hidden;
   min-width: 0;
-  padding-block: 0.12em;
+  padding-block: 0.05em 0.12em;
   font-size: 1.1em;
   font-weight: var(--peso-negrito);
   line-height: 1.05;
@@ -383,6 +384,12 @@
   font-weight: 800;
   line-height: 1.1;
   white-space: nowrap;
+}
+
+/* O ícone na altura da letra (o padrão, 1,25em, deixaria o chip mais alto que o texto e sem lugar embaixo do nome). */
+.telao__subiu .ui-icone {
+  width: 1em;
+  height: 1em;
 }
 
 .telao__subiu-texto {

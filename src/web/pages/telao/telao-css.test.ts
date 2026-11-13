@@ -266,10 +266,16 @@ describe("RIFA-050 (P2.1): o telão escala pela quantidade de itens (data-itens)
     );
     expect(valorDe(".telao__nome", "line-clamp")).toBe("2");
     expect(valorDe(".telao__nome", "-webkit-line-clamp")).toBe("2");
-    // Com a linha justa (1 a 1,05), o overflow: hidden do corte cortaria as pernas do g, p, q, j, y e o acento de
-    // uma maiúscula na 1ª linha ("Ágape"): o padding em cima e embaixo dá esse lugar dentro da caixa (revisão).
+    // Com a linha justa (1 a 1,05), o overflow: hidden do corte cortaria as pernas do g, p, q, j, y ("Ágape") e o
+    // acento de uma maiúscula na 1ª linha: o padding dá esse lugar dentro da caixa, mais embaixo (revisão).
     expect(valorDe(".telao__nome", "overflow")).toBe("hidden");
-    expect(emDe(".telao__nome", "padding-block")).toBeGreaterThanOrEqual(0.1);
+    const [emCima, embaixo] = (valorDe(".telao__nome", "padding-block") ?? "")
+      .split(" ")
+      .map((valor) => Number(/^([\d.]+)em$/.exec(valor)?.[1] ?? 0));
+    expect(emCima).toBeGreaterThanOrEqual(0.04);
+    expect(embaixo).toBeGreaterThanOrEqual(0.1);
+    // O chip embaixo de um nome de 2 linhas só cabe com o ícone na altura da letra.
+    expect(valorDe(".telao__subiu .ui-icone", "height")).toBe("1em");
     expect(
       REGRAS.filter(
         ({ seletores, declaracoes }) =>
