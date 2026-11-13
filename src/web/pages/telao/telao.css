@@ -2,7 +2,10 @@
  * Telão (/telao): ocupa exatamente a janela, sem rolagem em 1920×1080 e em 1280×720. Tamanhos em em a
  * partir de --telao-texto-base (tokens.css: ~46 px em 1920×1080, acompanha a largura e a altura). O
  * font-size fica só nos textos (os blocos herdam o do .telao), então cada em vale o texto-base: nenhum
- * texto abaixo de 0,9em (≥ 40 px em 1920×1080) e as posições com 1,5em (~69 px). telao-css.test.ts confere.
+ * texto abaixo de 0,9em (≥ 40 px em 1920×1080) e as posições com 1,5em (~69 px) ou mais. telao-css.test.ts confere.
+ * RIFA-050 (A-24): a disputa ocupa a altura que sobra e a lista escala pela quantidade de itens da maior divisão
+ * (data-itens): até 3 (o limite público), nome e % com 1,45em (~67 px) e o 1º com 1,6em; até 5, 1,25em; acima, os
+ * tamanhos de base. Com os dados da demonstração, a disputa ocupa mais de 60% da altura (capturas).
  * Cores da Videira (RIFA-020): fundo marinho, verde-água nos títulos e no pódio, o amarelo do Kids no 1º
  * lugar e na meta batida; texto com 7:1 ou mais (tokens.test.ts).
  */
@@ -98,18 +101,23 @@
   font-size: 1em;
 }
 
-/* O lugar da fase vale desde o início: 1,5em × 1,1 + 0,9em × 1,2 (as duas linhas). */
+/*
+ * O lugar da fase vale desde o início: 2em × 1,1 + 0,9em × 1,2 (as duas linhas). "Dia 12 de 24" é o herói do topo
+ * (RIFA-050), na fonte dos títulos.
+ */
 .telao__fase {
   display: grid;
   align-content: center;
-  min-height: 2.73em;
+  min-height: 3.28em;
   text-align: center;
 }
 
 .telao__fase-destaque {
-  font-size: 1.5em;
+  font-family: var(--fonte-titulo);
+  font-size: 2em;
   font-weight: 800;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
 .telao__fase-detalhe {
@@ -163,13 +171,30 @@
   min-height: 0;
 }
 
-/* Carregando, falha, sem campanha e antes da primeira venda: uma mensagem no meio da tela. */
+/* Falha, sem campanha e antes da primeira venda: uma mensagem no meio da tela. */
 .telao__mensagem {
   display: grid;
   place-content: center;
   justify-items: center;
   gap: 0.4em;
   text-align: center;
+}
+
+/* A falha da primeira carga: o ícone (sem conexão) num círculo, no amarelo suave do alerta do tema. */
+.telao__mensagem-icone {
+  display: grid;
+  place-items: center;
+  width: 2.6em;
+  height: 2.6em;
+  margin-bottom: 0.2em;
+  border-radius: 50%;
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+}
+
+.telao__mensagem-icone .ui-icone {
+  width: 1.4em;
+  height: 1.4em;
 }
 
 .telao__mensagem-titulo {
@@ -183,10 +208,10 @@
   color: var(--cor-texto-suave);
 }
 
-/* A disputa: o período e as duas divisões lado a lado, no meio da altura que sobra (no topo, se não couber). */
+/* A disputa: o período e as duas divisões lado a lado, que esticam até o fim da altura que sobra (RIFA-050). */
 .telao__disputa {
   display: grid;
-  align-content: safe center;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.3em;
   min-height: 0;
 }
@@ -204,9 +229,10 @@
   min-height: 0;
 }
 
+/* Cada divisão: o título, a lista (que estica) e, se houver, a linha "e mais". */
 .telao__divisao {
   display: grid;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.3em;
   min-width: 0;
   min-height: 0;
@@ -235,23 +261,45 @@
   color: var(--cor-texto-suave);
 }
 
+/*
+ * As linhas dividem a altura da lista. Acima de 5 itens (a lista mostra 4 e a linha "e mais"), 4 linhas iguais; até 5,
+ * 5 linhas iguais; até 3 (o limite público), 3 linhas, e a do 1º lugar com 1,2× a altura das outras. A grade é a
+ * mesma nas duas divisões: as linhas ficam alinhadas mesmo quando uma tem menos itens.
+ */
 .telao__lista {
   display: grid;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
   gap: 0.25em;
+  min-height: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.telao__disputa[data-itens="4"] .telao__lista,
+.telao__disputa[data-itens="5"] .telao__lista {
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: 0.2em;
+}
+
+.telao__disputa[data-itens="1"] .telao__lista,
+.telao__disputa[data-itens="2"] .telao__lista,
+.telao__disputa[data-itens="3"] .telao__lista {
+  grid-template-rows: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
+}
+
+/* overflow: clip: as partículas da comemoração não passam da borda do item. */
 .telao__item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.4em;
-  padding: 0.15em 0.5em 0.15em 0.15em;
+  min-height: 0;
+  padding: 0.1em 0.5em 0.1em 0.15em;
   border: 2px solid var(--cor-borda);
   border-radius: 0.4em;
   background: var(--cor-superficie);
+  overflow: clip;
 }
 
 /* Pódio (até o 3º lugar, empatados inclusive): borda e selo no verde-água da Videira. */
@@ -259,9 +307,9 @@
   border-color: var(--cor-primaria);
 }
 
-/* 1º lugar: o amarelo do Kids (comemoração), com o número em marinho. */
+/* 1º lugar: o amarelo do Kids (comemoração), com o número em marinho, e a borda de 3 px (pódio). */
 .telao__item[data-primeiro] {
-  border-color: var(--cor-comemoracao);
+  border: 3px solid var(--cor-comemoracao);
 }
 
 .telao__posicao {
@@ -286,6 +334,14 @@
   color: var(--cor-sobre-comemoracao);
 }
 
+/* O nome e, embaixo dele (até 3 itens) ou ao lado (mais itens, só a seta), o "↑ subiu". */
+.telao__celula {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  min-width: 0;
+}
+
 /* Nome longo quebra em até duas linhas (o resto vira reticências): a lista cabe sempre. */
 .telao__nome {
   display: -webkit-box;
@@ -293,16 +349,41 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
+  min-width: 0;
   font-size: 1.1em;
   font-weight: var(--peso-negrito);
   line-height: 1.05;
   overflow-wrap: anywhere;
 }
 
-/* O % numa pílula (espaço reservado sempre); a meta batida pinta a pílula de amarelo. */
+/*
+ * Quem subiu na última mudança de ordem (useSubiu): o chip no verde-água do telão, que fica até a próxima mudança.
+ * Só visual (aria-hidden). Com mais de 3 itens, só a seta, ao lado do nome (não há altura para o chip embaixo).
+ */
+.telao__subiu {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.15em;
+  padding: 0 0.3em;
+  border-radius: var(--raio-pilula);
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+  font-size: 0.9em;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.telao__subiu-texto {
+  display: none;
+}
+
+/* O % numa pílula (espaço reservado sempre), na fonte dos títulos. */
 .telao__percentual {
   padding: 0 0.3em;
   border-radius: var(--raio-pilula);
+  font-family: var(--fonte-titulo);
   font-size: 1.1em;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -310,9 +391,74 @@
   white-space: nowrap;
 }
 
-.telao__item[data-meta-batida] .telao__percentual {
+/*
+ * A meta batida pinta a pílula de amarelo quando o número termina de contar (enquanto conta, há um .mov-contagem
+ * dentro): a comemoração chega junto com o 100%. Sem :has, o navegador antigo pinta antes, como era.
+ */
+.telao__item[data-meta-batida] .telao__percentual:not(:has(.mov-contagem)) {
   background: var(--cor-comemoracao);
   color: var(--cor-sobre-comemoracao);
+}
+
+/*
+ * Até 5 itens: letras maiores (o lugar sobra). 1,2em (e o nome com a linha justa) é o que cabe em 5 linhas com
+ * nomes de 2 linhas, sem corte, em 16:9.
+ */
+.telao__disputa[data-itens="4"] .telao__nome,
+.telao__disputa[data-itens="4"] .telao__percentual,
+.telao__disputa[data-itens="5"] .telao__nome,
+.telao__disputa[data-itens="5"] .telao__percentual {
+  font-size: 1.2em;
+}
+
+/* Até 3 itens (o limite público): a posição com 1,8em, nome e % com 1,45em e o 1º lugar com 1,6em. */
+.telao__disputa[data-itens="1"] .telao__posicao,
+.telao__disputa[data-itens="2"] .telao__posicao,
+.telao__disputa[data-itens="3"] .telao__posicao {
+  min-width: 1.9em;
+  font-size: 1.8em;
+}
+
+.telao__disputa[data-itens="1"] .telao__nome,
+.telao__disputa[data-itens="1"] .telao__percentual,
+.telao__disputa[data-itens="2"] .telao__nome,
+.telao__disputa[data-itens="2"] .telao__percentual,
+.telao__disputa[data-itens="3"] .telao__nome,
+.telao__disputa[data-itens="3"] .telao__percentual {
+  font-size: 1.45em;
+}
+
+/* Até 5 itens, o nome de 2 linhas com a linha justa (cabe com o "↑ subiu" embaixo, ou em 5 linhas). */
+.telao__disputa[data-itens="1"] .telao__nome,
+.telao__disputa[data-itens="2"] .telao__nome,
+.telao__disputa[data-itens="3"] .telao__nome,
+.telao__disputa[data-itens="4"] .telao__nome,
+.telao__disputa[data-itens="5"] .telao__nome {
+  line-height: 1;
+}
+
+.telao__disputa[data-itens="1"] .telao__item[data-primeiro] .telao__nome,
+.telao__disputa[data-itens="1"] .telao__item[data-primeiro] .telao__percentual,
+.telao__disputa[data-itens="2"] .telao__item[data-primeiro] .telao__nome,
+.telao__disputa[data-itens="2"] .telao__item[data-primeiro] .telao__percentual,
+.telao__disputa[data-itens="3"] .telao__item[data-primeiro] .telao__nome,
+.telao__disputa[data-itens="3"] .telao__item[data-primeiro] .telao__percentual {
+  font-size: 1.6em;
+}
+
+/* Até 3 itens, o "↑ subiu" inteiro, embaixo do nome (a linha tem altura para ele). */
+.telao__disputa[data-itens="1"] .telao__celula,
+.telao__disputa[data-itens="2"] .telao__celula,
+.telao__disputa[data-itens="3"] .telao__celula {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.telao__disputa[data-itens="1"] .telao__subiu-texto,
+.telao__disputa[data-itens="2"] .telao__subiu-texto,
+.telao__disputa[data-itens="3"] .telao__subiu-texto {
+  display: inline;
 }
 
 .telao__resto {
@@ -322,6 +468,7 @@
 }
 
 .telao__sem-vendas {
+  align-self: start;
   padding: 0.4em;
   border: 2px dashed var(--cor-borda-forte);
   border-radius: 0.4em;
@@ -330,9 +477,29 @@
 }
 
 /*
+ * Esqueleto do carregando (RIFA-050): o período, o título de cada divisão e as 3 linhas, na grade da disputa
+ * (data-itens="3"); o brilho é o .mov-esqueleto do tema, no tom do telão.
+ */
+.telao__esqueleto-janela {
+  justify-self: center;
+  width: 9em;
+  height: 1.2em;
+}
+
+.telao__esqueleto-topo {
+  width: 40%;
+  height: 1.5em;
+}
+
+.telao__esqueleto-item {
+  border-radius: 0.4em;
+}
+
+/*
  * Movimento (sem prefers-reduced-motion), só quando os dados mudam: o que chega com eles aparece com um fade
- * curto, os itens entram em sequência e deslizam ao trocar de posição (useListaAnimada) e a meta batida pulsa
- * 2 vezes. A única coisa contínua é o fundo ambiente, muito lento (60 s e 75 s).
+ * curto, os itens entram em sequência e deslizam ao trocar de posição (useListaAnimada), a meta batida pulsa 2 vezes
+ * (e comemora, quando passa a ser batida: useComemoracao) e o "↑ subiu" aparece com um fade. A única coisa contínua é
+ * o fundo ambiente, muito lento (60 s e 75 s), além do brilho do esqueleto no carregando.
  */
 @media (prefers-reduced-motion: no-preference) {
   .telao__ambiente::before {
@@ -349,6 +516,7 @@
   .telao__divisao-topo,
   .telao__resto,
   .telao__sem-vendas,
+  .telao__subiu,
   .telao__mensagem {
     animation: ui-surgir var(--duracao-lenta) var(--curva-suave) backwards;
   }
