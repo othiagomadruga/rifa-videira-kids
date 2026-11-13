@@ -498,6 +498,15 @@
   border-radius: 0.4em;
 }
 
+/* Nas cores forçadas, o fundo some: a borda mostra o desenho (como o Esqueleto da P1). */
+@media (forced-colors: active) {
+  .telao__esqueleto-janela,
+  .telao__esqueleto-topo,
+  .telao__esqueleto-item {
+    border: 1px solid GrayText;
+  }
+}
+
 /*
  * Movimento (sem prefers-reduced-motion), só quando os dados mudam: o que chega com eles aparece com um fade
  * curto, os itens entram em sequência e deslizam ao trocar de posição (useListaAnimada), a meta batida pulsa 2 vezes

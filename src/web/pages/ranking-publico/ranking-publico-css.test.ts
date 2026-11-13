@@ -191,6 +191,12 @@ describe("RIFA-050: o CSS do ranking público", () => {
     );
   });
 
+  it("o esqueleto aparece nas cores forçadas (a borda, já que o fundo some)", () => {
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)\s*\{\s*\.ranking-publico__esqueleto \.mov-esqueleto\s*\{\s*border: 1px solid GrayText;/,
+    );
+  });
+
   it("a fase e o % na fonte dos títulos", () => {
     expect(valorDe(".ranking-publico__fase-destaque", "font-family")).toBe(
       "var(--fonte-titulo)",

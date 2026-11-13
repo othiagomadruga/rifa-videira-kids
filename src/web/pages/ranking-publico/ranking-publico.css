@@ -39,6 +39,13 @@
   border-radius: var(--raio-3);
 }
 
+/* Nas cores forçadas, o fundo some: a borda mostra o desenho (como o Esqueleto da P1). */
+@media (forced-colors: active) {
+  .ranking-publico__esqueleto .mov-esqueleto {
+    border: 1px solid GrayText;
+  }
+}
+
 /*
  * Onde a campanha está: a faixa no roxo suave da marca, com "Dia 12 de 24" no roxo forte (RIFA-050: o topo das telas
  * abertas já é o degradê forte; a faixa num tom claro não repete o degradê logo abaixo dele). Pares de contraste do

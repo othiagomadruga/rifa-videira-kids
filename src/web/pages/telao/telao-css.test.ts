@@ -281,6 +281,10 @@ describe("RIFA-050 (P2.1): o telão escala pela quantidade de itens (data-itens)
     expect(valorDe(".telao__esqueleto-item", "height")).toBeUndefined();
     expect(emDe(".telao__esqueleto-janela", "height")).toBe(1.2);
     expect(emDe(".telao__esqueleto-topo", "height")).toBe(1.5);
+    // Nas cores forçadas (o fundo some), a borda mostra o desenho.
+    expect(telaoCss).toMatch(
+      /@media \(forced-colors: active\)\s*\{\s*\.telao__esqueleto-janela,\s*\.telao__esqueleto-topo,\s*\.telao__esqueleto-item\s*\{\s*border: 1px solid GrayText;/,
+    );
   });
 });
 
