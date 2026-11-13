@@ -89,6 +89,33 @@ describe("Card e PageHeader", () => {
     expect(screen.getByText("Conteúdo do cartão")).toBeInTheDocument();
   });
 
+  it("Card com icone e variante destaque (RIFA-049): o ícone só visual dentro do título, cujo nome não muda", () => {
+    const { container } = render(
+      <Card titulo="Hoje" icone="calendario" variante="destaque">
+        <p>Conteúdo</p>
+      </Card>,
+    );
+    const titulo = screen.getByRole("heading", { level: 2, name: "Hoje" });
+    const icone = titulo.querySelector("svg");
+    expect(icone).toHaveAttribute("data-icone", "calendario");
+    expect(icone).toHaveAttribute("aria-hidden", "true");
+    expect(titulo).toHaveTextContent(/^Hoje$/);
+    expect(container.firstElementChild).toHaveClass(
+      "ui-card",
+      "ui-card--destaque",
+    );
+  });
+
+  it("Card sem as props novas: igual a antes (sem ícone, sem variante)", () => {
+    const { container } = render(
+      <Card titulo="Ritmo de vendas" className="extra">
+        <p>Conteúdo</p>
+      </Card>,
+    );
+    expect(container.firstElementChild?.className).toBe("ui-card extra");
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
   it("PageHeader mostra o h1, a descrição e muda o título da aba", () => {
     render(
       <PageHeader
@@ -300,6 +327,67 @@ describe("layouts", () => {
     expect(
       screen.getByRole("link", { name: "Pular para o conteúdo" }),
     ).toHaveAttribute("href", "#conteudo");
+  });
+
+  it("AppShell com ícones (RIFA-049): o ícone só visual dentro do link; o nome e o aria-current não mudam", () => {
+    render(
+      <MemoryRouter initialEntries={["/area/b"]}>
+        <AppShell
+          area="Coordenação"
+          itens={[
+            {
+              para: "/area",
+              rotulo: "Início",
+              exato: true,
+              icone: "visao-geral",
+            },
+            { para: "/area/b", rotulo: "Tela B", icone: "pedidos" },
+            { para: "/area/c", rotulo: "Tela C" },
+          ]}
+        >
+          <p>Conteúdo da tela</p>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    const menu = screen.getByRole("navigation", { name: "Coordenação" });
+    const atual = within(menu).getByRole("link", { name: "Tela B" });
+    expect(atual).toHaveAttribute("aria-current", "page");
+    expect(atual.querySelector("svg")).toHaveAttribute("data-icone", "pedidos");
+    expect(atual.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(atual).toHaveTextContent(/^Tela B$/);
+    expect(
+      within(menu).getByRole("link", { name: "Início" }).querySelector("svg"),
+    ).toHaveAttribute("data-icone", "visao-geral");
+    // Sem ícone, o link de antes.
+    expect(
+      within(menu).getByRole("link", { name: "Tela C" }).querySelector("svg"),
+    ).toBeNull();
+  });
+
+  it("AppShell: o véu do menu do celular é só visual, sem foco, e o toque nele fecha o menu", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/area"]}>
+        <AppShell
+          area="Coordenação"
+          itens={[{ para: "/area", rotulo: "Início" }]}
+        >
+          <p>Conteúdo da tela</p>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    const shell = container.querySelector(".ui-app-shell");
+    const veu = container.querySelector(".ui-app-shell__veu") as HTMLElement;
+    expect(veu).toHaveAttribute("aria-hidden", "true");
+    expect(veu).not.toHaveAttribute("tabindex");
+    expect(veu).toBeEmptyDOMElement();
+
+    const botao = screen.getByRole("button", { name: "Menu" });
+    fireEvent.click(botao);
+    expect(shell).toHaveAttribute("data-menu-aberto");
+    expect(botao.querySelector("svg")).toHaveAttribute("data-icone", "fechar");
+    fireEvent.pointerDown(veu);
+    expect(shell).not.toHaveAttribute("data-menu-aberto");
+    expect(botao.querySelector("svg")).toHaveAttribute("data-icone", "menu");
   });
 
   it("PublicShell mostra a marca e o conteúdo, sem navegação", () => {

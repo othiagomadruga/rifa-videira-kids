@@ -65,6 +65,8 @@
   --cor-foco: #3f6fae;
   /* Selo claro onde o logo da Videira fica em fundo escuro (o logo foi feito para fundo branco) */
   --cor-selo-marca: #ffffff;
+  /* Fundo suave da marca no topo da barra lateral da coordenação (texto e texto suave por cima: AA) */
+  --cor-lateral-topo: #e4f1f1;
 
   /* Comemoração (amarelo do Kids): 1º lugar e meta batida, sempre com texto marinho em cima */
   --cor-comemoracao: var(--kids-amarelo);

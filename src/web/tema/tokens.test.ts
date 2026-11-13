@@ -160,6 +160,9 @@ const TEXTO_CLARO: [string, string, number][] = [
   ["--cor-perigo", "--cor-perigo-suave", 4.5],
   ["--cor-perigo", "--cor-superficie", 4.5],
   ["--cor-sobre-primaria", "--cor-perigo-forte", 4.5],
+  // RIFA-049: o topo da barra lateral (a marca e "Coordenação") no fundo suave da marca.
+  ["--cor-texto", "--cor-lateral-topo", 7],
+  ["--cor-texto-suave", "--cor-lateral-topo", 4.5],
 ];
 
 const BORDAS_CLARO: [string, string][] = [

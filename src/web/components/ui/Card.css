@@ -23,6 +23,17 @@
   overflow-wrap: anywhere;
 }
 
+/* O ícone do título (RIFA-049): o roxo da marca, na linha do texto, com um respiro. */
+.ui-card__icone {
+  margin-right: var(--espaco-2);
+  color: var(--cor-primaria);
+}
+
+/* Destaque (RIFA-049): a borda roxa de 2 px (a do destaque da /minha). */
+.ui-card--destaque {
+  border: 2px solid var(--cor-primaria);
+}
+
 .ui-card__acoes {
   display: flex;
   flex-wrap: wrap;

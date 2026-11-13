@@ -500,3 +500,70 @@ describe("PublicShell: o topo na faixa da marca", () => {
     expect(selo.padding).toBe("var(--espaco-1) var(--espaco-2)");
   });
 });
+
+// RIFA-049 (P1.8, A-01 e A-20): a marca na coordenação. O véu atrás do menu do celular é só cor e opacidade (nada de
+// desfoque nem de movimento fora do no-preference), fixo na janela (não cria rolagem) e some no computador; o traço do
+// título é decorativo (::before, sem texto).
+describe("AppShell e PageHeader: o véu do menu e o traço da marca", () => {
+  const appShell = declaracoes(lerArquivo("./AppShell.css"));
+  const doVeu = appShell.filter(({ blocos }) =>
+    blocos.at(-1)!.includes("ui-app-shell__veu"),
+  );
+
+  it("o véu: fixo, cor do texto com opacidade, sem desfoque; no computador, nenhum", () => {
+    const aberto = Object.fromEntries(
+      doVeu
+        .filter(({ blocos }) => blocos.length === 1)
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+    expect(aberto).toMatchObject({
+      position: "fixed",
+      inset: "0",
+      background: "var(--cor-texto)",
+      opacity: "0.4",
+    });
+    expect(
+      regra(
+        lerArquivo("./AppShell.css"),
+        COMPUTADOR,
+        ".ui-app-shell[data-menu-aberto] .ui-app-shell__veu",
+      ),
+    ).toEqual({ display: "none" });
+    for (const { propriedade, valor } of doVeu) {
+      expect(propriedade).not.toMatch(/filter|transform|transition/);
+      expect(valor).not.toMatch(/blur/);
+    }
+    expect(lerArquivo("./AppShell.css")).not.toMatch(/backdrop-filter/);
+    // A animação do véu é só o fade (ui-surgir), dentro do no-preference.
+    const animacoes = doVeu.filter(
+      ({ propriedade }) => propriedade === "animation",
+    );
+    expect(animacoes).toHaveLength(1);
+    expect(animacoes[0].blocos[0]).toBe(
+      "@media (prefers-reduced-motion: no-preference)",
+    );
+    expect(animacoes[0].valor).toMatch(/^ui-surgir /);
+  });
+
+  it("o topo da barra lateral no fundo suave da marca (o token novo)", () => {
+    expect(
+      regra(lerArquivo("./AppShell.css"), COMPUTADOR, ".ui-app-shell__topo")
+        .background,
+    ).toMatch(/var\(--cor-lateral-topo\)/);
+  });
+
+  it("o traço do título: decorativo (::before vazio) com o degradê da marca, fora do <h1>", () => {
+    const traco = Object.fromEntries(
+      declaracoes(lerArquivo("./PageHeader.css"))
+        .filter(
+          ({ blocos }) => blocos.at(-1) === ".ui-page-header__textos::before",
+        )
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+    expect(traco).toMatchObject({
+      content: '""',
+      background: "var(--gradiente-marca)",
+    });
+    expect(traco.width).toMatch(/rem$/);
+  });
+});
