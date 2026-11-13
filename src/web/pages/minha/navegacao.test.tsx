@@ -33,7 +33,6 @@ import {
   visaoDe,
   type ApiFalsa,
 } from "./teste-apoio";
-import { COMPLEMENTO_RESERVADO } from "./MinhaLayout";
 import { DICAS_DA_MOLDURA } from "./textos-moldura";
 
 /** Token fictício no formato do contrato (43 caracteres base64url). */
@@ -301,9 +300,12 @@ describe("CA1: /minha sem sessão segue o fluxo da coordenação", () => {
     if (!topo) throw new Error("sem a barra do topo");
     const complemento = () =>
       topo.querySelector(".ui-marca__complemento")?.textContent;
-    // Um espaço que não quebra (o leitor de tela não lê) no lugar do papel, e ainda sem o "Sair".
-    expect(complemento()).toBe(COMPLEMENTO_RESERVADO);
-    expect(COMPLEMENTO_RESERVADO).toBe("\u00a0");
+    // Ainda sem o papel e sem o "Sair": o lugar da linha do papel é reservado só no CSS (minha-css.test.ts), sem
+    // texto de mentira na marca (nem um espaço) para o leitor de tela encontrar.
+    expect(topo.querySelector(".ui-marca__complemento")).toBeNull();
+    expect(topo.querySelector(".ui-marca__textos")?.textContent).toBe(
+      "Rifa Videira Kids",
+    );
     expect(within(topo).queryByRole("button")).toBeNull();
     await waitFor(() => expect(responder).not.toBeNull());
 

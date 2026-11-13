@@ -23,6 +23,13 @@
   --marca-altura: 1.75rem;
 }
 
+/* A linha do papel ("Líder") reservada desde o primeiro quadro (RIFA-051, CLS): enquanto a sessão não chega, a marca
+   tem só o nome, mas já com a altura das duas linhas (o nome e o papel em --texto-sm, com o line-height 1.2 da
+   marca). Só no CSS: nenhum texto de mentira (um espaço) para o leitor de tela encontrar. O papel chega e nada pula. */
+.minha-moldura__topo .ui-marca__textos {
+  min-height: calc(1.2em + 1.2 * var(--texto-sm));
+}
+
 .minha-moldura__limite {
   width: 100%;
   max-width: var(--largura-conteudo);
@@ -30,7 +37,7 @@
 }
 
 /* A altura do "Sair" desde o primeiro quadro (RIFA-051, CLS): o botão só aparece quando a sessão chega, e a barra
-   não cresce nessa hora (a linha do papel na marca também fica reservada, em MinhaLayout.tsx). */
+   não cresce nessa hora (a linha do papel na marca também fica reservada, acima). */
 .minha-moldura__barra {
   display: flex;
   flex-wrap: wrap;

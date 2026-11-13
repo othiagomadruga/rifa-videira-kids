@@ -199,6 +199,12 @@ describe("RIFA-051: nada pula e nada vaza", () => {
     );
   });
 
+  it("a linha do papel na marca reservada só no CSS: a altura do nome e do papel (line-height 1.2), sem texto de mentira", () => {
+    expect(regra(molduraCss, ".minha-moldura__topo .ui-marca__textos")).toMatch(
+      /min-height:\s*calc\(1\.2em \+ 1\.2 \* var\(--texto-sm\)\);/,
+    );
+  });
+
   it("o esqueleto dos cartões de cima usa a mesma grade dos cartões que chegam", () => {
     const colunas = (bloco: string) =>
       /grid-template-columns:\s*([^;]+);/.exec(bloco)?.[1];
