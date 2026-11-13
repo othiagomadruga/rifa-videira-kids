@@ -74,10 +74,31 @@
   color: var(--cor-sobre-primaria);
 }
 
+/* Ação destrutiva leve (RIFA-049, A-15): o vermelho do perigo no texto, sem fundo; no mouse, o fundo suave dele. */
+.ui-button--perigo-discreto {
+  background: transparent;
+  color: var(--cor-perigo);
+}
+
+.ui-button--perigo-discreto:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--cor-perigo-suave);
+  color: var(--cor-perigo);
+}
+
+/*
+ * Pequeno: 36 px de altura no mouse; numa tela de toque (o dedo, pointer: coarse), os 44 px do alvo de toque
+ * (RIFA-049, A-14: nas linhas de Pedidos e da Conferência).
+ */
 .ui-button--pequeno {
   min-height: 2.25rem;
   padding: var(--espaco-1) var(--espaco-3);
   font-size: var(--texto-sm);
+}
+
+@media (pointer: coarse) {
+  .ui-button--pequeno {
+    min-height: var(--alvo-toque);
+  }
 }
 
 .ui-button--largura-total {

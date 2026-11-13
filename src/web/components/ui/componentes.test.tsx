@@ -41,6 +41,19 @@ describe("Button", () => {
     expect(excluir).toBeDisabled();
   });
 
+  it("perigo-discreto (RIFA-049): a classe da variante, com as outras opções", () => {
+    render(
+      <Button variante="perigo-discreto" tamanho="pequeno">
+        Excluir
+      </Button>,
+    );
+    expect(screen.getByRole("button", { name: "Excluir" })).toHaveClass(
+      "ui-button",
+      "ui-button--perigo-discreto",
+      "ui-button--pequeno",
+    );
+  });
+
   it("classesBotao dá cara de botão a links", () => {
     expect(classesBotao({ variante: "secundario" }, "extra")).toBe(
       "ui-button ui-button--secundario extra",

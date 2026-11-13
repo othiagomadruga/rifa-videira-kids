@@ -173,8 +173,8 @@ describe("Button: o indisponível não reage ao mouse (RIFA-045)", () => {
     seletor.includes(':not([aria-disabled="true"])');
 
   it('com aria-disabled="true" (ex.: "Baixando…", "Carregar mais" carregando), nem o passar do mouse nem o pressionar mudam o botão', () => {
-    // Os quatro :hover das variantes, o subir 1 px no mouse e o afundar ao pressionar.
-    expect(seletores.length).toBeGreaterThanOrEqual(6);
+    // Os cinco :hover das variantes, o subir 1 px no mouse e o afundar ao pressionar.
+    expect(seletores.length).toBeGreaterThanOrEqual(7);
     expect(seletores.filter((seletor) => !pulaOIndisponivel(seletor))).toEqual(
       [],
     );
@@ -209,7 +209,13 @@ describe("Button: o indisponível (aria-disabled) tem a cara do disabled numa re
 
   it('.ui-button[aria-disabled="true"]: a opacidade e o cursor do :disabled, em todas as variantes, só com o Button.css', () => {
     const button = lerCss("components/ui/Button.css");
-    for (const variante of ["primario", "secundario", "discreto", "perigo"]) {
+    for (const variante of [
+      "primario",
+      "secundario",
+      "discreto",
+      "perigo",
+      "perigo-discreto",
+    ]) {
       expect(
         caraDeIndisponivel(
           indisponivel(`ui-button ui-button--${variante}`),
@@ -406,5 +412,59 @@ describe("Estados: a falha de conexão sem vermelho e o vazio sem tracejado", ()
     );
     expect(vazio.border).toBe("1px solid var(--cor-borda)");
     expect(lerArquivo("./Estados.css")).not.toMatch(/dashed/);
+  });
+});
+
+// RIFA-049 (P1.4, A-14 e A-15): o botão pequeno tem o alvo de toque de 44 px numa tela de toque (o mouse continua com
+// 36 px), e a variante perigo-discreto (ação destrutiva leve) segue as regras das outras.
+describe("Button: o pequeno com 44 px no toque e a variante perigo-discreto", () => {
+  const button = declaracoes(lerArquivo("./Button.css"));
+  const daRegra = (media: string | null, seletor: string) =>
+    Object.fromEntries(
+      button
+        .filter(
+          ({ blocos }) =>
+            blocos.length === (media ? 2 : 1) &&
+            (media === null || blocos[0] === media) &&
+            blocos
+              .at(-1)!
+              .split(/\s*,\s*/)
+              .includes(seletor),
+        )
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+
+  it("no toque (pointer: coarse), o pequeno tem o alvo de toque; no mouse, 36 px", () => {
+    expect(daRegra(null, ".ui-button--pequeno")["min-height"]).toBe("2.25rem");
+    expect(daRegra("@media (pointer: coarse)", ".ui-button--pequeno")).toEqual({
+      "min-height": "var(--alvo-toque)",
+    });
+    // O alvo de toque é 44 px (2,75rem).
+    expect(lerArquivo("../../tema/tokens.css")).toMatch(
+      /--alvo-toque:\s*2\.75rem;/,
+    );
+  });
+
+  it("perigo-discreto: texto do perigo sem fundo; o hover pula o indisponível e não repete a regra dele", () => {
+    expect(daRegra(null, ".ui-button--perigo-discreto")).toEqual({
+      background: "transparent",
+      color: "var(--cor-perigo)",
+    });
+    const hover = daRegra(
+      null,
+      '.ui-button--perigo-discreto:hover:not(:disabled):not([aria-disabled="true"])',
+    );
+    expect(hover).toEqual({
+      background: "var(--cor-perigo-suave)",
+      color: "var(--cor-perigo)",
+    });
+    // Nenhuma regra própria do indisponível nesta variante (a de .ui-button[aria-disabled="true"] vale para todas).
+    expect(
+      button.filter(({ blocos }) =>
+        /perigo-discreto[^,]*\[aria-disabled="true"\](?!\))/.test(
+          blocos.at(-1)!,
+        ),
+      ),
+    ).toEqual([]);
   });
 });
