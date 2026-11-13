@@ -2,6 +2,7 @@
 // desenho, que gera elementos do React com o mesmo texto (textContent igual ao da API, caractere por caractere).
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { lerCss } from "../../test/indisponivel";
 import { analisarWhatsApp, TextoDoWhatsApp, type Trecho } from "./formatacao";
 import { INSTANTES, respostaDoBumbo } from "./teste-apoio";
 
@@ -131,5 +132,25 @@ describe("TextoDoWhatsApp: o desenho com o mesmo texto", () => {
     ]);
     for (const marca of marcas)
       expect(marca).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("um <script> no texto vira texto (nada roda nem some)", () => {
+    const mensagem = "*Aviso:* <script>alert(1)</script> _ok_";
+    const pre = desenhar(mensagem);
+    expect(pre.textContent).toBe(mensagem);
+    expect(pre.querySelector("script")).toBeNull();
+    expect(pre.innerHTML).toContain("&lt;script&gt;");
+  });
+
+  it("as marcas somem da vista com fonte zero, nunca com display: none (a cópia manual da prévia leva as marcas)", () => {
+    // O jsdom não copia nem faz layout: o CSS é a prova. Medido no Chromium (revisão da RIFA-051): com display: none,
+    // selecionar a prévia e copiar dava o texto sem os * e _; com font-size: 0, a cópia é o texto da API e a prévia
+    // fica igual, pixel a pixel.
+    const regra =
+      /\.bumbo__marca\s*\{([^}]*)\}/.exec(
+        lerCss("pages/bumbo/bumbo.css"),
+      )?.[1] ?? "";
+    expect(regra).toMatch(/font-size:\s*0;/);
+    expect(regra).not.toMatch(/display|visibility|content-visibility/);
   });
 });

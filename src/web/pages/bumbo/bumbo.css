@@ -69,9 +69,11 @@
   font-weight: var(--peso-negrito);
 }
 
-/* As marcas do WhatsApp (* e _) ficam no texto (o que se copia), mas não aparecem, como no WhatsApp. */
+/* As marcas do WhatsApp (* e _) ficam no texto (o que se copia), mas não aparecem, como no WhatsApp. Com fonte zero,
+   e não display: none: quem seleciona a prévia à mão e copia leva as marcas junto (com display: none, o navegador
+   copiava sem elas, e o negrito se perdia no grupo). O leitor de tela já as pula (aria-hidden). */
 .bumbo__marca {
-  display: none;
+  font-size: 0;
 }
 
 .bumbo__acoes {
