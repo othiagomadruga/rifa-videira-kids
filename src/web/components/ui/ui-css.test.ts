@@ -468,3 +468,35 @@ describe("Button: o pequeno com 44 px no toque e a variante perigo-discreto", ()
     ).toEqual([]);
   });
 });
+
+// RIFA-049 (P1.7, A-02): o topo das telas abertas é a faixa do degradê forte da marca, com o texto branco (o contraste
+// de cada ponto está no tokens.test.ts); a altura é fixa (padding fixo e o selo do logo reservado desde o início).
+describe("PublicShell: o topo na faixa da marca", () => {
+  const topo = Object.fromEntries(
+    declaracoes(lerArquivo("./PublicShell.css"))
+      .filter(
+        ({ blocos }) =>
+          blocos.length === 1 && blocos[0] === ".ui-public-shell__topo",
+      )
+      .map(({ propriedade, valor }) => [propriedade, valor]),
+  );
+
+  it("o fundo é o --gradiente-marca-forte e o texto, o --cor-sobre-primaria", () => {
+    expect(topo.background).toBe("var(--gradiente-marca-forte)");
+    expect(topo.color).toBe("var(--cor-sobre-primaria)");
+    // Nada de altura que depende do logo ter chegado: o padding é fixo.
+    expect(topo.padding).toBe("var(--espaco-3) var(--margem-pagina)");
+  });
+
+  it("o selo do logo (fundo escuro) tem o lugar reservado em rem, com ou sem o logo carregado", () => {
+    const selo = Object.fromEntries(
+      declaracoes(lerArquivo("./Marca.css"))
+        .filter(
+          ({ blocos }) =>
+            blocos.at(-1) === '.ui-marca[data-fundo="escuro"] .ui-marca__selo',
+        )
+        .map(({ propriedade, valor }) => [propriedade, valor]),
+    );
+    expect(selo.padding).toBe("var(--espaco-1) var(--espaco-2)");
+  });
+});

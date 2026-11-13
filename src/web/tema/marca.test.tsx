@@ -123,6 +123,46 @@ describe("CA2: o logo da Videira", () => {
     ]);
   });
 
+  it("telas abertas (RIFA-049): a marca na faixa escura, com o logo no selo claro só depois de carregar", async () => {
+    renderizarRota("/entrar", { usuario: null });
+    await screen.findByRole("heading", { level: 1, name: "Entrar" });
+    const cabecalho = cabecalhoDaMoldura();
+    conferirLogo(cabecalho);
+    const marca = cabecalho.querySelector(".ui-marca");
+    expect(marca).toHaveAttribute("data-fundo", "escuro");
+    const logo = within(cabecalho).getByRole("img", { name: ALT_LOGO });
+    const selo = logo.closest(".ui-marca__selo");
+    expect(selo).not.toHaveAttribute("data-carregado");
+    fireEvent.load(logo);
+    expect(selo).toHaveAttribute("data-carregado");
+
+    // O fundo claro do selo vem só com data-carregado (o logo nunca é recolorido: nenhum filtro na imagem).
+    const css = fs
+      .readFileSync(caminho("../components/ui/Marca.css"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const regras = [
+      ...css.matchAll(
+        /(\.ui-marca\[data-fundo="escuro"\] \.ui-marca__selo[^{]*)\{([^}]*)\}/g,
+      ),
+    ].map(([, seletor, corpo]) => ({ seletor: seletor.trim(), corpo }));
+    expect(regras.length).toBeGreaterThanOrEqual(2);
+    expect(
+      regras
+        .filter(({ corpo }) => /background/.test(corpo))
+        .map(({ seletor }) => seletor),
+    ).toEqual([
+      '.ui-marca[data-fundo="escuro"] .ui-marca__selo[data-carregado]',
+    ]);
+    expect(css).not.toMatch(/filter\s*:/);
+  });
+
+  it("coordenação e /minha continuam com a marca no fundo claro (sem o selo)", () => {
+    renderizarRota("/coordenacao");
+    expect(cabecalhoDaMoldura().querySelector(".ui-marca")).not.toHaveAttribute(
+      "data-fundo",
+    );
+  });
+
   it("o logo é um só em cada tela (o símbolo provisório 'VK' saiu)", () => {
     renderizarRota("/");
     expect(screen.getAllByRole("img", { name: ALT_LOGO })).toHaveLength(1);

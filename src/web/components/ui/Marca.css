@@ -63,3 +63,30 @@
   border-left: 0;
   padding-left: 0;
 }
+
+/*
+ * Fundo escuro fora do telão (RIFA-049): a faixa do degradê forte das telas abertas (PublicShell). O mesmo selo claro
+ * do telão, em rem (o lugar dele vale desde o início: nada pula quando o logo chega), e o nome em branco (>= 5:1 em
+ * todos os pontos do degradê forte, tokens.test.ts).
+ */
+.ui-marca[data-fundo="escuro"] {
+  color: var(--cor-sobre-primaria);
+}
+
+.ui-marca[data-fundo="escuro"] .ui-marca__selo {
+  padding: var(--espaco-1) var(--espaco-2);
+  border-radius: var(--raio-2);
+}
+
+.ui-marca[data-fundo="escuro"] .ui-marca__selo[data-carregado] {
+  background: var(--cor-selo-marca);
+}
+
+.ui-marca[data-fundo="escuro"] .ui-marca__textos {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.ui-marca[data-fundo="escuro"] .ui-marca__complemento {
+  color: var(--cor-sobre-primaria);
+}
