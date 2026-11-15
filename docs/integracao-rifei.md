@@ -128,7 +128,7 @@ A ordem importa:
    - **Afiliado tardio**: se o pedido está sem afiliado e **qualquer** evento dele traz `affiliate_id` válido, o afiliado é preenchido. Isso vale inclusive para os eventos `duplicado` e `ignorado_transicao`; o resto do pedido não muda.
    - Pedido `approved` com `approved_at` nulo: `aprovado_em` recebe o instante do recebimento.
 10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido e `avisosParaGravar(avisos)`) e responde **200** `{ "resultado", "evento_id" }`.
-11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a conferência pelo CSV (seção 10) recupera.
+11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a conferência pelo CSV (seção 10) recupera a venda que não ficou no sistema; se o pedido já estava gravado (ex.: o `paid_order` falhou depois do `new_order`), ela só o mostra como `pagamento_nao_registrado` (seção 10, Recuperar).
 
 **Concorrência.** Os passos 8 a 10 vão num único `db.batch` (uma transação no D1). A transição é gravada com um UPSERT condicional, por exemplo para `paid_order`: `ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN ('in_process', 'expired')`. Com duas entregas simultâneas do mesmo pedido, o status lido no passo 7 pode estar velho. Por isso o **resultado gravado no evento vem do `meta.changes` do UPSERT**, e não da leitura:
 
