@@ -3,6 +3,8 @@
 // - As partes puras: o filtro que esconde link, token e cookie da saída; as opções; a lista de checagens (com e sem
 //   o Playwright); os cabeçalhos esperados contra o public/_headers; e o link lido da saída do acesso:criar.
 // - A ponta, sem rede: uso errado (2) e um endereço sem nada escutando (1, com a saúde como única conferência).
+//   Nada vaza com um servidor local que ecoa o que recebe e com um Playwright de mentira (revisão da RIFA-058):
+//   resposta cortada só depois de limpar, token do arquivo escondido mesmo codificado, DEBUG fora do ambiente.
 //   A prova contra o build local (npm run preview) e contra a produção fica no relatório da tarefa e no roteiro
 //   (docs/lancamento.md, 2.3 e 3.1): ela precisa do Worker no ar e, para as telas, do Playwright.
 import {
@@ -490,5 +492,125 @@ describe("principal (sem rede)", () => {
       await new Promise((fechado) => servidor.close(fechado));
       rmSync(pasta, { recursive: true, force: true });
     }
+  });
+
+  it("corta a resposta só depois de esconder: um segredo ecoado no meio do corpo não sai pela metade", async () => {
+    // Ecoa o valor cru (sem "Bearer " nem "__Host-sessao=") a partir do 31º caractere: o resumo mostra 60.
+    const recebidos = [];
+    const servidor = createHttpServer((req, res) => {
+      if (req.url === "/api/health") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end('{"ok":false}');
+        return;
+      }
+      const crus = [req.headers.authorization, req.headers.cookie]
+        .filter(Boolean)
+        .map((v) => v.replace(/^(Bearer |__Host-sessao=)/, ""));
+      recebidos.push(...crus);
+      res.writeHead(401, { "content-type": "text/plain" });
+      res.end(".".repeat(30) + crus.join(" "));
+    });
+    await new Promise((pronto) => servidor.listen(0, "127.0.0.1", pronto));
+    try {
+      const { codigo, saida } = await rodar([
+        "--url",
+        `http://127.0.0.1:${servidor.address().port}`,
+        "--sem-navegador",
+      ]);
+
+      expect(codigo).toBe(1);
+      // O cookie forjado (base64url) e o token errado do webhook (hexadecimal), cada um mandado ao menos uma vez.
+      expect(recebidos.length).toBeGreaterThanOrEqual(2);
+      expect(saida).toContain("cookie de sessão forjado: 401 text/plain (");
+      for (const segredo of recebidos)
+        expect(saida).not.toContain(segredo.slice(0, 16));
+    } finally {
+      await new Promise((fechado) => servidor.close(fechado));
+    }
+  });
+
+  describe("com o link do admin do mesmo endereço (o Chromium de mentira não abre)", () => {
+    /**
+     * Roda com um "playwright" de mentira (o index.js é `indexJs`, cujo launch() lança um erro), contra um servidor
+     * que só responde à saúde. O link do arquivo é do mesmo endereço: a coordenação lê o token e tenta abrir o Chromium.
+     */
+    async function rodarComChromiumQueFalha(indexJs) {
+      const pasta = mkdtempSync(join(tmpdir(), "verificar-producao-"));
+      const pacote = join(pasta, "node_modules", "playwright");
+      mkdirSync(pacote, { recursive: true });
+      writeFileSync(
+        join(pacote, "package.json"),
+        '{"name":"playwright","main":"index.js"}',
+      );
+      writeFileSync(join(pacote, "index.js"), indexJs);
+      const servidor = createHttpServer((req, res) => {
+        res.writeHead(req.url === "/api/health" ? 200 : 404, {
+          "content-type": "application/json",
+        });
+        res.end('{"ok":false}');
+      });
+      await new Promise((pronto) => servidor.listen(0, "127.0.0.1", pronto));
+      const origem = `http://127.0.0.1:${servidor.address().port}`;
+      const arquivoDoLink = join(pasta, "link.txt");
+      writeFileSync(
+        arquivoDoLink,
+        `Acesso criado.\n\n  ${origem}/acesso/${TOKEN}\n`,
+      );
+      try {
+        return await rodar([
+          "--url",
+          origem,
+          "--sem-navegador",
+          "--admin-link",
+          arquivoDoLink,
+          "--playwright",
+          join(pasta, "node_modules"),
+        ]);
+      } finally {
+        await new Promise((fechado) => servidor.close(fechado));
+        rmSync(pasta, { recursive: true, force: true });
+      }
+    }
+
+    it("o token lido do arquivo some mesmo onde os padrões gerais não o reconhecem (erro com o link codificado)", async () => {
+      const codificado = `${encodeURIComponent("http://127.0.0.1:1/acesso/")}${TOKEN}`;
+      // Sem a lista de segredos, limpar() deixaria passar: "%2F" cola uma letra antes do token.
+      expect(limpar(`falhou em ${codificado}`)).toContain(TOKEN);
+
+      const { codigo, saida } = await rodarComChromiumQueFalha(
+        `module.exports = { chromium: { launch() { throw new Error(${JSON.stringify(`page.goto: falhou em ${codificado}`)}); } } };`,
+      );
+
+      expect(codigo).toBe(1);
+      expect(saida).toContain(
+        `não abriu: page.goto: falhou em ${encodeURIComponent("http://127.0.0.1:1/acesso/")}[omitido]`,
+      );
+      expect(saida).not.toContain(TOKEN.slice(0, 16));
+    });
+
+    it("tira DEBUG e DEBUG_FILE do ambiente antes de carregar o Playwright (o log dele não passa por limpar)", async () => {
+      const antes = {
+        DEBUG: process.env.DEBUG,
+        DEBUG_FILE: process.env.DEBUG_FILE,
+      };
+      process.env.DEBUG = "pw:api";
+      process.env.DEBUG_FILE = join(tmpdir(), "nao-devia-gravar.log");
+      try {
+        const { saida } = await rodarComChromiumQueFalha(
+          [
+            "const visto = `DEBUG=${process.env.DEBUG ?? 'ausente'} DEBUG_FILE=${process.env.DEBUG_FILE ?? 'ausente'}`;",
+            "module.exports = { chromium: { launch() { throw new Error('ao carregar: ' + visto); } } };",
+          ].join("\n"),
+        );
+
+        expect(saida).toContain(
+          "não abriu: ao carregar: DEBUG=ausente DEBUG_FILE=ausente",
+        );
+      } finally {
+        for (const [nome, valor] of Object.entries(antes))
+          if (valor === undefined) delete process.env[nome];
+          else process.env[nome] = valor;
+      }
+    });
   });
 });

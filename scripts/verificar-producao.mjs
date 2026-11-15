@@ -64,6 +64,10 @@ function reabrirComProxy() {
     ],
     { stdio: "inherit", env: { ...process.env, NODE_USE_ENV_PROXY: "1" } },
   );
+  if (filho.error)
+    process.stderr.write(
+      `Erro: não deu para reabrir o script com NODE_USE_ENV_PROXY=1 (${filho.error.code ?? filho.error.message}).\n`,
+    );
   return filho.status ?? 1;
 }
 
@@ -357,14 +361,16 @@ async function pedir(
     texto,
     json,
     ms: Math.round(performance.now() - inicio),
+    segredos: ctx.segredos,
   };
 }
 
 function resumoResposta(r) {
   const tipo = r.headers.get("content-type") ?? "?";
+  // limpar() antes de cortar: um segredo cortado ao meio já não seria reconhecido na hora de escrever.
   const corpo = r.json?.erro
     ? `erro ${r.json.erro.codigo}`
-    : r.texto.slice(0, 60).replace(/\s+/g, " ");
+    : limpar(r.texto, r.segredos).slice(0, 60).replace(/\s+/g, " ");
   return `${r.status} ${tipo.split(";")[0]} (${corpo})`;
 }
 
@@ -798,8 +804,16 @@ export function acharPlaywright(locais) {
   );
 }
 
+/**
+ * Variáveis que ligam o log do próprio Playwright (DEBUG=pw:api escreve no stderr cada page.goto com o endereço
+ * inteiro, inclusive o /acesso/<token>; DEBUG_FILE grava o mesmo num arquivo). Esse log não passa por limpar(), por
+ * isso elas saem do ambiente antes de carregar o pacote, que as lê ao carregar.
+ */
+export const VARIAVEIS_DE_LOG_DO_PLAYWRIGHT = ["DEBUG", "DEBUG_FILE"];
+
 async function abrirChromium(ctx) {
   if (!ctx.chromium) {
+    for (const nome of VARIAVEIS_DE_LOG_DO_PLAYWRIGHT) delete process.env[nome];
     const { chromium } = createRequire(
       join(ctx.pastaPlaywright, "procurar.js"),
     )("playwright");
@@ -892,11 +906,15 @@ function escutar(ctx, page) {
       return registro.conhecidos.push(
         "CSP barrou o teste de eval do zod (esperado, docs/acesso.md §4)",
       );
-    registro.erros.push(`${m.type()}: ${texto.slice(0, 300)}`);
+    registro.erros.push(
+      `${m.type()}: ${limpar(texto, ctx.segredos).slice(0, 300)}`,
+    );
   };
   const aoConsole = (m) => registro.pendentes.push(classificar(m));
   const aoErroDaPagina = (e) =>
-    registro.erros.push(`pageerror: ${String(e).slice(0, 300)}`);
+    registro.erros.push(
+      `pageerror: ${limpar(String(e), ctx.segredos).slice(0, 300)}`,
+    );
   const aoFalharRequisicao = (req) => {
     const motivo = req.failure()?.errorText ?? "";
     if (/ERR_ABORTED/.test(motivo)) return; // navegação ou consulta cancelada pelo próprio app
