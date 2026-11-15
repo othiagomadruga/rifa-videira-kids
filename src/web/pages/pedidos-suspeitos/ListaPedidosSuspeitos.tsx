@@ -11,7 +11,7 @@ import {
   Loading,
   type ColunaTabela,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import {
   formatarDataHora,
   formatarMoeda,
@@ -146,6 +146,7 @@ export function ListaPedidosSuspeitos() {
       <ErrorState
         titulo="Não foi possível carregar os pedidos suspeitos."
         mensagem={mensagemDoErro(carga.erro)}
+        conexao={ehFalhaDeConexao(carga.erro)}
         aoTentarDeNovo={() => {
           setCarga({ tipo: "carregando" });
           setTentativa((atual) => atual + 1);

@@ -12,11 +12,7 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
-import {
-  formatarData,
-  formatarHora,
-  formatarPercentual,
-} from "../../lib/formatadores";
+import { formatarHora, formatarPercentual } from "../../lib/formatadores";
 import {
   ATRIBUTO_CHAVE,
   chavesPorNome,
@@ -25,6 +21,7 @@ import {
 import { CLASSE_COMEMORA, useComemoracao } from "../../lib/useComemoracao";
 import type { RankingDaDivisao, RankingPublico } from "./ranking-publico-api";
 import {
+  descricaoSemVendas,
   formatarPosicao,
   linhaDoTempo,
   textoDaFase,
@@ -121,20 +118,6 @@ function Esqueleto() {
       </div>
     </div>
   );
-}
-
-/**
- * O texto do vazio (ninguém vendeu na janela). A data do início vem da campanha (`referencia`), nunca do código. Antes
- * do início e durante, o convite do primeiro dia; depois do fim não há primeira venda a esperar, só o aviso.
- */
-function descricaoSemVendas({ referencia, janela }: RankingPublico): string {
-  const semVendas = `${janela.nome}: ainda sem vendas.`;
-  if (referencia.fase === "encerrada") return semVendas;
-  const contexto =
-    referencia.fase === "antes"
-      ? `As vendas começam em ${formatarData(referencia.data_inicio)}.`
-      : semVendas;
-  return `${contexto} Qual célula vai ser a primeira?`;
 }
 
 type PropsRanking = {

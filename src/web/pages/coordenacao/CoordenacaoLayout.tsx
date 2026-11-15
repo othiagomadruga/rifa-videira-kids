@@ -6,7 +6,7 @@ import {
   Loading,
   PublicShell,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
 import { itensDaNavegacao } from "./telas";
 
@@ -59,6 +59,7 @@ export function CoordenacaoLayout() {
         <ErrorState
           titulo="Não foi possível conferir o seu acesso."
           mensagem={mensagemDoErro(estado.erro)}
+          conexao={ehFalhaDeConexao(estado.erro)}
           aoTentarDeNovo={verificar}
         />
       ) : (

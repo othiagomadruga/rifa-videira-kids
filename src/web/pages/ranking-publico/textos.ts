@@ -71,6 +71,30 @@ export function linhaDoTempo(
   };
 }
 
+/** O convite do ranking vazio (decidido pelo PO para o ranking público; o telão usa o mesmo, RIFA-053). */
+export const CONVITE_PRIMEIRA_VENDA = "Qual célula vai ser a primeira?";
+
+/**
+ * O texto do vazio (ninguém vendeu na janela), no ranking público e no telão. A data do início vem da campanha
+ * (`referencia`), nunca do código. Antes do início e durante, o convite do primeiro dia; depois do fim não há primeira
+ * venda a esperar, só o aviso.
+ */
+export function descricaoSemVendas({
+  referencia,
+  janela,
+}: {
+  referencia: ReferenciaCampanha;
+  janela: JanelaRankingResposta;
+}): string {
+  const semVendas = `${janela.nome}: ainda sem vendas.`;
+  if (referencia.fase === "encerrada") return semVendas;
+  const contexto =
+    referencia.fase === "antes"
+      ? `As vendas começam em ${formatarData(referencia.data_inicio)}.`
+      : semVendas;
+  return `${contexto} ${CONVITE_PRIMEIRA_VENDA}`;
+}
+
 /** Título da disputa: "Semana 2 · 03/12 a 09/12"; depois do fim, "Resultado final da campanha". */
 export function textoDaJanela(
   janela: JanelaRankingResposta,

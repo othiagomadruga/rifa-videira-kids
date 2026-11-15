@@ -89,7 +89,7 @@
 .bumbo__copia {
   --copia-cor: var(--cor-sucesso);
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: var(--espaco-2);
   color: var(--copia-cor);
   font-weight: var(--peso-forte);
@@ -108,9 +108,13 @@
   border-radius: 50%;
   background: var(--copia-cor);
   color: var(--cor-sobre-primaria);
-  font-size: var(--texto-sm);
-  font-weight: var(--peso-negrito);
-  line-height: 1;
+}
+
+/* O ícone no chip (RIFA-053): menor que o círculo e com o traço mais grosso, como no Aviso. */
+.bumbo__copia-icone .ui-icone {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2.75;
 }
 
 .bumbo__dica {

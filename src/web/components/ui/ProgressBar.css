@@ -85,6 +85,22 @@
   stroke-width: 2.5;
 }
 
+/*
+ * Cores forçadas (alto contraste do Windows): o trilho e a barra eram só cor de fundo e degradê, que o sistema apaga,
+ * e a barra sumia (RIFA-053). O trilho ganha a borda do texto e a barra, a cor de destaque do sistema (Highlight),
+ * fora do ajuste automático das cores (senão o fundo dela virava o da página).
+ */
+@media (forced-colors: active) {
+  .ui-progress__trilho {
+    border: 1px solid CanvasText;
+  }
+
+  .ui-progress__barra {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .ui-progress__barra {
     transition: width var(--duracao-lenta) var(--curva-saida);

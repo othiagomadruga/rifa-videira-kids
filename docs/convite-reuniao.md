@@ -2,7 +2,7 @@
 
 Para a coordenação. Complementa a seção 5 do [lancamento.md](lancamento.md) (pré-requisitos, links em lote e vinculação na Adesão) e acompanha o [guia do líder](guia-lideres.md), que vai para os líderes em PDF ou imagem ([guia-lideres.html](guia-lideres.html)).
 
-- Os textos entre `[confirmar com a Rifei]` dependem da Rifei e ainda não estão documentados ([integracao-rifei.md](integracao-rifei.md), seção 12.3). Troque-os antes de usar.
+- Nada aqui depende de resposta do suporte da Rifei. Das telas dela, que as fontes não documentam ([integracao-rifei.md](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes), seção 12.3), o texto fala só do convite de afiliado, da conta com o e-mail e da Área de afiliados. O resto (como o convite chega, onde fica o link de afiliado) a coordenação já viu na compra de teste ([lancamento.md](lancamento.md#4-compra-de-teste-de-ponta-a-ponta), seção 4) e mostra na reunião.
 - Nada aqui leva link de verdade: o link pessoal de cada líder só aparece na tela **Acessos**, na hora de gerar, e vai só no privado.
 - Os nomes, dias e horários entre parênteses são para preencher. Os exemplos são fictícios.
 
@@ -47,8 +47,8 @@ Sem link nenhum. Mande depois dos links pessoais (seção 1), para a última fra
 > Você já recebeu no privado o seu link pessoal do sistema. Ele é só seu: não repasse.
 > As vendas começam em 23/11.
 
-- "Aberto no celular": a criação da conta de afiliado pode pedir uma confirmação por e-mail. `[confirmar com a Rifei: se o cadastro de afiliado manda confirmação ou código por e-mail; se não mandar, basta saber o e-mail]`
-- Quem já tem conta na Rifei traz o e-mail dela. `[confirmar com a Rifei: se uma conta que já existe, de comprador ou de afiliado de outro organizador, serve para ser afiliado desta campanha; a Área de afiliados é de cada organizador]`
+- "Aberto no celular": se o cadastro de afiliado pedir uma confirmação por e-mail, o líder já está com o e-mail à mão. A compra de teste mostra se pede ([lancamento.md](lancamento.md#41-os-passos), 4.1, passo 1); se não pedir, basta saber o e-mail.
+- Se o convite for por e-mail (cada líder com o seu), o líder usa na Rifei o e-mail para o qual o convite foi. A Área de afiliados é de cada organizador: uma conta de comprador, ou de afiliado de outro organizador, pode não servir; na dúvida, o líder cria a conta pelo convite.
 
 **Lembrete na véspera** (opcional, no grupo):
 
@@ -63,15 +63,15 @@ Quem abrir antes aparece em **Acessos → Líderes, discipuladores e redes**, na
 
 - Pré-requisitos do [lancamento.md](lancamento.md), seção 5: campanha ativa, webhook ligado, compra de teste aprovada e planilha importada com os telefones.
 - Duas pessoas da coordenação: uma conduz e a outra fica com a **Coordenação → Adesão** aberta (no celular ou no notebook).
-- Os convites de afiliado da Rifei prontos para mandar. `[confirmar com a Rifei: um convite por líder ou um para todos, e onde o organizador gera o convite]`
-- O guia do líder em PDF ou imagem, com os `[confirmar com a Rifei]` já trocados.
-- O modelo do link de vendas gravado na Adesão, se a Rifei já confirmou o formato do link de afiliado ([lancamento.md](lancamento.md), seção 3.6): com ele, cada líder vê o próprio link e o QR code na tela, logo depois de vinculado.
+- Os convites de afiliado da Rifei mandados ou prontos para mandar, do jeito que o painel gera (um por líder ou um para todos: o Thiago vê ao ligar os afiliados, [lancamento.md](lancamento.md), seções 1.3 e 5.1).
+- O guia do líder em PDF ou imagem.
+- O modelo do link de vendas gravado na Adesão, se a compra de teste confirmou o formato do link de afiliado ([lancamento.md](lancamento.md), seções 3.6 e 4.1): com ele, cada líder vê o próprio link e o QR code na tela, logo depois de vinculado. Sem ele, o líder usa o link da Área de afiliados.
 - Se houver projetor ou TV: um celular de exemplo espelhado, para mostrar as telas.
 
 | Tempo | Bloco | O que fazer e falar |
 |---|---|---|
 | 0 a 3 min | **Abertura** | Para que é a campanha: o espaço Videira Kids. As vendas começam em 23/11. Cada célula tem uma meta, e o ranking separa jovens e adultos. Os rankings não mostram valores em reais (por decisão da liderança da igreja). Hoje cada líder sai com duas coisas: o link de vendas da Rifei e o acesso à tela da célula. |
-| 3 a 9 min | **Como vender** | Mande os convites de afiliado. Todos ao mesmo tempo: abrem o convite e criam a conta de afiliado com o e-mail. Mostre onde fica o link de afiliado `[confirmar com a Rifei]`. Frase-chave: "Só conta para a sua célula a venda paga feita pelo seu link. Pelo link comum da campanha, ela ajuda a campanha, mas não entra na célula." Vender também para quem não é da igreja. |
+| 3 a 9 min | **Como vender** | Quem ainda não abriu o convite de afiliado abre agora (mande os que faltam). Todos ao mesmo tempo: criam a conta de afiliado com o e-mail e entram pela **Área de afiliados** (menu da página da campanha). Mostre onde fica o link de afiliado, como a conta de teste mostrou na compra de teste. Frase-chave: "Só conta para a sua célula a venda paga feita pelo seu link. Pelo link comum da campanha, ela ajuda a campanha, mas não entra na célula." Vender também para quem não é da igreja. |
 | 9 a 13 min | **Como entrar** | Todos abrem o link pessoal que receberam no privado e tocam em **Entrar**. Mostre a tela: hoje, a contagem regressiva ("Faltam … dias para começar"); a partir de 23/11, a meta em %, **Em dia** ou **Abaixo do esperado**, **Hoje**, o **Ranking** e **Os primeiros**. Reforce: o link é só seu, não repasse. O aviso amarelo "Seu link de afiliado ainda não está ligado à sua célula" some depois da vinculação (próximo bloco). Com o link de vendas liberado, o cartão **Seu link de vendas** mostra, depois da vinculação, o link e o QR code (**Copiar link**, **Enviar no WhatsApp**, **Baixar imagem**); antes dela, pede para falar com a coordenação. Sem o link liberado, o cartão diz que a coordenação ainda não liberou o link de vendas. |
 | 13 a 17 min | **Teste ao vivo** | Um voluntário, na frente de todos: abre o próprio link de afiliado e começa a compra de 1 bilhete, sem pagar. Em segundos, "Afiliado (código)" aparece no topo de **Sem célula**, na Adesão. Toque em **Vincular**, escolha a célula do voluntário e confirme. Na tela dele, o aviso amarelo some em até 2 minutos e, com o link de vendas liberado, aparecem no mesmo instante o link e o QR code dele em **Seu link de vendas**. Explique a fila (abaixo): um líder de cada vez, quando chamar o nome. |
 | 17 a 20 min | **Dúvidas** | Use as "Dúvidas frequentes" do guia (perdi o link, mudei de celular, a venda não apareceu, por que não aparece o valor em reais, quem vê o quê). Mande o guia no grupo dos líderes. Comece a fila. |

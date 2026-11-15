@@ -18,6 +18,8 @@ import {
   simularPreferencia,
 } from "../../test/movimento";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
+import { DURACAO_CONTAGEM_MS } from "../../lib/movimento";
+import { ATRASO_PULSO_MS } from "../../lib/usePulsoDaMeta";
 import { INTERVALO_ATUALIZACAO_MS } from "../ranking-publico/useRankingPublico";
 
 const DURANTE: ReferenciaCampanha = {
@@ -277,6 +279,17 @@ describe("RIFA-050 (P2.4): comemoração da meta batida no telão", () => {
     expect(particulas.length).toBeGreaterThanOrEqual(10);
     expect(particulas.length).toBeLessThanOrEqual(14);
     expect(animadosCom(animate, "mov-confete")).toHaveLength(particulas.length);
+    // RIFA-053: o confete chega com o 100% (e a pílula amarela): nenhuma partícula sai antes de o % terminar de contar;
+    // a primeira sai junto com o pulso.
+    const atrasos = animate.mock.calls
+      .filter((_, indice) =>
+        (animate.mock.contexts[indice] as Element).classList.contains(
+          "mov-confete",
+        ),
+      )
+      .map(([, opcoes]) => Number((opcoes as KeyframeAnimationOptions).delay));
+    expect(Math.min(...atrasos)).toBe(ATRASO_PULSO_MS);
+    expect(Math.min(...atrasos)).toBeGreaterThanOrEqual(DURACAO_CONTAGEM_MS);
     expect(
       animadosCom(animate, "telao__percentual").map(
         (elemento) =>

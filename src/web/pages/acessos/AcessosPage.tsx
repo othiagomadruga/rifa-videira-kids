@@ -14,7 +14,7 @@ import {
   Loading,
   PageHeader,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { useSessao, useUsuarioConectado } from "../../lib/sessao";
 import {
   definirAtivo,
@@ -294,6 +294,7 @@ function AcessosCoordenacao({ mensagens }: { mensagens: Mensagens }) {
         <ErrorState
           titulo="Não foi possível carregar as pessoas."
           mensagem={mensagemDoErro(erro)}
+          conexao={ehFalhaDeConexao(erro)}
           aoTentarDeNovo={tentarDeNovo}
         />
       )}

@@ -18,7 +18,7 @@ import {
   type UnidadeMeta,
 } from "../../../shared/contracts/calculos";
 import type { TipoAlvo } from "../../../shared/contracts/dominio";
-import type { TomBadge, TomSituacao } from "../../components/ui";
+import type { NomeIcone, TomBadge, TomSituacao } from "../../components/ui";
 import {
   formatarData,
   formatarNumero,
@@ -205,7 +205,8 @@ export type TextoSituacao = {
   tom: TomSituacao;
   titulo: string;
   detalhe: string;
-  icone?: string;
+  /** O ícone do chip (um nome de icones.ts; RIFA-053: antes, o caractere "↓"). Padrão: o do tom. */
+  icone?: NomeIcone;
 };
 
 /** "Falta 1 bilhete", "Faltam 3 bilhetes". */
@@ -250,7 +251,7 @@ export function situacaoDaJanela(
     case "abaixo":
       return {
         tom: "alerta",
-        icone: "↓",
+        icone: "caiu",
         titulo: "Abaixo do esperado",
         detalhe:
           diferenca === null
@@ -297,7 +298,7 @@ export function situacaoDaCampanha(
         }
       : {
           tom: "alerta",
-          icone: "↓",
+          icone: "caiu",
           titulo: "Abaixo da meta",
           detalhe:
             diferenca === null

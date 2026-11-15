@@ -170,6 +170,16 @@ export function avisoDaMensagem({
 // tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * A nota embaixo da prévia (RIFA-053): a prévia já mostra o negrito e o itálico desenhados, então a nota não fala mais
+ * de *asteriscos* e _sublinhados_, que não aparecem nela.
+ */
+export const NOTA_DA_PREVIA =
+  "A prévia mostra a mensagem como ela chega no grupo: o negrito e o itálico aparecem como no WhatsApp.";
+/** A nota de antes, só quando a cópia falha e a prévia vira o texto puro (aí os * e _ aparecem). */
+export const NOTA_DO_TEXTO_PURO =
+  "No WhatsApp, o que está entre *asteriscos* sai em negrito, e entre _sublinhados_, em itálico.";
+
 export const DICAS = {
   dia: "Mostra a mensagem de outro dia da campanha, para conferir ou mandar de novo. Hoje vem escolhido.",
   enviarNoWhatsApp:

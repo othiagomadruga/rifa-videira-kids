@@ -28,18 +28,21 @@ const ICONE_PADRAO: Record<TomSituacao, NomeIcone> = {
   neutro: "menos",
 };
 
-/** Os caracteres que as telas passavam antes dos ícones (RIFA-049): o desenho não muda de celular para celular. */
-const ICONE_DO_CARACTERE: Record<string, NomeIcone> = {
-  "↓": "caiu",
-  "↑": "subiu",
-  "→": "estavel",
-  "✓": "check",
-  "!": "alerta",
-  "–": "menos",
-};
+/**
+ * Os caracteres que as telas passavam antes dos ícones (RIFA-049): o desenho não muda de celular para celular. Um Map,
+ * e não um objeto: num objeto comum, "toString" ou "constructor" achariam o protótipo e virariam um "ícone" (RIFA-053).
+ */
+const ICONE_DO_CARACTERE: ReadonlyMap<string, NomeIcone> = new Map([
+  ["↓", "caiu"],
+  ["↑", "subiu"],
+  ["→", "estavel"],
+  ["✓", "check"],
+  ["!", "alerta"],
+  ["–", "menos"],
+]);
 
 function desenhoDoIcone(icone: string): ReactNode {
-  const nome = ehNomeDeIcone(icone) ? icone : ICONE_DO_CARACTERE[icone];
+  const nome = ehNomeDeIcone(icone) ? icone : ICONE_DO_CARACTERE.get(icone);
   return nome ? <Icone nome={nome} /> : icone;
 }
 

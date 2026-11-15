@@ -39,6 +39,14 @@ const OUTFIT = FACES.find((face) => face["font-family"] === '"Outfit"');
 const RESERVA = FACES.find(
   (face) => face["font-family"] === '"Outfit reserva"',
 );
+const RESERVA_ROBOTO = FACES.find(
+  (face) => face["font-family"] === '"Outfit reserva Roboto"',
+);
+/** A Outfit sobe 1000 e desce 260 num em de 1000. */
+const SUBIDA_OUTFIT = 100;
+const DESCIDA_OUTFIT = 26;
+const porcento = (valor: string | undefined) =>
+  Number(/^(\d+(?:\.\d+)?)%$/.exec(valor ?? "")?.[1] ?? Number.NaN);
 
 describe("fonte dos títulos: o arquivo", () => {
   it("um woff2 só, do próprio site (tema/fontes), com a licença OFL", () => {
@@ -105,12 +113,48 @@ describe("fonte dos títulos: o @font-face e o preload", () => {
     expect(RESERVA?.["ascent-override"]).toMatch(/^\d+(\.\d+)?%$/);
     expect(RESERVA?.["descent-override"]).toMatch(/^\d+(\.\d+)?%$/);
   });
+
+  it("RIFA-053: a reserva do Android é a Roboto (só local, o negrito antes), no peso 800", () => {
+    expect(RESERVA_ROBOTO).toBeDefined();
+    const locais = [
+      ...(RESERVA_ROBOTO?.src ?? "").matchAll(/local\("([^"]+)"\)/g),
+    ].map(([, nome]) => nome);
+    expect(RESERVA_ROBOTO?.src).not.toMatch(/url\(/);
+    expect(RESERVA_ROBOTO?.src.replace(/local\("[^"]+"\)|[\s,]/g, "")).toBe("");
+    expect(locais.slice(0, 2)).toEqual(["Roboto Bold", "Roboto-Bold"]);
+    expect(locais).toContain("Roboto");
+    expect(RESERVA_ROBOTO?.["font-weight"]).toBe("800");
+    expect(RESERVA_ROBOTO?.["line-gap-override"]).toBe("0%");
+  });
+
+  it.each([
+    ["Outfit reserva", () => RESERVA],
+    ["Outfit reserva Roboto", () => RESERVA_ROBOTO],
+  ])(
+    "%s: a subida e a descida da Outfit (100%% e 26%% do em), divididas pelo size-adjust (o navegador multiplica os overrides por ele)",
+    (_, face) => {
+      const ajuste = porcento(face()?.["size-adjust"]) / 100;
+      expect(ajuste).toBeGreaterThan(0.9);
+      expect(ajuste).toBeLessThan(1.1);
+      expect(
+        Math.abs(
+          porcento(face()?.["ascent-override"]) - SUBIDA_OUTFIT / ajuste,
+        ),
+      ).toBeLessThanOrEqual(0.05);
+      expect(
+        Math.abs(
+          porcento(face()?.["descent-override"]) - DESCIDA_OUTFIT / ajuste,
+        ),
+      ).toBeLessThanOrEqual(0.05);
+      expect(face()?.["line-gap-override"]).toBe("0%");
+    },
+  );
 });
 
 describe("fonte dos títulos: onde ela vale", () => {
-  it("--fonte-titulo é a Outfit, depois a reserva, depois a fonte do sistema", () => {
+  it("--fonte-titulo é a Outfit, depois a reserva (Arial ou Liberation), a do Android (Roboto) e a fonte do sistema", () => {
     expect(TOKENS_CSS).toMatch(
-      /--fonte-titulo:\s*"Outfit",\s*"Outfit reserva",\s*var\(--fonte-base\);/,
+      /--fonte-titulo:\s*"Outfit",\s*"Outfit reserva",\s*"Outfit reserva Roboto",\s*var\(--fonte-base\);/,
     );
   });
 

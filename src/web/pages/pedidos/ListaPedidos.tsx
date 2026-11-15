@@ -24,7 +24,7 @@ import {
   type NomeIcone,
 } from "../../components/ui";
 import { TextoContado } from "../../components/movimento";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { useUsuarioConectado } from "../../lib/sessao";
 import {
   LOCALIDADE,
@@ -372,6 +372,8 @@ function Filtros({
               </span>
             </>
           )}
+          {/* O chevron (RIFA-053): para baixo fechado, para cima aberto; só visual (o <details> diz se está aberto). */}
+          <Icone nome="abrir" className="pedidos-filtros-caixa__seta" />
         </summary>
       </ComDica>
       <div className="pedidos-filtros">
@@ -559,6 +561,7 @@ function Conteudo({
       <ErrorState
         titulo="Não foi possível carregar os pedidos."
         mensagem={mensagemDoErro(estado.erro)}
+        conexao={ehFalhaDeConexao(estado.erro)}
         aoTentarDeNovo={aoTentarDeNovo}
       />
     );

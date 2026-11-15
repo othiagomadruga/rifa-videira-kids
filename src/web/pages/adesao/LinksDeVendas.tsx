@@ -19,7 +19,7 @@ import {
   Input,
   Loading,
 } from "../../components/ui";
-import { ErroApi, mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, ErroApi, mensagemDoErro } from "../../lib/api";
 import { useUsuarioConectado } from "../../lib/sessao";
 import { telefoneParaWhatsApp } from "../acessos/textos";
 import type { CelulaAdesao } from "./adesao-api";
@@ -134,6 +134,7 @@ export function LinksDeVendas({ celulas }: { celulas: CelulaAdesao[] }) {
             <ErrorState
               titulo="Não foi possível carregar os links de vendas."
               mensagem={mensagemDoErro(estado.erro)}
+              conexao={ehFalhaDeConexao(estado.erro)}
               aoTentarDeNovo={() => {
                 setEstado({ tipo: "carregando" });
                 setRodada((n) => n + 1);

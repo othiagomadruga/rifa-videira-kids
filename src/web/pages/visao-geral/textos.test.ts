@@ -96,7 +96,7 @@ describe("CA2: situação, meta do dia e projeção", () => {
     const abaixo = resumoDoCenario(CENARIOS.abaixo);
     expect(situacaoDaCampanha(abaixo)).toEqual({
       tom: "alerta",
-      icone: "↓",
+      icone: "caiu",
       titulo: "Abaixo do esperado",
       detalhe: "Faltam 39 bilhetes para o esperado até ontem",
     });

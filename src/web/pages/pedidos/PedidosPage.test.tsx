@@ -934,6 +934,10 @@ describe("RIFA-051 (P3.7, A-04): no celular, os filtros num <details> 'Filtros',
 
     expect(caixa().open).toBe(false);
     expect(resumo()).toHaveTextContent(/^Filtros$/);
+    // RIFA-053: o chevron é o Icone "abrir" (só visual), no fim do <summary>.
+    const chevron = resumo().lastElementChild;
+    expect(chevron).toHaveAttribute("data-icone", "abrir");
+    expect(chevron).toHaveAttribute("aria-hidden", "true");
     // O <summary> é o primeiro filho do <details> e vem antes dos totais e da lista.
     expect(caixa().firstElementChild).toBe(resumo());
     expect(

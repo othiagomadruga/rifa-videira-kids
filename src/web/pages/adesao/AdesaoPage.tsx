@@ -8,7 +8,7 @@ import {
   Loading,
   PageHeader,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { useUsuarioConectado } from "../../lib/sessao";
 import {
   removerAfiliado,
@@ -123,6 +123,7 @@ export function AdesaoPage() {
       {estado.tipo === "erro" && (
         <ErrorState
           mensagem={mensagemDoErro(estado.erro)}
+          conexao={ehFalhaDeConexao(estado.erro)}
           aoTentarDeNovo={tentarDeNovo}
         />
       )}

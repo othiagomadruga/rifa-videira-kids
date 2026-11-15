@@ -7,7 +7,7 @@ A Rifei faz a venda, o pagamento e o sorteio. Este sistema recebe cada pedido po
 - Fonte oficial, lida em 06/11/2026: [Referência do webhook](https://rifei.com.br/ajuda/webhook/referencia-do-webhook) e [Como adicionar um webhook](https://rifei.com.br/ajuda/webhook/como-adicionar-webhook).
 - Passo a passo na Rifei e na Efí para o PO (campanha, slug, afiliados, Efí, estorno), conferido em 11/11/2026: [seção 12](#12-rifei-e-efí-passo-a-passo-para-o-po).
 
-Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e **SUPOSIÇÃO** quer dizer que ainda precisa ser conferido com uma campanha de teste (lista no fim).
+Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e **SUPOSIÇÃO** quer dizer que ainda precisa ser conferido na compra de teste (lista na seção 9).
 
 ## Decisões da integração (D1 a D9)
 
@@ -128,7 +128,7 @@ A ordem importa:
    - **Afiliado tardio**: se o pedido está sem afiliado e **qualquer** evento dele traz `affiliate_id` válido, o afiliado é preenchido. Isso vale inclusive para os eventos `duplicado` e `ignorado_transicao`; o resto do pedido não muda.
    - Pedido `approved` com `approved_at` nulo: `aprovado_em` recebe o instante do recebimento.
 10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido e `avisosParaGravar(avisos)`) e responde **200** `{ "resultado", "evento_id" }`.
-11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a conferência pelo CSV (seção 10) recupera.
+11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a conferência pelo CSV (seção 10) recupera a venda que não ficou no sistema; se o pedido já estava gravado (ex.: o `paid_order` falhou depois do `new_order`), ela só o mostra como `pagamento_nao_registrado` (seção 10, Recuperar).
 
 **Concorrência.** Os passos 8 a 10 vão num único `db.batch` (uma transação no D1). A transição é gravada com um UPSERT condicional, por exemplo para `paid_order`: `ON CONFLICT (id) DO UPDATE ... WHERE pedidos.status IN ('in_process', 'expired')`. Com duas entregas simultâneas do mesmo pedido, o status lido no passo 7 pode estar velho. Por isso o **resultado gravado no evento vem do `meta.changes` do UPSERT**, e não da leitura:
 
@@ -198,7 +198,7 @@ Os valores de `status_detail` em `new_order` (`"pending"`) e em `expired_order` 
 | `utm` inteiro ausente ou null | SUPOSIÇÃO (tolerado) |
 | Retry, reenvio, ordem de entrega e assinatura HMAC | NÃO DOCUMENTADO; o sistema assume duplicatas, ordem trocada e perda |
 | `new_order` já com `status: approved` (venda lançada pelo admin) | NÃO DOCUMENTADO; hoje o estado vem só do `event` |
-| Marcar pago à mão no painel dispara `paid_order` | SUPOSIÇÃO (o exemplo oficial tem `status_detail: changed_by_admin`) |
+| Marcar pago à mão no painel dispara `paid_order` | SUPOSIÇÃO (o exemplo oficial tem `status_detail: changed_by_admin`); a compra de teste no Pix manual confirma (seção 9, item 5) |
 | Colunas do CSV "Exportar Pedidos" | PARCIAL: a janela mostra "Bilhetes", "Quantidade de bilhetes", "Nome", "Email" e "Telefone" (há mais abaixo); separador vírgula; opção "Um bilhete por linha" (seção 12.5); a conferência detecta pelo nome e a coordenação confirma (seção 10) |
 | `slug` é o fim do link da campanha (`rifei.com.br/<slug>`) | CONFIRMADO em parte: o exemplo oficial do webhook traz `demonstracao`, e a campanha de demonstração da Rifei está em `rifei.com.br/demonstracao` (seção 12.1) |
 | Afiliado: área por organizador, entrada por e-mail, cadastro por convite | CONFIRMADO nas páginas públicas da conta de demonstração; as telas do organizador e o link de afiliado NÃO DOCUMENTADOS (seção 12.3) |
@@ -206,21 +206,26 @@ Os valores de `status_detail` em `new_order` (`"pending"`) e em `expired_order` 
 
 ## 9. O que confirmar com uma campanha de teste
 
-Antes do primeiro dia de vendas, com uma campanha de teste, uma segunda conta como afiliada e compras de valor mínimo:
+O lançamento não pergunta ao suporte da Rifei (decisão do PO, 15/11/2026): o que as fontes não dizem se descobre no painel e na compra de teste do roteiro ([lançamento, seção 4](lancamento.md#4-compra-de-teste-de-ponta-a-ponta)), feita na própria campanha, antes da largada, com uma segunda conta como afiliada e 1 bilhete. Os itens marcados **(lançamento)** respondem às perguntas 1, 2, 3, 8 e 9 da 12.7 e são os que a largada precisa; os outros se anotam quando aparecerem, sem segurar nada.
 
-1. **Link de afiliado** (como o líder vira afiliado: seção 12.3): o formato do link e se o id do afiliado aparece nele. NÃO DOCUMENTADO pela Rifei. O formato confirmado vira o modelo do link de vendas (seção 12.3, D24).
-2. **affiliate_id de cada líder**: onde o organizador vê esse número no painel (NÃO DOCUMENTADO; seção 12.3) e se é o mesmo que chega no webhook. Sem isso, o vínculo da reunião de cadastro dos líderes depende de uma compra iniciada por líder (lançamento, seção 5.2).
+**No painel, ao criar a campanha (lançamento; pergunta 1 da 12.7):** onde ligar os afiliados na campanha e gerar o convite; se é um convite por afiliado (pedindo o e-mail de cada um?) ou um para todos; e se o cadastro "só por convite" é escolha do organizador (seção 12.3). Sem isso não há conta afiliada de teste nem convite para os líderes (lançamento, 1.3 e 5.1).
+
+Na compra de teste:
+
+1. **Link de afiliado (lançamento; pergunta 2 da 12.7)** (como o líder vira afiliado: seção 12.3): onde o afiliado acha o link (a conta de teste entra pela "Área de afiliados"), o formato do link e se o id do afiliado aparece nele (compare com o "Afiliado <código>" que aparece em Adesão → Sem célula). NÃO DOCUMENTADO pela Rifei. O formato confirmado vira o modelo do link de vendas (seção 12.3, D24; lançamento, 3.6 e 4.1, passo 3).
+2. **affiliate_id de cada líder (lançamento; pergunta 3 da 12.7)**: o código que chega no webhook é o que aparece em Sem célula. Confira se é o mesmo número do link (item 1) e se o painel mostra esse número na lista de afiliados (NÃO DOCUMENTADO; seção 12.3). Sem isso, o vínculo da reunião de cadastro dos líderes depende de uma compra iniciada por líder (lançamento, seção 5.2), que já é o plano.
 3. Se `affiliate_id` chega mesmo como inteiro (a doc diz integer) e se é `null` quando não há afiliado.
 4. `status` e `status_detail` reais em `new_order` e `expired_order`, se `expired_at` vem preenchido e se `fbp`/`fbc` aparecem.
-5. Se `new_order` pode chegar já `approved` e se marcar pago à mão no painel dispara `paid_order`.
+5. Se `new_order` pode chegar já `approved` e se marcar pago à mão no painel dispara `paid_order`. **(lançamento, no plano B; pergunta 9 da 12.7)** Na compra de teste com o Pix manual (lançamento, 1.6 e 4.1, passo 4): marque o pedido como pago no painel e veja se chega "Pedido pago" em Pedidos → Entregas do webhook, com a célula do afiliado. Se não chegar, o pedido fica `in_process` (ou `expired`) e não conta; a conferência pelo CSV o mostra como `pagamento_nao_registrado`, mas não o corrige (seção 10, Recuperar). Do jeito que o sistema está, as vendas do Pix manual não contariam: chame o SM antes da largada.
 6. Se o pedido pode ser pago depois de expirar com o gateway escolhido (Efí), gerando `paid_order` depois de `expired_order`.
 7. Formato real de `buyer.phone` (sempre E.164?) e de `utm` sem parâmetros (null? ausente? strings vazias?).
 8. Retry: se a Rifei reenvia depois de um 500 ou de um timeout, quantas vezes e em que ordem. Dá para testar respondendo 500 de propósito num ambiente de teste.
-9. **CSV "Exportar Pedidos"**: quais colunas existem (id do pedido? afiliado? status? valor? data de pagamento?), o formato dos valores (`R$ 20,00`?), o encoding e o separador, e o efeito da opção "Um bilhete por linha". A conferência (seção 10) já detecta as colunas pelo nome e a coordenação confirma o mapeamento; o export real fecha os nomes e os formatos e deve virar um CSV de teste, com os dados pessoais trocados por fictícios.
+9. **CSV "Exportar Pedidos"** (lançamento, 4.1, passo 7): quais colunas existem (id do pedido? afiliado? status? valor? data de pagamento?), o formato dos valores (`R$ 20,00`?), o encoding e o separador, e o efeito da opção "Um bilhete por linha". A conferência (seção 10) já detecta as colunas pelo nome e a coordenação confirma o mapeamento; o export real fecha os nomes e os formatos e deve virar um CSV de teste, com os dados pessoais trocados por fictícios.
 10. Se o slug muda quando a campanha é renomeada (o filtro D5 depende dele).
-11. O tempo de reserva até expirar (`expires_at − created_at`), que define o volume de `expired_order`.
+11. O tempo de reserva até expirar (`expires_at − created_at`), que define o volume de `expired_order` (lançamento, 4.1, passo 5).
 12. Se a Rifei manda um teste ao adicionar o webhook (o artigo do n8n fala em "teste de webhook") e o que ele contém. Se a Rifei recusar o webhook por causa da resposta do sistema, anote a mensagem e passe ao SM.
 13. Onde a Efí é adicionada (na conta ou em cada campanha) e o nome do campo da chave Pix na janela "Adicionar Efí" (seção 12.2, passo E).
+14. **A indicação do afiliado fica guardada? (lançamento; pergunta 8 da 12.7)** Se o comprador abre o link do afiliado e só compra depois, voltando pela página da campanha sem o link, a compra continua com o afiliado? Teste (lançamento, 4.1, passo 6): no mesmo celular em que abriu o link de afiliado, abra o link comum da campanha e inicie uma compra sem pagar; em Pedidos, a coluna Célula mostra a célula do teste (guardou) ou "Sem afiliado" (não guardou). Outro dia ou outro aparelho ficam sem resposta, e não precisam: o líder orienta a comprar pelo link dele (guia do líder, seção 1). Pagar depois um pedido que já tem o afiliado não o tira do pedido no sistema: um evento sem `affiliate_id` não apaga o que já está gravado (seção 5, passo 9).
 
 Os payloads reais capturados devem virar fixtures novas, com os dados pessoais trocados por fictícios antes do commit.
 
@@ -341,10 +346,10 @@ Outros casos:
 Roteiro para o PO configurar a Rifei e a Efí de uma vez, quase tudo pelo celular. A exceção é ligar a Efí (12.2, passos B, C e E): faça num computador, no navegador, com a Efí e o painel da Rifei ([app.rifei.com.br](https://app.rifei.com.br)) abertos em abas. Assim o certificado baixado em B vai direto para a Rifei em E, sem passar por WhatsApp ou e-mail.
 
 - Tudo foi conferido nas fontes oficiais em **11/11/2026**, e cada passo traz o link. Os nomes entre aspas são os da fonte.
-- **NÃO DOCUMENTADO** quer dizer que a fonte oficial não diz. Confira na tela ou pergunte ao suporte da Rifei (12.7).
+- **NÃO DOCUMENTADO** quer dizer que a fonte oficial não diz. Descubra na tela, ao configurar, ou na compra de teste (seção 9). O lançamento não espera o suporte da Rifei: as perguntas da 12.7 são opcionais.
 - Nenhuma credencial (Client Secret, certificado, token do webhook, senha) vai para este repositório, o DevMission, o WhatsApp ou o e-mail.
 
-Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → campanha (12.1) → ligar a Efí (12.2 B a E) → webhook (12.4, com o token gerado pela tela) → afiliados (12.3) → compra de teste (lançamento, seção 4).
+Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → campanha (12.1) e, no mesmo painel, ligar os afiliados e gerar o convite da conta afiliada de teste (12.3) → webhook (12.4, com o token gerado pela tela) → ligar a Efí (12.2 B a E) ou, se a análise não terminou, o Pix manual (12.2, alternativa) → compra de teste (lançamento, seção 4) → convites dos líderes. O plano do dia, com quem faz cada passo e quanto tempo leva, está no topo do [lancamento.md](lancamento.md#plano-de-1-dia).
 
 ### 12.1 Criar a campanha na Rifei e achar o slug
 
@@ -367,7 +372,7 @@ Ordem sugerida: abrir a conta Efí (12.2 A, porque a análise pode demorar) → 
 
 ### 12.2 Ligar a Efí à Rifei (recebimento do Pix)
 
-**Alternativa: Pix manual.** A Rifei também aceita o Pix manual: o comprador paga direto na chave Pix cadastrada nas formas de pagamento, manda o comprovante no WhatsApp e o organizador confere no extrato e marca o pedido como pago no painel ([Como saber se um PIX manual foi pago](https://rifei.com.br/ajuda/pagamentos/como-saber-se-um-pix-manual-foi-pago), conferido em 13/11/2026). A célula continua vindo do afiliado do pedido, nas duas formas. Diferenças: com a Efí o pedido vira pago sozinho e a venda aparece no sistema em segundos; no Pix manual cada venda espera alguém conferir o extrato e marcar no painel (o artigo avisa que comprovante pode ser adulterado), e falta confirmar se a marcação manual dispara o webhook (pergunta 9 da seção 12.7). Para centenas de vendas, a Efí é o caminho recomendado.
+**Alternativa: Pix manual.** A Rifei também aceita o Pix manual: o comprador paga direto na chave Pix cadastrada nas formas de pagamento, manda o comprovante no WhatsApp e o organizador confere no extrato e marca o pedido como pago no painel ([Como saber se um PIX manual foi pago](https://rifei.com.br/ajuda/pagamentos/como-saber-se-um-pix-manual-foi-pago), conferido em 13/11/2026). A célula continua vindo do afiliado do pedido, nas duas formas. Diferenças: com a Efí o pedido vira pago sozinho e a venda aparece no sistema em segundos; no Pix manual cada venda espera alguém conferir o extrato e marcar no painel (o artigo avisa que comprovante pode ser adulterado), e se a marcação manual dispara o webhook se confirma na compra de teste (seção 9, item 5). Se não disparar, o pedido fica pendente no sistema: a conferência pelo CSV o mostra em "Pagamento não registrado", mas ainda não o corrige (seção 10, Recuperar). Para centenas de vendas, a Efí é o caminho recomendado. É o plano B do lançamento, se a análise da Efí não terminar a tempo ([lancamento.md, 1.6](lancamento.md#16-plano-b-do-pix-começar-com-o-pix-manual)).
 
 O artigo oficial da Rifei é [Como adicionar o Efí](https://rifei.com.br/ajuda/pagamentos/como-adicionar-o-efi-bank). Ele pede uma conta Efí Pro ou Empresas, uma aplicação com permissões do Pix, um certificado e uma chave Pix. Abaixo, na ordem: A (conta), B (certificado), C (aplicação), D (chave Pix) e E (colar na Rifei). A Efí diz que a API Pix precisa de um certificado ativo, por isso aqui o certificado vem antes da aplicação ([Como criar uma nova aplicação](https://sejaefi.com.br/central-de-ajuda/api/como-criar-uma-nova-aplicacao-para-usar-a-api-pix)).
 
@@ -442,7 +447,7 @@ Já tem "Efí Para você" (CPF)?
 - **Credenciais:** a Client Secret e o certificado dão acesso à conta pela API. A Efí pede que as chaves não sejam compartilhadas, e os Termos da Rifei (item 6.3) deixam a guarda com o usuário.
   - Não mande por WhatsApp nem por e-mail, e não guarde no projeto.
   - Depois de enviar à Rifei, apague o certificado baixado ou guarde só num lugar seu (ex.: gerenciador de senhas).
-- **"Enviar Pix":** a Rifei pede essa permissão, que a tela da Efí (na imagem do artigo da Rifei) descreve como "Permite envio de Pix". A fonte não diz para que a Rifei a usa. Uma conta Efí só para a rifa limita o risco. Pergunte ao suporte (12.7).
+- **"Enviar Pix":** a Rifei pede essa permissão, que a tela da Efí (na imagem do artigo da Rifei) descreve como "Permite envio de Pix". A fonte não diz para que a Rifei a usa. Uma conta Efí só para a rifa limita o risco. A pergunta fica na 12.7 (opcional).
 
 ### 12.3 Afiliados: programa da campanha e líderes
 
@@ -458,20 +463,20 @@ O que as fontes oficiais dizem:
 
 Passo a passo possível hoje:
 
-1. **[PO, no painel da Rifei]** Ligue os afiliados na campanha e gere o **link de convite** de cada líder. Onde: NÃO DOCUMENTADO. Pergunte ao suporte (12.7) ou procure "Afiliados" no painel.
+1. **[PO, no painel da Rifei]** Ligue os afiliados na campanha e gere o **link de convite** de cada líder. Onde: NÃO DOCUMENTADO. Descubra no painel ao criar a campanha (procure "Afiliados") e gere primeiro o convite da conta afiliada de teste (lançamento, 4.1).
 2. **[Líder]** Abre o convite, cria a conta de afiliado e entra pela "Área de afiliados" (menu da página da campanha) com o e-mail.
-3. **[Líder]** Pega o **link de afiliado** dele para divulgar. Onde fica e qual o formato: NÃO DOCUMENTADO.
+3. **[Líder]** Pega o **link de afiliado** dele para divulgar. Onde fica e qual o formato: NÃO DOCUMENTADO; a compra de teste mostra (seção 9, item 1).
 4. **[Líder]** Compartilha o link (WhatsApp, redes sociais). A venda feita por esse link chega ao sistema com o `affiliate_id` dele.
 5. **[Coordenação]** Vincula o código à célula na tela de Adesão (lançamento, seção 5).
 
-Ainda NÃO DOCUMENTADO, para conferir com o suporte ou com a campanha de teste (seção 9, itens 1 e 2):
+Ainda NÃO DOCUMENTADO, para descobrir no painel ou na compra de teste (seção 9: o parágrafo do painel e os itens 1 e 2):
 
 - se os afiliados precisam ser ligados em cada campanha;
 - onde o organizador gera o convite, e se o cadastro "só por convite" é uma escolha dele;
 - o formato do link de afiliado e se o id aparece nele;
 - onde o organizador vê o identificador de cada afiliado e se é o mesmo `affiliate_id` do webhook.
 
-**Onde o formato confirmado entra (RIFA-046, [decisions.md D24](decisions.md#d24-link-de-vendas-e-qr-code-de-cada-célula-rifa-046-contrato-2026-11-12)).** O sistema monta o link de vendas de cada célula (e o QR code dele, na `/minha` do líder e na Adesão) a partir de um **modelo** que só o admin grava, com `{slug}` (o slug da campanha) e `{afiliado}` (o `affiliate_id`). Ele fica vazio até o formato ser confirmado. Com a resposta do suporte ou a compra de teste:
+**Onde o formato confirmado entra (RIFA-046, [decisions.md D24](decisions.md#d24-link-de-vendas-e-qr-code-de-cada-célula-rifa-046-contrato-2026-11-12)).** O sistema monta o link de vendas de cada célula (e o QR code dele, na `/minha` do líder e na Adesão) a partir de um **modelo** que só o admin grava, com `{slug}` (o slug da campanha) e `{afiliado}` (o `affiliate_id`). Ele fica vazio até o formato ser confirmado. Com a compra de teste (lançamento, 4.1, passos 1 a 3):
 
 - se o link de afiliado leva o mesmo número do `affiliate_id` do webhook, o admin escreve o modelo trocando o slug por `{slug}` e o número por `{afiliado}` (ex.: `https://rifei.com.br/videira-kids?ref=1042` vira `https://rifei.com.br/{slug}?ref={afiliado}`) e confere com a compra de teste pelo QR de uma célula: a venda tem de cair nela;
 - se o link fica noutro endereço que não `https://rifei.com.br/` (ex.: `app.rifei.com.br`), ou não leva o `affiliate_id` (ex.: um código próprio de cada afiliado), passe ao SM: o endereço entra em `HOSTS_LINK_VENDAS` (`src/shared/contracts/link-vendas.ts`), ou o desenho muda para a opção (b) da D24 (o link de cada afiliado colado na Adesão).
@@ -515,13 +520,13 @@ Como remover ou alterar um pedido no painel: NÃO DOCUMENTADO.
 - No app: "Menu" → "Extrato" → toque na transação → "Devolver valor" → informe o valor → "Continuar" → "Autorizar devolução" → confirme com a Assinatura Eletrônica.
 - Na web: "Menu" → "Extrato" → três pontinhos da transação → "Detalhar" → "Devolver valor recebido via Pix" → informe o valor → "Autorizar devolução" → confirme com o Autenticador Efí e a Assinatura Eletrônica.
 
-**No sistema.** A Rifei só avisa pedido novo, pago e expirado ([Referência do webhook](https://rifei.com.br/ajuda/webhook/referencia-do-webhook)). Estorno ou remoção na Rifei não chega ao sistema: use a ação "desconsiderar pedido" do sistema (RIFA-028), quando ela estiver no ar.
+**No sistema.** A Rifei só avisa pedido novo, pago e expirado ([Referência do webhook](https://rifei.com.br/ajuda/webhook/referencia-do-webhook)). Estorno ou remoção na Rifei não chega ao sistema: use a ação **Desconsiderar** do sistema, na tela Pedidos (RIFA-028; lançamento, 4.4).
 
 Ordem: devolva na Efí → remova ou ajuste o pedido na Rifei, se der (**antes de 7 dias** da reserva) → desconsidere o pedido no sistema.
 
-### 12.7 Perguntas prontas para o suporte da Rifei
+### 12.7 Perguntas para o suporte da Rifei (referência opcional)
 
-O suporte da Rifei atende pelo WhatsApp, de segunda a sábado, das 9h às 21h (horário de Brasília) ([Preços](https://rifei.com.br/precos) e [rifei.com.br/ajuda](https://rifei.com.br/ajuda), onde o link fica no topo). Mande de uma vez:
+**Não usada no lançamento** (decisão do PO, 15/11/2026): o que ela perguntava é confirmado no painel e na compra de teste (seção 9): as perguntas 1, 2, 3, 8 e 9 estão lá, com o passo concreto de cada uma. As perguntas ficam aqui para quando houver tempo ou uma dúvida que o painel e o teste não resolvam (as 4, 5, 6 e 7). O suporte da Rifei atende pelo WhatsApp, de segunda a sábado, das 9h às 21h (horário de Brasília) ([Preços](https://rifei.com.br/precos) e [rifei.com.br/ajuda](https://rifei.com.br/ajuda), onde o link fica no topo).
 
 1. Onde, no painel, eu ligo os afiliados numa campanha e gero o link de convite de cada afiliado?
 2. Onde o afiliado acha o link dele para divulgar? Qual o formato desse link?
@@ -533,4 +538,4 @@ O suporte da Rifei atende pelo WhatsApp, de segunda a sábado, das 9h às 21h (h
 8. Se o comprador abre o link do afiliado e só paga depois (outro dia, outro aparelho, ou voltando pela página da campanha sem o link), a compra continua com o afiliado? Por quanto tempo a Rifei guarda essa indicação?
 9. Quando eu marco um pedido como pago à mão (Pix manual), a Rifei manda o evento `paid_order` no webhook, com o afiliado do pedido?
 
-Passe as respostas ao SM, para a seção 9 e o DevMission.
+Se perguntar, passe as respostas ao SM, para a seção 9 e o DevMission.

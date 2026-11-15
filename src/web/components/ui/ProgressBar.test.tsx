@@ -109,6 +109,22 @@ describe("ProgressBar", () => {
     expect(css).toMatch(/\.ui-progress__trofeu\s*\{[^}]*position:\s*absolute;/);
   });
 
+  it("RIFA-053: nas cores forçadas, o trilho tem borda e a barra a cor de destaque do sistema (antes, sumiam)", () => {
+    const css = lerCss("./ProgressBar.css");
+    const forcadas =
+      /@media \(forced-colors: active\)\s*\{([\s\S]*?\})\s*\}/.exec(css)?.[1] ??
+      "";
+    expect(forcadas).toMatch(
+      /\.ui-progress__trilho\s*\{\s*border:\s*1px solid CanvasText;\s*\}/,
+    );
+    const barra = /\.ui-progress__barra\s*\{([^}]*)\}/.exec(forcadas)?.[1];
+    expect(barra).toMatch(/background:\s*Highlight;/);
+    // Sem o ajuste automático, o sistema não troca o Highlight pelo fundo da página.
+    expect(barra).toMatch(/forced-color-adjust:\s*none;/);
+    // Uma regra só das cores forçadas, fora do movimento.
+    expect(css.match(/@media \(forced-colors: active\)/g)).toHaveLength(1);
+  });
+
   it("perto da meta não arredonda para 100%", () => {
     render(<ProgressBar rotulo="Quase" valor={9_999} meta={10_000} />);
 

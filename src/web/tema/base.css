@@ -20,7 +20,8 @@
 /*
  * Reserva enquanto a Outfit chega (font-display: swap): a Arial em negrito (ou a Liberation Sans, de métricas iguais)
  * ajustada à largura e à altura da Outfit, para a troca não mudar a quebra dos títulos. Medido no Chromium com os
- * textos das telas (RIFA-049): a Outfit 800 é 96,4% da largura da Arial em negrito; sobe 100% e desce 26% do em.
+ * textos das telas (RIFA-049): a Outfit 800 é 96,4% da largura da Arial em negrito; sobe 100% e desce 26% do em (os
+ * overrides são esses divididos pelo size-adjust: 100 / 0,964 = 103,7% e 26 / 0,964 = 27%).
  */
 @font-face {
   font-family: "Outfit reserva";
@@ -31,6 +32,30 @@
   size-adjust: 96.4%;
   ascent-override: 103.7%;
   descent-override: 27%;
+  line-gap-override: 0%;
+}
+
+/*
+ * Reserva no Android (RIFA-053): lá não há Arial nem Liberation, e a reserva acima não vale. A Roboto, a fonte do
+ * sistema do Android, ajustada à Outfit do mesmo jeito (o negrito estático primeiro; a Roboto variável do Android 12+
+ * por último, com o peso 800 pedido no eixo dela).
+ * - Largura (size-adjust): medida no Chromium com 25 textos das telas (títulos, nomes de célula e números), com a
+ *   Roboto 700 do Google Fonts (o mesmo desenho da do Android): a Outfit 800 é 103% da largura da Roboto em negrito.
+ * - Altura: a Outfit sobe 1000 e desce 260 num em de 1000 (100% e 26%: a linha tem 126% do em). A Roboto sobe 1900 e
+ *   desce 500 num em de 2048 (hhea): 92,8% e 24,4% (117,2%); sem ajuste, a troca mudaria a altura da linha. Os
+ *   overrides dão à Roboto a subida e a descida da Outfit. O navegador multiplica os overrides pelo size-adjust, então
+ *   cada um é o da Outfit dividido por ele: 100% / 1,03 = 97,1% e 26% / 1,03 = 25,2%. Sem espaço entre linhas
+ *   (line-gap 0, como a Outfit).
+ */
+@font-face {
+  font-family: "Outfit reserva Roboto";
+  src:
+    local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"),
+    local("Roboto Regular"), local("Roboto-Regular");
+  font-weight: 800;
+  size-adjust: 103%;
+  ascent-override: 97.1%;
+  descent-override: 25.2%;
   line-gap-override: 0%;
 }
 

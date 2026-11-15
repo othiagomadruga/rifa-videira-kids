@@ -20,7 +20,7 @@ export function CurvaDaCampanha({ resumo }: Props) {
   return (
     <Card
       titulo="Curva: esperado × realizado"
-      icone="subiu"
+      icone="grafico"
       className="visao-curva"
     >
       <p className="visao-curva__subtitulo">

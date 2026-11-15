@@ -234,7 +234,7 @@ function PorPedido({
         <Stat
           rotulo="Pagos no arquivo"
           valor={textoDosTotais(resumo.aprovados_no_arquivo)}
-          icone="baixar"
+          icone="documento"
           tom="marca"
         />
         <Stat
@@ -771,7 +771,7 @@ function Agregado({
         <Stat
           rotulo="Pagos no arquivo"
           valor={textoDosTotais(total.arquivo)}
-          icone="baixar"
+          icone="documento"
           tom="marca"
         />
         <Stat
