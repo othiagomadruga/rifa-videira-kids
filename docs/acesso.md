@@ -136,7 +136,7 @@ Ele não será mostrado de novo. Mande só para a própria pessoa: quem tiver o 
 - O nome aceita letras (com acento), números, espaço, ponto, hífen e apóstrofo, até 120 caracteres, e começa por letra. Qualquer outro caractere é recusado antes de montar o SQL. Os apóstrofos são dobrados no SQL (`D'Arc` vira `'D''Arc'`).
 - `--remote`, `--local` e `--help` não aceitam valor: `--remote=false` é erro, e não liga o D1 remoto. Opção desconhecida (inclusive `--senha=x` ou `--Remote`), valor solto (`--remote false`) e `--local` com `--remote` também são erro.
 - Códigos de saída: 0 (ok), 1 (o D1 não gravou: migrações não aplicadas, wrangler sem login...), 2 (uso errado).
-- **Em produção** ([lancamento.md, 3.1](lancamento.md#31-primeiro-admin-sm-depois-thiago)): o SM roda o comando com `--remote` da sessão dele e manda o link ao primeiro admin, que entra, gera um link novo para si, entra pelo novo e só então revoga o primeiro (o link passou pelo chat). O PO não precisa de Node.
+- **Em produção** ([lancamento.md, 3.1](lancamento.md#31-primeiro-admin-sm-depois-thiago)): o SM roda o comando com `--remote` da sessão dele, com a saída num arquivo (`umask 077`) e nunca na conversa, confere o link com `npm run verificar:producao -- --url <site> --admin-link <arquivo>` (RIFA-058) e manda o link ao primeiro admin, que entra, gera um link novo para si, entra pelo novo e só então revoga o primeiro (o link passou pelo chat). O PO não precisa de Node.
 
 ## 6. Montagem no app (`src/worker/index.ts`)
 
