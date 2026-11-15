@@ -231,8 +231,8 @@ function Previa({
         <p>
           <strong>{frasesDaPrevia(recuperados).join(" ")}</strong>{" "}
           {recuperados.length === 1
-            ? "Passa a contar no painel e no ranking, como paga."
-            : "Elas passam a contar no painel e no ranking, como pagas."}
+            ? "Passa a contar no painel e no ranking."
+            : "Passam a contar no painel e no ranking."}
         </p>
       ) : (
         <Aviso tom="alerta" anuncio="nenhum" titulo="Nada a gravar">

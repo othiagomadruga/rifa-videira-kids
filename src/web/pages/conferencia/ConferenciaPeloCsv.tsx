@@ -342,7 +342,7 @@ export function ConferenciaPeloCsv() {
     setVersaoHistorico((versao) => versao + 1);
     setAnuncio(
       resposta.aplicado
-        ? `${tituloDaGravacao(resposta)}: já contam no painel e no ranking.`
+        ? `${tituloDaGravacao(resposta)}: ${resposta.recuperados.length === 1 ? "já conta" : "já contam"} no painel e no ranking.`
         : `Nada foi gravado: ${NADA_GRAVADO[tipo]}`,
     );
     if (conferida) void conferirDeNovo(conferida);
