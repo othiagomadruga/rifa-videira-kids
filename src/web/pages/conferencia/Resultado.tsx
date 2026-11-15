@@ -204,7 +204,7 @@ function PorPedido({
       <Aviso
         tom="perigo"
         anuncio="nenhum"
-        titulo={`${plural(naoRegistrados.quantidade, "pedido pago", "pedidos pagos")} na Rifei ${um ? "está pendente" : "estão pendentes"} no sistema`}
+        titulo={`${plural(naoRegistrados.quantidade, "pedido pago", "pedidos pagos")} na Rifei ${um ? "está pendente ou expirado" : "estão pendentes ou expirados"} no sistema`}
       >
         <p>
           {um ? "Ele não conta" : "Eles não contam"} no painel nem no ranking.

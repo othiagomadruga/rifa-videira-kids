@@ -3,7 +3,7 @@
 // à mão no painel da Rifei, ou o webhook fora do ar entre os dois avisos). Só o admin; com o mesmo cuidado da venda
 // perdida. Com o D1 dos testes, o relógio fixo e o cenário de conferencia-apoio.ts (o R-0005 está pendente no
 // sistema e pago no arquivo; o R-0009, expirado). Todo dado é fictício.
-import { env } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
 import { Hono } from "hono";
 import {
   afterEach,
@@ -14,6 +14,7 @@ import {
   it,
   vi,
 } from "vitest";
+import expiredOrder from "../../../test/fixtures/rifei/expired_order.json";
 import paidOrderAfiliado from "../../../test/fixtures/rifei/paid_order.afiliado.json";
 import {
   respostaAnaliseReconciliacaoSchema,
@@ -28,6 +29,7 @@ import {
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { gravarRecuperacao } from "../db/reconciliacao";
+import { ORIGEM, cabecalhosDeSessao } from "../test/acesso-teste";
 import {
   AGORA_CONFERENCIA,
   LINHAS_DO_CENARIO,
@@ -136,8 +138,11 @@ const vendasDaCelula = async (id: number) =>
     )
     .itens.find((item) => item.id === id)!.vendas;
 
-/** Um "Pedido pago" do webhook para o pedido, com os dados do cenário (o afiliado 101 e 2 bilhetes de R$ 20,00). */
-async function pedidoPagoPeloWebhook(id: string, aprovadoEm: string) {
+/**
+ * Um evento do webhook (o exemplo `modelo`) para o pedido, com os dados do cenário (o afiliado 101 e 2 bilhetes de
+ * R$ 20,00) e as trocas dadas.
+ */
+async function eventoDoWebhook(modelo: object, trocas: object) {
   const webhook = new Hono<{ Bindings: Cloudflare.Env }>();
   webhook.route("/", webhookRifei);
   const res = await webhook.request(
@@ -149,15 +154,14 @@ async function pedidoPagoPeloWebhook(id: string, aprovadoEm: string) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        ...paidOrderAfiliado,
-        id,
+        ...modelo,
         slug: DADOS_CAMPANHA.slug_rifei,
         affiliate_id: 101,
         numbers: [501, 502],
         numbers_count: 2,
         subtotal: 40,
         total: 40,
-        approved_at: aprovadoEm,
+        ...trocas,
       }),
     },
     env,
@@ -165,6 +169,18 @@ async function pedidoPagoPeloWebhook(id: string, aprovadoEm: string) {
   expect(res.status).toBe(200);
   return ((await res.json()) as { resultado: string }).resultado;
 }
+
+/** Um "Pedido pago" do webhook para o pedido. */
+const pedidoPagoPeloWebhook = (id: string, aprovadoEm: string) =>
+  eventoDoWebhook(paidOrderAfiliado, { id, approved_at: aprovadoEm });
+
+/** Um "Pedido expirado" do webhook para o pedido (o prazo do Pix acabou na Rifei). */
+const pedidoExpiradoPeloWebhook = (id: string) =>
+  eventoDoWebhook(expiredOrder, {
+    id,
+    coupon_id: null,
+    coupon_discount: null,
+  });
 
 /** Tira do pedido o que a correção muda (status, data do pagamento, atualização e a ligação com a recuperação). */
 const QUE_MUDAM = new Set([
@@ -444,6 +460,59 @@ describe("RIFA-056: o admin marca como pago", () => {
     expect(await contar("auditoria")).toBe(0);
   });
 
+  it("o pedido de outra campanha nunca é tocado: pendente lá e pago no arquivo, fica como está (ja_existe), nem pelo lote", async () => {
+    await env.DB.prepare(
+      "UPDATE pedidos SET status = 'in_process', aprovado_em = NULL WHERE id = 'R-OUTRA'",
+    ).run();
+    const enviado = await corpo();
+    expect(
+      naoRegistrados(await analisar(enviado)).map((item) => item.pedido_id),
+    ).toEqual(["R-0005"]);
+    const antes = await linhaDoPedido("R-OUTRA");
+
+    // Nem a prévia o oferece, nem a gravação o muda.
+    for (const simular of [true, false])
+      expect(
+        await recuperar({ ...enviado, pedidos: ["R-OUTRA"], simular }),
+      ).toMatchObject({
+        aplicado: false,
+        recuperados: [],
+        nao_recuperados: [{ pedido_id: "R-OUTRA", motivo: "ja_existe" }],
+      });
+    expect(await linhaDoPedido("R-OUTRA")).toEqual(antes);
+
+    // O lote também confere a campanha: um plano com o pedido de outra campanha não muda nada.
+    const campanha = await env.DB.prepare(
+      "SELECT id FROM campanhas WHERE ativa = 1",
+    ).first<{ id: number }>();
+    const gravacao = await gravarRecuperacao(env.DB, {
+      campanhaId: campanha!.id,
+      usuarioId: admin.id,
+      executadoEm: AGORA_CONFERENCIA.toISOString(),
+      pedidosSolicitados: 1,
+      linhasArquivo: 1,
+      arquivoSha256: "0".repeat(64),
+      colunas: enviado.colunas,
+      pedidos: [
+        {
+          pedido_id: "R-OUTRA",
+          tipo: "pagamento_nao_registrado",
+          qtd_bilhetes: 1,
+          total_centavos: 2000,
+          afiliado: "reconhecido",
+          affiliate_id: 101,
+          celula: null,
+          aprovado_em: PAGO_EM_R0005,
+          origem_data: "arquivo",
+        },
+      ],
+      precoBilheteCentavos: DADOS_CAMPANHA.preco_bilhete_centavos,
+    });
+    expect(gravacao).toEqual({ recuperacaoId: null, gravados: new Set() });
+    expect(await linhaDoPedido("R-OUTRA")).toEqual(antes);
+    expect(await contar("recuperacoes")).toBe(0);
+  });
+
   it("idempotente: recuperar duas vezes é igual a uma (a segunda não grava, não cria recuperação nem trilha)", async () => {
     const conferido = await corpo();
     const enviado = { ...conferido, pedidos: ["R-0005"] };
@@ -544,6 +613,23 @@ describe('RIFA-056: a corrida com o webhook (o "Pedido pago" antes ou depois dá
     expect(
       await pedidoPagoPeloWebhook("R-0005", "2026-11-26T10:05:00.000-03:00"),
     ).toBe("duplicado");
+
+    expect(await linhaDoPedido("R-0005")).toEqual(corrigido);
+    expect(await resumoDoPainel()).toEqual({
+      pedidos_aprovados: 7,
+      bilhetes: 16,
+      total_centavos: 32000,
+    });
+  });
+
+  it('o "Pedido expirado" que chega depois da correção é ignorado (approved é terminal, D4): o pedido continua pago e contando', async () => {
+    await recuperar({ ...(await corpo()), pedidos: ["R-0005"] });
+    const corrigido = await linhaDoPedido("R-0005");
+    expect(corrigido).toMatchObject({ status: "approved" });
+
+    expect(await pedidoExpiradoPeloWebhook("R-0005")).toBe(
+      "ignorado_transicao",
+    );
 
     expect(await linhaDoPedido("R-0005")).toEqual(corrigido);
     expect(await resumoDoPainel()).toEqual({
@@ -781,5 +867,53 @@ describe("RIFA-056: só o admin", () => {
       { pedido_id: "R-0005", motivo: "ja_existe" },
     ]);
     expect(await linhaDoPedido("R-0005")).toEqual(antes);
+  });
+
+  it("pelo Worker de verdade (o login do index.ts põe o papel da sessão): a coordenação não marca; o admin marca", async () => {
+    // Sem a coluna da data: o Worker de verdade usa o relógio do sistema, e as datas do cenário podem estar no futuro.
+    const { arquivo } = await corpoDe(csvDoCenario());
+    const { corpo: semData } = await corpoDe(csvDoCenario(), {
+      ...arquivo.mapeamentoDetectado,
+      data: null,
+    });
+    const enviado = { ...semData, pedidos: ["R-0005"] };
+    const recuperarComo = async (papel: "admin" | "coordenacao") => {
+      const res = await exports.default.fetch(`${ORIGEM}${RECUPERAR}`, {
+        method: "POST",
+        headers: {
+          ...(await cabecalhosDeSessao(papel)),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(enviado),
+      });
+      expect(res.status).toBe(200);
+      return respostaRecuperarReconciliacaoSchema.parse(await res.json());
+    };
+    const antes = await linhaDoPedido("R-0005");
+
+    expect(await recuperarComo("coordenacao")).toMatchObject({
+      aplicado: false,
+      recuperados: [],
+      nao_recuperados: [{ pedido_id: "R-0005", motivo: "ja_existe" }],
+    });
+    expect(await linhaDoPedido("R-0005")).toEqual(antes);
+    expect(await contar("recuperacoes")).toBe(0);
+
+    const doAdmin = await recuperarComo("admin");
+    expect(doAdmin).toMatchObject({
+      aplicado: true,
+      recuperados: [
+        {
+          pedido_id: "R-0005",
+          tipo: "pagamento_nao_registrado",
+          origem_data: "recuperacao",
+        },
+      ],
+    });
+    expect(await linhaDoPedido("R-0005")).toMatchObject({
+      status: "approved",
+      origem: "webhook",
+      pagamento_recuperacao_id: doAdmin.recuperacao_id,
+    });
   });
 });

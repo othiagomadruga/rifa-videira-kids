@@ -236,10 +236,12 @@ describe("RIFA-056: o admin marca como pagos os pagamentos não registrados", ()
       expect(enviados).not.toContain(texto);
   });
 
-  it("só pagamentos não registrados: o aviso do topo diz que estão pendentes no sistema e manda registrar", async () => {
+  it("só pagamentos não registrados: o aviso do topo diz que estão pendentes ou expirados no sistema e manda registrar", async () => {
     await abrir(criarApiFalsa({ analises: [ANALISE_SO_PAGAMENTOS] }));
     expect(
-      screen.getByText("3 pedidos pagos na Rifei estão pendentes no sistema"),
+      screen.getByText(
+        "3 pedidos pagos na Rifei estão pendentes ou expirados no sistema",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
