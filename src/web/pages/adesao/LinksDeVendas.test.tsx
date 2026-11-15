@@ -607,6 +607,31 @@ describe("estados da seção Links de vendas", () => {
     expect(within(secao).queryByRole("button")).toBeNull();
   });
 
+  it("RIFA-053: sem conexão ao carregar os links, o estado neutro (o mesmo título), e o resto da Adesão fica", async () => {
+    simularApi({ modelo: MODELO_DE_TESTE });
+    const daApi = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/admin/links-vendas")
+          throw new TypeError("Failed to fetch");
+        return daApi(url, init);
+      }),
+    );
+    renderizarRota("/coordenacao/adesao", { usuario: USUARIO_DE_TESTE });
+    const secao = await screen.findByRole(
+      "region",
+      { name: "Links de vendas" },
+      ESPERA_DO_PACOTE,
+    );
+    const alerta = await within(secao).findByRole("alert");
+    expect(alerta).toHaveClass("ui-estado--conexao");
+    expect(alerta).toHaveTextContent(
+      "Não foi possível carregar os links de vendas.",
+    );
+    expect(document.querySelector(".ui-estado--erro")).toBeNull();
+  });
+
   it("falha ao carregar: o erro com Tentar de novo, que pede a lista outra vez", async () => {
     const { api, secao } = await abrir(USUARIO_DE_TESTE, {
       modelo: MODELO_DE_TESTE,
@@ -618,6 +643,8 @@ describe("estados da seção Links de vendas", () => {
     expect(alerta).toHaveTextContent(
       "Não foi possível carregar os links de vendas.",
     );
+    // A API respondeu com falha (503): o vermelho continua (RIFA-053).
+    expect(alerta).toHaveClass("ui-estado--erro");
     fireEvent.click(
       within(alerta).getByRole("button", { name: "Tentar de novo" }),
     );

@@ -1006,9 +1006,11 @@ describe("RIFA-006b: no celular, a fila logo no topo; depois de vincular, aviso 
       "ui-stat__icone--marca",
       "link",
     ]);
+    // RIFA-053: as vendas com o recibo dos pedidos; o check fica só para "nenhum afiliado sem célula" (antes, dois
+    // checks lado a lado).
     expect(chip("Células que já venderam")).toEqual([
       "ui-stat__icone--sucesso",
-      "check",
+      "pedidos",
     ]);
     // Com órfãos, o alerta (o número diz quantos); sem nenhum, neutro.
     expect(chip("Afiliados sem célula")).toEqual([
@@ -1024,6 +1026,11 @@ describe("RIFA-006b: no celular, a fila logo no topo; depois de vincular, aviso 
       "ui-stat__icone--neutro",
       "check",
     ]);
+    expect(
+      ["Células vinculadas", "Células que já venderam", "Afiliados sem célula"]
+        .map((rotulo) => chip(rotulo)[1])
+        .filter((icone) => icone === "check"),
+    ).toHaveLength(1);
   });
 
   it("sem matchMedia (navegador antigo): vale o celular, com o resumo compacto", async () => {

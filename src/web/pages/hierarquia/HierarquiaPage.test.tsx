@@ -100,7 +100,9 @@ describe("CA1: visão da hierarquia", () => {
       expect(chip).toHaveClass("ui-stat__icone--marca");
       return chip?.querySelector("svg")?.getAttribute("data-icone");
     });
-    expect(chips).toEqual(["hierarquia", "adesao", "pessoas", "pessoas"]);
+    // RIFA-053: cada número com o próprio ícone (antes, "pessoas" duas vezes).
+    expect(chips).toEqual(["hierarquia", "adesao", "celula", "pessoas"]);
+    expect(new Set(chips).size).toBe(chips.length);
 
     expect(
       within(tabela("Células"))

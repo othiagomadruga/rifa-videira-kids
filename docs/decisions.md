@@ -1323,8 +1323,8 @@ sem dependência nova. Decidido pelo SM em 13/11; o PO pode vetar ao ver a demon
 - **Cabeçalho das telas abertas na faixa do degradê forte**, com o logo no selo claro (como no telão); o Kids continua
   no rodapé.
 - **Alvo de toque**: o botão pequeno tem 44 px em tela de toque (`pointer: coarse`) e 36 px no mouse.
-- **Peso**: JS inicial ≤ 162 KiB e CSS inicial ≤ 16,5 KiB em gzip (eram 158,4 e 13,0 em 13/11), sem dependência nova;
-  medido pela ferramenta de capturas.
+- **Peso**: JS inicial ≤ 162 KiB (165 KiB desde a RIFA-053: veja o adendo abaixo) e CSS inicial ≤ 16,5 KiB em gzip
+  (eram 158,4 e 13,0 em 13/11), sem dependência nova; medido pela ferramenta de capturas.
 - **Fonte de títulos**: Outfit 800, subconjunto latino, um arquivo woff2 de 13,7 KiB (`@fontsource/outfit` 5.2.6,
   conferido pelo hash; licença OFL-1.1 ao lado), `font-display: swap`, preload e reserva com `size-adjust`; só em
   títulos e números de destaque; o texto corrido continua na fonte do sistema. O arquivo fica em
@@ -1334,3 +1334,22 @@ sem dependência nova. Decidido pelo SM em 13/11; o PO pode vetar ao ver a demon
   o hash também dá o cache longo).
 - **Fora**: `backdrop-filter`, animação infinita nova, carrossel no telão, texto em degradê, tema escuro no site, emoji
   como ícone, biblioteca de ícones, animação ou fonte.
+
+**Adendo (RIFA-053, fechamento da Sprint 9): o que mudou em relação ao plano.**
+
+- **Teto do JS inicial: 165 KiB** (o plano dizia 162). A main com P1, P2, P3a e P3b mediu 162,6 KiB em gzip: a fonte,
+  os ícones, a comemoração, os esqueletos e as falhas neutras couberam, mas sem folga para o acabamento. Com a RIFA-053,
+  163,1 KiB; o CSS inicial continua até 16,5 KiB (15,3 KiB) e nenhuma dependência nova.
+- **O corte das partículas fica na lista**, e não no item, como o plano previa: o item do telão e do ranking é o que o
+  FLIP move, e com `overflow: clip` nele o Chrome contava cada troca de lugar como layout shift (0,02 por troca). O
+  corte vai num ancestral que não se mexe (a lista; na `/minha`, que não tem FLIP, o cartão). E as partículas saem
+  junto com o pulso, quando o % termina de contar (RIFA-053): antes, chegavam ~450 ms antes do 100% e da pílula
+  amarela.
+- **A reserva do topo da `/minha` é só no CSS**: a linha do papel na marca tem `min-height` e a barra, a altura do alvo
+  de toque; nunca um texto falso (um espaço) na marca, que o leitor de tela acharia. O CLS da `/minha` foi de 0,018 a 0.
+- **O "Remover" fica na linha do código do afiliado** (Adesão): o plano previa as três ações numa grade de 3 colunas
+  iguais, que não cabe no cartão ("Desvincular" pede ~106 px e cada coluna teria ~83 px a 390 e a 1366 px). O código e
+  o "Remover", no perigo discreto, numa linha; "Trocar" e "Desvincular" embaixo, em duas colunas.
+- **Os filtros de Pedidos recolhidos no celular** são um `<details>` controlado (`useFiltrosRecolhidos`): fechado ao
+  abrir abaixo de 48rem, sempre aberto no computador e sem `matchMedia`, e acompanha a largura (girar o aparelho abre
+  ou fecha). O `<summary>` conta os filtros escolhidos e, desde a RIFA-053, tem a cara de botão e o chevron `abrir`.

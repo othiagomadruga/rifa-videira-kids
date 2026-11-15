@@ -1,6 +1,5 @@
 import { Link, useLocation } from "react-router";
 import { classesBotao, ComDica, PageHeader } from "../../components/ui";
-import { IconeDaTela } from "../entrar/IconeDaTela";
 import { dicaVoltarAoInicio } from "./textos";
 
 type Props = {
@@ -13,9 +12,9 @@ export function NaoEncontradaPage({ inicio = "/" }: Props) {
   const { pathname } = useLocation();
   return (
     <>
-      {/* A bússola acima do título (RIFA-050): a pessoa se perdeu. */}
-      <IconeDaTela nome="bussola" />
+      {/* A bússola ao lado do título (RIFA-050; no PageHeader desde a RIFA-053): a pessoa se perdeu. */}
       <PageHeader
+        icone="bussola"
         titulo="Página não encontrada"
         descricao={
           <>

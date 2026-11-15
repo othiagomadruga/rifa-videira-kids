@@ -3,7 +3,7 @@ import "./zod-sem-eval";
 import { useEffect, useState } from "react";
 import type { Campanha } from "../../../shared/contracts";
 import { ErrorState, Loading } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { carregarCampanha } from "./campanha-api";
 import { FormularioCampanha } from "./FormularioCampanha";
 import "./campanha.css";
@@ -38,6 +38,7 @@ export function ConfiguracaoCampanha() {
       <ErrorState
         titulo="Não foi possível carregar a campanha."
         mensagem={mensagemDoErro(estado.erro)}
+        conexao={ehFalhaDeConexao(estado.erro)}
         aoTentarDeNovo={() => {
           setEstado({ tipo: "carregando" });
           setTentativa((numero) => numero + 1);

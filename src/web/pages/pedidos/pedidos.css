@@ -17,24 +17,32 @@
 }
 
 /* Filtros recolhidos no celular (RIFA-051, P3.7; A-04): o <summary> "Filtros", com a cara de um botão secundário e
-   a contagem dos escolhidos numa pílula; a seta é desenhada com a borda (decorativa) e vira para cima aberto. No
-   computador (abaixo, no @media), o <summary> some e o <details> fica sempre aberto. */
+   a contagem dos escolhidos numa pílula; o chevron (Icone "abrir", decorativo) vira para cima aberto. No computador
+   (abaixo, no @media), o <summary> some e o <details> fica sempre aberto. */
 .pedidos-filtros-caixa {
   min-width: 0;
 }
 
+/*
+ * O <summary> com a cara do botão secundário (RIFA-053): inline-flex, do tamanho do texto, não da largura toda
+ * (antes, com a seta no canto, parecia um select). O chevron é o Icone "abrir", depois do texto, e gira para cima
+ * quando os filtros estão abertos.
+ */
 .pedidos-filtros-caixa__resumo {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--espaco-1) var(--espaco-3);
+  justify-content: center;
+  gap: var(--espaco-1) var(--espaco-2);
+  max-width: 100%;
   min-height: var(--alvo-toque);
-  padding: var(--espaco-2) var(--espaco-4);
+  padding: var(--espaco-2) var(--espaco-5);
   border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio-2);
   background: var(--cor-superficie);
   color: var(--cor-texto);
   font-weight: var(--peso-forte);
+  line-height: 1.2;
   list-style: none;
   cursor: pointer;
   transition:
@@ -46,18 +54,14 @@
   display: none;
 }
 
-.pedidos-filtros-caixa__resumo::after {
-  content: "";
-  width: var(--espaco-2);
-  height: var(--espaco-2);
-  margin-left: auto;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: translateY(-25%) rotate(45deg);
+.pedidos-filtros-caixa__seta {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
-.pedidos-filtros-caixa[open] > .pedidos-filtros-caixa__resumo::after {
-  transform: translateY(25%) rotate(-135deg);
+.pedidos-filtros-caixa[open] .pedidos-filtros-caixa__seta {
+  transform: rotate(180deg);
 }
 
 .pedidos-filtros-caixa__resumo:hover {
@@ -164,20 +168,20 @@
   min-width: 0;
 }
 
-/* O chip redondo do Stat (2rem): o ícone de 1rem com o respiro em volta (sem largura fixa). */
+/* O chip redondo do Stat (2rem): o ícone do Stat (1.125rem, RIFA-053) com o respiro em volta (sem largura fixa). */
 .pedidos-total__icone {
   flex: none;
   display: inline-grid;
   place-items: center;
-  padding: var(--espaco-2);
+  padding: calc((2rem - 1.125rem) / 2);
   border-radius: 50%;
   background: var(--total-fundo);
   color: var(--total-cor);
 }
 
 .pedidos-total__icone .ui-icone {
-  width: 1rem;
-  height: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .pedidos-total__icone--sucesso {
@@ -493,8 +497,8 @@
     animation: ui-entrar var(--duracao-media) var(--curva-saida) backwards;
   }
 
-  /* A seta do "Filtros" gira ao abrir e fechar. */
-  .pedidos-filtros-caixa__resumo::after {
+  /* O chevron do "Filtros" gira ao abrir e fechar (com reduce, só troca de lado). */
+  .pedidos-filtros-caixa__seta {
     transition: transform var(--duracao-rapida) var(--curva-saida);
   }
 }

@@ -8,15 +8,18 @@ import {
   ComDica,
   EmptyState,
   ErrorState,
+  Icone,
   Loading,
   PageHeader,
   Select,
   classesBotao,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { TextoDoWhatsApp } from "./formatacao";
 import {
   DICAS,
+  NOTA_DA_PREVIA,
+  NOTA_DO_TEXTO_PURO,
   avisoDaMensagem,
   linkWhatsApp,
   opcoesDoSeletor,
@@ -75,6 +78,7 @@ export function BumboPage() {
               <ErrorState
                 titulo="Não foi possível carregar a mensagem."
                 mensagem={mensagemDoErro(estado.erro)}
+                conexao={ehFalhaDeConexao(estado.erro)}
                 aoTentarDeNovo={tentarDeNovo}
               />
             )}
@@ -214,9 +218,10 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
       </p>
       {copia !== "nada" && (
         <p className="bumbo__copia" data-resultado={copia}>
+          {/* O ícone (RIFA-053: antes, os caracteres ✓ e !), só visual: o texto diz o que houve. */}
           <span className="bumbo__copia-icone" aria-hidden="true">
-            {copia === "copiada" ? "✓" : "!"}
-          </span>{" "}
+            <Icone nome={copia === "copiada" ? "check" : "alerta"} />
+          </span>
           {TEXTO_DA_COPIA[copia]}
         </p>
       )}
@@ -236,8 +241,7 @@ function Mensagem({ bumbo, hoje }: PropsMensagem) {
         </pre>
       </figure>
       <p className="bumbo__dica">
-        No WhatsApp, o que está entre *asteriscos* sai em negrito, e entre
-        _sublinhados_, em itálico.
+        {copia === "falhou" ? NOTA_DO_TEXTO_PURO : NOTA_DA_PREVIA}
       </p>
     </div>
   );

@@ -100,12 +100,14 @@
 
   /*
    * Tipografia: o texto na fonte do sistema; os títulos e os números de destaque na Outfit 800, do próprio site
-   * (tema/base.css, RIFA-049), com a reserva ajustada enquanto ela chega.
+   * (tema/base.css, RIFA-049), com a reserva ajustada enquanto ela chega: a Arial (ou a Liberation) e, no Android, a
+   * Roboto (RIFA-053).
    */
   --fonte-base:
     system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif;
-  --fonte-titulo: "Outfit", "Outfit reserva", var(--fonte-base);
+  --fonte-titulo:
+    "Outfit", "Outfit reserva", "Outfit reserva Roboto", var(--fonte-base);
   --fonte-mono:
     ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --texto-xs: 0.8125rem;

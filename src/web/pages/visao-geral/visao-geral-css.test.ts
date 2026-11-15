@@ -136,4 +136,42 @@ describe("RIFA-051 (P3.5 e P3.6): os cartões de cima e a meta de hoje", () => {
       expect(semMoldura).toContain(declaracao);
     expect(CSS).not.toMatch(/\.visao-cartao__destaque|\.visao-cartao__rotulo/);
   });
+
+  it("RIFA-053: o esperado e o realizado do período com a cara dos números (a fonte, o peso e os algarismos do Stat)", () => {
+    const numero = regra(".visao-comparacao dd");
+    // O caminho numa variável (com o texto fixo, o Vite trocaria pela URL do asset).
+    const arquivoDoStat = "../../components/ui/Stat.css";
+    const stat = process
+      .getBuiltinModule("node:fs")
+      .readFileSync(
+        decodeURIComponent(new URL(arquivoDoStat, import.meta.url).pathname),
+        "utf8",
+      );
+    const valorDoStat =
+      /\.ui-stat__valor\s*\{([^}]*)\}/.exec(stat)?.[1].replace(/\s+/g, " ") ??
+      "";
+    for (const propriedade of [
+      "font-family",
+      "font-weight",
+      "font-variant-numeric",
+    ]) {
+      const doStat = new RegExp(`${propriedade}: [^;]+;`).exec(
+        valorDoStat,
+      )?.[0];
+      expect(doStat, propriedade).toBeDefined();
+      expect(numero, propriedade).toContain(doStat);
+    }
+    expect(numero).toContain("font-family: var(--fonte-titulo);");
+    // Sem largura fixa nem corte: o "254 bilhetes" cabe numa linha (medido na captura a 390 e 1366 px).
+    expect(numero).not.toMatch(/width|white-space|overflow/);
+  });
+
+  it("RIFA-053: o esqueleto do painel muda no computador só pelas variáveis (a medida do celular é a reserva)", () => {
+    expect(CSS).toMatch(
+      /@media \(min-width: 64rem\)\s*\{\s*\.visao-esqueleto\s*\{[^}]*--visao-esqueleto-fase:[^}]*--visao-esqueleto-barra:[^}]*--visao-esqueleto-grafico:/,
+    );
+    expect(regra(".visao-esqueleto__referencia")).toMatch(
+      /gap: var\(--espaco-1\);/,
+    );
+  });
 });

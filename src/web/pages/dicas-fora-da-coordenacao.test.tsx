@@ -13,7 +13,11 @@ import type {
   JanelaRanking,
   ReferenciaCampanha,
 } from "../../shared/contracts/calculos";
-import { ATRASO_DA_DICA_MS, FOLGA_DA_DICA_MS } from "../components/ui";
+import {
+  ATRASO_DA_DICA_MS,
+  FOLGA_DA_DICA_MS,
+  TITULO_SEM_CONEXAO,
+} from "../components/ui";
 import {
   contarControles,
   controlesSemDica,
@@ -364,7 +368,8 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
 
     simularRanking({ falhar: true });
     renderizarRota("/telao", { usuario: null });
-    await screen.findByText("Não foi possível carregar o ranking.");
+    // Sem conexão (o fetch rejeita): o título neutro desde a RIFA-053.
+    await screen.findByText(TITULO_SEM_CONEXAO);
     expect(contarControles()).toBe(0);
   });
 

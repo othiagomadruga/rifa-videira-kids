@@ -37,6 +37,7 @@ export {
   type SerieGrafico,
 } from "./GraficoLinhas";
 export { Icone } from "./Icone";
+export { IconeDaTela } from "./IconeDaTela";
 export { ICONES, NOMES_ICONES, ehNomeDeIcone, type NomeIcone } from "./icones";
 export { IndicadorSituacao, type TomSituacao } from "./IndicadorSituacao";
 export { Loading } from "./Loading";

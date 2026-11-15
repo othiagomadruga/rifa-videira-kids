@@ -10,7 +10,7 @@ import {
   Loading,
   type ColunaTabela,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarDataHora } from "../../lib/formatadores";
 import { carregarPagina, ehSemPermissao } from "./trilha-api";
 import { DICAS, registros, rotuloDaAcao, textoDoAlvo } from "./textos";
@@ -133,6 +133,7 @@ export function TrilhaDeAuditoria() {
       <ErrorState
         titulo="Não foi possível carregar a trilha."
         mensagem={mensagemDoErro(primeira.erro)}
+        conexao={ehFalhaDeConexao(primeira.erro)}
         aoTentarDeNovo={tentarDeNovo}
       />
     );

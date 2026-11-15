@@ -1,13 +1,18 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { Aviso, Card, Loading, PageHeader } from "../../components/ui";
+import {
+  Aviso,
+  Card,
+  IconeDaTela,
+  Loading,
+  PageHeader,
+} from "../../components/ui";
 import {
   destinoDoPapel,
   esquecerDestino,
   lerEstadoEntrar,
   useSessao,
 } from "../../lib/sessao";
-import { IconeDaTela } from "./IconeDaTela";
 import "./entrar.css";
 
 // Como entrar (sem sessão): o acesso é pelo link pessoal que chega no WhatsApp, sem senha. Quem já tem

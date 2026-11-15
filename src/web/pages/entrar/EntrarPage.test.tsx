@@ -50,7 +50,7 @@ describe("CA3: /entrar", () => {
 
     const explicacao = titulo.closest(".ui-card");
     // RIFA-050: o ícone do link no topo do cartão, antes do título, só visual.
-    const icone = explicacao?.querySelector(".icone-da-tela");
+    const icone = explicacao?.querySelector(".ui-icone-da-tela");
     expect(icone).toHaveAttribute("aria-hidden", "true");
     expect(icone?.querySelector("svg")).toHaveAttribute("data-icone", "link");
     expect(

@@ -165,8 +165,9 @@ type Retorno =
   { tipo: "baixado"; nome: string } | { tipo: "falhou_baixar" } | null;
 
 const TEXTO_RETORNO = {
+  // RIFA-053: o check é o Icone, na linha visível (antes, o caractere ✓ no texto, lido também pela região viva).
   baixado: (nome: string) =>
-    `✓ Imagem baixada: ${nome}. Fica na pasta de downloads do aparelho.`,
+    `Imagem baixada: ${nome}. Fica na pasta de downloads do aparelho.`,
   falhou_baixar:
     "Não foi possível gerar a imagem neste aparelho. Use “Imprimir” ou tire um print da tela.",
 };
@@ -245,6 +246,7 @@ export function QrCodeLinkVendas({ url, celulaNome }: Props) {
           className="qr-codigo__retorno"
           data-tom={retorno?.tipo === "baixado" ? "sucesso" : "alerta"}
         >
+          {retorno?.tipo === "baixado" && <Icone nome="check" />}
           {texto}
         </p>
       )}

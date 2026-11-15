@@ -15,7 +15,7 @@ import {
   Textarea,
   type TomBadge,
 } from "../../components/ui";
-import { mensagemDoErro } from "../../lib/api";
+import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarDataHora } from "../../lib/formatadores";
 import {
   credencialEmUso,
@@ -204,6 +204,7 @@ export function WebhookRifei() {
         <ErrorState
           titulo="Não foi possível carregar o token do webhook."
           mensagem={mensagemDoErro(erro)}
+          conexao={ehFalhaDeConexao(erro)}
           aoTentarDeNovo={tentarDeNovo}
         />
       )}

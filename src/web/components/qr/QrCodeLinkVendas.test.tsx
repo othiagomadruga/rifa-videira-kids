@@ -102,14 +102,15 @@ describe("CA4: Baixar imagem", () => {
     expect([canvas.usados[0].width, canvas.usados[0].height]).toEqual([0, 0]);
     expect(document.querySelector('img[src^="blob:"]')).toBeNull();
 
-    expect(
-      screen.getByText(
-        "✓ Imagem baixada: link-de-vendas-celula-agape.png. Fica na pasta de downloads do aparelho.",
-        { selector: "p:not([role])" },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Imagem baixada: link-de-vendas-celula-agape.png.",
+    // RIFA-053: o check é o ícone (só visual), antes do texto, que fica sem o caractere (na tela e na região viva).
+    const baixada = screen.getByText(
+      "Imagem baixada: link-de-vendas-celula-agape.png. Fica na pasta de downloads do aparelho.",
+      { selector: "p:not([role])" },
+    );
+    expect(baixada.firstElementChild).toHaveAttribute("data-icone", "check");
+    expect(baixada.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByRole("status").textContent).toBe(
+      "Imagem baixada: link-de-vendas-celula-agape.png. Fica na pasta de downloads do aparelho.",
     );
 
     // O endereço do arquivo é liberado depois de 60 s (o navegador lê o arquivo depois do clique).

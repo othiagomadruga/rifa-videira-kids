@@ -163,7 +163,9 @@ type PropsPeriodo = {
 export function CartaoPeriodo({ periodo, info, unidade }: PropsPeriodo) {
   const ritmo = textoDoRitmo(periodo.ritmo_bp);
   return (
-    <Card titulo={info.nome} icone="trilha" className="visao-cartao">
+    // O período com o calendário do intervalo (RIFA-053: antes, o "trilha", que é o da Trilha; o "calendario" é do
+    // cartão Hoje e o "campanha", do cartão Campanha, na mesma tela).
+    <Card titulo={info.nome} icone="periodo" className="visao-cartao">
       <div className="visao-cartao__corpo">
         <p className="visao-cartao__subtitulo">
           Dia {formatarNumero(info.dia_no_periodo)} de{" "}

@@ -17,7 +17,7 @@
 }
 
 /* A chave no topo do cartão, sem esticar na coluna. */
-.acesso-cartao > .icone-da-tela {
+.acesso-cartao > .ui-icone-da-tela {
   align-self: flex-start;
 }
 
