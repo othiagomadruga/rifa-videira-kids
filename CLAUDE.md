@@ -75,6 +75,12 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   - `npm run typecheck`: `tsc -b` no Worker, no site e nas configs.
   - `npm run build`: gera `dist/client` (site) e `dist/rifa_videira_kids` (Worker). `npm run preview` serve o build.
   - `npm run db:migrate:local`: aplica as migrações no D1 local (`.wrangler/state`).
+  - `npm run verificar:producao -- --url https://rifa-videira-kids.madruga.workers.dev [--admin-link <arquivo>]`: confere o site publicado,
+    só leitura (saúde, cabeçalhos, área fechada, webhook, API pública e telas no Chromium), sem imprimir link, token nem cookie.
+    Fora da sessão do Claude (sem o Playwright de `/opt/node-tools`), use `--sem-navegador`. docs/lancamento.md 2.2, 2.3 e 3.1.
+  - Publicar pela sessão: `gh workflow run ci.yml --ref main` (se der 403, commit vazio `RIFA-023: publica` na `main`) e
+    `gh run watch <id>` em segundo plano. Daqui não se vê o segredo: o sinal é o job `publicar` sem "publicação pulada".
+    O `acesso:criar --remote` pela sessão grava a saída num arquivo (`umask 077`), nunca na conversa.
   - **Publicação:** automática pelo GitHub Actions a cada push na `main` (job `publicar` do ci.yml, depois dos testes),
     com o segredo `CLOUDFLARE_API_TOKEN` do repositório. O job `ci` (sem segredo) constrói e entrega só o `dist/` como
     artefato; o `publicar` instala com `npm ci --ignore-scripts`, baixa o artefato, confere o `wrangler.json` gerado com
