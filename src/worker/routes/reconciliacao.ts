@@ -3,7 +3,8 @@
  * seção 10), do grupo `coordenacao`:
  * - POST /api/admin/reconciliacao/analisar: compara o corpo compacto (o navegador já leu o CSV e mandou
  *   só as colunas mapeadas, normalizadas) com o banco, pedido a pedido (com o código) ou pelos totais;
- * - POST /api/admin/reconciliacao/recuperar: grava as vendas perdidas escolhidas (simular = prévia);
+ * - POST /api/admin/reconciliacao/recuperar: grava as vendas perdidas escolhidas e, só para o admin (RIFA-056),
+ *   marca como pagos os pagamentos não registrados escolhidos (simular = prévia);
  * - GET /api/admin/reconciliacao/recuperacoes: as recuperações da campanha ativa (auditoria), em páginas.
  *
  * Este sub-app NÃO autentica: o index.ts o monta sob /api/admin, depois do login da coordenação
@@ -30,6 +31,7 @@ import {
   type DetalheValidacao,
   type ProblemaDoCorpo,
   type RespostaRecuperarReconciliacao,
+  type UsuarioSessao,
   type ValidacaoDoCorpo,
 } from "../../shared/contracts";
 import { ehNomeDeColunaPessoal } from "../../shared/conferencia/colunas";
@@ -316,6 +318,8 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
         ] satisfies DetalheValidacao[],
       );
 
+    // Sem sessão (só no sub-app de teste, montado sem o login), também não é admin.
+    const conectado = c.get("usuario") as UsuarioSessao | undefined;
     const plano = planejarRecuperacao(
       {
         corpo,
@@ -323,6 +327,9 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
         sistema,
         convencao,
         calendario: new Calendario(campanha.fuso, agora),
+        // RIFA-056: marcar como pago o pagamento não registrado é só do admin. Para a coordenação, o pedido pendente
+        // ou expirado fica como antes (`ja_existe`: um pedido que já existe não muda).
+        corrigirPagamentos: conectado?.papel === "admin",
       },
       codigos,
     );
@@ -345,7 +352,8 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
         precoBilheteCentavos: campanha.preco,
       });
       recuperacaoId = resultado.recuperacaoId;
-      // O que não entrou já existia: gravado por outra via entre a leitura e o lote.
+      // O que não entrou já existia (gravado por outra via entre a leitura e o lote) ou, no pagamento não
+      // registrado, mudou nesse meio tempo (o "Pedido pago" chegou, ou o admin o desconsiderou): nada foi mudado.
       gravados = plano.gravar.filter((pedido) =>
         resultado.gravados.has(pedido.pedido_id),
       );
@@ -361,6 +369,9 @@ export function criarReconciliacao(relogio: Relogio = relogioDoSistema) {
         recuperacao_id: recuperacaoId,
         usuario_id: usuario.id,
         pedidos_recuperados: gravados.length,
+        pagamentos_registrados: gravados.filter(
+          (pedido) => pedido.tipo === "pagamento_nao_registrado",
+        ).length,
       });
     }
 

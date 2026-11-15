@@ -200,13 +200,27 @@ export async function semearConferencia(
 export async function criarPessoaDaCoordenacao(
   nome = "Coordenadora Ficticia da Conferencia",
 ): Promise<UsuarioSessao> {
+  return criarPessoa(nome, "coordenacao");
+}
+
+/** O admin conectado (RIFA-056: só ele marca como pago o pagamento não registrado). */
+export async function criarAdminDaConferencia(
+  nome = "Admin Ficticio da Conferencia",
+): Promise<UsuarioSessao> {
+  return criarPessoa(nome, "admin");
+}
+
+async function criarPessoa(
+  nome: string,
+  papel: "admin" | "coordenacao",
+): Promise<UsuarioSessao> {
   const linha = await env.DB.prepare(
-    "INSERT INTO usuarios (nome, papel) VALUES (?1, 'coordenacao') RETURNING id",
+    "INSERT INTO usuarios (nome, papel) VALUES (?1, ?2) RETURNING id",
   )
-    .bind(nome)
+    .bind(nome, papel)
     .first<{ id: number }>();
   if (!linha) throw new Error("não foi possível criar a pessoa de teste");
-  return { id: linha.id, nome, papel: "coordenacao" };
+  return { id: linha.id, nome, papel };
 }
 
 // ---------------------------------------------------------------------------------------------------

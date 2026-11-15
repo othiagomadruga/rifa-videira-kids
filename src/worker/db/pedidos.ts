@@ -21,7 +21,9 @@ import { prepararRegistroEventoSePedidoIgual } from "./webhook-eventos";
  * approved), o preenchimento do afiliado tardio (de null para um id), a remoção do afiliado de teste pelo
  * admin (RIFA-031, D20: o pedido desconsiderado fica sem afiliado, de um id para null) e um evento depois que
  * o preenche de novo (o afiliado tardio, outra vez). A 7ª sempre grava. A desconsideração (RIFA-028) não
- * conta: não muda status nem afiliado, e o UPSERT abaixo nunca toca nas colunas dela.
+ * conta: não muda status nem afiliado, e o UPSERT abaixo nunca toca nas colunas dela. O pagamento registrado pela
+ * conferência (RIFA-056, db/reconciliacao.ts) também não soma: é a transição para approved (a mesma, por outra via;
+ * approved é terminal), e o UPSERT abaixo nunca toca em `pagamento_recuperacao_id`.
  */
 export const MAX_TENTATIVAS = 7;
 

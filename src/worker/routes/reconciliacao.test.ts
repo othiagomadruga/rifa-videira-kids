@@ -703,6 +703,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     expect(previa.recuperados).toEqual([
       {
         pedido_id: "R-0101",
+        tipo: "venda_perdida",
         qtd_bilhetes: 3,
         total_centavos: 6000,
         afiliado: "reconhecido",
@@ -713,6 +714,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       },
       {
         pedido_id: "R-0102",
+        tipo: "venda_perdida",
         qtd_bilhetes: 2,
         total_centavos: 4000,
         afiliado: "reconhecido",
@@ -723,6 +725,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       },
       {
         pedido_id: "R-0105",
+        tipo: "venda_perdida",
         qtd_bilhetes: 1,
         total_centavos: 2000,
         afiliado: "nao_reconhecido",
@@ -874,7 +877,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     expect(codigosPorTipo(analise).venda_perdida).toEqual(["R-0103", "R-0106"]);
   });
 
-  it("nunca sobrescreve um pedido que já existe (nem o pendente que está pago na Rifei)", async () => {
+  it("nunca sobrescreve um pedido que já existe; o pendente que está pago na Rifei, só o admin marca como pago (RIFA-056)", async () => {
     const antes = await Promise.all(["R-0001", "R-0005"].map(pedidoGravado));
     const resultado = await recuperar({
       ...(await corpo()),
@@ -1124,6 +1127,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
     ).first<{ id: number }>();
     const pedido = (id: string): PedidoRecuperado => ({
       pedido_id: id,
+      tipo: "venda_perdida",
       qtd_bilhetes: 1,
       total_centavos: 2000,
       afiliado: "reconhecido",
@@ -1200,6 +1204,7 @@ describe("CA2: Recuperar (pré-visualização, gravação atômica e idempotente
       "SELECT id FROM campanhas WHERE ativa = 1",
     ).first<{ id: number }>();
     const base = {
+      tipo: "venda_perdida" as const,
       qtd_bilhetes: 1,
       total_centavos: 2000,
       afiliado: "reconhecido" as const,
@@ -1358,6 +1363,7 @@ describe("CA2: histórico das recuperações (GET .../recuperacoes)", () => {
       pedidos_recuperados: 1,
       colunas: { pedido_id: "Pedido", valor: null },
       pedidos: [],
+      pagamentos_registrados: [],
     });
   });
 

@@ -1,9 +1,10 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
-// 0008_regras_campanha.sql, 0009_token_webhook.sql e 0010_link_vendas.sql), aplicado pelo setup apply-migrations.ts
-// no D1 local dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009 e a 0010 também são aplicadas num D1 à
-// parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá
-// (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7).
+// 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql e 0011_pagamento_conferencia.sql), aplicado
+// pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010 e a
+// 0011 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações
+// anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7;
+// RIFA-056).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -117,6 +118,9 @@ describe("migrações: schema do D1", () => {
         "pedidos_por_campanha_registro",
         // 0008 (RIFA-028, D20): parcial (desconsiderado_em IS NOT NULL), para a lista com desconsiderado=true.
         "pedidos_desconsiderados_por_registro",
+        // 0011 (RIFA-056): parcial (pagamento_recuperacao_id IS NOT NULL), os pagamentos registrados de cada
+        // recuperação.
+        "pedidos_por_pagamento_recuperado",
       ],
       webhook_eventos: [
         "webhook_eventos_por_pedido",
@@ -537,7 +541,8 @@ async function fotografarTodasAsTabelas(
 
 // As migrações sobre dados que já existiam são um cenário em passos no mesmo D1 (DB_MIGRACAO): até a 0005 e os
 // dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados, a 0008 sobre mais outros, a 0009 sobre
-// tudo o que ficou (inclusive a trilha e as entregas do webhook) e a 0010 sobre tudo isso e o token. Por isso a
+// tudo o que ficou (inclusive a trilha e as entregas do webhook), a 0010 sobre tudo isso e o token e a 0011 sobre o
+// resto (com uma recuperação e um pedido pendente). Por isso a
 // ordem é a do arquivo, mesmo com --sequence.shuffle: cada uma tem de ser a última aplicada quando os testes dela
 // rodam, e a cascata apaga linhas que a comparação "continuam iguais" fotografou.
 describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
@@ -1687,7 +1692,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ),
       ]);
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0010: a 0011 é aplicada depois, sobre tudo isto (describe "0011 sobre dados que já existiam").
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0011"),
+      );
     });
 
     it("a 0010 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -1813,6 +1822,202 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
             ?.link_vendas_modelo,
         ).toBe(MODELO);
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0011 (RIFA-056): o pagamento registrado pela conferência, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0011 sobre dados que já existiam (RIFA-056)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+    let campanhaId: number;
+    let recuperacaoId: number;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0010 (aqui vale também rodando este sozinho).
+      const ate0010 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0011",
+      );
+      expect(ate0010.map((migracao) => migracao.name)).not.toContain(
+        "0011_pagamento_conferencia.sql",
+      );
+      await applyD1Migrations(db, ate0010);
+      campanhaId = (await db
+        .prepare("SELECT id FROM campanhas WHERE ativa = 1")
+        .first<{ id: number }>())!.id;
+      const usuarioId = (await db
+        .prepare("SELECT id FROM usuarios ORDER BY id LIMIT 1")
+        .first<{ id: number }>())!.id;
+      // Além do que os describes anteriores gravaram: uma recuperação com a venda perdida que ela gravou (0004), um
+      // pedido pendente e um expirado do webhook (os casos do pagamento não registrado), de antes da 0011.
+      recuperacaoId = (await db
+        .prepare(
+          `INSERT INTO recuperacoes (campanha_id, usuario_id, executado_em, pedidos_solicitados,
+             pedidos_recuperados, bilhetes, total_centavos, linhas_arquivo, arquivo_sha256, mapeamento)
+           VALUES (?1, ?2, '2026-11-12T10:00:00.000Z', 1, 1, 1, 2000, 3, ?3, '{"pedido_id":"Pedido"}')
+           RETURNING id`,
+        )
+        .bind(campanhaId, usuarioId, "a".repeat(64))
+        .first<{ id: number }>())!.id;
+      await db.batch([
+        db
+          .prepare(
+            `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos, aprovado_em, origem,
+               recuperacao_id)
+             VALUES ('ANTES-0011-REC', ?1, 'approved', 1, 2000, '2026-11-12T09:00:00.000Z', 'conferencia', ?2)`,
+          )
+          .bind(campanhaId, recuperacaoId),
+        db
+          .prepare(
+            `INSERT INTO pedidos (id, campanha_id, status, qtd_bilhetes, total_centavos)
+             VALUES ('ANTES-0011-PEND', ?1, 'in_process', 2, 4000), ('ANTES-0011-EXP', ?1, 'expired', 1, 2000)`,
+          )
+          .bind(campanhaId),
+      ]);
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0011 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0011_pagamento_conferencia.sql",
+      );
+      expect(antes.pedidos[0]).not.toHaveProperty("pagamento_recuperacao_id");
+      for (const tabela of ["pedidos", "recuperacoes", "auditoria"])
+        expect({ tabela, vazia: antes[tabela].length === 0 }).toEqual({
+          tabela,
+          vazia: false,
+        });
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada pedido ganha só pagamento_recuperacao_id, NULL", async () => {
+      const { pedidos, ...depois } = await fotografarTodasAsTabelas(db);
+      const { pedidos: pedidosAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(pedidos).toEqual(
+        pedidosAntes.map((pedido) => ({
+          ...pedido,
+          pagamento_recuperacao_id: null,
+        })),
+      );
+      const { results: coluna } = await db
+        .prepare(
+          `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('pedidos')
+           WHERE name = 'pagamento_recuperacao_id'`,
+        )
+        .all();
+      expect(coluna).toEqual([
+        {
+          name: "pagamento_recuperacao_id",
+          type: "INTEGER",
+          notnull: 0,
+          dflt_value: null,
+          pk: 0,
+        },
+      ]);
+    });
+
+    it("o CHECK e a FK: só num pedido do webhook já pago, apontando para uma recuperação que existe; a recuperação não sai com o pedido ligado", async () => {
+      const marcar = (id: string, recuperacao: number | null) =>
+        db
+          .prepare(
+            "UPDATE pedidos SET pagamento_recuperacao_id = ?1 WHERE id = ?2",
+          )
+          .bind(recuperacao, id)
+          .run();
+      onTestFinished(async () => {
+        await db.batch([
+          db.prepare(
+            "UPDATE pedidos SET pagamento_recuperacao_id = NULL WHERE id LIKE 'ANTES-0011-%'",
+          ),
+          db.prepare(
+            "UPDATE pedidos SET status = 'in_process', aprovado_em = NULL WHERE id = 'ANTES-0011-PEND'",
+          ),
+        ]);
+      });
+      // Pendente ou expirado (ainda não pago) e a venda perdida (origem 'conferencia'): o CHECK recusa.
+      for (const id of ["ANTES-0011-PEND", "ANTES-0011-EXP", "ANTES-0011-REC"])
+        await expect(marcar(id, recuperacaoId)).rejects.toThrow(
+          /CHECK constraint failed/,
+        );
+      // Pago e marcado no mesmo UPDATE (como a gravação faz): aceito.
+      await db
+        .prepare(
+          `UPDATE pedidos SET status = 'approved', aprovado_em = '2026-11-12T11:00:00.000Z',
+             pagamento_recuperacao_id = ?1
+           WHERE id = 'ANTES-0011-PEND'`,
+        )
+        .bind(recuperacaoId)
+        .run();
+      expect(
+        await db
+          .prepare(
+            "SELECT status, origem, recuperacao_id, pagamento_recuperacao_id FROM pedidos WHERE id = 'ANTES-0011-PEND'",
+          )
+          .first(),
+      ).toEqual({
+        status: "approved",
+        origem: "webhook",
+        recuperacao_id: null,
+        pagamento_recuperacao_id: recuperacaoId,
+      });
+      // Uma recuperação que não existe: a FK recusa.
+      await expect(marcar("ANTES-0011-PEND", 999_999)).rejects.toThrow(
+        /FOREIGN KEY constraint failed/,
+      );
+      // ON DELETE RESTRICT: a recuperação com o pagamento registrado não pode ser apagada (nem com a venda perdida).
+      await db
+        .prepare(
+          "UPDATE pedidos SET recuperacao_id = NULL, origem = 'webhook' WHERE id = 'ANTES-0011-REC'",
+        )
+        .run();
+      onTestFinished(async () => {
+        await db
+          .prepare(
+            "UPDATE pedidos SET origem = 'conferencia', recuperacao_id = ?1 WHERE id = 'ANTES-0011-REC'",
+          )
+          .bind(recuperacaoId)
+          .run();
+      });
+      await expect(
+        db
+          .prepare("DELETE FROM recuperacoes WHERE id = ?1")
+          .bind(recuperacaoId)
+          .run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+    });
+
+    it("o índice parcial novo serve às contagens e à lista dos pagamentos de uma recuperação", async () => {
+      const plano = async (sql: string) =>
+        (
+          await db
+            .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+            .bind(recuperacaoId)
+            .all<{ detail: string }>()
+        ).results.map((passo) => passo.detail);
+      expect(
+        await plano(
+          "SELECT count(*), coalesce(sum(qtd_bilhetes), 0) FROM pedidos WHERE pagamento_recuperacao_id = ?1",
+        ),
+      ).toEqual([
+        expect.stringMatching(
+          /^SEARCH pedidos USING INDEX pedidos_por_pagamento_recuperado \(pagamento_recuperacao_id=\?\)$/,
+        ),
+      ]);
+      expect(
+        await plano(
+          "SELECT json_group_array(id) FROM pedidos WHERE pagamento_recuperacao_id = ?1",
+        ),
+      ).toEqual([
+        expect.stringMatching(
+          /^SEARCH pedidos USING (COVERING )?INDEX pedidos_por_pagamento_recuperado \(pagamento_recuperacao_id=\?\)$/,
+        ),
+      ]);
     });
 
     it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {

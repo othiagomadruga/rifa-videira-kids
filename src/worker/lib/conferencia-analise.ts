@@ -797,6 +797,62 @@ function impedimentos(
   return lista;
 }
 
+/**
+ * O afiliado do arquivo é outro que o gravado? Sem a coluna ou não reconhecido, não compara (não dá para dizer);
+ * vazio no arquivo é "sem afiliado".
+ */
+function afiliadoDiferente(
+  afiliado: AfiliadoResolvido,
+  gravado: PedidoGravado,
+): boolean {
+  return (
+    afiliado.situacao !== "sem_coluna" &&
+    afiliado.situacao !== "nao_reconhecido" &&
+    afiliado.affiliateId !== gravado.affiliate_id
+  );
+}
+
+type DiferencaDoGravado =
+  "quantidade_diferente" | "valor_diferente" | "afiliado_diferente";
+
+/**
+ * O que o arquivo não confirma do pedido gravado (pagamento não registrado, RIFA-056): a quantidade, o valor e o
+ * afiliado, com as mesmas comparações dos pagos nos dois lados (quantidade ou valor desconhecidos não comparam:
+ * esses são `sem_quantidade` e `sem_valor`). Lista vazia = o arquivo confirma o pedido e ele pode virar pago.
+ */
+function diferencasDoGravado(
+  qtd: number | null,
+  decidido: ValorDecidido,
+  afiliado: AfiliadoResolvido,
+  gravado: PedidoGravado,
+): DiferencaDoGravado[] {
+  const lista: DiferencaDoGravado[] = [];
+  if (qtd !== null && qtd !== gravado.qtd_bilhetes)
+    lista.push("quantidade_diferente");
+  if (
+    decidido.centavos !== null &&
+    decidido.centavos !== gravado.total_centavos
+  )
+    lista.push("valor_diferente");
+  if (afiliadoDiferente(afiliado, gravado)) lista.push("afiliado_diferente");
+  return lista;
+}
+
+/**
+ * O pedido gravado do pagamento não registrado: da campanha ativa, pendente ou expirado e que conta (o
+ * desconsiderado vai para o grupo à parte e nunca volta sozinho, D20).
+ */
+function ehPagamentoNaoRegistrado(
+  gravado: PedidoGravado,
+  campanhaId: number,
+): boolean {
+  return (
+    gravado.campanha_id === campanhaId &&
+    gravado.status !== "approved" &&
+    gravado.desconsiderado === null
+  );
+}
+
 function ladoDoArquivo(
   pedido: PedidoDoArquivo,
   qtd: number | null,
@@ -1036,7 +1092,13 @@ export function analisarPorPedido(
           codigo.confere,
         );
       } else if (gravado.status !== "approved") {
+        // RIFA-056: o "Recuperar" do admin o marca como pago, com o mesmo cuidado da venda perdida e só se o
+        // arquivo confirmar o pedido gravado (quantidade, valor e afiliado).
         tipos = ["pagamento_nao_registrado"];
+        observacoes = [
+          ...impedimentos(pedido, qtd, decidido, calendario, codigo.confere),
+          ...diferencasDoGravado(qtd, decidido, afiliado, gravado),
+        ];
       } else {
         if (
           decidido.centavos !== null &&
@@ -1045,11 +1107,7 @@ export function analisarPorPedido(
           (tipos ??= []).push("valor_diferente");
         if (qtd !== null && qtd !== gravado.qtd_bilhetes)
           (tipos ??= []).push("quantidade_diferente");
-        if (
-          afiliado.situacao !== "sem_coluna" &&
-          afiliado.situacao !== "nao_reconhecido" &&
-          afiliado.affiliateId !== gravado.affiliate_id
-        )
+        if (afiliadoDiferente(afiliado, gravado))
           (tipos ??= []).push("afiliado_diferente");
         if (tipos === null) conferem++;
       }
@@ -1069,7 +1127,9 @@ export function analisarPorPedido(
         pedido_id: pedido.id,
         arquivo: doArquivo,
         sistema: doSistema,
-        recuperavel: tipo === "venda_perdida" && observacoes.length === 0,
+        recuperavel:
+          (tipo === "venda_perdida" || tipo === "pagamento_nao_registrado") &&
+          observacoes.length === 0,
         observacoes,
       });
   }
@@ -1452,7 +1512,10 @@ export interface PlanoRecuperacao {
 /**
  * Decide, para cada código escolhido (sem repetição, na ordem pedida), se ele pode ser gravado como venda
  * aprovada e com quais dados, com as mesmas regras da análise (a convenção do valor; a trava do código é
- * conferida antes, na rota). Um código que já está no banco (em qualquer campanha) nunca é sobrescrito.
+ * conferida antes, na rota). Um código que já está no banco (em qualquer campanha) nunca é sobrescrito, com uma
+ * exceção (RIFA-056): com `corrigirPagamentos` (só o admin), o pagamento não registrado (pendente ou expirado, da
+ * campanha ativa, que conta) vira pago, se o arquivo confirmar a quantidade, o valor e o afiliado gravados. Sem
+ * `corrigirPagamentos`, ele fica como hoje: `ja_existe`.
  */
 export function planejarRecuperacao(
   entrada: {
@@ -1461,13 +1524,15 @@ export function planejarRecuperacao(
     sistema: SistemaPorPedido;
     convencao: ConvencaoDoValor | null;
     calendario: Calendario;
+    /** Marcar como pago o pagamento não registrado (RIFA-056): só o admin. Padrão: não. */
+    corrigirPagamentos?: boolean;
   },
   codigos: readonly string[],
 ): PlanoRecuperacao {
   const { corpo, agrupamento, sistema, convencao, calendario } = entrada;
+  const corrigirPagamentos = entrada.corrigirPagamentos ?? false;
   const avisos = new Avisos();
   if (corpo.colunas.status === null) avisos.marcar("sem_coluna_status");
-  if (corpo.colunas.afiliado === null) avisos.marcar("sem_coluna_afiliado");
   if (corpo.colunas.data === null) avisos.marcar("sem_coluna_data");
   const afiliados = new Afiliados(sistema.afiliados);
   const preco = sistema.campanha.preco;
@@ -1492,7 +1557,14 @@ export function planejarRecuperacao(
       nao("nao_aprovado_no_arquivo");
       continue;
     }
-    if (sistema.encontrados.has(codigo)) {
+    const gravado = sistema.encontrados.get(codigo);
+    if (
+      gravado &&
+      !(
+        corrigirPagamentos &&
+        ehPagamentoNaoRegistrado(gravado, sistema.campanha.id)
+      )
+    ) {
       nao("ja_existe");
       continue;
     }
@@ -1511,20 +1583,39 @@ export function planejarRecuperacao(
       nao("data_no_futuro");
       continue;
     }
+    const afiliado = afiliados.doArquivo(pedido.afiliado);
+    if (gravado) {
+      const [diferenca] = diferencasDoGravado(qtd, decidido, afiliado, gravado);
+      if (diferenca !== undefined) {
+        nao(diferenca);
+        continue;
+      }
+    }
     regra.contar(decidido);
-    const { situacao, affiliateId } = afiliados.doArquivo(pedido.afiliado);
-    if (situacao === "nao_reconhecido") naoReconhecidos++;
+    if (afiliado.situacao === "nao_reconhecido") naoReconhecidos++;
+    // No pagamento não registrado, a quantidade, o valor e o afiliado são os gravados (o arquivo os confirmou; o
+    // afiliado sem a coluna ou não reconhecido no arquivo continua o do pedido).
+    const affiliateId = gravado ? gravado.affiliate_id : afiliado.affiliateId;
     gravar.push({
       pedido_id: codigo,
-      qtd_bilhetes: qtd,
-      total_centavos: decidido.centavos,
-      afiliado: situacao,
+      tipo: gravado ? "pagamento_nao_registrado" : "venda_perdida",
+      qtd_bilhetes: gravado ? gravado.qtd_bilhetes : qtd,
+      total_centavos: gravado ? gravado.total_centavos : decidido.centavos,
+      afiliado: afiliado.situacao,
       affiliate_id: affiliateId,
       celula: afiliados.celula(affiliateId),
       aprovado_em: new Date(venda.instante).toISOString(),
       origem_data: venda.origem,
     });
   }
+  // "Uma venda recuperada entra sem afiliado" só vale para a venda perdida: o pagamento registrado fica com o
+  // afiliado gravado. Uma prévia só de pagamentos registrados não leva o aviso.
+  if (
+    corpo.colunas.afiliado === null &&
+    (gravar.length === 0 ||
+      gravar.some((pedido) => pedido.tipo === "venda_perdida"))
+  )
+    avisos.marcar("sem_coluna_afiliado");
   regra.avisar(avisos, preco);
   avisos.contar("afiliado_nao_reconhecido", naoReconhecidos, "pedido");
   return { gravar, naoRecuperados, avisos: avisos.lista() };
