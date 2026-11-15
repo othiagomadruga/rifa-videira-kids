@@ -6,6 +6,7 @@ import type {
   MapeamentoReconciliacao,
   RespostaAnaliseReconciliacao,
   RespostaRecuperarReconciliacao,
+  TipoRecuperacao,
 } from "../../../shared/contracts";
 import { juntarAvisos } from "../../../shared/conferencia/avisos";
 import {
@@ -16,12 +17,14 @@ import {
 } from "../../../shared/conferencia/leitura";
 import { Aviso, Card, Loading, SeletorArquivo } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
+import { useUsuarioConectado } from "../../lib/sessao";
 import { lerArquivo, sha256DoTexto } from "./arquivo";
 import { analisar, carregarFusoDaCampanha } from "./conferencia-api";
 import { DialogoRecuperar } from "./DialogoRecuperar";
 import { Historico } from "./Historico";
 import { Mapeamento } from "./Mapeamento";
 import { Resultado } from "./Resultado";
+import { comMaiuscula } from "./formatos";
 import { CAMPOS, DICAS, plural } from "./textos";
 import "./conferencia.css";
 
@@ -49,15 +52,46 @@ const mesmoMapeamento = (
   b: MapeamentoReconciliacao,
 ) => CAMPOS_EM_ORDEM.every((campo) => a[campo] === b[campo]);
 
-/** As vendas perdidas que dá para recuperar (modo por pedido; com a trava do código, nenhuma). */
-function recuperaveisDe(analise: RespostaAnaliseReconciliacao): string[] {
+/**
+ * Os pedidos de um grupo que dá para gravar (modo por pedido; com a trava do código, nenhum): as vendas perdidas que
+ * dá para recuperar ou os pagamentos não registrados que dá para marcar como pagos (RIFA-056).
+ */
+function recuperaveisDe(
+  analise: RespostaAnaliseReconciliacao,
+  tipo: TipoRecuperacao,
+): string[] {
   if (analise.modo !== "por_pedido") return [];
-  const perdidas = analise.divergencias.find(
-    (grupo) => grupo.tipo === "venda_perdida",
-  );
-  return (perdidas?.itens ?? [])
+  const grupo = analise.divergencias.find((item) => item.tipo === tipo);
+  return (grupo?.itens ?? [])
     .filter((item) => item.recuperavel)
     .map((item) => item.pedido_id);
+}
+
+/** O que já vem marcado: as vendas perdidas e, para o admin, os pagamentos não registrados que dá para gravar. */
+function marcadosDe(
+  analise: RespostaAnaliseReconciliacao,
+  admin: boolean,
+): Set<string> {
+  return new Set([
+    ...recuperaveisDe(analise, "venda_perdida"),
+    ...(admin ? recuperaveisDe(analise, "pagamento_nao_registrado") : []),
+  ]);
+}
+
+/** "2 vendas recuperadas", "1 pagamento registrado" ou os dois, pelo que a gravação fez. */
+function tituloDaGravacao(resposta: RespostaRecuperarReconciliacao): string {
+  const pagamentos = resposta.recuperados.filter(
+    (pedido) => pedido.tipo === "pagamento_nao_registrado",
+  ).length;
+  const vendas = resposta.recuperados.length - pagamentos;
+  return [
+    vendas > 0 ? plural(vendas, "venda recuperada", "vendas recuperadas") : "",
+    pagamentos > 0
+      ? plural(pagamentos, "pagamento registrado", "pagamentos registrados")
+      : "",
+  ]
+    .filter((parte) => parte !== "")
+    .join(" e ");
 }
 
 /** O que o leitor de tela ouve quando a conferência chega. */
@@ -75,6 +109,13 @@ function anuncioDaAnalise(analise: RespostaAnaliseReconciliacao): string {
     return "Conferência pronta: tudo confere.";
   return `Conferência pronta: ${plural(analise.resumo.com_divergencia, "pedido", "pedidos")} com diferença, ${plural(perdidas, "venda perdida", "vendas perdidas")}.`;
 }
+
+/** Por que nada foi gravado, pelo grupo de onde saiu o "Recuperar" (em minúscula: entra no meio da frase). */
+const NADA_GRAVADO: Record<TipoRecuperacao, string> = {
+  venda_perdida: "as vendas escolhidas já estavam no sistema.",
+  pagamento_nao_registrado:
+    "os pedidos escolhidos já estavam pagos no sistema ou mudaram desde a conferência.",
+};
 
 const SEM_CAMPANHA: Falha = {
   titulo: "Não dá para conferir ainda",
@@ -133,9 +174,16 @@ export function ConferenciaPeloCsv() {
   const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [aRecuperar, setARecuperar] = useState<string[] | null>(null);
-  const [recuperacao, setRecuperacao] =
-    useState<RespostaRecuperarReconciliacao | null>(null);
+  const admin = useUsuarioConectado().papel === "admin";
+  const [aRecuperar, setARecuperar] = useState<{
+    tipo: TipoRecuperacao;
+    pedidos: string[];
+  } | null>(null);
+  /** O último "Recuperar" gravado (ou tentado) e de qual grupo ele saiu. */
+  const [recuperacao, setRecuperacao] = useState<{
+    resposta: RespostaRecuperarReconciliacao;
+    tipo: TipoRecuperacao;
+  } | null>(null);
   const [versaoHistorico, setVersaoHistorico] = useState(0);
   const [anuncio, setAnuncio] = useState("");
   // Cada arquivo escolhido e cada conferência é uma tentativa: respostas de uma antiga são ignoradas.
@@ -202,7 +250,7 @@ export function ConferenciaPeloCsv() {
         mapeamento: comMapeamento,
         avisos: montagem.avisos,
       });
-      setSelecionados(new Set(recuperaveisDe(resposta)));
+      setSelecionados(marcadosDe(resposta, admin));
       setAnuncio(anuncioDaAnalise(resposta));
     } catch (erro) {
       if (meu.signal.aborted || minha !== sequencia.current) return;
@@ -259,7 +307,7 @@ export function ConferenciaPeloCsv() {
       const resposta = await analisar(anterior.corpo);
       if (minha !== sequencia.current) return;
       setConferida({ ...anterior, analise: resposta });
-      setSelecionados(new Set(recuperaveisDe(resposta)));
+      setSelecionados(marcadosDe(resposta, admin));
     } catch (erro) {
       if (minha === sequencia.current) setFalha(falhaDaConferencia(erro));
     }
@@ -276,22 +324,26 @@ export function ConferenciaPeloCsv() {
     });
   }
 
-  function abrirRecuperar() {
+  /** Abre a confirmação do grupo (Recuperar ou Registrar pagamento) com os marcados dele. */
+  function abrirRecuperar(tipo: TipoRecuperacao) {
     if (!conferida) return;
-    const escolhidas = recuperaveisDe(conferida.analise).filter((codigo) =>
-      selecionados.has(codigo),
+    const escolhidas = recuperaveisDe(conferida.analise, tipo).filter(
+      (codigo) => selecionados.has(codigo),
     );
-    if (escolhidas.length > 0) setARecuperar(escolhidas);
+    if (escolhidas.length > 0) setARecuperar({ tipo, pedidos: escolhidas });
   }
 
-  function aoGravar(resposta: RespostaRecuperarReconciliacao) {
+  function aoGravar(
+    resposta: RespostaRecuperarReconciliacao,
+    tipo: TipoRecuperacao,
+  ) {
     setARecuperar(null);
-    setRecuperacao(resposta);
+    setRecuperacao({ resposta, tipo });
     setVersaoHistorico((versao) => versao + 1);
     setAnuncio(
       resposta.aplicado
-        ? `${plural(resposta.recuperados.length, "venda recuperada", "vendas recuperadas")}: já contam no painel e no ranking.`
-        : "Nada foi gravado: as vendas escolhidas já estavam no sistema.",
+        ? `${tituloDaGravacao(resposta)}: já contam no painel e no ranking.`
+        : `Nada foi gravado: ${NADA_GRAVADO[tipo]}`,
     );
     if (conferida) void conferirDeNovo(conferida);
   }
@@ -306,29 +358,22 @@ export function ConferenciaPeloCsv() {
 
   const avisoDaRecuperacao =
     recuperacao &&
-    (recuperacao.aplicado ? (
+    (recuperacao.resposta.aplicado ? (
       <Aviso
         tom="sucesso"
         anuncio="nenhum"
-        titulo={plural(
-          recuperacao.recuperados.length,
-          "venda recuperada",
-          "vendas recuperadas",
-        )}
+        titulo={tituloDaGravacao(recuperacao.resposta)}
         aoFechar={() => setRecuperacao(null)}
       >
         <p>
-          {plural(recuperacao.totais.bilhetes, "bilhete", "bilhetes")} já contam
-          no painel e no ranking. A conferência abaixo já foi refeita.
+          {plural(recuperacao.resposta.totais.bilhetes, "bilhete", "bilhetes")}{" "}
+          já contam no painel e no ranking. A conferência abaixo já foi refeita.
         </p>
-        {recuperacao.nao_recuperados.length > 0 && (
+        {recuperacao.resposta.nao_recuperados.length > 0 && (
           <p>
-            {plural(
-              recuperacao.nao_recuperados.length,
-              "venda ficou",
-              "vendas ficaram",
-            )}{" "}
-            de fora: já estavam no sistema.
+            {recuperacao.tipo === "venda_perdida"
+              ? `${plural(recuperacao.resposta.nao_recuperados.length, "venda ficou", "vendas ficaram")} de fora: já estavam no sistema.`
+              : `${plural(recuperacao.resposta.nao_recuperados.length, "pedido ficou", "pedidos ficaram")} de fora: já estavam pagos no sistema ou mudaram desde a conferência.`}
           </p>
         )}
       </Aviso>
@@ -339,7 +384,7 @@ export function ConferenciaPeloCsv() {
         titulo="Nada foi gravado"
         aoFechar={() => setRecuperacao(null)}
       >
-        <p>As vendas escolhidas já estavam no sistema.</p>
+        <p>{comMaiuscula(NADA_GRAVADO[recuperacao.tipo])}</p>
       </Aviso>
     ));
 
@@ -459,6 +504,7 @@ export function ConferenciaPeloCsv() {
             selecionados={selecionados}
             aoSelecionar={selecionar}
             aoRecuperar={abrirRecuperar}
+            admin={admin}
             refTitulo={refTitulo}
             aviso={avisoDaRecuperacao}
           />
@@ -469,10 +515,11 @@ export function ConferenciaPeloCsv() {
 
       {aRecuperar && conferida && (
         <DialogoRecuperar
+          tipo={aRecuperar.tipo}
           corpo={conferida.corpo}
-          pedidos={aRecuperar}
+          pedidos={aRecuperar.pedidos}
           aoFechar={() => setARecuperar(null)}
-          aoGravar={aoGravar}
+          aoGravar={(resposta) => aoGravar(resposta, aRecuperar.tipo)}
         />
       )}
     </>

@@ -466,6 +466,7 @@ export const ANALISE_AGREGADA: RespostaAnaliseAgregada =
 
 const RECUPERADO_0101 = {
   pedido_id: "R-0101",
+  tipo: "venda_perdida" as const,
   qtd_bilhetes: 3,
   total_centavos: 6000,
   afiliado: "reconhecido" as const,
@@ -477,6 +478,7 @@ const RECUPERADO_0101 = {
 
 const RECUPERADO_0105 = {
   pedido_id: "R-0105",
+  tipo: "venda_perdida" as const,
   qtd_bilhetes: 1,
   total_centavos: 2000,
   afiliado: "nao_reconhecido" as const,
@@ -530,7 +532,151 @@ export const RECUPERACOES: Recuperacao[] =
           data: "Data do pagamento",
         },
         pedidos: ["R-0101", "R-0105"],
+        pagamentos_registrados: [],
       },
+    ],
+    proximo: null,
+  }).itens;
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-056: o "Pagamento não registrado" (pago na Rifei, pendente ou expirado no sistema) que o admin marca como pago
+// ---------------------------------------------------------------------------------------------------
+
+function naoRegistrado(
+  pedido_id: string,
+  status: "in_process" | "expired",
+  recuperavel = true,
+  observacoes: Divergencia["observacoes"] = [],
+  totalNoArquivo = 4000,
+): Divergencia {
+  return {
+    pedido_id,
+    arquivo: {
+      status: "aprovado",
+      qtd_bilhetes: 2,
+      total_centavos: totalNoArquivo,
+      afiliado: "reconhecido",
+      affiliate_id: 101,
+      celula: ATAPE,
+      data: "2026-11-26",
+    },
+    sistema: {
+      status,
+      qtd_bilhetes: 2,
+      total_centavos: 4000,
+      affiliate_id: 101,
+      celula: ATAPE,
+      aprovado_em: null,
+      origem: "webhook",
+    },
+    recuperavel,
+    observacoes,
+  };
+}
+
+/** O R-0005 (pendente) e o R-0009 (expirado) dá para marcar como pagos; o R-0010 tem outro valor no arquivo. */
+const NAO_REGISTRADOS: Divergencia[] = [
+  naoRegistrado("R-0005", "in_process"),
+  naoRegistrado("R-0009", "expired"),
+  naoRegistrado("R-0010", "in_process", false, ["valor_diferente"], 5000),
+];
+
+/** A conferência do exemplo, com os pagamentos não registrados (e as mesmas vendas perdidas). */
+export const ANALISE_COM_PAGAMENTOS: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_POR_PEDIDO,
+    divergencias: TIPOS.map((tipo) =>
+      grupo(
+        tipo,
+        tipo === "pagamento_nao_registrado"
+          ? NAO_REGISTRADOS
+          : (ITENS_POR_TIPO[tipo] ?? []),
+      ),
+    ),
+    desconsiderados: SEM_DESCONSIDERADOS,
+  });
+
+/** Só os pagamentos não registrados (nenhuma venda perdida). */
+export const ANALISE_SO_PAGAMENTOS: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_POR_PEDIDO,
+    divergencias: TIPOS.map((tipo) =>
+      grupo(tipo, tipo === "pagamento_nao_registrado" ? NAO_REGISTRADOS : []),
+    ),
+    desconsiderados: SEM_DESCONSIDERADOS,
+  });
+
+/** Depois de registrar R-0005 e R-0009: sai do grupo o que virou pago. */
+export const ANALISE_DEPOIS_DOS_PAGAMENTOS: RespostaAnalisePorPedido =
+  respostaAnalisePorPedidoSchema.parse({
+    ...ANALISE_COM_PAGAMENTOS,
+    divergencias: TIPOS.map((tipo) =>
+      grupo(
+        tipo,
+        tipo === "pagamento_nao_registrado"
+          ? NAO_REGISTRADOS.slice(2)
+          : (ITENS_POR_TIPO[tipo] ?? []),
+      ),
+    ),
+    desconsiderados: SEM_DESCONSIDERADOS,
+  });
+
+const PAGAMENTO_0005 = {
+  pedido_id: "R-0005",
+  tipo: "pagamento_nao_registrado" as const,
+  qtd_bilhetes: 2,
+  total_centavos: 4000,
+  afiliado: "reconhecido" as const,
+  affiliate_id: 101,
+  celula: ATAPE,
+  aprovado_em: "2026-11-26T15:00:00.000Z",
+  origem_data: "dia_do_arquivo" as const,
+};
+
+/** Prévia de R-0005 e R-0009: o R-0009 já tinha virado pago pelo webhook no meio do caminho. */
+export const PREVIA_PAGAMENTOS: RespostaRecuperarReconciliacao =
+  respostaRecuperarReconciliacaoSchema.parse({
+    simulado: true,
+    aplicado: false,
+    recuperacao_id: null,
+    recuperados: [PAGAMENTO_0005],
+    nao_recuperados: [{ pedido_id: "R-0009", motivo: "ja_existe" }],
+    totais: { pedidos_aprovados: 1, bilhetes: 2, total_centavos: 4000 },
+    avisos: [],
+  });
+
+export const PAGAMENTOS_GRAVADOS: RespostaRecuperarReconciliacao =
+  respostaRecuperarReconciliacaoSchema.parse({
+    ...PREVIA_PAGAMENTOS,
+    simulado: false,
+    aplicado: true,
+    recuperacao_id: 8,
+  });
+
+/** Uma recuperação com os dois tipos e uma só de pagamento, no histórico. */
+export const RECUPERACOES_COM_PAGAMENTOS: Recuperacao[] =
+  respostaListaRecuperacoesSchema.parse({
+    itens: [
+      {
+        ...RECUPERACOES[0],
+        id: 9,
+        pedidos_recuperados: 3,
+        bilhetes: 6,
+        total_centavos: 12000,
+        pedidos: ["R-0005", "R-0101", "R-0105"],
+        pagamentos_registrados: ["R-0005"],
+      },
+      {
+        ...RECUPERACOES[0],
+        id: 8,
+        pedidos_solicitados: 2,
+        pedidos_recuperados: 1,
+        bilhetes: 2,
+        total_centavos: 4000,
+        pedidos: ["R-0009"],
+        pagamentos_registrados: ["R-0009"],
+      },
+      RECUPERACOES[0],
     ],
     proximo: null,
   }).itens;

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type {
   CorpoConferencia,
+  PedidoRecuperado,
   RespostaRecuperarReconciliacao,
+  TipoRecuperacao,
 } from "../../../shared/contracts";
 import { Aviso, Button, ComDica, Dialogo, Loading } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
@@ -11,6 +13,8 @@ import { textoDoAfiliado, textoDosTotais } from "./formatos";
 import { DICAS, MOTIVOS, ORIGEM_DA_DATA, plural, tomDoAviso } from "./textos";
 
 type Props = {
+  /** De qual grupo saiu a confirmação: Recuperar (venda perdida) ou Registrar pagamento (RIFA-056, só o admin). */
+  tipo: TipoRecuperacao;
   /** O mesmo corpo da conferência (as colunas mapeadas, sem os dados pessoais). */
   corpo: CorpoConferencia;
   pedidos: readonly string[];
@@ -24,17 +28,59 @@ type Estado =
   | { tipo: "previa"; previa: RespostaRecuperarReconciliacao }
   | { tipo: "erro"; mensagem: string };
 
-// Confirmação do "Recuperar": ao abrir, pede à API a prévia (simular: true), que já confere o banco de
-// agora (um pedido que chegou pelo webhook depois da conferência aparece como "já está no sistema"). Só o
-// botão "Gravar" grava, num lote só e sem sobrescrever nada. Gravando, Cancelar e Gravar ficam indisponíveis com
+// Confirmação do "Recuperar" (e do "Registrar pagamento", RIFA-056: a mesma rota): ao abrir, pede à API a prévia
+// (simular: true), que já confere o banco de agora (um pedido que chegou pelo webhook depois da conferência aparece
+// como "já está no sistema"). Só o botão "Gravar" grava, num lote só e sem sobrescrever nada (o pagamento registrado
+// só muda o status e a data do pagamento do pedido pendente ou expirado). Gravando, Cancelar e Gravar ficam indisponíveis com
 // aria-disabled (RIFA-045), não disabled: o foco fica no botão (dentro do diálogo), o Tab continua passando por eles
 // com a dica e o clique, o Esc e o × são ignorados até a gravação terminar.
+/** Os textos de cada confirmação. */
+const TEXTOS: Record<
+  TipoRecuperacao,
+  {
+    titulo: (n: number) => string;
+    descricao: string;
+    gravar: (n: number) => string;
+    dicaCancelar: string;
+    dicaGravar: string;
+    dicaGravando: string;
+    nadaAGravar: string;
+    deFora: (n: number) => string;
+  }
+> = {
+  venda_perdida: {
+    titulo: (n) => `Recuperar ${plural(n, "venda", "vendas")}?`,
+    descricao:
+      "Confira o que vai entrar no sistema. Pedido que já está no sistema nunca é mudado.",
+    gravar: (n) => `Gravar ${plural(n, "venda", "vendas")}`,
+    dicaCancelar: DICAS.cancelarRecuperar,
+    dicaGravar: DICAS.gravar,
+    dicaGravando: DICAS.gravando,
+    nadaAGravar: "Nenhuma das vendas escolhidas pode ser recuperada agora.",
+    deFora: (n) => `${plural(n, "venda fica", "vendas ficam")} de fora:`,
+  },
+  pagamento_nao_registrado: {
+    titulo: (n) => `Registrar ${plural(n, "pagamento", "pagamentos")}?`,
+    descricao:
+      "Confira os pedidos que vão passar a pagos. Só muda o pedido pendente ou expirado: ele ganha a data do pagamento do arquivo, e o resto dele fica como está.",
+    gravar: (n) => `Gravar ${plural(n, "pagamento", "pagamentos")}`,
+    dicaCancelar: DICAS.cancelarPagamentos,
+    dicaGravar: DICAS.gravarPagamentos,
+    dicaGravando: DICAS.gravandoPagamentos,
+    nadaAGravar:
+      "Nenhum dos pedidos escolhidos pode ser marcado como pago agora.",
+    deFora: (n) => `${plural(n, "pedido fica", "pedidos ficam")} de fora:`,
+  },
+};
+
 export function DialogoRecuperar({
+  tipo,
   corpo,
   pedidos,
   aoFechar,
   aoGravar,
 }: Props) {
+  const textos = TEXTOS[tipo];
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
   const [gravando, setGravando] = useState(false);
   const [erroAoGravar, setErroAoGravar] = useState<string | null>(null);
@@ -76,16 +122,16 @@ export function DialogoRecuperar({
     <Dialogo
       aberto
       papel="alertdialog"
-      titulo={`Recuperar ${plural(pedidos.length, "venda", "vendas")}?`}
-      descricao="Confira o que vai entrar no sistema. Pedido que já está no sistema nunca é mudado."
+      titulo={textos.titulo(pedidos.length)}
+      descricao={textos.descricao}
       aoFechar={() => {
         if (!gravando) aoFechar();
       }}
       dicaFechar={
         gravando
-          ? DICAS.gravando
+          ? textos.dicaGravando
           : aGravar > 0
-            ? DICAS.cancelarRecuperar
+            ? textos.dicaCancelar
             : DICAS.fecharRecuperar
       }
       rodape={
@@ -93,9 +139,9 @@ export function DialogoRecuperar({
           <ComDica
             texto={
               gravando
-                ? DICAS.gravando
+                ? textos.dicaGravando
                 : aGravar > 0
-                  ? DICAS.cancelarRecuperar
+                  ? textos.dicaCancelar
                   : DICAS.fecharRecuperar
             }
           >
@@ -110,16 +156,14 @@ export function DialogoRecuperar({
             </Button>
           </ComDica>
           {aGravar > 0 && (
-            <ComDica texto={gravando ? DICAS.gravando : DICAS.gravar}>
+            <ComDica texto={gravando ? textos.dicaGravando : textos.dicaGravar}>
               <Button
                 aria-disabled={gravando || undefined}
                 onClick={() => {
                   if (!gravando) void gravar();
                 }}
               >
-                {gravando
-                  ? "Gravando…"
-                  : `Gravar ${plural(aGravar, "venda", "vendas")}`}
+                {gravando ? "Gravando…" : textos.gravar(aGravar)}
               </Button>
             </ComDica>
           )}
@@ -134,7 +178,9 @@ export function DialogoRecuperar({
           <p>{estado.mensagem}</p>
         </Aviso>
       )}
-      {estado.tipo === "previa" && <Previa previa={estado.previa} />}
+      {estado.tipo === "previa" && (
+        <Previa previa={estado.previa} textos={textos} />
+      )}
       {erroAoGravar && (
         <Aviso tom="perigo" titulo="Nada foi gravado">
           <p>{erroAoGravar}</p>
@@ -144,21 +190,53 @@ export function DialogoRecuperar({
   );
 }
 
-function Previa({ previa }: { previa: RespostaRecuperarReconciliacao }) {
+/** "Vão entrar 2 vendas: …" e "Vão passar a pagos 2 pedidos: …", pelo que a prévia de fato vai fazer. */
+function frasesDaPrevia(recuperados: readonly PedidoRecuperado[]): string[] {
+  const somar = (lista: readonly PedidoRecuperado[]) =>
+    textoDosTotais({
+      pedidos_aprovados: lista.length,
+      bilhetes: lista.reduce((soma, pedido) => soma + pedido.qtd_bilhetes, 0),
+      total_centavos: lista.reduce(
+        (soma, pedido) => soma + pedido.total_centavos,
+        0,
+      ),
+    });
+  const vendas = recuperados.filter(
+    (pedido) => pedido.tipo === "venda_perdida",
+  );
+  const pagamentos = recuperados.filter(
+    (pedido) => pedido.tipo === "pagamento_nao_registrado",
+  );
+  return [
+    vendas.length > 0
+      ? `Vão entrar ${plural(vendas.length, "venda", "vendas")}: ${somar(vendas)}.`
+      : null,
+    pagamentos.length > 0
+      ? `Vão passar a pagos ${plural(pagamentos.length, "pedido", "pedidos")}: ${somar(pagamentos)}.`
+      : null,
+  ].filter((frase) => frase !== null);
+}
+
+function Previa({
+  previa,
+  textos,
+}: {
+  previa: RespostaRecuperarReconciliacao;
+  textos: (typeof TEXTOS)[TipoRecuperacao];
+}) {
   const { recuperados, nao_recuperados: naoRecuperados } = previa;
   return (
     <div className="conferencia-bloco">
       {recuperados.length > 0 ? (
         <p>
-          <strong>
-            Vão entrar {plural(recuperados.length, "venda", "vendas")}:{" "}
-            {textoDosTotais(previa.totais)}.
-          </strong>{" "}
-          Elas passam a contar no painel e no ranking, como pagas.
+          <strong>{frasesDaPrevia(recuperados).join(" ")}</strong>{" "}
+          {recuperados.length === 1
+            ? "Passa a contar no painel e no ranking, como paga."
+            : "Elas passam a contar no painel e no ranking, como pagas."}
         </p>
       ) : (
         <Aviso tom="alerta" anuncio="nenhum" titulo="Nada a gravar">
-          <p>Nenhuma das vendas escolhidas pode ser recuperada agora.</p>
+          <p>{textos.nadaAGravar}</p>
         </Aviso>
       )}
       {recuperados.length > 0 && (
@@ -171,14 +249,23 @@ function Previa({ previa }: { previa: RespostaRecuperarReconciliacao }) {
               <span>
                 {plural(pedido.qtd_bilhetes, "bilhete", "bilhetes")} ·{" "}
                 {formatarMoeda(pedido.total_centavos)} ·{" "}
-                {pedido.afiliado === "nao_reconhecido"
-                  ? "sem afiliado (o do arquivo não foi reconhecido)"
-                  : textoDoAfiliado(
-                      pedido.afiliado,
+                {pedido.tipo === "pagamento_nao_registrado"
+                  ? textoDoAfiliado(
+                      "gravado",
                       pedido.affiliate_id,
                       pedido.celula,
-                    )}
+                    )
+                  : pedido.afiliado === "nao_reconhecido"
+                    ? "sem afiliado (o do arquivo não foi reconhecido)"
+                    : textoDoAfiliado(
+                        pedido.afiliado,
+                        pedido.affiliate_id,
+                        pedido.celula,
+                      )}
               </span>
+              {pedido.tipo === "pagamento_nao_registrado" && (
+                <span>Pendente ou expirado no sistema: passa a pago.</span>
+              )}
               <span className="conferencia-suave">
                 {formatarDataHora(pedido.aprovado_em)} (
                 {ORIGEM_DA_DATA[pedido.origem_data]})
@@ -190,8 +277,7 @@ function Previa({ previa }: { previa: RespostaRecuperarReconciliacao }) {
       {naoRecuperados.length > 0 && (
         <>
           <p className="conferencia-subtitulo">
-            {plural(naoRecuperados.length, "venda fica", "vendas ficam")} de
-            fora:
+            {textos.deFora(naoRecuperados.length)}
           </p>
           <ul className="conferencia-lista-simples conferencia-previa">
             {naoRecuperados.map((item) => (

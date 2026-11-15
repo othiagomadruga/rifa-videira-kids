@@ -30,6 +30,36 @@ export const idDaRecuperacao = (id: number) => `conferencia-recuperacao-${id}`;
 /** O texto do histórico: recebe o foco se a página seguinte vier vazia e a lista também (o botão some). */
 export const ID_TEXTO_DO_HISTORICO = "conferencia-historico-texto";
 
+/**
+ * O que a recuperação gravou (RIFA-056): vendas perdidas, pagamentos registrados (o pendente ou expirado que passou a
+ * pago) ou os dois.
+ */
+export function tipoDaRecuperacao(item: Recuperacao): string {
+  const pagamentos = item.pagamentos_registrados.length;
+  const vendas = item.pedidos.length - pagamentos;
+  if (pagamentos === 0)
+    return vendas === 1 ? "Venda perdida" : "Vendas perdidas";
+  if (vendas === 0)
+    return pagamentos === 1 ? "Pagamento registrado" : "Pagamentos registrados";
+  return `${plural(vendas, "venda perdida", "vendas perdidas")} e ${plural(pagamentos, "pagamento registrado", "pagamentos registrados")}`;
+}
+
+/** Os códigos; com os dois tipos, cada um no seu grupo. */
+function PedidosDaRecuperacao({ item }: { item: Recuperacao }) {
+  const pagamentos = new Set(item.pagamentos_registrados);
+  const vendas = item.pedidos.filter((codigo) => !pagamentos.has(codigo));
+  if (pagamentos.size === 0 || vendas.length === 0)
+    return (
+      <span className="conferencia-codigos">{item.pedidos.join(", ")}</span>
+    );
+  return (
+    <span className="conferencia-codigos">
+      Vendas perdidas: {vendas.join(", ")}. Pagamentos registrados:{" "}
+      {item.pagamentos_registrados.join(", ")}.
+    </span>
+  );
+}
+
 const COLUNAS: ColunaTabela<Recuperacao>[] = [
   {
     chave: "quando",
@@ -46,6 +76,7 @@ const COLUNAS: ColunaTabela<Recuperacao>[] = [
     ),
   },
   { chave: "quem", titulo: "Quem", celula: (item) => item.usuario.nome },
+  { chave: "tipo", titulo: "Tipo", celula: tipoDaRecuperacao },
   {
     chave: "vendas",
     titulo: "Vendas",
@@ -67,22 +98,20 @@ const COLUNAS: ColunaTabela<Recuperacao>[] = [
   {
     chave: "pedidos",
     titulo: "Pedidos",
-    celula: (item) => (
-      <span className="conferencia-codigos">{item.pedidos.join(", ")}</span>
-    ),
+    celula: (item) => <PedidosDaRecuperacao item={item} />,
   },
 ];
 
 /** O que a lista mostra: quantas (todas ou só as mais recentes) e onde as vendas recuperadas aparecem. */
 function textoDoHistorico(quantas: number, temMais: boolean): string {
   if (quantas === 0)
-    return "Toda venda recuperada fica registrada aqui, com quem recuperou e quando.";
+    return "Toda venda recuperada e todo pagamento registrado ficam aqui, com quem gravou e quando.";
   const lista = !temMais
     ? `${plural(quantas, "recuperação", "recuperações")}, a mais recente primeiro.`
     : quantas === 1
       ? "A recuperação mais recente; as anteriores em “Carregar mais”."
       : `As ${quantas.toLocaleString("pt-BR")} recuperações mais recentes; as anteriores em “Carregar mais”.`;
-  return `${lista} As vendas recuperadas aparecem no sistema como “recuperado na conferência”.`;
+  return `${lista} As vendas recuperadas aparecem no sistema como “recuperado na conferência”; os pagamentos registrados, como pagos.`;
 }
 
 // Auditoria das recuperações da campanha ativa: quem, quando e quantas vendas cada "Recuperar" gravou (a
