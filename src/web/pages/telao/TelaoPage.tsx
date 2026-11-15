@@ -68,8 +68,12 @@ export function TelaoPage() {
         <div className="telao__marca">
           <Marca />
         </div>
-        {/* O lugar da fase existe desde o início (vazio até os dados chegarem): o topo não muda de tamanho. */}
-        <div className="telao__fase">
+        {/*
+         * O lugar da fase existe desde o início (vazio até os dados chegarem): o topo não muda de tamanho. data-fase
+         * dá o tamanho do destaque: "Campanha encerrada" e "Começa em 28 dias" são mais longos que "Dia 12 de 24"
+         * e ficam menores, para caber entre a marca e a hora (telao.css, RIFA-057).
+         */}
+        <div className="telao__fase" data-fase={ranking?.referencia.fase}>
           {fase && (
             <>
               <p
@@ -87,34 +91,38 @@ export function TelaoPage() {
             </>
           )}
         </div>
+        {/*
+         * A hora: o selo do Kids e o relógio numa linha; embaixo, a linha da atualização, que passa por baixo do selo
+         * (a coluna fica com a largura dela, e não com a soma do selo e dos textos: sobra lugar para a fase).
+         */}
         <div className="telao__hora">
-          <img
-            className="telao__kids"
-            src={kids.src}
-            alt={kids.alt}
-            width={kids.largura}
-            height={kids.altura}
-            decoding="async"
-          />
-          <div className="telao__hora-textos">
+          <div className="telao__hora-linha">
+            <img
+              className="telao__kids"
+              src={kids.src}
+              alt={kids.alt}
+              width={kids.largura}
+              height={kids.altura}
+              decoding="async"
+            />
             <p className="telao__relogio">
               <span className="visualmente-oculto">Agora são </span>
               {hora}
             </p>
-            {/* A linha da atualização também tem lugar desde o início. */}
-            <p
-              className="telao__atualizado"
-              data-falhou={falhou ? "" : undefined}
-            >
-              {ranking && (
-                <>
-                  Atualizado às {formatarHora(ranking.atualizadoEm)}
-                  {/* Região viva fixa: avisa quando uma atualização automática falha. */}
-                  <span role="status">{falhou ? " · sem conexão" : ""}</span>
-                </>
-              )}
-            </p>
           </div>
+          {/* A linha da atualização também tem lugar desde o início. */}
+          <p
+            className="telao__atualizado"
+            data-falhou={falhou ? "" : undefined}
+          >
+            {ranking && (
+              <>
+                Atualizado às {formatarHora(ranking.atualizadoEm)}
+                {/* Região viva fixa: avisa quando uma atualização automática falha. */}
+                <span role="status">{falhou ? " · sem conexão" : ""}</span>
+              </>
+            )}
+          </p>
         </div>
       </header>
       <main className="telao__conteudo">

@@ -5,7 +5,10 @@
 // medida na tela de verdade está nas capturas do Playwright.
 import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ReferenciaCampanha } from "../../../shared/contracts/calculos";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
+import { MARCA } from "../../tema/marca";
+import { faseDoTelao } from "./textos";
 
 // O Vitest esvazia todo import de CSS (até com ?raw): o texto vem do disco, pelo fs do Node.
 type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
@@ -177,8 +180,8 @@ describe("CA2: no telão renderizado, o em não se multiplica", () => {
 // ---------------------------------------------------------------------------------------------------
 
 /** Cada regra do telao.css: os seletores (um por item da lista) e as declarações. */
-const REGRAS = [...telaoCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
-  ([, seletor, corpo]) => ({
+const regrasDe = (css: string) =>
+  [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, seletor, corpo]) => ({
     seletores: seletor
       .split(",")
       .map((parte) => parte.trim().replace(/\s+/g, " ")),
@@ -187,21 +190,32 @@ const REGRAS = [...telaoCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
         ([, propriedade, valor]) => [propriedade, valor.trim()],
       ),
     ),
-  }),
-);
+  }));
+type Regras = ReturnType<typeof regrasDe>;
+
+const REGRAS = regrasDe(telaoCss);
 
 /** O valor de uma propriedade para um seletor exato (a última regra que o lista vence, como na cascata). */
-function valorDe(seletor: string, propriedade: string): string | undefined {
-  return REGRAS.filter(
-    ({ seletores, declaracoes }) =>
-      seletores.includes(seletor) && declaracoes.has(propriedade),
-  )
+function valorDe(
+  seletor: string,
+  propriedade: string,
+  regras: Regras = REGRAS,
+): string | undefined {
+  return regras
+    .filter(
+      ({ seletores, declaracoes }) =>
+        seletores.includes(seletor) && declaracoes.has(propriedade),
+    )
     .at(-1)
     ?.declaracoes.get(propriedade);
 }
 
-const emDe = (seletor: string, propriedade = "font-size") => {
-  const valor = valorDe(seletor, propriedade);
+const emDe = (
+  seletor: string,
+  propriedade = "font-size",
+  regras: Regras = REGRAS,
+) => {
+  const valor = valorDe(seletor, propriedade, regras);
   const em = valor === undefined ? null : /^([\d.]+)em$/.exec(valor);
   if (!em)
     throw new Error(`${seletor} { ${propriedade} } fora de em: ${valor}`);
@@ -392,5 +406,237 @@ describe("RIFA-050: as cores novas são do tema do telão, com o contraste do te
     expect(
       contraste("--cor-alerta", "--cor-alerta-suave"),
     ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-057: o topo em todas as fases (antes do início, durante, encerrada) e no carregando, no vazio e na falha. Cada
+// parte fica na coluna dela, nada por cima de nada, e a conta da largura fecha: a marca numa linha, a hora na largura
+// reservada e o destaque mais longo de cada fase cabem lado a lado. Tudo em em do texto-base, então a conta é a
+// mesma em 1920×1080 e em 1280×720 (e em qualquer telão deitado: a largura da tela, em em, quase não muda).
+// ---------------------------------------------------------------------------------------------------
+
+/** As regras do telão deitado: fora dos @media (o celular em pé empilha o topo; movimento e cores forçadas à parte). */
+const DEITADO = regrasDe(
+  telaoCss.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g, ""),
+);
+const deitado = (seletor: string, propriedade: string) =>
+  valorDe(seletor, propriedade, DEITADO);
+const emDeitado = (seletor: string, propriedade = "font-size") =>
+  emDe(seletor, propriedade, DEITADO);
+
+/**
+ * Larguras medidas no Chromium das capturas (RIFA-057), em em da própria fonte. Os destaques e o nome da marca são da
+ * Outfit 800, que vem com o site (a mesma largura em toda máquina); a linha da atualização é da fonte do sistema, que
+ * muda de máquina para máquina (a do Chromium das capturas está entre as largas). Texto novo no topo: meça de novo.
+ */
+const LARGURA_MEDIDA: Record<string, number> = {
+  "Dia 24 de 24": 5.73,
+  "Começa em 120 dias": 9.37,
+  "Campanha encerrada": 10.17,
+  "Rifa Videira Kids": 7.7,
+  "Atualizado às 15:30": 9.17,
+};
+
+const DURANTE_NO_TOPO: ReferenciaCampanha = {
+  data: "2026-12-16",
+  fase: "durante",
+  data_inicio: "2026-11-23",
+  data_fim: "2026-12-16",
+  duracao_dias: 24,
+  dia_campanha: 24,
+  dias_restantes: 1,
+  dias_para_inicio: null,
+  periodo: null,
+};
+
+/** O destaque mais longo de cada fase, como o telão escreve (textos.ts). */
+const DESTAQUE_MAIS_LONGO = {
+  durante: faseDoTelao(DURANTE_NO_TOPO).destaque,
+  antes: faseDoTelao({
+    ...DURANTE_NO_TOPO,
+    fase: "antes",
+    dia_campanha: null,
+    dias_restantes: 24,
+    dias_para_inicio: 120,
+  }).destaque,
+  encerrada: faseDoTelao({
+    ...DURANTE_NO_TOPO,
+    fase: "encerrada",
+    dia_campanha: null,
+    dias_restantes: 0,
+  }).destaque,
+};
+
+const TAMANHO_DO_DESTAQUE = {
+  durante: () => emDeitado(".telao__fase-destaque"),
+  antes: () =>
+    emDeitado('.telao__fase[data-fase="antes"] .telao__fase-destaque'),
+  encerrada: () =>
+    emDeitado('.telao__fase[data-fase="encerrada"] .telao__fase-destaque'),
+};
+
+const marcaCss = semComentarios(lerArquivo("../../components/ui/Marca.css"));
+
+/** A largura da marca no telão: o logo no selo claro, o espaço e o nome numa linha. */
+function larguraDaMarca(): number {
+  const selo =
+    /\[data-tema="telao"\] \.ui-marca__selo\s*\{[^}]*padding:\s*[\d.]+em\s+([\d.]+)em;/.exec(
+      marcaCss,
+    );
+  if (!selo) throw new Error("O selo da marca no telão mudou de forma");
+  const logo =
+    (emDeitado(".telao .ui-marca", "--marca-altura") * MARCA.logo.largura) /
+    MARCA.logo.altura;
+  return (
+    logo +
+    2 * Number(selo[1]) +
+    emDeitado(".telao .ui-marca", "gap") +
+    LARGURA_MEDIDA[MARCA.produto] * emDeitado(".telao .ui-marca__nome")
+  );
+}
+
+/** A largura do conteúdo do telão, em em: a tela menos o padding dos lados. */
+function larguraDoConteudo(largura: number, altura: number): number {
+  const [, lados] = (deitado(".telao", "padding") ?? "").split(" ");
+  const padding = Number(/^([\d.]+)em$/.exec(lados ?? "")?.[1]);
+  if (!padding) throw new Error("O padding do .telao mudou de forma");
+  return largura / textoBase(largura, altura) - 2 * padding;
+}
+
+describe("RIFA-057: o topo do telão, em todas as fases", () => {
+  it("cada parte na coluna dela: as laterais nunca ficam menores que o conteúdo e o meio encolhe e corta, sem passar para o lado", () => {
+    expect(deitado(".telao__topo", "grid-template-columns")).toBe(
+      "minmax(max-content, 1fr) auto minmax(max-content, 1fr)",
+    );
+    // O meio (a fase) pode ficar menor que o destaque, mas aí corta na borda dele, nunca cobre o selo do Kids.
+    expect(deitado(".telao__fase", "min-width")).toBe("0");
+    expect(deitado(".telao__fase", "overflow-x")).toBe("clip");
+    expect(deitado(".telao__fase", "grid-template-columns")).toBe(
+      "minmax(0, 1fr)",
+    );
+    // A marca numa linha só (com a fase longa, ela quebrava em 3).
+    expect(deitado(".telao .ui-marca__nome", "white-space")).toBe("nowrap");
+    // A hora é uma grade de largura fixa: o selo do Kids e o relógio numa linha, a atualização embaixo, à direita.
+    expect(deitado(".telao__hora", "display")).toBe("grid");
+    expect(deitado(".telao__hora", "justify-items")).toBe("end");
+    expect(deitado(".telao__atualizado", "text-align")).toBe("right");
+    expect(emDeitado(".telao__hora", "width")).toBeGreaterThan(0);
+  });
+
+  it("nada no topo se posiciona por cima de outra parte (só a faixa do degradê, embaixo, é absoluta)", () => {
+    const doTopo =
+      /telao__topo|telao__marca|ui-marca|telao__fase|telao__hora|telao__kids|telao__relogio|telao__atualizado/;
+    const regras = REGRAS.filter(({ seletores }) =>
+      seletores.some((seletor) => doTopo.test(seletor)),
+    );
+    expect(regras.length).toBeGreaterThan(8);
+    for (const { seletores, declaracoes } of regras) {
+      const nome = seletores.join(", ");
+      if (nome === ".telao__topo::after") {
+        expect(declaracoes.get("position")).toBe("absolute");
+        expect(declaracoes.get("bottom")).toBe("0");
+        continue;
+      }
+      expect({ nome, position: declaracoes.get("position") ?? "" }).toEqual({
+        nome,
+        position: expect.not.stringMatching(/absolute|fixed|sticky/),
+      });
+      for (const [propriedade, valor] of declaracoes) {
+        expect({ nome, propriedade }).toEqual({
+          nome,
+          propriedade: expect.not.stringMatching(
+            /^(transform|translate|inset|top|right|bottom|left)$/,
+          ),
+        });
+        if (propriedade.startsWith("margin"))
+          expect({ nome, propriedade, valor }).toEqual({
+            nome,
+            propriedade,
+            valor: expect.not.stringMatching(/-/),
+          });
+      }
+    }
+  });
+
+  it("os destaques que o telão escreve são os medidos (texto novo no topo: meça de novo)", () => {
+    expect(DESTAQUE_MAIS_LONGO).toEqual({
+      durante: "Dia 24 de 24",
+      antes: "Começa em 120 dias",
+      encerrada: "Campanha encerrada",
+    });
+    expect(MARCA.produto).toBe("Rifa Videira Kids");
+  });
+
+  it.each([
+    [1920, 1080],
+    [1280, 720],
+  ])(
+    "em %i×%i, a marca, o destaque mais longo de cada fase e a hora cabem lado a lado, com folga",
+    (largura, altura) => {
+      const conteudo = larguraDoConteudo(largura, altura);
+      const espaco = emDeitado(".telao__topo", "gap");
+      const hora = emDeitado(".telao__hora", "width");
+      const marca = larguraDaMarca();
+      // Conferência das medidas: a marca tem ~12,4em (569 px em 1920×1080) e o conteúdo ~38,6em.
+      expect(marca).toBeCloseTo(12.4, 1);
+      expect(conteudo).toBeCloseTo(38.6, 1);
+      // A folga cobre a fonte de reserva (antes de a Outfit chegar) e o arredondamento.
+      const FOLGA = 0.4;
+      for (const fase of ["durante", "antes", "encerrada"] as const) {
+        const destaque =
+          TAMANHO_DO_DESTAQUE[fase]() *
+          LARGURA_MEDIDA[DESTAQUE_MAIS_LONGO[fase]];
+        expect({
+          fase,
+          cabe: marca + espaco + destaque + espaco + hora + FOLGA <= conteudo,
+        }).toEqual({ fase, cabe: true });
+      }
+      // Durante, "Dia 24 de 24" fica no meio da tela: as duas laterais iguais, cada uma com o conteúdo dela.
+      const durante =
+        TAMANHO_DO_DESTAQUE.durante() *
+        LARGURA_MEDIDA[DESTAQUE_MAIS_LONGO.durante];
+      expect(durante + 2 * espaco + 2 * Math.max(marca, hora)).toBeLessThan(
+        conteudo,
+      );
+    },
+  );
+
+  it("a hora cabe a linha 'Atualizado às 15:30' e, na linha de cima, o selo do Kids e o relógio (nada anda quando os dados chegam)", () => {
+    const hora = emDeitado(".telao__hora", "width");
+    expect(
+      LARGURA_MEDIDA["Atualizado às 15:30"] * emDeitado(".telao__atualizado"),
+    ).toBeLessThan(hora);
+    // "15:30" com algarismos de mesma largura (~0,65em cada, em negrito): bem menos que a coluna.
+    expect(
+      emDeitado(".telao__kids", "width") +
+        emDeitado(".telao__hora-linha", "gap") +
+        5 * 0.65 * emDeitado(".telao__relogio"),
+    ).toBeLessThan(hora);
+  });
+
+  it("o destaque continua o herói: 2em durante; antes e depois, menor, mas maior que o relógio", () => {
+    expect(TAMANHO_DO_DESTAQUE.durante()).toBe(2);
+    for (const fase of ["antes", "encerrada"] as const) {
+      expect(TAMANHO_DO_DESTAQUE[fase]()).toBeLessThan(2);
+      expect(TAMANHO_DO_DESTAQUE[fase]()).toBeGreaterThan(
+        emDeitado(".telao__relogio"),
+      );
+    }
+  });
+
+  it("a altura reservada do topo cabe a fase e a hora com a linha da atualização em duas ('· sem conexão')", () => {
+    const linhaDaHora = Math.max(
+      emDeitado(".telao__kids", "height"),
+      emDeitado(".telao__relogio") *
+        Number(deitado(".telao__relogio", "line-height")),
+    );
+    const duasLinhas =
+      2 *
+      emDeitado(".telao__atualizado") *
+      Number(deitado(".telao__atualizado", "line-height"));
+    expect(emDeitado(".telao__fase", "min-height")).toBeGreaterThanOrEqual(
+      Number((linhaDaHora + duasLinhas).toFixed(2)),
+    );
   });
 });

@@ -574,6 +574,64 @@ describe("CA2: o telão (/telao)", () => {
   });
 });
 
+// RIFA-057: o topo em todas as fases. O tamanho do destaque vem do data-fase (telao.css: antes e depois, os textos são
+// mais longos e ficam menores, para caber entre a marca e a hora); o selo do Kids fica na linha do relógio.
+describe("RIFA-057: o topo do telão em todas as fases", () => {
+  const fase = () => document.querySelector(".telao__fase");
+
+  it.each([
+    [ANTES, "antes", "Começa em 3 dias"],
+    [DURANTE, "durante", "Dia 12 de 24"],
+    [ULTIMO_DIA, "durante", "Dia 24 de 24"],
+    [ENCERRADA, "encerrada", "Campanha encerrada"],
+  ])(
+    "o lugar da fase diz a fase (data-fase) só com os dados: %#",
+    async (referencia, dataFase, destaque) => {
+      abrir({ referencia });
+      // No carregando, sem fase: o lugar fica vazio, no tamanho de sempre.
+      expect(fase()).not.toHaveAttribute("data-fase");
+      await esperarRanking();
+      expect(fase()).toHaveAttribute("data-fase", dataFase);
+      expect(fase()?.querySelector(".telao__fase-destaque")).toHaveTextContent(
+        destaque,
+      );
+    },
+  );
+
+  it("o selo do Kids fica na linha do relógio e a atualização embaixo; nada sai do lugar quando os dados chegam", async () => {
+    abrir({ referencia: ENCERRADA });
+    const hora = document.querySelector(".telao__hora");
+    const filhos = () =>
+      [...(hora?.children ?? [])].map((filho) => filho.className);
+    expect(filhos()).toEqual(["telao__hora-linha", "telao__atualizado"]);
+    const linha = hora?.querySelector(".telao__hora-linha");
+    const selo = screen.getByRole("img", { name: "Videira Kids" });
+    const relogio = document.querySelector(".telao__relogio");
+    expect(
+      [...(linha?.children ?? [])].map((filho) => filho.className),
+    ).toEqual(["telao__kids", "telao__relogio"]);
+    expect(linha?.firstElementChild).toBe(selo);
+
+    await esperarRanking();
+    // Os mesmos elementos, nas mesmas posições (nada é montado de novo nem muda de pai).
+    expect(filhos()).toEqual(["telao__hora-linha", "telao__atualizado"]);
+    expect(linha?.firstElementChild).toBe(selo);
+    expect(linha?.lastElementChild).toBe(relogio);
+    expect(hora?.lastElementChild).toHaveTextContent(/^Atualizado às 15:30$/);
+  });
+
+  it("na falha da primeira carga, o topo é o do carregando: marca, lugar da fase vazio e a hora", async () => {
+    abrir({ falhas: 1 });
+    await screen.findByRole("alert");
+    expect(fase()).toBeEmptyDOMElement();
+    expect(fase()).not.toHaveAttribute("data-fase");
+    expect(document.querySelector(".telao__atualizado")).toBeEmptyDOMElement();
+    expect(
+      document.querySelector(".telao__hora-linha .telao__kids"),
+    ).toHaveAccessibleName("Videira Kids");
+  });
+});
+
 describe("CA2: o telão se atualiza sozinho (timers falsos)", () => {
   beforeEach(() => {
     vi.useFakeTimers({
