@@ -66,11 +66,19 @@
   background: radial-gradient(closest-side, var(--cor-ambiente-2), transparent);
 }
 
-/* Topo: marca | onde a campanha está | selo do Kids e relógio. A faixa do degradê da marca embaixo. */
+/*
+ * Topo: marca | onde a campanha está | selo do Kids e relógio. A faixa do degradê da marca embaixo.
+ * RIFA-057: cada parte fica na coluna dela, sem passar para a do lado. As laterais nunca ficam menores que o conteúdo
+ * (minmax(max-content, 1fr)): a marca numa linha só e a hora na largura reservada. Elas dividem o que sobra por igual,
+ * então "Dia 12 de 24" fica no meio da tela; uma fase mais longa encosta na marca e empurra a sobra da hora, sem
+ * cobrir nada. O meio cabe a fase mais longa ("Campanha encerrada", a conta está no telao-css.test.ts) e, se um dia não
+ * couber, encolhe (min-width: 0 na .telao__fase) e corta o destaque na borda dele (overflow-x: clip; o detalhe continua
+ * no meio), em vez de passar por cima do selo do Kids.
+ */
 .telao__topo {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   gap: 1em;
   padding-bottom: 0.35em;
@@ -87,28 +95,30 @@
   background: var(--gradiente-marca);
 }
 
-.telao__marca {
-  min-width: 0;
-}
-
 .telao .ui-marca {
   --marca-altura: 1.35em;
 
   gap: 0.4em;
 }
 
+/* O nome numa linha só, em todas as fases (com a fase longa, a coluna apertava e ele quebrava em 3: RIFA-057). */
 .telao .ui-marca__nome {
   font-size: 1em;
+  white-space: nowrap;
 }
 
 /*
- * O lugar da fase vale desde o início: 2em × 1,1 + 0,9em × 1,2 (as duas linhas). "Dia 12 de 24" é o herói do topo
- * (RIFA-050), na fonte dos títulos.
+ * O lugar da fase vale desde o início e cabe as duas linhas (2em × 1,1 + 0,9em × 1,2 = 3,28em) e a hora com a linha
+ * da atualização em duas (1,55em + 2 × 0,9em = 3,35em, com "· sem conexão"): o topo tem a mesma altura do carregando
+ * até os dados, em todas as fases e na falha. "Dia 12 de 24" é o herói do topo (RIFA-050), na fonte dos títulos.
  */
 .telao__fase {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: center;
-  min-height: 3.28em;
+  min-width: 0;
+  min-height: 3.36em;
+  overflow-x: clip;
   text-align: center;
 }
 
@@ -120,17 +130,37 @@
   white-space: nowrap;
 }
 
+/*
+ * Antes do início e depois do fim, o destaque é mais longo ("Começa em 28 dias", "Campanha encerrada") e fica com
+ * 1,45em, para caber entre a marca e a hora. Com 2em, ele passava por cima do selo do Kids (RIFA-057).
+ */
+.telao__fase[data-fase="antes"] .telao__fase-destaque,
+.telao__fase[data-fase="encerrada"] .telao__fase-destaque {
+  font-size: 1.45em;
+}
+
 .telao__fase-detalhe {
   font-size: 0.9em;
   font-weight: var(--peso-forte);
   color: var(--cor-texto-suave);
 }
 
+/*
+ * A hora: o selo do Kids e o relógio numa linha e, embaixo, a linha da atualização, as duas à direita. A largura de
+ * "Atualizado às 15:30" (~8,3em) fica reservada desde o carregando (nada anda quando os dados chegam) e a linha passa
+ * por baixo do selo: a coluna tem 9em, e não a soma do selo e dos textos (sobra lugar para a fase, RIFA-057).
+ */
 .telao__hora {
+  display: grid;
+  justify-items: end;
+  justify-self: end;
+  width: 9em;
+}
+
+.telao__hora-linha {
   display: flex;
   align-items: center;
-  justify-self: end;
-  gap: 0.5em;
+  gap: 0.4em;
 }
 
 /* Selo do Kids: pequeno e ao lado do relógio, longe do logo da Videira. */
@@ -141,12 +171,6 @@
   border-radius: 0.3em;
 }
 
-/* A largura de "Atualizado às 15:30" (~8,3em) fica reservada desde o carregando: o selo do Kids não anda. */
-.telao__hora-textos {
-  min-width: 9em;
-  text-align: right;
-}
-
 .telao__relogio {
   font-size: 1.3em;
   font-weight: 800;
@@ -154,10 +178,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Uma linha reservada desde o início (vazia até os dados chegarem). */
+/*
+ * Uma linha reservada desde o início (vazia até os dados chegarem). Com "· sem conexão", a linha quebra em duas dentro
+ * da coluna; a linha justa (1) é o que faz as duas caberem na altura do topo.
+ */
 .telao__atualizado {
-  min-height: 1.2em;
+  min-height: 1em;
   font-size: 0.9em;
+  line-height: 1;
+  text-align: right;
   color: var(--cor-texto-suave);
 }
 
