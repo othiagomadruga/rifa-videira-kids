@@ -2,7 +2,7 @@
 
 Guia de 1 página para o líder de célula, que a coordenação manda no WhatsApp em PDF ou imagem. A versão para imprimir ou compartilhar é a [guia-lideres.html](guia-lideres.html) (abra no navegador e use "Imprimir" → "Salvar como PDF", em A4 retrato). O convite da reunião, a mensagem do link e o roteiro de 20 minutos estão em [convite-reuniao.md](convite-reuniao.md).
 
-- Os textos entre `[confirmar com a Rifei]` dependem da Rifei e ainda não estão documentados ([integracao-rifei.md](integracao-rifei.md), seção 12.3). **Troque-os antes de mandar o guia** aos líderes.
+- O guia vale como está, sem esperar nada da Rifei: das telas dela, que as fontes não documentam ([integracao-rifei.md](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes), seção 12.3), ele fala só do convite de afiliado, da conta com o e-mail e da **Área de afiliados** (menu da página da campanha). Se a compra de teste mostrar algo que ajude o líder (ex.: onde fica o link de afiliado dentro da Área de afiliados), acrescente aqui e no HTML, sem passar de 1 página.
 - Os nomes de botão e os textos do sistema foram conferidos nas telas `/acesso`, `/entrar` e `/minha` (inclusive o cartão "Seu link de vendas"), com dados fictícios, no ensaio geral 2 (RIFA-036).
 - Se algo mudar no sistema (ex.: o texto de um botão), atualize este arquivo e o HTML juntos.
 
@@ -20,9 +20,9 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 ### 1. Vender pela Rifei (o seu link de afiliado)
 
-1. Abra o convite de afiliado da campanha. `[confirmar com a Rifei: como o convite chega e o que a tela pede]`
+1. Abra o **convite de afiliado** da campanha, que a coordenação manda para você. Não chegou? Peça à coordenação.
 2. Crie a sua conta de afiliado com o seu e-mail.
-3. Copie o **seu link de afiliado**. `[confirmar com a Rifei: onde ele fica e como ele é]` Quando a coordenação liberar, ele aparece também na sua tela do sistema, em **Seu link de vendas**, com o QR code (seção 3).
+3. Entre na **Área de afiliados** (menu da página da campanha na Rifei) com o seu e-mail e copie o **seu link de afiliado**. Quando a coordenação liberar, ele aparece também na sua tela do sistema, em **Seu link de vendas**, com o QR code (seção 3).
 4. Na reunião, **quando a coordenação chamar o seu nome**: abra o seu link de afiliado e comece a compra de 1 bilhete, **sem pagar**. Assim a coordenação liga o seu link à sua célula. A compra sem pagamento não conta e expira sozinha.
 5. Mande o seu link para amigos, família, vizinhos e colegas, inclusive para quem não é da igreja.
 
@@ -60,7 +60,7 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 ### Dúvidas frequentes
 
-**Perdi o link.** Do sistema: no WhatsApp, procure "link pessoal" na conversa com a coordenação. Não achou, ou a página diz "Este link não vale mais"? Peça um link novo à coordenação. De afiliado: na sua tela do sistema, em **Seu link de vendas**; ou na página da campanha na Rifei, abra o menu, toque em **Área de afiliados** e entre com o seu e-mail. `[confirmar com a Rifei]`
+**Perdi o link.** Do sistema: no WhatsApp, procure "link pessoal" na conversa com a coordenação. Não achou, ou a página diz "Este link não vale mais"? Peça um link novo à coordenação. De afiliado: na sua tela do sistema, em **Seu link de vendas**; ou na página da campanha na Rifei, abra o menu, toque em **Área de afiliados** e entre com o seu e-mail. Não conseguiu? Fale com a coordenação.
 
 **Mudei de celular.** No celular novo, toque no mesmo link e em **Entrar**. Se o celular antigo ficou com outra pessoa, peça à coordenação para trocar o seu acesso: você recebe um link novo e o celular antigo sai do sistema. A conversa não veio para o celular novo? Peça um link novo.
 
