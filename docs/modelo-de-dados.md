@@ -3,12 +3,13 @@
 - Migration: [`migrations/0001_init.sql`](../migrations/0001_init.sql), aplicada depois de `0000_setup.sql` (tabela `_meta`, RIFA-001). O acesso da equipe (`0002_acessos.sql`) e os papéis da hierarquia (`0006_acesso_hierarquia.sql`, RIFA-014) estão na seção [`usuarios`, `links_acesso` e `sessoes`](#usuarios-links_acesso-e-sessoes-acesso-da-equipe).
 - Conferência pelo CSV da Rifei (RIFA-012): [`0004_conferencia.sql`](../migrations/0004_conferencia.sql), aditiva, com a tabela [`recuperacoes`](#recuperacoes-migração-0004-rifa-012) e as colunas `pedidos.origem` e `pedidos.recuperacao_id`. Não depende da 0005 à 0007 nem elas dela: aplicada antes ou depois delas, dá o mesmo schema (`src/worker/test/migracao-0004-depois.test.ts`).
 - Tipos e schemas espelho: `src/shared/contracts/dominio.ts`.
-- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007, a 0008, a 0009 e a 0010 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
+- Teste do schema no workerd com o D1 local: `src/worker/test/migrations.test.ts` (tabelas e view criadas, CHECK de enum, FK, gravação de um pedido válido e atribuição pela view; a 0006, a 0007, a 0008, a 0009, a 0010 e a 0011 aplicadas sobre dados que já existiam; a 0004 aplicada depois da 0007, em `migracao-0004-depois.test.ts`).
 - Índices só de leitura: `0003_vendas_por_dia.sql` (painel; recriado na 0008), `0007_indices_pedidos_entregas.sql` (lista de pedidos, entregas e estado do webhook, RIFA-025) e o da lista dos desconsiderados (0008), na [seção 4](#4-índices-e-consultas-típicas). Os planos das consultas que dependem deles são travados por teste com `EXPLAIN QUERY PLAN` e as linhas lidas (`src/worker/db/painel.test.ts`, `src/worker/db/pedidos-webhook-desempenho.test.ts`, `src/worker/db/mapa-ddd-desempenho.test.ts`, `src/worker/routes/painel-desempenho.test.ts`, `src/worker/routes/minha-desempenho.test.ts`, `src/worker/routes/reconciliacao-desempenho.test.ts` e `src/worker/db/links-vendas.test.ts`).
 - Integração com a Rifei, com as decisões D1 a D9: [integracao-rifei.md](integracao-rifei.md).
 - Regras do admin (Sprint 6, D20): [`0008_regras_campanha.sql`](../migrations/0008_regras_campanha.sql), aditiva, com as chaves e as mensagens em `campanhas`, a desconsideração em `pedidos`, o índice da 0003 recriado, o índice da lista dos desconsiderados e a view recriada. Como foi feita e por quê: [seção 9](#9-migração-0008_regras_campanhasql-rifa-028-029-e-032-d20).
 - Token do webhook gerado pela tela (RIFA-039, D21): [`0009_token_webhook.sql`](../migrations/0009_token_webhook.sql), aditiva, com a tabela `token_webhook` (uma linha no máximo, só o SHA-256 do token). Aplicada depois da 0008; como foi feita, as consultas e o que foi medido: [seção 10](#10-migração-0009_token_webhooksql-rifa-039-d21).
 - Link de vendas de cada célula (RIFA-046, D24): [`0010_link_vendas.sql`](../migrations/0010_link_vendas.sql), aditiva, com a coluna `campanhas.link_vendas_modelo` (o modelo do link de afiliado da Rifei, só do admin). Aplicada depois da 0009; as consultas e o que foi medido: [seção 11](#11-migração-0010_link_vendassql-rifa-046-d24).
+- Pagamento registrado pela conferência (RIFA-056, D19): [`0011_pagamento_conferencia.sql`](../migrations/0011_pagamento_conferencia.sql), aditiva, com a coluna `pedidos.pagamento_recuperacao_id` e um índice parcial. Aplicada depois da 0010: [seção 12](#12-migração-0011_pagamento_conferenciasql-rifa-056-d19).
 
 ## 1. Visão geral
 
@@ -141,6 +142,7 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `registrado_em`, `atualizado_em` | TEXT (UTC) | nossos: primeira gravação e última alteração |
 | `origem` | TEXT, padrão `webhook` | `webhook` ou `conferencia` (migração 0004). Os pedidos anteriores à 0004 ficaram com `webhook` |
 | `recuperacao_id` | INTEGER FK → recuperacoes, NULL | a recuperação que gravou o pedido; preenchido **se e somente se** `origem = 'conferencia'` (CHECK) |
+| `pagamento_recuperacao_id` | INTEGER FK → recuperacoes, NULL | migração 0011 (RIFA-056): a recuperação que marcou como pago o pedido do webhook que estava pendente ou expirado (o pagamento não registrado); só com `origem = 'webhook'` e `status = 'approved'` (CHECK). O webhook nunca escreve nela |
 | `desconsiderado_em` | TEXT (UTC) NULL | migração 0008 (RIFA-028, D20): o admin tirou o pedido de todas as contas; NULL = o pedido conta |
 | `desconsiderado_motivo` | TEXT NULL | `teste`, `fraude`, `estorno` ou `outro`; preenchido **se e somente se** `desconsiderado_em` (CHECK) |
 | `desconsiderado_observacao` | TEXT NULL, 1–140 | só com `desconsiderado_em` (CHECK); nota do admin, sem dado pessoal (o contrato recusa "@" e 8 dígitos seguidos) |
@@ -148,6 +150,8 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 **Desconsiderado** (RIFA-028, D20): sai de toda soma (painel, rankings, público, bumbo, `/minha`, mapa, adesão, totais do afiliado, totais da lista de pedidos e as somas da conferência), porque toda consulta que soma repete `desconsiderado_em IS NULL` (e o índice da 0003 e a view já não o têm); continua na lista de pedidos (com o selo e o filtro), na de suspeitos e na conferência, à parte. Quem desconsiderou fica na trilha (`auditoria`), não no pedido. O webhook nunca escreve nessas colunas: um evento que chega depois muda o status, mas o pedido continua desconsiderado.
 
 Pedido recuperado na conferência (`POST /api/admin/reconciliacao/recuperar`, RIFA-012): entra `approved`, com `qtd_bilhetes`, `total_centavos`, `affiliate_id` e `aprovado_em` vindos do CSV da Rifei (lido no navegador); `numeros`, `ddd`, `pais`, `criado_em` e os campos informativos ficam NULL (os números dos bilhetes e o telefone não saem do navegador). Conta no painel, nos rankings e no bumbo como qualquer venda aprovada. Um evento do webhook que chegue depois segue a máquina da seção 5 (um `paid_order` dá `duplicado`).
+
+Pagamento registrado na conferência (o mesmo `POST`, só o admin, RIFA-056): o pedido do webhook `in_process` ou `expired` que o CSV diz que está pago (e cuja quantidade, valor e afiliado o CSV confirma) vira `approved`, com `aprovado_em` do CSV, `atualizado_em` e `pagamento_recuperacao_id`; o resto do pedido (inclusive `origem = 'webhook'`) não muda. Conta como qualquer aprovado. Um `paid_order` que chegue depois dá `duplicado`.
 
 ### `webhook_eventos` (D3)
 
@@ -226,6 +230,7 @@ Migrations `0002_acessos.sql` (RIFA-007) e `0006_acesso_hierarquia.sql` (RIFA-01
 | `webhook_eventos_por_resultado_id (resultado, id)` (migração 0007, RIFA-025) | entregas de um resultado da mais nova para a mais antiga, pelo id, com o cursor (`GET /api/admin/webhook/entregas`, `src/worker/db/entregas-webhook.ts`): ~51 linhas lidas por página, sem B-tree temporária (sem ele, ~800 a ~21 mil) |
 | `webhook_eventos_da_campanha_por_slug (slug, recebido_em) WHERE resultado IN ('processado', 'duplicado', 'ignorado_transicao')` (migração 0007, parcial, RIFA-025) | a última entrega da campanha no estado do webhook (`MAX(recebido_em)` no slug da ativa, D16): 0 ou 1 linha lida. A consulta repete o MESMO `resultado IN (...)` do índice, senão o planejador não o usa. Pelo índice `(resultado, recebido_em)`, com o slug trocado depois de entregas processadas, o MAX percorria todas as entregas do slug antigo (~17,6 mil linhas por chamada) |
 | `recuperacoes_por_campanha (campanha_id, executado_em)` e `pedidos_por_recuperacao (recuperacao_id) WHERE recuperacao_id IS NOT NULL` (migração 0004) | auditoria da conferência: as recuperações e os pedidos que cada uma gravou; a FK de `pedidos.recuperacao_id` |
+| `pedidos_por_pagamento_recuperado (pagamento_recuperacao_id) WHERE pagamento_recuperacao_id IS NOT NULL` (migração 0011, RIFA-056) | os pagamentos registrados de cada recuperação (as contagens da gravação e o histórico); a FK de `pedidos.pagamento_recuperacao_id` |
 | `campanhas_uma_ativa` (parcial, único) | garantir uma única campanha ativa |
 
 Exemplo, ranking de células da campanha `?1` no período, com `[início, fim)` já convertido para UTC (`?2`, `?3`):
@@ -529,3 +534,31 @@ ALTER TABLE campanhas ADD COLUMN link_vendas_modelo TEXT
   coluna nova, NULL), o CHECK (vazio, 301 caracteres e um modelo de 301 recusados; NULL, 1, 300, um endereço fora das
   regras do contrato e o modelo de exemplo aceitos: o banco só confere o tamanho) e o UPSERT do PUT da campanha
   (`salvarCampanhaAtiva`, com e sem os grupos do admin) mantendo o modelo.
+
+## 12. Migração `0011_pagamento_conferencia.sql` (RIFA-056; D19)
+
+Aplicada depois da `0010_link_vendas.sql`, no mesmo merge que a gravação (`gravarRecuperacao` em
+`src/worker/db/reconciliacao.ts`). Aditiva: uma coluna nova em `pedidos`, que nasce NULL em todos, e um índice parcial
+(vazio até a primeira correção). Por que uma coluna nova, e não `recuperacao_id`: a 0004 prende `recuperacao_id` a
+`origem = 'conferencia'` (CHECK), e o SQLite não troca o CHECK de uma coluna sem recriar a tabela.
+
+```sql
+ALTER TABLE pedidos ADD COLUMN pagamento_recuperacao_id INTEGER REFERENCES recuperacoes (id) ON DELETE RESTRICT
+  CHECK (pagamento_recuperacao_id IS NULL OR (origem = 'webhook' AND status = 'approved'));
+
+CREATE INDEX pedidos_por_pagamento_recuperado ON pedidos (pagamento_recuperacao_id)
+  WHERE pagamento_recuperacao_id IS NOT NULL;
+```
+
+- **Gravação**: no mesmo `db.batch` da recuperação, `UPDATE pedidos SET status = 'approved', aprovado_em, atualizado_em,
+  pagamento_recuperacao_id FROM json_each(...)`, só no pedido da campanha ativa ainda `in_process` ou `expired`, sem
+  desconsideração, com `origem = 'webhook'` e a mesma quantidade, o mesmo valor e o mesmo afiliado da prévia. As
+  contagens de `recuperacoes` somam `recuperacao_id` e `pagamento_recuperacao_id` (cada um pelo seu índice parcial), e a
+  recuperação em que nada mudou é apagada no mesmo lote, como antes (a FK RESTRICT não deixa apagar a que tem pedido).
+- **Leitura**: o histórico (`listarRecuperacoes`) lista os pedidos de cada recuperação pelos dois índices; os
+  pagamentos registrados vão em `pagamentos_registrados`. As somas do painel, da conferência e do resto não mudam:
+  leem `status = 'approved'`, e a coluna nova não entra em nenhum índice que elas usam.
+- Teste da migração (`src/worker/test/migrations.test.ts`, "0011 sobre dados que já existiam"): nenhuma tabela muda,
+  cada pedido ganha só a coluna, NULL; o CHECK recusa o pendente, o expirado e a venda perdida (`origem =
+  'conferencia'`) e aceita o pago no mesmo UPDATE; a FK recusa uma recuperação que não existe e segura a que tem um
+  pagamento registrado; os planos das contagens e da lista usam o índice novo.

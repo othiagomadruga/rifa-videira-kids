@@ -43,6 +43,7 @@ import {
   SITUACOES_AFILIADO_ARQUIVO,
   STATUS_ARQUIVO_RECONCILIACAO,
   TIPOS_DIVERGENCIA,
+  TIPOS_RECUPERACAO,
   validarCorpoConferencia,
   validarCorpoRecuperacao,
   type CorpoConferencia,
@@ -550,7 +551,8 @@ export type RespostaPedidosSuspeitos = z.infer<
  *   remoção, o acesso da hierarquia que caiu junto (o id do usuário);
  * - conferencia.recuperar: POST /api/admin/reconciliacao/recuperar quando grava algum pedido (RIFA-012, D19;
  *   não na prévia nem quando nada entrou), alvo `campanha:<id>`, resumo sem dados pessoais (o id da
- *   recuperação, quantos pedidos e bilhetes entraram; os códigos estão em GET .../recuperacoes);
+ *   recuperação, quantos pedidos e bilhetes entraram como vendas perdidas e, RIFA-056, quantos pedidos
+ *   pendentes ou expirados e bilhetes foram marcados como pagos; os códigos estão em GET .../recuperacoes);
  * - pedido.desconsiderar e pedido.reconsiderar (RIFA-028, D20): ROTAS_REGRAS_CAMPANHA, alvo `pedido:<id>` (só
  *   `pedido` quando o id não cabe nos 64 caracteres do alvo); resumo com o id do pedido entre aspas, o status, os
  *   bilhetes e a célula; na desconsideração, o motivo e, da observação, só "observação informada" (texto livre);
@@ -1749,8 +1751,10 @@ export const corpoAnalisarReconciliacaoSchema = z.custom<CorpoConferencia>(
 
 /**
  * "Recuperar": o corpo da análise (com a coluna do código) mais `pedidos` (1 a 500 códigos) e `simular`
- * (true = prévia, nada é gravado). Grava como aprovados (origem `conferencia`) os pedidos escolhidos, com
- * os dados do arquivo; pedido que já existe nunca é sobrescrito; atômico e idempotente.
+ * (true = prévia, nada é gravado). Grava como aprovados (origem `conferencia`) as vendas perdidas escolhidas,
+ * com os dados do arquivo; pedido que já existe nunca é sobrescrito, com uma exceção (RIFA-056, só do admin): o
+ * pedido do pagamento não registrado (pendente ou expirado, que conta, da campanha ativa, com quantidade, valor e
+ * afiliado confirmados pelo arquivo) vira pago com a data do arquivo, e nada mais dele muda. Atômico e idempotente.
  */
 export const corpoRecuperarReconciliacaoSchema = z.custom<CorpoRecuperacao>(
   (valor) => validarCorpoRecuperacao(valor).ok,
@@ -1804,7 +1808,11 @@ export const divergenciaSchema = z.strictObject({
   arquivo: pedidoNoArquivoSchema.nullable(),
   /** null em venda_perdida. */
   sistema: pedidoNoSistemaSchema.nullable(),
-  /** Só em venda_perdida, e só sem observação: o arquivo tem o que a gravação precisa. */
+  /**
+   * Só em venda_perdida e pagamento_nao_registrado (RIFA-056), e só sem observação: o arquivo tem o que a
+   * gravação precisa (na venda perdida) ou confirma o pedido gravado (no pagamento não registrado). Não depende
+   * do papel: marcar como pago é só do admin, e a tela da coordenação não oferece.
+   */
   recuperavel: z.boolean(),
   observacoes: z.array(z.enum(OBSERVACOES_DIVERGENCIA)),
 });
@@ -2017,9 +2025,18 @@ export type RespostaAnaliseReconciliacao = z.infer<
 
 export const pedidoRecuperadoSchema = z.strictObject({
   pedido_id: z.string().min(1).max(128),
+  /**
+   * RIFA-056: `venda_perdida` = o pedido entra (novo, origem `conferencia`); `pagamento_nao_registrado` = o
+   * pedido pendente ou expirado do webhook vira pago (quantidade, valor e afiliado ficam os gravados, que o
+   * arquivo confirmou).
+   */
+  tipo: z.enum(TIPOS_RECUPERACAO),
   qtd_bilhetes: z.number().int().positive(),
   total_centavos: centavosSchema,
-  /** `nao_reconhecido` grava sem afiliado (a venda entra em "sem afiliado"). */
+  /**
+   * A situação do afiliado no arquivo. Na venda perdida, `nao_reconhecido` grava sem afiliado (a venda entra em
+   * "sem afiliado"). No pagamento não registrado, `affiliate_id` e `celula` são os gravados (não mudam).
+   */
   afiliado: z.enum(SITUACOES_AFILIADO_ARQUIVO),
   affiliate_id: affiliateIdSchema.nullable(),
   celula: celulaReconciliacaoSchema,
@@ -2034,7 +2051,10 @@ export const respostaRecuperarReconciliacaoSchema = z.strictObject({
   aplicado: z.boolean(),
   /** A linha da auditoria (GET .../recuperacoes); null na simulação ou se nada foi gravado. */
   recuperacao_id: idSchema.nullable(),
-  /** Gravados (ou, na simulação, os que seriam gravados), na ordem pedida. */
+  /**
+   * Gravados (ou, na simulação, os que seriam gravados), na ordem pedida: as vendas perdidas que entraram e os
+   * pagamentos não registrados marcados como pagos (`tipo`, RIFA-056).
+   */
   recuperados: z.array(pedidoRecuperadoSchema),
   nao_recuperados: z.array(
     z.strictObject({
@@ -2050,7 +2070,10 @@ export type RespostaRecuperarReconciliacao = z.infer<
   typeof respostaRecuperarReconciliacaoSchema
 >;
 
-/** Uma recuperação feita (auditoria): quem, quando, quantos e de qual arquivo. */
+/**
+ * Uma recuperação feita (auditoria): quem, quando, quantos e de qual arquivo. As contagens (`pedidos_recuperados`,
+ * `bilhetes`, `total_centavos`) somam as vendas perdidas e os pagamentos registrados (RIFA-056).
+ */
 export const recuperacaoSchema = z.strictObject({
   id: idSchema,
   executado_em: instanteSchema,
@@ -2072,8 +2095,13 @@ export const recuperacaoSchema = z.strictObject({
     afiliado: z.string().min(1).nullable(),
     data: z.string().min(1).nullable(),
   }),
-  /** Códigos dos pedidos gravados, em ordem. */
+  /** Códigos dos pedidos gravados (vendas perdidas e pagamentos registrados), em ordem. */
   pedidos: z.array(z.string().min(1).max(128)),
+  /**
+   * RIFA-056: os de `pedidos` que já existiam pendentes ou expirados e esta recuperação marcou como pagos (o
+   * pagamento não registrado), em ordem; os outros entraram como vendas perdidas. Vazio nas recuperações de antes.
+   */
+  pagamentos_registrados: z.array(z.string().min(1).max(128)),
 });
 export type Recuperacao = z.infer<typeof recuperacaoSchema>;
 

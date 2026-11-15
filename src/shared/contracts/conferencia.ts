@@ -127,7 +127,8 @@ export type OrigemPedido = (typeof ORIGENS_PEDIDO)[number];
 /**
  * Tipos de divergência do modo por pedido, na ordem em que a resposta os traz:
  * - venda_perdida: pago na Rifei e ausente no sistema (não conta no painel nem no ranking): "Recuperar";
- * - pagamento_nao_registrado: pago na Rifei, e no sistema pendente ou expirado;
+ * - pagamento_nao_registrado: pago na Rifei, e no sistema pendente ou expirado (o "Pedido novo" chegou e o
+ *   "Pedido pago" não): o "Recuperar" do admin o marca como pago (RIFA-056);
  * - nao_pago_na_rifei: pago no sistema, e na Rifei pendente, expirado ou cancelado (ex.: estorno);
  * - ausente_no_arquivo: pago no sistema e ausente no arquivo (arquivo parcial ou compra de teste);
  * - valor_diferente, quantidade_diferente e afiliado_diferente: pago nos dois lados, com diferença.
@@ -144,9 +145,11 @@ export const TIPOS_DIVERGENCIA = [
 export type TipoDivergencia = (typeof TIPOS_DIVERGENCIA)[number];
 
 /**
- * Observações de um item: na venda perdida, o que impede a recuperação (sem quantidade, sem valor, valor
- * ambíguo de um pedido em várias linhas, data no futuro, código que não confere com o sistema); na
- * ausente no arquivo, o pedido é de um dia que o arquivo não cobre.
+ * Observações de um item: na venda perdida e no pagamento não registrado, o que impede a recuperação (sem
+ * quantidade, sem valor, valor ambíguo de um pedido em várias linhas, data no futuro, código que não confere
+ * com o sistema); só no pagamento não registrado (RIFA-056), o arquivo que não confirma o pedido gravado:
+ * quantidade, valor ou afiliado diferentes dos do sistema (o afiliado comparado como em afiliado_diferente: sem
+ * a coluna ou não reconhecido, não compara); na ausente no arquivo, o pedido é de um dia que o arquivo não cobre.
  */
 export const OBSERVACOES_DIVERGENCIA = [
   "sem_quantidade",
@@ -155,8 +158,23 @@ export const OBSERVACOES_DIVERGENCIA = [
   "data_no_futuro",
   "codigo_nao_confere",
   "fora_do_periodo_do_arquivo",
+  "quantidade_diferente",
+  "valor_diferente",
+  "afiliado_diferente",
 ] as const;
 export type ObservacaoDivergencia = (typeof OBSERVACOES_DIVERGENCIA)[number];
+
+/**
+ * O que o "Recuperar" faz com um pedido (RIFA-056): grava a venda perdida (o pedido novo, `origem`
+ * `conferencia`) ou marca como pago o pedido pendente ou expirado do pagamento não registrado (o pedido do
+ * webhook só muda de status e ganha a data do pagamento; quantidade, valor e afiliado ficam os gravados). O
+ * segundo é só do admin.
+ */
+export const TIPOS_RECUPERACAO = [
+  "venda_perdida",
+  "pagamento_nao_registrado",
+] as const satisfies readonly TipoDivergencia[];
+export type TipoRecuperacao = (typeof TIPOS_RECUPERACAO)[number];
 
 /**
  * Avisos (mensagens sem nenhum valor do arquivo: só números, nomes de coluna e o preço da campanha), na
@@ -215,6 +233,11 @@ export const ORIGENS_DATA_RECUPERADA = [
   "recuperacao",
 ] as const;
 
+/**
+ * Por que um código escolhido não foi gravado. `ja_existe`: o pedido já está no sistema e não muda (pago,
+ * desconsiderado, de outra campanha ou, para quem não é admin, pendente ou expirado). Os três últimos são do
+ * pagamento não registrado (RIFA-056): o arquivo não confirma a quantidade, o valor ou o afiliado gravados.
+ */
 export const MOTIVOS_NAO_RECUPERADO = [
   "ja_existe",
   "nao_esta_no_arquivo",
@@ -224,6 +247,9 @@ export const MOTIVOS_NAO_RECUPERADO = [
   "sem_valor",
   "valor_ambiguo",
   "data_no_futuro",
+  "quantidade_diferente",
+  "valor_diferente",
+  "afiliado_diferente",
 ] as const;
 export type MotivoNaoRecuperado = (typeof MOTIVOS_NAO_RECUPERADO)[number];
 
@@ -269,7 +295,10 @@ export interface CorpoConferencia {
   instante?: (number | null)[];
 }
 
-/** Corpo de POST /api/admin/reconciliacao/recuperar: o mesmo, mais os códigos escolhidos. */
+/**
+ * Corpo de POST /api/admin/reconciliacao/recuperar: o mesmo, mais os códigos escolhidos (vendas perdidas e, só
+ * do admin, pagamentos não registrados: RIFA-056). O que fazer com cada um a API decide pelo banco de agora.
+ */
 export interface CorpoRecuperacao extends CorpoConferencia {
   pedidos: string[];
   /** true: só a prévia, nada é gravado. */

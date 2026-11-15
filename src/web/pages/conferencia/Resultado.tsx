@@ -7,6 +7,7 @@ import type {
   RespostaAnaliseAgregada,
   RespostaAnalisePorPedido,
   RespostaAnaliseReconciliacao,
+  TipoRecuperacao,
 } from "../../../shared/contracts";
 import {
   Aviso,
@@ -33,6 +34,7 @@ import {
   DIVERGENCIAS,
   MOTIVO_DESCONSIDERACAO,
   OBSERVACOES,
+  PAGAMENTOS,
   plural,
   tomDoAviso,
 } from "./textos";
@@ -41,10 +43,12 @@ type Props = {
   analise: RespostaAnaliseReconciliacao;
   /** Os avisos da leitura do arquivo (na tela) e os da comparação (da API), juntos. */
   avisos: readonly AvisoReconciliacao[];
-  /** Vendas perdidas marcadas para recuperar. */
+  /** Vendas perdidas marcadas para recuperar e (só o admin) pagamentos não registrados marcados para registrar. */
   selecionados: ReadonlySet<string>;
   aoSelecionar: (codigos: string[], marcado: boolean) => void;
-  aoRecuperar: () => void;
+  aoRecuperar: (tipo: TipoRecuperacao) => void;
+  /** O admin marca como pago o pagamento não registrado (RIFA-056); a coordenação só vê. */
+  admin: boolean;
   /** Recebe o foco quando o resultado chega. */
   refTitulo: RefObject<HTMLSpanElement | null>;
   /** Aviso do último "Recuperar" (no topo do resultado). */
@@ -60,6 +64,7 @@ export function Resultado({
   selecionados,
   aoSelecionar,
   aoRecuperar,
+  admin,
   refTitulo,
   aviso,
 }: Props) {
@@ -87,6 +92,7 @@ export function Resultado({
             selecionados={selecionados}
             aoSelecionar={aoSelecionar}
             aoRecuperar={aoRecuperar}
+            admin={admin}
           />
         ) : (
           <Agregado analise={analise} avisos={avisos} />
@@ -124,16 +130,21 @@ function PorPedido({
   selecionados,
   aoSelecionar,
   aoRecuperar,
+  admin,
 }: {
   analise: RespostaAnalisePorPedido;
   avisos: readonly AvisoReconciliacao[];
   selecionados: ReadonlySet<string>;
   aoSelecionar: Props["aoSelecionar"];
-  aoRecuperar: () => void;
+  aoRecuperar: Props["aoRecuperar"];
+  admin: boolean;
 }) {
   const { resumo } = analise;
   const perdidas = analise.divergencias.find(
     (grupo) => grupo.tipo === "venda_perdida",
+  );
+  const naoRegistrados = analise.divergencias.find(
+    (grupo) => grupo.tipo === "pagamento_nao_registrado",
   );
   const comCasos = analise.divergencias.filter((grupo) => grupo.quantidade > 0);
   const semCasos = analise.divergencias.filter(
@@ -183,6 +194,22 @@ function PorPedido({
         <p>
           {perdidas.quantidade === 1 ? "Ela não conta" : "Elas não contam"} no
           painel nem no ranking. Veja em “Vendas perdidas” e recupere.
+        </p>
+      </Aviso>
+    );
+  } else if (naoRegistrados && naoRegistrados.quantidade > 0) {
+    // RIFA-056: o "Pedido novo" chegou e o "Pedido pago" não (o Pix manual, ou o webhook fora do ar no meio).
+    const um = naoRegistrados.quantidade === 1;
+    manchete = (
+      <Aviso
+        tom="perigo"
+        anuncio="nenhum"
+        titulo={`${plural(naoRegistrados.quantidade, "pedido pago", "pedidos pagos")} na Rifei ${um ? "está pendente ou expirado" : "estão pendentes ou expirados"} no sistema`}
+      >
+        <p>
+          {um ? "Ele não conta" : "Eles não contam"} no painel nem no ranking.
+          Veja em “Pagamento não registrado”
+          {admin ? " e registre o pagamento." : "."}
         </p>
       </Aviso>
     );
@@ -248,6 +275,7 @@ function PorPedido({
           selecionados={selecionados}
           aoSelecionar={aoSelecionar}
           aoRecuperar={aoRecuperar}
+          admin={admin}
         />
       ))}
       {semCasos.length > 0 && (
@@ -350,15 +378,23 @@ function Grupo({
   selecionados,
   aoSelecionar,
   aoRecuperar,
+  admin,
 }: {
   grupo: GrupoDivergencia;
   codigoConfere: boolean;
   selecionados: ReadonlySet<string>;
   aoSelecionar: Props["aoSelecionar"];
-  aoRecuperar: () => void;
+  aoRecuperar: Props["aoRecuperar"];
+  admin: boolean;
 }) {
   const id = useId();
   const textos = DIVERGENCIAS[grupo.tipo];
+  // A venda perdida se recupera (admin e coordenação); o pagamento não registrado, só o admin marca como pago.
+  const selecao: TipoRecuperacao | null =
+    grupo.tipo === "venda_perdida" ||
+    (grupo.tipo === "pagamento_nao_registrado" && admin)
+      ? grupo.tipo
+      : null;
   return (
     <section className="conferencia-grupo" aria-labelledby={id}>
       <div className="conferencia-grupo__cabecalho">
@@ -370,14 +406,18 @@ function Grupo({
         </Badge>
       </div>
       <p>{textos.explicacao}</p>
+      {grupo.tipo === "pagamento_nao_registrado" && (
+        <p>{admin ? PAGAMENTOS.comoFunciona : PAGAMENTOS.soAdmin}</p>
+      )}
       <p className="conferencia-suave">{totaisDoGrupo(grupo)}</p>
-      {grupo.tipo === "venda_perdida" ? (
-        <VendasPerdidas
+      {selecao !== null ? (
+        <Selecao
+          tipo={selecao}
           itens={grupo.itens}
           codigoConfere={codigoConfere}
           selecionados={selecionados}
           aoSelecionar={aoSelecionar}
-          aoRecuperar={aoRecuperar}
+          aoRecuperar={() => aoRecuperar(selecao)}
         />
       ) : (
         <DataTable
@@ -428,13 +468,84 @@ const COLUNAS_DIVERGENCIA: ColunaTabela<Divergencia>[] = [
   },
 ];
 
-function VendasPerdidas({
+/** Os textos da seleção de cada grupo que se grava: a venda perdida (Recuperar) e o pagamento não registrado. */
+type TextosDaSelecao = {
+  legenda: string;
+  marcarTodas: string;
+  desmarcarTodas: string;
+  dicaMarcarTodas: string;
+  dicaDesmarcarTodas: string;
+  dicaItem: string;
+  dicaItemIndisponivel: string;
+  /** O botão que abre a confirmação, com quantos estão marcados (0 = nenhum). */
+  botao: (marcados: number) => string;
+  dicaBotao: string;
+  /** A frase acima do botão: por que está indisponível, ou o que acontece. */
+  travado: string;
+  nenhum: string;
+  nadaMarcado: string;
+  demais: string;
+  pronto: string;
+};
+
+const LIMITE = LIMITE_PEDIDOS_RECUPERAR.toLocaleString("pt-BR");
+
+const SELECAO: Record<TipoRecuperacao, TextosDaSelecao> = {
+  venda_perdida: {
+    legenda: "Vendas perdidas para recuperar",
+    marcarTodas: "Marcar todas",
+    desmarcarTodas: "Desmarcar todas",
+    dicaMarcarTodas: DICAS.marcarTodas,
+    dicaDesmarcarTodas: DICAS.desmarcarTodas,
+    dicaItem: DICAS.vendaRecuperavel,
+    dicaItemIndisponivel: DICAS.vendaNaoRecuperavel,
+    botao: (marcados) =>
+      marcados === 0
+        ? "Recuperar"
+        : `Recuperar ${plural(marcados, "venda", "vendas")}`,
+    dicaBotao: DICAS.recuperar,
+    travado:
+      "Nada pode ser recuperado enquanto a coluna do código do pedido não conferir com o sistema.",
+    nenhum:
+      "Nenhuma destas vendas pode ser recuperada agora: veja o motivo em cada uma.",
+    nadaMarcado: "Marque as vendas que quer recuperar.",
+    demais: `Recupere até ${LIMITE} por vez.`,
+    pronto:
+      "Antes de gravar, o sistema mostra o que vai entrar. Pedido que já está no sistema nunca é mudado.",
+  },
+  pagamento_nao_registrado: {
+    legenda: "Pedidos para marcar como pagos",
+    marcarTodas: "Marcar todos",
+    desmarcarTodas: "Desmarcar todos",
+    dicaMarcarTodas: DICAS.marcarTodosPagamentos,
+    dicaDesmarcarTodas: DICAS.desmarcarTodosPagamentos,
+    dicaItem: DICAS.pagamentoRecuperavel,
+    dicaItemIndisponivel: DICAS.pagamentoNaoRecuperavel,
+    botao: (marcados) =>
+      marcados === 0
+        ? "Registrar pagamento"
+        : `Registrar ${plural(marcados, "pagamento", "pagamentos")}`,
+    dicaBotao: DICAS.registrarPagamentos,
+    travado:
+      "Nada pode ser marcado como pago enquanto a coluna do código do pedido não conferir com o sistema.",
+    nenhum:
+      "Nenhum destes pedidos pode ser marcado como pago agora: veja o motivo em cada um.",
+    nadaMarcado: "Marque os pedidos que quer marcar como pagos.",
+    demais: `Registre até ${LIMITE} por vez.`,
+    pronto:
+      "Antes de gravar, o sistema mostra o que vai mudar. Só o pedido pendente ou expirado muda; o que já está pago fica como está.",
+  },
+};
+
+function Selecao({
+  tipo,
   itens,
   codigoConfere,
   selecionados,
   aoSelecionar,
   aoRecuperar,
 }: {
+  tipo: TipoRecuperacao;
   itens: readonly Divergencia[];
   codigoConfere: boolean;
   selecionados: ReadonlySet<string>;
@@ -442,53 +553,45 @@ function VendasPerdidas({
   aoRecuperar: () => void;
 }) {
   const idDica = useId();
+  const textos = SELECAO[tipo];
   const recuperaveis = itens
     .filter((item) => item.recuperavel)
     .map((item) => item.pedido_id);
   const marcadas = recuperaveis.filter((codigo) => selecionados.has(codigo));
   const demais = marcadas.length > LIMITE_PEDIDOS_RECUPERAR;
-  // Nada marcado ou demais: o Recuperar fica indisponível com aria-disabled (RIFA-045), no Tab e com a dica; a frase
+  // Nada marcado ou demais: o botão fica indisponível com aria-disabled (RIFA-045), no Tab e com a dica; a frase
   // acima dele diz por quê e o clique é barrado aqui. As caixas que não dá para marcar podem ficar disabled: o motivo
   // já está escrito na tela.
-  const recuperarIndisponivel = marcadas.length === 0 || demais;
+  const indisponivel = marcadas.length === 0 || demais;
 
   let dica: string;
-  if (!codigoConfere)
-    dica =
-      "Nada pode ser recuperado enquanto a coluna do código do pedido não conferir com o sistema.";
-  else if (recuperaveis.length === 0)
-    dica =
-      "Nenhuma destas vendas pode ser recuperada agora: veja o motivo em cada uma.";
-  else if (marcadas.length === 0) dica = "Marque as vendas que quer recuperar.";
-  else if (demais)
-    dica = `Recupere até ${LIMITE_PEDIDOS_RECUPERAR.toLocaleString("pt-BR")} por vez.`;
-  else
-    dica =
-      "Antes de gravar, o sistema mostra o que vai entrar. Pedido que já está no sistema nunca é mudado.";
+  if (!codigoConfere) dica = textos.travado;
+  else if (recuperaveis.length === 0) dica = textos.nenhum;
+  else if (marcadas.length === 0) dica = textos.nadaMarcado;
+  else if (demais) dica = textos.demais;
+  else dica = textos.pronto;
 
   return (
     <fieldset className="conferencia-perdidas">
-      <legend className="visualmente-oculto">
-        Vendas perdidas para recuperar
-      </legend>
+      <legend className="visualmente-oculto">{textos.legenda}</legend>
       {recuperaveis.length > 1 && (
         <div className="conferencia-acoes">
-          <ComDica texto={DICAS.marcarTodas}>
+          <ComDica texto={textos.dicaMarcarTodas}>
             <Button
               variante="discreto"
               tamanho="pequeno"
               onClick={() => aoSelecionar(recuperaveis, true)}
             >
-              Marcar todas
+              {textos.marcarTodas}
             </Button>
           </ComDica>
-          <ComDica texto={DICAS.desmarcarTodas}>
+          <ComDica texto={textos.dicaDesmarcarTodas}>
             <Button
               variante="discreto"
               tamanho="pequeno"
               onClick={() => aoSelecionar(recuperaveis, false)}
             >
-              Desmarcar todas
+              {textos.desmarcarTodas}
             </Button>
           </ComDica>
         </div>
@@ -500,9 +603,7 @@ function VendasPerdidas({
             <ComDica
               id={`${idDica}-${indice}`}
               texto={
-                item.recuperavel
-                  ? DICAS.vendaRecuperavel
-                  : DICAS.vendaNaoRecuperavel
+                item.recuperavel ? textos.dicaItem : textos.dicaItemIndisponivel
               }
             >
               <label
@@ -523,7 +624,18 @@ function VendasPerdidas({
                   <span className="conferencia-codigo">
                     Pedido {item.pedido_id}
                   </span>
-                  {item.arquivo && <span>{textoDoArquivo(item.arquivo)}</span>}
+                  {tipo === "venda_perdida" ? (
+                    item.arquivo && <span>{textoDoArquivo(item.arquivo)}</span>
+                  ) : (
+                    <>
+                      {item.arquivo && (
+                        <span>Na Rifei: {textoDoArquivo(item.arquivo)}</span>
+                      )}
+                      {item.sistema && (
+                        <span>No sistema: {textoDoSistema(item.sistema)}</span>
+                      )}
+                    </>
+                  )}
                   {item.observacoes.map((codigo) => (
                     <span
                       key={codigo}
@@ -543,22 +655,16 @@ function VendasPerdidas({
       </p>
       <div className="conferencia-acoes">
         <ComDica
-          texto={
-            recuperarIndisponivel
-              ? DICAS.recuperarIndisponivel
-              : DICAS.recuperar
-          }
+          texto={indisponivel ? DICAS.recuperarIndisponivel : textos.dicaBotao}
         >
           <Button
-            aria-disabled={recuperarIndisponivel || undefined}
+            aria-disabled={indisponivel || undefined}
             aria-describedby={idDica}
             onClick={() => {
-              if (!recuperarIndisponivel) aoRecuperar();
+              if (!indisponivel) aoRecuperar();
             }}
           >
-            {marcadas.length === 0
-              ? "Recuperar"
-              : `Recuperar ${plural(marcadas.length, "venda", "vendas")}`}
+            {textos.botao(marcadas.length)}
           </Button>
         </ComDica>
       </div>

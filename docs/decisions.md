@@ -446,6 +446,57 @@ do passo com o token, e o que deixassem no disco rodava com ele.
   `conferencia.recuperar`, alvo `campanha:<id>`, no mesmo `db.batch` da gravação e só quando algum pedido entra;
   o resumo traz o id da recuperação e quantos pedidos e bilhetes entraram (nada do arquivo).
 
+### Adendo (RIFA-056, 2026-11-15): o "Recuperar" do admin corrige o "Pagamento não registrado"
+
+O lançamento pode começar com o Pix manual da Rifei (lancamento.md, 1.6): o "Pedido novo" chega pelo webhook e, se
+marcar como pago no painel da Rifei não mandar o "Pedido pago" (a compra de teste decide), o pedido ficaria pendente ou
+expirado para sempre. O mesmo buraco existe com o webhook fora do ar entre os dois avisos. A conferência só mostrava o
+caso. Decisões do SM, reversíveis:
+
+- **O mesmo "Recuperar", com o mesmo cuidado da venda perdida.** O `pagamento_nao_registrado` (pago no arquivo; no
+  sistema `in_process` ou `expired`, da campanha ativa e sem desconsideração) passa a `recuperavel` quando não tem
+  observação. Impedem as mesmas da venda perdida (`sem_quantidade`, `sem_valor`, `valor_ambiguo`, `data_no_futuro`,
+  `codigo_nao_confere`) e três novas, do arquivo que não confirma o pedido gravado: `quantidade_diferente`,
+  `valor_diferente` e `afiliado_diferente`, com as comparações dos pagos nos dois lados (o afiliado sem a coluna ou não
+  reconhecido não compara; vazio no arquivo é "sem afiliado", diferente de um afiliado gravado). O afiliado tardio
+  (gravado sem afiliado e, no arquivo, com um) fica barrado como `afiliado_diferente`: a correção não troca o afiliado.
+  O desconsiderado (D20) continua no grupo à parte e nunca volta sozinho (`ja_existe`).
+- **O que a correção grava** (o que o "Pedido pago" deixaria nas contas): `status = 'approved'` e `aprovado_em` com a
+  data do arquivo, pela regra da venda perdida (a hora do arquivo; só o dia, o meio-dia ou agora, se for hoje; sem
+  data, agora), `atualizado_em` e `pagamento_recuperacao_id` (0011). Quantidade, valor, afiliado, `origem` (continua
+  `webhook`), `status_rifei` e os demais campos do webhook não mudam; nada é apagado. Conta no painel, nos rankings,
+  no bumbo, na `/minha`, na Adesão e no mapa como qualquer aprovado (todos leem `status = 'approved'` e
+  `aprovado_em`). A plausibilidade da D11 marca o fora do padrão em `pedidos_suspeitos` no mesmo lote, como o "Pedido
+  pago" marcaria.
+- **Gravação** (`gravarRecuperacao`, o mesmo `db.batch`): `UPDATE ... FROM json_each(...)` com a guarda "o pedido
+  ainda é o que o plano conferiu": a campanha ativa, `status IN ('in_process', 'expired')`, `desconsiderado_em IS
+  NULL`, `origem = 'webhook'` e a mesma quantidade, o mesmo valor e o mesmo afiliado (`IS`). **Idempotente**: repetir
+  encontra o pedido pago (`ja_existe`, sem outra recuperação nem trilha). **Corrida com o webhook**: o "Pedido pago"
+  antes da gravação faz o UPDATE não mudar nada (`ja_existe`); depois dela, dá `duplicado` (approved é terminal, D4) e
+  não muda o pedido. Nos dois casos ele conta uma vez; só o `aprovado_em` pode ser outro (o do arquivo ou o
+  `approved_at` do evento: vale o que chegou primeiro). `MAX_TENTATIVAS` do webhook não muda: a correção é a mesma
+  transição para approved, por outra via.
+- **Migração `0011_pagamento_conferencia.sql`** (modelo-de-dados.md, seção 12): `pedidos.pagamento_recuperacao_id` →
+  `recuperacoes` (ON DELETE RESTRICT; CHECK: só com `origem = 'webhook'` e `status = 'approved'`) e o índice parcial
+  `pedidos_por_pagamento_recuperado`. Uma coluna nova, e não `recuperacao_id`: a 0004 prende `recuperacao_id` a
+  `origem = 'conferencia'` (CHECK), e trocar o CHECK exigiria recriar a tabela de pedidos na véspera do lançamento.
+  Aditiva: nenhum dado muda.
+- **Só o admin** (pedido do SM). A rota é a mesma, `POST /api/admin/reconciliacao/recuperar`, que continua com admin e
+  coordenação para a venda perdida (adendo da RIFA-042 na D20). Com a sessão da coordenação, o pendente fica
+  `ja_existe`, como antes. A análise é igual para os dois papéis (`recuperavel` diz se o arquivo confirma o pedido); a
+  tela da coordenação mostra o grupo sem seleção, com "Só o admin marca estes pedidos como pagos.".
+- **Contrato** (commit à parte, `RIFA-056: contrato: ...`): `TIPOS_RECUPERACAO`; as três observações e os três motivos
+  novos; `tipo` em cada pedido de `recuperados` (a prévia e a resposta dizem o que cada um vai virar, mesmo que o banco
+  tenha mudado desde a análise); `pagamentos_registrados` em cada recuperação do histórico (os de `pedidos` que eram
+  pagamentos não registrados). As contagens de `recuperacoes` somam os dois tipos.
+- **Trilha**: a mesma ação `conferencia.recuperar`. Só vendas perdidas: o texto de antes. Com pagamentos registrados:
+  "...; 2 pedidos pendentes ou expirados (3 bilhetes) marcados como pagos" (só eles: sem a parte das vendas).
+- **Site**: o grupo ganha a mesma seleção da venda perdida (para o admin, os que dá para marcar já vêm marcados),
+  **Registrar pagamento** (indisponível com `aria-disabled` e a dica), a confirmação com a prévia, o aviso depois de
+  gravar, o aviso do topo quando só há pagamentos não registrados e a coluna **Tipo** no histórico.
+- Testes: `src/worker/routes/reconciliacao-pagamento.test.ts` (workerd + D1) e
+  `src/web/pages/conferencia/PagamentoNaoRegistrado.test.tsx`.
+
 ## D20. Regras do admin na campanha: desconsiderar pedido, acesso da hierarquia, remover afiliado e mensagens (RIFA-028, 029, 031 e 032; contrato, 2026-11-11)
 
 O PO pediu: "Todas essas decisões quero configuráveis na conta do
@@ -659,7 +710,8 @@ Reforços da revisão de segurança RIFA-041 (decisões do SM, reversíveis; o P
   os mesmos motivos do webhook (`avaliarPlausibilidade`, `lib/plausibilidade.ts`), no mesmo `db.batch` da gravação
   (`gravarRecuperacao`, `db/reconciliacao.ts`): só o que entrou neste lote (`recuperacao_id` da recuperação), com
   `marcado_em` = o instante da recuperação. Continua contando, como no webhook. A prévia não marca; a resposta e a
-  trilha (`conferencia.recuperar`) não mudam. O Recuperar continua com a coordenação.
+  trilha (`conferencia.recuperar`) não mudam. O Recuperar continua com a coordenação (a venda perdida; marcar como
+  pago o pagamento não registrado é só do admin: adendo da RIFA-056 na D19).
 
 ## D21. Token do webhook gerado pela tela da coordenação (RIFA-039; contrato, 2026-11-11)
 
@@ -684,7 +736,7 @@ puras) e `api.ts` (schemas e o catálogo `ROTAS_TOKEN_WEBHOOK`); testes em `toke
   `/`, `=`, `-` ou `_` que o formulário da Rifei corte ou que o toque longo do celular pare de selecionar). Por isso
   não é o `gerarSegredo()` dos links (base64url).
 - **Banco**: tabela de uma linha `token_webhook` (migração `0009_token_webhook.sql`; plano em
-  [modelo-de-dados.md, seção 10](modelo-de-dados.md#10-plano-da-migração-0009_token_webhooksql-rifa-039-d21)) com o
+  [modelo-de-dados.md, seção 10](modelo-de-dados.md#10-migração-0009_token_webhooksql-rifa-039-d21)) com o
   **SHA-256 em hex** do token e `gerado_em`. É o padrão dos links e das sessões (D8, acesso.md seção 4). HMAC não:
   com 256 bits aleatórios, o SHA-256 já não deixa quem lê o banco montar o token, e a chave do HMAC seria outro
   segredo do Worker, o `wrangler secret put` que a tarefa quer evitar. Gerar de novo substitui a linha (UPSERT): o
@@ -1286,7 +1338,8 @@ do QR) e `api.ts` (schemas e o catálogo `ROTAS_LINK_VENDAS`); testes em `link-v
 **Perguntas ao PO** (com a opção que o contrato assumiu, reversível):
 
 1. Qual é o formato do link de afiliado da Rifei, e ele leva o número do afiliado (o mesmo que chega no webhook)?
-   Pergunte ao suporte (integracao-rifei.md 12.7, pergunta 2) ou veja na compra de teste. (Assumido: o modelo fica
+   Confere-se na compra de teste ([lancamento.md, 4.1](lancamento.md#41-os-passos), passos 1 a 3): o PO decidiu não
+   perguntar ao suporte da Rifei (15/11/2026). (Assumido: o modelo fica
    vazio, e o líder vê "ainda não liberado", até a resposta.)
 2. O discipulador e o responsável pela rede podem ver os links e os QR das células deles? (Assumido: sim, só ver,
    copiar e mandar.)

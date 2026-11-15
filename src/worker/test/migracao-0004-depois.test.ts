@@ -137,6 +137,8 @@ describe("0004 aplicada depois da 0005 à 0007 (RIFA-012)", () => {
         desconsiderado_em: null,
         desconsiderado_motivo: null,
         desconsiderado_observacao: null,
+        // 0011 (RIFA-056): nenhum pagamento registrado pela conferência.
+        pagamento_recuperacao_id: null,
       })),
     );
   });

@@ -13,19 +13,28 @@
  * (SELECIONAR_ENCONTRADOS), para a análise os mostrar à parte (nunca como "faltando").
  *
  * Nada do arquivo chega aqui além dos códigos e, no "Recuperar", do pedido recuperado (código, quantidade,
- * valor, afiliado e instante) e, na auditoria, do SHA-256 do arquivo e dos nomes das colunas usadas (D1).
+ * valor, afiliado e instante; no pagamento registrado, a quantidade, o valor e o afiliado são os gravados) e, na
+ * auditoria, do SHA-256 do arquivo e dos nomes das colunas usadas (D1).
  *
  * Gravação (um único db.batch, que o D1 roda numa transação: tudo ou nada):
  * 1. a linha da auditoria em `recuperacoes`;
- * 2. os afiliados novos (fila de órfãos, como os do webhook: origem 'webhook' = apareceu numa venda);
- * 3. os pedidos, com INSERT ... ON CONFLICT (id) DO NOTHING: um pedido que já existe (inclusive um que o
+ * 2. os afiliados novos das vendas perdidas (fila de órfãos, como os do webhook: origem 'webhook' = apareceu numa
+ *    venda);
+ * 3. as vendas perdidas, com INSERT ... ON CONFLICT (id) DO NOTHING: um pedido que já existe (inclusive um que o
  *    webhook gravou depois da pré-visualização) nunca é sobrescrito, e repetir a mesma recuperação não
  *    duplica nada (idempotente). Cada pedido leva `origem = 'conferencia'` e o id da auditoria;
- *    3a. o pedido fora do padrão (a plausibilidade da D11, a mesma do webhook: lib/plausibilidade.ts, com o preço do
- *    bilhete da campanha) entra em `pedidos_suspeitos`, com os mesmos motivos, só se entrou neste lote (RIFA-042);
- * 4. as contagens da auditoria, tiradas dos pedidos que de fato entraram;
+ *    3b. os pagamentos não registrados (RIFA-056, só do admin; a rota decide): UPDATE do pedido do webhook para
+ *    'approved', com a data do pagamento do arquivo (o que o "Pedido pago" faria) e o id da auditoria em
+ *    `pagamento_recuperacao_id` (0011). Só se ele AINDA está como o plano o leu: da campanha ativa, pendente ou
+ *    expirado, sem desconsideração e com a mesma quantidade, o mesmo valor e o mesmo afiliado. Um "Pedido pago" que
+ *    chegou antes (ou uma desconsideração no meio) faz o UPDATE não mudar nada; repetir também não (o pedido já está
+ *    pago): idempotente, sem duplicar. Quantidade, valor, afiliado, `origem` e o resto do pedido não mudam;
+ *    3c. o pedido fora do padrão (a plausibilidade da D11, a mesma do webhook: lib/plausibilidade.ts, com o preço do
+ *    bilhete da campanha) entra em `pedidos_suspeitos`, com os mesmos motivos, só se entrou ou foi marcado como
+ *    pago neste lote (RIFA-042; o "Pedido pago" do webhook também marca);
+ * 4. as contagens da auditoria, tiradas dos pedidos que de fato entraram ou viraram pagos;
  * 5. a linha da trilha de auditoria da coordenação (`auditoria`, ação `conferencia.recuperar`, alvo
- *    `campanha:<id>`), só se algum pedido entrou;
+ *    `campanha:<id>`), só se algum pedido entrou ou virou pago, com as contagens de cada tipo;
  * 6. a lista desses pedidos;
  * 7. se nada entrou, a auditoria da recuperação é apagada (não houve mudança a registrar).
  * O id da auditoria é o maior de `recuperacoes` dentro do lote: o D1 serializa as escritas, então nenhuma
@@ -377,7 +386,7 @@ function pedacosDeJson(itens: readonly string[]): string[] {
   return pedacos;
 }
 
-/** Os pedidos em pedaços de JSON para o INSERT em `pedidos`. */
+/** Os pedidos em pedaços de JSON para o INSERT (venda perdida) ou o UPDATE (pagamento registrado) em `pedidos`. */
 function pedacosDePedidos(pedidos: readonly PedidoRecuperado[]): string[] {
   return pedacosDeJson(
     pedidos.map((pedido) =>
@@ -425,6 +434,22 @@ function pedacosDeSuspeitos(
 
 const ID_DA_RECUPERACAO = "(SELECT max(id) FROM recuperacoes)";
 
+/** Os pedidos que esta recuperação gravou (venda perdida) ou marcou como pagos (pagamento registrado), em `p`. */
+const DESTA_RECUPERACAO = `(p.recuperacao_id = ${ID_DA_RECUPERACAO}
+  OR p.pagamento_recuperacao_id = ${ID_DA_RECUPERACAO})`;
+
+/**
+ * Contagem e somas dos pedidos de uma recuperação (`?` = a expressão do id): as vendas perdidas (`recuperacao_id`) e
+ * os pagamentos registrados (`pagamento_recuperacao_id`), cada um pelo seu índice parcial (0004 e 0011).
+ */
+const somaDaRecuperacao = (expressao: string, id: string) =>
+  `(SELECT ${expressao} FROM pedidos WHERE recuperacao_id = ${id})
+     + (SELECT ${expressao} FROM pedidos WHERE pagamento_recuperacao_id = ${id})`;
+
+/** "1 pedido", "2 bilhetes"... no SQL (`valor` é uma expressão inteira). */
+const pluralSql = (valor: string, singular: string, varios: string) =>
+  `${valor} || CASE ${valor} WHEN 1 THEN ' ${singular}' ELSE ' ${varios}' END`;
+
 /**
  * Grava a recuperação num lote só (veja o topo do arquivo). Devolve o id da auditoria (null se nada
  * entrou) e os códigos que de fato foram gravados. Os números dos bilhetes não saem do navegador: o pedido
@@ -434,9 +459,16 @@ export async function gravarRecuperacao(
   db: D1Database,
   gravacao: GravacaoRecuperacao,
 ): Promise<{ recuperacaoId: number | null; gravados: Set<string> }> {
+  const vendas = gravacao.pedidos.filter(
+    (pedido) => pedido.tipo === "venda_perdida",
+  );
+  const pagamentos = gravacao.pedidos.filter(
+    (pedido) => pedido.tipo === "pagamento_nao_registrado",
+  );
+  // O afiliado do pagamento registrado é o do pedido gravado (já existe): só os das vendas perdidas podem ser novos.
   const afiliados = [
     ...new Set(
-      gravacao.pedidos.flatMap((pedido) =>
+      vendas.flatMap((pedido) =>
         pedido.affiliate_id === null ? [] : [pedido.affiliate_id],
       ),
     ),
@@ -464,7 +496,7 @@ export async function gravarRecuperacao(
          ON CONFLICT (affiliate_id) DO NOTHING`,
       )
       .bind(JSON.stringify(afiliados), gravacao.executadoEm),
-    ...pedacosDePedidos(gravacao.pedidos).map((pedaco) =>
+    ...pedacosDePedidos(vendas).map((pedaco) =>
       db
         .prepare(
           `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos,
@@ -477,8 +509,26 @@ export async function gravarRecuperacao(
         )
         .bind(gravacao.campanhaId, gravacao.executadoEm, pedaco),
     ),
-    // A plausibilidade da D11 (RIFA-042), como o webhook: só os pedidos que este lote gravou (os que já existiam
-    // ficam como estão) entram na lista de revisão, e continuam contando nas vendas.
+    // RIFA-056: o pagamento não registrado vira pago só se o pedido ainda é o que o plano conferiu (veja o topo). O
+    // `origem = 'webhook'` também é o CHECK da coluna nova (0011): sem ele, um pedido fora do padrão derrubaria o lote.
+    ...pedacosDePedidos(pagamentos).map((pedaco) =>
+      db
+        .prepare(
+          `UPDATE pedidos SET status = 'approved', aprovado_em = j.aprovado_em, atualizado_em = ?2,
+             pagamento_recuperacao_id = ${ID_DA_RECUPERACAO}
+           FROM (SELECT json_extract(value, '$.id') AS id, json_extract(value, '$.aprovado_em') AS aprovado_em,
+                   json_extract(value, '$.bilhetes') AS bilhetes, json_extract(value, '$.centavos') AS centavos,
+                   json_extract(value, '$.afiliado') AS afiliado
+                 FROM json_each(?3)) AS j
+           WHERE pedidos.id = j.id AND pedidos.campanha_id = ?1
+             AND pedidos.status IN ('in_process', 'expired') AND pedidos.desconsiderado_em IS NULL
+             AND pedidos.origem = 'webhook' AND pedidos.qtd_bilhetes = j.bilhetes
+             AND pedidos.total_centavos = j.centavos AND pedidos.affiliate_id IS j.afiliado`,
+        )
+        .bind(gravacao.campanhaId, gravacao.executadoEm, pedaco),
+    ),
+    // A plausibilidade da D11 (RIFA-042), como o webhook: só os pedidos que este lote gravou ou marcou como pagos (os
+    // que já existiam e não mudaram ficam como estão) entram na lista de revisão, e continuam contando nas vendas.
     ...pedacosDeSuspeitos(gravacao.pedidos, gravacao.precoBilheteCentavos).map(
       (pedaco) =>
         db
@@ -490,8 +540,7 @@ export async function gravarRecuperacao(
                json_extract(j.value, '$.motivos'), ?1
              FROM json_each(?2) AS j
              WHERE EXISTS (SELECT 1 FROM pedidos AS p
-                           WHERE p.id = json_extract(j.value, '$.id')
-                             AND p.recuperacao_id = ${ID_DA_RECUPERACAO})
+                           WHERE p.id = json_extract(j.value, '$.id') AND ${DESTA_RECUPERACAO})
              ON CONFLICT (pedido_id) DO UPDATE SET
                qtd_bilhetes = excluded.qtd_bilhetes,
                total_centavos = excluded.total_centavos,
@@ -503,25 +552,34 @@ export async function gravarRecuperacao(
     ),
     db.prepare(
       `UPDATE recuperacoes SET
-         pedidos_recuperados = (SELECT count(*) FROM pedidos WHERE recuperacao_id = recuperacoes.id),
-         bilhetes = (SELECT coalesce(sum(qtd_bilhetes), 0) FROM pedidos
-           WHERE recuperacao_id = recuperacoes.id),
-         total_centavos = (SELECT coalesce(sum(total_centavos), 0) FROM pedidos
-           WHERE recuperacao_id = recuperacoes.id)
+         pedidos_recuperados = ${somaDaRecuperacao("count(*)", "recuperacoes.id")},
+         bilhetes = ${somaDaRecuperacao("coalesce(sum(qtd_bilhetes), 0)", "recuperacoes.id")},
+         total_centavos = ${somaDaRecuperacao("coalesce(sum(total_centavos), 0)", "recuperacoes.id")}
        WHERE id = ${ID_DA_RECUPERACAO}
        RETURNING id, pedidos_recuperados`,
     ),
-    // A trilha de auditoria (RIFA-013b) no mesmo lote, só quando algum pedido entrou: o id da recuperação
-    // e as contagens saem da linha dela, já com o que de fato foi gravado (nada do arquivo, nenhum código).
+    // A trilha de auditoria (RIFA-013b) no mesmo lote, só quando algum pedido entrou ou virou pago: o id da
+    // recuperação e as contagens saem da linha dela e dos pedidos, já com o que de fato foi gravado (nada do arquivo,
+    // nenhum código). Só vendas perdidas: o texto de antes da RIFA-056; com pagamentos registrados, a parte deles.
     db
       .prepare(
         `INSERT INTO auditoria (usuario_id, em, acao, alvo, resumo)
          SELECT ?1, ?2, ?3, ?4,
-           'Recuperação ' || r.id || ' (conferência pelo CSV): ' || r.pedidos_recuperados
-             || CASE r.pedidos_recuperados WHEN 1 THEN ' pedido' ELSE ' pedidos' END || ' e '
-             || r.bilhetes || CASE r.bilhetes WHEN 1 THEN ' bilhete' ELSE ' bilhetes' END
-             || ' gravados como vendas aprovadas'
-         FROM recuperacoes AS r
+           'Recuperação ' || r.id || ' (conferência pelo CSV): '
+             || CASE WHEN v.pedidos > 0 THEN ${pluralSql("v.pedidos", "pedido", "pedidos")} || ' e '
+                  || ${pluralSql("v.bilhetes", "bilhete", "bilhetes")} || ' gravados como vendas aprovadas'
+                ELSE '' END
+             || CASE WHEN v.pedidos > 0 AND pg.pedidos > 0 THEN '; ' ELSE '' END
+             || CASE WHEN pg.pedidos > 0 THEN pg.pedidos
+                  || CASE pg.pedidos WHEN 1 THEN ' pedido pendente ou expirado (' ELSE ' pedidos pendentes ou expirados (' END
+                  || ${pluralSql("pg.bilhetes", "bilhete", "bilhetes")}
+                  || CASE pg.pedidos WHEN 1 THEN ') marcado como pago' ELSE ') marcados como pagos' END
+                ELSE '' END
+         FROM recuperacoes AS r,
+           (SELECT count(*) AS pedidos, coalesce(sum(qtd_bilhetes), 0) AS bilhetes FROM pedidos
+            WHERE pagamento_recuperacao_id = ${ID_DA_RECUPERACAO}) AS pg,
+           (SELECT count(*) AS pedidos, coalesce(sum(qtd_bilhetes), 0) AS bilhetes FROM pedidos
+            WHERE recuperacao_id = ${ID_DA_RECUPERACAO}) AS v
          WHERE r.id = ${ID_DA_RECUPERACAO} AND r.pedidos_recuperados > 0`,
       )
       .bind(
@@ -531,7 +589,10 @@ export async function gravarRecuperacao(
         `campanha:${gravacao.campanhaId}`,
       ),
     db.prepare(
-      `SELECT id FROM pedidos WHERE recuperacao_id = ${ID_DA_RECUPERACAO} ORDER BY id`,
+      `SELECT id FROM pedidos WHERE recuperacao_id = ${ID_DA_RECUPERACAO}
+       UNION ALL
+       SELECT id FROM pedidos WHERE pagamento_recuperacao_id = ${ID_DA_RECUPERACAO}
+       ORDER BY id`,
     ),
     db.prepare(
       `DELETE FROM recuperacoes WHERE id = ${ID_DA_RECUPERACAO} AND pedidos_recuperados = 0`,
@@ -566,7 +627,10 @@ interface LinhaRecuperacao {
   linhas_arquivo: number;
   arquivo_sha256: string;
   mapeamento: string;
+  /** As vendas perdidas gravadas (JSON). */
   pedidos: string;
+  /** Os pagamentos registrados (JSON, RIFA-056). */
+  pagamentos: string;
 }
 
 const CAMPOS_DAS_COLUNAS: readonly CampoReconciliacao[] = [
@@ -581,7 +645,8 @@ const CAMPOS_DAS_COLUNAS: readonly CampoReconciliacao[] = [
 
 /**
  * As recuperações da campanha ativa (nenhuma sem campanha ativa), da mais recente para a mais antiga, com
- * quem fez e os pedidos gravados, em páginas como a auditoria (cursor `antes_de` = o `proximo` anterior).
+ * quem fez e os pedidos gravados (as vendas perdidas e, à parte também, os pagamentos registrados: RIFA-056), em
+ * páginas como a auditoria (cursor `antes_de` = o `proximo` anterior).
  */
 export async function listarRecuperacoes(
   db: D1Database,
@@ -592,7 +657,9 @@ export async function listarRecuperacoes(
       `SELECT r.id, r.executado_em, r.usuario_id, u.nome AS usuario, r.pedidos_solicitados,
          r.pedidos_recuperados, r.bilhetes, r.total_centavos, r.linhas_arquivo, r.arquivo_sha256,
          r.mapeamento,
-         (SELECT json_group_array(p.id) FROM pedidos AS p WHERE p.recuperacao_id = r.id) AS pedidos
+         (SELECT json_group_array(p.id) FROM pedidos AS p WHERE p.recuperacao_id = r.id) AS pedidos,
+         (SELECT json_group_array(p.id) FROM pedidos AS p
+          WHERE p.pagamento_recuperacao_id = r.id) AS pagamentos
        FROM recuperacoes AS r
        JOIN usuarios AS u ON u.id = r.usuario_id
        WHERE r.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1) AND r.id < ?1
@@ -617,6 +684,8 @@ function recuperacaoDaLinha(linha: LinhaRecuperacao): Recuperacao {
       return [campo, typeof nome === "string" && nome !== "" ? nome : null];
     }),
   ) as Recuperacao["colunas"];
+  const vendas = JSON.parse(linha.pedidos) as string[];
+  const pagamentos = JSON.parse(linha.pagamentos) as string[];
   return {
     id: linha.id,
     executado_em: linha.executado_em,
@@ -628,6 +697,7 @@ function recuperacaoDaLinha(linha: LinhaRecuperacao): Recuperacao {
     linhas_arquivo: linha.linhas_arquivo,
     arquivo_sha256: linha.arquivo_sha256,
     colunas,
-    pedidos: (JSON.parse(linha.pedidos) as string[]).sort(),
+    pedidos: [...vendas, ...pagamentos].sort(),
+    pagamentos_registrados: pagamentos.sort(),
   };
 }

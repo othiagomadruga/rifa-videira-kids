@@ -179,6 +179,7 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
   const {
     origem,
     recuperacao_id,
+    pagamento_recuperacao_id,
     desconsiderado_em,
     desconsiderado_motivo,
     desconsiderado_observacao,
@@ -187,12 +188,15 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
   expect({
     origem,
     recuperacao_id,
+    pagamento_recuperacao_id,
     desconsiderado_em,
     desconsiderado_motivo,
     desconsiderado_observacao,
   }).toEqual({
     origem: "webhook",
     recuperacao_id: null,
+    // RIFA-056 (0011): só a conferência marca o pagamento; o webhook nunca escreve nela.
+    pagamento_recuperacao_id: null,
     desconsiderado_em: null,
     desconsiderado_motivo: null,
     desconsiderado_observacao: null,

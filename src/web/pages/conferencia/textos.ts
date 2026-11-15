@@ -67,7 +67,7 @@ export const DIVERGENCIAS: Record<
   pagamento_nao_registrado: {
     titulo: "Pagamento não registrado",
     explicacao:
-      "Pagas na Rifei, mas no sistema ainda estão pendentes ou expiradas: o aviso do pagamento não chegou e elas não contam no ranking. A conferência ainda não corrige este caso: avise a equipe técnica.",
+      "Pagas na Rifei, mas no sistema ainda estão pendentes ou expiradas: o aviso do pagamento não chegou e elas não contam no ranking.",
     tom: "perigo",
   },
   nao_pago_na_rifei: {
@@ -126,6 +126,12 @@ export const OBSERVACOES: Record<string, string> = {
   codigo_nao_confere:
     "A coluna do código não confere com o sistema: troque a coluna para recuperar.",
   fora_do_periodo_do_arquivo: "De um dia que o arquivo não cobre.",
+  quantidade_diferente:
+    "A quantidade de bilhetes no arquivo é outra que a do sistema: confira na Rifei.",
+  valor_diferente:
+    "O valor no arquivo é outro que o do sistema: confira na Rifei.",
+  afiliado_diferente:
+    "O afiliado no arquivo é outro que o do sistema: confira na Rifei.",
 };
 
 /** Por que um pedido escolhido não foi recuperado (MOTIVOS_NAO_RECUPERADO). */
@@ -139,6 +145,20 @@ export const MOTIVOS: Record<string, string> = {
   valor_ambiguo:
     "Valor ambíguo (o mesmo em todas as linhas, e não é o preço do bilhete)",
   data_no_futuro: "Data depois de agora",
+  quantidade_diferente:
+    "Quantidade de bilhetes diferente da que está no sistema",
+  valor_diferente: "Valor diferente do que está no sistema",
+  afiliado_diferente: "Afiliado diferente do que está no sistema",
+};
+
+/**
+ * O "Pagamento não registrado" (RIFA-056): o que a tela diz sobre marcar como pago o pedido pendente ou expirado
+ * que a Rifei diz que está pago. Só o admin marca.
+ */
+export const PAGAMENTOS = {
+  comoFunciona:
+    "Escolha os que quer marcar como pagos. O pedido passa a pago com a data do arquivo e passa a contar; quantidade, valor e afiliado ficam os do sistema.",
+  soAdmin: "Só o admin marca estes pedidos como pagos.",
 };
 
 /** De onde vem a data gravada (ORIGENS_DATA_RECUPERADA). */
@@ -218,6 +238,21 @@ export const DICAS = {
   gravar:
     "Grava agora as vendas da lista, num lote só. Depois, a conferência é refeita e a gravação entra nas recuperações feitas.",
   gravando: `Gravando as vendas. ${ESPERE}`,
+  // Pagamento não registrado (RIFA-056)
+  marcarTodosPagamentos:
+    "Marca todos os pedidos que dá para marcar como pagos.",
+  desmarcarTodosPagamentos: "Tira a marca de todos estes pedidos.",
+  pagamentoRecuperavel:
+    "Marque para incluir este pedido no “Registrar pagamento”. Nada é gravado antes da confirmação.",
+  pagamentoNaoRecuperavel:
+    "Este pedido não pode ser marcado como pago agora: o motivo aparece logo abaixo dele ou no aviso do topo do resultado.",
+  registrarPagamentos:
+    "Abre a confirmação com os pedidos que vão passar a pagos. Só grava depois que você confirmar.",
+  cancelarPagamentos:
+    "Fecha sem gravar nada. Os pedidos continuam marcados na conferência.",
+  gravarPagamentos:
+    "Marca agora os pedidos da lista como pagos, num lote só. Depois, a conferência é refeita e a gravação entra nas recuperações feitas.",
+  gravandoPagamentos: `Gravando os pagamentos. ${ESPERE}`,
   // Recuperações feitas
   carregarMais: "Traz as recuperações mais antigas para o fim da lista.",
   carregando: `Indisponível enquanto a próxima parte da lista chega. ${ESPERE}`,
