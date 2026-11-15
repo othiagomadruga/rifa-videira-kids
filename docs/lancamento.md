@@ -183,7 +183,7 @@ npx wrangler d1 migrations list DB --remote  # lista as migrações que ainda v�
 ```
 
 - O bookmark **não é segredo**: anote no DevMission (nota da RIFA-023) com a data e a hora.
-- A lista de migrações deve trazer as de `migrations/` que ainda não rodaram em produção.
+- A lista de migrações deve trazer as de `migrations/` que ainda não rodaram em produção. A `0000_setup.sql` já foi aplicada em 06/11/2026, junto com a criação do banco de produção: as pendentes são as de `0001_init.sql` em diante (hoje, da `0001` à `0010_link_vendas.sql`, mais as que entrarem na `main` até a publicação).
 - A Cloudflare guarda esse histórico por 30 dias no Workers Paid (no gratuito, menos: veja **"Time Travel"** na documentação do D1).
 
 ### 2.2 Publicar
@@ -192,11 +192,53 @@ npx wrangler d1 migrations list DB --remote  # lista as migrações que ainda v�
 2. **[Thiago]** Com o bookmark anotado (2.1), crie o token (1.1 b) e cadastre direto no segredo `CLOUDFLARE_API_TOKEN` do repositório (1.2).
 3. **[SM ou Thiago, pelo celular]** Dispare a publicação com um push na `main` ou, sem nada novo para subir, no GitHub: **Actions** → **CI** → **Run workflow** → branch `main` (o padrão) → **Run workflow**. Ele constrói e publica a `main` como um push (RIFA-035, D22); noutra branch, só constrói. Também serve **Re-run jobs** → **Re-run all jobs** na última execução da `main` (o "all" refaz o build, que vale só 1 dia).
 
+**Pela sessão do SM** (RIFA-058). Da raiz do checkout, onde o `gh` acha o repositório sozinho:
+
+1. Confira a última execução da `main`:
+   ```sh
+   gh run list --workflow ci.yml --branch main -L 1 --json databaseId,event,status,conclusion,headSha
+   ```
+   Se ela ainda estiver rodando e o segredo já estiver salvo, esse push publica sozinho: pule para o item 3 com o `databaseId` dela.
+2. Dispare a publicação sem commit (o mesmo **Run workflow** do item 3 acima):
+   ```sh
+   gh workflow run ci.yml --ref main
+   ```
+   Se responder 403 ("Resource not accessible by integration" ou a recusa do proxy da sessão), publique com um commit vazio na `main` (só o SM faz push na `main`): `git commit --allow-empty -m "RIFA-023: publica"`, com as linhas de atribuição da sessão, e `git push origin main`.
+3. Acompanhe. O run leva uns 10 min: na sessão, rode o `gh run watch` em segundo plano, porque o comando em primeiro plano é cortado em 10 min.
+   ```sh
+   gh run list --workflow ci.yml --branch main -L 1 --json databaseId,event,status,headSha   # o run novo: workflow_dispatch ou push
+   gh run watch <databaseId> --exit-status --compact
+   ```
+4. Leia o log do job **"publicar na Cloudflare"** num arquivo do scratchpad da sessão, não na conversa (uma linha do wrangler pode trazer o e-mail da conta):
+   ```sh
+   gh run view <databaseId> --json jobs --jq '.jobs[] | "\(.databaseId) \(.name) \(.conclusion)"'
+   gh run view <databaseId> --job <id do job "publicar na Cloudflare"> --log > <scratchpad>/log-publicar.txt
+   grep -nE 'publicação pulada|Build conferido|dry-run: exiting|Migrations to be applied|✅|Uploaded|Deployed|Current Version ID|"ok":true|##\[error\]' <scratchpad>/log-publicar.txt
+   ```
+   Tem de aparecer, nesta ordem: **nenhum** "publicação pulada"; "Build conferido: dist/rifa_videira_kids/wrangler.json segue o wrangler.jsonc" (sem o token); "--dry-run: exiting now." (até aqui o D1 não foi tocado); a lista das migrações pendentes (0001 a 0010), cada uma com ✅; "Uploaded rifa-videira-kids" e "Deployed rifa-videira-kids triggers", com o endereço do site; "Current Version ID: <id>" (anote o id no DevMission); e, no passo "Conferir /api/health em produção", `{"ok":true,"db":"ok","latenciaMs":…}`. Depois, siga para 2.3.
+
+**O segredo existe?** Da sessão não dá para ver: o proxy recusa a API `actions/secrets` (403). O sinal é o job **"publicar na Cloudflare"**: sem o segredo, ele avisa "Segredo CLOUDFLARE_API_TOKEN não configurado no repositório: publicação pulada", os passos depois de "Conferir o segredo da Cloudflare" aparecem como `skipped` no `gh run view <databaseId> --json jobs` e o CI fica verde mesmo assim. Se aparecer "publicação pulada", pare e peça ao Thiago para conferir o segredo (1.2).
+
 O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist/`). O job de publicação instala as dependências sem rodar os scripts de instalação, baixa esse build, confere que a configuração gerada é a do `wrangler.jsonc` (`scripts/conferir-artefato.mjs`) e, só então, no passo "Publicar" (`npm run deploy:publicar`, o único com o token), confere o que foi construído (`wrangler deploy --dry-run`), aplica as migrações no D1 remoto e publica. Depois consulta `/api/health` em produção até 6 vezes.
 
 **A partir daqui, todo push na `main` publica.** Sugestão para a campanha: o SM só faz merge de correção, com a `main` verde e fora do horário do culto e dos picos de venda.
 
 ### 2.3 Conferir que deu certo
+
+**Tudo de uma vez [SM]** (RIFA-058). Da raiz do checkout:
+
+```sh
+npm run verificar:producao -- --url https://rifa-videira-kids.madruga.workers.dev
+```
+
+- **Esperado:** `0 FALHA(S)` no resumo e saída 0 (1 = alguma falha, listada no fim; 2 = uso errado). Antes de 3.2 e 3.3, o resumo diz "Webhook: nao_configurado" e "Campanha: não configurada", e os 404 de "campanha ainda não configurada" aparecem como "esperado". Leva cerca de 1 min.
+- **O que confere** (os itens 2, 3, 4 e 6 abaixo, e mais): `/api/health`; o app nas rotas do site, com os 4 cabeçalhos de segurança e sem cache longo no HTML; os arquivos que não podem sair (`_headers`, `.dev.vars`, `wrangler.json`...); os assets e a fonte; a área fechada sem sessão (401 em todos os caminhos), cookie forjado e escrita de outra origem (CSRF); o webhook sem token válido; a API pública sem valores em R$; e as telas abertas no Chromium, a 390 e a 1366 px, sem erro no console nem rolagem lateral.
+- **Só leitura:** GETs, duas escritas de outra origem (recusadas pelo CSRF antes da sessão) e três POSTs ao webhook sem token válido (recusados antes de ler o corpo). Não cria pedido, não grava configuração, não gera link nem token, e nunca imprime link, token ou cookie.
+- **Endereço errado ou site fora do ar:** a saúde falha ("sem resposta", ou "a Cloudflare responde 404 sem o Worker", o erro 1042) e as outras conferências são puladas.
+- **Navegador:** as telas usam o Playwright, que o projeto não instala: o script usa o da sessão de nuvem do Claude (`/opt/node-tools/node_modules`). Fora dela, rode com `--sem-navegador` (só HTTP) ou aponte `--playwright <pasta node_modules com o playwright>`; sem Playwright, ele falha dizendo isso.
+- Com o link do primeiro admin, `--admin-link <arquivo>` também entra na coordenação (3.1).
+
+O passo a passo à mão, para quem não tem a sessão:
 
 1. **CI:** os dois jobs verdes, **"lint, typecheck, test, build"** e **"publicar na Cloudflare"**. No segundo, o passo **"Conferir /api/health em produção"** verde.
 2. **Saúde:** abra https://rifa-videira-kids.madruga.workers.dev/status (deve mostrar **"API ok"**) ou rode:
@@ -257,11 +299,20 @@ O primeiro job constrói o site e o Worker, sem segredo, e guarda o build (`dist
 
 ### 3.1 Primeiro admin [SM, depois Thiago]
 
-1. **[SM]** Da sessão dele, logo depois da primeira publicação (2.2):
+1. **[SM]** Da sessão dele, logo depois da primeira publicação e da conferência (2.2 e 2.3). A saída vai para um arquivo só dele no scratchpad da sessão (`umask 077`), nunca para a conversa, até a entrega combinada ao Thiago. Na sessão de nuvem, o wrangler pede um `CLOUDFLARE_API_TOKEN` qualquer (o proxy da sessão põe a credencial de verdade) e o id da conta (não é segredo; é o do `.github/workflows/ci.yml`):
    ```sh
-   npm run acesso:criar -- --nome "<nome do Thiago>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev
+   umask 077
+   CLOUDFLARE_API_TOKEN=substituido-pelo-proxy CLOUDFLARE_ACCOUNT_ID=4d8a1d1dae5b596e42e97dcf28292572 \
+     npm run --silent acesso:criar -- --nome "<nome do Thiago>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev \
+     > <scratchpad>/link-admin-producao.txt 2>&1; echo "saida=$?"
+   sed -E 's#/acesso/[A-Za-z0-9_-]+#/acesso/[omitido]#' <scratchpad>/link-admin-producao.txt
    ```
-   O link `https://rifa-videira-kids.madruga.workers.dev/acesso/<token>` aparece uma vez, no terminal da sessão, e o SM o manda ao Thiago no chat da sessão. Como passou pelo chat, esse link é só para a primeira entrada: o passo 2 o troca.
+   - Saída 0: gravado e conferido no D1. 1: o D1 não gravou (migrações não aplicadas, credencial). 2: uso errado. O `sed` mostra o resultado sem o token.
+   - O link vale **45 dias** (a data exata está na linha "O link vale até … (UTC)"; `docs/acesso.md`, seções 1 e 5) e abre sessão quantas vezes for preciso nesse prazo.
+   - Nunca `cat` no arquivo, nem o link em nota, commit ou DevMission.
+   - Antes de mandar, confira o link: `npm run verificar:producao -- --url https://rifa-videira-kids.madruga.workers.dev --admin-link <scratchpad>/link-admin-producao.txt`. Ele entra, abre Visão geral, Campanha e Adesão a 1366 e a 390 px e sai (a sessão que ele abriu é encerrada; o link continua valendo). Esperado: `0 FALHA(S)`.
+   - **A entrega combinada:** o SM tira o link do arquivo (`grep -o 'https://rifa-videira-kids.madruga.workers.dev/acesso/[A-Za-z0-9_-]\{43\}' <arquivo>`) e o manda ao Thiago no chat da sessão, com os passos abaixo. Como passou pelo chat, esse link é só para a primeira entrada: o passo 2 o troca.
+   - Depois que o Thiago disser que trocou: o mesmo `verificar:producao --admin-link` passa a falhar em "entrar" ("Este link não vale mais"), o que confirma a revogação; então o SM apaga o arquivo (`shred -u <arquivo>`, ou `rm`).
 2. **[Thiago]** Abra o link no navegador e toque em **Entrar**: você cai na área `/coordenacao`. Então, nesta ordem:
    1. **Acessos → Coordenação** → no seu cartão, **Gerar link novo** → **Copiar link**;
    2. abra o link novo numa aba nova e toque em **Entrar**;
