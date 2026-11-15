@@ -4,6 +4,7 @@
 // uma depois da outra em até 300 ms, e sai do DOM no fim; umaVezPor "dia" guarda a data no sessionStorage.
 // RIFA-053: as partículas saem junto com o pulso (quando o % termina de contar), nunca antes do 100%.
 import { act, render } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   desfazerMovimento,
@@ -407,5 +408,66 @@ describe("useComemoracao: umaVezPor dia", () => {
 
     render(<Pilula batida texto="113%" opcoes={MINHA} />);
     expect(particulas()).toHaveLength(PARTICULAS.length);
+  });
+});
+
+// Revisão da RIFA-053: o site roda no StrictMode (main.tsx), que no desenvolvimento roda os efeitos duas vezes ao montar.
+// Nada pode sair em dobro: um pulso, uma leva de partículas (com a espera do pulso), o dia marcado uma vez, e nada
+// pendente ao sair.
+describe("useComemoracao: no StrictMode, nada em dobro", () => {
+  const MINHA: OpcoesComemoracao = {
+    quando: "ao-aparecer-e-ao-bater",
+    umaVezPor: "dia",
+    chave: "minha",
+  };
+
+  it("false → true: um pulso e uma leva de partículas, que saem do DOM no fim", () => {
+    simularPreferencia(false);
+    vi.useFakeTimers();
+    const animate = espiarAnimate();
+    const { rerender, unmount } = render(
+      <StrictMode>
+        <Pilula batida={false} texto="96%" />
+      </StrictMode>,
+    );
+    rerender(
+      <StrictMode>
+        <Pilula batida texto="104%" />
+      </StrictMode>,
+    );
+    expect(chamadasDoPulso(animate)).toHaveLength(1);
+    expect(particulas()).toHaveLength(PARTICULAS.length);
+    const atrasos = chamadasDasParticulas(animate).map(({ opcoes }) =>
+      Number(opcoes.delay),
+    );
+    expect(atrasos).toHaveLength(PARTICULAS.length);
+    expect(Math.min(...atrasos)).toBe(INICIO_PARTICULAS_MS);
+
+    act(() => vi.advanceTimersByTime(DURACAO_COMEMORACAO_MS));
+    expect(camada()).toBeNull();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("ao aparecer já batida (a /minha): um pulso, uma leva, e sair no meio da espera não deixa nada vivo", () => {
+    simularPreferencia(false);
+    vi.useFakeTimers();
+    const animate = espiarAnimate();
+    const { unmount } = render(
+      <StrictMode>
+        <Pilula batida texto="113%" opcoes={MINHA} />
+      </StrictMode>,
+    );
+    expect(chamadasDoPulso(animate)).toHaveLength(1);
+    expect(particulas()).toHaveLength(PARTICULAS.length);
+    expect(chamadasDasParticulas(animate)).toHaveLength(PARTICULAS.length);
+    expect(
+      window.sessionStorage.getItem(`${PREFIXO_ARMAZENAMENTO}minha`),
+    ).not.toBeNull();
+
+    act(() => vi.advanceTimersByTime(INICIO_PARTICULAS_MS - 1));
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(camada()).toBeNull();
   });
 });
