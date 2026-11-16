@@ -1,0 +1,254 @@
+// O cruzamento do extrato com os pedidos (RIFA-059, D26), NO NAVEGADOR: cada Pix recebido com no máximo um pedido, e
+// cada pedido com no máximo um Pix. Os graus:
+// - "Certo": a descrição, o FITID ou o documento do Pix trazem o número de um pedido (no Pix manual da Rifei, o
+//   identificador da transação é o número do pedido);
+// - "Provável": sem o número, só um pedido serve: o mesmo valor, reservado antes do Pix e dentro da janela (padrão
+//   24 h); o pedido já pago só serve se foi pago depois do Pix (quem marca na Rifei marca depois de ver o Pix);
+// - "Ambíguo": mais de um pedido serve; a pessoa escolhe olhando a Rifei;
+// - "Pix sem pedido": nenhum pedido serve (Pix fora da campanha, valor errado, Pix em dobro).
+// O pedido casado que já está pago no sistema é "já contado"; o pendente ou expirado vai para a lista de marcar na Rifei.
+//
+// O algoritmo (guloso e estável):
+// 1. A ordem: os Pix do mais antigo ao mais novo (no empate, a ordem no extrato); os pedidos pela reserva (no empate,
+//    pelo número).
+// 2. Os Certos primeiro: cada Pix, na ordem, fica com o pedido do número que ele traz. O número de um pedido que já
+//    ficou com um Pix anterior deixa o Pix sem pedido (Pix em dobro?).
+// 3. Depois, pelo valor, em voltas até nada mudar: cada Pix ainda sem par, do mais antigo ao mais novo, olha os pedidos
+//    livres que servem; se só um serve, fica com ele (Provável). Assim, quando dois Pix disputam o mesmo e único pedido,
+//    o mais antigo fica com ele; e um Pix que tinha dois candidatos vira Provável quando o outro candidato fica com um
+//    Pix que só tinha ele.
+// 4. O que sobra: com 2 ou mais pedidos livres que servem, Ambíguo (se todos já estão pagos, não há o que marcar: vai
+//    para "já contados"); com nenhum, Pix sem pedido.
+// O desconsiderado pelo admin (D20) nunca serve: o número dele no Pix deixa o Pix sem pedido, com o motivo.
+import type { Pix } from "./lancamentos";
+
+export type StatusDoPedido = "in_process" | "approved" | "expired";
+
+/** O que o cruzamento usa de cada pedido (da lista de pedidos da campanha ativa). */
+export interface PedidoDoCruzamento {
+  id: string;
+  status: StatusDoPedido;
+  qtd_bilhetes: number;
+  total_centavos: number;
+  celula_nome: string | null;
+  /** Quando foi reservado (o criado_em da Rifei; sem ele, quando chegou ao sistema), em ms. */
+  reserva: number;
+  aprovado_em: number | null;
+  desconsiderado: boolean;
+}
+
+export type Grau = "certo" | "provavel";
+
+/** Folga para a diferença entre o relógio do banco e o da Rifei. */
+export const FOLGA_DO_RELOGIO_MS = 5 * 60_000;
+/** Os números de pedido mais curtos que isto não contam como "Certo" (seriam achados por acaso no texto). */
+export const MINIMO_CARACTERES_DO_NUMERO = 4;
+
+export interface Casamento {
+  pix: Pix;
+  pedido: PedidoDoCruzamento;
+  grau: Grau;
+  /** Só no Certo: o valor do Pix é outro que o do pedido (pago a menos ou a mais). */
+  valorDiferente: boolean;
+}
+
+export interface PixAmbiguo {
+  pix: Pix;
+  /** Os pedidos livres que servem, do reservado mais cedo ao mais tarde. */
+  candidatos: PedidoDoCruzamento[];
+}
+
+export type MotivoSemPedido =
+  /** Nenhum pedido com este valor na janela. */
+  | "nenhum"
+  /** Os pedidos que serviam ficaram com outros Pix do extrato. */
+  | "ja_casados"
+  /** O número do pedido no Pix é de um pedido que ficou com outro Pix (Certo). */
+  | "pedido_repetido"
+  /** O número do pedido no Pix é de um pedido desconsiderado pelo admin. */
+  | "desconsiderado";
+
+export interface PixSemPedido {
+  pix: Pix;
+  motivo: MotivoSemPedido;
+  /** Os pedidos do motivo (o repetido, o desconsiderado ou os que ficaram com outros Pix). */
+  pedidos: string[];
+}
+
+export interface JaContado {
+  pix: Pix;
+  /** Um pedido (Certo ou Provável) ou, sem grau, um destes pedidos já pagos (todos os candidatos). */
+  pedidos: PedidoDoCruzamento[];
+  grau: Grau | null;
+}
+
+export interface ResultadoDoCruzamento {
+  /** Os pendentes e expirados que o extrato confirma: para marcar como pagos na Rifei. */
+  paraMarcar: Casamento[];
+  ambiguos: PixAmbiguo[];
+  semPedido: PixSemPedido[];
+  jaContados: JaContado[];
+}
+
+/** Os textos do Pix em pedaços que podem ser um número de pedido ("PIX-ABC123" dá "PIX-ABC123", "PIX" e "ABC123"). */
+function pedacosDoPix(pix: Pix): string[] {
+  const pedacos = new Set<string>();
+  for (const texto of [pix.descricao, ...pix.identificadores])
+    for (const palavra of texto.split(/[\s,;|()[\]{}<>"'*·]+/)) {
+      const limpa = palavra.replace(/^[.:/#_-]+|[.:/#_-]+$/g, "");
+      if (limpa.length >= MINIMO_CARACTERES_DO_NUMERO)
+        pedacos.add(limpa.toUpperCase());
+      for (const parte of limpa.split(/[.:/#_-]+/))
+        if (parte.length >= MINIMO_CARACTERES_DO_NUMERO)
+          pedacos.add(parte.toUpperCase());
+    }
+  return [...pedacos];
+}
+
+const porReserva = (a: PedidoDoCruzamento, b: PedidoDoCruzamento) =>
+  a.reserva - b.reserva || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/** O pedido serve para o Pix pelo valor e pela hora? */
+export function serve(
+  pix: Pix,
+  pedido: PedidoDoCruzamento,
+  janelaMs: number,
+): boolean {
+  if (pedido.desconsiderado || pedido.total_centavos !== pix.centavos)
+    return false;
+  // O Pix vem depois da reserva, dentro da janela (o Pix sem hora pode ser de qualquer hora do dia).
+  if (pix.fim < pedido.reserva - FOLGA_DO_RELOGIO_MS) return false;
+  if (pix.inicio > pedido.reserva + janelaMs) return false;
+  // O pedido já pago foi pago por um Pix que chegou antes da aprovação.
+  if (
+    pedido.status === "approved" &&
+    pedido.aprovado_em !== null &&
+    pix.inicio > pedido.aprovado_em + FOLGA_DO_RELOGIO_MS
+  )
+    return false;
+  return true;
+}
+
+export function cruzar(
+  pixDoExtrato: readonly Pix[],
+  pedidos: readonly PedidoDoCruzamento[],
+  opcoes: { janelaMs: number },
+): ResultadoDoCruzamento {
+  const ordem = [...pixDoExtrato].sort(
+    (a, b) => a.inicio - b.inicio || a.ordem - b.ordem,
+  );
+  const porNumero = new Map<string, PedidoDoCruzamento>();
+  for (const pedido of pedidos) porNumero.set(pedido.id.toUpperCase(), pedido);
+  const porValor = new Map<number, PedidoDoCruzamento[]>();
+  for (const pedido of [...pedidos].sort(porReserva)) {
+    const lista = porValor.get(pedido.total_centavos) ?? [];
+    lista.push(pedido);
+    porValor.set(pedido.total_centavos, lista);
+  }
+  /** pedido → o Pix que ficou com ele. */
+  const casados = new Map<string, Pix>();
+  const casamentos = new Map<
+    string,
+    { pedido: PedidoDoCruzamento; grau: Grau }
+  >();
+  const semPedido = new Map<string, PixSemPedido>();
+
+  // 2. Os Certos.
+  for (const pix of ordem) {
+    const achados = pedacosDoPix(pix)
+      .map((pedaco) => porNumero.get(pedaco))
+      .filter((pedido) => pedido !== undefined);
+    if (achados.length === 0) continue;
+    const livre = achados.find(
+      (pedido) => !pedido.desconsiderado && !casados.has(pedido.id),
+    );
+    if (livre) {
+      casados.set(livre.id, pix);
+      casamentos.set(pix.chave, { pedido: livre, grau: "certo" });
+      continue;
+    }
+    const desconsiderado = achados.find((pedido) => pedido.desconsiderado);
+    semPedido.set(pix.chave, {
+      pix,
+      motivo: desconsiderado ? "desconsiderado" : "pedido_repetido",
+      pedidos: [(desconsiderado ?? achados[0]).id],
+    });
+  }
+
+  // 3. Pelo valor, em voltas, enquanto algum Pix tem um pedido só.
+  const livresQueServem = (pix: Pix) =>
+    (porValor.get(pix.centavos) ?? []).filter(
+      (pedido) =>
+        !casados.has(pedido.id) && serve(pix, pedido, opcoes.janelaMs),
+    );
+  let pendentes = ordem.filter(
+    (pix) => !casamentos.has(pix.chave) && !semPedido.has(pix.chave),
+  );
+  let mudou = true;
+  while (mudou) {
+    mudou = false;
+    for (const pix of pendentes) {
+      const candidatos = livresQueServem(pix);
+      if (candidatos.length !== 1) continue;
+      casados.set(candidatos[0].id, pix);
+      casamentos.set(pix.chave, { pedido: candidatos[0], grau: "provavel" });
+      mudou = true;
+    }
+    pendentes = pendentes.filter((pix) => !casamentos.has(pix.chave));
+  }
+
+  // 4. O que sobra.
+  const resultado: ResultadoDoCruzamento = {
+    paraMarcar: [],
+    ambiguos: [],
+    semPedido: [],
+    jaContados: [],
+  };
+  for (const pix of ordem) {
+    const casamento = casamentos.get(pix.chave);
+    if (casamento) {
+      const { pedido, grau } = casamento;
+      if (pedido.status === "approved")
+        resultado.jaContados.push({ pix, pedidos: [pedido], grau });
+      else
+        resultado.paraMarcar.push({
+          pix,
+          pedido,
+          grau,
+          valorDiferente: pedido.total_centavos !== pix.centavos,
+        });
+      continue;
+    }
+    const sem = semPedido.get(pix.chave);
+    if (sem) {
+      resultado.semPedido.push(sem);
+      continue;
+    }
+    const candidatos = livresQueServem(pix);
+    if (candidatos.length >= 2) {
+      if (candidatos.every((pedido) => pedido.status === "approved"))
+        resultado.jaContados.push({ pix, pedidos: candidatos, grau: null });
+      else resultado.ambiguos.push({ pix, candidatos });
+      continue;
+    }
+    const tomados = (porValor.get(pix.centavos) ?? []).filter(
+      (pedido) =>
+        casados.has(pedido.id) &&
+        casados.get(pedido.id) !== pix &&
+        serve(pix, pedido, opcoes.janelaMs),
+    );
+    resultado.semPedido.push({
+      pix,
+      motivo: tomados.length > 0 ? "ja_casados" : "nenhum",
+      pedidos: tomados.map((pedido) => pedido.id),
+    });
+  }
+  return resultado;
+}
+
+/** Os números dos pedidos para marcar na Rifei, um por linha, na ordem dos Pix. */
+export function numerosParaCopiar(resultado: ResultadoDoCruzamento): string {
+  return resultado.paraMarcar
+    .map((casamento) => casamento.pedido.id)
+    .join("\n");
+}

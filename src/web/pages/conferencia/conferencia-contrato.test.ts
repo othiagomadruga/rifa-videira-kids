@@ -26,10 +26,10 @@ import {
   STATUS_DO_SISTEMA,
 } from "./textos";
 
-/** O código da tela e o do leitor (sem os testes e sem o apoio deles). */
+/** O código da tela (com a seção do extrato, RIFA-059) e o do leitor (sem os testes e sem o apoio deles). */
 const FONTES = {
   ...import.meta.glob<string>(
-    ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+    ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./**/teste-apoio.ts"],
     { query: "?raw", import: "default", eager: true },
   ),
   ...import.meta.glob<string>(
@@ -42,9 +42,12 @@ const FONTES = {
   ),
 };
 
-/** Módulos do contrato sem zod (o site pode importar valores deles). */
+/**
+ * Módulos do contrato sem zod (o site pode importar valores deles). O "./csv" é o leitor do extrato em CSV
+ * (extrato/csv.ts, RIFA-059), que só importa o shared/csv.
+ */
 const SEM_ZOD =
-  /shared\/contracts\/(conferencia|calendario)$|\.\.\/contracts\/(conferencia|calendario)$|\.\.\/csv$|shared\/csv$/;
+  /shared\/contracts\/(conferencia|calendario)$|\.\.\/contracts\/(conferencia|calendario)$|\.\.\/csv$|shared\/csv$|^\.\/csv$/;
 
 describe("a tela da conferência e o contrato", () => {
   it("caminhos da API", () => {
