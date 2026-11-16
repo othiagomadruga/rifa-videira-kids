@@ -100,7 +100,7 @@ describe("lerOfx: OFX 1.x (SGML)", () => {
     expect(extrato.semHora).toBe(false);
   });
 
-  it("guarda o dia, o instante, a descrição (MEMO e NAME) e os identificadores (FITID, CHECKNUM)", () => {
+  it("guarda o dia, o instante, a descrição (MEMO e NAME) e o FITID (o CHECKNUM, documento do banco, fica de fora)", () => {
     const [primeiro, segundo] = extrato.lancamentos;
     expect(primeiro).toEqual({
       ordem: 1,
@@ -108,7 +108,7 @@ describe("lerOfx: OFX 1.x (SGML)", () => {
       instante: belem("2026-11-16T10:05:00"),
       centavos: 2000,
       descricao: `TRANSFERENCIA PIX PEDTESTE0101 REM: ${PAGADORA_UM}`,
-      identificadores: [FITID_UM, "1400200"],
+      identificadores: [FITID_UM],
     });
     expect(segundo.descricao).toBe(`TRANSFERENCIA PIX · REM: ${PAGADOR_DOIS}`);
     expect(segundo.centavos).toBe(4000);

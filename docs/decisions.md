@@ -1428,7 +1428,8 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
 - **Formatos** (o formato do Bradesco não está documentado em fonte pública: o leitor é tolerante):
   - OFX 1.x (SGML, tags de valor sem fechamento, `CHARSET:1252`) e 2.x (XML), lidos por texto (sem parser de XML). De
     cada `<STMTTRN>`: `TRNAMT` (ponto ou vírgula; o sinal decide, não o `TRNTYPE`), `DTPOSTED` (ou `DTUSER`), `MEMO` e
-    `NAME` (a descrição) e `FITID`, `CHECKNUM` e `REFNUM` (onde o número do pedido pode aparecer). Datas
+    `NAME` (a descrição) e `FITID` (onde o número do pedido pode aparecer; `CHECKNUM` e `REFNUM` são o documento do
+    banco e ficam de fora, para não bater por acaso com um número de pedido). Datas
     `YYYYMMDD[HHMM[SS]][.XXX][offset:TZ]`: com o deslocamento, o instante exato; sem ele, a hora local do fuso da
     campanha (a especificação manda ler como GMT, mas os bancos brasileiros gravam a hora local; GMT trocaria o dia dos
     lançamentos da noite); só o dia ou meia-noite em ponto: só o dia escrito; a mesma hora em todos os lançamentos (o
@@ -1450,11 +1451,14 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
   estado da tela), aparece só nas listas do resultado, some ao sair da tela e nunca entra numa chamada, no storage ou no
   log (`ExtratoDoBanco.test.tsx` varre os endereços, os corpos, o `localStorage`, o `sessionStorage` e o `console`;
   `conferencia-contrato.test.ts` barra storage no código da pasta).
-- **Os graus.** "Certo": a descrição, o FITID ou o documento trazem o número de um pedido (o artigo da Rifei "Como saber
-  se um PIX manual foi pago": o identificador da transação Pix é o número do pedido; o número inteiro, ou um pedaço
-  entre separadores, com pelo menos 4 caracteres; com outro valor, continua Certo, com o aviso). "Provável": sem o
-  número, só um pedido serve: o mesmo valor, reservado antes do Pix (`criado_em`; sem ele, `registrado_em`) e dentro da
-  janela (padrão 24 h, de 1 a 72 h na tela), com 5 min de folga para o relógio; o pedido já pago só serve se foi pago
+- **Os graus.** "Certo": a descrição, o FITID ou a coluna de identificador do CSV trazem o número de um pedido (o
+  artigo da Rifei "Como saber se um PIX manual foi pago": o identificador da transação Pix é o número do pedido; o
+  número inteiro, ou um pedaço entre separadores, com pelo menos 4 caracteres, ou 8 se for só de algarismos: o
+  documento do banco, a agência, a conta e a data aparecem em todo lançamento e bateriam por acaso com um número curto,
+  e o Certo não confere o valor nem a hora; com o número da Rifei curto e só de algarismos, o Pix cai no Provável; com
+  outro valor, continua Certo, com o aviso). "Provável": sem o número, só um pedido serve:
+  o mesmo valor, reservado antes do Pix (`criado_em`; sem ele, `registrado_em`) e dentro da janela (padrão 24 h, de 1
+  a 72 h na tela), com 5 min de folga para o relógio; o pedido já pago só serve se foi pago
   depois do Pix (quem marca na Rifei marca depois de ver o Pix); o desconsiderado (D20) nunca serve. "Ambíguo": mais de
   um pedido serve (os candidatos com número, célula, hora da reserva, quantidade e situação); se todos já estão pagos,
   não há o que marcar e o Pix vai para "Já contados" ("um destes"). "Pix sem pedido": nenhum pedido livre serve (com o

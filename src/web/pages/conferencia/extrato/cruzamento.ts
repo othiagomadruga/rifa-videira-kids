@@ -1,7 +1,8 @@
 // O cruzamento do extrato com os pedidos (RIFA-059, D26), NO NAVEGADOR: cada Pix recebido com no máximo um pedido, e
 // cada pedido com no máximo um Pix. Os graus:
-// - "Certo": a descrição, o FITID ou o documento do Pix trazem o número de um pedido (no Pix manual da Rifei, o
-//   identificador da transação é o número do pedido);
+// - "Certo": a descrição ou o FITID do Pix trazem o número de um pedido (no Pix manual da Rifei, o identificador da
+//   transação é o número do pedido). O pedaço só de algarismos precisa de 8 ou mais: o extrato tem números do banco
+//   (o documento, a agência e a conta, a data) que bateriam por acaso com um número de pedido curto;
 // - "Provável": sem o número, só um pedido serve: o mesmo valor, reservado antes do Pix e dentro da janela (padrão
 //   24 h); o pedido já pago só serve se foi pago depois do Pix (quem marca na Rifei marca depois de ver o Pix);
 // - "Ambíguo": mais de um pedido serve; a pessoa escolhe olhando a Rifei;
@@ -43,6 +44,12 @@ export type Grau = "certo" | "provavel";
 export const FOLGA_DO_RELOGIO_MS = 5 * 60_000;
 /** Os números de pedido mais curtos que isto não contam como "Certo" (seriam achados por acaso no texto). */
 export const MINIMO_CARACTERES_DO_NUMERO = 4;
+/**
+ * O pedaço só de algarismos precisa de mais: o documento do banco (7 algarismos no Bradesco), a agência, a conta e a
+ * data aparecem em todo lançamento e bateriam por acaso com um número de pedido curto, e o "Certo" não confere o valor
+ * nem a hora. Com o número da Rifei curto e só de algarismos, o Pix cai no "Provável" (pelo valor e pela hora).
+ */
+export const MINIMO_ALGARISMOS_DO_NUMERO = 8;
 
 export interface Casamento {
   pix: Pix;
@@ -90,17 +97,22 @@ export interface ResultadoDoCruzamento {
   jaContados: JaContado[];
 }
 
+/** O pedaço pode ser um número de pedido: 4 ou mais caracteres; só de algarismos, 8 ou mais. */
+const podeSerNumero = (pedaco: string) =>
+  pedaco.length >=
+  (/^\d+$/.test(pedaco)
+    ? MINIMO_ALGARISMOS_DO_NUMERO
+    : MINIMO_CARACTERES_DO_NUMERO);
+
 /** Os textos do Pix em pedaços que podem ser um número de pedido ("PIX-ABC123" dá "PIX-ABC123", "PIX" e "ABC123"). */
 function pedacosDoPix(pix: Pix): string[] {
   const pedacos = new Set<string>();
   for (const texto of [pix.descricao, ...pix.identificadores])
     for (const palavra of texto.split(/[\s,;|()[\]{}<>"'*·]+/)) {
       const limpa = palavra.replace(/^[.:/#_-]+|[.:/#_-]+$/g, "");
-      if (limpa.length >= MINIMO_CARACTERES_DO_NUMERO)
-        pedacos.add(limpa.toUpperCase());
+      if (podeSerNumero(limpa)) pedacos.add(limpa.toUpperCase());
       for (const parte of limpa.split(/[.:/#_-]+/))
-        if (parte.length >= MINIMO_CARACTERES_DO_NUMERO)
-          pedacos.add(parte.toUpperCase());
+        if (podeSerNumero(parte)) pedacos.add(parte.toUpperCase());
     }
   return [...pedacos];
 }

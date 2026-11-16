@@ -2,8 +2,9 @@
 // "<TRNAMT>-50.00" e a quebra de linha) e o OFX 2.x (XML, "<TRNAMT>-50.00</TRNAMT>"), numa leitura tolerante por texto
 // (nada de parser XML: o SGML não fecha as tags, e os bancos brasileiros não seguem o padrão à risca).
 //
-// De cada <STMTTRN>: TRNAMT (o valor, com ponto ou vírgula), DTPOSTED (ou DTUSER), MEMO e NAME (a descrição), FITID,
-// CHECKNUM e REFNUM (onde o número do pedido pode aparecer). TRNTYPE não decide nada: o sinal do valor decide.
+// De cada <STMTTRN>: TRNAMT (o valor, com ponto ou vírgula), DTPOSTED (ou DTUSER), MEMO e NAME (a descrição) e FITID
+// (onde o número do pedido pode aparecer). CHECKNUM e REFNUM ficam de fora: são o número do documento do banco, nunca o
+// do pedido, e bateriam por acaso com um número de pedido. TRNTYPE não decide nada: o sinal do valor decide.
 //
 // Datas (especificação do OFX: "YYYYMMDDHHMMSS.XXX[gmt offset:tz name]", com os campos da direita opcionais):
 // - com o deslocamento ("[-3:BRT]", "[-03:EST]", "[-3]"): o instante exato;
@@ -140,9 +141,9 @@ export function lerOfx(
       instante: data.instante,
       centavos,
       descricao: descricao || "(sem descrição)",
-      identificadores: ["FITID", "CHECKNUM", "REFNUM"]
-        .map((tag) => campo(bloco, tag))
-        .filter((valor): valor is string => valor !== null),
+      identificadores: [campo(bloco, "FITID")].filter(
+        (valor): valor is string => valor !== null,
+      ),
     });
   }
   if (blocos === 0)

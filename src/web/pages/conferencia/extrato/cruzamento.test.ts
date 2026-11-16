@@ -121,6 +121,33 @@ describe("Certo: o Pix traz o número do pedido", () => {
     expect(resultado.paraMarcar).toEqual([]);
   });
 
+  it("só de algarismos, o número precisa de 8 ou mais: o documento do banco não vira Certo por acaso", () => {
+    const resultado = cruzar(
+      [
+        // O documento do banco (7 algarismos) igual ao número de um pedido reservado dias antes, com outro valor.
+        pix(1, "2026-11-16 10:05", 5000, "TRANSF PIX REM: FULANA 1234567", [
+          "2026111600001",
+        ]),
+        // O número só de algarismos com 8 ou mais: Certo.
+        pix(2, "2026-11-16 10:06", 2000, "PIX RECEBIDO 98765432"),
+        // Com letra, 4 bastam.
+        pix(3, "2026-11-16 10:07", 2000, "PIX RECEBIDO AB12"),
+      ],
+      [
+        pedido("1234567", "2026-11-10 09:00", 2000),
+        pedido("98765432", "2026-11-14 08:00"),
+        pedido("AB12", "2026-11-14 08:00"),
+      ],
+      janela,
+    );
+    expect(curto(resultado)).toEqual({
+      paraMarcar: ["L2→98765432:certo", "L3→AB12:certo"],
+      ambiguos: [],
+      semPedido: ["L1:nenhum"],
+      jaContados: [],
+    });
+  });
+
   it("os Certos vêm antes: um Pix mais antigo, só pelo valor, perde o pedido para o que traz o número", () => {
     const resultado = cruzar(
       [
@@ -330,18 +357,25 @@ describe("empates e o algoritmo guloso estável", () => {
       pedido("PEDX0006", "2026-11-16 08:00", 6000),
     ];
     const referencia = curto(cruzar(pixes, pedidos, janela));
-    for (let volta = 0; volta < 10; volta++) {
-      const embaralhar = <T>(lista: T[]) =>
-        [...lista].sort(() =>
-          Math.sin(volta * 97 + lista.length) > 0 ? 1 : -1,
-        );
+    // Fisher-Yates com semente fixa: permutações de verdade, sempre as mesmas.
+    let semente = 7;
+    const sorteio = () =>
+      (semente = (semente * 1_103_515_245 + 12_345) % 2 ** 31) / 2 ** 31;
+    const embaralhar = <T>(lista: T[]) => {
+      const copia = [...lista];
+      for (let i = copia.length - 1; i > 0; i--) {
+        const j = Math.floor(sorteio() * (i + 1));
+        [copia[i], copia[j]] = [copia[j], copia[i]];
+      }
+      return copia;
+    };
+    expect(
+      curto(cruzar([...pixes].reverse(), [...pedidos].reverse(), janela)),
+    ).toEqual(referencia);
+    for (let volta = 0; volta < 50; volta++)
       expect(
         curto(cruzar(embaralhar(pixes), embaralhar(pedidos), janela)),
       ).toEqual(referencia);
-      expect(
-        curto(cruzar([...pixes].reverse(), [...pedidos].reverse(), janela)),
-      ).toEqual(referencia);
-    }
     const resultado = cruzar(pixes, pedidos, janela);
     const casados = [
       ...resultado.paraMarcar.map((item) => [item.pix.chave, item.pedido.id]),
