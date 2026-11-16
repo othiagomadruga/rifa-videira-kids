@@ -32,7 +32,16 @@ import {
   itemPedido,
   type Chamada,
 } from "./teste-apoio";
-import { CAMPOS, DICAS, GRUPOS, LER_TEXTO } from "./textos";
+import {
+  CAMPOS,
+  DICAS,
+  GRUPOS,
+  LER_TEXTO,
+  MAIS_AMBIGUOS,
+  MAIS_CANDIDATOS,
+  MAXIMO_AMBIGUOS_NA_TELA,
+  MAXIMO_CANDIDATOS_NA_TELA,
+} from "./textos";
 
 const CAMINHO = "/coordenacao/conferencia";
 type Api = ReturnType<typeof criarApiDoExtrato>;
@@ -345,6 +354,47 @@ describe("colar o texto", () => {
       screen.getByText(/Nenhum Pix recebido neste extrato/),
     ).toBeInTheDocument();
     expect(api.pedidos()).toHaveLength(buscas);
+  });
+
+  it("muitos pedidos do mesmo valor: o ambíguo mostra os 8 primeiros e conta os outros (a página não trava)", async () => {
+    const pedidos = Array.from({ length: 12 }, (_, i) =>
+      itemPedido(`PEDTESTE03${String(i).padStart(2, "0")}`, {
+        reserva: belem("2026-11-16", `09:${String(10 + i)}`),
+      }),
+    ).reverse();
+    await abrir(criarApiDoExtrato({ pedidos }));
+    await colar("16/11/2026 10:05 PIX RECEBIDO FULANA FICTICIA R$ 20,00");
+    const ambiguos = grupo(GRUPOS.ambiguos.titulo);
+    expect(
+      within(ambiguos).getByText("12 pedidos servem:"),
+    ).toBeInTheDocument();
+    expect(within(ambiguos).getAllByText(/^PEDTESTE03\d\d$/)).toHaveLength(
+      MAXIMO_CANDIDATOS_NA_TELA,
+    );
+    expect(within(ambiguos).getByText(MAIS_CANDIDATOS(4))).toBeInTheDocument();
+  });
+
+  it("muitos Pix ambíguos: mostra os 100 primeiros e conta os outros", async () => {
+    await abrir(
+      criarApiDoExtrato({
+        pedidos: [
+          itemPedido("PEDTESTE0402", { reserva: belem("2026-11-16", "09:02") }),
+          itemPedido("PEDTESTE0401", { reserva: belem("2026-11-16", "09:01") }),
+        ],
+      }),
+    );
+    await colar(
+      Array.from(
+        { length: MAXIMO_AMBIGUOS_NA_TELA + 3 },
+        (_, i) =>
+          `16/11/2026 10:${String(i % 60).padStart(2, "0")} PIX RECEBIDO FULANA FICTICIA R$ 20,00`,
+      ).join("\n"),
+    );
+    const ambiguos = grupo(GRUPOS.ambiguos.titulo);
+    expect(within(ambiguos).getAllByText("2 pedidos servem:")).toHaveLength(
+      MAXIMO_AMBIGUOS_NA_TELA,
+    );
+    expect(within(ambiguos).getByText(MAIS_AMBIGUOS(3))).toBeInTheDocument();
   });
 });
 

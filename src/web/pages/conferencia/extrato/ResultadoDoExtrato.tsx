@@ -44,6 +44,10 @@ import {
   FALHAS,
   GRAU,
   GRUPOS,
+  MAIS_AMBIGUOS,
+  MAIS_CANDIDATOS,
+  MAXIMO_AMBIGUOS_NA_TELA,
+  MAXIMO_CANDIDATOS_NA_TELA,
   RESULTADO,
   ROTULO_NUMEROS,
   SEM_AREA_DE_TRANSFERENCIA,
@@ -190,7 +194,13 @@ const COLUNAS_JA_CONTADOS: ColunaTabela<JaContado>[] = [
         <span className="extrato-codigo">{pedidos[0].id}</span>
       ) : (
         <span className="extrato-codigos">
-          {UM_DESTES} {pedidos.map((pedido) => pedido.id).join(", ")}
+          {UM_DESTES}{" "}
+          {pedidos
+            .slice(0, MAXIMO_CANDIDATOS_NA_TELA)
+            .map((pedido) => pedido.id)
+            .join(", ")}
+          {pedidos.length > MAXIMO_CANDIDATOS_NA_TELA &&
+            `. ${MAIS_CANDIDATOS(pedidos.length - MAXIMO_CANDIDATOS_NA_TELA)}`}
         </span>
       ),
   },
@@ -246,23 +256,37 @@ function Candidato({ pedido }: { pedido: PedidoDoCruzamento }) {
 
 function Ambiguos({ itens }: { itens: PixAmbiguo[] }) {
   return (
-    <ul className="extrato-lista">
-      {itens.map(({ pix, candidatos }) => (
-        <li key={pix.chave} className="extrato-ambiguo">
-          <p className="extrato-ambiguo__pix">
-            <strong>Pix de {formatarMoeda(pix.centavos)}</strong> ·{" "}
-            {quandoDoPix(pix)}
-          </p>
-          <p className="extrato-suave">{pix.descricao}</p>
-          <p>{plural(candidatos.length, "pedido serve", "pedidos servem")}:</p>
-          <ul className="extrato-lista">
-            {candidatos.map((pedido) => (
-              <Candidato key={pedido.id} pedido={pedido} />
-            ))}
-          </ul>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="extrato-lista">
+        {itens.slice(0, MAXIMO_AMBIGUOS_NA_TELA).map(({ pix, candidatos }) => (
+          <li key={pix.chave} className="extrato-ambiguo">
+            <p className="extrato-ambiguo__pix">
+              <strong>Pix de {formatarMoeda(pix.centavos)}</strong> ·{" "}
+              {quandoDoPix(pix)}
+            </p>
+            <p className="extrato-suave">{pix.descricao}</p>
+            <p>
+              {plural(candidatos.length, "pedido serve", "pedidos servem")}:
+            </p>
+            <ul className="extrato-lista">
+              {candidatos.slice(0, MAXIMO_CANDIDATOS_NA_TELA).map((pedido) => (
+                <Candidato key={pedido.id} pedido={pedido} />
+              ))}
+            </ul>
+            {candidatos.length > MAXIMO_CANDIDATOS_NA_TELA && (
+              <p className="extrato-suave">
+                {MAIS_CANDIDATOS(candidatos.length - MAXIMO_CANDIDATOS_NA_TELA)}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+      {itens.length > MAXIMO_AMBIGUOS_NA_TELA && (
+        <p className="extrato-atencao">
+          {MAIS_AMBIGUOS(itens.length - MAXIMO_AMBIGUOS_NA_TELA)}
+        </p>
+      )}
+    </>
   );
 }
 

@@ -1450,7 +1450,7 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
   extrato é o único jeito de a pessoa desempatar um Pix ambíguo olhando a Rifei. Ela fica só na memória da página (o
   estado da tela), aparece só nas listas do resultado, some ao sair da tela e nunca entra numa chamada, no storage ou no
   log (`ExtratoDoBanco.test.tsx` varre os endereços, os corpos, o `localStorage`, o `sessionStorage` e o `console`;
-  `conferencia-contrato.test.ts` barra storage no código da pasta).
+  `conferencia-contrato.test.ts` barra storage e `console` no código da pasta).
 - **Os graus.** "Certo": a descrição, o FITID ou a coluna de identificador do CSV trazem o número de um pedido (o
   artigo da Rifei "Como saber se um PIX manual foi pago": o identificador da transação Pix é o número do pedido; o
   número inteiro, ou um pedaço entre separadores, com pelo menos 4 caracteres, ou 8 se for só de algarismos: o
@@ -1460,7 +1460,8 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
   o mesmo valor, reservado antes do Pix (`criado_em`; sem ele, `registrado_em`) e dentro da janela (padrão 24 h, de 1
   a 72 h na tela), com 5 min de folga para o relógio; o pedido já pago só serve se foi pago
   depois do Pix (quem marca na Rifei marca depois de ver o Pix); o desconsiderado (D20) nunca serve. "Ambíguo": mais de
-  um pedido serve (os candidatos com número, célula, hora da reserva, quantidade e situação); se todos já estão pagos,
+  um pedido serve (os candidatos com número, célula, hora da reserva, quantidade e situação; na tela, os 8 primeiros e
+  quantos faltam, e os 100 primeiros Pix ambíguos, para um extrato grande não travar a página); se todos já estão pagos,
   não há o que marcar e o Pix vai para "Já contados" ("um destes"). "Pix sem pedido": nenhum pedido livre serve (com o
   motivo: nenhum com o valor no horário, o que servia ficou com outro Pix, o número é de um pedido que ficou com outro
   Pix ou de um desconsiderado). O pedido casado que já está pago é "já contado"; o pendente ou expirado vai para "Para

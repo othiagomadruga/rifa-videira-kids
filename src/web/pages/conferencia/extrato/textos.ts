@@ -179,6 +179,18 @@ export function motivoSemPedido(
 
 export const UM_DESTES = "Um destes pedidos, todos já pagos:";
 
+/**
+ * Os candidatos mostrados por Pix (ambíguo ou "um destes"): com muitos pedidos do mesmo valor na janela, a lista
+ * inteira de cada Pix travaria a página num extrato grande. Os outros viram uma linha.
+ */
+export const MAXIMO_CANDIDATOS_NA_TELA = 8;
+/** Os Pix ambíguos mostrados: num extrato grande (um mês), centenas deles travariam a página e não dá para olhar todos. */
+export const MAXIMO_AMBIGUOS_NA_TELA = 100;
+export const MAIS_AMBIGUOS = (n: number) =>
+  `E mais ${plural(n, "Pix ambíguo", "Pix ambíguos")}. Diminua o tempo entre a reserva e o Pix, ou use um extrato de um período menor, para ver todos.`;
+export const MAIS_CANDIDATOS = (n: number) =>
+  `E mais ${plural(n, "pedido", "pedidos")}. Diminua o tempo entre a reserva e o Pix para ver menos.`;
+
 export const FALHAS = {
   semCampanha: {
     titulo: "Não dá para conferir ainda",

@@ -115,12 +115,13 @@ describe("a tela da conferência e o contrato", () => {
         ).toBe(true);
       }
       expect(fonte, arquivo).not.toMatch(/\bfrom\s*["']zod["']/);
-      // O arquivo do usuário nunca vai para o armazenamento do navegador (comentários à parte).
+      // O arquivo do usuário nunca vai para o armazenamento do navegador nem para o log (comentários à parte; o
+      // extrato do banco tem o nome de quem pagou, D26).
       const semComentarios = fonte
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/^\s*\/\/.*$/gm, "");
       expect(semComentarios, arquivo).not.toMatch(
-        /localStorage|sessionStorage|indexedDB/,
+        /localStorage|sessionStorage|indexedDB|\bconsole\s*\./,
       );
     }
   });
