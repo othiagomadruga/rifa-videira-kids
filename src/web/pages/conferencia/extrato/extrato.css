@@ -87,9 +87,11 @@
   overflow-wrap: anywhere;
 }
 
+/* O número do pedido não quebra no meio enquanto cabe (break-word não encolhe a coluna da tabela); um número longo
+   demais quebra no cartão do celular. */
 .extrato-codigo {
   font-weight: var(--peso-forte);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .extrato-codigos {

@@ -38,7 +38,7 @@ export const CAMPOS = {
   },
   palavras: {
     rotulo: "Palavras do Pix",
-    dica: "Só entram os créditos com uma destas palavras na descrição, separadas por vírgula.",
+    dica: "Só entram créditos com uma destas palavras (separe com vírgula).",
   },
 };
 

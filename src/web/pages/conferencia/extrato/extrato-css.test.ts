@@ -49,13 +49,14 @@ describe("extrato.css", () => {
   it("a descrição do banco, os números dos pedidos e os ambíguos quebram em qualquer ponto", () => {
     for (const seletor of [
       ".extrato-pix",
-      ".extrato-codigo",
       ".extrato-codigos",
       ".extrato-suave",
       ".extrato-ambiguo",
       ".extrato-candidato",
     ])
       expect(regra(seletor), seletor).toMatch(/overflow-wrap:\s*anywhere/);
+    // O número do pedido quebra só se não couber (break-word não encolhe a coluna da tabela: "PEDTESTE010 / 1").
+    expect(regra(".extrato-codigo")).toMatch(/overflow-wrap:\s*break-word/);
   });
 
   it("as duas colunas só a partir de 48rem (o ponto de quebra da DataTable)", () => {
