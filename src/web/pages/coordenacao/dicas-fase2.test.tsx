@@ -44,6 +44,17 @@ import {
   RECUPERACOES,
   criarApiFalsa as criarApiConferencia,
 } from "../conferencia/teste-apoio";
+import {
+  CSV_EXTRATO,
+  OFX_SGML,
+  TEXTO_LINHAS,
+  criarApiDoExtrato,
+} from "../conferencia/extrato/teste-apoio";
+import {
+  CAMPOS as CAMPOS_EXTRATO,
+  DICAS as DICAS_EXTRATO,
+  LER_TEXTO as LER_TEXTO_EXTRATO,
+} from "../conferencia/extrato/textos";
 import { DICAS as DICAS_CONFERENCIA } from "../conferencia/textos";
 import {
   criarApiFalsa as criarApiHierarquia,
@@ -404,6 +415,61 @@ describe("Conferência", () => {
     // O `inert` do resto da página sai num efeito do Dialogo, que também devolve o foco a quem o abriu e pode rodar
     // depois de o findBy voltar: sob carga, a varredura via a página toda inert e não contava nenhum controle.
     await waitFor(() => expect(recuperar).toHaveFocus());
+    conferirDicas(20);
+  });
+});
+
+describe("Conferência: o extrato do banco (RIFA-059)", () => {
+  it("antes do extrato: o arquivo, a caixa do texto, 'Ler o texto colado' (indisponível), a janela e as palavras", async () => {
+    vi.stubGlobal("fetch", criarApiDoExtrato().fetch);
+    renderizarRota("/coordenacao/conferencia");
+    const texto = await screen.findByLabelText(
+      CAMPOS_EXTRATO.texto.rotulo,
+      undefined,
+      { timeout: 5000 },
+    );
+    const ler = botao(LER_TEXTO_EXTRATO);
+    esperarIndisponivel(ler);
+    expect(textoDaDica(ler)).toBe(DICAS_EXTRATO.lerTextoVazio);
+    expect(
+      textoDaDica(screen.getByLabelText(CAMPOS_EXTRATO.arquivo.rotulo)),
+    ).toBe(DICAS_EXTRATO.escolherArquivo);
+    fireEvent.change(texto, { target: { value: TEXTO_LINHAS } });
+    esperarDisponivel(ler);
+    expect(textoDaDica(ler)).toBe(DICAS_EXTRATO.lerTexto);
+    conferirDicas(12);
+  });
+
+  it("o resultado do OFX e do CSV: 'Copiar os números dos pedidos' e as colunas do CSV", async () => {
+    vi.stubGlobal("fetch", criarApiDoExtrato().fetch);
+    renderizarRota("/coordenacao/conferencia");
+    const arquivo = await screen.findByLabelText(
+      CAMPOS_EXTRATO.arquivo.rotulo,
+      undefined,
+      { timeout: 5000 },
+    );
+    fireEvent.change(arquivo, {
+      target: { files: [new File([OFX_SGML], "extrato.ofx")] },
+    });
+    const copiar = await screen.findByRole("button", {
+      name: "Copiar os números dos pedidos",
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Resultado do extrato")).toHaveFocus(),
+    );
+    expect(textoDaDica(copiar)).toBe(DICAS_EXTRATO.copiar);
+    conferirDicas(15);
+
+    fireEvent.change(arquivo, {
+      target: { files: [new File([CSV_EXTRATO], "extrato.csv")] },
+    });
+    const coluna = await screen.findByRole("combobox", {
+      name: "Documento ou identificador",
+    });
+    expect(textoDaDica(coluna)).toBe(DICAS_EXTRATO.coluna);
+    await screen.findByRole("button", {
+      name: "Copiar os números dos pedidos",
+    });
     conferirDicas(20);
   });
 });

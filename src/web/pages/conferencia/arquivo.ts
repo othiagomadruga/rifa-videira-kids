@@ -2,14 +2,13 @@
 // endereço, no log ou na API). A tela lê as colunas e as linhas aqui (src/shared/conferencia) e manda à API
 // só o corpo compacto, sem os dados pessoais; do texto, sai só o SHA-256 (para a auditoria).
 //
-// Codificação: o export da Rifei pode vir em UTF-8 ou, se passou pelo Excel, em Windows-1252. O texto é
-// lido como UTF-8 estrito; se não for UTF-8 válido, é lido de novo como Windows-1252, para os acentos
-// ("Situação", "Não pago") saírem certos.
+// Codificação: o export da Rifei pode vir em UTF-8 ou, se passou pelo Excel, em Windows-1252 (decodificar.ts).
 import { LIMITE_CARACTERES_CSV_RECONCILIACAO } from "../../../shared/contracts/conferencia";
 import {
   FALHA_ARQUIVO_GRANDE,
   FALHA_ARQUIVO_VAZIO,
 } from "../../../shared/conferencia/leitura";
+import { decodificar } from "./decodificar";
 
 export type ArquivoDecodificado =
   | { tipo: "ok"; texto: string; codificacao: "utf-8" | "windows-1252" }
@@ -23,27 +22,6 @@ const problema = (falha: {
   titulo: falha.titulo,
   mensagem: falha.mensagem,
 });
-
-const BOM = String.fromCharCode(0xfeff);
-
-/** Os bytes como texto: UTF-8 estrito ou, se não for UTF-8, Windows-1252. Sem o BOM do início. */
-export function decodificar(bytes: ArrayBuffer): {
-  texto: string;
-  codificacao: "utf-8" | "windows-1252";
-} {
-  let texto: string;
-  let codificacao: "utf-8" | "windows-1252" = "utf-8";
-  try {
-    texto = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    texto = new TextDecoder("windows-1252").decode(bytes);
-    codificacao = "windows-1252";
-  }
-  return {
-    texto: texto.startsWith(BOM) ? texto.slice(1) : texto,
-    codificacao,
-  };
-}
 
 /** Lê o arquivo escolhido. Arquivo muito maior que o limite nem é lido. */
 export async function lerArquivo(arquivo: File): Promise<ArquivoDecodificado> {

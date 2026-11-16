@@ -1,0 +1,138 @@
+/* Seção "Extrato do banco (Pix manual)" da Conferência (RIFA-059). Celular primeiro: tudo empilhado; a partir de
+   48rem, as opções e as colunas do CSV ficam em duas colunas. Nada de largura fixa: a descrição do banco e os números
+   dos pedidos quebram na linha (390 px sem rolagem lateral). */
+.extrato {
+  --pilha-espaco: var(--espaco-5);
+}
+
+.extrato-bloco,
+.extrato-grupo,
+.extrato-colar {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.extrato-grupo {
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.extrato-subtitulo {
+  margin: 0;
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-forte);
+}
+
+.extrato-suave {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.extrato-atencao {
+  margin: 0;
+  color: var(--cor-alerta);
+  font-weight: var(--peso-medio);
+  overflow-wrap: anywhere;
+}
+
+.extrato-passos {
+  display: grid;
+  gap: var(--espaco-3);
+  margin: 0;
+  padding-left: var(--espaco-5);
+}
+
+.extrato-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-3);
+}
+
+.extrato-opcoes,
+.extrato-campos {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .extrato-opcoes,
+  .extrato-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* O título do resultado e o aviso da falha recebem o foco quando chegam. */
+.extrato-foco {
+  border-radius: var(--raio-1);
+}
+
+.extrato-foco:focus-visible {
+  outline: var(--foco-anel);
+  outline-offset: var(--foco-distancia);
+}
+
+/* Os números: cada cartão com a largura de "1.234 pedidos" (o Stat sem R$). */
+.extrato-numeros {
+  --grade-min: 11rem;
+}
+
+.extrato-pix {
+  display: grid;
+  gap: var(--espaco-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* O número do pedido não quebra no meio enquanto cabe (break-word não encolhe a coluna da tabela); um número longo
+   demais quebra no cartão do celular. */
+.extrato-codigo {
+  font-weight: var(--peso-forte);
+  overflow-wrap: break-word;
+}
+
+.extrato-codigos {
+  overflow-wrap: anywhere;
+}
+
+.extrato-selos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.extrato-lista {
+  display: grid;
+  gap: var(--espaco-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.extrato-ambiguo {
+  display: grid;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  overflow-wrap: anywhere;
+}
+
+.extrato-ambiguo p {
+  margin: 0;
+}
+
+.extrato-candidato {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-3);
+  padding: var(--espaco-2) 0;
+  border-top: 1px solid var(--cor-borda);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -1406,3 +1406,83 @@ sem dependência nova. Decidido pelo SM em 13/11; o PO pode vetar ao ver a demon
 - **Os filtros de Pedidos recolhidos no celular** são um `<details>` controlado (`useFiltrosRecolhidos`): fechado ao
   abrir abaixo de 48rem, sempre aberto no computador e sem `matchMedia`, e acompanha a largura (girar o aparelho abre
   ou fecha). O `<summary>` conta os filtros escolhidos e, desde a RIFA-053, tem a cara de botão e o chevron `abrir`.
+
+## D26. Conferência do extrato do banco para o Pix manual (RIFA-059, 2026-11-16)
+
+Decisões do PO (16/11): sem a Efí, o Pix manual da Rifei é o caminho principal (lancamento.md, 1.6). O comprador reserva
+na Rifei e paga pelo QR ou pelo copia e cola na chave da campanha; alguém confere o extrato e marca o pedido como pago no
+painel da Rifei; a Rifei manda o "Pedido pago" no webhook e a venda conta. Banco: Bradesco, conta de pessoa jurídica no
+Net Empresa, com um acesso só de consulta. O Open Finance é pago e está fora: o extrato é baixado à mão. O objetivo é
+automatizar o cruzamento do extrato com os pedidos; a marcação na Rifei continua manual. Decisão do SM: nada de robô que
+entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada login).
+
+- **O extrato é lido só no navegador.** Seção "Extrato do banco (Pix manual)" da Conferência
+  (`src/web/pages/conferencia/extrato/`, num pacote `lazy` à parte, como a conferência pelo CSV), para admin e
+  coordenação. O arquivo (ou o texto colado) nunca vai para o servidor e nada é gravado: nem banco, nem localStorage, nem
+  log. A tela só LÊ o que já existe: o fuso da campanha (`GET /api/admin/campanha`) e a lista de pedidos
+  (`GET /api/admin/pedidos?limite=200`, de todos os status, página a página pelo cursor, do registrado mais novo para o
+  mais antigo, até passar do primeiro crédito do extrato menos a maior janela, 72 h; teto de 60 páginas, 12 mil pedidos,
+  com aviso). A lista já traz tudo o que o cruzamento usa (número, status, quantidade, valor, célula, `criado_em`,
+  `aprovado_em` e a desconsideração): nenhuma rota nova, nenhuma migração, nenhuma mudança no contrato. Nada do sistema
+  muda pela seção.
+- **Formatos** (o formato do Bradesco não está documentado em fonte pública: o leitor é tolerante):
+  - OFX 1.x (SGML, tags de valor sem fechamento, `CHARSET:1252`) e 2.x (XML), lidos por texto (sem parser de XML). De
+    cada `<STMTTRN>`: `TRNAMT` (ponto ou vírgula; o sinal decide, não o `TRNTYPE`), `DTPOSTED` (ou `DTUSER`), `MEMO` e
+    `NAME` (a descrição) e `FITID` (onde o número do pedido pode aparecer; `CHECKNUM` e `REFNUM` são o documento do
+    banco e ficam de fora, para não bater por acaso com um número de pedido). Datas
+    `YYYYMMDD[HHMM[SS]][.XXX][offset:TZ]`: com o deslocamento, o instante exato; sem ele, a hora local do fuso da
+    campanha (a especificação manda ler como GMT, mas os bancos brasileiros gravam a hora local; GMT trocaria o dia dos
+    lançamentos da noite); só o dia ou meia-noite em ponto: só o dia escrito; a mesma hora em todos os lançamentos (o
+    banco completou com 12:00, por exemplo): só o dia.
+  - Texto colado de qualquer banco (a tabela da tela do banco ou do PDF), linha a linha: data (`16/11/2026`, `16/11/26`,
+    `16/11`, `16 nov 2026`, "Hoje"...; a linha só com a data vale para as de baixo), hora se houver, o primeiro valor no
+    formato brasileiro (`1.234,56`, `R$`, `+`, `-`, `−`, `C`, `D`), a descrição e as linhas sem valor logo abaixo (o
+    "REM: <nome>" do Bradesco). Numa tabela com tabulações e cabeçalho, valem as colunas Crédito, Débito ou Valor. Sem
+    sinal, é crédito, a não ser que a descrição diga saída ("ENVIADO", "DES:", "DEBITO", "TARIFA", "PAGTO"...).
+  - CSV, se o banco gerar: o mesmo leitor da conferência (`src/shared/csv.ts`), o cabeçalho achado depois das linhas de
+    título e um mapeamento simples (data, hora, descrição, valor ou crédito, débito, documento), que a pessoa troca na
+    tela (o resultado muda na hora).
+  - Só entram os créditos que parecem Pix: a descrição com "PIX" ou "TRANSF" (configurável na tela; vazio, todos os
+    créditos). A tela diz quantos ficaram de fora e por quê (débitos, créditos sem as palavras, linhas de saldo,
+    linhas sem data ou valor).
+- **O nome de quem pagou: exceção à D19.** A D19 nunca lê as colunas de dado pessoal do CSV da Rifei. Aqui a descrição do
+  lançamento, que pode trazer o nome de quem pagou ("REM: <nome>"), é lida e mostrada, porque sem o número do pedido no
+  extrato é o único jeito de a pessoa desempatar um Pix ambíguo olhando a Rifei. Ela fica só na memória da página (o
+  estado da tela), aparece só nas listas do resultado, some ao sair da tela e nunca entra numa chamada, no storage ou no
+  log (`ExtratoDoBanco.test.tsx` varre os endereços, os corpos, o `localStorage`, o `sessionStorage` e o `console`;
+  `conferencia-contrato.test.ts` barra storage e `console` no código da pasta).
+- **Os graus.** "Certo": a descrição, o FITID ou a coluna de identificador do CSV trazem o número de um pedido (o
+  artigo da Rifei "Como saber se um PIX manual foi pago": o identificador da transação Pix é o número do pedido; o
+  número inteiro, ou um pedaço entre separadores, com pelo menos 4 caracteres, ou 8 se for só de algarismos: o
+  documento do banco, a agência, a conta e a data aparecem em todo lançamento e bateriam por acaso com um número curto,
+  e o Certo não confere o valor nem a hora; com o número da Rifei curto e só de algarismos, o Pix cai no Provável; com
+  outro valor, continua Certo, com o aviso). "Provável": sem o número, só um pedido serve:
+  o mesmo valor, reservado antes do Pix (`criado_em`; sem ele, `registrado_em`) e dentro da janela (padrão 24 h, de 1
+  a 72 h na tela), com 5 min de folga para o relógio; o pedido já pago só serve se foi pago
+  depois do Pix (quem marca na Rifei marca depois de ver o Pix); o desconsiderado (D20) nunca serve. "Ambíguo": mais de
+  um pedido serve (os candidatos com número, célula, hora da reserva, quantidade e situação; na tela, os 8 primeiros e
+  quantos faltam, e os 100 primeiros Pix ambíguos, para um extrato grande não travar a página); se todos já estão pagos,
+  não há o que marcar e o Pix vai para "Já contados" ("um destes"). "Pix sem pedido": nenhum pedido livre serve (com o
+  motivo: nenhum com o valor no horário, o que servia ficou com outro Pix, o número é de um pedido que ficou com outro
+  Pix ou de um desconsiderado). O pedido casado que já está pago é "já contado"; o pendente ou expirado vai para "Para
+  marcar como pago na Rifei", com "Copiar os números dos pedidos" (um por linha).
+- **O algoritmo** (`cruzamento.ts`, guloso e estável; um Pix nunca casa com dois pedidos e um pedido nunca casa com dois
+  Pix):
+  1. a ordem: os Pix do mais antigo ao mais novo (no empate, a ordem no extrato); os pedidos pela reserva (no empate,
+     pelo número);
+  2. os Certos primeiro: cada Pix, na ordem, fica com o pedido do número que traz; o número de um pedido que já ficou com
+     um Pix anterior deixa o Pix sem pedido ("Pix em dobro?");
+  3. depois, pelo valor, em voltas até nada mudar: cada Pix ainda sem par, do mais antigo ao mais novo, olha os pedidos
+     livres que servem; se só um serve, fica com ele (Provável). Quando dois Pix disputam o mesmo e único pedido, o mais
+     antigo fica com ele (o outro diz com quem ele ficou); e um Pix com dois candidatos vira Provável quando o outro
+     candidato fica com um Pix que só tinha ele;
+  4. o que sobra é Ambíguo (2 ou mais livres) ou sem pedido (nenhum).
+  Dois Pix iguais com os mesmos dois pedidos iguais ficam os dois Ambíguos: o algoritmo não chuta o par (pergunta ao
+  PO). O resultado não depende da ordem de entrada (`cruzamento.test.ts`).
+- **Fora desta versão:** o PDF (pediria o pdf.js, dependência nova de centenas de KB; hoje, abrir o PDF, selecionar a
+  tabela e colar o texto), o Open Finance (pago), o robô no internet banking (a chave de segurança a cada login) e
+  automatizar o painel da Rifei (sem API para marcar como pago; automatizar a tela de outro sistema é frágil e foge dos
+  termos dela).
+- **Peso:** o JS inicial sobe 0,1 KiB (o `lazy` e o `Suspense` na `ConferenciaPage`), nenhuma dependência nova; a seção
+  vem num pacote à parte de ~13 KiB em gzip, mais o leitor de valores e datas, que agora é dividido com a conferência
+  pelo CSV (~5 KiB).

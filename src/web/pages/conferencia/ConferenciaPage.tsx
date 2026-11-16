@@ -11,15 +11,26 @@ const ConferenciaPeloCsv = lazy(() =>
   })),
 );
 
+// O extrato do banco (RIFA-059, Pix manual) vem noutro pacote à parte, com o próprio leitor e o próprio estilo. Os
+// dois ficam no mesmo Suspense: a página aparece de uma vez, sem a conferência pelo CSV pular para baixo.
+const ExtratoDoBanco = lazy(() =>
+  import("./extrato/ExtratoDoBanco").then((modulo) => ({
+    default: modulo.ExtratoDoBanco,
+  })),
+);
+
 export function ConferenciaPage() {
   return (
     <>
       <PageHeader
         titulo="Conferência"
-        descricao="Compare as vendas da Rifei com as do sistema e recupere as que se perderam."
+        descricao="Confira os Pix do extrato do banco e compare as vendas da Rifei com as do sistema."
       />
       <Suspense fallback={<Loading texto="Carregando a conferência…" />}>
-        <ConferenciaPeloCsv />
+        <div className="pilha">
+          <ExtratoDoBanco />
+          <ConferenciaPeloCsv />
+        </div>
       </Suspense>
     </>
   );
