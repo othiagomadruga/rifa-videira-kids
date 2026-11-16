@@ -143,6 +143,9 @@ export function ExtratoDoBanco() {
     const ja = cobertura.current;
     if (ja && ja.versao === atual.versao && ja.desde <= desde && !ja.falhou)
       return;
+    // O foco vai ao resultado na primeira busca do extrato (e depois de "Tentar de novo", que some); a busca a mais de
+    // uma troca de coluna do CSV deixa o foco na coluna.
+    const levarOFoco = !ja || ja.versao !== atual.versao || ja.falhou;
     controle.current?.abort();
     const meu = new AbortController();
     controle.current = meu;
@@ -151,7 +154,7 @@ export function ExtratoDoBanco() {
     try {
       const buscados = await buscarPedidosDesde(desde, { signal: meu.signal });
       if (meu.signal.aborted) return;
-      focarDepois.current = "resultado";
+      if (levarOFoco) focarDepois.current = "resultado";
       setBusca({ tipo: "ok", buscados });
     } catch (erro) {
       if (meu.signal.aborted) return;
