@@ -1611,7 +1611,8 @@ discipulador → célula.
   mudaria o contrato do relatório; com uma rede, ela repete o mesmo nome e pode ser apagada no Excel) e a API aceita
   `tipo=redes`; a trilha cita a rede quando ela é criada ou mudada (é o registro do que aconteceu); o líder e o
   discipulador já não viam a rede na `/minha` (o teste confere); a `/minha` do papel rede fica como era (sem o acesso de
-  rede oferecido, ninguém novo entra com ele).
+  rede oferecido, ninguém novo entra com ele); a apresentação em `/exemplo` (D28) é uma fotografia do site de antes e
+  só esconde a rede quando for refeita.
 - **Uma rede vazia** (sem células; a importação só cria rede com célula) conta na Hierarquia, nos Rankings, na Campanha e
   nos Acessos (que contam as redes), mas não na Visão geral, nos Pedidos e na Adesão (que contam pelas células).
 - **Peso e navegador** (a ferramenta de capturas, com as gravações da demonstração numa rede só e 3 discipuladores): o JS
