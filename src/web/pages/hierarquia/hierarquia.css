@@ -231,12 +231,12 @@
   padding-left: var(--espaco-5);
 }
 
+/* O <summary> fica com o triângulo de abrir (display de lista) e o alvo de toque inteiro. */
 .hierarquia-login__senhas > summary {
   cursor: pointer;
   font-weight: var(--peso-forte);
   min-height: var(--alvo-toque);
-  display: flex;
-  align-items: center;
+  padding-block: var(--espaco-2);
 }
 
 .hierarquia-login__copia:empty {
@@ -260,10 +260,18 @@
   border-bottom: 1px solid var(--cor-borda);
 }
 
+/* No celular, o nome numa linha e, embaixo, a senha e o "Copiar" (o mesmo desenho em toda célula); a partir de 40rem,
+   tudo numa linha. */
 .hierarquia-login__celula {
-  flex: 1 1 12rem;
+  flex: 1 1 100%;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+@media (min-width: 40rem) {
+  .hierarquia-login__celula {
+    flex-basis: 12rem;
+  }
 }
 
 .hierarquia-login__senha {
