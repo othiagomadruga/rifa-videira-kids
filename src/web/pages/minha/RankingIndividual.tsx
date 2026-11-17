@@ -16,7 +16,8 @@ import {
 
 // A posição do alvo entre os pares (na divisão, que é a da premiação, e no geral), com o nome e a posição do
 // vizinho de cima e do de baixo (sem a distância: D12), e os primeiros da divisão com o próprio alvo
-// destacado. Antes da 1ª venda do alvo, uma frase de incentivo no lugar da posição; alvo sem células (fora do
+// destacado. Sem ranking por divisão (D27: `por_divisao: false`), uma posição só, entre todos, e os primeiros de
+// todos. Antes da 1ª venda do alvo, uma frase de incentivo no lugar da posição; alvo sem células (fora do
 // ranking, posições null), a explicação.
 export function RankingIndividual({
   visao,
@@ -26,6 +27,7 @@ export function RankingIndividual({
   const idPrimeiros = useId();
   const { ranking, alvo, referencia, desempenho } = visao;
   const divisao = NOMES_DIVISAO[alvo.divisao];
+  const porDivisao = ranking.por_divisao !== false;
   const foraDoRanking = ranking.geral === null || ranking.divisao === null;
   const semVendas = desempenho.bilhetes.campanha === 0;
 
@@ -43,21 +45,31 @@ export function RankingIndividual({
           </p>
         ) : (
           <div className="minha-posicoes">
-            <Posicao
-              titulo="Na sua divisão"
-              pares={textoDosPares(ranking.nivel, alvo.divisao)}
-              posicao={ranking.divisao}
-            />
-            <Posicao
-              titulo="Geral"
-              pares={textoDosPares(ranking.nivel, null)}
-              posicao={ranking.geral}
-            />
+            {porDivisao ? (
+              <>
+                <Posicao
+                  titulo="Na sua divisão"
+                  pares={textoDosPares(ranking.nivel, alvo.divisao)}
+                  posicao={ranking.divisao}
+                />
+                <Posicao
+                  titulo="Geral"
+                  pares={textoDosPares(ranking.nivel, null)}
+                  posicao={ranking.geral}
+                />
+              </>
+            ) : (
+              <Posicao
+                titulo="Sua posição"
+                pares={textoDosPares(ranking.nivel, null, false)}
+                posicao={ranking.geral}
+              />
+            )}
           </div>
         )}
         <section className="minha-primeiros" aria-labelledby={idPrimeiros}>
           <h3 id={idPrimeiros} className="minha-primeiros__titulo">
-            Os primeiros dos {divisao}
+            {porDivisao ? `Os primeiros dos ${divisao}` : "Os primeiros"}
           </h3>
           {ranking.primeiros.length === 0 ? (
             <p className="minha-ranking__nota">

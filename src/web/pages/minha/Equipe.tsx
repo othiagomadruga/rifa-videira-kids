@@ -21,14 +21,26 @@ import {
 type Referencia = RespostaVisaoIndividual["referencia"];
 
 // A equipe de quem responde por mais de uma célula: o discipulador vê as células dele; a rede, os
-// discipuladores dela, cada um com as células dele. Números de cada um (sem dinheiro), a posição na divisão
-// e o aviso de quem ainda não aderiu (célula sem nenhum afiliado da Rifei vinculado). O líder não tem equipe.
+// discipuladores dela, cada um com as células dele. Números de cada um (sem dinheiro), a posição na divisão (sem
+// ranking por divisão, D27, a posição entre todos) e o aviso de quem ainda não aderiu (célula sem nenhum afiliado da Rifei vinculado). O líder não tem equipe.
 export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
   const idTitulo = useId();
   const { equipe, alvo, referencia } = visao;
   const celulas = equipe.filter((item) => item.tipo === "celula");
   const semAdesao = celulas.filter((item) => item.afiliados_vinculados === 0);
+  // Sem ranking por divisão (D27), a posição é entre todos: o título da coluna não fala de divisão.
+  const porDivisao = visao.ranking.por_divisao !== false;
   const divisao = NOMES_DIVISAO[alvo.divisao];
+  const titulo = porDivisao ? `Posição nos ${divisao}` : "Posição";
+  const entre = porDivisao
+    ? {
+        rede: `entre os do mesmo nível (discipuladores ou células) dos ${divisao}`,
+        celulas: `entre as células dos ${divisao}`,
+      }
+    : {
+        rede: "entre todos os do mesmo nível (discipuladores ou células)",
+        celulas: "entre todas as células",
+      };
 
   return (
     <section className="minha-equipe" aria-labelledby={idTitulo}>
@@ -38,8 +50,8 @@ export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
         </h2>
         <p className="minha-equipe__descricao">
           {alvo.tipo === "rede"
-            ? `Os discipuladores da rede e as células de cada um. A posição é a de cada um entre os do mesmo nível (discipuladores ou células) dos ${divisao}, no mesmo período do seu ranking.`
-            : `As células que você acompanha. A posição é a de cada célula entre as células dos ${divisao}, no mesmo período do seu ranking.`}
+            ? `Os discipuladores da rede e as células de cada um. A posição é a de cada um ${entre.rede}, no mesmo período do seu ranking.`
+            : `As células que você acompanha. A posição é a de cada célula ${entre.celulas}, no mesmo período do seu ranking.`}
         </p>
       </div>
       {semAdesao.length > 0 && (
@@ -55,11 +67,7 @@ export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
         </Aviso>
       )}
       {alvo.tipo === "rede" ? (
-        <EquipeDaRede
-          equipe={equipe}
-          referencia={referencia}
-          divisao={divisao}
-        />
+        <EquipeDaRede equipe={equipe} referencia={referencia} titulo={titulo} />
       ) : celulas.length === 0 ? (
         <p className="minha-equipe__vazia">
           Ainda não há células ligadas a você.
@@ -69,7 +77,7 @@ export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
           celulas={celulas}
           legenda={`Células de ${alvo.nome}`}
           referencia={referencia}
-          divisao={divisao}
+          titulo={titulo}
         />
       )}
     </section>
@@ -79,11 +87,11 @@ export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
 type PropsGrupo = {
   equipe: ItemEquipe[];
   referencia: Referencia;
-  /** Nome da divisão do alvo ("Jovens"). */
-  divisao: string;
+  /** O título da posição: "Posição nos Jovens" (sem ranking por divisão, "Posição"). */
+  titulo: string;
 };
 
-function EquipeDaRede({ equipe, referencia, divisao }: PropsGrupo) {
+function EquipeDaRede({ equipe, referencia, titulo }: PropsGrupo) {
   const discipuladores = equipe.filter((item) => item.tipo === "discipulador");
   if (discipuladores.length === 0) {
     return (
@@ -104,7 +112,7 @@ function EquipeDaRede({ equipe, referencia, divisao }: PropsGrupo) {
               item.discipulador_id === discipulador.id,
           )}
           referencia={referencia}
-          divisao={divisao}
+          titulo={titulo}
         />
       ))}
     </div>
@@ -115,12 +123,12 @@ function GrupoDoDiscipulador({
   discipulador,
   celulas,
   referencia,
-  divisao,
+  titulo,
 }: {
   discipulador: ItemEquipe;
   celulas: ItemEquipe[];
   referencia: Referencia;
-  divisao: string;
+  titulo: string;
 }) {
   const idGrupo = useId();
   const { desempenho, posicao_divisao: posicao } = discipulador;
@@ -146,7 +154,7 @@ function GrupoDoDiscipulador({
           <dd>{formatarNumero(desempenho.bilhetes.campanha)}</dd>
         </div>
         <div>
-          <dt>Posição nos {divisao}</dt>
+          <dt>{titulo}</dt>
           <dd>
             {posicao === null
               ? "Fora do ranking (sem células)"
@@ -163,7 +171,7 @@ function GrupoDoDiscipulador({
           celulas={celulas}
           legenda={`Células de ${discipulador.nome}`}
           referencia={referencia}
-          divisao={divisao}
+          titulo={titulo}
         />
       )}
     </section>
@@ -174,12 +182,12 @@ function TabelaCelulas({
   celulas,
   legenda,
   referencia,
-  divisao,
+  titulo,
 }: {
   celulas: ItemEquipe[];
   legenda: string;
   referencia: Referencia;
-  divisao: string;
+  titulo: string;
 }) {
   const colunas: ColunaTabela<ItemEquipe>[] = [
     {
@@ -224,7 +232,7 @@ function TabelaCelulas({
       : []),
     {
       chave: "posicao",
-      titulo: `Posição nos ${divisao}`,
+      titulo,
       alinhamento: "fim",
       celula: (item) =>
         item.posicao_divisao === null

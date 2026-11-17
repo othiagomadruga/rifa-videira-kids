@@ -24,7 +24,12 @@ export function VisaoIndividual() {
 
   return (
     <>
-      <Cabecalho alvo={alvo} nome={usuario.nome} />
+      {/* Sem ranking por divisão (D27), o cabeçalho não fala da divisão (o padrão, até a visão chegar). */}
+      <Cabecalho
+        alvo={alvo}
+        nome={usuario.nome}
+        porDivisao={visao?.ranking.por_divisao !== false}
+      />
       {estado.tipo === "carregando" && <EsqueletoDaVisao />}
       {estado.tipo === "erro" && (
         <ErrorState
