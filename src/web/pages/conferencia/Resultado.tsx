@@ -14,6 +14,7 @@ import {
   Badge,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   DataTable,
   Stat,
@@ -29,6 +30,7 @@ import {
   textoDosTotais,
 } from "./formatos";
 import {
+  AJUDA,
   DESCONSIDERADOS,
   DICAS,
   DIVERGENCIAS,
@@ -70,6 +72,7 @@ export function Resultado({
 }: Props) {
   return (
     <Card
+      ajuda={AJUDA.resultado}
       titulo={
         <span ref={refTitulo} tabIndex={-1} className="conferencia-titulo-foco">
           Resultado da conferência
@@ -106,7 +109,9 @@ function Avisos({ avisos }: { avisos: readonly AvisoReconciliacao[] }) {
   if (avisos.length === 0) return null;
   return (
     <div className="conferencia-avisos">
-      <h3 className="conferencia-subtitulo">Avisos sobre o arquivo</h3>
+      <SubtituloComAjuda texto={AJUDA.avisos}>
+        Avisos sobre o arquivo
+      </SubtituloComAjuda>
       <ul className="conferencia-lista-simples">
         {avisos.map((item) => (
           <li key={item.codigo}>
@@ -233,24 +238,28 @@ function PorPedido({
       <div className="grade conferencia-totais">
         <Stat
           rotulo="Pagos no arquivo"
+          ajuda={AJUDA.pagosNoArquivo}
           valor={textoDosTotais(resumo.aprovados_no_arquivo)}
           icone="documento"
           tom="marca"
         />
         <Stat
           rotulo="Pagos no sistema"
+          ajuda={AJUDA.pagosNoSistema}
           valor={textoDosTotais(resumo.aprovados_no_sistema)}
           icone="pedidos"
           tom="marca"
         />
         <Stat
           rotulo="Conferem"
+          ajuda={AJUDA.conferem}
           valor={plural(resumo.conferem, "pedido", "pedidos")}
           icone="check"
           tom="sucesso"
         />
         <Stat
           rotulo="Com diferença"
+          ajuda={AJUDA.comDiferenca}
           valor={plural(resumo.com_divergencia, "pedido", "pedidos")}
           icone={resumo.com_divergencia > 0 ? "alerta" : "check"}
           tom={resumo.com_divergencia > 0 ? "alerta" : "neutro"}
@@ -304,9 +313,9 @@ function GrupoDesconsiderados({
   return (
     <section className="conferencia-grupo" aria-labelledby={id}>
       <div className="conferencia-grupo__cabecalho">
-        <h3 id={id} className="conferencia-subtitulo">
+        <SubtituloComAjuda id={id} texto={DESCONSIDERADOS.explicacao}>
           {DESCONSIDERADOS.titulo}
-        </h3>
+        </SubtituloComAjuda>
         <Badge tom="neutro">
           {plural(grupo.quantidade, "pedido", "pedidos")}
         </Badge>
@@ -398,9 +407,9 @@ function Grupo({
   return (
     <section className="conferencia-grupo" aria-labelledby={id}>
       <div className="conferencia-grupo__cabecalho">
-        <h3 id={id} className="conferencia-subtitulo">
+        <SubtituloComAjuda id={id} texto={textos.explicacao}>
           {textos.titulo}
-        </h3>
+        </SubtituloComAjuda>
         <Badge tom={textos.tom}>
           {plural(grupo.quantidade, "pedido", "pedidos")}
         </Badge>
@@ -608,6 +617,8 @@ function Selecao({
             >
               <label
                 className="conferencia-escolha"
+                // A escolha de um pedido da lista, não um rótulo de campo (RIFA-066): a ajuda fica no título do grupo.
+                data-sem-ajuda="escolha de um pedido"
                 data-desabilitado={item.recuperavel ? undefined : ""}
               >
                 <input
@@ -770,12 +781,14 @@ function Agregado({
       <div className="grade conferencia-totais">
         <Stat
           rotulo="Pagos no arquivo"
+          ajuda={AJUDA.pagosNoArquivo}
           valor={textoDosTotais(total.arquivo)}
           icone="documento"
           tom="marca"
         />
         <Stat
           rotulo="Pagos no sistema"
+          ajuda={AJUDA.pagosNoSistema}
           valor={textoDosTotais(total.sistema)}
           icone="pedidos"
           tom="marca"
@@ -791,7 +804,9 @@ function Agregado({
       <Avisos avisos={avisos} />
       {analise.por_afiliado && (
         <section className="conferencia-grupo">
-          <h3 className="conferencia-subtitulo">Por afiliado</h3>
+          <SubtituloComAjuda texto={AJUDA.porAfiliado}>
+            Por afiliado
+          </SubtituloComAjuda>
           <DataTable
             colunas={COLUNAS_AFILIADO}
             linhas={analise.por_afiliado}
@@ -804,7 +819,7 @@ function Agregado({
       )}
       {analise.por_dia && (
         <section className="conferencia-grupo">
-          <h3 className="conferencia-subtitulo">Por dia</h3>
+          <SubtituloComAjuda texto={AJUDA.porDia}>Por dia</SubtituloComAjuda>
           <DataTable
             colunas={COLUNAS_DIA}
             linhas={analise.por_dia}
@@ -814,5 +829,26 @@ function Agregado({
         </section>
       )}
     </>
+  );
+}
+
+/** Subtítulo (h3) de um grupo do resultado, com a ajuda (RIFA-066). */
+function SubtituloComAjuda({
+  id: idDeFora,
+  texto,
+  children,
+}: {
+  id?: string;
+  texto: string;
+  children: ReactNode;
+}) {
+  const idAutomatico = useId();
+  const id = idDeFora ?? idAutomatico;
+  return (
+    <ComAjuda texto={texto} idDoTitulo={id}>
+      <h3 id={id} className="conferencia-subtitulo">
+        {children}
+      </h3>
+    </ComAjuda>
   );
 }

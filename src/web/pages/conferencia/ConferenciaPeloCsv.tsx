@@ -25,7 +25,7 @@ import { Historico } from "./Historico";
 import { Mapeamento } from "./Mapeamento";
 import { Resultado } from "./Resultado";
 import { comMaiuscula } from "./formatos";
-import { CAMPOS, DICAS, plural } from "./textos";
+import { AJUDA, CAMPOS, DICAS, plural } from "./textos";
 import "./conferencia.css";
 
 const CAMPOS_EM_ORDEM = Object.keys(CAMPOS) as CampoReconciliacao[];
@@ -409,7 +409,7 @@ export function ConferenciaPeloCsv() {
         {anuncio}
       </p>
       <div className="pilha conferencia">
-        <Card titulo="Como conferir">
+        <Card titulo="Como conferir" ajuda={AJUDA.comoConferir}>
           <div className="conferencia-bloco">
             <ol className="conferencia-passos">
               <li>
@@ -443,10 +443,11 @@ export function ConferenciaPeloCsv() {
           </div>
         </Card>
 
-        <Card titulo="Arquivo da Rifei">
+        <Card titulo="Arquivo da Rifei" ajuda={AJUDA.arquivoDaRifei}>
           <div className="conferencia-bloco">
             <SeletorArquivo
               rotulo="Arquivo exportado da Rifei (CSV)"
+              ajuda={AJUDA.arquivo}
               dica="O arquivo que a Rifei baixa em “Exportar Pedidos”."
               aceitar=".csv,text/csv"
               arquivo={arquivo}

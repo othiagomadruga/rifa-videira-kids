@@ -54,6 +54,7 @@ import {
 } from "../conferencia/extrato/teste-apoio";
 import {
   CAMPOS as CAMPOS_EXTRATO,
+  AJUDA as AJUDA_EXTRATO,
   DICAS as DICAS_EXTRATO,
   LER_TEXTO as LER_TEXTO_EXTRATO,
 } from "../conferencia/extrato/textos";
@@ -82,7 +83,20 @@ import {
 import { DICAS as DICAS_VISAO_GERAL } from "../visao-geral/textos";
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia", "Adesão", "Rankings", "Bumbo", "Acessos", "Pedidos", "Pedidos suspeitos", "Trilha", "Mapa"]);
+const TELAS_COM_AJUDA = new Set([
+  "Campanha",
+  "Visão geral",
+  "Hierarquia",
+  "Adesão",
+  "Rankings",
+  "Bumbo",
+  "Acessos",
+  "Pedidos",
+  "Pedidos suspeitos",
+  "Trilha",
+  "Mapa",
+  "Conferência",
+]);
 
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);
@@ -478,7 +492,8 @@ describe("Conferência: o extrato do banco (RIFA-059)", () => {
     const coluna = await screen.findByRole("combobox", {
       name: "Documento ou identificador",
     });
-    expect(textoDaDica(coluna)).toBe(DICAS_EXTRATO.coluna);
+    // O campo tem a ajuda do rótulo como dica (RIFA-066).
+    expect(textoDaDica(coluna)).toBe(AJUDA_EXTRATO.coluna);
     await screen.findByRole("button", {
       name: "Copiar os números dos pedidos",
     });

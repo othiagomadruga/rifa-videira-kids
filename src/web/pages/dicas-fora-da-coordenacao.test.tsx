@@ -44,7 +44,20 @@ import { DICAS as DICAS_404 } from "./nao-encontrada/textos";
 const ESPERA_DO_PACOTE = { timeout: 5000 };
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia", "Adesão", "Rankings", "Bumbo", "Acessos", "Pedidos", "Pedidos suspeitos", "Trilha", "Mapa"]);
+const TELAS_COM_AJUDA = new Set([
+  "Campanha",
+  "Visão geral",
+  "Hierarquia",
+  "Adesão",
+  "Rankings",
+  "Bumbo",
+  "Acessos",
+  "Pedidos",
+  "Pedidos suspeitos",
+  "Trilha",
+  "Mapa",
+  "Conferência",
+]);
 
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);

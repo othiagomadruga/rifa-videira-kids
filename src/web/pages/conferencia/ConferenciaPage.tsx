@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Loading, PageHeader } from "../../components/ui";
+import { DICA_DO_MENU } from "../coordenacao/textos";
 
 // A conferência pelo CSV (RIFA-012) lê o arquivo no navegador: o leitor do CSV, o resultado, o "Recuperar"
 // e o estilo dela vêm num pacote à parte, carregado só aqui (como a configuração da Campanha). O pacote
@@ -24,6 +25,7 @@ export function ConferenciaPage() {
     <>
       <PageHeader
         titulo="Conferência"
+        ajuda={DICA_DO_MENU.conferencia}
         descricao="Confira os Pix do extrato do banco e compare as vendas da Rifei com as do sistema."
       />
       <Suspense fallback={<Loading texto="Carregando a conferência…" />}>
