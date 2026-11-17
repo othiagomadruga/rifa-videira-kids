@@ -26,7 +26,8 @@ import type { CriterioRanking, UnidadeMeta } from "./dominio";
 /**
  * Um arquivo por tipo (a ordem é a da tela):
  * - totais: uma linha com os totais da campanha;
- * - celulas, discipuladores, redes: uma linha por instância, por divisão e na ordem do ranking da divisão;
+ * - celulas, discipuladores, redes: uma linha por instância, por divisão e na ordem do ranking da divisão (sem ranking
+ *   por divisão, D27: na ordem do ranking único, de todas as células);
  * - periodos, dias: bilhetes e R$ de cada período e de cada dia já começado;
  * - ddd: o mapa por DDD (uma linha por DDD com venda, mais "Exterior" e "Sem DDD").
  */
@@ -156,11 +157,24 @@ export const COLUNAS_RELATORIO = {
   ddd: ["uf", "ddd", "pedidos", "bilhetes", "arrecadacao", "parte_bilhetes"],
 } as const satisfies Record<TipoRelatorio, readonly ColunaRelatorio[]>;
 
-/** O título de uma coluna na unidade da meta da campanha. */
+/**
+ * O título da coluna `posicao_divisao` quando a campanha não separa o ranking por divisão (`ranking.por_divisao`
+ * desligado, D27): a posição é a do ranking único, de todas as células. A coluna "Divisão" continua (é o dado da
+ * hierarquia, como "Rede").
+ */
+export const TITULO_POSICAO_RANKING_UNICO = "Posição no ranking";
+
+/**
+ * O título de uma coluna na unidade da meta da campanha. `porDivisao` é o `ranking.por_divisao` da campanha (padrão:
+ * separa); só muda o título da posição.
+ */
 export function tituloDaColuna(
   coluna: ColunaRelatorio,
   unidade: UnidadeMeta,
+  porDivisao = true,
 ): string {
+  if (coluna === "posicao_divisao" && !porDivisao)
+    return TITULO_POSICAO_RANKING_UNICO;
   const titulo: string | Record<UnidadeMeta, string> =
     TITULOS_COLUNAS_RELATORIO[coluna];
   return typeof titulo === "string" ? titulo : titulo[unidade];
@@ -170,9 +184,10 @@ export function tituloDaColuna(
 export function cabecalhoDoRelatorio(
   tipo: TipoRelatorio,
   unidade: UnidadeMeta,
+  porDivisao = true,
 ): string[] {
   return COLUNAS_RELATORIO[tipo].map((coluna) =>
-    tituloDaColuna(coluna, unidade),
+    tituloDaColuna(coluna, unidade, porDivisao),
   );
 }
 
@@ -187,7 +202,7 @@ export const TEXTO_FASE_RELATORIO = {
   encerrada: "Encerrada",
 } as const satisfies Record<FaseCampanha, string>;
 
-/** "Critério do ranking" nos totais: o que ordena a "Posição na divisão" dos outros tipos. */
+/** "Critério do ranking" nos totais: o que ordena a "Posição na divisão" (ou "Posição no ranking") dos outros tipos. */
 export const TEXTO_CRITERIO_RELATORIO = {
   percentual_meta: "% da meta",
   bilhetes: "Bilhetes",

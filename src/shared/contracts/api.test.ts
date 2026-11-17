@@ -284,6 +284,22 @@ describe("CA3: rotas abertas nunca devolvem valores financeiros", () => {
       );
   });
 
+  it("RIFA-061 (D27): a marca por_divisao só aparece com false (sem ranking por divisão), no público e na coordenação", () => {
+    const unico = { ...rankingPublico, por_divisao: false };
+    expect(respostaRankingPublicoSchema.safeParse(unico).success).toBe(true);
+    for (const por_divisao of [true, "false", null])
+      expect(
+        respostaRankingPublicoSchema.safeParse({
+          ...rankingPublico,
+          por_divisao,
+        }).success,
+      ).toBe(false);
+    const coordenacao = respostaRankingSchema.shape.por_divisao;
+    expect(coordenacao.safeParse(undefined).success).toBe(true);
+    expect(coordenacao.safeParse(false).success).toBe(true);
+    expect(coordenacao.safeParse(true).success).toBe(false);
+  });
+
   it("o bumbo é estrito: só data, referência, texto e gerado_em", () => {
     const bumbo = {
       data: "2026-12-02",
@@ -306,6 +322,8 @@ describe("CA3: rotas abertas nunca devolvem valores financeiros", () => {
       // ranking público
       "nivel",
       "divisao",
+      // RIFA-061 (D27): só a marca false, sem valor nenhum.
+      "por_divisao",
       "janela",
       "tipo",
       "ordem",
@@ -888,6 +906,7 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
         "percentual_meta_bp",
         "periodo",
         "pessoa",
+        "por_divisao",
         "posicao",
         "posicao_divisao",
         "primeiros",
@@ -1224,9 +1243,18 @@ describe("RIFA-014 (D12): visão individual sem dinheiro e com o alvo só da ses
       },
     };
     expect(valida({ ...visao, desempenho: semMeta, curva: [] })).toBe(true);
+    // RIFA-061 (D27): sem ranking por divisão, a posição "na divisão" é a geral (a mesma, inteira).
+    expect(
+      valida({
+        ...visao,
+        ranking: { ...ranking, por_divisao: false, divisao: ranking.geral },
+      }),
+    ).toBe(true);
     const invalidas: unknown[] = [
       { ...visao, ranking: { ...ranking, geral: null } },
       { ...visao, ranking: { ...ranking, divisao: null } },
+      { ...visao, ranking: { ...ranking, por_divisao: false } },
+      { ...visao, ranking: { ...ranking, por_divisao: true } },
       { ...visao, equipe: [{ ...celulaDaEquipe, posicao_divisao: null }] },
       { ...visao, desempenho: semMeta },
       { ...visao, curva: curva.slice(0, 23) },
