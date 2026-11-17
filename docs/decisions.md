@@ -1525,3 +1525,8 @@ ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apr
   site não chega a `/exemplo` até ela ser refeita. Refazer: gravar de novo a partir da versão do site que se quer
   mostrar, `VITE_ROTEADOR=hash npx vite build --base /exemplo/` e trocar a pasta `public/exemplo/` inteira (os nomes dos
   arquivos de `assets/` mudam a cada build). Apagar `public/exemplo/` tira a página do ar no próximo push na `main`.
+  Pendência (revisão): as ferramentas da gravação (o servidor local com o relógio simulado, o cenário das vendas
+  fictícias, a gravação por papel e a montagem do `index.html`) ainda não estão no repositório; até entrarem (por
+  exemplo em `scripts/apresentacao/`), refazer não sai só daqui.
+- **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
+  `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
