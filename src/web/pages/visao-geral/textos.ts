@@ -360,7 +360,9 @@ export function descricaoDaCurva(resumo: RespostaPainelResumo): string {
 
 /**
  * Relatório da campanha (RIFA-038, D23): o nome e uma linha que explica cada tipo, em linguagem simples. A ordem
- * da tela é a de TIPOS_RELATORIO (contrato); um tipo novo no contrato falha aqui no typecheck.
+ * da tela é a de TIPOS_RELATORIO (contrato); um tipo novo no contrato falha aqui no typecheck. RIFA-061 (D27): "posição
+ * no ranking" vale com e sem ranking por divisão (a coluna do arquivo diz "Posição na divisão" ou "Posição no
+ * ranking"; o cartão não lê a campanha).
  */
 export const TEXTOS_TIPO_RELATORIO = {
   totais: {
@@ -371,17 +373,17 @@ export const TEXTOS_TIPO_RELATORIO = {
   celulas: {
     rotulo: "Por célula",
     descricao:
-      "Cada célula com rede, discipulador, líder, vendas, % da meta e posição na divisão.",
+      "Cada célula com rede, discipulador, líder, vendas, % da meta e posição no ranking.",
   },
   discipuladores: {
     rotulo: "Por discipulador",
     descricao:
-      "Cada discipulador com a soma das células dele, % da meta e posição na divisão.",
+      "Cada discipulador com a soma das células dele, % da meta e posição no ranking.",
   },
   redes: {
     rotulo: "Por rede",
     descricao:
-      "Cada rede com a soma das células dela, % da meta e posição na divisão.",
+      "Cada rede com a soma das células dela, % da meta e posição no ranking.",
   },
   periodos: {
     rotulo: "Por período",
