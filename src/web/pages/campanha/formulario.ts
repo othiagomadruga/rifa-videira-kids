@@ -9,6 +9,7 @@ import {
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
   PUBLICO_PADRAO,
+  RANKING_POR_DIVISAO_PADRAO,
   TIPOS_MENSAGEM,
   calcularCalendario,
   corpoSalvarCampanhaSchema,
@@ -48,6 +49,8 @@ export type Formulario = {
   meta_valor: string;
   periodos: PeriodoFormulario[];
   ranking_criterio: CriterioRanking | "";
+  /** RIFA-061 (D27): separa o ranking por divisão (Jovens e Adultos) ou um ranking só. */
+  ranking_por_divisao: boolean;
   publico_mostra_percentual_meta: boolean;
   /** "" = todas as posições (null na API). */
   publico_limite_ranking: string;
@@ -115,6 +118,7 @@ export function formularioVazio(): Formulario {
     meta_valor: "",
     periodos: [],
     ranking_criterio: "",
+    ranking_por_divisao: RANKING_POR_DIVISAO_PADRAO,
     publico_mostra_percentual_meta: PUBLICO_PADRAO.mostra_percentual_meta,
     publico_limite_ranking: String(PUBLICO_PADRAO.limite_ranking),
     pedidos_desconsiderar: PEDIDOS_PADRAO.desconsiderar,
@@ -144,6 +148,7 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
       percentual: percentualParaTexto(periodo.percentual_bp),
     })),
     ranking_criterio: campanha.ranking.criterio,
+    ranking_por_divisao: campanha.ranking.por_divisao,
     publico_mostra_percentual_meta: campanha.publico.mostra_percentual_meta,
     publico_limite_ranking:
       campanha.publico.limite_ranking === null
@@ -365,7 +370,11 @@ export function montarCorpo(
         "Use um percentual de 0 a 100, com até 2 casas decimais. Ex.: 35 ou 12,5.",
       ),
     })),
-    ranking: { criterio: formulario.ranking_criterio },
+    // RIFA-061: a opção vai sempre (é do grupo ranking, que a coordenação também muda, como o critério).
+    ranking: {
+      criterio: formulario.ranking_criterio,
+      por_divisao: formulario.ranking_por_divisao,
+    },
     publico: {
       mostra_percentual_meta: formulario.publico_mostra_percentual_meta,
       limite_ranking:
@@ -425,6 +434,7 @@ const MENSAGEM_DO_CAMPO: Record<string, string> = {
   "periodos.*.dias": "Use um número inteiro de 1 a 366.",
   "periodos.*.percentual_bp": "Use um percentual de 0 a 100.",
   "ranking.criterio": "Escolha o critério do ranking.",
+  "ranking.por_divisao": "Marque ou desmarque esta opção.",
   "publico.mostra_percentual_meta": "Marque ou desmarque esta opção.",
   "publico.limite_ranking":
     "Use um número inteiro de 1 a 100, ou deixe em branco para mostrar todas.",
@@ -493,6 +503,7 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   "meta.valor": "Valor da meta",
   periodos: "Períodos",
   "ranking.criterio": "Critério do ranking",
+  "ranking.por_divisao": "Separar o ranking por divisão",
   "publico.mostra_percentual_meta": "Percentual da meta no ranking público",
   "publico.limite_ranking": "Posições no ranking público",
   "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
@@ -521,6 +532,7 @@ const ORDEM_DOS_CAMPOS = [
   "meta.regra",
   "meta.valor",
   "ranking.criterio",
+  "ranking.por_divisao",
   "publico.mostra_percentual_meta",
   "publico.limite_ranking",
   "pedidos.desconsiderar",
