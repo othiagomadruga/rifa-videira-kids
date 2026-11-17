@@ -23,6 +23,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "afiliado.remover": "Afiliado removido",
   // RIFA-039 (D21): o token do webhook gerado pela tela (aba Webhook da Rifei de Acessos; alvo `webhook`).
   "webhook.gerar_token": "Token do webhook gerado",
+  // RIFA-064 (D29): cada entrada de uma célula com a senha padrão (tela Entrar; alvo `celula:<id>`).
+  "sessao.entrar_com_senha": "Célula entrou com a senha padrão",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */

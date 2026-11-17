@@ -218,7 +218,8 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
       mensagens: gravada.mensagens,
     }).toEqual({
       pedidos: { desconsiderar: true },
-      acesso: { discipuladores: true, redes: false },
+      // RIFA-064 (D29): a chave do login das células com senha, ausente no corpo, fica com o padrão (ligada).
+      acesso: { discipuladores: true, redes: false, celulas_senha: true },
       mensagens,
     });
     // O modelo igual ao padrão fica NULL (= o padrão); o editado, com o texto.

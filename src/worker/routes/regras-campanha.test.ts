@@ -1238,7 +1238,7 @@ describe("RIFA-042 (CA1): pedidos, acesso e mensagens da campanha são só do ad
     expect(criada.status).toBe(200);
     expect(gruposDe(campanhaSchema.parse(criada.corpo))).toEqual({
       pedidos: { desconsiderar: false },
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: MENSAGENS_PADRAO,
     });
   });
@@ -1261,7 +1261,7 @@ describe("RIFA-042 (CA1): pedidos, acesso e mensagens da campanha são só do ad
     expect(resposta.status).toBe(200);
     expect(gruposDe(campanhaSchema.parse(resposta.corpo))).toEqual({
       pedidos: { desconsiderar: false },
-      acesso: { discipuladores: true, redes: false },
+      acesso: { discipuladores: true, redes: false, celulas_senha: true },
       mensagens: { ...MENSAGENS_PADRAO, link_rede: modeloDoAdmin },
     });
     expect((await lerCampanha()).nome).toBe("Rifa da coordenação");

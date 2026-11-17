@@ -45,8 +45,16 @@ export const PEDIDOS_PADRAO = { desconsiderar: false } as const;
 // RIFA-029: acesso de discipuladores e de redes (líderes não são afetados)
 // ---------------------------------------------------------------------------------------------------
 
-/** `acesso` da campanha: os dois acessos começam ligados (como hoje). */
-export const ACESSO_PADRAO = { discipuladores: true, redes: true } as const;
+/**
+ * `acesso` da campanha: os dois acessos começam ligados (como hoje). RIFA-064 (D29): `celulas_senha`, o login de cada
+ * célula com a senha padrão (login-celula.ts), também começa ligado: foi o PO que pediu, para esta campanha, e
+ * desligado nenhuma célula entraria por senha no primeiro dia sem alguém lembrar de ligar. Só o admin desliga.
+ */
+export const ACESSO_PADRAO = {
+  discipuladores: true,
+  redes: true,
+  celulas_senha: true,
+} as const;
 export type ChaveDeAcesso = keyof typeof ACESSO_PADRAO;
 
 /** Os papéis que têm chave de acesso na campanha. O `lider` não tem: entra sempre. */
@@ -64,7 +72,9 @@ export const CHAVE_DE_ACESSO_DO_PAPEL = {
  * e a coordenação, nunca. Sem campanha ativa, vale ACESSO_PADRAO.
  */
 export function acessoDoPapelLigado(
-  acesso: Readonly<Record<ChaveDeAcesso, boolean>>,
+  acesso: Readonly<
+    Record<(typeof CHAVE_DE_ACESSO_DO_PAPEL)[PapelComChaveDeAcesso], boolean>
+  >,
   papel: Papel,
 ): boolean {
   return papel === "discipulador" || papel === "rede"

@@ -67,7 +67,7 @@ describe("CA1: as chaves da campanha", () => {
       campanha: {
         ...CONFIGURADA,
         pedidos: { desconsiderar: true },
-        acesso: { discipuladores: true, redes: false },
+        acesso: { discipuladores: true, redes: false, celulas_senha: true },
       },
     });
 
@@ -415,7 +415,7 @@ describe("RIFA-042 (CA2): para a coordenação, pedidos, acesso e mensagens fica
   const SALVA = {
     ...CONFIGURADA,
     pedidos: { desconsiderar: true },
-    acesso: { discipuladores: true, redes: false },
+    acesso: { discipuladores: true, redes: false, celulas_senha: true },
     mensagens: { ...MENSAGENS_PADRAO, link_lider: modeloLider },
   };
 

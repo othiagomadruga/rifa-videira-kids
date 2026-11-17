@@ -182,10 +182,27 @@ export const pedidosConfigSchema = z.object({
  * /api/minha/* (403 `acesso_desligado`), e a tela Acessos não gera link do papel (409 `acao_desligada`). Os links
  * e as sessões que já existem não são apagados: voltam a valer quando a chave volta. Os líderes não têm chave.
  * Padrão: os dois ligados (ACESSO_PADRAO).
+ *
+ * RIFA-064 (D29): `celulas_senha`, o login de cada célula com a senha padrão (POST /api/sessao/senha;
+ * login-celula.ts). Desligado, o login por senha é recusado (401, a mesma resposta da senha errada) e as sessões
+ * abertas por senha deixam de valer (401); o link pessoal do líder não muda. Padrão: ligado (ACESSO_PADRAO). O
+ * `.default()` é da transição: enquanto a API não grava a chave (migração 0013), o parse do `montarCampanha` completa
+ * com o padrão, que é o que vale.
  */
 export const acessoConfigSchema = z.object({
   discipuladores: z.boolean(),
   redes: z.boolean(),
+  celulas_senha: z.boolean().default(ACESSO_PADRAO.celulas_senha),
+});
+
+/**
+ * `acesso` na entrada (PUT). `celulas_senha` ausente mantém o gravado (no primeiro PUT, o padrão), como um grupo
+ * ausente (D20): um corpo que não conhece a chave (uma aba antiga do site) não a liga nem a desliga.
+ */
+export const acessoConfigEntradaSchema = z.object({
+  discipuladores: z.boolean(),
+  redes: z.boolean(),
+  celulas_senha: z.boolean().optional(),
 });
 
 /** Um modelo de mensagem (RIFA-032): texto com marcadores (regras.ts), até LIMITE_CARACTERES_MENSAGEM. */
@@ -257,7 +274,7 @@ export const campanhaEntradaSchema = z.object({
    * grupos (uma aba antiga do site) não religa nem desliga nada.
    */
   pedidos: pedidosConfigSchema.optional(),
-  acesso: acessoConfigSchema.optional(),
+  acesso: acessoConfigEntradaSchema.optional(),
   mensagens: mensagensConfigSchema.optional(),
 });
 export type CampanhaEntrada = z.input<typeof campanhaEntradaSchema>;
