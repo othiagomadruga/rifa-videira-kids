@@ -4,7 +4,13 @@ import {
   type RespostaRanking,
   type UnidadeMeta,
 } from "../../../shared/contracts/calculos";
-import { Badge, ProgressBar } from "../../components/ui";
+import { useId, type ReactNode } from "react";
+import {
+  Badge,
+  ComAjuda,
+  ProgressBar,
+  type TextoDeAjuda,
+} from "../../components/ui";
 import {
   TEXTO_COLUNA_VALORES,
   TEXTO_NIVEL,
@@ -13,6 +19,7 @@ import {
   realizadoEMeta,
   textoDaFalta,
 } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
 export const POSICOES_EM_DESTAQUE = 3;
@@ -46,15 +53,15 @@ export function TabelaRanking({ resposta }: Props) {
             <th scope="col" role="columnheader">
               {textos.coluna}
             </th>
-            <th scope="col" role="columnheader">
+            <ColunaComAjuda texto={ajuda("colunaPercentual")}>
               % da meta
-            </th>
+            </ColunaComAjuda>
             <th scope="col" role="columnheader" data-alinhamento="fim">
               {TEXTO_COLUNA_VALORES[unidade]}
             </th>
-            <th scope="col" role="columnheader">
+            <ColunaComAjuda texto={ajuda("colunaSituacao")}>
               Situação
-            </th>
+            </ColunaComAjuda>
           </tr>
         </thead>
         <tbody role="rowgroup">
@@ -154,4 +161,25 @@ function vinculoDoItem(item: ItemRanking, resposta: RespostaRanking): string {
   if (item.discipulador) partes.push(item.discipulador.nome);
   if (item.rede) partes.push(item.rede.nome);
   return partes.join(" · ");
+}
+
+/**
+ * Cabeçalho de coluna com a ajuda (RIFA-066): o "?" fica dentro do <th>, que se chama só pelo texto (aria-labelledby;
+ * sem isso, o nome da coluna levaria o "Ajuda: ..." do botão).
+ */
+function ColunaComAjuda({
+  texto,
+  children,
+}: {
+  texto: TextoDeAjuda;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <th scope="col" role="columnheader" aria-labelledby={id}>
+      <ComAjuda texto={texto} idDoTitulo={id}>
+        <span id={id}>{children}</span>
+      </ComAjuda>
+    </th>
+  );
 }

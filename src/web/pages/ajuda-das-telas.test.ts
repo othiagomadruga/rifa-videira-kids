@@ -37,6 +37,11 @@ describe("os textos de ajuda", () => {
     expect(Object.keys(AJUDA)).toHaveLength(chaves.length);
   });
 
+  it("os textos das telas da coordenação que carregam com o site não falam de dinheiro em R$ (o bumbo também os usa)", () => {
+    for (const [chave, texto] of textos(AJUDA))
+      expect(texto, chave).not.toMatch(/R\$/);
+  });
+
   it.each(TODOS)(
     "%s: até 3 frases curtas (até 260 caracteres), com ponto final",
     (_chave, texto) => {

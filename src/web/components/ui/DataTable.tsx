@@ -68,6 +68,10 @@ export function DataTable<T>({
                 scope="col"
                 role="columnheader"
                 data-alinhamento={coluna.alinhamento}
+                // Com a ajuda, a coluna se chama só pelo texto (sem o "Ajuda: ..." do "?" de dentro).
+                aria-labelledby={
+                  coluna.ajuda ? `${idTabela}-${coluna.chave}` : undefined
+                }
               >
                 {coluna.ajuda ? (
                   <ComAjuda

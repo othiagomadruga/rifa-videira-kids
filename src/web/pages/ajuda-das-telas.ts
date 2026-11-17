@@ -3,10 +3,24 @@
 // vez de um por tela) pesa menos nele. Cada tela escreve os dela no próprio `ajuda.ts`; as chaves não se repetem
 // entre as telas (`ajuda-das-telas.test.ts` confere). As telas `lazy` deixam os textos no `textos.ts` delas.
 import { AJUDA as ADESAO } from "./adesao/ajuda";
+import { AJUDA as BUMBO } from "./bumbo/ajuda";
 import { AJUDA as HIERARQUIA } from "./hierarquia/ajuda";
+import { AJUDA as RANKINGS } from "./rankings/ajuda";
 import { AJUDA as VISAO_GERAL } from "./visao-geral/ajuda";
 
 /** Todas as telas juntas: as chaves de cada uma não se repetem nas outras. */
-export const AJUDA_DAS_TELAS = [VISAO_GERAL, HIERARQUIA, ADESAO] as const;
+export const AJUDA_DAS_TELAS = [
+  VISAO_GERAL,
+  HIERARQUIA,
+  ADESAO,
+  RANKINGS,
+  BUMBO,
+] as const;
 
-export const AJUDA = { ...VISAO_GERAL, ...HIERARQUIA, ...ADESAO };
+export const AJUDA = {
+  ...VISAO_GERAL,
+  ...HIERARQUIA,
+  ...ADESAO,
+  ...RANKINGS,
+  ...BUMBO,
+};

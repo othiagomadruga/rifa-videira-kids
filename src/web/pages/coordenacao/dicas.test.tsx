@@ -42,7 +42,7 @@ import {
 } from "../pedidos/teste-apoio";
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia", "Adesão"]);
+const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia", "Adesão", "Rankings", "Bumbo"]);
 
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);

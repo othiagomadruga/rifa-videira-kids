@@ -385,6 +385,10 @@ describe("título da tela, números e colunas", () => {
     expect(ajuda("Campanha")).toBeInTheDocument();
     expect(ajuda("Vendidos")).toBeInTheDocument();
     expect(ajuda("Meta")).toBeInTheDocument();
+    // O nome da coluna continua só o texto dela.
+    expect(
+      screen.getByRole("columnheader", { name: "Meta" }),
+    ).toBeInTheDocument();
     tocar(ajuda("Meta"));
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "Quantos bilhetes a célula deve vender.",

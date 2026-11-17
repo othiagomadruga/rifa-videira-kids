@@ -5,6 +5,12 @@ import { describe, expect, it } from "vitest";
 
 const PASTA = "/src/web/pages/bumbo/";
 
+/** O que o bumbo pode importar de fora da pasta para a ajuda dos títulos (RIFA-066). */
+const AJUDA_PERMITIDA = [
+  "/src/web/pages/coordenacao/textos",
+  "/src/web/pages/ajuda-sob-demanda",
+];
+
 /** O código da tela (sem os testes nem o apoio deles). */
 const FONTES = import.meta.glob<string>(
   ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
@@ -87,8 +93,13 @@ describe("de onde o bumbo importa", () => {
       for (const { trecho, destino, soTipo } of importacoes(arquivo, fonte)) {
         vistas.push(destino);
         const contexto = `${arquivo}: ${trecho}`;
-        // Outras telas, nunca: nem as públicas (ranking público, telão) nem as da coordenação.
-        if (destino.startsWith("/src/web/pages/"))
+        // Outras telas, nunca: nem as públicas (ranking público, telão) nem as da coordenação. A ajuda dos títulos
+        // (RIFA-066) pode: o texto do menu da coordenação (o título da tela) e o carregador comum da ajuda das telas
+        // da coordenação, que só traz textos (sem dinheiro: ajuda-das-telas.test.ts confere).
+        if (
+          destino.startsWith("/src/web/pages/") &&
+          !AJUDA_PERMITIDA.includes(destino)
+        )
           expect(destino.startsWith(PASTA), contexto).toBe(true);
         // O apoio dos testes não entra no pacote.
         expect(destino, contexto).not.toMatch(/teste-apoio/);

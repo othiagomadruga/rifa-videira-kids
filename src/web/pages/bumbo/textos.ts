@@ -181,7 +181,6 @@ export const NOTA_DO_TEXTO_PURO =
   "No WhatsApp, o que está entre *asteriscos* sai em negrito, e entre _sublinhados_, em itálico.";
 
 export const DICAS = {
-  dia: "Mostra a mensagem de outro dia da campanha, para conferir ou mandar de novo. Hoje vem escolhido.",
   enviarNoWhatsApp:
     "Abre o WhatsApp com a mensagem já escrita. Lá você escolhe o grupo dos líderes e envia.",
   copiar:
