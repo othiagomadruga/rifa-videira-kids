@@ -148,7 +148,8 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
       percentual: percentualParaTexto(periodo.percentual_bp),
     })),
     ranking_criterio: campanha.ranking.criterio,
-    ranking_por_divisao: campanha.ranking.por_divisao,
+    // Só false desliga: uma resposta sem a opção (API de antes dela) vale o padrão.
+    ranking_por_divisao: campanha.ranking.por_divisao !== false,
     publico_mostra_percentual_meta: campanha.publico.mostra_percentual_meta,
     publico_limite_ranking:
       campanha.publico.limite_ranking === null
