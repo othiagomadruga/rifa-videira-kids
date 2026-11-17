@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -25,6 +26,7 @@ import {
 } from "../../components/ui";
 import { TextoContado } from "../../components/movimento";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
+import { contarRedes, useRedes } from "../../lib/redes";
 import { useUsuarioConectado } from "../../lib/sessao";
 import {
   LOCALIDADE,
@@ -340,6 +342,12 @@ function Filtros({
 }) {
   const ativos = quantosFiltros(filtros);
   const grupos = celulas.tipo === "ok" ? celulasPorRede(celulas.celulas) : [];
+  // As células trazem a hierarquia toda: com uma rede só, a lista sai sem o grupo com o nome dela (RIFA-065, D30).
+  const redeUnica = useRedes(
+    celulas.tipo === "ok"
+      ? contarRedes(celulas.celulas.map((celula) => celula.rede_id))
+      : null,
+  ).unica;
   const celulaAtual = filtros.celula;
   // A célula da URL ainda não está na lista (não chegou, falhou ou saiu da hierarquia): uma opção só para ela.
   const avulsa =
@@ -421,15 +429,20 @@ function Filtros({
             {avulsa !== null && (
               <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
             )}
-            {grupos.map((grupo) => (
-              <optgroup key={grupo.rede} label={grupo.rede}>
-                {grupo.celulas.map((celula) => (
-                  <option key={celula.id} value={valorDaCelula(celula.id)}>
-                    {celula.nome}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
+            {grupos.map((grupo) => {
+              const opcoes = grupo.celulas.map((celula) => (
+                <option key={celula.id} value={valorDaCelula(celula.id)}>
+                  {celula.nome}
+                </option>
+              ));
+              return redeUnica ? (
+                <Fragment key={grupo.rede}>{opcoes}</Fragment>
+              ) : (
+                <optgroup key={grupo.rede} label={grupo.rede}>
+                  {opcoes}
+                </optgroup>
+              );
+            })}
           </Select>
         </ComDica>
         <ComDica texto={DICAS.filtroDesconsiderados}>

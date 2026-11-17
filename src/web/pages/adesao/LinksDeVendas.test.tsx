@@ -71,7 +71,14 @@ function celulasDaReuniao(): CelulaAdesao[] {
       vinculada: true,
     }),
     celula(2, "Célula Betel", { afiliados: [1002], vinculada: true }),
-    celula(3, "Célula Canaã"),
+    // Em outra rede: com uma rede só, a tela não mostraria a rede no cartão (RIFA-065, D30).
+    celula(3, "Célula Canaã", {
+      discipulador_id: 2,
+      discipulador_nome: "Discipulador Ficticio B",
+      rede_id: 2,
+      rede_nome: "Rede Adulta Ficticia",
+      divisao: "adultos",
+    }),
   ];
 }
 

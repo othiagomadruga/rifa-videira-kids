@@ -29,6 +29,7 @@ import {
   type PapelHierarquia,
   type Usuario,
 } from "../../../shared/contracts";
+import { ehListaDasRedes, respostaRedes } from "../../test/redes";
 import { ADMIN_DE_TESTE, respostaJson } from "../../test/renderizar";
 
 const AGORA = "2026-11-10T22:00:00.000Z";
@@ -586,8 +587,18 @@ export function criarApiFalsa(
     return respostaErro(404, "nao_encontrado", "Rota não encontrada");
   }
 
+  /**
+   * A lista das redes (RIFA-065, D30: a tela pergunta quantas há): `redes.quantidade` redes (padrão: duas, a tela
+   * como sempre foi); cada pedido fica em `redes.pedidos`, fora de `chamadas`.
+   */
+  const redes = { quantidade: 2, pedidos: 0 };
+
   const fetchFalso = vi.fn(
     async (entrada: string | URL | Request, init?: RequestInit) => {
+      if (ehListaDasRedes(String(entrada), init?.method ?? "GET")) {
+        redes.pedidos += 1;
+        return respostaRedes(redes.quantidade);
+      }
       const url = new URL(String(entrada), window.location.origin);
       const chamada: Chamada = {
         metodo: init?.method ?? "GET",
@@ -613,6 +624,7 @@ export function criarApiFalsa(
   return {
     fetch: fetchFalso,
     regras,
+    redes,
     sessao,
     pessoas,
     alvos,

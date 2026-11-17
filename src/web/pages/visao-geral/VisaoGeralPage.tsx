@@ -10,6 +10,7 @@ import {
 } from "../../components/ui";
 import { ErroApi, ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
+import { contarRedes, useRedes } from "../../lib/redes";
 import { AlertaWebhook } from "../pedidos/AlertaWebhook";
 import { AvisosVendas } from "./AvisosVendas";
 import { CartaoCampanha, CartaoHoje, CartaoPeriodo } from "./Cartoes";
@@ -54,6 +55,13 @@ export function VisaoGeralPage() {
   const { estado, atualizando, atualizarAgora, tentarDeNovo } =
     usePainelResumo(escopo);
   const celulas = useCelulasDoFiltro();
+  // As células trazem a hierarquia toda: com uma rede só, o filtro, os avisos e o relatório não citam a rede
+  // (RIFA-065, D30). Contadas aqui, avisam o resto da tela (e do site) antes da pintura.
+  useRedes(
+    celulas.estado.tipo === "ok"
+      ? contarRedes(celulas.estado.celulas.map((celula) => celula.rede_id))
+      : null,
+  );
   // Depois que a pessoa troca o filtro, a região viva diz o recorte que entrou (na carga inicial, não).
   const [trocouFiltro, setTrocouFiltro] = useState(false);
 

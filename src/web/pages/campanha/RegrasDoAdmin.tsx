@@ -3,7 +3,8 @@
 // `preencherMensagem` (a mesma que a tela Acessos usa) e os problemas do modelo enquanto a pessoa digita.
 // Só o admin muda esses três grupos (RIFA-042): para a coordenação, os dois cartões ficam só leitura, com o aviso
 // "Só o admin muda estas regras." (as caixas com `aria-disabled` e os textos com `readOnly`, focáveis e descritos
-// pelo aviso; o resumo "Regras da campanha" continua levando o foco a eles).
+// pelo aviso; o resumo "Regras da campanha" continua levando o foco a eles). Com uma rede só (RIFA-065, D30), sem a
+// chave do acesso das redes nem a mensagem do link da rede: o valor gravado fica como está e vai igual no PUT.
 import { useId } from "react";
 import {
   LIMITE_CARACTERES_MENSAGEM,
@@ -69,6 +70,22 @@ const ORDEM_DAS_CHAVES: readonly ChaveDoFormulario[] = [
   "acesso_redes",
 ];
 
+/** As chaves que a tela mostra: com uma rede só (D30), sem o acesso das redes. */
+export function chavesVisiveis(
+  redeUnica: boolean,
+): readonly ChaveDoFormulario[] {
+  return redeUnica
+    ? ORDEM_DAS_CHAVES.filter((chave) => chave !== "acesso_redes")
+    : ORDEM_DAS_CHAVES;
+}
+
+/** As mensagens que a tela mostra: com uma rede só (D30), sem a do link da rede. */
+export function mensagensVisiveis(redeUnica: boolean): readonly TipoMensagem[] {
+  return redeUnica
+    ? TIPOS_MENSAGEM.filter((tipo) => tipo !== "link_rede")
+    : TIPOS_MENSAGEM;
+}
+
 /** O título do aviso dos grupos só do admin, para a coordenação (RIFA-042). */
 export const TEXTO_SO_ADMIN = "Só o admin muda estas regras.";
 
@@ -85,6 +102,8 @@ type PropsChaves = {
   formulario: Formulario;
   /** Coordenação (RIFA-042): as chaves aparecem como estão, sem mudar. */
   somenteLeitura: boolean;
+  /** Uma rede só (D30): sem a chave do acesso das redes. */
+  redeUnica?: boolean;
   idDoCampo: (chave: string) => string;
   aoAlterar: (chave: ChaveDoFormulario, ligada: boolean) => void;
 };
@@ -93,6 +112,7 @@ type PropsChaves = {
 export function ChavesDaCampanha({
   formulario,
   somenteLeitura,
+  redeUnica = false,
   idDoCampo,
   aoAlterar,
 }: PropsChaves) {
@@ -108,7 +128,7 @@ export function ChavesDaCampanha({
           Os líderes de célula entram sempre.
         </p>
         <ul className="campanha-chaves">
-          {ORDEM_DAS_CHAVES.map((chave) => {
+          {chavesVisiveis(redeUnica).map((chave) => {
             const id = idDoCampo(CAMINHO_DA_CHAVE[chave]);
             const texto = TEXTO_DA_CHAVE[chave];
             const ligada = formulario[chave];
@@ -191,6 +211,10 @@ const EXPLICACAO_DO_MARCADOR: Record<string, string> = {
   link: "{link} = o link pessoal (obrigatório)",
 };
 
+/** Com uma rede só (D30), o {alvo} sem a rede. */
+const EXPLICACAO_DO_ALVO_REDE_UNICA =
+  "{alvo} = o nome da célula ou do discipulador";
+
 /**
  * Os problemas do modelo como a pessoa digitou, em português: os do contrato (marcador desconhecido, falta do
  * {link}) e o tamanho (vazio ou acima do limite).
@@ -215,6 +239,8 @@ type PropsMensagens = {
   mensagens: Formulario["mensagens"];
   /** Coordenação (RIFA-042): os modelos aparecem como estão (com a pré-visualização), sem editar. */
   somenteLeitura: boolean;
+  /** Uma rede só (D30): sem a mensagem do link da rede, e o {alvo} sem a rede. */
+  redeUnica?: boolean;
   /** Os erros do último "Salvar" (do contrato ou da API). */
   erros: ErrosFormulario;
   idDoCampo: (chave: string) => string;
@@ -226,6 +252,7 @@ type PropsMensagens = {
 export function MensagensDoLink({
   mensagens,
   somenteLeitura,
+  redeUnica = false,
   erros,
   idDoCampo,
   aoAlterar,
@@ -242,10 +269,11 @@ export function MensagensDoLink({
             : "O texto que vai pelo WhatsApp com o link de cada pessoa (tela Acessos). Escreva os marcadores entre chaves, como estão na dica: o sistema troca cada um pelo valor de quem recebe."}{" "}
           O bumbo não muda aqui.
         </p>
-        {TIPOS_MENSAGEM.map((tipo) => (
+        {mensagensVisiveis(redeUnica).map((tipo) => (
           <EditorMensagem
             key={tipo}
             tipo={tipo}
+            redeUnica={redeUnica}
             texto={mensagens[tipo]}
             idAvisoSoAdmin={somenteLeitura ? idAviso : null}
             erroAoSalvar={erros[`mensagens.${tipo}`]}
@@ -261,6 +289,7 @@ export function MensagensDoLink({
 
 function EditorMensagem({
   tipo,
+  redeUnica,
   texto,
   idAvisoSoAdmin,
   erroAoSalvar,
@@ -269,6 +298,7 @@ function EditorMensagem({
   aoVoltarAoPadrao,
 }: {
   tipo: TipoMensagem;
+  redeUnica: boolean;
   texto: string;
   /** O aviso "Só o admin muda estas regras." (só leitura), ou null (o admin edita). */
   idAvisoSoAdmin: string | null;
@@ -305,7 +335,11 @@ function EditorMensagem({
           id={id}
           rotulo={ROTULO_MENSAGEM[tipo]}
           dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
-            .map((marcador) => EXPLICACAO_DO_MARCADOR[marcador])
+            .map((marcador) =>
+              redeUnica && marcador === "alvo"
+                ? EXPLICACAO_DO_ALVO_REDE_UNICA
+                : EXPLICACAO_DO_MARCADOR[marcador],
+            )
             .join("; ")}.`}
           erro={erro}
           value={texto}
