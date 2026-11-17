@@ -262,6 +262,37 @@ export function totaisDepoisDe(
 // tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * Ajuda (RIFA-066, D31): a explicação dos títulos e dos rótulos, com o mouse no título (ou no campo) e no "?" ao lado
+ * dele: o que é, para que serve e um exemplo. Nos campos, é também a dica do campo.
+ */
+export const AJUDA = {
+  totais:
+    "Quantos pedidos há em cada situação, com os bilhetes e o valor. Serve para conferir a campanha de relance: só os aprovados contam nas vendas.",
+  status: {
+    approved:
+      "Pedidos pagos e confirmados pela Rifei. São os únicos que contam nas metas, nos rankings e no telão.",
+    in_process:
+      "Pedidos feitos na Rifei que ainda esperam o pagamento. Ex.: o Pix foi gerado e não foi pago. Passam a contar quando a Rifei avisar que foram pagos.",
+    expired:
+      "Pedidos que não foram pagos no prazo e a Rifei encerrou. Não contam nas vendas.",
+  } satisfies Record<StatusPedido, string>,
+  filtroStatus:
+    "A situação do pedido na Rifei: aguardando pagamento, aprovado ou expirado. Ex.: escolha Aprovados para ver só o que conta nas vendas.",
+  filtroCelula:
+    "Mostra só os pedidos de uma célula, ou os que chegaram sem célula; os totais seguem a escolha. Ex.: a célula de um líder que diz que uma venda não apareceu.",
+  filtroDesconsiderados:
+    "Pedidos que o admin tirou das contas (teste, fraude ou estorno). Escolha ver todos, só os que contam ou só os tirados.",
+  campoBusca:
+    "Procura um pedido pelo id completo, como aparece na Rifei, junto com os outros filtros. Ex.: o id que o comprador mandou no print.",
+  motivo:
+    "Por que o pedido sai das contas: teste, fraude ou estorno. Fica gravado com o pedido e na trilha, para quem conferir depois.",
+  observacao:
+    "Um detalhe para quem conferir depois, como o número do estorno. Não escreva nome, telefone, e-mail nem documento do comprador.",
+  filtroResultado:
+    "O que aconteceu com cada aviso de venda que a Rifei mandou: processado, repetido, ignorado ou com erro. Ex.: escolha os com erro para ver o que falhou.",
+} as const;
+
 export const DICAS = {
   abaPedidos:
     "Os pedidos que chegaram da Rifei, do mais novo para o mais antigo, com os totais por status.",
@@ -269,14 +300,6 @@ export const DICAS = {
     "Cada aviso de venda que a Rifei mandou e o que o sistema fez com ele. Serve para achar pedido com erro.",
   filtros:
     "Mostra ou esconde os filtros da lista: status, célula, desconsiderados e a busca pelo id do pedido.",
-  filtroStatus:
-    "Mostra só os pedidos com o status escolhido. Só os aprovados contam nas vendas.",
-  filtroCelula:
-    "Mostra só os pedidos de uma célula, ou os que chegaram sem célula. Os totais seguem a escolha.",
-  filtroDesconsiderados:
-    "Mostra todos os pedidos, só os que contam nas vendas ou só os que foram tirados das contas.",
-  campoBusca:
-    "Procura um pedido pelo id completo da Rifei, junto com os outros filtros.",
   buscar: "Procura o pedido com o id digitado no campo.",
   limparBusca:
     "Apaga o id da busca e volta a mostrar os pedidos dos outros filtros.",
@@ -294,10 +317,6 @@ export const DICAS = {
     "Tira este pedido das contas: metas, rankings, painel e telão. Antes, pede o motivo. Dá para desfazer.",
   desfazer:
     "Faz este pedido voltar a contar nas metas e nos rankings. Antes, pede confirmação.",
-  motivo:
-    "Por que o pedido sai das contas. Fica gravado junto com o pedido e na trilha.",
-  observacao:
-    "Um detalhe para quem conferir depois, como o número do estorno. Não escreva dados do comprador.",
   cancelarDesconsiderar:
     "Fecha sem desconsiderar. O pedido continua contando nas vendas.",
   confirmarDesconsiderar:
@@ -310,8 +329,6 @@ export const DICAS = {
     "Indisponível enquanto o pedido volta para as contas. Espere um instante.",
   entendi:
     "Fecha esta janela. Para voltar a desconsiderar, o admin liga a regra na tela Campanha.",
-  filtroResultado:
-    "Mostra só as entregas com o resultado escolhido, como as que deram erro.",
   verTodasAsEntregas:
     "Tira o filtro de resultado e mostra todas as entregas de novo.",
 } as const;

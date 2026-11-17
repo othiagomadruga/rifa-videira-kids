@@ -121,11 +121,22 @@ export function listaDeNomes(nomes: readonly string[]): string {
 // tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
 // ---------------------------------------------------------------------------------------------------
 
-export const DICAS = {
+/**
+ * Ajuda (RIFA-066, D31): a explicação dos títulos e dos rótulos, com o mouse no título (ou no campo) e no "?" ao lado
+ * dele: o que é, para que serve e um exemplo. Nos campos, é também a dica do campo.
+ */
+export const AJUDA = {
   periodo:
-    "Mostra as vendas da campanha inteira ou só do período de agora. As datas aparecem logo abaixo.",
+    "De quando são as vendas do mapa: da campanha inteira ou só do período de agora. Ex.: escolha o período atual para ver de onde vieram as vendas desta semana.",
   divisao:
     "Mostra só as vendas das células de Jovens ou de Adultos. As vendas sem célula ficam de fora.",
+  porEstado:
+    "O mapa do Brasil com quantos bilhetes saíram de cada estado, pelo DDD do telefone de quem comprou. Serve para ver até onde a campanha chegou.",
+  porDdd:
+    "A lista dos DDDs de quem comprou, agrupados por estado, com os bilhetes de cada um. Ex.: 91 é Belém e região.",
+} as const;
+
+export const DICAS = {
   atualizar:
     "Busca os números de novo. Os de agora ficam na tela até chegar a resposta.",
   atualizando:

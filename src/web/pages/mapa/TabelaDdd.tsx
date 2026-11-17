@@ -1,9 +1,9 @@
 import { useId, type ReactNode } from "react";
 import type { RespostaMapaDdd } from "../../../shared/contracts/api";
 import { NOME_DA_UF, type Uf } from "../../../shared/contracts/ddd";
-import { DataTable, type ColunaTabela } from "../../components/ui";
+import { ComAjuda, DataTable, type ColunaTabela } from "../../components/ui";
 import { formatarMoeda, formatarNumero } from "../../lib/formatadores";
-import { posicoesDoTop3, textoParte, type TotaisMapa } from "./textos";
+import { AJUDA, posicoesDoTop3, textoParte, type TotaisMapa } from "./textos";
 
 type Linha =
   | { tipo: "ddd"; ddd: string; uf: Uf; totais: TotaisMapa; posicao?: number }
@@ -114,9 +114,11 @@ export function TabelaDdd({ resposta }: { resposta: RespostaMapaDdd }) {
   const idTitulo = useId();
   return (
     <section className="mapa-secao mapa-ddds" aria-labelledby={idTitulo}>
-      <h2 id={idTitulo} className="mapa-secao__titulo">
-        Por DDD
-      </h2>
+      <ComAjuda texto={AJUDA.porDdd} idDoTitulo={idTitulo}>
+        <h2 id={idTitulo} className="mapa-secao__titulo">
+          Por DDD
+        </h2>
+      </ComAjuda>
       <p className="mapa-secao__texto">
         Os DDDs com venda, agrupados por estado. Os 3 que mais venderam bilhetes
         têm a posição ao lado do número.

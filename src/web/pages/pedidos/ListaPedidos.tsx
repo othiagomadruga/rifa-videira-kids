@@ -12,6 +12,7 @@ import {
   Aviso,
   Badge,
   Button,
+  ComAjuda,
   ComDica,
   DataTable,
   EmptyState,
@@ -55,6 +56,7 @@ import {
   type FiltrosPedidos,
 } from "./pedidos-api";
 import {
+  AJUDA,
   DICAS,
   MARCA_RECUPERADO,
   ROTULO_STATUS,
@@ -377,82 +379,82 @@ function Filtros({
         </summary>
       </ComDica>
       <div className="pedidos-filtros">
-        <ComDica texto={DICAS.filtroStatus}>
-          <Select
-            ref={primeiroFiltro}
-            rotulo="Status"
-            value={filtros.status ?? ""}
-            onChange={(evento) =>
-              aoMudar({
-                ...filtros,
-                status:
-                  STATUS_PEDIDO.find(
-                    (status) => status === evento.target.value,
-                  ) ?? null,
-              })
-            }
-          >
-            <option value="">Todos os status</option>
-            {STATUS_PEDIDO.map((status) => (
-              <option key={status} value={status}>
-                {ROTULO_STATUS[status]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.filtroCelula}>
-          <Select
-            rotulo="Célula"
-            value={valorDoFiltroCelula(celulaAtual)}
-            onChange={(evento) =>
-              aoMudar({
-                ...filtros,
-                celula: celulaDoValor(evento.target.value),
-              })
-            }
-            dica={
-              celulas.tipo === "erro"
-                ? "Não foi possível carregar as células; recarregue a página para tentar de novo."
-                : undefined
-            }
-          >
-            <option value={VALOR_TODAS}>Todas as células</option>
-            <option value={VALOR_SEM_CELULA}>Só os sem célula</option>
-            {avulsa !== null && (
-              <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
-            )}
-            {grupos.map((grupo) => (
-              <optgroup key={grupo.rede} label={grupo.rede}>
-                {grupo.celulas.map((celula) => (
-                  <option key={celula.id} value={valorDaCelula(celula.id)}>
-                    {celula.nome}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.filtroDesconsiderados}>
-          <Select
-            rotulo="Desconsiderados"
-            value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
-            onChange={(evento) =>
-              aoMudar({
-                ...filtros,
-                desconsiderado:
-                  evento.target.value === "so"
-                    ? true
-                    : evento.target.value === "sem"
-                      ? false
-                      : null,
-              })
-            }
-          >
-            <option value="todos">Todos os pedidos</option>
-            <option value="sem">Só os que contam</option>
-            <option value="so">Só os desconsiderados</option>
-          </Select>
-        </ComDica>
+        <Select
+          ajuda={AJUDA.filtroStatus}
+          ref={primeiroFiltro}
+          rotulo="Status"
+          value={filtros.status ?? ""}
+          onChange={(evento) =>
+            aoMudar({
+              ...filtros,
+              status:
+                STATUS_PEDIDO.find(
+                  (status) => status === evento.target.value,
+                ) ?? null,
+            })
+          }
+        >
+          <option value="">Todos os status</option>
+          {STATUS_PEDIDO.map((status) => (
+            <option key={status} value={status}>
+              {ROTULO_STATUS[status]}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          ajuda={AJUDA.filtroCelula}
+          rotulo="Célula"
+          value={valorDoFiltroCelula(celulaAtual)}
+          onChange={(evento) =>
+            aoMudar({
+              ...filtros,
+              celula: celulaDoValor(evento.target.value),
+            })
+          }
+          dica={
+            celulas.tipo === "erro"
+              ? "Não foi possível carregar as células; recarregue a página para tentar de novo."
+              : undefined
+          }
+        >
+          <option value={VALOR_TODAS}>Todas as células</option>
+          <option value={VALOR_SEM_CELULA}>Só os sem célula</option>
+          {avulsa !== null && (
+            <option value={valorDaCelula(avulsa)}>Célula {avulsa}</option>
+          )}
+          {grupos.map((grupo) => (
+            <optgroup key={grupo.rede} label={grupo.rede}>
+              {grupo.celulas.map((celula) => (
+                <option key={celula.id} value={valorDaCelula(celula.id)}>
+                  {celula.nome}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </Select>
+
+        <Select
+          ajuda={AJUDA.filtroDesconsiderados}
+          rotulo="Desconsiderados"
+          value={VALOR_DESCONSIDERADO[String(filtros.desconsiderado)]}
+          onChange={(evento) =>
+            aoMudar({
+              ...filtros,
+              desconsiderado:
+                evento.target.value === "so"
+                  ? true
+                  : evento.target.value === "sem"
+                    ? false
+                    : null,
+            })
+          }
+        >
+          <option value="todos">Todos os pedidos</option>
+          <option value="sem">Só os que contam</option>
+          <option value="so">Só os desconsiderados</option>
+        </Select>
+
         <BuscaPorId
           aplicada={filtros.id}
           aoBuscar={(id) => aoMudar({ ...filtros, id })}
@@ -499,18 +501,18 @@ function BuscaPorId({
 
   return (
     <form className="pedidos-busca" role="search" onSubmit={buscar}>
-      <ComDica texto={DICAS.campoBusca}>
-        <Input
-          ref={campo}
-          rotulo="Buscar pelo id do pedido"
-          dica="O id completo, como aparece na Rifei."
-          value={texto}
-          maxLength={TAMANHO_MAXIMO_ID}
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(evento) => setTexto(evento.target.value)}
-        />
-      </ComDica>
+      <Input
+        ajuda={AJUDA.campoBusca}
+        ref={campo}
+        rotulo="Buscar pelo id do pedido"
+        dica="O id completo, como aparece na Rifei."
+        value={texto}
+        maxLength={TAMANHO_MAXIMO_ID}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(evento) => setTexto(evento.target.value)}
+      />
+
       <div className="pedidos-busca__botoes">
         <ComDica texto={DICAS.buscar}>
           <Button type="submit" variante="secundario">
@@ -668,9 +670,11 @@ function Totais({
 }) {
   return (
     <section className="pedidos-totais" aria-labelledby="pedidos-totais-titulo">
-      <h2 id="pedidos-totais-titulo" className="pedidos-totais__titulo">
-        Totais por status
-      </h2>
+      <ComAjuda texto={AJUDA.totais} idDoTitulo="pedidos-totais-titulo">
+        <h2 id="pedidos-totais-titulo" className="pedidos-totais__titulo">
+          Totais por status
+        </h2>
+      </ComAjuda>
       <p className="pedidos-totais__nota">
         Só os aprovados contam nas vendas. Os desconsiderados ficam fora dos
         totais.
@@ -690,9 +694,17 @@ function Totais({
                 >
                   <Icone nome={icone} />
                 </span>
-                <h3 className="pedidos-total__status">
-                  {ROTULO_STATUS_PLURAL[status]}
-                </h3>
+                <ComAjuda
+                  texto={AJUDA.status[status]}
+                  idDoTitulo={`pedidos-total-${status}`}
+                >
+                  <h3
+                    id={`pedidos-total-${status}`}
+                    className="pedidos-total__status"
+                  >
+                    {ROTULO_STATUS_PLURAL[status]}
+                  </h3>
+                </ComAjuda>
               </div>
               <dl className="pedidos-total__numeros">
                 <div>
