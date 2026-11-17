@@ -715,6 +715,30 @@ describe("RIFA-061 (D27): sem ranking por divisão, uma lista só", () => {
     expect(lista("Células")).toHaveLength(3);
   });
 
+  it('"↑ subiu" entre todas: a Betel (jovens) passa a Dorcas (adultos) e ganha o chip (nos Jovens, seguiria em 2º)', async () => {
+    abrir({ porDivisao: false });
+    await esperarRanking();
+    expect(document.querySelectorAll(".ranking-publico__subiu")).toHaveLength(
+      0,
+    );
+
+    api.cenario.todas.atual = [
+      ...itens("jovens", [1, "Célula Ágape"], [2, "Célula Betel"]),
+      ...itens("adultos", [3, "Célula Dorcas"]),
+    ];
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    await waitFor(() =>
+      expect(lista("Células")).toEqual([
+        "1º Célula Ágape",
+        "2º Célula Betel",
+        "3º Célula Dorcas",
+      ]),
+    );
+    const chips = document.querySelectorAll(".ranking-publico__subiu");
+    expect(chips).toHaveLength(1);
+    expect(chips[0].closest("li")).toHaveTextContent(/^2º Célula Betel/);
+  });
+
   it("a coordenação volta a separar: a consulta sem divisão vê isso e pede de novo as duas, e as duas listas voltam", async () => {
     abrir({ porDivisao: false });
     await esperarRanking();

@@ -23,7 +23,12 @@ import {
 } from "../ranking-publico/textos";
 import { useRankingPublico } from "../ranking-publico/useRankingPublico";
 import { useSubiu } from "../ranking-publico/useSubiu";
-import { colunasDaLista, faseDoTelao, listaDoTelao } from "./textos";
+import {
+  colunasDaLista,
+  faseDoTelao,
+  itensDaEscala,
+  listaDoTelao,
+} from "./textos";
 import { useCursorEscondidoParado, useRelogio } from "./useTelao";
 import "./telao.css";
 
@@ -212,7 +217,7 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
 
   // A lista escala pela maior divisão (telao.css): até 3 itens (o limite público), letras bem maiores. Sem ranking
   // por divisão (D27), a lista única usa a tela toda: uma coluna larga ou, com muitos itens, duas colunas da mesma
-  // lista, e a escala é pelos itens de cada coluna.
+  // lista, e a escala é pelos itens de cada coluna (pelo menos 4: itensDaEscala).
   const itensDaMaior = Math.max(
     ...ranking.divisoes.map(({ itens }) => itens.length),
   );
@@ -222,7 +227,7 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
     <section
       className="telao__disputa"
       aria-labelledby={idJanela}
-      data-itens={Math.ceil(itensDaMaior / colunas)}
+      data-itens={itensDaEscala(itensDaMaior, colunas)}
     >
       <h2 id={idJanela} className="telao__janela">
         {textoDaJanela(ranking.janela, ranking.referencia)}

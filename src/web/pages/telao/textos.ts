@@ -63,6 +63,17 @@ export function colunasDaLista(unica: boolean, itens: number): 1 | 2 {
 }
 
 /**
+ * O `data-itens` da disputa (a escala do telao.css): os itens da maior lista; em duas colunas, os de cada coluna, com
+ * pelo menos LINHAS_POR_DIVISAO - 1 (com 6 itens, 4 e 2). A escala de até 3 itens (letras maiores) não cabe na meia
+ * tela: com 3 e 3, um nome de 17 caracteres ou mais ficava cortado em reticências (revisão da RIFA-061).
+ */
+export function itensDaEscala(itens: number, colunas: 1 | 2): number {
+  return colunas === 1
+    ? itens
+    : Math.max(LINHAS_POR_DIVISAO - 1, Math.ceil(itens / colunas));
+}
+
+/**
  * A lista de uma divisão como cabe no telão. A API já corta no limite da campanha (top 3, com os
  * empatados no último lugar); se ainda passar de LINHAS_POR_DIVISAO por coluna, ficam os primeiros e uma
  * linha diz quantos faltam, como no bumbo.
