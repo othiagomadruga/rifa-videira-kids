@@ -1,5 +1,5 @@
 /**
- * Os afiliados da Rifei com o que o sistema sabe deles (RIFA-070, D28), sem banco nem rede: a lista da tela, as
+ * Os afiliados da Rifei com o que o sistema sabe deles (RIFA-070, D29), sem banco nem rede: a lista da tela, as
  * células sem afiliado e o plano da sincronização. Testado em lib/rifei-afiliados.test.ts.
  *
  * Regra do vínculo pelo e-mail: o e-mail da conta de afiliado na Rifei igual (sem diferença de maiúsculas e espaços

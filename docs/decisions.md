@@ -1535,7 +1535,51 @@ as decisões configuráveis: virou uma opção da Campanha.
   telão, o cabeçalho da /minha) e o CSS inicial 0,1 KiB; nenhuma dependência nova. Com a opção ligada, as capturas das
   telas de ranking ficam iguais às da `main` (só a Campanha muda, com a caixa e a linha do resumo).
 
-## D28. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17)
+## D28. Apresentação simulada em /exemplo do próprio site (RIFA-063, 2026-11-17)
+
+Decisão do PO (17/11): a apresentação da RIFA-062 (o site com a campanha simulada: as células e os discipuladores
+reais, vendas fictícias, nada é gravado) fica em https://rifa-videira-kids.madruga.workers.dev/exemplo, aberta a quem
+tiver o link, para mostrar ao pastor e à igreja. Os nomes das células e dos discipuladores podem ficar públicos; o da
+rede, não: a gravação usa a planilha com a rede chamada "Igreja Videira" e a barra não tem o papel Rede (ficam Público,
+Coordenação, Líder e Discipulador). Os líderes aparecem como "Líder da célula X" e não vai nenhum link de acesso, token
+ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apresentação pode ser refeita.
+
+- **Roteador de hash, só no build da apresentação.** O site tira a tela do caminho (`createBrowserRouter`) e o Worker
+  serve os assets em modo SPA: `/exemplo/telao` sem arquivo cairia no `index.html` da raiz (o site oficial), e
+  recarregar sairia da apresentação. Com `VITE_ROTEADOR=hash` no `vite build`, o `main.tsx` usa o `createHashRouter`
+  (`src/web/roteador.ts`): a tela fica no hash (`/exemplo/#/telao`), o servidor só vê `/exemplo/` e serve o
+  `/exemplo/index.html`. O build do site não define a variável: o mesmo roteador, as mesmas rotas e os mesmos testes
+  (`roteador.test.ts` confere o padrão e que nem a configuração do build, nem o CI, nem os `.env` a definem). Nada muda
+  no Worker, no `wrangler.jsonc` nem no contrato. Descartados: o roteador do navegador com `basename` e uma regra para
+  `/exemplo/*` no Worker ou no `wrangler.jsonc` (mexe no Worker e na proteção das rotas por causa de uma página de
+  apresentação) e o roteador em memória (sem link direto para o telão; recarregar volta ao início).
+- **Em `public/exemplo/`, gerado.** O Vite copia `public/` para `dist/client` e a publicação já leva: nada muda no CI
+  nem no deploy. Lá ficam o `index.html` (documento completo, com o `noindex` e o título "Apresentação Rifa Videira
+  Kids"), `assets/` (o pacote do site construído com `VITE_ROTEADOR=hash` e `--base /exemplo/`) e `demo/` (`dados.js`,
+  as respostas gravadas; `demo.js`, a API simulada e a barra "Ver como"; `demo.css`). Nada inline: a CSP do
+  `public/_headers` vale também em `/exemplo` (por isso a apresentação não usa `<base>`: a CSP tem `base-uri 'none'`).
+  O ESLint e o Prettier ignoram a pasta. Peso: 42 arquivos, ~2,6 MiB no repositório e nos assets; o maior é o
+  `demo/dados.js` (~1,5 MiB; o limite da Cloudflare é 25 MiB por arquivo). O pacote do site não muda: sem a variável,
+  o Vite troca a comparação por `false` e o roteador de hash nem entra nele.
+- **Nada vai para a API de verdade.** O `demo.js` roda antes do pacote do site e troca o `window.fetch` de `/api/*`: GET
+  devolve a resposta gravada do papel escolhido na barra; escrita não grava nada. A página está na mesma origem do site,
+  mas nenhum pedido chega ao Worker (nem com o cookie de quem tem sessão no site); o destino "voltar para" que o site
+  guarda no `localStorage` volta, ao sair da apresentação, ao que era antes dela; o papel da barra fica no
+  `sessionStorage` da aba (recarregar em `#/coordenacao` ou `#/minha` volta ao papel daquela área); e os links `#<id>`
+  de dentro da página ("Pular para o conteúdo") levam ao elemento, sem virar tela no roteador de hash.
+- **noindex.** `<meta name="robots" content="noindex">`: a página é pública pelo link, mas tem vendas fictícias e não
+  deve aparecer nos buscadores no lugar do site da campanha.
+- **Uma fotografia.** A apresentação é o site de quando foi montada (esta, com o ranking único da RIFA-061): mudança no
+  site não chega a `/exemplo` até ela ser refeita. Refazer: gravar de novo a partir da versão do site que se quer
+  mostrar, `VITE_ROTEADOR=hash npx vite build --base /exemplo/` e trocar a pasta `public/exemplo/` inteira (os nomes dos
+  arquivos de `assets/` mudam a cada build). Apagar `public/exemplo/` tira a página do ar no próximo push na `main`.
+  Pendência (revisão): as ferramentas da gravação (o servidor local com o relógio simulado, o cenário das vendas
+  fictícias, a gravação por papel e a montagem do `index.html`) ainda não estão no repositório; até entrarem (por
+  exemplo em `scripts/apresentacao/`), refazer não sai só daqui.
+- **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
+  `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
+
+## D29. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17)
 
 Decisão do PO (17/11): no Pix manual (D26), o último passo, marcar como pago no painel da Rifei, deixa de ser à mão; e
 os afiliados das células (dezenas) não são mais criados um a um. A D26 deixava isso de fora porque "a Rifei não tem API

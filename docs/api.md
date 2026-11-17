@@ -1089,7 +1089,7 @@ de 4 módulos (`MARGEM_QR_LINK_VENDAS_MODULOS`), preto no branco; a imagem para 
 
 ---
 
-## API interna da Rifei (RIFA-070; docs/decisions.md D28)
+## API interna da Rifei (RIFA-070; docs/decisions.md D29)
 
 Rotas **só de admin** (o "só admin" vai no handler, antes do corpo: a coordenação leva 403). Todas chamam a Rifei pela
 API interna do painel (`https://api.rifei.com.br/`) com o segredo do Worker `RIFEI_API_TOKEN`. Catálogo:

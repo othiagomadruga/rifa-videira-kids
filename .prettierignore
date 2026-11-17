@@ -3,6 +3,8 @@ dist/
 .wrangler/
 coverage/
 package-lock.json
+# A apresentação de /exemplo (gerada; D28)
+public/exemplo/
 
 # Markdown fica fora do Prettier (docs escritas por vários agentes)
 *.md

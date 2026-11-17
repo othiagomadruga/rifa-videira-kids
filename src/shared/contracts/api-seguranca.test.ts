@@ -190,7 +190,7 @@ describe("GET /api/admin/auditoria", () => {
       "afiliado.remover",
       // RIFA-039 (D21): o token do webhook gerado pela tela.
       "webhook.gerar_token",
-      // RIFA-070 (D28): a API da Rifei (marcar pagos, sincronizar afiliados e gerar convites).
+      // RIFA-070 (D29): a API da Rifei (marcar pagos, sincronizar afiliados e gerar convites).
       "rifei.marcar_pagos",
       "rifei.sincronizar_afiliados",
       "rifei.gerar_convites",

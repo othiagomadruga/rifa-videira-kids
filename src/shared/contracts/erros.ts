@@ -55,7 +55,7 @@ export const STATUS_HTTP_DO_ERRO = {
   erro_interno: 500,
   nao_configurado: 503,
   banco_indisponivel: 503,
-  /** RIFA-070 (D28): a chamada à API da Rifei falhou inteira (`detalhesRifeiFalhouSchema`: o motivo). */
+  /** RIFA-070 (D29): a chamada à API da Rifei falhou inteira (`detalhesRifeiFalhouSchema`: o motivo). */
   rifei_falhou: 502,
 } as const satisfies Record<CodigoErro, number>;
 

@@ -1,5 +1,5 @@
--- 0013_codigo_afiliado_rifei.sql: o código do afiliado na Rifei (RIFA-070, D28). Aplica-se depois de 0012.
--- Documentação: docs/decisions.md (D28), docs/integracao-rifei.md (seção 13) e docs/modelo-de-dados.md.
+-- 0013_codigo_afiliado_rifei.sql: o código do afiliado na Rifei (RIFA-070, D29). Aplica-se depois de 0012.
+-- Documentação: docs/decisions.md (D29), docs/integracao-rifei.md (seção 13) e docs/modelo-de-dados.md.
 --
 -- * O link de vendas da Rifei é `https://rifei.com.br/<slug>?ref=<código>`: a página da campanha lê o `ref`, e o código
 --   (ex.: "thiago") é o do afiliado na Rifei, diferente do `affiliate_id` que chega no webhook. A sincronização com a

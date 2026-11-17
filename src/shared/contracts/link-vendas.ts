@@ -39,7 +39,7 @@ export const LIMITE_CARACTERES_LINK_VENDAS = 2048;
  * Marcadores do modelo, entre chaves:
  * - slug: o `slug_rifei` da campanha ativa (codificado com encodeURIComponent);
  * - afiliado: o `affiliate_id` do afiliado vinculado à célula;
- * - codigo (RIFA-070, D28): o código do afiliado na Rifei (`afiliados.codigo_rifei`, gravado pela sincronização com a
+ * - codigo (RIFA-070, D29): o código do afiliado na Rifei (`afiliados.codigo_rifei`, gravado pela sincronização com a
  *   API da Rifei; codificado com encodeURIComponent). É o `ref` do link de vendas real:
  *   `https://rifei.com.br/{slug}?ref={codigo}`.
  * O modelo precisa de {afiliado} ou de {codigo}: é o que faz a venda contar para a célula.

@@ -659,7 +659,7 @@ describe("D24: o catálogo à parte", () => {
   });
 });
 
-describe("RIFA-070 (D28): o marcador {codigo}, o ref do link de vendas da Rifei", () => {
+describe("RIFA-070 (D29): o marcador {codigo}, o ref do link de vendas da Rifei", () => {
   const MODELO_REF = "https://rifei.com.br/{slug}?ref={codigo}";
 
   it("o modelo com {codigo} e sem {afiliado} é válido", () => {

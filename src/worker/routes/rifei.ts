@@ -1,5 +1,5 @@
 /**
- * API interna da Rifei (RIFA-070, docs/decisions.md D28; docs/api.md; docs/integracao-rifei.md, seção 13), SÓ ADMIN:
+ * API interna da Rifei (RIFA-070, docs/decisions.md D29; docs/api.md; docs/integracao-rifei.md, seção 13), SÓ ADMIN:
  * - POST /api/admin/rifei/marcar-pagos { pedidos }: marca como pagos na Rifei os pedidos que a Conferência do extrato
  *   achou. Confere no banco antes: só os pendentes ou expirados da campanha ativa, sem desconsideração, vão à Rifei.
  *   Não grava nada no pedido (ele passa a contar quando o "Pedido pago" chegar pelo webhook).

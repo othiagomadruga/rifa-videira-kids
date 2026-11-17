@@ -2175,7 +2175,7 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
   });
 
   // -------------------------------------------------------------------------------------------------
-  // 0013 (RIFA-070, D28): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
+  // 0013 (RIFA-070, D29): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
   // -------------------------------------------------------------------------------------------------
 
   describe("0013 sobre dados que já existiam (RIFA-070)", () => {

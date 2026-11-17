@@ -1,4 +1,4 @@
-// RIFA-070 (D28): as rotas da API da Rifei no app real, com o D1 local e uma Rifei falsa no lugar do fetch. Só admin;
+// RIFA-070 (D29): as rotas da API da Rifei no app real, com o D1 local e uma Rifei falsa no lugar do fetch. Só admin;
 // 503 sem o segredo; 404 sem campanha; o banco decide o que vai à Rifei (já pago, desconsiderado e fora do sistema não
 // vão); aprovado, expirado restaurado, recusado e indisponível, cada um no seu pedido; 401 da Rifei para tudo (502); a
 // trilha sem o token; afiliados com o vínculo e a sugestão pelo e-mail; a sincronização que nunca troca um vínculo; e os

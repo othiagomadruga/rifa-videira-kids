@@ -1,4 +1,4 @@
-// RIFA-070 (D28): o cliente da API da Rifei sem rede (fetch falso): os cabeçalhos do painel, o caminho certo de cada
+// RIFA-070 (D29): o cliente da API da Rifei sem rede (fetch falso): os cabeçalhos do painel, o caminho certo de cada
 // chamada, os erros que param tudo (token, campanha, formato) e os que ficam num pedido só, a mensagem da Rifei
 // cortada e a ordem do emLotes.
 import { describe, expect, it, vi } from "vitest";
