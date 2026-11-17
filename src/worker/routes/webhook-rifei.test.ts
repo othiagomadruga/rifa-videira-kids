@@ -1771,6 +1771,17 @@ describe("RIFA-060: o teste que a Rifei manda ao adicionar o webhook", () => {
     expect(await contar("webhook_eventos")).toBe(0);
   });
 
+  it("o teste acima de 1 MiB leva 413 como qualquer corpo (o limite de tamanho vem antes do teste)", async () => {
+    const corpoCru = JSON.stringify({
+      event: "test",
+      observation: "x".repeat(LIMITE_CORPO_WEBHOOK_BYTES),
+    });
+    const res = await enviar(null, { corpoCru });
+
+    expect(res.status).toBe(413);
+    expect(await contar("webhook_eventos")).toBe(1);
+  });
+
   it("só o event exato 'test' é teste: outro event desconhecido continua erro_validacao", async () => {
     for (const evento of ["Test", "teste", "test_order"]) {
       const res = await enviar({ event: evento });

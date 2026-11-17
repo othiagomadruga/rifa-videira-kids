@@ -137,6 +137,7 @@ Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Contro
 | Status | Corpo | Gravado em `webhook_eventos`? |
 |---|---|---|
 | **200** | `{ "resultado": "processado" \| "duplicado" \| "ignorado_outra_campanha" \| "ignorado_transicao", "evento_id": 123 }` | sim, depois de gravar (D9) |
+| **200** (teste da Rifei, RIFA-060) | `{ "resultado": "teste" }` (`respostaTesteWebhookRifeiSchema`): o corpo é um objeto com `event` exatamente `"test"`, que a Rifei manda ao "Adicionar" o webhook; vem depois da autenticação, do limite de tamanho e do JSON, e antes da validação | não |
 | **400** `json_invalido` / `payload_invalido` | erro; `detalhes` = `{ "evento_id": 124, "problemas": [...] }` | sim, como `erro_validacao` (sem dado pessoal) |
 | **413** `corpo_muito_grande` | erro; `detalhes` = `{ "evento_id": 125, "problemas": [...] }` | sim, como `erro_validacao`, sem payload |
 | **401** `nao_autenticado` | erro | não |

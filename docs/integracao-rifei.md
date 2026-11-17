@@ -32,7 +32,8 @@ O webhook é da **conta**, não da campanha. Por isso ele recebe pedidos de toda
 3. Na Rifei: menu do usuário → **Integrações** → seção **Outro** → **Adicionar** (webhook).
    - **URL**: `https://<domínio do Worker>/api/webhooks/rifei`. Com barra no fim também funciona (`CAMINHOS_WEBHOOK_RIFEI`). A URL precisa aceitar POST com corpo JSON.
    - **Token**: o do passo 1 (ou o da alternativa do passo 2). A Rifei manda `Authorization: Bearer <token>`.
-   - **Eventos**: marcar os três, "Novo pedido", "Pedido pago" e "Pedido expirado".
+   - **Eventos**: marcar os três de pedido, "Novo pedido", "Pedido aprovado" (o "Pedido pago" do artigo) e "Pedido expirado"; "Prêmio instantâneo" fica desmarcado (seção 12.4).
+   - Ao tocar em **Adicionar**, a Rifei manda um teste (`{"event":"test"}`) e só aceita a URL com resposta 2xx; o sistema responde 200 `{"resultado":"teste"}` sem gravar nada (RIFA-060; seção 5, passo 3).
 4. No sistema, configurar a campanha (`PUT /api/admin/campanha`) com `slug_rifei` igual ao slug da campanha na Rifei, que é o identificador que aparece no link da campanha (seção 12.1).
 5. Conferir com um pedido de teste: a entrega aparece em `webhook_eventos` com `resultado = 'processado'`.
 
@@ -117,6 +118,7 @@ A ordem importa:
 2. `Authorization` ausente ou inválido: **401** `nao_autenticado` e nada é gravado (D6).
    - Depois da autenticação: corpo acima de 1 MiB (`LIMITE_CORPO_WEBHOOK_BYTES`) grava um evento `erro_validacao` sem payload, com o problema `corpo_muito_grande`, e responde **413** `corpo_muito_grande`. Um pedido real ocupa poucos KB.
 3. Corpo que não é JSON: grava um evento `erro_validacao` e responde **400** `json_invalido` (D9). A mensagem do problema é fixa: a do `JSON.parse` traz um trecho do corpo e nunca é gravada, devolvida nem logada (D1).
+   - Depois do JSON, o teste da Rifei (RIFA-060): um objeto com `event` exatamente `"test"` (o que a Rifei manda ao "Adicionar" o webhook, sem pedido) responde **200** `{ "resultado": "teste" }` e nada é gravado. Só chega aqui com o Bearer certo e dentro do limite de tamanho; qualquer outro `event` desconhecido segue para o passo 4 (400 `payload_invalido`).
 4. `analisarPayloadRifei` recusa (falta um essencial): grava um evento `erro_validacao` com `identificarPayloadInvalido` (só os textos de `event`, `id` e `slug`) e os `problemas`, e responde **400** `payload_invalido` (D9).
 5. Redige o payload aceito (D1). Os `avisos` acompanham o evento até a gravação.
 6. Sem campanha ativa, ou `slug` diferente de `campanhas.slug_rifei`: grava um evento `ignorado_outra_campanha` (com o payload redigido e os avisos) e responde **200** (D5). Sem campanha ativa, o evento também cai aqui (SUPOSIÇÃO): o payload redigido fica guardado e pode ser reprocessado depois que a campanha for configurada.
@@ -196,6 +198,7 @@ Os valores de `status_detail` em `new_order` (`"pending"`) e em `expired_order` 
 | `status` num `expired_order` (a doc lista só `in_process` e `approved`) | SUPOSIÇÃO; o sistema não depende disso |
 | `status_detail` em `new_order` e `expired_order` | SUPOSIÇÃO |
 | `utm` inteiro ausente ou null | SUPOSIÇÃO (tolerado) |
+| Teste ao "Adicionar" o webhook: POST com o Bearer e `{"event":"test"}`, aceito só com resposta 2xx | CONFIRMADO em 17/11/2026 (seção 9, item 12; RIFA-060) |
 | Retry, reenvio, ordem de entrega e assinatura HMAC | NÃO DOCUMENTADO; o sistema assume duplicatas, ordem trocada e perda |
 | `new_order` já com `status: approved` (venda lançada pelo admin) | NÃO DOCUMENTADO; hoje o estado vem só do `event` |
 | Marcar pago à mão no painel dispara `paid_order` | SUPOSIÇÃO (o exemplo oficial tem `status_detail: changed_by_admin`); a compra de teste no Pix manual confirma (seção 9, item 5) |
