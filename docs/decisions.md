@@ -1489,12 +1489,79 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
   Dois Pix iguais com os mesmos dois pedidos iguais ficam os dois Ambíguos: o algoritmo não chuta o par (pergunta ao
   PO). O resultado não depende da ordem de entrada (`cruzamento.test.ts`).
 - **Fora desta versão:** o PDF (pediria o pdf.js, dependência nova de centenas de KB; hoje, abrir o PDF, selecionar a
-  tabela e colar o texto), o Open Finance (pago), o robô no internet banking (a chave de segurança a cada login) e
+  tabela e colar o texto; **entrou na RIFA-068**, adendo abaixo), o Open Finance (pago), o robô no internet banking (a chave de segurança a cada login) e
   automatizar o painel da Rifei (sem API para marcar como pago; automatizar a tela de outro sistema é frágil e foge dos
   termos dela).
 - **Peso:** o JS inicial sobe 0,1 KiB (o `lazy` e o `Suspense` na `ConferenciaPage`), nenhuma dependência nova; a seção
   vem num pacote à parte de ~13 KiB em gzip, mais o leitor de valores e datas, que agora é dividido com a conferência
   pelo CSV (~5 KiB).
+
+### D26, adendo: o extrato em PDF (RIFA-068, 2026-11-17)
+
+Pedido do PO (17/11): "o pastor sobe o PDF do extrato bancário e o sistema reconhece os bilhetes que foram pagos". O
+banco continua o Bradesco Net Empresa (acesso só de consulta) e a marcação na Rifei continua à mão (sem API). A tarefa
+só lê o PDF e cai no mesmo cruzamento.
+
+- **Biblioteca: `pdfjs-dist` 6.5.438 (o pdf.js da Mozilla, Apache-2.0), versão fixa no `package.json`, build
+  `legacy`.** É o leitor de PDF mantido e testado em escala (o do Firefox): lida com compressão, fontes, objetos em
+  fluxo e PDF cifrado, o que um leitor caseiro não cobriria. O build `legacy` roda nos navegadores de alguns anos
+  atrás (o build moderno usa `Map.prototype.getOrInsertComputed`, que nem o Node 22 nem os celulares mais velhos
+  têm), por ~20 KB a mais em gzip. Alternativas descartadas: o `unpdf` (embrulha o mesmo pdf.js para servidor) e o
+  `pdf-parse` (Node). A dependência opcional `@napi-rs/canvas` do pacote só serve ao Node (os testes); no site, nada.
+- **Só sob demanda.** `extrato/pdf.ts` (o único que importa o `pdfjs-dist`) chega pelo `import("./pdf")` de
+  `leitura.ts`, só quando a pessoa escolhe um PDF (pela extensão, pelo tipo ou pelo `%PDF-` no começo). O JS inicial
+  não muda (`pdf-lazy.test.ts` segue os imports estáticos, como o `qr-lazy.test.ts`; o seguidor ficou em
+  `src/web/test/pacotes.ts`, dividido pelos dois). Sem internet (ou com o pacote antigo fora do ar depois de uma
+  publicação), o `import()` falha e a tela diz "Não foi possível abrir o leitor de PDF".
+- **CSP de produção sem mudança** (`default-src 'self'`, sem eval e sem inline). O worker do pdf.js é um arquivo do
+  próprio site: `import enderecoDoWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"` (o Vite copia o
+  arquivo para `assets/` com o hash e devolve a URL) e `GlobalWorkerOptions.workerSrc = enderecoDoWorker`; o
+  `new Worker(url, { type: "module" })` da mesma origem passa pelo `default-src 'self'` (sem `worker-src`, vale o
+  `script-src`, que cai no `default-src`). A versão 6 não tem mais eval (a opção `isEvalSupported` saiu); o
+  equivalente é `useWasm: false` (a CSP não tem `'wasm-unsafe-eval'`). Também `disableWorkerRendering: true` (sem o
+  segundo worker, de desenho), `useSystemFonts` e `disableFontFace` (nenhuma fonte baixada nem criada) e nenhuma URL de
+  fontes, cMaps ou WebAssembly: o pdf.js não busca nada pela rede. `verbosity: ERRORS` (nada de aviso no console).
+  Conferido no Chromium com o build servido pelo `npm run preview` e a CSP do `public/_headers`: nenhuma violação, o
+  console limpo e o worker criado de verdade (`assets/pdf.worker.min-<hash>.mjs`, `text/javascript`).
+- **As linhas pela posição** (`extrato/pdf-linhas.ts`, puro): de cada página, o texto e a posição de cada pedaço
+  (`getTextContent`); o y agrupa a linha (tolerância de 0,4 da altura da letra), o x ordena; pedaços colados viram a
+  mesma palavra, um vão até a altura da letra vira espaço, um vão maior separa as colunas. Achado o cabeçalho da
+  tabela (a mesma regra do texto colado: Data e Crédito e Débito, ou Valor; agora exportada de `texto-colado.ts`),
+  cada linha vira as células dele, separadas por tabulação e com as vazias no lugar (a coluna pela maior sobreposição
+  com o título dela; sem nenhuma, a mais próxima): é o que o navegador copia de uma tabela. Assim o débito sem sinal
+  da coluna Débito é débito (uma "TRANSF CC PARA CC PJ" de saída não vira Pix) e o saldo nunca é lido como o valor.
+  Sem cabeçalho, a linha é o texto com espaços. A página sem cabeçalho usa as colunas da anterior; um vão vertical
+  maior que 2,5 alturas da letra (o rodapé) e a troca de página viram uma linha em branco (encerram o lançamento de
+  cima). O texto vai para o **mesmo leitor do texto colado**; o resultado diz "Lido do arquivo PDF".
+- **A data na coluna Data vale para as linhas de baixo** (mudança no leitor do texto colado, que vale também para a
+  tabela colada): no extrato do Bradesco a data pode vir só na primeira linha do dia, que costuma ser o "SALDO
+  ANTERIOR", sem crédito nem débito. Antes, essa linha era ignorada e os lançamentos de baixo ficavam sem data. A
+  célula precisa ser só a data (um rodapé com "Emitido em 18/11/2026" na mesma coluna não muda o dia).
+- **O formato do Bradesco** (fontes públicas: só cópias de extratos de terceiros e importadores de código aberto; o
+  Bradesco não publica o modelo): a tabela "Data | Histórico (ou Lançamento) | Docto. (ou Dcto.) | Crédito (R$) |
+  Débito (R$) | Saldo (R$)", o "SALDO ANTERIOR" no começo e o Pix em duas linhas: "TRANSFERENCIA PIX", o documento,
+  o valor e o saldo; embaixo, "REM: <nome> <dd/mm>" (recebido) ou "DES: <nome> <dd/mm>" (enviado). Os testes usam
+  PDFs sintéticos nesse formato, gerados em `extrato/teste-apoio-pdf.ts` (Helvetica, posições de relatório, duas
+  páginas com o cabeçalho repetido, título e rodapé), com dados fictícios. NÃO DOCUMENTADO e a conferir no primeiro
+  PDF de verdade (sem guardar o arquivo): se o débito vem com sinal, se a data vem em toda linha e se há uma linha de
+  total (ela entraria como "crédito sem as palavras do Pix").
+- **Falhas claras:** o PDF sem nenhum texto ("Este PDF é uma imagem": escaneado ou fotografado; o outro jeito é o OFX
+  ou copiar a tabela da tela do banco), o PDF com senha de abrir ("Este PDF tem senha": a tela não pede a senha), o
+  arquivo que não é PDF de verdade, o PDF com texto mas sem lançamentos, mais de 200 páginas e o leitor que não
+  carregou. O limite de 5 MB do arquivo vale também para o PDF.
+- **Privacidade (D26 inteira):** os bytes vão do arquivo escolhido direto para o worker do próprio site; nada sai do
+  navegador, nada é gravado e o documento (com o worker) é destruído no fim da leitura. `ExtratoDoBanco.test.tsx`
+  sobe o PDF na varredura de privacidade (chamadas, storage e console) e o `pdf.test.ts` lê os PDFs sintéticos pelo
+  pdf.js de verdade (nos testes, o worker roda na mesma linha de execução, pelo `globalThis.pdfjsWorker`).
+- **Fora:** o PDF escaneado (pediria OCR), a senha digitada na tela, texto em PDF girado e o extrato com a descrição
+  numa linha e o valor na de baixo (um importador de terceiros descreve esse jeito no PDF do Bradesco: "PIX RECEBIDO"
+  numa linha e "complemento, documento, valor, saldo" na seguinte); se o PDF de verdade vier assim, os Pix ficariam
+  sem a palavra do Pix e cairiam em "créditos sem as palavras do Pix" (tarefa nova).
+- **Peso:** o JS inicial não muda (534,78 KiB, 162,95 KiB em gzip, igual ao da `main`); a seção do extrato sobe
+  ~0,6 KiB em gzip (13,2 KiB); o leitor de PDF vem num pacote à parte de 490 KiB (148 KiB em gzip) e o worker do
+  pdf.js num arquivo de 1,3 MB (386 KiB em gzip), os dois baixados só quando a pessoa escolhe um PDF (e guardados pelo
+  cache do navegador). O aviso de pedaço grande do Vite passou de 500 para 600 kB (`vite.config.ts`) por causa do
+  pacote do pdf.js.
 
 ## D27. Ranking único: separar ou não o ranking por divisão (RIFA-061; contrato, 2026-11-17)
 
