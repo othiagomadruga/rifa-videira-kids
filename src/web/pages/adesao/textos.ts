@@ -15,8 +15,6 @@ export const DICAS = {
     "Pede confirmação para tirar este afiliado de teste do sistema. Só dá certo se nenhum pedido dele conta.",
 
   // A escolha da célula (ao vincular e ao trocar).
-  buscarNaEscolha:
-    "Filtra as células pelo nome, pelo líder, pelo discipulador, pela rede ou pelo código de afiliado.",
   opcaoCelula:
     "Marca esta célula. Nada é gravado até você confirmar no botão abaixo.",
   confirmarSemEscolha:
@@ -33,8 +31,6 @@ export const DICAS = {
     "Copia o número do líder para colar onde quiser, como no WhatsApp.",
 
   // "Todas as células".
-  buscarCelulas:
-    "Filtra a lista pelo nome da célula, do líder, do discipulador, da rede ou pelo código de afiliado.",
   trocar:
     "Abre a lista das células para mudar este afiliado de célula. As vendas dele passam a contar para a nova.",
   trocarAberto: "Fecha a troca sem mudar nada.",
@@ -47,8 +43,6 @@ export const DICAS = {
   cancelarDesvinculo: "Fecha a pergunta sem desvincular.",
   adicionarOutroCodigo:
     "Abre o campo para ligar mais um código de afiliado a esta célula (o líder pode ter duas contas na Rifei).",
-  codigoAfiliado:
-    "Só os números do código de afiliado que o líder já tem na Rifei (ex.: 1043).",
   salvarCodigo:
     "Liga o código a esta célula: as vendas dele passam a contar para ela. Se ele já está em outra, pergunta antes.",
   salvandoCodigo: "Indisponível enquanto o código é gravado.",
@@ -65,14 +59,11 @@ export const DICAS = {
   removendo: "Indisponível enquanto o afiliado é removido.",
 
   // Seção "Links de vendas" (RIFA-046).
-  modelo: "O endereço do link de afiliado da Rifei, com {slug} e {afiliado}.",
-  modeloSoLeitura: "Só o admin muda o modelo.",
   salvarModelo: "Grava o modelo; os links de todas as células mudam na hora.",
   salvarModeloSemMudanca: "Nada mudou desde o modelo gravado.",
   salvarModeloSalvando:
     "Indisponível enquanto o modelo é gravado. Espere um instante.",
   previa: "Abre o link de exemplo na Rifei para conferir.",
-  buscar: "Filtra pelo nome da célula, do líder ou pelo código.",
   imprimirOsQrCodes: "Imprime uma página por célula com link.",
   imprimirOsQrCodesSemLink:
     "Indisponível: nenhuma célula tem link ainda. A célula ganha o link quando um afiliado é ligado a ela.",

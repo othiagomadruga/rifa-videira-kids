@@ -2,6 +2,7 @@ import { useId } from "react";
 import { ProgressBar, Stat } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
 import type { RespostaAdesao } from "./adesao-api";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Props = {
   resumo: RespostaAdesao["resumo"];
@@ -44,18 +45,21 @@ export function ResumoAdesao({ resumo, afiliadosSemCelula, compacto }: Props) {
           <div className="grade adesao-resumo__numeros">
             <Stat
               rotulo="Células vinculadas"
+              ajuda={ajuda("vinculadas")}
               valor={vinculadas}
               icone="link"
               tom="marca"
             />
             <Stat
               rotulo="Células que já venderam"
+              ajuda={ajuda("comVenda")}
               valor={formatarNumero(resumo.com_venda)}
               icone="pedidos"
               tom="sucesso"
             />
             <Stat
               rotulo="Afiliados sem célula"
+              ajuda={ajuda("afiliadosSemCelula")}
               valor={formatarNumero(afiliadosSemCelula)}
               icone={afiliadosSemCelula > 0 ? "alerta" : "check"}
               tom={afiliadosSemCelula > 0 ? "alerta" : "neutro"}

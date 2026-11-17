@@ -4,6 +4,7 @@ import { mensagemDoErro } from "../../lib/api";
 import type { CelulaAdesao } from "./adesao-api";
 import { celulaCombina, ordenarParaEscolha } from "./formatos";
 import { DICAS } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** Quantas células a lista mostra de uma vez (a busca encontra as outras). */
 export const LIMITE_OPCOES = 8;
@@ -66,16 +67,16 @@ export function EscolherCelula({
 
   return (
     <form className="adesao-escolha" onSubmit={confirmar} noValidate>
-      <ComDica texto={DICAS.buscarNaEscolha}>
-        <Input
-          rotulo="Buscar célula ou líder"
-          type="search"
-          autoComplete="off"
-          value={busca}
-          onChange={(evento) => setBusca(evento.target.value)}
-          autoFocus
-        />
-      </ComDica>
+      <Input
+        ajuda={ajuda("buscarNaEscolha")}
+        rotulo="Buscar célula ou líder"
+        type="search"
+        autoComplete="off"
+        value={busca}
+        onChange={(evento) => setBusca(evento.target.value)}
+        autoFocus
+      />
+
       <fieldset className="adesao-escolha__opcoes">
         <legend className="visualmente-oculto">{legenda}</legend>
         {visiveis.map((celula) => {

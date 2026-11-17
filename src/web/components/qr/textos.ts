@@ -2,8 +2,16 @@
 // jeito: para que serve e o que acontece, em 1 ou 2 frases curtas, sem repetir o rótulo. As da seção da Adesão (o
 // modelo, a prévia, a busca e "Imprimir os QR codes") ficam em pages/adesao/textos.ts.
 
+/**
+ * A ajuda do campo do link (RIFA-066): no rótulo, no "?" e no próprio campo. O pacote do link e do QR code já é
+ * `lazy` (a /minha e os links da Adesão): o texto fica aqui.
+ */
+export const AJUDA = {
+  campoLink:
+    "O link da Rifei desta célula: toda compra feita por ele conta para a célula. Toque no campo para selecionar o link inteiro e mandar a quem vai comprar.",
+} as const;
+
 export const DICAS = {
-  campoLink: "Toque para selecionar o link inteiro.",
   copiarLink: "Copia o link de vendas para colar onde quiser.",
   enviarWhatsApp: "Abre o WhatsApp com a mensagem e o link prontos.",
   /** Na Adesão, com o telefone do líder (sem ele, a pessoa escolhe o contato: a dica de cima). */

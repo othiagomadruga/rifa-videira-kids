@@ -19,7 +19,10 @@ import {
 } from "../../../shared/contracts";
 import { CLASSE_IMPRIMINDO } from "../../components/qr/QrCodeLinkVendas";
 import { pixelsDoSvg, textoDaDica } from "../../components/qr/teste-apoio";
-import { DICAS as DICAS_DO_QR } from "../../components/qr/textos";
+import {
+  AJUDA as AJUDA_DO_QR,
+  DICAS as DICAS_DO_QR,
+} from "../../components/qr/textos";
 import { contarControles, controlesSemDica } from "../../test/dicas";
 import {
   ADMIN_DE_TESTE,
@@ -34,6 +37,7 @@ import {
   respostaLinksDe,
   urlDeTeste,
 } from "./teste-apoio-links";
+import { AJUDA } from "./ajuda";
 import { DICAS } from "./textos";
 import { INTERVALO_ATUALIZACAO_MS } from "./usePainelAdesao";
 
@@ -604,7 +608,12 @@ describe("estados da seção Links de vendas", () => {
       within(secao).getByText("A campanha ainda não foi configurada."),
     ).toBeInTheDocument();
     expect(within(secao).queryByRole("textbox")).toBeNull();
-    expect(within(secao).queryByRole("button")).toBeNull();
+    // Só o "?" da ajuda do título (RIFA-066): nenhum botão de ação.
+    expect(
+      within(secao)
+        .queryAllByRole("button")
+        .filter((botao) => !botao.matches("[data-ajuda-botao]")),
+    ).toEqual([]);
   });
 
   it("RIFA-053: sem conexão ao carregar os links, o estado neutro (o mesmo título), e o resto da Adesão fica", async () => {
@@ -693,15 +702,16 @@ describe("dicas nos botões e campos dos links de vendas", () => {
   it("admin com o modelo gravado: o campo, Salvar (indisponível), Imprimir os QR codes, a busca e os links de cada célula; no Ver QR, o diálogo", async () => {
     const { secao } = await abrir(ADMIN_DE_TESTE, { modelo: MODELO_DE_TESTE });
     await within(secao).findByRole("link", { name: urlDeTeste(1001) });
-    // Modelo, Salvar, Imprimir os QR codes, busca; Ágape (2 links × 4) e Betel (4).
-    expect(contarControles(secao)).toBe(16);
+    // Modelo, Salvar, Imprimir os QR codes, busca; Ágape (2 links × 4) e Betel (4). E 7 "?" de ajuda (RIFA-066): o
+    // título, o modelo, "Link de cada célula", a busca e os 3 links.
+    expect(contarControles(secao)).toBe(23);
     expect(controlesSemDica(secao)).toEqual([]);
 
     const texto = (papel: "button" | "link" | "textbox", nome: string) =>
       textoDaDica(within(secao).getByRole(papel, { name: nome }));
-    expect(texto("textbox", "Modelo do link de vendas")).toBe(
-      "O endereço do link de afiliado da Rifei, com {slug} e {afiliado}.",
-    );
+    // Os campos têm a ajuda do rótulo como dica (RIFA-066), que chega sob demanda.
+    await act(() => vi.dynamicImportSettled());
+    expect(texto("textbox", "Modelo do link de vendas")).toBe(AJUDA.modelo);
     expect(texto("button", "Salvar modelo")).toBe(
       "Nada mudou desde o modelo gravado.",
     );
@@ -718,7 +728,7 @@ describe("dicas nos botões e campos dos links de vendas", () => {
           name: "Buscar nos links: célula, líder ou código",
         }),
       ),
-    ).toBe("Filtra pelo nome da célula, do líder ou pelo código.");
+    ).toBe(AJUDA.buscarLinks);
     // WhatsApp: com o telefone do líder (Ágape) e sem ele (Betel, a pessoa escolhe o contato).
     expect(
       texto(
@@ -736,7 +746,7 @@ describe("dicas nos botões e campos dos links de vendas", () => {
     );
     expect(
       texto("textbox", "Link de vendas (afiliado 1002) da Célula Betel"),
-    ).toBe("Toque para selecionar o link inteiro.");
+    ).toBe(AJUDA_DO_QR.campoLink);
 
     // Com o campo mudado, Salvar diz o que acontece.
     fireEvent.change(
@@ -767,15 +777,17 @@ describe("dicas nos botões e campos dos links de vendas", () => {
       modelo: MODELO_DE_TESTE,
     });
     // Modelo (só leitura), Imprimir os QR codes, busca e os links das células.
-    expect(contarControles(secao)).toBe(15);
+    expect(contarControles(secao)).toBe(22);
     expect(controlesSemDica(secao)).toEqual([]);
+    // O campo tem a ajuda do rótulo como dica (RIFA-066), que chega sob demanda.
+    await act(() => vi.dynamicImportSettled());
     expect(
       textoDaDica(
         within(secao).getByRole("textbox", {
           name: "Modelo do link de vendas",
         }),
       ),
-    ).toBe(DICAS.modeloSoLeitura);
+    ).toBe(AJUDA.modeloSoLeitura);
   });
 
   it("nenhuma célula com link: Imprimir os QR codes indisponível diz por quê", async () => {

@@ -7,7 +7,7 @@ import {
   numeroDoWhatsApp,
   type ResultadoCopia,
 } from "./compartilhar";
-import { DICAS } from "./textos";
+import { AJUDA, DICAS } from "./textos";
 import "./compartilhar.css";
 
 type Props = {
@@ -59,19 +59,19 @@ export function CompartilharLink({
   const doLink = `da ${celulaNome}${affiliateId === undefined ? "" : ` (afiliado ${affiliateId})`}`;
   return (
     <div className="qr-compartilhar">
-      <ComDica texto={DICAS.campoLink}>
-        <Textarea
-          ref={refCampo}
-          rotulo={rotulo}
-          value={url}
-          readOnly
-          rows={linhasDoCampo(url)}
-          spellCheck={false}
-          autoComplete="off"
-          className="qr-compartilhar__campo"
-          onFocus={(evento) => evento.currentTarget.select()}
-        />
-      </ComDica>
+      <Textarea
+        ajuda={AJUDA.campoLink}
+        ref={refCampo}
+        rotulo={rotulo}
+        value={url}
+        readOnly
+        rows={linhasDoCampo(url)}
+        spellCheck={false}
+        autoComplete="off"
+        className="qr-compartilhar__campo"
+        onFocus={(evento) => evento.currentTarget.select()}
+      />
+
       <div className="qr-compartilhar__acoes">
         <ComDica texto={DICAS.copiarLink}>
           <Button

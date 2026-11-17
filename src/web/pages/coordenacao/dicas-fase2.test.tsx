@@ -36,6 +36,7 @@ import {
   respostaJson,
 } from "../../test/renderizar";
 import { celulaDeTeste, simularApiAdesao } from "../adesao/teste-apoio";
+import { AJUDA as AJUDA_ADESAO } from "../adesao/ajuda";
 import { DICAS as DICAS_ADESAO } from "../adesao/textos";
 import { simularApi as simularBumbo } from "../bumbo/teste-apoio";
 import { DICAS as DICAS_BUMBO } from "../bumbo/textos";
@@ -81,7 +82,7 @@ import {
 import { DICAS as DICAS_VISAO_GERAL } from "../visao-geral/textos";
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia"]);
+const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia", "Adesão"]);
 
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);
@@ -693,13 +694,15 @@ describe("Adesão", () => {
     expect(textoDaDica(botao("Copiar o telefone de Lider Ágape"))).toBe(
       DICAS_ADESAO.copiarTelefone,
     );
+    // O campo tem a ajuda do rótulo como dica (RIFA-066), que chega sob demanda.
+    await act(() => vi.dynamicImportSettled());
     expect(
       textoDaDica(
         naLista("Célula Ágape").getByRole("textbox", {
           name: "Código de afiliado (Célula Ágape)",
         }),
       ),
-    ).toBe(DICAS_ADESAO.codigoAfiliado);
+    ).toBe(AJUDA_ADESAO.codigoAfiliado);
     // O número do líder é um link comum (tel:), que a varredura não pega: a dica confere à parte.
     const ligar = screen.getByRole("link", { name: "(91) 90000-0001" });
     expect(ligar).toHaveAttribute("href", "tel:91900000001");

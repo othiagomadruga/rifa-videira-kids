@@ -13,7 +13,7 @@ import { decodeQR } from "qr/decode.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RespostaMeusLinksVendas } from "../../../shared/contracts";
 import { pixelsDoSvg, textoDaDica } from "../../components/qr/teste-apoio";
-import { DICAS } from "../../components/qr/textos";
+import { AJUDA, DICAS } from "../../components/qr/textos";
 import { contarControles, controlesSemDica } from "../../test/dicas";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
@@ -671,13 +671,14 @@ describe("dicas nos botões e campos do link de vendas", () => {
       { name: "QR code do link de vendas da Célula Ágape" },
       ESPERA_DO_PACOTE,
     );
-    // O link em destaque (campo, Copiar, WhatsApp, Baixar imagem, Imprimir) e o outro (campo, Copiar, WhatsApp, Ver QR).
-    expect(contarControles(cartao)).toBe(9);
+    // O link em destaque (campo, Copiar, WhatsApp, Baixar imagem, Imprimir) e o outro (campo, Copiar, WhatsApp, Ver QR),
+    // e o "?" da ajuda de cada campo (RIFA-066).
+    expect(contarControles(cartao)).toBe(11);
     expect(controlesSemDica(cartao)).toEqual([]);
 
     const texto = (papel: "button" | "link" | "textbox", nome: string) =>
       textoDaDica(within(cartao).getByRole(papel, { name: nome }));
-    expect(texto("textbox", "Link de vendas")).toBe(DICAS.campoLink);
+    expect(texto("textbox", "Link de vendas")).toBe(AJUDA.campoLink);
     expect(texto("button", "Copiar link da Célula Ágape")).toBe(
       DICAS.copiarLink,
     );

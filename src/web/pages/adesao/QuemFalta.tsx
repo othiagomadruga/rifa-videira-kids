@@ -3,6 +3,7 @@ import { Button, Card, ComDica, EmptyState } from "../../components/ui";
 import type { CelulaAdesao } from "./adesao-api";
 import { linkTelefone } from "./formatos";
 import { DICAS } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 // Células que ainda não têm afiliado: a coordenação chama o líder ali mesmo, na reunião.
 export function QuemFalta({ celulas }: { celulas: CelulaAdesao[] }) {
@@ -10,7 +11,10 @@ export function QuemFalta({ celulas }: { celulas: CelulaAdesao[] }) {
   const idTitulo = useId();
   return (
     <section aria-labelledby={idTitulo}>
-      <Card titulo={<span id={idTitulo}>Quem falta ({faltam.length})</span>}>
+      <Card
+        titulo={<span id={idTitulo}>Quem falta ({faltam.length})</span>}
+        ajuda={ajuda("quemFalta")}
+      >
         {faltam.length === 0 ? (
           <EmptyState titulo="Todas as células já têm afiliado." />
         ) : (
@@ -45,7 +49,9 @@ function ItemQuemFalta({ celula }: { celula: CelulaAdesao }) {
 
   return (
     <article className="adesao-item">
-      <h3 className="adesao-item__titulo">{celula.celula_nome}</h3>
+      <h3 className="adesao-item__titulo" data-sem-ajuda="nome da célula">
+        {celula.celula_nome}
+      </h3>
       <p className="adesao-item__detalhe">Líder: {celula.lider_nome}</p>
       {telefone ? (
         <div className="adesao-telefone">
