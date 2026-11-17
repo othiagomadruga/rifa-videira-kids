@@ -16,9 +16,10 @@ src/web/
                         (keyframes, esqueleto e toque), marca.ts (nomes e arquivos da marca), marca/ (logo da Videira e
                         selo do Kids) e fontes/ (a Outfit 800 dos títulos e a licença OFL, D25)
   lib/                  api.ts (cliente da API), sessao.tsx (sessão, áreas por papel e guarda), formatadores.ts
-                        (pt-BR), acesso-desligado.ts (o 403 `acesso_desligado`, D20) e o movimento: movimento.ts,
-                        contagem.ts (count-up), useListaAnimada.ts (stagger e FLIP), usePulsoDaMeta.ts (pulso da
-                        meta batida) e useComemoracao.tsx (o pulso e as partículas da meta batida, D25)
+                        (pt-BR), acesso-desligado.ts (o 403 `acesso_desligado`, D20), redes.ts (a rede única, D30) e
+                        o movimento: movimento.ts, contagem.ts (count-up), useListaAnimada.ts (stagger e FLIP),
+                        usePulsoDaMeta.ts (pulso da meta batida) e useComemoracao.tsx (o pulso e as partículas da meta
+                        batida, D25)
   components/ui/        componentes base; importe de "components/ui" (index.ts); os ícones: Icone.tsx e os desenhos,
                         só dados, em icones.ts
   components/movimento/ TextoContado (número que conta até o valor; importe de "components/movimento") e
@@ -27,7 +28,7 @@ src/web/
                         pedaço `lazy`, QrCodeLinkVendas e qr-matriz.ts (o único módulo que importa o `qr`)
   components/EmConstrucao.tsx   aviso das telas que ainda são só a casca
   pages/<tela>/         uma pasta por tela: componente, CSS, chamadas à API e testes da tela
-  test/                 setup.ts, renderizar.tsx, movimento.ts e download.ts (ajudantes de teste)
+  test/                 setup.ts, renderizar.tsx, movimento.ts, download.ts, dicas.ts e redes.ts (ajudantes de teste)
 ```
 
 ## Rotas
