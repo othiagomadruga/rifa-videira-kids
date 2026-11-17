@@ -1486,3 +1486,50 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
 - **Peso:** o JS inicial sobe 0,1 KiB (o `lazy` e o `Suspense` na `ConferenciaPage`), nenhuma dependência nova; a seção
   vem num pacote à parte de ~13 KiB em gzip, mais o leitor de valores e datas, que agora é dividido com a conferência
   pelo CSV (~5 KiB).
+
+## D27. Ranking único: separar ou não o ranking por divisão (RIFA-061; contrato, 2026-11-17)
+
+Decisão do PO (17/11): a igreja só tem o nome dos discipuladores e das células (38 células e 8 discipuladores, numa rede
+só); não há divisão jovens/adultos, número de pessoas nem líder. "Por enquanto aplique o ranking igual para todos": a meta
+igual para todas as células (a regra `fixa_por_celula`, que já existia: nada a fazer no código) e um ranking só. O PO quer
+as decisões configuráveis: virou uma opção da Campanha.
+
+- **A opção** (`ranking.por_divisao` no contrato, `dominio.ts`; `RANKING_POR_DIVISAO_PADRAO` em `regras.ts`): ligada (o
+  padrão) = Jovens e Adultos disputam cada um o seu ranking, como até aqui; desligada = um ranking só, de todas as
+  células, em todo lugar que separava por divisão. Coluna `campanhas.ranking_por_divisao` (migração 0012, `NOT NULL
+  DEFAULT 1`, CHECK 0/1: toda campanha que já existia fica separando, como antes). É do grupo `ranking`, como o critério:
+  admin e coordenação mudam (não é uma das regras só do admin da D20). No PUT, ausente mantém o gravado (no primeiro PUT,
+  o padrão), como os grupos do admin: uma aba antiga do site, que não conhece a opção, não a religa. A trilha diz
+  `ranking.por_divisao: ligado → desligado` (e, na criação, só quando nasce desligada).
+- **O contrato das respostas** (o desenho mais simples e compatível): as respostas dos rankings (`GET /api/painel/ranking`,
+  `GET /api/publico/ranking` e o `ranking` de `GET /api/minha/visao`) ganham a marca `por_divisao: false`, que **só
+  aparece com a opção desligada** (`z.literal(false).optional()`). Ligada, nenhuma resposta muda (nem um campo a mais):
+  os clientes de antes e as gravações da demonstração continuam valendo. Desligada:
+  - os rankings **ignoram a `divisao` da consulta** (`montarRankingPainel` e `montarRankingPublico`, `calculos.ts`) e
+    respondem o de todas as células, com `divisao: null`. Ignorar, e não recusar com 400 nem devolver só a divisão, é o
+    que deixa a 1ª consulta do ranking aberto e do telão, que pede as duas divisões antes de saber da opção, já receber
+    a lista única, sem uma ida a mais; e uma URL antiga dos Rankings com `?divisao=` mostra o ranking de todos;
+  - na /minha, a posição "na divisão" sai igual à geral (`divisao` = `geral`, o refine novo do schema confere), os
+    primeiros e as posições da equipe são as do ranking de todos (`lib/visao-individual.ts` nem monta o ranking da
+    divisão);
+  - o site transforma a marca em "uma lista só": no ranking aberto e no telão, uma entrada só, com a divisão null, que
+    vira o título neutro **"Células"**. As consultas seguintes pedem uma lista só (sem divisão); se a campanha voltar a
+    separar, a resposta sem a marca avisa e o site pede as duas de novo.
+- **Onde muda, com a opção desligada:**
+
+  | Tela ou saída | Com a opção desligada |
+  | --- | --- |
+  | Ranking aberto (`/`) | Uma lista só, "Células", na largura toda (a partir de 48rem); as posições, o "↑ subiu" e a comemoração valem entre todas |
+  | Telão | A lista única ocupa a tela: até 5 itens, uma coluna larga com a escala de sempre; de 6 a 10, duas colunas da mesma lista (de cima para baixo, depois a da direita), com a escala pelos itens de cada coluna; acima de 10, 8 e "e mais N"; em pé, uma coluna só. O esqueleto do carregando continua com as duas colunas |
+  | Rankings da coordenação | A lista de todos (era o "Todas" do filtro), sem a divisão na legenda nem no vínculo; o filtro "Divisão" fica no lugar, indisponível (`aria-disabled`, só "Todas as células", com a dica de onde ligar), para nada andar na tela quando a resposta chega |
+  | /minha | Uma posição só ("Sua posição", "Entre todas as células"), "Os primeiros" sem a divisão, a coluna e o rótulo "Posição" na equipe, e o cabeçalho "Célula" sem "· Jovens" (depois que a visão chega; antes, como sempre) |
+  | Bumbo (texto do WhatsApp) | Um ranking só, sem `_Jovens_`/`_Adultos_` (como já era com uma divisão só); "Ainda sem vendas." sem o nome da divisão |
+  | Relatório (CSV) | Células, discipuladores e redes numa lista só, na ordem do ranking de todos, com a coluna "Posição no ranking" no lugar de "Posição na divisão" (`cabecalhoDoRelatorio(tipo, unidade, porDivisao)`); a coluna "Divisão" continua (é o dado da hierarquia, como "Rede") |
+  | Campanha | A caixa "Separar o ranking por divisão (jovens e adultos)" no cartão "Ranking e público" e a linha "Ranking por divisão" no resumo "Regras da campanha" |
+
+- **O que não muda:** o recorte por divisão do painel (o escopo `divisao` da Visão geral) e do mapa (é recorte de dados,
+  não ranking: com a hierarquia toda numa divisão, a outra fica vazia); a divisão na hierarquia e na planilha (a coluna
+  `divisao` continua obrigatória: a planilha da campanha usa `jovens` em todas as células, provisório); as mensagens do
+  link pessoal (nunca falaram de divisão); a meta (a regra é a da campanha).
+- **Peso:** o JS inicial sobe ~0,6 KiB (a lista única no ranking aberto e no telão, o cabeçalho da /minha); nenhuma
+  dependência nova.

@@ -47,15 +47,15 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 - **Hoje:** quanto falta para a meta de hoje.
 - O período atual (ex.: **Período 2**) e a **Curva da campanha**: o que a célula vendeu e o esperado, dia a dia.
 - **Seu link de vendas:** o seu link da Rifei, com **Copiar link**, **Enviar no WhatsApp** e o **QR code** para a pessoa apontar a câmera (**Baixar imagem** e **Imprimir**). Mostra "A coordenação ainda não liberou o link de vendas."? Use o link da sua Área de afiliados na Rifei.
-- **Ranking:** a posição da célula **Na sua divisão** (jovens ou adultos) e no **Geral**, quem está **Logo acima** e **Logo abaixo** e **Os primeiros** da sua divisão. A sua célula aparece com a marca **Você**.
+- **Ranking:** a posição da célula entre todas as células (**Sua posição**; se a campanha separar jovens e adultos, **Na sua divisão** e **Geral**), quem está **Logo acima** e **Logo abaixo** e **Os primeiros**. A sua célula aparece com a marca **Você**.
 - Apareceu o aviso **"Seu link de afiliado ainda não está ligado à sua célula: fale com a coordenação."**? Fale com a coordenação. Quando ela ligar o link, as vendas que você já fez entram na célula.
 - **Sair:** só se o celular for emprestado.
 
 ### 4. Dia a dia
 
-- **De manhã, o bumbo no grupo dos líderes:** como a campanha foi ontem, o ritmo, as 3 primeiras células de jovens e de adultos e quem mais subiu. Só % e posições. Comemore e anime a sua célula.
+- **De manhã, o bumbo no grupo dos líderes:** como a campanha foi ontem, o ritmo, as 3 primeiras células e quem mais subiu. Só % e posições. Comemore e anime a sua célula.
 - **Durante o dia:** abra a sua tela, veja quanto falta hoje e mande o seu link de vendas (ou mostre o QR code).
-- **No culto, o telão:** o ranking de jovens e de adultos, lado a lado.
+- **No culto, o telão:** o ranking das células, na tela toda.
 - **Ranking para todo mundo ver:** rifa-videira-kids.madruga.workers.dev
 
 ### Dúvidas frequentes
