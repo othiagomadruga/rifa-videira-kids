@@ -1570,6 +1570,11 @@ discipulador → célula.
   rede oferecido, ninguém novo entra com ele).
 - **Uma rede vazia** (sem células; a importação só cria rede com célula) conta na Hierarquia, nos Rankings, na Campanha e
   nos Acessos (que contam as redes), mas não na Visão geral, nos Pedidos e na Adesão (que contam pelas células).
+- **Peso e navegador** (a ferramenta de capturas, com as gravações da demonstração numa rede só e 3 discipuladores): o JS
+  inicial sobe 1,1 KiB em gzip e o CSS fica igual; nenhuma dependência nova; nenhum CLS subiu, sem rolagem lateral a 390
+  px, sem erro no console e sem "R$" na tela do líder e do discipulador. A varredura das telas (Visão geral, Rankings,
+  Hierarquia com os diálogos, Acessos, Adesão, Campanha, Pedidos, `/minha` do líder e do discipulador e `/entrar`, a 390
+  e a 1366 px, com as dicas) só achou a rede na dica da aba "Importar planilha", a exceção combinada.
 - **Testes:** `lib/redes.test.ts` e `pages/rede-unica.test.tsx` (cada tela com uma rede só: o texto, os atributos, os
   valores dos campos e as dicas, para admin, coordenação, líder e discipulador). As API falsas dos Rankings, da Campanha e
   dos Acessos respondem a lista das redes com duas (a tela como sempre foi) e guardam o pedido à parte.
