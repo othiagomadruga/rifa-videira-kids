@@ -30,6 +30,24 @@ export const eventoRifeiSchema = z.enum(EVENTOS_RIFEI);
 export type EventoRifei = z.infer<typeof eventoRifeiSchema>;
 
 /**
+ * Evento de teste que a Rifei manda ao "Adicionar" o webhook (visto em produção em 17/11/2026: `event` "test", sem
+ * id, slug nem total). A Rifei recusa a URL ("não retornou uma resposta válida") se a resposta não for 2xx, então o
+ * Worker responde 200 `{"resultado":"teste"}` sem gravar nada (RIFA-060). Não é um evento de pedido: fica fora de
+ * EVENTOS_RIFEI.
+ */
+export const EVENTO_TESTE_RIFEI = "test";
+
+/** O corpo é o evento de teste da Rifei? Só o `event` exato conta; o resto do corpo não é lido. */
+export function ehEventoDeTesteRifei(corpo: unknown): boolean {
+  return (
+    typeof corpo === "object" &&
+    corpo !== null &&
+    !Array.isArray(corpo) &&
+    (corpo as Record<string, unknown>)["event"] === EVENTO_TESTE_RIFEI
+  );
+}
+
+/**
  * Valores de `status` citados na doc oficial. O schema aceita qualquer texto porque o valor num
  * `expired_order` não é documentado (SUPOSIÇÃO). O estado do pedido vem do `event` (D4), não daqui.
  */

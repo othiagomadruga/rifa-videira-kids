@@ -21,6 +21,8 @@ import {
   payloadRifeiSchema,
   pedidoSchema,
   redigirPayloadRifei,
+  ehEventoDeTesteRifei,
+  respostaTesteWebhookRifeiSchema,
   respostaWebhookRifeiSchema,
   type EventoRifei,
   type StatusPedido,
@@ -1718,6 +1720,79 @@ describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
     expect(vazamentos).toEqual([]);
     for (const [controle, lugar] of Object.entries(controles)) {
       expect(ocorrencias.get(controle)).toContain(lugar);
+    }
+  });
+});
+
+describe("RIFA-060: o teste que a Rifei manda ao adicionar o webhook", () => {
+  // O corpo que a Rifei mandou em produção ao "Adicionar" (17/11/2026): só o event, sem pedido.
+  const TESTE_DA_RIFEI = { event: "test" };
+
+  it("com o token certo: 200 {resultado: teste} e nada é gravado", async () => {
+    const res = await enviar(TESTE_DA_RIFEI);
+
+    expect(res.status).toBe(200);
+    expect(respostaTesteWebhookRifeiSchema.parse(await res.json())).toEqual({
+      resultado: "teste",
+    });
+    expect(await contar("webhook_eventos")).toBe(0);
+    expect(await contar("pedidos")).toBe(0);
+    expect(await contar("afiliados")).toBe(0);
+  });
+
+  it("o teste com outros campos (ex.: um exemplo de pedido) também é só teste: nada é gravado", async () => {
+    const res = await enviar({ ...newOrderAfiliado, event: "test" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ resultado: "teste" });
+    expect(await contar("webhook_eventos")).toBe(0);
+    expect(await contar("pedidos")).toBe(0);
+  });
+
+  it.each([
+    ["sem o header Authorization", null],
+    ["token errado", "Bearer token-errado"],
+  ])(
+    "%s: o teste também leva 401 (a autenticação vem antes)",
+    async (_caso, autorizacao) => {
+      const res = await enviar(TESTE_DA_RIFEI, { autorizacao });
+
+      expect(res.status).toBe(401);
+      expect(await contar("webhook_eventos")).toBe(0);
+    },
+  );
+
+  it("sem a credencial no servidor: 503 nao_configurado, como qualquer evento", async () => {
+    const res = await enviar(TESTE_DA_RIFEI, {
+      env: { RIFEI_WEBHOOK_TOKEN: undefined },
+    });
+
+    expect(res.status).toBe(503);
+    expect(await contar("webhook_eventos")).toBe(0);
+  });
+
+  it("só o event exato 'test' é teste: outro event desconhecido continua erro_validacao", async () => {
+    for (const evento of ["Test", "teste", "test_order"]) {
+      const res = await enviar({ event: evento });
+      expect(res.status).toBe(400);
+    }
+    expect(await contar("webhook_eventos")).toBe(3);
+  });
+
+  it("ehEventoDeTesteRifei só aceita um objeto com event 'test'", () => {
+    expect(ehEventoDeTesteRifei({ event: "test" })).toBe(true);
+    expect(ehEventoDeTesteRifei({ event: "test", id: "x" })).toBe(true);
+    for (const corpo of [
+      null,
+      "test",
+      ["test"],
+      [{ event: "test" }],
+      {},
+      { event: "TEST" },
+      { evento: "test" },
+      { event: "new_order" },
+    ]) {
+      expect(ehEventoDeTesteRifei(corpo)).toBe(false);
     }
   });
 });
