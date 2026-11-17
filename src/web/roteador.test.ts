@@ -1,7 +1,12 @@
 // RIFA-063 (D28): o site continua com o roteador do navegador; o de hash é só do build da apresentação de
 // /exemplo (VITE_ROTEADOR=hash), que o build do site não define.
-import type { DataRouter, RouteObject } from "react-router";
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  createBrowserRouter,
+  createHashRouter,
+  type DataRouter,
+  type RouteObject,
+} from "react-router";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import ci from "../../.github/workflows/ci.yml?raw";
 import pacote from "../../package.json?raw";
 import viteConfig from "../../vite.config.ts?raw";
@@ -37,12 +42,22 @@ let roteador: DataRouter | null = null;
 afterEach(() => {
   roteador?.dispose();
   roteador = null;
+  vi.unstubAllEnvs();
+  vi.resetModules();
   window.history.replaceState(null, "", "/");
 });
+
+/** O roteador.ts avaliado de novo com VITE_ROTEADOR=<valor> (como num build com a variável). */
+async function roteadorDoBuildCom(valor: string) {
+  vi.stubEnv("VITE_ROTEADOR", valor);
+  vi.resetModules();
+  return (await import("./roteador")).criarRoteador;
+}
 
 describe("criarRoteador", () => {
   it("sem VITE_ROTEADOR (o build do site): o do navegador, com a tela no caminho do endereço", async () => {
     expect(import.meta.env.VITE_ROTEADOR).toBeUndefined();
+    expect(criarRoteador).toBe(createBrowserRouter);
     window.history.replaceState(null, "", "/telao");
 
     roteador = criarRoteador(ROTAS);
@@ -54,9 +69,11 @@ describe("criarRoteador", () => {
   });
 
   it("VITE_ROTEADOR=hash (só a apresentação): a tela no hash, e o caminho do endereço não muda", async () => {
+    const doBuild = await roteadorDoBuildCom("hash");
+    expect(doBuild).toBe(createHashRouter);
     window.history.replaceState(null, "", "/exemplo/#/telao");
 
-    roteador = criarRoteador(ROTAS, "hash");
+    roteador = doBuild(ROTAS);
 
     expect(roteador.state.location.pathname).toBe("/telao");
     await roteador.navigate("/minha");
@@ -65,11 +82,7 @@ describe("criarRoteador", () => {
   });
 
   it("outro valor qualquer: o do navegador", async () => {
-    roteador = criarRoteador(ROTAS, "memoria");
-
-    await roteador.navigate("/telao");
-    expect(window.location.pathname).toBe("/telao");
-    expect(window.location.hash).toBe("");
+    expect(await roteadorDoBuildCom("memoria")).toBe(createBrowserRouter);
   });
 });
 
