@@ -297,6 +297,13 @@
   border-bottom: 0;
 }
 
+/* A opção do ranking por divisão (RIFA-061, D27), no cartão "Ranking e público": a borda de baixo é a do bloco "O que o
+   público vê", que vem logo depois (sem ela, a linha sairia dupla). */
+.campanha-chave--ranking {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
 .campanha-chave__explicacao {
   font-size: var(--texto-sm);
   overflow-wrap: anywhere;

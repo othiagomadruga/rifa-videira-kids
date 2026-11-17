@@ -540,7 +540,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
               </ComDica>
 
               {/* RIFA-061 (D27): como as chaves da campanha, a caixa e uma linha do que acontece ligada e desligada. */}
-              <div className="campanha-chave">
+              <div className="campanha-chave campanha-chave--ranking">
                 <ComDica
                   id={`${idDoCampo("ranking.por_divisao")}-dica`}
                   texto={DICAS.porDivisao}
