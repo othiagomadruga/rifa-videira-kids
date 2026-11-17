@@ -52,7 +52,7 @@ const COLUNAS: ColunaTabela<ItemMarcarPagosRifei>[] = [
   },
 ];
 
-// "Marcar como pago na Rifei" (RIFA-070, D27), só o admin: confirma, manda os números ao sistema (que marca na Rifei
+// "Marcar como pago na Rifei" (RIFA-070, D28), só o admin: confirma, manda os números ao sistema (que marca na Rifei
 // pela API do painel) e mostra o resultado de cada pedido. O "Copiar os números" continua ao lado, para o caminho
 // manual. Marcando, os botões ficam indisponíveis com aria-disabled (RIFA-045), como no "Recuperar".
 export function MarcarNaRifei({ pedidos, aoAnunciar, aoBuscarDeNovo }: Props) {

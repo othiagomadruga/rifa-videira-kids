@@ -450,6 +450,64 @@ describe("CA3: equipe por papel", () => {
   });
 });
 
+describe("RIFA-061 (D27): sem ranking por divisão, a posição entre todos e nada de divisão", () => {
+  it("líder: uma posição só ('Sua posição', entre todas as células), os primeiros de todos e o cabeçalho sem a divisão", async () => {
+    await abrirCenario({ porDivisao: false });
+
+    const cabecalho = screen.getByRole("heading", { level: 1 }).parentElement;
+    await waitFor(() =>
+      expect(cabecalho).toHaveTextContent(
+        /^Célula Ágape\s*Célula Você entrou como Maria Fictícia\.$/,
+      ),
+    );
+    const ranking = regiao("Ranking");
+    expect(
+      within(ranking).queryByRole("heading", { name: "Na sua divisão" }),
+    ).toBeNull();
+    expect(
+      within(ranking).queryByRole("heading", { name: "Geral" }),
+    ).toBeNull();
+    const posicao = regiao("Sua posição", 3);
+    expect(posicao).toHaveTextContent("4º de 12");
+    expect(posicao).toHaveTextContent("Entre todas as células");
+    expect(posicao).not.toHaveTextContent(/jovens|adultos/i);
+    expect(valorDe(posicao, "Logo acima")).toBe("Célula Éfeso (3º)");
+    expect(
+      within(regiao("Os primeiros", 3)).getAllByRole("listitem"),
+    ).toHaveLength(3);
+    expect(ranking).not.toHaveTextContent(/Jovens|Adultos/);
+  });
+
+  it("discipulador e rede: a coluna e o rótulo da posição sem a divisão, e a explicação entre todos", async () => {
+    const { unmount } = await abrirCenario({
+      papel: "discipulador",
+      porDivisao: false,
+    });
+    const equipe = regiao("Suas células");
+    expect(equipe).toHaveTextContent(
+      "A posição é a de cada célula entre todas as células, no mesmo período do seu ranking.",
+    );
+    expect(
+      within(within(equipe).getByRole("table"))
+        .getAllByRole("columnheader")
+        .map((coluna) => coluna.textContent),
+    ).toContain("Posição");
+    expect(regiao("Sua posição", 3)).toHaveTextContent(
+      "Entre todos os discipuladores",
+    );
+    expect(screen.getByRole("main")).not.toHaveTextContent(/Jovens|Adultos/);
+    unmount();
+    vi.unstubAllGlobals();
+
+    await abrirCenario({ papel: "rede", porDivisao: false });
+    expect(regiao("Sua rede")).toHaveTextContent(
+      "A posição é a de cada um entre todos os do mesmo nível (discipuladores ou células), no mesmo período do seu ranking.",
+    );
+    expect(valorDe(regiao("Davi Fictício", 3), "Posição")).toBe("1º");
+    expect(screen.getByRole("main")).not.toHaveTextContent(/Jovens|Adultos/);
+  });
+});
+
 describe("fases, primeira venda e alvo sem células", () => {
   it("antes do início: a contagem regressiva no destaque e, no lugar da posição, a frase de incentivo", async () => {
     await abrirCenario({ fase: "antes" });

@@ -32,6 +32,7 @@ import {
   montarCsvRelatorio,
   montarRankingPainel,
   montarResumoPainel,
+  rankingPorDivisao,
   somarDias,
   type EntradaCalculo,
   type EscopoResolvido,
@@ -180,14 +181,18 @@ export function linhaDosTotais(
 /**
  * Os itens do ranking do nível, divisão por divisão (`ORDEM_DIVISOES`: jovens, depois adultos), na janela da campanha
  * inteira até hoje e na ordem do ranking da divisão: `montarRankingPainel` com `periodo: "campanha"`, como os
- * Rankings. Entram todos, inclusive quem não vendeu; discipulador ou rede sem célula não aparece (R8).
+ * Rankings. Entram todos, inclusive quem não vendeu; discipulador ou rede sem célula não aparece (R8). Sem ranking
+ * por divisão (RIFA-061, D27), um ranking só, de todos, na ordem dele (a "Posição no ranking" do cabeçalho).
  */
 function itensPorDivisao(
   dados: DadosDoPainel,
   nivel: NivelRanking,
   montadores: MontadoresDoRelatorio,
 ): { unidade: UnidadeMeta; itens: ItemRanking[] } {
-  const rankings = ORDEM_DIVISOES.map((divisao) =>
+  const divisoes = rankingPorDivisao(dados.entrada.campanha)
+    ? ORDEM_DIVISOES
+    : [undefined];
+  const rankings = divisoes.map((divisao) =>
     montadores.montarRankingPainel(
       dados.entrada,
       { nivel, divisao, periodo: "campanha" },
@@ -200,7 +205,10 @@ function itensPorDivisao(
   };
 }
 
-/** As colunas comuns aos três níveis: divisão, meta, vendas, % da meta e a posição no ranking da divisão. */
+/**
+ * As colunas comuns aos três níveis: divisão, meta, vendas, % da meta e a posição no ranking da divisão (sem ranking
+ * por divisão, no ranking de todos).
+ */
 function colunasDoItem(item: ItemRanking, unidade: UnidadeMeta) {
   return {
     divisao: NOMES_DIVISAO[item.divisao],
@@ -406,7 +414,11 @@ export function arquivoDoPainel(
   } satisfies Record<TipoDoPainel, () => string[][]>;
   return {
     csv: montarCsvRelatorio(
-      cabecalhoDoRelatorio(tipo, campanha.meta.unidade),
+      cabecalhoDoRelatorio(
+        tipo,
+        campanha.meta.unidade,
+        rankingPorDivisao(campanha),
+      ),
       linhas[tipo](),
     ),
     data: hojeNoFuso(campanha.fuso_horario, dados.agora),

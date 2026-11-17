@@ -66,6 +66,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `meta_regra` | TEXT | `por_pessoa`, `total_proporcional` ou `fixa_por_celula` ([regras-de-calculo.md](regras-de-calculo.md), R1) |
 | `meta_valor` | INTEGER > 0 | na unidade da meta; o significado depende da regra |
 | `ranking_criterio` | TEXT | `percentual_meta`, `bilhetes` ou `arrecadacao` |
+| `ranking_por_divisao` | INTEGER 0/1 | padrão 1 (migração 0012, D27): `ranking.por_divisao`. 1 = Jovens e Adultos com rankings separados; 0 = um ranking só, de todas as células |
 | `publico_mostra_percentual_meta` | INTEGER 0/1 | padrão 0: o público vê só posições |
 | `publico_limite_ranking` | INTEGER 1–100 ou NULL | padrão 3 (top 3); NULL mostra todas as posições |
 | `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |
@@ -563,11 +564,11 @@ CREATE INDEX pedidos_por_pagamento_recuperado ON pedidos (pagamento_recuperacao_
   'conferencia'`) e aceita o pago no mesmo UPDATE; a FK recusa uma recuperação que não existe e segura a que tem um
   pagamento registrado; os planos das contagens e da lista usam o índice novo.
 
-## 13. Migração `0012_codigo_afiliado_rifei.sql` (RIFA-070; D27)
+## 13. Migração `0013_codigo_afiliado_rifei.sql` (RIFA-070; D28)
 
 Aditiva: `afiliados.codigo_rifei TEXT NULL` (1 a 120 caracteres), o código do afiliado na Rifei, que é o `ref` do link
 de vendas (`https://rifei.com.br/<slug>?ref=<código>`), diferente do `affiliate_id` do webhook. Nasce NULL e é gravado
 pela sincronização com a API da Rifei (`POST /api/admin/rifei/afiliados/sincronizar`), que também cria, com origem
 `manual` e sem célula, o afiliado da Rifei que o sistema ainda não conhecia. O link de vendas (D24) usa o código pelo
 marcador `{codigo}`; afiliado sem código fica sem link nesse modelo. Testes: `src/worker/test/migrations.test.ts`
-("0012 sobre dados que já existiam").
+("0013 sobre dados que já existiam").

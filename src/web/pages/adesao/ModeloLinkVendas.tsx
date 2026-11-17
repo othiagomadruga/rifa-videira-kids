@@ -20,7 +20,7 @@ export type ExemploDaPrevia = {
 export const AFILIADO_DE_EXEMPLO = 1234;
 
 /** O exemplo do formato (o real ainda não está documentado pela Rifei; D24). */
-// RIFA-070 (D27): o link de vendas da Rifei é `?ref=<código do afiliado>`; o código vem da sincronização com a Rifei.
+// RIFA-070 (D28): o link de vendas da Rifei é `?ref=<código do afiliado>`; o código vem da sincronização com a Rifei.
 const EXEMPLO_DE_MODELO = "https://rifei.com.br/{slug}?ref={codigo}";
 
 /**

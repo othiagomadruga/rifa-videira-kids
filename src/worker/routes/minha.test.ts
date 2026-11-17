@@ -642,6 +642,31 @@ describe("campanha, cache e alvo novo", () => {
   });
 });
 
+describe("RIFA-061 (D27): sem ranking por divisão, a visão usa o ranking de todos", () => {
+  it("o líder da Dorcas (adultos) fica na posição entre todas, com a marca; a rede adulta vê as posições de todos", async () => {
+    await semear({ unidade: "bilhetes", valor: 10 }, "percentual_meta");
+    const lider = await entrarComo("lider", 4);
+    const rede = await entrarComo("rede", 2);
+    const separado = await visao(lider);
+    expect(separado.corpo.ranking).not.toHaveProperty("por_divisao");
+    await env.DB.prepare(
+      "UPDATE campanhas SET ranking_por_divisao = 0 WHERE ativa = 1",
+    ).run();
+    andarDoRelogio();
+    const { corpo } = await visao(lider);
+    expect(corpo.ranking.por_divisao).toBe(false);
+    expect(corpo.ranking.divisao).toEqual(corpo.ranking.geral);
+    expect(corpo.ranking.geral).toEqual(separado.corpo.ranking.geral);
+    expect(corpo.ranking.divisao).not.toEqual(separado.corpo.ranking.divisao);
+    const daRede = (await visao(rede)).corpo;
+    expect(daRede.ranking.por_divisao).toBe(false);
+    for (const item of daRede.equipe.filter(
+      (membro) => membro.tipo === "celula",
+    ))
+      expect(item.posicao_divisao).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("a hierarquia muda com a base em cache: nunca 500 (RIFA-014-api-b)", () => {
   // A sessão lê o alvo na hora; a base da visão pode ter sido lida até 30 s antes. Se o alvo de quem pede mudou de
   // divisão, a base guardada não serve (relê): sem isso, a visão misturava a divisão nova (da sessão) com os

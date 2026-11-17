@@ -24,18 +24,22 @@ export function PublicShell({ children }: { children: ReactNode }) {
         </div>
       </main>
       <footer className="ui-public-shell__rodape">
-        <div className="ui-public-shell__limite ui-public-shell__kids">
-          {/* O texto ao lado já diz o nome: a imagem é decorativa (alt vazio). */}
-          <img
-            className="ui-public-shell__selo-kids"
-            src={kids.src}
-            alt=""
-            width={kids.largura}
-            height={kids.altura}
-            loading="lazy"
-            decoding="async"
-          />
-          <p>{kids.frase}</p>
+        <div className="ui-public-shell__limite ui-public-shell__linha-rodape">
+          <div className="ui-public-shell__kids">
+            {/* O texto ao lado já diz o nome: a imagem é decorativa (alt vazio). */}
+            <img
+              className="ui-public-shell__selo-kids"
+              src={kids.src}
+              alt=""
+              width={kids.largura}
+              height={kids.altura}
+              loading="lazy"
+              decoding="async"
+            />
+            <p>{kids.frase}</p>
+          </div>
+          {/* RIFA-067: o crédito no canto direito; no celular, desce para a linha de baixo. */}
+          <p className="ui-public-shell__credito">{MARCA.credito}</p>
         </div>
       </footer>
     </div>

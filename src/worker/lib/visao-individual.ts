@@ -16,7 +16,10 @@
  *   percentual_meta_bp (percentualBp) e de percentual_esperado_bp (percentualEsperadoBp): o ponto de hoje é
  *   igual a campanha.percentual_meta_bp;
  * - `eu` nos primeiros pelo id, a partir do ranking da coordenação (o item público não tem id);
- * - alvo sem células fica fora do ranking (R8): posições null.
+ * - alvo sem células fica fora do ranking (R8): posições null;
+ * - sem ranking por divisão (RIFA-061, D27: `ranking.por_divisao` desligado), o ranking que vale é o de todos: a
+ *   posição "na divisão" é a geral (o mesmo objeto, sem montar outro ranking), os primeiros e as posições da equipe
+ *   saem do ranking de todos, e a resposta leva a marca `por_divisao: false`.
  *
  * CPU (o Worker tem 10 ms por requisição no plano Free; cada montador percorre as linhas de venda que recebe,
  * ~1,5 µs por linha no workerd): "hoje" é calculado uma vez e vai como `data` para todos os montadores, e cada
@@ -39,6 +42,7 @@ import {
   montarResumoPainel,
   percentualBp,
   percentualEsperadoBp,
+  rankingPorDivisao,
   somarMetas,
   type Alvo,
   type CelulaCalculo,
@@ -330,10 +334,15 @@ export function montarVisaoIndividual(
       { nivel: nivelDoRanking, divisao, periodo, data },
       agora,
     );
+  // Sem ranking por divisão (D27), a divisão de todos os rankings daqui é nenhuma: o de todos.
+  const porDivisao = rankingPorDivisao(campanha);
+  const divisaoDosRankings = porDivisao ? alvo.divisao : undefined;
   const geral = ranking(nivel);
-  const naDivisao = ranking(nivel, alvo.divisao);
+  const naDivisao = porDivisao ? ranking(nivel, alvo.divisao) : geral;
   const posicaoGeral = posicaoNoRanking(geral, alvo.id);
-  const posicaoNaDivisao = posicaoNoRanking(naDivisao, alvo.id);
+  const posicaoNaDivisao = porDivisao
+    ? posicaoNoRanking(naDivisao, alvo.id)
+    : posicaoGeral;
   // R9, a regra do ranking público (montarRankingPublico): só quem já vendeu na janela, posição até o limite
   // (empates no limite entram todos). Pelo ranking da coordenação, que tem o id: `eu` não depende do nome.
   const limite = campanha.publico.limite_ranking;
@@ -353,7 +362,7 @@ export function montarVisaoIndividual(
   // das células dele. Só quem está abaixo do alvo, pelos ids da hierarquia.
   const equipe: ItemEquipe[] = [];
   if (alvo.tipo !== "celula") {
-    const rankingDasCelulas = ranking("celula", alvo.divisao);
+    const rankingDasCelulas = ranking("celula", divisaoDosRankings);
     const itemDaCelula = (celula: CelulaCalculo): ItemEquipe => {
       const extra = dados.celulas.get(celula.id);
       if (extra === undefined)
@@ -386,7 +395,10 @@ export function montarVisaoIndividual(
     if (alvo.tipo === "discipulador")
       equipe.push(...celulasDoDiscipulador(alvo.id).map(itemDaCelula));
     else {
-      const rankingDosDiscipuladores = ranking("discipulador", alvo.divisao);
+      const rankingDosDiscipuladores = ranking(
+        "discipulador",
+        divisaoDosRankings,
+      );
       const discipuladores = dados.discipuladores
         .filter((discipulador) => discipulador.rede_id === alvo.id)
         .sort(porNome);
@@ -456,6 +468,7 @@ export function montarVisaoIndividual(
       nivel,
       janela,
       criterio: campanha.ranking.criterio,
+      ...(porDivisao ? {} : { por_divisao: false as const }),
       geral: posicaoGeral,
       divisao: posicaoNaDivisao,
       primeiros,

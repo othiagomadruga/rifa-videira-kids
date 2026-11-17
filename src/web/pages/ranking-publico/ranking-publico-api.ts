@@ -22,26 +22,43 @@ export const CAMINHO_RANKING_PUBLICO: (typeof ROTAS)["rankingPublico"]["caminho"
   "/api/publico/ranking";
 
 export type RankingDaDivisao = {
-  divisao: Divisao;
+  /** null: o ranking único, de todas as células (a campanha não separa por divisão, D27). */
+  divisao: Divisao | null;
   /** Só quem já vendeu, até o limite da campanha (a API corta; empates no limite entram todos). */
   itens: ItemRankingPublico[];
 };
 
-/** O ranking público das células: jovens e adultos, cada divisão um ranking separado. */
+/** O ranking público das células: jovens e adultos, cada divisão um ranking separado (ou um só, D27). */
 export type RankingPublico = {
   referencia: ReferenciaCampanha;
   janela: JanelaRankingResposta;
-  /** Na ordem de ORDEM_DIVISOES (jovens, adultos). */
+  /** Na ordem de ORDEM_DIVISOES (jovens, adultos); sem ranking por divisão, uma entrada só (divisão null). */
   divisoes: RankingDaDivisao[];
+  /** A campanha separa o ranking por divisão (a resposta não traz `por_divisao: false`). */
+  porDivisao: boolean;
   atualizadoEm: string;
 };
 
-/** "/api/publico/ranking?nivel=celula&divisao=jovens&periodo=atual". */
+/** O que a consulta anterior mostrou: a fase escolhe a janela; `porDivisao`, se pede uma ou duas listas. */
+export type RankingConhecido = {
+  fase: FaseCampanha | null;
+  porDivisao: boolean;
+};
+
+/** Antes da 1ª resposta: a fase não se sabe e vale o padrão (separa por divisão). */
+export const RANKING_DESCONHECIDO: RankingConhecido = {
+  fase: null,
+  porDivisao: true,
+};
+
+/** "/api/publico/ranking?nivel=celula&divisao=jovens&periodo=atual"; sem divisão (null), o ranking de todas. */
 export function caminhoDoRankingPublico(
-  divisao: Divisao,
+  divisao: Divisao | null,
   periodo: JanelaRanking,
 ): string {
-  const consulta = new URLSearchParams({ nivel: "celula", divisao, periodo });
+  const consulta = new URLSearchParams({ nivel: "celula" });
+  if (divisao) consulta.set("divisao", divisao);
+  consulta.set("periodo", periodo);
   return `${CAMINHO_RANKING_PUBLICO}?${consulta.toString()}`;
 }
 
@@ -57,10 +74,12 @@ type Opcoes = { signal?: AbortSignal };
 
 async function carregarDivisoes(
   periodo: JanelaRanking,
+  porDivisao: boolean,
   opcoes: Opcoes,
 ): Promise<RankingPublico> {
+  const pedidas = porDivisao ? ORDEM_DIVISOES : [null];
   const respostas = await Promise.all(
-    ORDEM_DIVISOES.map((divisao) =>
+    pedidas.map((divisao) =>
       api.get<RespostaRankingPublico>(
         caminhoDoRankingPublico(divisao, periodo),
         opcoes,
@@ -68,29 +87,41 @@ async function carregarDivisoes(
     ),
   );
   const [primeira] = respostas;
+  // Sem ranking por divisão, a API ignora a divisão pedida: as respostas são a mesma lista, de todas.
+  const unico = primeira.por_divisao === false;
   return {
     referencia: primeira.referencia,
     janela: primeira.janela,
-    divisoes: respostas.map((resposta, indice) => ({
-      divisao: ORDEM_DIVISOES[indice],
-      itens: resposta.itens,
-    })),
+    divisoes: unico
+      ? [{ divisao: null, itens: primeira.itens }]
+      : respostas.map((resposta, indice) => ({
+          divisao: pedidas[indice],
+          itens: resposta.itens,
+        })),
+    porDivisao: !unico,
     atualizadoEm: primeira.atualizado_em,
   };
 }
 
 /**
- * Os rankings de jovens e de adultos. `faseConhecida` (a da resposta anterior) escolhe a janela; se a
- * resposta mostrar outra fase (ex.: a campanha acabou desde a última consulta), pede de novo na janela certa.
+ * Os rankings de jovens e de adultos (ou o único, D27). O `conhecido` (o da resposta anterior) escolhe a janela e
+ * quantas listas pedir; se a resposta mostrar outra fase (ex.: a campanha acabou desde a última consulta), ou que a
+ * campanha voltou a separar por divisão depois de um pedido sem divisão, pede de novo do jeito certo. Separar ou não
+ * na 1ª consulta não custa uma ida a mais: os dois pedidos por divisão já trazem o ranking único.
  */
 export async function carregarRankingPublico(
-  faseConhecida: FaseCampanha | null,
+  conhecido: RankingConhecido,
   opcoes: Opcoes = {},
 ): Promise<RankingPublico> {
-  const periodo = janelaDaFase(faseConhecida);
-  const ranking = await carregarDivisoes(periodo, opcoes);
+  const periodo = janelaDaFase(conhecido.fase);
+  const ranking = await carregarDivisoes(periodo, conhecido.porDivisao, opcoes);
   const certa = janelaDaFase(ranking.referencia.fase);
-  return certa === periodo ? ranking : carregarDivisoes(certa, opcoes);
+  // Pedido sem divisão e a campanha separa: veio o ranking geral, e não os das divisões. O contrário não acontece: o
+  // pedido por divisão já traz o ranking único.
+  const faltamDivisoes = !conhecido.porDivisao && ranking.porDivisao;
+  return certa === periodo && !faltamDivisoes
+    ? ranking
+    : carregarDivisoes(certa, ranking.porDivisao, opcoes);
 }
 
 /** 404 nao_encontrado: ainda não há campanha ativa. */

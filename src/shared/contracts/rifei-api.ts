@@ -1,5 +1,5 @@
 /**
- * Integração com a API interna do painel da Rifei (RIFA-070; docs/decisions.md D27; docs/integracao-rifei.md, seção
+ * Integração com a API interna do painel da Rifei (RIFA-070; docs/decisions.md D28; docs/integracao-rifei.md, seção
  * 13). A Rifei não tem API pública: o painel (app.rifei.com.br) fala com `https://api.rifei.com.br/` com o token do
  * login (`Authorization: Bearer`). O sistema usa o MESMO token, guardado como segredo do Worker (`RIFEI_API_TOKEN`),
  * para fazer pelo admin o que ele faria à mão no painel:

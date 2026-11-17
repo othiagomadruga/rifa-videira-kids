@@ -54,7 +54,8 @@ export type CampanhaCalculo = {
   data_inicio: string;
   meta: { unidade: UnidadeMeta; regra: RegraMeta; valor: number };
   periodos: readonly { nome: string; dias: number; percentual_bp: number }[];
-  ranking: { criterio: CriterioRanking };
+  /** `por_divisao` ausente vale o padrão (separa por divisão: RANKING_POR_DIVISAO_PADRAO). */
+  ranking: { criterio: CriterioRanking; por_divisao?: boolean };
   publico: { mostra_percentual_meta: boolean; limite_ranking: number | null };
 };
 
@@ -108,6 +109,31 @@ export const ORDEM_DIVISOES = [
   "jovens",
   "adultos",
 ] as const satisfies readonly Divisao[];
+
+/**
+ * A campanha separa o ranking por divisão (RIFA-061, D27)? Sem a opção (uma campanha de antes dela), o padrão: sim
+ * (RANKING_POR_DIVISAO_PADRAO de regras.ts; aqui escrito, para calculos.ts trazer valores só de calendario.ts).
+ * Desligada, os rankings (`montarRankingPainel`, `montarRankingPublico`) ignoram a `divisao` da consulta e o bumbo
+ * lista um ranking só, de todas as células.
+ */
+export function rankingPorDivisao(campanha: {
+  ranking: { por_divisao?: boolean };
+}): boolean {
+  return campanha.ranking.por_divisao ?? true;
+}
+
+/**
+ * A divisão que filtra o ranking: a da consulta, ou nenhuma (todas as células) quando a campanha não separa por
+ * divisão. Com a marca que vai na resposta: `por_divisao: false` só nesse caso (ausente, a resposta fica como antes).
+ */
+function divisaoDoRanking(
+  campanha: CampanhaCalculo,
+  divisao: Divisao | undefined,
+): { divisao: Divisao | undefined; marca: { por_divisao?: false } } {
+  return rankingPorDivisao(campanha)
+    ? { divisao, marca: {} }
+    : { divisao: undefined, marca: { por_divisao: false } };
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Tipos das respostas, com nome, para as telas. O site importa regras e tipos daqui (módulo sem zod),
@@ -1275,11 +1301,12 @@ export function montarRankingPainel(
     consulta.periodo,
     base.dia,
   );
+  const { divisao, marca } = divisaoDoRanking(campanha, consulta.divisao);
   const linhas = linhasDoRanking(
     base,
     entrada.celulas,
     consulta.nivel,
-    consulta.divisao,
+    divisao,
     janela,
     corteDoDia(base),
   );
@@ -1292,7 +1319,8 @@ export function montarRankingPainel(
     };
   return {
     nivel: consulta.nivel,
-    divisao: consulta.divisao ?? null,
+    divisao: divisao ?? null,
+    ...marca,
     janela: resposta,
     criterio: campanha.ranking.criterio,
     unidade: campanha.meta.unidade,
@@ -1347,17 +1375,19 @@ export function montarRankingPublico(
     consulta.periodo,
     base.dia,
   );
+  const { divisao, marca } = divisaoDoRanking(campanha, consulta.divisao);
   const linhas = linhasDoRanking(
     base,
     entrada.celulas,
     consulta.nivel,
-    consulta.divisao,
+    divisao,
     janela,
     corteDoDia(base),
   );
   return {
     nivel: consulta.nivel,
-    divisao: consulta.divisao ?? null,
+    divisao: divisao ?? null,
+    ...marca,
     janela: resposta,
     criterio: campanha.ranking.criterio,
     referencia: referenciaDaCampanha(campanha, data),
@@ -1569,13 +1599,18 @@ function textoDoBumbo(
     }
   }
 
-  // Primeiras posições: ranking do período de ontem (ou da campanha, no fim), por divisão.
+  // Primeiras posições: ranking do período de ontem (ou da campanha, no fim), por divisão; sem ranking por divisão
+  // (D27), um ranking só, de todas as células, sem título (como quando só uma divisão tem células).
   const janela = encerrada
     ? janelaDaCampanha(base)
     : janelaDoPeriodo(base, indiceDaJanelaAtual(base, ontem));
-  const divisoes = ORDEM_DIVISOES.filter((divisao) =>
-    entrada.celulas.some((celula) => celula.divisao === divisao),
-  );
+  const divisoes: readonly (Divisao | undefined)[] = rankingPorDivisao(campanha)
+    ? ORDEM_DIVISOES.filter((divisao) =>
+        entrada.celulas.some((celula) => celula.divisao === divisao),
+      )
+    : entrada.celulas.length > 0
+      ? [undefined]
+      : [];
   if (divisoes.length > 0) {
     const periodoFechou = janela.ultimo === ontem;
     // Nunca mais posições que a visão pública permite.
@@ -1601,7 +1636,10 @@ function textoDoBumbo(
         ),
         posicoes,
       );
-      const titulo = divisoes.length > 1 ? `_${NOMES_DIVISAO[divisao]}_` : "";
+      const titulo =
+        divisao !== undefined && divisoes.length > 1
+          ? `_${NOMES_DIVISAO[divisao]}_`
+          : "";
       if (visiveis.length === 0) {
         linhas.push(
           titulo ? `${titulo}: ainda sem vendas.` : "Ainda sem vendas.",

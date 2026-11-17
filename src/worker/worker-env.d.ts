@@ -6,7 +6,7 @@ declare namespace Cloudflare {
     // Segredo do webhook da Rifei (D6): .dev.vars no dev, `wrangler secret put` em
     // produção, binding de teste no vitest.config.ts. Ausente ou vazio: o webhook responde 503.
     RIFEI_WEBHOOK_TOKEN?: string;
-    // Token do login na Rifei para a API interna do painel (RIFA-070, D27): `wrangler secret put RIFEI_API_TOKEN`
+    // Token do login na Rifei para a API interna do painel (RIFA-070, D28): `wrangler secret put RIFEI_API_TOKEN`
     // em produção, .dev.vars no dev. Ausente ou vazio: as rotas /api/admin/rifei/* respondem 503.
     RIFEI_API_TOKEN?: string;
     // Rate Limiting do Workers (RIFA-013b, `ratelimits` no wrangler.jsonc; lib/limite-requisicoes.ts).

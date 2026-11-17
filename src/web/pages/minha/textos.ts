@@ -408,16 +408,19 @@ export function textoDoVizinho(vizinho: VizinhoIndividual | null): string {
 
 /**
  * Entre quem é a disputa: na divisão, "Entre as células dos Jovens"; no geral (divisao null), "Entre todas
- * as células, jovens e adultos".
+ * as células, jovens e adultos"; sem ranking por divisão (D27, `porDivisao` false), só "Entre todas as células".
  */
 export function textoDosPares(
   nivel: NivelRanking,
   divisao: Divisao | null,
+  porDivisao = true,
 ): string {
   const { pares, artigo, todos } = PARES_DO_NIVEL[nivel];
-  return divisao === null
+  if (divisao !== null)
+    return `Entre ${artigo} ${pares} dos ${NOMES_DIVISAO[divisao]}`;
+  return porDivisao
     ? `Entre ${todos} ${pares}, jovens e adultos`
-    : `Entre ${artigo} ${pares} dos ${NOMES_DIVISAO[divisao]}`;
+    : `Entre ${todos} ${pares}`;
 }
 
 /** O critério do ranking, em uma frase (sem valores). */

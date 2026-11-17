@@ -1,10 +1,10 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
-// 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql e 0011_pagamento_conferencia.sql), aplicado
-// pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010 e a
-// 0011 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações
-// anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7;
-// RIFA-056).
+// 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
+// 0012_ranking_por_divisao.sql e 0013_codigo_afiliado_rifei.sql), aplicado pelo setup apply-migrations.ts no D1 local
+// dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010, a 0011, a 0012 e a 0013 também são aplicadas num D1 à parte (DB_MIGRACAO,
+// vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7;
+// RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -541,8 +541,8 @@ async function fotografarTodasAsTabelas(
 
 // As migrações sobre dados que já existiam são um cenário em passos no mesmo D1 (DB_MIGRACAO): até a 0005 e os
 // dados, a 0006 e as conferências dela, depois a 0007 sobre outros dados, a 0008 sobre mais outros, a 0009 sobre
-// tudo o que ficou (inclusive a trilha e as entregas do webhook), a 0010 sobre tudo isso e o token e a 0011 sobre o
-// resto (com uma recuperação e um pedido pendente). Por isso a
+// tudo o que ficou (inclusive a trilha e as entregas do webhook), a 0010 sobre tudo isso e o token, a 0011 sobre o
+// resto (com uma recuperação e um pedido pendente) e a 0012 sobre tudo (as campanhas ganham a opção). Por isso a
 // ordem é a do arquivo, mesmo com --sequence.shuffle: cada uma tem de ser a última aplicada quando os testes dela
 // rodam, e a cascata apaga linhas que a comparação "continuam iguais" fotografou.
 describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
@@ -1787,43 +1787,10 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ).toBe(aceito);
       }
     });
-
-    it("o UPSERT do PUT da campanha (salvarCampanhaAtiva, que nomeia as colunas) não apaga o modelo, com e sem os grupos do admin", async () => {
-      onTestFinished(apagarModelos);
-      await db
-        .prepare("UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1")
-        .bind(MODELO)
-        .run();
-      const dados = {
-        nome: "Campanha Depois da 0010",
-        slug_rifei: "campanha-depois-da-0010",
-        data_inicio: "2026-11-23",
-        preco_bilhete_centavos: 2000,
-        meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
-        periodos: [{ nome: "Período 1", dias: 21, percentual_bp: 10000 }],
-        ranking: { criterio: "percentual_meta" },
-        publico: { mostra_percentual_meta: false, limite_ranking: 3 },
-      };
-      for (const corpo of [
-        campanhaEntradaSchema.parse(dados),
-        // Com os grupos do admin (o PUT do admin): o UPSERT também não nomeia o modelo.
-        campanhaEntradaSchema.parse({
-          ...dados,
-          slug_rifei: "campanha-depois-da-0010-b",
-          pedidos: PEDIDOS_PADRAO,
-          acesso: ACESSO_PADRAO,
-          mensagens: MENSAGENS_PADRAO,
-        }),
-      ]) {
-        const salvo = await salvarCampanhaAtiva(db, corpo);
-        expect(salvo.ok && salvo.campanha.slug_rifei).toBe(corpo.slug_rifei);
-        expect(
-          (await modelos()).find((linha) => linha.ativa === 1)
-            ?.link_vendas_modelo,
-        ).toBe(MODELO);
-      }
-    });
   });
+
+  // O "UPSERT do PUT não apaga o modelo" (RIFA-046) roda no describe da 0012: o PUT de hoje nomeia a coluna da 0012
+  // (ranking_por_divisao), então só roda sobre o schema completo.
 
   // -------------------------------------------------------------------------------------------------
   // 0011 (RIFA-056): o pagamento registrado pela conferência, aplicada sobre tudo o que já existia
@@ -2040,29 +2007,197 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
   });
 
   // -------------------------------------------------------------------------------------------------
-  // 0012 (RIFA-070, D27): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
+  // 0012 (RIFA-061, D27): a opção do ranking por divisão na campanha, aplicada sobre tudo o que já existia
   // -------------------------------------------------------------------------------------------------
 
-  describe("0012 sobre dados que já existiam (RIFA-070)", () => {
+  describe("0012 sobre dados que já existiam (RIFA-061)", () => {
     const db = DB_MIGRACAO;
     let antes: Record<string, Record<string, unknown>[]>;
 
     beforeAll(async () => {
       // Idempotente: os describes anteriores já aplicaram até a 0011 (aqui vale também rodando este sozinho).
+      const ate0011 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0012",
+      );
+      expect(ate0011.map((migracao) => migracao.name)).not.toContain(
+        "0012_ranking_por_divisao.sql",
+      );
+      await applyD1Migrations(db, ate0011);
+      antes = await fotografarTodasAsTabelas(db);
+      // Até a 0012: a 0013 é aplicada depois, sobre tudo isto (describe "0013 sobre dados que já existiam").
       await applyD1Migrations(
         db,
-        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0012"),
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0013"),
+      );
+    });
+
+    it("a 0012 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0012_ranking_por_divisao.sql",
+      );
+      // A ativa e a inativa, sem a coluna antes da 0012; e a hierarquia, os pedidos e a trilha que já existiam.
+      expect(antes.campanhas).toHaveLength(2);
+      expect(antes.campanhas[0]).not.toHaveProperty("ranking_por_divisao");
+      for (const tabela of ["celulas", "redes", "pedidos", "auditoria"])
+        expect({ tabela, vazia: antes[tabela].length === 0 }).toEqual({
+          tabela,
+          vazia: false,
+        });
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada campanha ganha só ranking_por_divisao = 1 (separa, como sempre)", async () => {
+      const { campanhas, ...depois } = await fotografarTodasAsTabelas(db);
+      const { campanhas: campanhasAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(campanhas).toEqual(
+        campanhasAntes.map((campanha) => ({
+          ...campanha,
+          ranking_por_divisao: 1,
+        })),
+      );
+      const { results: coluna } = await db
+        .prepare(
+          `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('campanhas')
+           WHERE name = 'ranking_por_divisao'`,
+        )
+        .all();
+      expect(coluna).toEqual([
+        {
+          name: "ranking_por_divisao",
+          type: "INTEGER",
+          notnull: 1,
+          dflt_value: "1",
+          pk: 0,
+        },
+      ]);
+    });
+
+    it("a campanha que já existia sai com o ranking por divisão ligado; o PUT sem a opção mantém, com a opção grava", async () => {
+      const ativa = async () =>
+        (await db
+          .prepare(
+            "SELECT ranking_por_divisao, ranking_criterio FROM campanhas WHERE ativa = 1",
+          )
+          .first<{ ranking_por_divisao: number; ranking_criterio: string }>())!;
+      const linha = antes.campanhas.find((campanha) => campanha.ativa === 1)!;
+      onTestFinished(async () => {
+        await db
+          .prepare(
+            "UPDATE campanhas SET ranking_por_divisao = 1, ranking_criterio = ?1 WHERE ativa = 1",
+          )
+          .bind(linha.ranking_criterio)
+          .run();
+      });
+      expect(await ativa()).toEqual({
+        ranking_por_divisao: 1,
+        ranking_criterio: linha.ranking_criterio,
+      });
+      const dados = campanhaEntradaSchema.parse({
+        nome: "Campanha Depois da 0012",
+        slug_rifei: linha.slug_rifei,
+        data_inicio: "2026-11-23",
+        preco_bilhete_centavos: 2000,
+        meta: { unidade: "bilhetes", regra: "fixa_por_celula", valor: 50 },
+        periodos: [{ nome: "Única", dias: 24, percentual_bp: 10_000 }],
+        ranking: { criterio: "bilhetes", por_divisao: false },
+      });
+      const desligada = await salvarCampanhaAtiva(db, dados);
+      expect(desligada.ok && desligada.campanha.ranking).toEqual({
+        criterio: "bilhetes",
+        por_divisao: false,
+      });
+      // Sem a opção no corpo (uma aba antiga): o gravado fica.
+      const semOpcao = await salvarCampanhaAtiva(db, {
+        ...dados,
+        ranking: { criterio: "percentual_meta" },
+      });
+      expect(semOpcao.ok && semOpcao.campanha.ranking).toEqual({
+        criterio: "percentual_meta",
+        por_divisao: false,
+      });
+      expect((await ativa()).ranking_por_divisao).toBe(0);
+      await expect(
+        db.prepare("UPDATE campanhas SET ranking_por_divisao = 2").run(),
+      ).rejects.toThrow(/CHECK constraint failed/);
+    });
+    // RIFA-046 (veio do describe da 0010): o PUT de hoje nomeia a coluna da 0012, então roda sobre o schema completo.
+    it("o UPSERT do PUT da campanha (salvarCampanhaAtiva, que nomeia as colunas) não apaga o modelo, com e sem os grupos do admin", async () => {
+      const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
+      const modelos = async () =>
+        (
+          await db
+            .prepare(
+              "SELECT ativa, link_vendas_modelo FROM campanhas ORDER BY id",
+            )
+            .all<{ ativa: number; link_vendas_modelo: string | null }>()
+        ).results;
+      onTestFinished(async () => {
+        await db
+          .prepare("UPDATE campanhas SET link_vendas_modelo = NULL")
+          .run();
+      });
+      await db
+        .prepare("UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1")
+        .bind(MODELO)
+        .run();
+      const dados = {
+        nome: "Campanha Depois da 0010",
+        slug_rifei: "campanha-depois-da-0010",
+        data_inicio: "2026-11-23",
+        preco_bilhete_centavos: 2000,
+        meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
+        periodos: [{ nome: "Período 1", dias: 21, percentual_bp: 10000 }],
+        ranking: { criterio: "percentual_meta" },
+        publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+      };
+      for (const corpo of [
+        campanhaEntradaSchema.parse(dados),
+        // Com os grupos do admin (o PUT do admin): o UPSERT também não nomeia o modelo.
+        campanhaEntradaSchema.parse({
+          ...dados,
+          slug_rifei: "campanha-depois-da-0010-b",
+          pedidos: PEDIDOS_PADRAO,
+          acesso: ACESSO_PADRAO,
+          mensagens: MENSAGENS_PADRAO,
+        }),
+      ]) {
+        const salvo = await salvarCampanhaAtiva(db, corpo);
+        expect(salvo.ok && salvo.campanha.slug_rifei).toBe(corpo.slug_rifei);
+        expect(
+          (await modelos()).find((linha) => linha.ativa === 1)
+            ?.link_vendas_modelo,
+        ).toBe(MODELO);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0013 (RIFA-070, D28): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0013 sobre dados que já existiam (RIFA-070)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0012 (aqui vale também rodando este sozinho).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0013"),
       );
       antes = await fotografarTodasAsTabelas(db);
       await applyD1Migrations(db, TEST_MIGRATIONS);
     });
 
-    it("a 0012 foi aplicada por último, sobre os dados (com afiliados gravados)", async () => {
+    it("a 0013 foi aplicada por último, sobre os dados (com afiliados gravados)", async () => {
       const { results } = await db
         .prepare("SELECT name FROM d1_migrations ORDER BY id")
         .all<{ name: string }>();
       expect(results.map((linha) => linha.name).at(-1)).toBe(
-        "0012_codigo_afiliado_rifei.sql",
+        "0013_codigo_afiliado_rifei.sql",
       );
       expect(antes.afiliados.length).toBeGreaterThan(0);
       expect(antes.afiliados[0]).not.toHaveProperty("codigo_rifei");

@@ -1,4 +1,4 @@
-// RIFA-070 (D27): o cartão "Afiliados na Rifei" da Adesão (só o admin), com a API falsa: nada é lido sozinho; ler
+// RIFA-070 (D28): o cartão "Afiliados na Rifei" da Adesão (só o admin), com a API falsa: nada é lido sozinho; ler
 // mostra o vínculo e a sugestão pelo e-mail; sincronizar avisa a Adesão para atualizar; os convites das células sem
 // afiliado saem com o WhatsApp do líder; sem a configuração, a tela manda usar o painel da Rifei. Dados fictícios.
 import { fireEvent, render, screen, within } from "@testing-library/react";

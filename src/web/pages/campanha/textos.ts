@@ -56,6 +56,15 @@ export const TEXTO_CRITERIO: Record<
   },
 };
 
+/** RIFA-061 (D27): a opção do ranking por divisão, com uma linha do que acontece ligada e desligada. */
+export const TEXTO_POR_DIVISAO = {
+  rotulo: "Separar o ranking por divisão (jovens e adultos)",
+  ligada:
+    "Ligada: Jovens e Adultos disputam cada um o seu ranking, no telão, no ranking aberto, nos rankings e no bumbo.",
+  desligada:
+    "Desligada: um ranking só, com todas as células juntas, em todos esses lugares.",
+} as const;
+
 // ---------------------------------------------------------------------------------------------------
 // Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
 // tela. Dizem para que serve e o que acontece, sem repetir o rótulo.
@@ -105,6 +114,8 @@ export const DICAS = {
     "O número da meta, na unidade e na regra escolhidas. A meta de cada célula sai dele.",
   criterioRanking:
     "Decide quem fica na frente nos rankings, no telão e no ranking aberto.",
+  porDivisao:
+    "Marcada, Jovens e Adultos têm cada um o seu ranking. Desmarcada, todas as células disputam um ranking só.",
   mostraPercentual:
     "Marcado, o telão e o ranking aberto também mostram quanto da meta cada célula já fez, em %. Nunca mostram R$.",
   limiteRanking:

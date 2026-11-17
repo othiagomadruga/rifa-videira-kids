@@ -25,10 +25,13 @@ type Props = { resposta: RespostaRanking };
 export function TabelaRanking({ resposta }: Props) {
   const { nivel, divisao, unidade, janela, itens } = resposta;
   const textos = TEXTO_NIVEL[nivel];
+  // Sem ranking por divisão (D27), a legenda não fala de divisão.
   const legenda = [
     `Ranking: ${textos.plural}`,
     janela.nome,
-    divisao ? NOMES_DIVISAO[divisao] : "todas as divisões",
+    ...(resposta.por_divisao === false
+      ? []
+      : [divisao ? NOMES_DIVISAO[divisao] : "todas as divisões"]),
   ].join(" · ");
 
   return (
@@ -137,11 +140,15 @@ function Linha({ item, unidade, vinculo }: PropsLinha) {
 
 /**
  * A quem o item pertence: célula → discipulador e rede; discipulador → rede; rede → a divisão. Com
- * "todas as divisões", a divisão vem na frente em todos os níveis.
+ * "todas as divisões", a divisão vem na frente em todos os níveis. Sem ranking por divisão (D27), a divisão não
+ * aparece (a rede fica sem vínculo).
  */
 function vinculoDoItem(item: ItemRanking, resposta: RespostaRanking): string {
   const partes: string[] = [];
-  if (resposta.divisao === null || resposta.nivel === "rede") {
+  if (
+    resposta.por_divisao !== false &&
+    (resposta.divisao === null || resposta.nivel === "rede")
+  ) {
     partes.push(NOMES_DIVISAO[item.divisao]);
   }
   if (item.discipulador) partes.push(item.discipulador.nome);

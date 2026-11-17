@@ -1,4 +1,4 @@
-// "Marcar como pago na Rifei" (RIFA-070, D27; só o admin): os números dos pedidos de "Para marcar como pago na Rifei"
+// "Marcar como pago na Rifei" (RIFA-070, D28; só o admin): os números dos pedidos de "Para marcar como pago na Rifei"
 // vão ao sistema, que marca cada um na Rifei pela API do painel e devolve o resultado de cada pedido. Só os NÚMEROS
 // dos pedidos saem da tela (nunca o extrato): o mesmo que o "Copiar os números dos pedidos" já entregava.
 //

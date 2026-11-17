@@ -193,6 +193,7 @@ Corpo do PUT:
 (As mensagens estão encurtadas; os padrões completos são `MENSAGENS_PADRAO`, em `regras.ts`.)
 
 - `fuso_horario` (padrão `America/Belem`) e `publico` (padrão `{ false, 3 }`) são opcionais.
+- `ranking.por_divisao` (RIFA-061, [D27](decisions.md#d27-ranking-único-separar-ou-não-o-ranking-por-divisão-rifa-061-contrato-2026-11-17)): separa o ranking por divisão (`true`, o padrão) ou não (`false`: um ranking só, de todas as células). No PUT é opcional e, ausente, **mantém o gravado** (no primeiro PUT, o padrão), como os grupos do admin; na resposta, sempre presente. É do grupo `ranking`: a coordenação também muda, como o critério.
 - **Regras do admin** (Sprint 6, [D20](decisions.md#d20-regras-do-admin-na-campanha-desconsiderar-pedido-acesso-da-hierarquia-remover-afiliado-e-mensagens-rifa-028-029-031-e-032-contrato-2026-11-11)): `pedidos`, `acesso` e `mensagens` são opcionais e, diferente de `publico`, **o grupo ausente mantém o que está gravado** (no primeiro PUT, o padrão); o grupo presente vem inteiro e substitui o gravado.
   - **Só o `admin` muda os três** (RIFA-042). A coordenação pode mandá-los ausentes ou iguais ao gravado (passa, e a gravação vai sem eles: o PUT dela nunca escreve essas colunas nem desfaz o que um admin gravar no meio); diferente do gravado, 403 `proibido`. O resto da campanha a coordenação continua mudando.
   - `pedidos.desconsiderar` (padrão `false`): libera desconsiderar e reconsiderar pedido ([abaixo](#regras-da-campanha-sprint-6-docsdecisionsmd-d20)). Desligar não devolve às contas o que já foi desconsiderado.
@@ -559,7 +560,7 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 
 - **Consulta** (`consultaRankingSchema`):
   - `nivel` = `celula` (padrão), `discipulador` ou `rede`;
-  - `divisao` = `jovens` ou `adultos` (filtro: rankings separados);
+  - `divisao` = `jovens` ou `adultos` (filtro: rankings separados). **Ignorada** quando a campanha não separa o ranking por divisão (`ranking.por_divisao: false`, D27): a resposta é o ranking de todas as células, com `divisao: null` e `por_divisao: false`;
   - `periodo` = `atual` (padrão: o período que contém a data; antes do início, o 1º; depois do fim, o último) ou `campanha` (do 1º dia até a data);
   - `data` (no máximo hoje): padrão hoje. Serve, por exemplo, para ver a Semana 2 fechada (`periodo=atual&data=<último dia dela>`).
 - **200** (`respostaRankingSchema`): todas as instâncias do nível (e da divisão), inclusive as que não venderam, na ordem do ranking.
@@ -605,6 +606,7 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 - **Ordem** pelo critério configurado (`ranking.criterio`): `percentual_meta` (realizado na janela ÷ meta na janela), `bilhetes` ou `arrecadacao`. Empates dividem a posição (1, 1, 3) e seguem o nome. No critério % da meta, quem está sem meta vai para o fim.
 - `meta`, `esperado`, `realizado`, `diferenca`, `situacao` e `percentual_meta_bp` são da janela; `vendas` são os totais aprovados na janela.
 - `discipulador` só no nível célula; `rede` nos níveis célula e discipulador.
+- `por_divisao` (D27): **só aparece**, com `false`, quando a campanha não separa o ranking por divisão; ausente, a resposta é a de sempre.
 - `acima` e `abaixo`: o vizinho na posição anterior e na seguinte (empatados não são vizinhos), com a distância no critério (pontos-base, bilhetes ou centavos; null se um dos dois está sem meta).
 - **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 404 `nao_encontrado` (sem campanha ativa).
 
@@ -640,6 +642,7 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 
 - Mesma ordem e mesmas posições do ranking da coordenação, mas só com quem **já vendeu** na janela e com `posicao` até `publico.limite_ranking` (padrão 3; null = todas). Quem empata na última posição entra (1, 2, 3, 3). Antes da primeira venda, `itens` vem vazio.
 - `percentual_meta_bp` só aparece se `publico.mostra_percentual_meta = true`.
+- `por_divisao: false` (D27) só aparece quando a campanha não separa o ranking por divisão: a `divisao` da consulta é ignorada e vem o ranking de todas as células (`divisao: null`). O site pede as duas divisões na 1ª consulta e já recebe a lista única.
 - Nunca valores em unidades, R$ ou bilhetes, com qualquer configuração: não aparecem centavos, bilhetes, meta, esperado, realizado, diferença ou projeção. O teste de `api.test.ts` confere que os campos das rotas abertas estão numa lista fechada.
 - **Erros**: 400 `requisicao_invalida`, 404 `nao_encontrado` (sem campanha ativa).
 
@@ -674,6 +677,7 @@ Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o seu link de afiliado com
 
 - Partes: venda de ontem (% da meta do dia), acumulado contra a curva e projeção, top 3 do período por divisão (como no ranking público: só quem vendeu, nunca mais posições que `publico.limite_ranking`), as 3 células que mais subiram ontem (em % da própria meta) e a chamada final. Antes do início, no 1º dia, no último dia e depois do fim, o texto muda (contagem regressiva, largada, último dia e resultado final).
 - Cada divisão lista no máximo 5 células (`NOMES_POR_DIVISAO_NO_BUMBO`); as demais empatadas viram a linha "e mais N empatadas no Pº lugar".
+- Sem ranking por divisão (`ranking.por_divisao: false`, D27), um ranking só, de todas as células, sem `_Jovens_`/`_Adultos_` (como já era quando só uma divisão tem células).
 - **Nunca contém R$, centavos nem quantidade de bilhetes**, com qualquer configuração (R9). Os % (da meta, da curva e da projeção) aparecem; % por célula só se `publico.mostra_percentual_meta`. Um bumbo interno da coordenação, com bilhetes, é pendência ([regras-de-calculo.md, seção 6](regras-de-calculo.md#6-pendências)).
 - Sempre cabe em 4000 caracteres (o pior caso, com 72 células empatadas e nomes de 120 caracteres, dá 2436), com o *negrito* e o _itálico_ do WhatsApp.
 - **Erros**: 400 `requisicao_invalida` (`data` fora do formato, fora da janela da campanha ou futura), 404 `nao_encontrado` (sem campanha ativa).
@@ -698,6 +702,9 @@ Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`;
 - Os números são os do painel da coordenação para o mesmo escopo (`montarResumoPainel` e `montarRankingPainel`,
   com as metas sobre todas as células); a curva usa a meta exata, então o ponto de hoje é o
   `percentual_meta_bp` da campanha. Com meta em centavos, os bilhetes de hoje saem somados das vendas do dia.
+- Sem ranking por divisão (`ranking.por_divisao: false`, D27), `ranking.por_divisao` vem `false`, `ranking.divisao`
+  igual a `ranking.geral` (o schema confere), os primeiros são os do ranking de todos e a `posicao_divisao` da equipe é
+  a posição entre todos. Com a opção ligada, o campo não aparece.
 - `equipe`: do discipulador, as células dele por nome; da rede, os discipuladores dela por nome (inclusive os sem
   células), cada um seguido das células dele por nome (ordem de português: "Célula 2" antes de "Célula 10").
   `posicao_divisao` é a posição no ranking do nível do item, na divisão e na janela pedidas.
@@ -1082,7 +1089,7 @@ de 4 módulos (`MARGEM_QR_LINK_VENDAS_MODULOS`), preto no branco; a imagem para 
 
 ---
 
-## API interna da Rifei (RIFA-070; docs/decisions.md D27)
+## API interna da Rifei (RIFA-070; docs/decisions.md D28)
 
 Rotas **só de admin** (o "só admin" vai no handler, antes do corpo: a coordenação leva 403). Todas chamam a Rifei pela
 API interna do painel (`https://api.rifei.com.br/`) com o segredo do Worker `RIFEI_API_TOKEN`. Catálogo:

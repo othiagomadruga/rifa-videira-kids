@@ -130,7 +130,7 @@ function ConviteGerado({ convite }: { convite: Convite }) {
   );
 }
 
-// Afiliados da Rifei na Adesão (RIFA-070, D27), só o admin. Nada é lido sozinho (cada botão chama a Rifei uma vez):
+// Afiliados da Rifei na Adesão (RIFA-070, D28), só o admin. Nada é lido sozinho (cada botão chama a Rifei uma vez):
 // a tela da reunião continua atualizando pelo sistema, e a Rifei não é chamada a cada 15 s.
 export function AfiliadosDaRifei({ aoMudar }: { aoMudar: () => void }) {
   const [estado, setEstado] = useState<Estado>({ tipo: "parado" });

@@ -1,5 +1,5 @@
 /**
- * O que as rotas da API da Rifei (RIFA-070, D27; routes/rifei.ts) leem e gravam no D1.
+ * O que as rotas da API da Rifei (RIFA-070, D28; routes/rifei.ts) leem e gravam no D1.
  *
  * - Marcar como pago: só LÊ os pedidos do corpo (o status e a desconsideração), para mandar à Rifei só os pendentes ou
  *   expirados da campanha ativa. Nada do pedido é gravado: ele passa a contar quando o "Pedido pago" chegar pelo

@@ -581,7 +581,7 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - webhook.gerar_token (RIFA-039, D21): ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook, alvo `webhook`
  *   (ALVO_AUDITORIA_TOKEN_WEBHOOK); resumo com o que deixou de valer (nada, o segredo do Worker ou o token da tela
  *   gerado em <instante>), NUNCA o token nem o hash. O 409 (sem `substituir`) não registra.
- * - rifei.marcar_pagos, rifei.sincronizar_afiliados e rifei.gerar_convites (RIFA-070, D27): ROTAS_RIFEI_API, alvo
+ * - rifei.marcar_pagos, rifei.sincronizar_afiliados e rifei.gerar_convites (RIFA-070, D28): ROTAS_RIFEI_API, alvo
  *   `campanha:<id>` na marcação e `rifei` (ALVO_AUDITORIA_AFILIADOS_RIFEI) nos afiliados; resumo só com contagens e,
  *   na marcação, os números dos pedidos marcados se couberem (nunca o token, o link do convite nem o e-mail do
  *   afiliado). Registram só quando a Rifei aceitou algo (a marcação, o convite) ou quando a sincronização mudou algo.
@@ -862,7 +862,10 @@ export type JanelaRanking = (typeof JANELAS_RANKING)[number];
 
 export const consultaRankingSchema = z.object({
   nivel: z.enum(NIVEIS_RANKING).default("celula"),
-  /** Filtra uma divisão (rankings separados de jovens e adultos). */
+  /**
+   * Filtra uma divisão (rankings separados de jovens e adultos). Ignorada quando a campanha não separa o ranking por
+   * divisão (D27): o ranking é o de todas as células, com `divisao: null` e `por_divisao: false` na resposta.
+   */
   divisao: divisaoSchema.optional(),
   /**
    * `atual` = período que contém a data (antes do início, o 1º; depois do fim, o último);
@@ -888,6 +891,13 @@ const vinculoRankingSchema = z.strictObject({
   id: idSchema,
   nome: z.string().min(1),
 });
+
+/**
+ * RIFA-061, D27: só aparece, com `false`, quando a campanha NÃO separa o ranking por divisão (`ranking.por_divisao`
+ * desligado): o ranking é um só, de todas as células, e a `divisao` da consulta é ignorada (a resposta sai com
+ * `divisao: null`). Ausente: o ranking separa as divisões, como sempre (a resposta fica igual à de antes da opção).
+ */
+export const porDivisaoNaRespostaSchema = z.literal(false).optional();
 
 /** Quem está logo acima ou logo abaixo (na posição vizinha; empatados não são vizinhos). */
 export const vizinhoRankingSchema = z.strictObject({
@@ -923,7 +933,9 @@ export type ItemRanking = z.infer<typeof itemRankingSchema>;
 
 export const respostaRankingSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING),
+  /** A divisão do ranking; null = todas (sem filtro, ou a campanha não separa por divisão). */
   divisao: divisaoSchema.nullable(),
+  por_divisao: porDivisaoNaRespostaSchema,
   janela: janelaRankingSchema,
   criterio: z.enum(CRITERIOS_RANKING),
   unidade: z.enum(UNIDADES_META),
@@ -1065,7 +1077,9 @@ export const itemRankingPublicoSchema = z.strictObject({
 
 export const respostaRankingPublicoSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING),
+  /** A divisão do ranking; null = todas (sem filtro, ou a campanha não separa por divisão). */
   divisao: divisaoSchema.nullable(),
+  por_divisao: porDivisaoNaRespostaSchema,
   janela: janelaRankingSchema,
   criterio: z.enum(CRITERIOS_RANKING),
   referencia: referenciaCampanhaSchema,
@@ -1229,14 +1243,23 @@ export const rankingIndividualSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING),
   janela: janelaRankingSchema,
   criterio: z.enum(CRITERIOS_RANKING),
+  /**
+   * RIFA-061, D27: só aparece, com `false`, quando a campanha não separa o ranking por divisão. Aí o ranking que vale é
+   * o geral: `divisao` sai igual a `geral`, `primeiros` são os do ranking de todos e a `posicao_divisao` da equipe é a
+   * posição no ranking de todos. Ausente: separa, como sempre.
+   */
+  por_divisao: porDivisaoNaRespostaSchema,
   /** Entre todos do nível (jovens e adultos juntos). null: o alvo não tem células e não entra no ranking (R8). */
   geral: posicaoIndividualSchema.nullable(),
-  /** Entre os do nível na divisão do alvo (a premiação separa as divisões). null: como em `geral`. */
+  /**
+   * Entre os do nível na divisão do alvo (a premiação separa as divisões). null: como em `geral`. Com
+   * `por_divisao: false`, igual a `geral`.
+   */
   divisao: posicaoIndividualSchema.nullable(),
   /**
-   * Os primeiros da divisão, pela regra do ranking público: só quem já vendeu na janela, posição até
-   * `publico.limite_ranking` (padrão 3; null = todos), empates na última posição entram todos. Só nome e
-   * posição; `eu` marca o próprio alvo (pelo id, não pelo nome).
+   * Os primeiros da divisão (com `por_divisao: false`, os de todos), pela regra do ranking público: só quem já vendeu
+   * na janela, posição até `publico.limite_ranking` (padrão 3; null = todos), empates na última posição entram todos.
+   * Só nome e posição; `eu` marca o próprio alvo (pelo id, não pelo nome).
    */
   primeiros: z.array(
     z.strictObject({
@@ -1263,8 +1286,8 @@ export const itemEquipeSchema = z.strictObject({
   afiliados_vinculados: quantidadeSchema.nullable(),
   desempenho: desempenhoIndividualSchema,
   /**
-   * Posição no ranking do nível dele, na divisão, na janela pedida. null quando ele não entra no ranking
-   * (discipulador sem células, R8).
+   * Posição no ranking do nível dele, na divisão (com `ranking.por_divisao: false`, no ranking de todos, D27), na
+   * janela pedida. null quando ele não entra no ranking (discipulador sem células, R8).
    */
   posicao_divisao: z.number().int().min(1).nullable(),
 });
@@ -1338,6 +1361,15 @@ export const respostaVisaoIndividualSchema = z
       problema(
         ["ranking", "divisao"],
         "Fora do ranking (alvo sem células): geral e divisão null juntos",
+      );
+    if (
+      visao.ranking.por_divisao === false &&
+      JSON.stringify(visao.ranking.divisao) !==
+        JSON.stringify(visao.ranking.geral)
+    )
+      problema(
+        ["ranking", "divisao"],
+        "Sem ranking por divisão (D27), a posição na divisão é a geral",
       );
     const { fase, dia_campanha, duracao_dias } = visao.referencia;
     if (visao.desempenho.campanha.percentual_meta_bp === null) {
@@ -2989,7 +3021,7 @@ export const ROTAS_LINK_VENDAS = {
 export type NomeRotaLinkVendas = keyof typeof ROTAS_LINK_VENDAS;
 
 // ---------------------------------------------------------------------------------------------------
-// API interna da Rifei (RIFA-070, D27; só admin): marcar como pagos os pedidos da Conferência do extrato, ler e
+// API interna da Rifei (RIFA-070, D28; só admin): marcar como pagos os pedidos da Conferência do extrato, ler e
 // sincronizar os afiliados da conta e gerar os convites das células. Regras puras, limites e textos em ./rifei-api.
 // ---------------------------------------------------------------------------------------------------
 
@@ -3144,7 +3176,7 @@ export const respostaConvitesRifeiSchema = z.strictObject({
 export type RespostaConvitesRifei = z.infer<typeof respostaConvitesRifeiSchema>;
 
 /**
- * Rotas da API da Rifei (RIFA-070, D27), só admin (no handler de cada rota). Todas chamam a Rifei com o segredo
+ * Rotas da API da Rifei (RIFA-070, D28), só admin (no handler de cada rota). Todas chamam a Rifei com o segredo
  * `RIFEI_API_TOKEN`; sem ele: 503 `nao_configurado`. Sem campanha ativa: 404. Falha inteira da Rifei: 502
  * `rifei_falhou` com detalhesRifeiFalhouSchema. Saem com `Cache-Control: no-store` (do exigirSessao).
  */

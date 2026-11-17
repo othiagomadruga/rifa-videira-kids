@@ -354,7 +354,7 @@ function CopiarNumeros({
 }
 
 // O resultado do extrato: os números do cruzamento e as quatro listas. Nada do sistema muda aqui; o admin pode mandar
-// a lista "Para marcar" à Rifei (RIFA-070, D27), e a venda passa a contar quando a Rifei avisar pelo webhook.
+// a lista "Para marcar" à Rifei (RIFA-070, D28), e a venda passa a contar quando a Rifei avisar pelo webhook.
 export function ResultadoDoExtrato({
   origem,
   extrato,

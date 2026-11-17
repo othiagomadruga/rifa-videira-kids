@@ -234,7 +234,7 @@ export const DICAS = {
   numeros: "Os números para copiar à mão, um por linha.",
 };
 
-/** "Marcar como pago na Rifei" (RIFA-070, D27; só o admin): o sistema marca na Rifei pela API do painel. */
+/** "Marcar como pago na Rifei" (RIFA-070, D28; só o admin): o sistema marca na Rifei pela API do painel. */
 export const MARCAR_NA_RIFEI = {
   botao: (n: number) =>
     `Marcar ${plural(n, "pedido", "pedidos")} como pago na Rifei`,

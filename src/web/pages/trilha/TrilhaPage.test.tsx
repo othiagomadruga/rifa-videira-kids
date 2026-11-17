@@ -229,6 +229,10 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Pedido voltou a contar",
       "Afiliado removido",
       "Token do webhook gerado",
+      // RIFA-070 (D28): a API da Rifei.
+      "Pedidos marcados como pagos na Rifei",
+      "Afiliados sincronizados com a Rifei",
+      "Convites de afiliado gerados na Rifei",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

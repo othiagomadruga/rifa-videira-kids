@@ -19,11 +19,15 @@
 //   do contrato (MENSAGENS_PADRAO) é gravado como NULL (= o padrão): se o padrão mudar um dia, quem nunca editou
 //   acompanha. Na leitura, NULL volta como o padrão. Esses três grupos são só do admin (RIFA-042, adendo da D20):
 //   a rota confere com gruposDoAdminAlterados e grava o PUT da coordenação com semGruposDoAdmin.
+// - Ranking por divisão (RIFA-061, D27; coluna da migração 0012): `ranking.por_divisao`. No PUT, ausente mantém o
+//   gravado (no primeiro PUT, o padrão da coluna: separa), como os grupos do admin; é do grupo `ranking`, que a
+//   coordenação também muda (como o critério).
 import type { z } from "zod";
 import {
   ACESSO_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
+  RANKING_POR_DIVISAO_PADRAO,
   TIPOS_MENSAGEM,
   calcularCalendario,
   respostaCampanhaSchema,
@@ -71,6 +75,8 @@ export interface CampanhaAtiva {
   meta_regra: string;
   meta_valor: number;
   ranking_criterio: string;
+  /** RIFA-061 (D27, migração 0012): 1 = separa o ranking por divisão; 0 = um ranking só. */
+  ranking_por_divisao: number;
   publico_mostra_percentual_meta: number;
   publico_limite_ranking: number | null;
   /** Regras do admin (D20, migração 0008): as chaves (0/1) e os modelos (NULL = o padrão do contrato). */
@@ -107,7 +113,7 @@ type LinhaCampanhaAtiva = Omit<CampanhaAtiva, "periodos"> & {
 // A ativa e os períodos dela num comando só (json_group_array devolve "[]" sem períodos).
 const SELECIONAR_CAMPANHA_ATIVA = `
   SELECT c.id, c.nome, c.slug_rifei, c.fuso_horario, c.data_inicio, c.preco_bilhete_centavos,
-    c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio,
+    c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio, c.ranking_por_divisao,
     c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.pedidos_desconsiderar,
     c.acesso_discipuladores, c.acesso_redes, c.mensagem_link_coordenacao, c.mensagem_link_lider,
     c.mensagem_link_discipulador, c.mensagem_link_rede, c.criado_em, c.atualizado_em,
@@ -122,13 +128,15 @@ const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 // campanhas_uma_ativa). criado_em fica como estava; atualizado_em vira o instante da gravação.
 // Regras do admin (D20): ?12 a ?14 são as chaves (null = grupo ausente: o padrão no INSERT, o gravado no UPDATE);
 // ?15 = 1 quando o grupo `mensagens` veio, e ?16 a ?19 são os modelos (null = o padrão do contrato).
+// RIFA-061 (D27): ?20 é `ranking.por_divisao` (null = ausente: o padrão no INSERT, o gravado no UPDATE).
 const GRAVAR_CAMPANHA = `
   INSERT INTO campanhas (nome, slug_rifei, ativa, fuso_horario, data_inicio, preco_bilhete_centavos,
     meta_unidade, meta_regra, meta_valor, ranking_criterio, publico_mostra_percentual_meta,
     publico_limite_ranking, pedidos_desconsiderar, acesso_discipuladores, acesso_redes,
-    mensagem_link_coordenacao, mensagem_link_lider, mensagem_link_discipulador, mensagem_link_rede)
+    mensagem_link_coordenacao, mensagem_link_lider, mensagem_link_discipulador, mensagem_link_rede,
+    ranking_por_divisao)
   VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, coalesce(?12, 0), coalesce(?13, 1),
-    coalesce(?14, 1), ?16, ?17, ?18, ?19)
+    coalesce(?14, 1), ?16, ?17, ?18, ?19, coalesce(?20, 1))
   ON CONFLICT (ativa) WHERE ativa = 1 DO UPDATE SET
     nome = excluded.nome,
     slug_rifei = excluded.slug_rifei,
@@ -139,6 +147,7 @@ const GRAVAR_CAMPANHA = `
     meta_regra = excluded.meta_regra,
     meta_valor = excluded.meta_valor,
     ranking_criterio = excluded.ranking_criterio,
+    ranking_por_divisao = coalesce(?20, ranking_por_divisao),
     publico_mostra_percentual_meta = excluded.publico_mostra_percentual_meta,
     publico_limite_ranking = excluded.publico_limite_ranking,
     pedidos_desconsiderar = coalesce(?12, pedidos_desconsiderar),
@@ -266,10 +275,16 @@ function resumirCriacaoDaCampanha(depois: DadosCampanha): string {
       : TIPOS_MENSAGEM.filter(
           (tipo) => mensagens[tipo] !== MENSAGENS_PADRAO[tipo],
         );
+  // RIFA-061 (D27): o ranking por divisão só entra quando nasce desligado (ligado é o padrão de sempre).
+  const porDivisao =
+    (depois.ranking.por_divisao ?? RANKING_POR_DIVISAO_PADRAO)
+      ? []
+      : [`ranking.por_divisao: ${ligado(false)}`];
   return [
     `Campanha criada: slug_rifei ${JSON.stringify(depois.slug_rifei)}`,
     `preco_bilhete_centavos ${depois.preco_bilhete_centavos}`,
     ...chaves.map(([nome, valor]) => `${nome}: ${ligado(valor)}`),
+    ...porDivisao,
     ...editadas.map((tipo) => `mensagens.${tipo}`),
   ].join(", ");
 }
@@ -312,6 +327,15 @@ export function resumirMudancaDaCampanha(
     alterados.push("periodos");
   if (antes.ranking_criterio !== depois.ranking.criterio)
     alterados.push("ranking");
+  // RIFA-061 (D27): a opção, com o antes e o depois (ausente no corpo mantém o gravado: não muda nada).
+  const { por_divisao } = depois.ranking;
+  if (
+    por_divisao !== undefined &&
+    (antes.ranking_por_divisao === 1) !== por_divisao
+  )
+    alterados.push(
+      `ranking.por_divisao: ${ligado(antes.ranking_por_divisao === 1)} → ${ligado(por_divisao)}`,
+    );
   if (
     (antes.publico_mostra_percentual_meta === 1) !==
       depois.publico.mostra_percentual_meta ||
@@ -379,6 +403,7 @@ export async function salvarCampanhaAtiva(
             ? null
             : modeloParaGravar(tipo, dados.mensagens[tipo]),
         ),
+        chave(dados.ranking.por_divisao),
       ),
     db.prepare(
       `DELETE FROM campanha_periodos WHERE campanha_id = ${ID_DA_ATIVA}`,
@@ -460,7 +485,11 @@ export function montarCampanha(campanha: CampanhaAtiva): Campanha {
       ...calendario.periodos[indice],
     })),
     soma_percentuais_bp: somarPercentuais(periodos),
-    ranking: { criterio: campanha.ranking_criterio },
+    ranking: {
+      criterio: campanha.ranking_criterio,
+      // Só 0 desliga: uma linha lida sem a coluna (antes da 0012) fica com o padrão, que é o que vale.
+      por_divisao: campanha.ranking_por_divisao !== 0,
+    },
     publico: {
       mostra_percentual_meta: campanha.publico_mostra_percentual_meta === 1,
       limite_ranking: campanha.publico_limite_ranking,
