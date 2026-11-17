@@ -418,6 +418,12 @@ do passo com o token, e o que deixassem no disco rodava com ele.
   `$GITHUB_ENV`/`$GITHUB_PATH`, sem `defaults`, `shell`, `working-directory` ou `continue-on-error`, o artefato do
   mesmo run em `dist/`, actions por SHA, sem `environment:`) e em `scripts/conferir-artefato.test.mjs` (as
   adulterações recusadas).
+- **Adendo de 17/11 (RIFA-072): o CI roda só na `main`.** Em 17/11 o GitHub Actions parou de rodar jobs por cobrança:
+  o repositório é privado, a cota do plano é em minutos, e cada push de branch de agente rodava a suíte inteira. Agora
+  `on.push` vale só para a `main` (que publica); numa branch, o CI roda pelo Run workflow ou por um pull request. As
+  branches passam pelo portão local do SM (testes, lint, typecheck e build) antes do merge, como sempre. Para voltar
+  ao CI em toda branch, tire o `branches: [main]` e a linha correspondente do teste. Se a cota acabar de novo, o
+  push na `main` não publica: o PO ajusta em GitHub → Settings → Billing (pagamento ou limite de gastos do Actions).
 
 ## D19. Conferência pelo CSV: o arquivo é lido no navegador (RIFA-012, ciclo 2, 2026-11-07)
 

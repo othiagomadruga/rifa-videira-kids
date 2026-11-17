@@ -444,6 +444,7 @@ describe(".github/workflows/ci.yml", () => {
     expect(linhasDoTopo(ci, "on")).toEqual([
       "on:",
       "  push:",
+      "    branches: [main]",
       "  pull_request:",
       "  workflow_dispatch:",
     ]);
