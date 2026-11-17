@@ -438,14 +438,19 @@ function DicaAtiva({
  * tela, com a seta apontando para o meio do controle.
  */
 function posicionar(alvo: HTMLElement, dica: HTMLElement) {
-  const controle = alvo.getBoundingClientRect();
+  // Num campo com ajuda (RIFA-066), a dica aponta para o rótulo (a âncora) e, sem lugar acima, fica abaixo do campo
+  // inteiro: não cobre o que se digita.
+  const controle = (
+    alvo.querySelector("[data-ajuda-ancora]") ?? alvo
+  ).getBoundingClientRect();
+  const base = alvo.getBoundingClientRect().bottom;
   const { width: largura, height: altura } = dica.getBoundingClientRect();
   const larguraTela = document.documentElement.clientWidth || window.innerWidth;
   const alturaTela =
     document.documentElement.clientHeight || window.innerHeight;
 
   const topoAcima = controle.top - AFASTAMENTO_PX - altura;
-  const topoAbaixo = controle.bottom + AFASTAMENTO_PX;
+  const topoAbaixo = base + AFASTAMENTO_PX;
   const cabeAcima = topoAcima >= MARGEM_DA_TELA_PX;
   const cabeAbaixo = topoAbaixo + altura <= alturaTela - MARGEM_DA_TELA_PX;
   // Sem lugar inteiro nos dois lados (tela baixa): o lado com mais espaço, preso dentro da tela.
@@ -453,7 +458,7 @@ function posicionar(alvo: HTMLElement, dica: HTMLElement) {
     ? "acima"
     : cabeAbaixo
       ? "abaixo"
-      : controle.top >= alturaTela - controle.bottom
+      : controle.top >= alturaTela - base
         ? "acima"
         : "abaixo";
   const topo = Math.max(

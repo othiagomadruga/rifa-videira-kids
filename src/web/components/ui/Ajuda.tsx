@@ -6,7 +6,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { juntarClasses } from "./classes";
 import { ComDica } from "./Dica";
 import { Icone } from "./Icone";
 import "./Ajuda.css";
@@ -36,14 +35,7 @@ export type TextoDeAjuda = ReactNode | AjudaSobDemanda;
 
 /** O que a ajuda mostra enquanto o texto sob demanda não chegou. */
 export const CARREGANDO_A_AJUDA = "Carregando a explicação…";
-const AJUDA_NAO_CHEGOU = "Não foi possível carregar a explicação agora.";
-
-const carregando = new Set<Promise<unknown>>();
-
-/** Espera os textos sob demanda que estão chegando (os testes esperam antes de conferir as ajudas). */
-export async function ajudasCarregadas(): Promise<void> {
-  while (carregando.size > 0) await Promise.all(carregando);
-}
+const AJUDA_NAO_CHEGOU = "Explicação indisponível agora.";
 
 function ehSobDemanda(texto: TextoDeAjuda): texto is AjudaSobDemanda {
   return typeof texto === "object" && texto !== null && "carregar" in texto;
@@ -81,31 +73,56 @@ export function ajudasSobDemanda<T extends Record<string, ReactNode>>(
   };
 }
 
-/** O texto pronto, ou o que chegou de um sob demanda (pede ao montar). */
-function useTextoDaAjuda(texto: TextoDeAjuda): ReactNode {
-  const [lido, setLido] = useState<{
-    de: AjudaSobDemanda;
-    texto: ReactNode;
-  } | null>(null);
+/**
+ * O texto pronto, ou o que chegou de um sob demanda (pede ao montar, logo depois de a tela aparecer). Cada título
+ * tem sempre a mesma chave: não há troca de texto sob demanda a cuidar.
+ */
+export function useTextoDaAjuda(texto: TextoDeAjuda): ReactNode {
+  const [lido, setLido] = useState<ReactNode>();
   useEffect(() => {
-    if (!ehSobDemanda(texto)) return;
-    let montado = true;
-    const chegada = texto.carregar().then(
-      (chegou) => {
-        if (montado) setLido({ de: texto, texto: chegou });
-      },
-      () => {
-        if (montado) setLido({ de: texto, texto: AJUDA_NAO_CHEGOU });
-      },
-    );
-    carregando.add(chegada);
-    void chegada.finally(() => carregando.delete(chegada));
-    return () => {
-      montado = false;
-    };
+    if (ehSobDemanda(texto))
+      texto.carregar().then(setLido, () => setLido(AJUDA_NAO_CHEGOU));
   }, [texto]);
-  if (!ehSobDemanda(texto)) return texto;
-  return lido?.de === texto ? lido.texto : CARREGANDO_A_AJUDA;
+  return ehSobDemanda(texto) ? (lido ?? CARREGANDO_A_AJUDA) : texto;
+}
+
+/** Há ajuda (texto não vazio)? */
+export function temAjuda(texto: TextoDeAjuda | undefined): boolean {
+  return (
+    texto !== undefined && texto !== null && texto !== "" && texto !== false
+  );
+}
+
+/**
+ * O "?": um botão "Ajuda: <o texto do título>" (o nome sai do título, que pode mudar, como "Quem falta (3)", e ter
+ * partes só para o leitor de tela), com a explicação (`id`) no aria-describedby quando aberta.
+ */
+export function BotaoDeAjuda({
+  id,
+  idDoTitulo,
+}: {
+  id: string;
+  idDoTitulo: string;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    const titulo = document.getElementById(idDoTitulo)?.textContent ?? "";
+    ref.current?.setAttribute(
+      "aria-label",
+      `Ajuda: ${titulo.replace(/\s+/g, " ").trim()}`,
+    );
+  });
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className="ui-ajuda__botao"
+      data-ajuda-botao=""
+      aria-describedby={id}
+    >
+      <Icone nome="ajuda" />
+    </button>
+  );
 }
 
 type Props = {
@@ -113,7 +130,7 @@ type Props = {
   texto: TextoDeAjuda | undefined;
   /** Id do título ou do rótulo (o filho): o nome do botão é "Ajuda: " e o texto dele. */
   idDoTitulo: string;
-  /** O título ou o rótulo (h1, h2, h3, label, o rótulo do Stat, o texto do cabeçalho da coluna). */
+  /** O título ou o rótulo (h1, h2, h3, a caixa de marcar com o texto, o rótulo do Stat, o texto da coluna). */
   children: ReactNode;
   /** Sem o "?": só o mouse no título abre (o telão, que não tem controles). */
   semBotao?: boolean;
@@ -122,7 +139,6 @@ type Props = {
    * `<label>` (o mesmo id no `aria-describedby` dela, como no `ComDica`).
    */
   id?: string;
-  className?: string;
 };
 
 /** O título (ou rótulo) com a explicação ao passar o mouse e o "?" ao lado. Veja o comentário do topo. */
@@ -132,38 +148,16 @@ export function ComAjuda({
   children,
   semBotao,
   id: idDeFora,
-  className,
 }: Props) {
   const idAutomatico = useId();
   const id = idDeFora ?? `${idAutomatico}ajuda`;
   const lido = useTextoDaAjuda(texto);
-  const refBotao = useRef<HTMLButtonElement>(null);
-  // O nome do "?" acompanha o texto do título (que pode mudar, como "Quem falta (3)"), antes de pintar.
-  useLayoutEffect(() => {
-    const botao = refBotao.current;
-    const titulo = document.getElementById(idDoTitulo);
-    if (!botao || !titulo) return;
-    const nome = `Ajuda: ${(titulo.textContent ?? "").replace(/\s+/g, " ").trim()}`;
-    if (botao.getAttribute("aria-label") !== nome)
-      botao.setAttribute("aria-label", nome);
-  });
-  if (texto === undefined || texto === null || texto === "" || texto === false)
-    return children;
+  if (!temAjuda(texto)) return children;
   return (
     <ComDica texto={lido} id={id} fixarNoBotao>
-      <div className={juntarClasses("ui-ajuda", className)} data-ajuda={id}>
+      <div className="ui-ajuda" data-ajuda={id}>
         {children}
-        {!semBotao && (
-          <button
-            ref={refBotao}
-            type="button"
-            className="ui-ajuda__botao"
-            data-ajuda-botao=""
-            aria-describedby={id}
-          >
-            <Icone nome="ajuda" />
-          </button>
-        )}
+        {!semBotao && <BotaoDeAjuda id={id} idDoTitulo={idDoTitulo} />}
       </div>
     </ComDica>
   );

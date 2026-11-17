@@ -148,53 +148,45 @@ export function EditorPeriodos({
                     </p>
                   </div>
                   <div className="campanha-periodo__campos">
-                    <ComDica texto={DICAS.nomeDoPeriodo}>
-                      <Input
-                        {...campo("nome")}
-                        ajuda={AJUDA.nomeDoPeriodo}
-                        rotulo={
-                          <RotuloDoPeriodo texto="Nome" numero={numero} />
-                        }
-                        value={periodo.nome}
-                        autoComplete="off"
-                        onChange={(evento) =>
-                          aoAlterar(indice, "nome", evento.target.value)
-                        }
-                      />
-                    </ComDica>
-                    <ComDica texto={DICAS.diasDoPeriodo}>
-                      <Input
-                        {...campo("dias")}
-                        ajuda={AJUDA.diasDoPeriodo}
-                        rotulo={
-                          <RotuloDoPeriodo texto="Dias" numero={numero} />
-                        }
-                        value={periodo.dias}
-                        inputMode="numeric"
-                        autoComplete="off"
-                        onChange={(evento) =>
-                          aoAlterar(indice, "dias", evento.target.value)
-                        }
-                      />
-                    </ComDica>
-                    <ComDica texto={DICAS.percentualDoPeriodo}>
-                      <Input
-                        {...campo("percentual")}
-                        ajuda={AJUDA.percentualDoPeriodo}
-                        rotulo={
-                          <RotuloDoPeriodo
-                            texto="Percentual (%)"
-                            numero={numero}
-                          />
-                        }
-                        value={periodo.percentual}
-                        inputMode="decimal"
-                        autoComplete="off"
-                        onChange={(evento) =>
-                          aoAlterar(indice, "percentual", evento.target.value)
-                        }
-                      />
-                    </ComDica>
+                    <Input
+                      {...campo("nome")}
+                      ajuda={AJUDA.nomeDoPeriodo}
+                      rotulo={<RotuloDoPeriodo texto="Nome" numero={numero} />}
+                      value={periodo.nome}
+                      autoComplete="off"
+                      onChange={(evento) =>
+                        aoAlterar(indice, "nome", evento.target.value)
+                      }
+                    />
+
+                    <Input
+                      {...campo("dias")}
+                      ajuda={AJUDA.diasDoPeriodo}
+                      rotulo={<RotuloDoPeriodo texto="Dias" numero={numero} />}
+                      value={periodo.dias}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      onChange={(evento) =>
+                        aoAlterar(indice, "dias", evento.target.value)
+                      }
+                    />
+
+                    <Input
+                      {...campo("percentual")}
+                      ajuda={AJUDA.percentualDoPeriodo}
+                      rotulo={
+                        <RotuloDoPeriodo
+                          texto="Percentual (%)"
+                          numero={numero}
+                        />
+                      }
+                      value={periodo.percentual}
+                      inputMode="decimal"
+                      autoComplete="off"
+                      onChange={(evento) =>
+                        aoAlterar(indice, "percentual", evento.target.value)
+                      }
+                    />
                   </div>
                   <div className="campanha-periodo__rodape">
                     <ComDica texto={DICAS.removerPeriodo}>

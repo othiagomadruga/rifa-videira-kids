@@ -1,7 +1,7 @@
 import { Fragment, useId } from "react";
 import type { RespostaPainelResumo } from "../../../shared/contracts/calculos";
 import { ComAjuda } from "../../components/ui";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 import { ROTULO_DO_ESCOPO, textoDaFase } from "./textos";
 
 type Props = { resumo: RespostaPainelResumo };

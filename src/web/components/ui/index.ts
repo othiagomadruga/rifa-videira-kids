@@ -3,7 +3,6 @@ export { Abas, idDaAba, type Aba } from "./Abas";
 export {
   CARREGANDO_A_AJUDA,
   ComAjuda,
-  ajudasCarregadas,
   ajudasSobDemanda,
   type AjudaSobDemanda,
   type TextoDeAjuda,

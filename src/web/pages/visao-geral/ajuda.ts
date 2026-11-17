@@ -1,6 +1,6 @@
 // Ajuda da Visão geral (RIFA-066, D31): a explicação de cada título e rótulo, para quem nunca viu o sistema (o que é,
 // para que serve e um exemplo). A tela carrega junto com o site: este módulo vem sob demanda, num pedaço à parte
-// (`ajudasSobDemanda` em `ajuda-sob-demanda.ts`), para o JS inicial não levar os textos.
+// (`pages/ajuda-das-telas.ts`), para o JS inicial não levar os textos.
 
 export const AJUDA = {
   hoje: "Quanto vender hoje para a campanha seguir em dia e quanto já entrou hoje. Se ontem faltou, a falta entra na meta de hoje; se sobrou, ela diminui.",

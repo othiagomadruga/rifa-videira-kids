@@ -28,7 +28,7 @@ import {
   valorCurto,
   type TextoSituacao,
 } from "./textos";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** O nome de um dado (<dt>) com a explicação ao passar o mouse e no "?" (RIFA-066): ritmo, projeção... */
 function Termo({

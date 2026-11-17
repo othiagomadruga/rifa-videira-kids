@@ -5,7 +5,7 @@ import type {
   TotaisVendas,
 } from "../../../shared/contracts/calculos";
 import { ComAjuda, Icone } from "../../components/ui";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 import { textoDosTotais } from "./textos";
 
 type Props = { resumo: RespostaPainelResumo };

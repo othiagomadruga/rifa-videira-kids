@@ -166,13 +166,6 @@ export const DICAS = {
     "Cadastra ou atualiza de uma vez as redes, os discipuladores e as células por uma planilha.",
   tentarDeNovo:
     "Lê as tabelas de novo. Enquanto isso, a tela continua com os dados que já tinha.",
-  // Tabela das células
-  filtroDivisao:
-    "Mostra só as células de Jovens ou de Adultos. A lista de redes ao lado segue a escolha.",
-  filtroRede:
-    "Mostra só as células de uma rede. A contagem de células e pessoas segue o filtro.",
-  busca:
-    "Filtra a lista enquanto você digita. Acentos e maiúsculas não fazem diferença.",
   limparFiltros:
     "Tira a divisão, a rede e a busca e mostra todas as células de novo.",
   irParaImportar:
@@ -191,30 +184,6 @@ export const DICAS = {
       "Apaga o discipulador, depois de pedir confirmação. Só dá se ele não tiver células.",
     rede: "Apaga a rede, depois de pedir confirmação. Só dá se ela não tiver discipuladores.",
   } satisfies Record<Entidade, string>,
-  // Diálogos de edição
-  nome: {
-    celula:
-      "Como a célula aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outra célula.",
-    discipulador:
-      "Como o discipulador aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outro.",
-    rede: "Como a rede aparece nas tabelas, nos filtros e nos rankings. Não pode repetir o de outra rede.",
-  } satisfies Record<Entidade, string>,
-  discipuladorDaCelula:
-    "Quem acompanha a célula. Nos rankings e no painel, ela passa a contar, com as vendas de antes, para este discipulador e a rede dele.",
-  pessoas:
-    "Quantas pessoas a célula tem. A meta da célula sai deste número, a não ser que seja igual para todas; na meta total dividida pelas células, mudar aqui muda também a das outras.",
-  liderNome:
-    "Quem lidera a célula. Aparece na tabela das células e no relatório por célula.",
-  liderEmail:
-    "Para a coordenação falar com o líder: vira um link de e-mail na tabela. Pode ficar em branco.",
-  liderTelefone:
-    "Para a coordenação falar com o líder: no celular, vira um link que liga. Pode ficar em branco.",
-  redeDoDiscipulador:
-    "Mude quando o discipulador passar para outra rede. Ele e as células dele ficam com a divisão da rede nova.",
-  divisaoDaRede:
-    "Jovens ou Adultos. O painel e o mapa podem ser filtrados por divisão; os rankings separam as duas se a Campanha estiver assim.",
-  responsavel:
-    "Quem responde pela rede. Aparece na tabela das redes. Pode ficar em branco.",
   cancelarEdicao: "Fecha sem salvar. Nada muda na hierarquia.",
   salvar:
     "Grava as mudanças e atualiza as tabelas. Se algum campo estiver errado, ele avisa.",

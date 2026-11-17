@@ -9,7 +9,7 @@ import {
   valorCurto,
   valorDoEixo,
 } from "./textos";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Props = { resumo: RespostaPainelResumo };
 

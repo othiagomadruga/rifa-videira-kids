@@ -409,8 +409,6 @@ export const TEXTOS_TIPO_RELATORIO = {
 // ---------------------------------------------------------------------------------------------------
 
 export const DICAS = {
-  filtro:
-    "Mostra o painel de uma divisão, rede, discipulador ou célula. A escolha fica no endereço da página.",
   atualizar:
     "Busca os números agora, sem esperar a próxima atualização automática.",
   verCampanhaToda:

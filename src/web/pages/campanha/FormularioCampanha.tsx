@@ -296,46 +296,44 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
         <fieldset className="campanha-formulario__campos" disabled={salvando}>
           <Card titulo="Identificação" ajuda={AJUDA.identificacao}>
             <div className="campanha-campos">
-              <ComDica texto={DICAS.nome}>
+              <Input
+                id={idDoCampo("nome")}
+                rotulo="Nome da campanha"
+                ajuda={AJUDA.nome}
+                dica="Como a coordenação chama a campanha. Ex.: Rifa Videira Kids."
+                value={formulario.nome}
+                autoComplete="off"
+                erro={erros.nome}
+                onChange={(evento) =>
+                  alterar({ nome: evento.target.value }, "nome")
+                }
+              />
+
+              <div className="campanha-campo-com-sugestao">
                 <Input
-                  id={idDoCampo("nome")}
-                  rotulo="Nome da campanha"
-                  ajuda={AJUDA.nome}
-                  dica="Como a coordenação chama a campanha. Ex.: Rifa Videira Kids."
-                  value={formulario.nome}
+                  id={idDoCampo("slug_rifei")}
+                  rotulo="Slug da campanha na Rifei"
+                  ajuda={AJUDA.slug}
+                  dica={
+                    <>
+                      É o identificador da campanha no endereço dela na Rifei.
+                      Abra a campanha na Rifei e copie a parte final do link,
+                      depois da última barra: num link que termina em{" "}
+                      <code>/videira-kids</code>, o slug é{" "}
+                      <code>videira-kids</code>. Copie exatamente: só as vendas
+                      com este slug contam para a campanha.
+                    </>
+                  }
+                  value={formulario.slug_rifei}
                   autoComplete="off"
-                  erro={erros.nome}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  erro={erros.slug_rifei}
                   onChange={(evento) =>
-                    alterar({ nome: evento.target.value }, "nome")
+                    alterar({ slug_rifei: evento.target.value }, "slug_rifei")
                   }
                 />
-              </ComDica>
-              <div className="campanha-campo-com-sugestao">
-                <ComDica texto={DICAS.slug}>
-                  <Input
-                    id={idDoCampo("slug_rifei")}
-                    rotulo="Slug da campanha na Rifei"
-                    ajuda={AJUDA.slug}
-                    dica={
-                      <>
-                        É o identificador da campanha no endereço dela na Rifei.
-                        Abra a campanha na Rifei e copie a parte final do link,
-                        depois da última barra: num link que termina em{" "}
-                        <code>/videira-kids</code>, o slug é{" "}
-                        <code>videira-kids</code>. Copie exatamente: só as
-                        vendas com este slug contam para a campanha.
-                      </>
-                    }
-                    value={formulario.slug_rifei}
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    erro={erros.slug_rifei}
-                    onChange={(evento) =>
-                      alterar({ slug_rifei: evento.target.value }, "slug_rifei")
-                    }
-                  />
-                </ComDica>
+
                 {sugestaoDeSlug && (
                   <div className="campanha-sugestao">
                     <p>
@@ -361,42 +359,36 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
           <Card titulo="Datas e períodos" ajuda={AJUDA.datasEPeriodos}>
             <div className="campanha-campos">
               <div className="grade">
-                <ComDica texto={DICAS.dataInicio}>
-                  <Input
-                    id={idDoCampo("data_inicio")}
-                    type="date"
-                    rotulo="Data de início"
-                    ajuda={AJUDA.dataInicio}
-                    dica="Primeiro dia de vendas."
-                    value={formulario.data_inicio}
-                    erro={erros.data_inicio}
-                    onChange={(evento) =>
-                      alterar(
-                        { data_inicio: evento.target.value },
-                        "data_inicio",
-                      )
-                    }
-                  />
-                </ComDica>
-                <ComDica texto={DICAS.fuso}>
-                  <Input
-                    id={idDoCampo("fuso_horario")}
-                    rotulo="Fuso horário"
-                    ajuda={AJUDA.fuso}
-                    dica="Quando cada dia começa e termina. Padrão: America/Belem."
-                    value={formulario.fuso_horario}
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    erro={erros.fuso_horario}
-                    onChange={(evento) =>
-                      alterar(
-                        { fuso_horario: evento.target.value },
-                        "fuso_horario",
-                      )
-                    }
-                  />
-                </ComDica>
+                <Input
+                  id={idDoCampo("data_inicio")}
+                  type="date"
+                  rotulo="Data de início"
+                  ajuda={AJUDA.dataInicio}
+                  dica="Primeiro dia de vendas."
+                  value={formulario.data_inicio}
+                  erro={erros.data_inicio}
+                  onChange={(evento) =>
+                    alterar({ data_inicio: evento.target.value }, "data_inicio")
+                  }
+                />
+
+                <Input
+                  id={idDoCampo("fuso_horario")}
+                  rotulo="Fuso horário"
+                  ajuda={AJUDA.fuso}
+                  dica="Quando cada dia começa e termina. Padrão: America/Belem."
+                  value={formulario.fuso_horario}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  erro={erros.fuso_horario}
+                  onChange={(evento) =>
+                    alterar(
+                      { fuso_horario: evento.target.value },
+                      "fuso_horario",
+                    )
+                  }
+                />
               </div>
               <EditorPeriodos
                 periodos={formulario.periodos}
@@ -426,142 +418,132 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
 
           <Card titulo="Bilhete e meta" ajuda={AJUDA.bilheteEMeta}>
             <div className="campanha-campos">
-              <ComDica texto={DICAS.preco}>
-                <Input
-                  id={idDoCampo("preco_bilhete_centavos")}
-                  rotulo="Preço do bilhete (R$)"
-                  ajuda={AJUDA.preco}
-                  dica={
-                    precoCentavos !== null && precoCentavos > 0
-                      ? `Cada bilhete custa ${formatarMoeda(precoCentavos)}.`
-                      : "Em reais. Ex.: 20,00."
-                  }
-                  value={formulario.preco}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  erro={erros.preco_bilhete_centavos}
+              <Input
+                id={idDoCampo("preco_bilhete_centavos")}
+                rotulo="Preço do bilhete (R$)"
+                ajuda={AJUDA.preco}
+                dica={
+                  precoCentavos !== null && precoCentavos > 0
+                    ? `Cada bilhete custa ${formatarMoeda(precoCentavos)}.`
+                    : "Em reais. Ex.: 20,00."
+                }
+                value={formulario.preco}
+                inputMode="decimal"
+                autoComplete="off"
+                erro={erros.preco_bilhete_centavos}
+                onChange={(evento) =>
+                  alterar(
+                    { preco: evento.target.value },
+                    "preco_bilhete_centavos",
+                  )
+                }
+              />
+
+              <div className="grade">
+                <Select
+                  id={idDoCampo("meta.unidade")}
+                  rotulo="Unidade da meta"
+                  ajuda={AJUDA.unidadeMeta}
+                  dica="Em que a meta é medida."
+                  value={formulario.meta_unidade}
+                  erro={erros["meta.unidade"]}
                   onChange={(evento) =>
                     alterar(
-                      { preco: evento.target.value },
-                      "preco_bilhete_centavos",
+                      {
+                        meta_unidade: evento.target.value as UnidadeMeta | "",
+                      },
+                      "meta.unidade",
                     )
                   }
-                />
-              </ComDica>
-              <div className="grade">
-                <ComDica texto={DICAS.unidadeMeta}>
-                  <Select
-                    id={idDoCampo("meta.unidade")}
-                    rotulo="Unidade da meta"
-                    ajuda={AJUDA.unidadeMeta}
-                    dica="Em que a meta é medida."
-                    value={formulario.meta_unidade}
-                    erro={erros["meta.unidade"]}
-                    onChange={(evento) =>
-                      alterar(
-                        {
-                          meta_unidade: evento.target.value as UnidadeMeta | "",
-                        },
-                        "meta.unidade",
-                      )
-                    }
-                  >
-                    <option value="">Escolha…</option>
-                    {UNIDADES_META.map((unidade) => (
-                      <option key={unidade} value={unidade}>
-                        {TEXTO_UNIDADE[unidade]}
-                      </option>
-                    ))}
-                  </Select>
-                </ComDica>
-                <ComDica texto={DICAS.regraMeta}>
-                  <Select
-                    id={idDoCampo("meta.regra")}
-                    rotulo="Regra da meta"
-                    ajuda={AJUDA.regraMeta}
-                    dica={
-                      regra?.explicacao ?? "Como sai a meta de cada célula."
-                    }
-                    value={formulario.meta_regra}
-                    erro={erros["meta.regra"]}
-                    onChange={(evento) =>
-                      alterar(
-                        { meta_regra: evento.target.value as RegraMeta | "" },
-                        "meta.regra",
-                      )
-                    }
-                  >
-                    <option value="">Escolha…</option>
-                    {REGRAS_META.map((opcao) => (
-                      <option key={opcao} value={opcao}>
-                        {TEXTO_REGRA[opcao].opcao}
-                      </option>
-                    ))}
-                  </Select>
-                </ComDica>
-              </div>
-              <ComDica texto={ajudaDaMeta}>
-                <Input
-                  id={idDoCampo("meta.valor")}
-                  ajuda={ajudaDaMeta}
-                  rotulo={`${regra?.campo ?? "Valor da meta"}${
-                    formulario.meta_unidade === "bilhetes"
-                      ? " (bilhetes)"
-                      : metaEmReais
-                        ? " (R$)"
-                        : ""
-                  }`}
-                  dica={dicaDaMeta(formulario.meta_unidade, metaLida)}
-                  value={formulario.meta_valor}
-                  inputMode={metaEmReais ? "decimal" : "numeric"}
-                  autoComplete="off"
-                  erro={erros["meta.valor"]}
+                >
+                  <option value="">Escolha…</option>
+                  {UNIDADES_META.map((unidade) => (
+                    <option key={unidade} value={unidade}>
+                      {TEXTO_UNIDADE[unidade]}
+                    </option>
+                  ))}
+                </Select>
+
+                <Select
+                  id={idDoCampo("meta.regra")}
+                  rotulo="Regra da meta"
+                  ajuda={AJUDA.regraMeta}
+                  dica={regra?.explicacao ?? "Como sai a meta de cada célula."}
+                  value={formulario.meta_regra}
+                  erro={erros["meta.regra"]}
                   onChange={(evento) =>
-                    alterar({ meta_valor: evento.target.value }, "meta.valor")
+                    alterar(
+                      { meta_regra: evento.target.value as RegraMeta | "" },
+                      "meta.regra",
+                    )
                   }
-                />
-              </ComDica>
+                >
+                  <option value="">Escolha…</option>
+                  {REGRAS_META.map((opcao) => (
+                    <option key={opcao} value={opcao}>
+                      {TEXTO_REGRA[opcao].opcao}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <Input
+                id={idDoCampo("meta.valor")}
+                ajuda={ajudaDaMeta}
+                rotulo={`${regra?.campo ?? "Valor da meta"}${
+                  formulario.meta_unidade === "bilhetes"
+                    ? " (bilhetes)"
+                    : metaEmReais
+                      ? " (R$)"
+                      : ""
+                }`}
+                dica={dicaDaMeta(formulario.meta_unidade, metaLida)}
+                value={formulario.meta_valor}
+                inputMode={metaEmReais ? "decimal" : "numeric"}
+                autoComplete="off"
+                erro={erros["meta.valor"]}
+                onChange={(evento) =>
+                  alterar({ meta_valor: evento.target.value }, "meta.valor")
+                }
+              />
             </div>
           </Card>
 
           <Card titulo="Ranking e público" ajuda={AJUDA.rankingEPublico}>
             <div className="campanha-campos">
-              <ComDica texto={DICAS.criterioRanking}>
-                <Select
-                  id={idDoCampo("ranking.criterio")}
-                  rotulo="Critério do ranking"
-                  ajuda={AJUDA.criterioRanking}
-                  dica={
-                    formulario.ranking_criterio
-                      ? TEXTO_CRITERIO[formulario.ranking_criterio].explicacao
-                      : "Como as células são ordenadas nos rankings."
-                  }
-                  value={formulario.ranking_criterio}
-                  erro={erros["ranking.criterio"]}
-                  onChange={(evento) =>
-                    alterar(
-                      {
-                        ranking_criterio: evento.target.value as
-                          CriterioRanking | "",
-                      },
-                      "ranking.criterio",
-                    )
-                  }
-                >
-                  <option value="">Escolha…</option>
-                  {CRITERIOS_RANKING.map((criterio) => (
-                    <option key={criterio} value={criterio}>
-                      {TEXTO_CRITERIO[criterio].opcao}
-                    </option>
-                  ))}
-                </Select>
-              </ComDica>
+              <Select
+                id={idDoCampo("ranking.criterio")}
+                rotulo="Critério do ranking"
+                ajuda={AJUDA.criterioRanking}
+                dica={
+                  formulario.ranking_criterio
+                    ? TEXTO_CRITERIO[formulario.ranking_criterio].explicacao
+                    : "Como as células são ordenadas nos rankings."
+                }
+                value={formulario.ranking_criterio}
+                erro={erros["ranking.criterio"]}
+                onChange={(evento) =>
+                  alterar(
+                    {
+                      ranking_criterio: evento.target.value as
+                        CriterioRanking | "",
+                    },
+                    "ranking.criterio",
+                  )
+                }
+              >
+                <option value="">Escolha…</option>
+                {CRITERIOS_RANKING.map((criterio) => (
+                  <option key={criterio} value={criterio}>
+                    {TEXTO_CRITERIO[criterio].opcao}
+                  </option>
+                ))}
+              </Select>
 
               {/* RIFA-061 (D27): como as chaves da campanha, a caixa e uma linha do que acontece ligada e desligada. */}
               <div className="campanha-chave campanha-chave--ranking">
                 <ComAjuda
                   id={`${idDoCampo("ranking.por_divisao")}-dica`}
-                  texto={DICAS.porDivisao}
+                  texto={AJUDA.porDivisao}
                   idDoTitulo={`${idDoCampo("ranking.por_divisao")}-rotulo`}
                 >
                   <label
@@ -622,7 +604,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                 {/* A ajuda fica na linha toda (caixa e texto) e no "?"; a caixa a tem na descrição (`id` dela). */}
                 <ComAjuda
                   id={`${idDoCampo("publico.mostra_percentual_meta")}-dica`}
-                  texto={DICAS.mostraPercentual}
+                  texto={AJUDA.mostraPercentual}
                   idDoTitulo={`${idDoCampo("publico.mostra_percentual_meta")}-rotulo`}
                 >
                   <label
@@ -651,24 +633,22 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                     </span>
                   </label>
                 </ComAjuda>
-                <ComDica texto={DICAS.limiteRanking}>
-                  <Input
-                    id={idDoCampo("publico.limite_ranking")}
-                    rotulo="Quantas posições o público vê"
-                    ajuda={AJUDA.limiteRanking}
-                    dica="Padrão: 3. Deixe em branco para mostrar todas. Quem empata na última posição também aparece."
-                    value={formulario.publico_limite_ranking}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    erro={erros["publico.limite_ranking"]}
-                    onChange={(evento) =>
-                      alterar(
-                        { publico_limite_ranking: evento.target.value },
-                        "publico.limite_ranking",
-                      )
-                    }
-                  />
-                </ComDica>
+                <Input
+                  id={idDoCampo("publico.limite_ranking")}
+                  rotulo="Quantas posições o público vê"
+                  ajuda={AJUDA.limiteRanking}
+                  dica="Padrão: 3. Deixe em branco para mostrar todas. Quem empata na última posição também aparece."
+                  value={formulario.publico_limite_ranking}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  erro={erros["publico.limite_ranking"]}
+                  onChange={(evento) =>
+                    alterar(
+                      { publico_limite_ranking: evento.target.value },
+                      "publico.limite_ranking",
+                    )
+                  }
+                />
               </div>
             </div>
           </Card>

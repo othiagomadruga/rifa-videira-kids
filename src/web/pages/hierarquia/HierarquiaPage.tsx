@@ -25,7 +25,7 @@ import { TabelaCelulas, TabelaDiscipuladores, TabelaRedes } from "./Tabelas";
 import { DICAS, type Entidade } from "./textos";
 import "./hierarquia.css";
 import { DICA_DO_MENU } from "../coordenacao/textos";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 
 const ID_ABAS = "hierarquia";
 type IdAba = "celulas" | "discipuladores" | "redes" | "importar";

@@ -1,16 +1,25 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { ComAjuda, type TextoDeAjuda } from "./Ajuda";
+import {
+  BotaoDeAjuda,
+  temAjuda,
+  useTextoDaAjuda,
+  type TextoDeAjuda,
+} from "./Ajuda";
 import { juntarClasses } from "./classes";
+import { ComDica } from "./Dica";
 import "./Campos.css";
 
 // Campos de formulário com rótulo, dica e mensagem de erro ligados ao controle
-// (label/htmlFor, aria-describedby e aria-invalid).
+// (label/htmlFor, aria-describedby e aria-invalid). Com `ajuda` (RIFA-066), o campo inteiro é um grupo de ajuda: a
+// explicação aparece com o mouse no rótulo ou no campo, no foco do teclado no campo (é a dica dele: não ponha
+// ComDica em volta) e no toque do "?" ao lado do rótulo, apontando para o rótulo.
 
 type PropsDoCampo = {
   rotulo: ReactNode;
   /**
-   * A explicação do rótulo (RIFA-066): o que é o campo, para que serve e um exemplo. Aparece com o mouse no rótulo e
-   * no "?" ao lado dele, no foco e no toque do "?" (veja Ajuda.tsx). Todo campo tem.
+   * A explicação do campo (RIFA-066): o que é, para que serve e um exemplo. Aparece com o mouse no rótulo ou no campo,
+   * no foco do teclado e no toque do "?" ao lado do rótulo (veja Ajuda.tsx). É também a dica do campo: com `ajuda`,
+   * o campo não leva ComDica em volta.
    */
   ajuda?: TextoDeAjuda;
   /** Texto de ajuda abaixo do rótulo. */
@@ -33,7 +42,7 @@ export function Input({
   "aria-describedby": descritoPor,
   ...resto
 }: InputProps) {
-  const campo = useCampo(id, dica, erro, descritoPor);
+  const campo = useCampo(id, dica, erro, descritoPor, ajuda);
   return (
     <Moldura rotulo={rotulo} ajuda={ajuda} dica={dica} erro={erro} {...campo}>
       <input
@@ -58,7 +67,7 @@ export function Select({
   "aria-describedby": descritoPor,
   ...resto
 }: SelectProps) {
-  const campo = useCampo(id, dica, erro, descritoPor);
+  const campo = useCampo(id, dica, erro, descritoPor, ajuda);
   return (
     <Moldura rotulo={rotulo} ajuda={ajuda} dica={dica} erro={erro} {...campo}>
       <select
@@ -85,7 +94,7 @@ export function Textarea({
   "aria-describedby": descritoPor,
   ...resto
 }: TextareaProps) {
-  const campo = useCampo(id, dica, erro, descritoPor);
+  const campo = useCampo(id, dica, erro, descritoPor, ajuda);
   return (
     <Moldura rotulo={rotulo} ajuda={ajuda} dica={dica} erro={erro} {...campo}>
       <textarea
@@ -114,15 +123,18 @@ function useCampo(
   dica: ReactNode,
   erro: ReactNode,
   descritoPorExterno: string | undefined,
+  ajuda: TextoDeAjuda | undefined,
 ): IdsDoCampo {
   const idAutomatico = useId();
   const idCampo = id ?? idAutomatico;
   const idDica = `${idCampo}-dica`;
   const idErro = `${idCampo}-erro`;
+  // A explicação (aberta) vai por último, como a dica dos controles; fechada, o id não aponta para nada.
   const ids = [
     descritoPorExterno,
     dica ? idDica : undefined,
     erro ? idErro : undefined,
+    temAjuda(ajuda) ? `${idCampo}-ajuda` : undefined,
   ].filter(Boolean);
   const descritoPor = ids.length > 0 ? ids.join(" ") : undefined;
   return { idCampo, idDica, idErro, descritoPor };
@@ -141,17 +153,33 @@ function Moldura({
   idErro,
   children,
 }: PropsMoldura) {
-  return (
-    <div className="ui-campo" data-invalido={erro ? "" : undefined}>
-      <ComAjuda texto={ajuda} idDoTitulo={`${idCampo}-rotulo`}>
-        <label
-          id={`${idCampo}-rotulo`}
-          className="ui-campo__rotulo"
-          htmlFor={idCampo}
-        >
-          {rotulo}
-        </label>
-      </ComAjuda>
+  const lido = useTextoDaAjuda(ajuda);
+  const comAjuda = temAjuda(ajuda);
+  const idAjuda = `${idCampo}-ajuda`;
+  const rotuloDoCampo = (
+    <label
+      id={`${idCampo}-rotulo`}
+      className="ui-campo__rotulo"
+      htmlFor={idCampo}
+    >
+      {rotulo}
+    </label>
+  );
+  const campo = (
+    <div
+      className="ui-campo"
+      data-invalido={erro ? "" : undefined}
+      data-ajuda={comAjuda ? idAjuda : undefined}
+    >
+      {comAjuda ? (
+        // A âncora da explicação: ela aponta para o rótulo (e, sem lugar acima, vai para baixo do campo inteiro).
+        <div className="ui-ajuda" data-ajuda-ancora="">
+          {rotuloDoCampo}
+          <BotaoDeAjuda id={idAjuda} idDoTitulo={`${idCampo}-rotulo`} />
+        </div>
+      ) : (
+        rotuloDoCampo
+      )}
       {dica && (
         <p id={idDica} className="ui-campo__dica">
           {dica}
@@ -164,5 +192,12 @@ function Moldura({
       )}
       {children}
     </div>
+  );
+  return comAjuda ? (
+    <ComDica texto={lido} id={idAjuda} fixarNoBotao>
+      {campo}
+    </ComDica>
+  ) : (
+    campo
   );
 }

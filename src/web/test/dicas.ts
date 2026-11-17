@@ -6,7 +6,6 @@ import {
   ATRASO_DA_DICA_MS,
   CARREGANDO_A_AJUDA,
   FOLGA_DA_DICA_MS,
-  ajudasCarregadas,
 } from "../components/ui";
 
 /** O que precisa de dica: botões, campos, abas, links com cara de botão, os links do menu e o "abrir" de um <details>. */
@@ -202,7 +201,8 @@ export async function titulosSemAjuda(
   raiz: ParentNode = document.body,
   { semBotao = false }: { semBotao?: boolean } = {},
 ): Promise<string[]> {
-  await act(() => ajudasCarregadas());
+  // Os textos sob demanda (import() do ajuda.ts da tela) chegam e entram na tela antes de conferir.
+  await act(() => vi.dynamicImportSettled());
   const falhas: string[] = [];
   const relogioJaFalso = vi.isFakeTimers();
   if (!relogioJaFalso) {

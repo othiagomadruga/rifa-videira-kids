@@ -154,41 +154,25 @@ export const AJUDA = {
 } as const;
 
 // ---------------------------------------------------------------------------------------------------
-// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
-// tela. Dizem para que serve e o que acontece, sem repetir o rótulo. Os campos usam o texto da ajuda do rótulo
-// (RIFA-066: um texto só por campo, que diz o que é, para que serve e dá um exemplo).
+// Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão da tela. Dizem
+// para que serve e o que acontece, sem repetir o rótulo. Os campos e as caixas de marcar usam a AJUDA (RIFA-066: um
+// texto só por campo, no rótulo, no "?" e no próprio campo).
 // ---------------------------------------------------------------------------------------------------
 
 export const DICAS = {
-  nome: AJUDA.nome,
-  slug: AJUDA.slug,
   usarSoOSlug:
     "Troca o link colado no campo só pela parte final dele, que é o slug.",
-  dataInicio: AJUDA.dataInicio,
-  fuso: AJUDA.fuso,
   modeloSantoAndre:
     "Preenche os períodos com o modelo usado em Santo André (3 períodos, 24 dias), um ponto de partida que dá para mudar depois. Preço e meta não mudam.",
-  nomeDoPeriodo: AJUDA.nomeDoPeriodo,
-  diasDoPeriodo: AJUDA.diasDoPeriodo,
-  percentualDoPeriodo: AJUDA.percentualDoPeriodo,
   removerPeriodo:
     "Tira este período da lista. Os seguintes andam para o lugar dele. Só vale depois de salvar.",
   adicionarPeriodo:
     "Põe mais uma etapa no fim da campanha, logo depois da última. A data final anda junto.",
   adicionarPeriodoNoLimite: (limite: number) =>
     `Indisponível: a campanha já tem o máximo de ${limite} períodos.`,
-  preco: AJUDA.preco,
-  unidadeMeta: AJUDA.unidadeMeta,
-  regraMeta: AJUDA.regraMeta,
-  valorMeta: AJUDA.valorMeta,
-  criterioRanking: AJUDA.criterioRanking,
-  porDivisao: AJUDA.porDivisao,
-  mostraPercentual: AJUDA.mostraPercentual,
-  limiteRanking: AJUDA.limiteRanking,
-  chave: AJUDA.chave,
   chaveSoLeitura:
     "Indisponível: só o admin muda esta regra. Aqui você vê como ela está valendo.",
-  mensagem: AJUDA.mensagem,
+  /** A ajuda da mensagem para a coordenação, que só vê (RIFA-042). */
   mensagemSoLeitura: (tipo: TipoMensagem) =>
     `Só o admin muda esta mensagem. É o texto que vai pelo WhatsApp com o link pessoal ${QUEM_RECEBE[tipo]}.`,
   voltarAoPadrao:

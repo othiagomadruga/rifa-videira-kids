@@ -11,12 +11,7 @@ import {
   passarOMouse,
   tirarOMouse,
 } from "../../test/dicas";
-import {
-  CARREGANDO_A_AJUDA,
-  ComAjuda,
-  ajudasCarregadas,
-  ajudasSobDemanda,
-} from "./Ajuda";
+import { CARREGANDO_A_AJUDA, ComAjuda, ajudasSobDemanda } from "./Ajuda";
 import { Input, Select, Textarea } from "./Campos";
 import { Card } from "./Card";
 import { DataTable } from "./DataTable";
@@ -281,10 +276,37 @@ describe("os rótulos de campo (Input, Select, Textarea, SeletorArquivo) e as ca
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "Em que a meta é contada.",
     );
-    // O campo não ganha a explicação do rótulo na descrição (a dica dele é a do ComDica, quando houver).
+    // A explicação é também a dica do campo: aberta, entra no fim da descrição dele.
     expect(
       screen.getByRole("combobox", { name: "Unidade da meta" }),
-    ).not.toHaveAccessibleDescription();
+    ).toHaveAccessibleDescription("Em que a meta é contada.");
+  });
+
+  it("campo com ajuda: o mouse no próprio campo e o foco do teclado nele abrem a mesma explicação (é a dica dele), depois da dica visível e do erro", () => {
+    render(
+      <Input
+        rotulo="Dias"
+        dica="Número inteiro."
+        erro="Use um número."
+        ajuda="Quantos dias esta etapa dura. Ex.: 7 dias = uma semana."
+      />,
+    );
+    const campo = screen.getByRole("textbox", { name: "Dias" });
+    expect(campo).toHaveAccessibleDescription("Número inteiro. Use um número.");
+    passarOMouse(campo);
+    esperar(ATRASO_DA_DICA_MS);
+    expect(campo).toHaveAccessibleDescription(
+      "Número inteiro. Use um número. Quantos dias esta etapa dura. Ex.: 7 dias = uma semana.",
+    );
+    expect(dicaDe(campo)).toBe(screen.getByRole("tooltip"));
+    tirarOMouse(campo);
+    esperar(FOLGA_DA_DICA_MS);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    focarPeloTeclado(campo);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Quantos dias");
+    // O clique no campo (para digitar) tira a explicação da frente.
+    fireEvent.pointerDown(campo, { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it('caixa de marcar dentro do <label>: o mouse na linha abre, o foco do teclado na caixa abre (id dado) e o "?" também', () => {
@@ -411,7 +433,7 @@ describe("texto sob demanda (as telas que carregam com o site: o JS inicial não
     expect(screen.getByRole("tooltip")).toHaveTextContent(CARREGANDO_A_AJUDA);
     await act(async () => {
       liberar({ AJUDA: { a: "Texto do primeiro.", b: "Texto do segundo." } });
-      await ajudasCarregadas();
+      await Promise.resolve();
     });
     expect(screen.getByRole("tooltip")).toHaveTextContent("Texto do primeiro.");
     fireEvent.click(ajuda("Segundo"));
@@ -431,10 +453,10 @@ describe("texto sob demanda (as telas que carregam com o site: o JS inicial não
         <p>1</p>
       </Card>,
     );
-    await act(() => ajudasCarregadas());
+    await act(async () => {});
     fireEvent.click(ajuda("Primeiro"));
     expect(screen.getByRole("tooltip")).toHaveTextContent(
-      "Não foi possível carregar a explicação agora.",
+      "Explicação indisponível agora.",
     );
     unmount();
     render(
@@ -442,7 +464,7 @@ describe("texto sob demanda (as telas que carregam com o site: o JS inicial não
         <p>1</p>
       </Card>,
     );
-    await act(() => ajudasCarregadas());
+    await act(async () => {});
     fireEvent.click(ajuda("Primeiro"));
     expect(screen.getByRole("tooltip")).toHaveTextContent("Chegou.");
     expect(carregar).toHaveBeenCalledTimes(2);
@@ -450,6 +472,41 @@ describe("texto sob demanda (as telas que carregam com o site: o JS inicial não
 });
 
 describe("a posição: sempre dentro da tela a 390 px, mesmo com o título colado na borda", () => {
+  it("campo no topo da tela, sem lugar acima do rótulo: a explicação vai para baixo do campo inteiro (não cobre o que se digita), apontando para o rótulo", () => {
+    vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(
+      390,
+    );
+    vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(
+      844,
+    );
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const caixa = this.matches("[role='tooltip']")
+          ? { left: 0, top: 0, width: 288, height: 90 }
+          : this.matches("[data-ajuda-ancora]")
+            ? { left: 16, top: 10, width: 80, height: 24 }
+            : { left: 16, top: 10, width: 358, height: 90 };
+        return {
+          ...caixa,
+          right: caixa.left + caixa.width,
+          bottom: caixa.top + caixa.height,
+          x: caixa.left,
+          y: caixa.top,
+          toJSON: () => caixa,
+        } as DOMRect;
+      },
+    );
+    render(<Input rotulo="Dias" ajuda="Quantos dias esta etapa dura." />);
+    tocar(ajuda("Dias"));
+    const aberta = screen.getByRole("tooltip");
+    expect(aberta).toHaveAttribute("data-lado", "abaixo");
+    // Abaixo do campo inteiro (10 + 90) e não logo abaixo do rótulo (10 + 24).
+    expect(Number.parseInt(aberta.style.top, 10)).toBe(10 + 90 + 8);
+    // A seta aponta para o meio do rótulo (16 + 40 = 56 px da borda), não do campo.
+    expect(Number.parseInt(aberta.style.left, 10)).toBe(8);
+    expect(aberta.style.getPropertyValue("--dica-seta")).toBe("48px");
+  });
+
   it("o grupo do título na borda direita: a explicação começa e termina dentro da tela (8 px de margem)", () => {
     vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(
       390,

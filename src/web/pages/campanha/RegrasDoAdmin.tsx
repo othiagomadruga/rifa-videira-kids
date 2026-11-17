@@ -127,8 +127,8 @@ export function ChavesDaCampanha({
                   id={`${id}-dica`}
                   texto={
                     somenteLeitura
-                      ? `${DICAS.chave[chave]} ${DICAS.chaveSoLeitura}`
-                      : DICAS.chave[chave]
+                      ? `${AJUDA.chave[chave]} ${DICAS.chaveSoLeitura}`
+                      : AJUDA.chave[chave]
                   }
                   idDoTitulo={`${id}-rotulo`}
                 >
@@ -307,29 +307,26 @@ function EditorMensagem({
 
   return (
     <div className="campanha-mensagem">
-      <ComDica
-        texto={
-          somenteLeitura ? DICAS.mensagemSoLeitura(tipo) : DICAS.mensagem(tipo)
+      <Textarea
+        id={id}
+        rotulo={ROTULO_MENSAGEM[tipo]}
+        ajuda={
+          somenteLeitura ? DICAS.mensagemSoLeitura(tipo) : AJUDA.mensagem(tipo)
         }
-      >
-        <Textarea
-          id={id}
-          rotulo={ROTULO_MENSAGEM[tipo]}
-          ajuda={AJUDA.mensagem(tipo)}
-          dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
-            .map((marcador) => EXPLICACAO_DO_MARCADOR[marcador])
-            .join("; ")}.`}
-          erro={erro}
-          value={texto}
-          rows={5}
-          spellCheck={!somenteLeitura}
-          readOnly={somenteLeitura}
-          aria-describedby={idAvisoSoAdmin ?? undefined}
-          onChange={(evento) => {
-            if (!somenteLeitura) aoAlterar(evento.target.value);
-          }}
-        />
-      </ComDica>
+        dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
+          .map((marcador) => EXPLICACAO_DO_MARCADOR[marcador])
+          .join("; ")}.`}
+        erro={erro}
+        value={texto}
+        rows={5}
+        spellCheck={!somenteLeitura}
+        readOnly={somenteLeitura}
+        aria-describedby={idAvisoSoAdmin ?? undefined}
+        onChange={(evento) => {
+          if (!somenteLeitura) aoAlterar(evento.target.value);
+        }}
+      />
+
       <div className="campanha-mensagem__rodape">
         <p id={idContagem} className="campanha-texto-suave">
           {formatarNumero(texto.trim().length)} de{" "}

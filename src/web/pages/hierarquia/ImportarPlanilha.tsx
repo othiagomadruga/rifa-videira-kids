@@ -20,7 +20,7 @@ import {
   type TextoDeAjuda,
 } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 import { CAMINHO_MODELO_CSV, importarPlanilha } from "./hierarquia-api";
 import {
   COLUNAS_DA_PLANILHA,

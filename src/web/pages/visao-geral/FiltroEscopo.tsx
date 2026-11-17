@@ -2,10 +2,10 @@ import {
   NOMES_DIVISAO,
   ORDEM_DIVISOES,
 } from "../../../shared/contracts/calculos";
-import { ComDica, Select } from "../../components/ui";
+import { Select } from "../../components/ui";
 import { LOCALIDADE } from "../../lib/formatadores";
-import { ajuda } from "./ajuda-sob-demanda";
-import { DICAS, ROTULO_DO_ESCOPO } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
+import { ROTULO_DO_ESCOPO } from "./textos";
 import type { EstadoCelulas } from "./useCelulasDoFiltro";
 import {
   chaveDoEscopo,
@@ -81,48 +81,46 @@ export function FiltroEscopo({ escopo, celulas, nomeAtual, aoMudar }: Props) {
 
   return (
     <div className="visao-filtro">
-      <ComDica texto={DICAS.filtro}>
-        <Select
-          rotulo="Filtrar por"
-          ajuda={ajuda("filtro")}
-          value={valor}
-          onChange={(evento) =>
-            aoMudar(escopoDosParams(new URLSearchParams(evento.target.value)))
-          }
-          dica={
-            celulas.tipo === "erro"
-              ? "Não foi possível carregar as redes e as células. Toque em Atualizar para tentar de novo."
-              : undefined
-          }
-        >
-          <option value="">{ROTULO_DO_ESCOPO.campanha}</option>
-          <optgroup label="Divisão">
-            {ORDEM_DIVISOES.map((divisao) => (
-              <option
-                key={divisao}
-                value={chaveDoEscopo({ tipo: "divisao", divisao })}
-              >
-                {NOMES_DIVISAO[divisao]}
-              </option>
-            ))}
-          </optgroup>
-          {opcaoAvulsa !== null && <option value={valor}>{opcaoAvulsa}</option>}
-          {TIPOS_COM_ID.map((tipo) =>
-            grupos[GRUPO_DO_TIPO[tipo]].length > 0 ? (
-              <optgroup key={tipo} label={ROTULO_DO_ESCOPO[tipo]}>
-                {grupos[GRUPO_DO_TIPO[tipo]].map((opcao) => (
-                  <option
-                    key={opcao.id}
-                    value={chaveDoEscopo({ tipo, id: opcao.id })}
-                  >
-                    {opcao.nome}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null,
-          )}
-        </Select>
-      </ComDica>
+      <Select
+        rotulo="Filtrar por"
+        ajuda={ajuda("filtro")}
+        value={valor}
+        onChange={(evento) =>
+          aoMudar(escopoDosParams(new URLSearchParams(evento.target.value)))
+        }
+        dica={
+          celulas.tipo === "erro"
+            ? "Não foi possível carregar as redes e as células. Toque em Atualizar para tentar de novo."
+            : undefined
+        }
+      >
+        <option value="">{ROTULO_DO_ESCOPO.campanha}</option>
+        <optgroup label="Divisão">
+          {ORDEM_DIVISOES.map((divisao) => (
+            <option
+              key={divisao}
+              value={chaveDoEscopo({ tipo: "divisao", divisao })}
+            >
+              {NOMES_DIVISAO[divisao]}
+            </option>
+          ))}
+        </optgroup>
+        {opcaoAvulsa !== null && <option value={valor}>{opcaoAvulsa}</option>}
+        {TIPOS_COM_ID.map((tipo) =>
+          grupos[GRUPO_DO_TIPO[tipo]].length > 0 ? (
+            <optgroup key={tipo} label={ROTULO_DO_ESCOPO[tipo]}>
+              {grupos[GRUPO_DO_TIPO[tipo]].map((opcao) => (
+                <option
+                  key={opcao.id}
+                  value={chaveDoEscopo({ tipo, id: opcao.id })}
+                >
+                  {opcao.nome}
+                </option>
+              ))}
+            </optgroup>
+          ) : null,
+        )}
+      </Select>
     </div>
   );
 }

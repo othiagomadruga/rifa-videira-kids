@@ -13,7 +13,7 @@ import {
   Icone,
 } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
-import { ajuda } from "./ajuda-sob-demanda";
+import { ajuda } from "../ajuda-sob-demanda";
 import { DICAS, TEXTOS_TIPO_RELATORIO } from "./textos";
 import { baixarRelatorio } from "./visao-geral-api";
 
