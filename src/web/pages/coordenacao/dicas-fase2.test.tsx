@@ -81,7 +81,7 @@ import {
 import { DICAS as DICAS_VISAO_GERAL } from "../visao-geral/textos";
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral"]);
+const TELAS_COM_AJUDA = new Set(["Campanha", "Visão geral", "Hierarquia"]);
 
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);

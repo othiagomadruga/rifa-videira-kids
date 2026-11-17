@@ -25,6 +25,7 @@ import {
   plural,
   type Entidade,
 } from "./textos";
+import { ajuda } from "./ajuda-sob-demanda";
 
 type AcoesDaLinha<T> = {
   aoEditar: (item: T) => void;
@@ -155,6 +156,7 @@ export function TabelaCelulas({
         <ComDica texto={DICAS.filtroDivisao}>
           <Select
             rotulo="Divisão"
+            ajuda={ajuda("filtroDivisao")}
             value={divisao}
             onChange={(evento) => {
               const nova = evento.currentTarget.value as Divisao | "";
@@ -174,6 +176,7 @@ export function TabelaCelulas({
         <ComDica texto={DICAS.filtroRede}>
           <Select
             rotulo="Rede"
+            ajuda={ajuda("filtroRede")}
             value={redeFiltro}
             onChange={(evento) => setRedeId(evento.currentTarget.value)}
           >
@@ -188,6 +191,7 @@ export function TabelaCelulas({
         <ComDica texto={DICAS.busca}>
           <Input
             rotulo="Buscar por nome"
+            ajuda={ajuda("busca")}
             dica="Célula, líder ou discipulador"
             type="search"
             value={busca}

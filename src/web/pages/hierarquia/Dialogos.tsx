@@ -14,6 +14,7 @@ import type {
 import {
   Aviso,
   Button,
+  ComAjuda,
   ComDica,
   Dialogo,
   Input,
@@ -44,6 +45,7 @@ import {
   dadosDesatualizados,
   type Entidade,
 } from "./textos";
+import { ajuda } from "./ajuda-sob-demanda";
 
 type PropsEdicao<T> = {
   item: T;
@@ -204,6 +206,7 @@ export function DialogoCelula({
         <ComDica texto={DICAS.nome.celula}>
           <Input
             rotulo={ROTULOS_CELULA.nome}
+            ajuda={ajuda("nomeCelula")}
             name="nome"
             value={valores.nome}
             onChange={mudar("nome")}
@@ -215,6 +218,7 @@ export function DialogoCelula({
         <ComDica texto={DICAS.discipuladorDaCelula}>
           <Select
             rotulo={ROTULOS_CELULA.discipulador_id}
+            ajuda={ajuda("discipuladorDaCelula")}
             name="discipulador_id"
             dica="A célula fica na rede do discipulador escolhido."
             value={valores.discipulador_id}
@@ -235,6 +239,7 @@ export function DialogoCelula({
         <ComDica texto={DICAS.pessoas}>
           <Input
             rotulo={ROTULOS_CELULA.qtd_pessoas}
+            ajuda={ajuda("qtdPessoas")}
             name="qtd_pessoas"
             dica={`Número inteiro de ${LIMITES.pessoasMin} a ${LIMITES.pessoasMax}: é a base da meta da célula.`}
             inputMode="numeric"
@@ -244,11 +249,23 @@ export function DialogoCelula({
             erro={erros.qtd_pessoas}
           />
         </ComDica>
-        <fieldset className="hierarquia-grupo">
-          <legend className="hierarquia-grupo__titulo">Líder</legend>
+        {/* O "?" da ajuda fica dentro da legenda (a primeira filha do fieldset): o nome do grupo vem só do texto. */}
+        <fieldset
+          className="hierarquia-grupo"
+          aria-labelledby="hierarquia-grupo-lider"
+        >
+          <legend className="hierarquia-grupo__titulo">
+            <ComAjuda
+              texto={ajuda("lider")}
+              idDoTitulo="hierarquia-grupo-lider"
+            >
+              <span id="hierarquia-grupo-lider">Líder</span>
+            </ComAjuda>
+          </legend>
           <ComDica texto={DICAS.liderNome}>
             <Input
               rotulo={ROTULOS_CELULA.lider_nome}
+              ajuda={ajuda("liderNome")}
               name="lider_nome"
               value={valores.lider_nome}
               onChange={mudar("lider_nome")}
@@ -260,6 +277,7 @@ export function DialogoCelula({
           <ComDica texto={DICAS.liderEmail}>
             <Input
               rotulo="E-mail (opcional)"
+              ajuda={ajuda("liderEmail")}
               name="lider_email"
               type="email"
               value={valores.lider_email}
@@ -272,6 +290,7 @@ export function DialogoCelula({
           <ComDica texto={DICAS.liderTelefone}>
             <Input
               rotulo="Telefone (opcional)"
+              ajuda={ajuda("liderTelefone")}
               name="lider_telefone"
               type="tel"
               dica="Com DDD, ex.: (91) 90000-0001."
@@ -378,6 +397,7 @@ export function DialogoDiscipulador({
         <ComDica texto={DICAS.nome.discipulador}>
           <Input
             rotulo={ROTULOS_DISCIPULADOR.nome}
+            ajuda={ajuda("nomeDiscipulador")}
             name="nome"
             value={valores.nome}
             onChange={mudar("nome")}
@@ -389,6 +409,7 @@ export function DialogoDiscipulador({
         <ComDica texto={DICAS.redeDoDiscipulador}>
           <Select
             rotulo={ROTULOS_DISCIPULADOR.rede_id}
+            ajuda={ajuda("redeDoDiscipulador")}
             name="rede_id"
             dica="As células do discipulador vão junto para a rede escolhida."
             value={valores.rede_id}
@@ -489,6 +510,7 @@ export function DialogoRede({
         <ComDica texto={DICAS.nome.rede}>
           <Input
             rotulo={ROTULOS_REDE.nome}
+            ajuda={ajuda("nomeRede")}
             name="nome"
             value={valores.nome}
             onChange={mudar("nome")}
@@ -500,6 +522,7 @@ export function DialogoRede({
         <ComDica texto={DICAS.divisaoDaRede}>
           <Select
             rotulo={ROTULOS_REDE.divisao}
+            ajuda={ajuda("divisaoRede")}
             name="divisao"
             dica="Mudar a divisão muda também a das células da rede."
             value={valores.divisao}
@@ -516,6 +539,7 @@ export function DialogoRede({
         <ComDica texto={DICAS.responsavel}>
           <Input
             rotulo="Responsável (opcional)"
+            ajuda={ajuda("responsavel")}
             name="responsavel_nome"
             dica="Pastor ou obreiro da rede."
             value={valores.responsavel_nome}

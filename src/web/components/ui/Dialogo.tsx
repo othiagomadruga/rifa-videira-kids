@@ -82,9 +82,12 @@ function DialogoAberto({
         ? document.activeElement
         : null;
     const desfazerIsolamento = isolarDoResto(fundo);
+    // O foco começa no primeiro campo ou botão, não no "?" da ajuda de um rótulo (RIFA-066): ele vem antes do campo.
     const inicial =
       focoInicial?.current ??
-      focaveis(refCorpo.current)[0] ??
+      focaveis(refCorpo.current).find(
+        (elemento) => !elemento.matches("[data-ajuda-botao]"),
+      ) ??
       focaveis(refRodape.current)[0] ??
       painel;
     inicial.focus();

@@ -20,6 +20,7 @@ import {
 import { Input, Select, Textarea } from "./Campos";
 import { Card } from "./Card";
 import { DataTable } from "./DataTable";
+import { Dialogo } from "./Dialogo";
 import { ATRASO_DA_DICA_MS, FOLGA_DA_DICA_MS } from "./Dica";
 import { PageHeader } from "./PageHeader";
 import { SeletorArquivo } from "./SeletorArquivo";
@@ -314,6 +315,21 @@ describe("os rótulos de campo (Input, Select, Textarea, SeletorArquivo) e as ca
     fireEvent.click(caixa);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expect(caixa).toBeChecked();
+  });
+});
+
+describe("num diálogo", () => {
+  it('o foco começa no primeiro campo, não no "?" do rótulo (que vem antes dele)', () => {
+    render(
+      <Dialogo aberto titulo="Editar célula" aoFechar={() => {}}>
+        <Input
+          rotulo="Nome da célula"
+          ajuda="Como a célula aparece nos rankings."
+        />
+      </Dialogo>,
+    );
+    expect(screen.getByLabelText("Nome da célula")).toHaveFocus();
+    expect(ajuda("Nome da célula")).toBeInTheDocument();
   });
 });
 
