@@ -1534,3 +1534,42 @@ as decisões configuráveis: virou uma opção da Campanha.
 - **Peso** (a ferramenta de capturas, em gzip): o JS inicial sobe 0,4 KiB (379 B: a lista única no ranking aberto e no
   telão, o cabeçalho da /minha) e o CSS inicial 0,1 KiB; nenhuma dependência nova. Com a opção ligada, as capturas das
   telas de ranking ficam iguais às da `main` (só a Campanha muda, com a caixa e a linha do resumo).
+
+## D30. Rede única: com uma rede só, o site esconde o nível rede (RIFA-065, 2026-11-17)
+
+Pedido do PO (17/11): "Não quero que tenha o nome das redes, apenas dos discipuladores." A planilha da igreja não tem
+rede (8 discipuladores e 38 células); a importação usa uma rede só ("Exploradores"), porque o modelo exige rede →
+discipulador → célula.
+
+- **A regra, só no site** (sem mudar o contrato nem a API): com uma rede só na hierarquia, o nível rede some de todas as
+  telas; com duas ou mais (ou nenhuma), tudo como antes. A rede continua no banco, na API, na planilha (a coluna `rede`
+  segue obrigatória: o mesmo nome em todas as linhas) e nos arquivos do relatório.
+- **De onde o site sabe** (`src/web/lib/redes.ts`): das listas que as telas já recebem com a hierarquia toda: as redes
+  (Hierarquia) e as células (Visão geral, Pedidos e Adesão, contadas pela `rede_id`). Rankings, Campanha e Acessos não
+  recebem a hierarquia (o ranking com o filtro de divisão traz só parte das redes): perguntam `GET /api/admin/redes`
+  (rota que já existia), uma vez por página aberta e só se o site ainda não souber. O que se sabe fica no módulo, vale
+  entre as telas e o menu usa. Sem saber, as abas, colunas e campos ficam como sempre; os textos que só enumeram os
+  níveis (dicas do menu e descrições) saem sem a rede até se saber que há mais de uma.
+- **Onde muda, com uma rede só:**
+
+  | Tela | Com uma rede só |
+  | --- | --- |
+  | Hierarquia | Sem o número "Redes", a aba Redes, as colunas Rede (células e discipuladores) e o filtro Rede; no "Editar célula", os discipuladores numa lista só; no "Editar discipulador", sem o campo Rede (o PUT manda a mesma). A aba "Importar planilha" é a exceção: a dica e a explicação da coluna dizem que a rede pode ser uma só, e o resultado só tem a linha "Redes" se a planilha cria ou muda uma rede |
+  | Visão geral | O filtro sem o grupo Rede; o aviso das vendas sem célula diz "em nenhuma divisão nem célula"; o relatório sem o tipo "Por rede" |
+  | Rankings | Sem a aba Redes (uma URL de antes com `?nivel=rede` mostra as células) e sem a rede no vínculo |
+  | Pedidos | O filtro de célula numa lista só, sem o grupo com o nome da rede |
+  | Adesão | "Líder: …" sem a rede nos cartões; as dicas das buscas sem citar a rede |
+  | Acessos | A aba "Líderes e discipuladores", sem o papel Rede: não se oferece criar acesso de rede |
+  | Campanha | Sem a caixa "Acesso das redes", a linha do resumo e a "Mensagem do link da rede" (os valores gravados ficam e vão iguais no PUT); o `{alvo}` sem a rede |
+  | Menu e `/entrar` | As dicas da Hierarquia e dos Rankings sem a rede; o `/entrar` (tela aberta, sem a hierarquia) diz "Coordenação, líderes e discipuladores" sempre |
+
+- **O que fica:** o relatório em CSV continua com a coluna "Rede" (é o arquivo de trabalho, montado pela API: tirá-la
+  mudaria o contrato do relatório; com uma rede, ela repete o mesmo nome e pode ser apagada no Excel) e a API aceita
+  `tipo=redes`; a trilha cita a rede quando ela é criada ou mudada (é o registro do que aconteceu); o líder e o
+  discipulador já não viam a rede na `/minha` (o teste confere); a `/minha` do papel rede fica como era (sem o acesso de
+  rede oferecido, ninguém novo entra com ele).
+- **Uma rede vazia** (sem células; a importação só cria rede com célula) conta na Hierarquia, nos Rankings, na Campanha e
+  nos Acessos (que contam as redes), mas não na Visão geral, nos Pedidos e na Adesão (que contam pelas células).
+- **Testes:** `lib/redes.test.ts` e `pages/rede-unica.test.tsx` (cada tela com uma rede só: o texto, os atributos, os
+  valores dos campos e as dicas, para admin, coordenação, líder e discipulador). As API falsas dos Rankings, da Campanha e
+  dos Acessos respondem a lista das redes com duas (a tela como sempre foi) e guardam o pedido à parte.
