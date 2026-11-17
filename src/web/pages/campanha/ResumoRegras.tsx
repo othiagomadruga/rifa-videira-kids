@@ -18,7 +18,7 @@ import {
   formatarNumero,
 } from "../../lib/formatadores";
 import { textoPercentual } from "./formulario";
-import { TEXTO_CRITERIO } from "./textos";
+import { AJUDA, TEXTO_CRITERIO } from "./textos";
 
 /** Uma linha do resumo: o nome da decisão, o valor (null = falta preencher) e o campo que a muda. */
 export type ItemResumo = {
@@ -209,7 +209,7 @@ export function ResumoRegras({ campanha, ...ids }: Props) {
   const itens = itensDoResumo(campanha, ids);
   const faltam = itens.filter((item) => item.valor === null);
   return (
-    <Card titulo="Regras da campanha">
+    <Card titulo="Regras da campanha" ajuda={AJUDA.regras}>
       <div className="campanha-regras">
         <p className="campanha-texto-suave">
           O que está valendo agora, em resumo. Toque no nome para ir ao campo e

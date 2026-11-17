@@ -1,4 +1,5 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
+import { ComAjuda, type TextoDeAjuda } from "./Ajuda";
 import { juntarClasses } from "./classes";
 import "./Campos.css";
 
@@ -7,6 +8,11 @@ import "./Campos.css";
 
 type PropsDoCampo = {
   rotulo: ReactNode;
+  /**
+   * A explicação do rótulo (RIFA-066): o que é o campo, para que serve e um exemplo. Aparece com o mouse no rótulo e
+   * no "?" ao lado dele, no foco e no toque do "?" (veja Ajuda.tsx). Todo campo tem.
+   */
+  ajuda?: TextoDeAjuda;
   /** Texto de ajuda abaixo do rótulo. */
   dica?: ReactNode;
   /** Mensagem de erro; quando presente, o campo fica inválido. */
@@ -19,6 +25,7 @@ export type TextareaProps = ComponentProps<"textarea"> & PropsDoCampo;
 
 export function Input({
   rotulo,
+  ajuda,
   dica,
   erro,
   id,
@@ -28,7 +35,7 @@ export function Input({
 }: InputProps) {
   const campo = useCampo(id, dica, erro, descritoPor);
   return (
-    <Moldura rotulo={rotulo} dica={dica} erro={erro} {...campo}>
+    <Moldura rotulo={rotulo} ajuda={ajuda} dica={dica} erro={erro} {...campo}>
       <input
         id={campo.idCampo}
         className={juntarClasses("ui-campo__controle", className)}
@@ -43,6 +50,7 @@ export function Input({
 /** As opções vão como filhas: <Select rotulo="Célula"><option>...</option></Select>. */
 export function Select({
   rotulo,
+  ajuda,
   dica,
   erro,
   id,
@@ -52,7 +60,7 @@ export function Select({
 }: SelectProps) {
   const campo = useCampo(id, dica, erro, descritoPor);
   return (
-    <Moldura rotulo={rotulo} dica={dica} erro={erro} {...campo}>
+    <Moldura rotulo={rotulo} ajuda={ajuda} dica={dica} erro={erro} {...campo}>
       <select
         id={campo.idCampo}
         className={juntarClasses(
@@ -69,6 +77,7 @@ export function Select({
 
 export function Textarea({
   rotulo,
+  ajuda,
   dica,
   erro,
   id,
@@ -78,7 +87,7 @@ export function Textarea({
 }: TextareaProps) {
   const campo = useCampo(id, dica, erro, descritoPor);
   return (
-    <Moldura rotulo={rotulo} dica={dica} erro={erro} {...campo}>
+    <Moldura rotulo={rotulo} ajuda={ajuda} dica={dica} erro={erro} {...campo}>
       <textarea
         id={campo.idCampo}
         className={juntarClasses(
@@ -124,6 +133,7 @@ type PropsMoldura = PropsDoCampo &
 
 function Moldura({
   rotulo,
+  ajuda,
   dica,
   erro,
   idCampo,
@@ -133,9 +143,15 @@ function Moldura({
 }: PropsMoldura) {
   return (
     <div className="ui-campo" data-invalido={erro ? "" : undefined}>
-      <label className="ui-campo__rotulo" htmlFor={idCampo}>
-        {rotulo}
-      </label>
+      <ComAjuda texto={ajuda} idDoTitulo={`${idCampo}-rotulo`}>
+        <label
+          id={`${idCampo}-rotulo`}
+          className="ui-campo__rotulo"
+          htmlFor={idCampo}
+        >
+          {rotulo}
+        </label>
+      </ComAjuda>
       {dica && (
         <p id={idDica} className="ui-campo__dica">
           {dica}

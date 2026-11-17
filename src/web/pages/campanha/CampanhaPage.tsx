@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Loading, PageHeader } from "../../components/ui";
+import { DICA_DO_MENU } from "../coordenacao/textos";
 
 // A configuração valida com os schemas do contrato (zod, cerca de 29 kB gzip). Carregada só aqui,
 // ela fica fora do pacote principal, que também serve as telas públicas (ranking e telão).
@@ -14,6 +15,7 @@ export function CampanhaPage() {
     <>
       <PageHeader
         titulo="Campanha"
+        ajuda={DICA_DO_MENU.campanha}
         descricao="Nome, slug da Rifei, datas e períodos, preço, meta, o que o público vê, as regras de pedidos e acessos e as mensagens do link pessoal."
       />
       <Suspense fallback={<Loading texto="Carregando a campanha…" />}>

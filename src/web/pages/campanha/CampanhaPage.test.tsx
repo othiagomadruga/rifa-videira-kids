@@ -84,6 +84,10 @@ function botao(nome: string | RegExp) {
   return screen.getByRole("button", { name: nome });
 }
 
+// O formulário tem um "?" de ajuda em cada título e rótulo (RIFA-066): com 8 períodos e a suíte inteira em
+// paralelo, os testes que preenchem o formulário passam dos 5 s padrão do Vitest.
+vi.setConfig({ testTimeout: 15_000 });
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -373,7 +377,7 @@ describe("CA2: slug, meta e público", () => {
     );
     const publico = screen
       .getByRole("heading", { name: "O que o público vê" })
-      .closest("div") as HTMLElement;
+      .closest(".campanha-publico") as HTMLElement;
     expect(publico).toHaveTextContent(
       "Valores em R$ nunca aparecem para o público, com qualquer configuração.",
     );

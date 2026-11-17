@@ -20,7 +20,14 @@ import {
   type TipoMensagem,
   type UnidadeMeta,
 } from "../../../shared/contracts";
-import { Button, Card, ComDica, Input, Select } from "../../components/ui";
+import {
+  Button,
+  Card,
+  ComAjuda,
+  ComDica,
+  Input,
+  Select,
+} from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/formatadores";
 import { useUsuarioConectado } from "../../lib/sessao";
@@ -60,6 +67,7 @@ import {
 import { ResumoRegras } from "./ResumoRegras";
 import { SituacaoCampanha } from "./SituacaoCampanha";
 import {
+  AJUDA,
   DICAS,
   TEXTO_CRITERIO,
   TEXTO_POR_DIVISAO,
@@ -266,6 +274,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
     ? TEXTO_REGRA[formulario.meta_regra]
     : null;
   const sugestaoDeSlug = slugDoLink(formulario.slug_rifei);
+  const ajudaDaMeta = AJUDA.valorMeta[formulario.meta_regra || "semRegra"];
 
   return (
     <>
@@ -285,12 +294,13 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
             confirmação ficam fora do fieldset: gravando, eles ficam indisponíveis com aria-disabled (RIFA-047), no
             Tab e com a dica dizendo por quê, e o foco fica neles (o disabled do fieldset o jogava no <body>). */}
         <fieldset className="campanha-formulario__campos" disabled={salvando}>
-          <Card titulo="Identificação">
+          <Card titulo="Identificação" ajuda={AJUDA.identificacao}>
             <div className="campanha-campos">
               <ComDica texto={DICAS.nome}>
                 <Input
                   id={idDoCampo("nome")}
                   rotulo="Nome da campanha"
+                  ajuda={AJUDA.nome}
                   dica="Como a coordenação chama a campanha. Ex.: Rifa Videira Kids."
                   value={formulario.nome}
                   autoComplete="off"
@@ -305,6 +315,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   <Input
                     id={idDoCampo("slug_rifei")}
                     rotulo="Slug da campanha na Rifei"
+                    ajuda={AJUDA.slug}
                     dica={
                       <>
                         É o identificador da campanha no endereço dela na Rifei.
@@ -347,7 +358,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
             </div>
           </Card>
 
-          <Card titulo="Datas e períodos">
+          <Card titulo="Datas e períodos" ajuda={AJUDA.datasEPeriodos}>
             <div className="campanha-campos">
               <div className="grade">
                 <ComDica texto={DICAS.dataInicio}>
@@ -355,6 +366,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                     id={idDoCampo("data_inicio")}
                     type="date"
                     rotulo="Data de início"
+                    ajuda={AJUDA.dataInicio}
                     dica="Primeiro dia de vendas."
                     value={formulario.data_inicio}
                     erro={erros.data_inicio}
@@ -370,6 +382,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   <Input
                     id={idDoCampo("fuso_horario")}
                     rotulo="Fuso horário"
+                    ajuda={AJUDA.fuso}
                     dica="Quando cada dia começa e termina. Padrão: America/Belem."
                     value={formulario.fuso_horario}
                     autoComplete="off"
@@ -411,12 +424,13 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
             </div>
           </Card>
 
-          <Card titulo="Bilhete e meta">
+          <Card titulo="Bilhete e meta" ajuda={AJUDA.bilheteEMeta}>
             <div className="campanha-campos">
               <ComDica texto={DICAS.preco}>
                 <Input
                   id={idDoCampo("preco_bilhete_centavos")}
                   rotulo="Preço do bilhete (R$)"
+                  ajuda={AJUDA.preco}
                   dica={
                     precoCentavos !== null && precoCentavos > 0
                       ? `Cada bilhete custa ${formatarMoeda(precoCentavos)}.`
@@ -439,6 +453,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   <Select
                     id={idDoCampo("meta.unidade")}
                     rotulo="Unidade da meta"
+                    ajuda={AJUDA.unidadeMeta}
                     dica="Em que a meta é medida."
                     value={formulario.meta_unidade}
                     erro={erros["meta.unidade"]}
@@ -463,6 +478,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   <Select
                     id={idDoCampo("meta.regra")}
                     rotulo="Regra da meta"
+                    ajuda={AJUDA.regraMeta}
                     dica={
                       regra?.explicacao ?? "Como sai a meta de cada célula."
                     }
@@ -484,9 +500,10 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   </Select>
                 </ComDica>
               </div>
-              <ComDica texto={DICAS.valorMeta}>
+              <ComDica texto={ajudaDaMeta}>
                 <Input
                   id={idDoCampo("meta.valor")}
+                  ajuda={ajudaDaMeta}
                   rotulo={`${regra?.campo ?? "Valor da meta"}${
                     formulario.meta_unidade === "bilhetes"
                       ? " (bilhetes)"
@@ -507,12 +524,13 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
             </div>
           </Card>
 
-          <Card titulo="Ranking e público">
+          <Card titulo="Ranking e público" ajuda={AJUDA.rankingEPublico}>
             <div className="campanha-campos">
               <ComDica texto={DICAS.criterioRanking}>
                 <Select
                   id={idDoCampo("ranking.criterio")}
                   rotulo="Critério do ranking"
+                  ajuda={AJUDA.criterioRanking}
                   dica={
                     formulario.ranking_criterio
                       ? TEXTO_CRITERIO[formulario.ranking_criterio].explicacao
@@ -541,9 +559,10 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
 
               {/* RIFA-061 (D27): como as chaves da campanha, a caixa e uma linha do que acontece ligada e desligada. */}
               <div className="campanha-chave campanha-chave--ranking">
-                <ComDica
+                <ComAjuda
                   id={`${idDoCampo("ranking.por_divisao")}-dica`}
                   texto={DICAS.porDivisao}
+                  idDoTitulo={`${idDoCampo("ranking.por_divisao")}-rotulo`}
                 >
                   <label
                     className="campanha-opcao"
@@ -561,9 +580,11 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                         )
                       }
                     />
-                    <span>{TEXTO_POR_DIVISAO.rotulo}</span>
+                    <span id={`${idDoCampo("ranking.por_divisao")}-rotulo`}>
+                      {TEXTO_POR_DIVISAO.rotulo}
+                    </span>
                   </label>
-                </ComDica>
+                </ComAjuda>
                 <p
                   id={`${idDoCampo("ranking.por_divisao")}-explicacao`}
                   className="campanha-chave__explicacao"
@@ -582,16 +603,27 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
               </div>
 
               <div className="campanha-publico">
-                <h3 className="campanha-subtitulo">O que o público vê</h3>
+                <ComAjuda
+                  texto={AJUDA.oQueOPublicoVe}
+                  idDoTitulo="campanha-publico-titulo"
+                >
+                  <h3
+                    id="campanha-publico-titulo"
+                    className="campanha-subtitulo"
+                  >
+                    O que o público vê
+                  </h3>
+                </ComAjuda>
                 <p className="campanha-texto-suave">
                   No telão e no ranking aberto (grupo do WhatsApp), o público vê
                   a posição e o nome de cada célula. Valores em R$ nunca
                   aparecem para o público, com qualquer configuração.
                 </p>
-                {/* A dica fica na linha toda (caixa e texto); a caixa a tem na descrição (`id` da dica). */}
-                <ComDica
+                {/* A ajuda fica na linha toda (caixa e texto) e no "?"; a caixa a tem na descrição (`id` dela). */}
+                <ComAjuda
                   id={`${idDoCampo("publico.mostra_percentual_meta")}-dica`}
                   texto={DICAS.mostraPercentual}
+                  idDoTitulo={`${idDoCampo("publico.mostra_percentual_meta")}-rotulo`}
                 >
                   <label
                     className="campanha-opcao"
@@ -612,13 +644,18 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                         )
                       }
                     />
-                    <span>Mostrar também o percentual da meta atingido</span>
+                    <span
+                      id={`${idDoCampo("publico.mostra_percentual_meta")}-rotulo`}
+                    >
+                      Mostrar também o percentual da meta atingido
+                    </span>
                   </label>
-                </ComDica>
+                </ComAjuda>
                 <ComDica texto={DICAS.limiteRanking}>
                   <Input
                     id={idDoCampo("publico.limite_ranking")}
                     rotulo="Quantas posições o público vê"
+                    ajuda={AJUDA.limiteRanking}
                     dica="Padrão: 3. Deixe em branco para mostrar todas. Quem empata na última posição também aparece."
                     value={formulario.publico_limite_ranking}
                     inputMode="numeric"

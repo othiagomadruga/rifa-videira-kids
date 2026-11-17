@@ -1,0 +1,57 @@
+/*
+ * Ajuda (RIFA-066, D31): o título (ou o rótulo) e o "?" lado a lado, do tamanho do texto (num campo, a grade não
+ * estica a linha: a dica fica centrada no rótulo, não no meio do campo). O "?" é discreto (o cinza do texto suave)
+ * e vira roxo no mouse. No mouse, 24 px; numa tela de toque, o alvo de 44 px (D25) sem mudar a altura da
+ * linha (a margem negativa devolve o espaço).
+ */
+.ui-ajuda {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ui-campo > .ui-ajuda {
+  justify-self: start;
+}
+
+.ui-ajuda__botao {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: transparent;
+  color: var(--cor-texto-suave);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color var(--transicao),
+    color var(--transicao);
+}
+
+.ui-ajuda__botao .ui-icone {
+  width: 1em;
+  height: 1em;
+  vertical-align: 0;
+}
+
+.ui-ajuda__botao:hover {
+  background: var(--cor-primaria-suave);
+  color: var(--cor-primaria);
+}
+
+@media (pointer: coarse) {
+  .ui-ajuda__botao {
+    width: var(--alvo-toque);
+    height: var(--alvo-toque);
+    margin: calc((1.5rem - var(--alvo-toque)) / 2);
+  }
+}
