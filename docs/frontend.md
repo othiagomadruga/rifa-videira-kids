@@ -8,7 +8,7 @@ Princípios: celular primeiro, sem rolagem horizontal em 390 px (360 px na visã
 
 ```
 src/web/
-  main.tsx              entrada: createBrowserRouter(rotas) + <App>
+  main.tsx              entrada: criarRoteador(rotas) (roteador.ts; o de hash só em /exemplo, D28) + <App>
   App.tsx               <RouterProvider>; o roteador vem de fora (navegador ou memória nos testes)
   rotas.tsx             tabela de rotas do site
   styles.css            CSS global: importa tema/tokens.css, tema/base.css e tema/movimento.css
