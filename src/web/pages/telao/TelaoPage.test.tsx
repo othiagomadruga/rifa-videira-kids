@@ -630,6 +630,19 @@ describe("RIFA-061 (D27): sem ranking por divisão, o telão mostra uma lista s�
     expect(document.querySelector(".telao__resto")).toBeNull();
   });
 
+  it("6 itens: duas colunas de 4 linhas (4 e 2), nunca a escala de até 3 itens, que cortaria o nome na meia tela", async () => {
+    abrir({ todas: todas(6) });
+    await esperarRanking();
+
+    expect(lista("Células")).toHaveLength(6);
+    expect(ordem()).toHaveAttribute("data-colunas", "2");
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      String(LINHAS_POR_DIVISAO - 1),
+    );
+    expect(document.querySelector(".telao__resto")).toBeNull();
+  });
+
   it("mais de 10: 8 nas duas colunas (4 em cada) e a linha com os que faltam", async () => {
     abrir({ todas: todas(14) });
     await esperarRanking();

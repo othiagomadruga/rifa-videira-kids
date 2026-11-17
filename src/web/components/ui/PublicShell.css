@@ -86,14 +86,29 @@
   padding: 0 var(--margem-pagina) var(--espaco-6);
 }
 
-.ui-public-shell__kids {
+/* A linha do rodapé: o selo e a frase à esquerda, o crédito à direita (RIFA-067); no celular, o crédito desce. */
+.ui-public-shell__linha-rodape {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: var(--espaco-3);
   padding-top: var(--espaco-4);
   border-top: 1px solid var(--cor-borda);
   color: var(--cor-texto-suave);
   font-size: var(--texto-sm);
+}
+
+.ui-public-shell__kids {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.ui-public-shell__credito {
+  margin-left: auto;
+  font-size: var(--texto-xs);
 }
 
 .ui-public-shell__selo-kids {

@@ -1520,7 +1520,7 @@ as decisões configuráveis: virou uma opção da Campanha.
   | Tela ou saída | Com a opção desligada |
   | --- | --- |
   | Ranking aberto (`/`) | Uma lista só, "Células", na largura toda (a partir de 48rem); as posições, o "↑ subiu" e a comemoração valem entre todas |
-  | Telão | A lista única ocupa a tela: até 5 itens, uma coluna larga com a escala de sempre; de 6 a 10, duas colunas da mesma lista (de cima para baixo, depois a da direita), com a escala pelos itens de cada coluna; acima de 10, 8 e "e mais N"; em pé, uma coluna só. O esqueleto do carregando continua com as duas colunas |
+  | Telão | A lista única ocupa a tela: até 5 itens, uma coluna larga com a escala de sempre; de 6 a 10, duas colunas da mesma lista (de cima para baixo, depois a da direita), com a escala pelos itens de cada coluna, pelo menos 4 (com 6, 4 e 2: a escala de até 3 itens cortava o nome na meia tela; revisão); acima de 10, 8 e "e mais N"; em pé, uma coluna só. O esqueleto do carregando continua com as duas colunas |
   | Rankings da coordenação | A lista de todos (era o "Todas" do filtro), sem a divisão na legenda nem no vínculo; o filtro "Divisão" fica no lugar, indisponível (`aria-disabled`, só "Todas as células", com a dica de onde ligar), para nada andar na tela quando a resposta chega |
   | /minha | Uma posição só ("Sua posição", "Entre todas as células"), "Os primeiros" sem a divisão, a coluna e o rótulo "Posição" na equipe, e o cabeçalho "Célula" sem "· Jovens" (depois que a visão chega; antes, como sempre) |
   | Bumbo (texto do WhatsApp) | Um ranking só, sem `_Jovens_`/`_Adultos_` (como já era com uma divisão só); "Ainda sem vendas." sem o nome da divisão |

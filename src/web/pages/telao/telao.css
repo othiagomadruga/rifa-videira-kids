@@ -329,17 +329,13 @@
 
 /*
  * A lista única em duas colunas (D27, mais de 5 itens): de cima para baixo, depois a coluna da direita, com as linhas
- * do tamanho de cada coluna (data-itens é a quantidade por coluna). As linhas iguais (sem a do 1º lugar maior, que
- * cresceria também a do topo da outra coluna).
+ * do tamanho de cada coluna (data-itens é a quantidade por coluna, pelo menos 4: itensDaEscala, em textos.ts; a escala
+ * de até 3 itens cortaria o nome na meia tela). As linhas iguais.
  */
 .telao__lista[data-colunas="2"] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-flow: column;
   column-gap: 1em;
-}
-
-.telao__disputa[data-itens="3"] .telao__lista[data-colunas="2"] {
-  grid-template-rows: repeat(3, minmax(0, 1fr));
 }
 
 .telao__disputa[data-itens="4"] .telao__lista[data-colunas="2"] {
