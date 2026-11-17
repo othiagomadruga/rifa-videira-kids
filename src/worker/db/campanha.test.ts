@@ -75,6 +75,8 @@ describe("buscarCampanhaAtiva", () => {
       mensagem_link_lider: null,
       mensagem_link_discipulador: null,
       mensagem_link_rede: null,
+      // 0013 (RIFA-064, D29): o login das células com a senha padrão nasce ligado.
+      acesso_celulas_senha: 1,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],
@@ -280,7 +282,7 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
     const criacao = (corpo: CampanhaEntrada) =>
       resumirMudancaDaCampanha(null, corpoSalvarCampanhaSchema.parse(corpo));
     const PADROES =
-      "pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado";
+      "pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado, acesso.celulas_senha: ligado";
 
     // Sem os grupos (a coordenação, ou um admin que não mexeu): os padrões que o INSERT grava, sem mensagem.
     expect(criacao(BASE)).toBe(
@@ -311,7 +313,7 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
       },
     });
     expect(resumo).toBe(
-      'Campanha criada: slug_rifei "rifa \\"aspas\\"", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: desligado, acesso.redes: desligado, mensagens.link_coordenacao, mensagens.link_rede',
+      'Campanha criada: slug_rifei "rifa \\"aspas\\"", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: desligado, acesso.redes: desligado, acesso.celulas_senha: ligado, mensagens.link_coordenacao, mensagens.link_rede',
     );
     expect(resumo).not.toContain("Obrigado");
     expect(resumo).not.toContain("Equipe");

@@ -1787,43 +1787,10 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ).toBe(aceito);
       }
     });
-
-    it("o UPSERT do PUT da campanha (salvarCampanhaAtiva, que nomeia as colunas) não apaga o modelo, com e sem os grupos do admin", async () => {
-      onTestFinished(apagarModelos);
-      await db
-        .prepare("UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1")
-        .bind(MODELO)
-        .run();
-      const dados = {
-        nome: "Campanha Depois da 0010",
-        slug_rifei: "campanha-depois-da-0010",
-        data_inicio: "2026-11-23",
-        preco_bilhete_centavos: 2000,
-        meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
-        periodos: [{ nome: "Período 1", dias: 21, percentual_bp: 10000 }],
-        ranking: { criterio: "percentual_meta" },
-        publico: { mostra_percentual_meta: false, limite_ranking: 3 },
-      };
-      for (const corpo of [
-        campanhaEntradaSchema.parse(dados),
-        // Com os grupos do admin (o PUT do admin): o UPSERT também não nomeia o modelo.
-        campanhaEntradaSchema.parse({
-          ...dados,
-          slug_rifei: "campanha-depois-da-0010-b",
-          pedidos: PEDIDOS_PADRAO,
-          acesso: ACESSO_PADRAO,
-          mensagens: MENSAGENS_PADRAO,
-        }),
-      ]) {
-        const salvo = await salvarCampanhaAtiva(db, corpo);
-        expect(salvo.ok && salvo.campanha.slug_rifei).toBe(corpo.slug_rifei);
-        expect(
-          (await modelos()).find((linha) => linha.ativa === 1)
-            ?.link_vendas_modelo,
-        ).toBe(MODELO);
-      }
-    });
   });
+
+  // O "UPSERT do PUT não apaga o modelo" (RIFA-046) roda no describe da 0013: o PUT de hoje nomeia a coluna da 0013
+  // (acesso_celulas_senha), então só roda sobre o schema completo.
 
   // -------------------------------------------------------------------------------------------------
   // 0011 (RIFA-056): o pagamento registrado pela conferência, aplicada sobre tudo o que já existia
@@ -1877,7 +1844,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           .bind(campanhaId),
       ]);
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0011: as migrações depois dela são aplicadas nos describes delas, sobre tudo isto.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0012"),
+      );
     });
 
     it("a 0011 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -2018,6 +1989,150 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           /^SEARCH pedidos USING (COVERING )?INDEX pedidos_por_pagamento_recuperado \(pagamento_recuperacao_id=\?\)$/,
         ),
       ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0013 (RIFA-064, D29): a chave do login das células com a senha padrão, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0013 sobre dados que já existiam (RIFA-064)", () => {
+    const db = DB_MIGRACAO;
+    const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    const modelos = async () =>
+      (
+        await db
+          .prepare(
+            "SELECT id, ativa, link_vendas_modelo FROM campanhas ORDER BY id",
+          )
+          .all<{
+            id: number;
+            ativa: number;
+            link_vendas_modelo: string | null;
+          }>()
+      ).results;
+    const apagarModelos = async () => {
+      await db.prepare("UPDATE campanhas SET link_vendas_modelo = NULL").run();
+    };
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0011 (aqui vale também rodando este sozinho).
+      const ate0012 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0013",
+      );
+      expect(ate0012.map((migracao) => migracao.name)).not.toContain(
+        "0013_login_celulas_senha.sql",
+      );
+      await applyD1Migrations(db, ate0012);
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0013 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0013_login_celulas_senha.sql",
+      );
+      // A ativa e a inativa, sem a coluna antes da 0013; e a hierarquia, os acessos, as sessões e a trilha.
+      expect(antes.campanhas.length).toBeGreaterThanOrEqual(2);
+      expect(antes.campanhas[0]).not.toHaveProperty("acesso_celulas_senha");
+      for (const tabela of [
+        "celulas",
+        "usuarios",
+        "links_acesso",
+        "sessoes",
+        "auditoria",
+      ])
+        expect({ tabela, vazia: antes[tabela].length === 0 }).toEqual({
+          tabela,
+          vazia: false,
+        });
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada campanha ganha só acesso_celulas_senha = 1 (ligado, o padrão)", async () => {
+      const { campanhas, ...depois } = await fotografarTodasAsTabelas(db);
+      const { campanhas: campanhasAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(campanhas).toEqual(
+        campanhasAntes.map((campanha) => ({
+          ...campanha,
+          acesso_celulas_senha: 1,
+        })),
+      );
+      const { results: coluna } = await db
+        .prepare(
+          `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('campanhas')
+           WHERE name = 'acesso_celulas_senha'`,
+        )
+        .all();
+      expect(coluna).toEqual([
+        {
+          name: "acesso_celulas_senha",
+          type: "INTEGER",
+          notnull: 1,
+          dflt_value: "1",
+          pk: 0,
+        },
+      ]);
+    });
+
+    it("o CHECK aceita só 0 e 1", async () => {
+      for (const valor of [2, -1, "sim"])
+        await expect(
+          db
+            .prepare(
+              "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1",
+            )
+            .bind(valor)
+            .run(),
+        ).rejects.toThrow(/CHECK constraint failed/);
+      for (const valor of [0, 1])
+        await db
+          .prepare(
+            "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1",
+          )
+          .bind(valor)
+          .run();
+    });
+
+    it("o UPSERT do PUT da campanha (salvarCampanhaAtiva, que nomeia as colunas) não apaga o modelo, com e sem os grupos do admin", async () => {
+      onTestFinished(apagarModelos);
+      await db
+        .prepare("UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1")
+        .bind(MODELO)
+        .run();
+      const dados = {
+        nome: "Campanha Depois da 0013",
+        slug_rifei: "campanha-depois-da-0013",
+        data_inicio: "2026-11-23",
+        preco_bilhete_centavos: 2000,
+        meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
+        periodos: [{ nome: "Período 1", dias: 21, percentual_bp: 10000 }],
+        ranking: { criterio: "percentual_meta" },
+        publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+      };
+      for (const corpo of [
+        campanhaEntradaSchema.parse(dados),
+        // Com os grupos do admin (o PUT do admin): o UPSERT também não nomeia o modelo.
+        campanhaEntradaSchema.parse({
+          ...dados,
+          slug_rifei: "campanha-depois-da-0013-b",
+          pedidos: PEDIDOS_PADRAO,
+          acesso: ACESSO_PADRAO,
+          mensagens: MENSAGENS_PADRAO,
+        }),
+      ]) {
+        const salvo = await salvarCampanhaAtiva(db, corpo);
+        expect(salvo.ok && salvo.campanha.slug_rifei).toBe(corpo.slug_rifei);
+        expect(
+          (await modelos()).find((linha) => linha.ativa === 1)
+            ?.link_vendas_modelo,
+        ).toBe(MODELO);
+      }
     });
 
     it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
