@@ -1531,5 +1531,6 @@ as decisões configuráveis: virou uma opção da Campanha.
   não ranking: com a hierarquia toda numa divisão, a outra fica vazia); a divisão na hierarquia e na planilha (a coluna
   `divisao` continua obrigatória: a planilha da campanha usa `jovens` em todas as células, provisório); as mensagens do
   link pessoal (nunca falaram de divisão); a meta (a regra é a da campanha).
-- **Peso:** o JS inicial sobe ~0,6 KiB (a lista única no ranking aberto e no telão, o cabeçalho da /minha); nenhuma
-  dependência nova.
+- **Peso** (a ferramenta de capturas, em gzip): o JS inicial sobe 0,4 KiB (379 B: a lista única no ranking aberto e no
+  telão, o cabeçalho da /minha) e o CSS inicial 0,1 KiB; nenhuma dependência nova. Com a opção ligada, as capturas das
+  telas de ranking ficam iguais às da `main` (só a Campanha muda, com a caixa e a linha do resumo).
