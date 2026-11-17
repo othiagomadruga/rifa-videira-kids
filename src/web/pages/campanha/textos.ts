@@ -63,7 +63,10 @@ export const TEXTO_CRITERIO: Record<
 
 /** As chaves da campanha (os nomes do formulário, como em RegrasDoAdmin.tsx). */
 type ChaveDica =
-  "pedidos_desconsiderar" | "acesso_discipuladores" | "acesso_redes";
+  | "pedidos_desconsiderar"
+  | "acesso_discipuladores"
+  | "acesso_redes"
+  | "acesso_celulas_senha";
 
 /** De quem é cada mensagem do link pessoal. */
 const QUEM_RECEBE: Record<TipoMensagem, string> = {
@@ -116,6 +119,8 @@ export const DICAS = {
       "Marcada, os discipuladores entram pelo link pessoal. Desmarcar não apaga os links: eles voltam a valer ao marcar de novo.",
     acesso_redes:
       "Marcada, as redes entram pelo link pessoal. Desmarcar não apaga os links: eles voltam a valer ao marcar de novo.",
+    acesso_celulas_senha:
+      "Marcada, cada célula entra na tela Entrar com o nome dela e a senha padrão (@ + nome da célula + 1234). Desmarcar tira na hora quem entrou assim; o link pessoal continua.",
   } satisfies Record<ChaveDica, string>,
   chaveSoLeitura:
     "Indisponível: só o admin muda esta regra. Aqui você vê como ela está valendo.",

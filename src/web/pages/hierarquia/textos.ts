@@ -166,6 +166,11 @@ export const DICAS = {
     "Cadastra ou atualiza de uma vez as redes, os discipuladores e as células por uma planilha.",
   tentarDeNovo:
     "Lê as tabelas de novo. Enquanto isso, a tela continua com os dados que já tinha.",
+  // Login das células com senha (RIFA-064, D29)
+  verSenhas:
+    "Mostra a senha padrão de cada célula, para repassar ao líder pelo WhatsApp. A senha sai do nome da célula.",
+  copiarSenha:
+    "Copia a senha desta célula, para colar na conversa com o líder.",
   // Tabela das células
   filtroDivisao:
     "Mostra só as células de Jovens ou de Adultos. A lista de redes ao lado segue a escolha.",

@@ -1,5 +1,5 @@
 // Sprint 6 (D20), tela Campanha pela rota de verdade, com a API falsa de teste-apoio.ts:
-// - CA1: as três chaves e as quatro mensagens do link pessoal são carregadas e salvas; a pré-visualização mostra o
+// - CA1: as chaves (RIFA-064: também o login das células com senha) e as quatro mensagens do link pessoal são carregadas e salvas; a pré-visualização mostra o
 //   texto final (preencherMensagem) e o modelo inválido é barrado antes de salvar;
 // - CA2 (RIFA-030): o resumo "Regras da campanha" mostra cada decisão e o que falta preencher, e leva ao campo;
 // - CA8: rótulos, descrição das chaves e a lista de erros com foco.
@@ -124,7 +124,7 @@ describe("CA1: as chaves da campanha", () => {
     expect(puts()).toHaveLength(1);
     expect(puts()[0].corpo).toMatchObject({
       pedidos: { desconsiderar: true },
-      acesso: { discipuladores: false, redes: true },
+      acesso: { discipuladores: false, redes: true, celulas_senha: true },
       mensagens: { ...MENSAGENS_PADRAO, link_rede: novoModelo },
     });
     // A resposta (o que a API gravou) volta para o formulário e para o resumo.
@@ -314,6 +314,51 @@ describe("CA1: as mensagens do link pessoal", () => {
   });
 });
 
+describe("RIFA-064 (D29): o login das células com a senha padrão, na Campanha", () => {
+  it("ligado por padrão, com o que acontece ligado e desligado; o admin desliga, o PUT manda e o resumo diz", async () => {
+    const { puts } = simularApi({ campanha: CONFIGURADA });
+    await abrirTela();
+
+    const chave = caixa("Login das células com senha padrão");
+    expect(chave).toBeChecked();
+    expect(chave).toHaveAccessibleDescription(
+      /^Ligado: cada célula entra com o nome dela e a senha @ \+ nome da célula \+ 1234 e vê só a página dela \(ranking, meta e link de vendas\)\. Desligado: ninguém entra pela senha, e quem entrou assim sai na hora; o link pessoal do líder continua\./,
+    );
+    fireEvent.click(chave);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
+    expect(puts()[0].corpo).toMatchObject({
+      acesso: { discipuladores: true, redes: true, celulas_senha: false },
+    });
+    expect(caixa("Login das células com senha padrão")).not.toBeChecked();
+    expect(linhasDoResumo()).toEqual(
+      expect.arrayContaining([
+        ["Login das células com senha", "Desligado: só pelo link pessoal."],
+      ]),
+    );
+  });
+
+  it("para a coordenação, só leitura (como as outras chaves do admin), e o PUT dela não manda a chave", async () => {
+    const { puts } = simularApi({
+      campanha: {
+        ...CONFIGURADA,
+        acesso: { discipuladores: true, redes: true, celulas_senha: false },
+      },
+    });
+    await abrirTela(USUARIO_DE_TESTE);
+
+    const chave = caixa("Login das células com senha padrão");
+    expect(chave).not.toBeChecked();
+    expect(chave).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(chave);
+    expect(chave).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
+    expect(puts()[0].corpo).not.toHaveProperty("acesso");
+  });
+});
+
 describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
   it("mostra cada decisão do PO com o valor que está valendo, em linguagem simples", async () => {
     simularApi({ campanha: CONFIGURADA });
@@ -345,6 +390,11 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       ],
       ["Acesso de discipuladores", "Ligado: entram pelo link pessoal."],
       ["Acesso de redes", "Ligado: entram pelo link pessoal."],
+      // RIFA-064 (D29).
+      [
+        "Login das células com senha",
+        "Ligado: cada célula entra com o nome e a senha padrão.",
+      ],
       ["Mensagens do link pessoal", "As 4 com o texto padrão."],
     ]);
     expect(screen.queryByText(/Falta preencher/)).not.toBeInTheDocument();
@@ -375,6 +425,10 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
         "Ligado: entram pelo link pessoal. (padrão)",
       ],
       ["Acesso de redes", "Ligado: entram pelo link pessoal. (padrão)"],
+      [
+        "Login das células com senha",
+        "Ligado: cada célula entra com o nome e a senha padrão. (padrão)",
+      ],
       ["Mensagens do link pessoal", "As 4 com o texto padrão. (padrão)"],
     ]);
 
@@ -397,6 +451,9 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       screen.getByLabelText("Critério do ranking"),
     );
     expect(irPara("Acesso de redes")).toBe(caixa("Acesso das redes"));
+    expect(irPara("Login das células com senha")).toBe(
+      caixa("Login das células com senha padrão"),
+    );
     expect(irPara("Mensagens do link pessoal")).toBe(
       campoMensagem("Mensagem do link da coordenação"),
     );
@@ -549,7 +606,7 @@ describe("RIFA-042 (CA2): para a coordenação, pedidos, acesso e mensagens fica
     expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
     expect(puts()[0].corpo).toMatchObject({
       pedidos: { desconsiderar: false },
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: {
         ...SALVA.mensagens,
         link_coordenacao: "{saudacao} Seu acesso:\n{link}",
