@@ -1,0 +1,193 @@
+/*
+ * Barra da demonstração estática (só da demonstração; não faz parte do site).
+ * Visual da D15: marinho da Videira, a faixa do degradê da marca no alto, texto branco e o verde-água no foco.
+ * Contraste: branco sobre o marinho 15,9:1; verde-água (#43bab8) sobre o marinho 6,9:1 (anel de foco).
+ */
+:root {
+  --demo-barra-altura: 4.5rem;
+}
+
+.demo-barra {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  /* Abaixo dos diálogos do site (z-index 1000), acima do resto. */
+  z-index: 900;
+  padding: calc(0.375rem + 3px) 0.5rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
+  background:
+    linear-gradient(120deg, #43bab8, #5983ba 55%, #5e297c) top / 100% 3px no-repeat,
+    #1b203c;
+  color: #ffffff;
+  font-family:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  box-shadow: 0 -4px 16px rgb(27 32 60 / 0.18);
+}
+
+.demo-barra__dentro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.demo-barra__texto {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* v4: o texto da demonstração e, só no ranking público e no telão, a frase da próxima atualização. */
+.demo-barra__textos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/* #d5d8e6 sobre o marinho: 11,2:1. */
+.demo-barra__dica {
+  padding-left: 1rem;
+  color: #d5d8e6;
+  font-size: 0.75rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.demo-barra__dica[hidden] {
+  display: none;
+}
+
+.demo-barra__ponto {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #fcd44d;
+}
+
+.demo-barra__grupo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.demo-barra__rotulo {
+  display: none;
+  margin-right: 0.25rem;
+  color: #d5d8e6;
+}
+
+.demo-barra__botao {
+  flex: 1 1 auto;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  border-radius: 999px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.demo-barra__botao:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.demo-barra__botao[aria-pressed="true"] {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #1b203c;
+  font-weight: 700;
+}
+
+.demo-barra__botao:focus-visible {
+  outline: 2px solid #43bab8;
+  outline-offset: 2px;
+}
+
+/* Computador: uma linha só. */
+@media (min-width: 48rem) {
+  .demo-barra {
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .demo-barra__dentro {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .demo-barra__rotulo {
+    display: inline;
+  }
+
+  .demo-barra__botao {
+    flex: none;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Espaço para a barra: o fim da página não fica escondido atrás dela. */
+body {
+  padding-bottom: var(--demo-barra-altura) !important;
+}
+
+.ui-public-shell,
+.ui-app-shell,
+.minha-moldura {
+  min-height: calc(100vh - var(--demo-barra-altura)) !important;
+  min-height: calc(100dvh - var(--demo-barra-altura)) !important;
+}
+
+@media (min-width: 64rem) {
+  .ui-app-shell__lateral,
+  .ui-app-shell[data-menu-aberto] .ui-app-shell__lateral {
+    height: calc(100vh - var(--demo-barra-altura)) !important;
+    height: calc(100dvh - var(--demo-barra-altura)) !important;
+  }
+}
+
+@media (min-aspect-ratio: 1/1) {
+  .telao {
+    height: calc(100vh - var(--demo-barra-altura)) !important;
+    height: calc(100dvh - var(--demo-barra-altura)) !important;
+  }
+}
+
+/* Enquanto troca de papel (entrada simulada pelo link), o site some e fica só o aviso. */
+.demo-trocando #root {
+  visibility: hidden;
+}
+
+.demo-aviso-troca {
+  position: fixed;
+  inset: 0 0 var(--demo-barra-altura);
+  z-index: 899;
+  display: none;
+  place-items: center;
+  padding: 1rem;
+  background: #f4f5fa;
+  color: #1b203c;
+  font-family:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.demo-trocando .demo-aviso-troca {
+  display: grid;
+}
