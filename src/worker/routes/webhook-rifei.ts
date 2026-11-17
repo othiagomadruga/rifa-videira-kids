@@ -6,10 +6,12 @@ import {
   analisarPayloadRifei,
   avisosParaGravar,
   credencialVigenteDoWebhook,
+  ehEventoDeTesteRifei,
   identificarPayloadInvalido,
   redigirPayloadRifei,
   segredoDoWorkerConfigurado,
   type DetalheResumido,
+  type RespostaTesteWebhookRifei,
   type RespostaWebhookRifei,
 } from "../../shared/contracts";
 import { buscarCampanhaAtiva } from "../db/campanha";
@@ -154,6 +156,14 @@ async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
       undefined,
       [problemaDoCorpo("json_invalido", MENSAGEM_JSON_INVALIDO)],
       recebidoEm,
+    );
+  }
+
+  // RIFA-060: o teste que a Rifei manda ao adicionar o webhook (sem pedido). Já autenticado; nada é gravado.
+  if (ehEventoDeTesteRifei(corpo)) {
+    return c.json(
+      { resultado: "teste" } satisfies RespostaTesteWebhookRifei,
+      200,
     );
   }
 

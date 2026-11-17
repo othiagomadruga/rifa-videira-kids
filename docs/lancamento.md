@@ -344,7 +344,8 @@ O token do webhook sai do site: não precisa de Node nem de terminal (`docs/deci
 2. **Na Rifei** ([12.4](integracao-rifei.md#124-webhook-caminho-conferido)): ícone do usuário → **Integrações** → role até **Outro** → **Adicionar** no webhook (ou edite o webhook que já existe).
    - **URL:** `https://rifa-videira-kids.madruga.workers.dev/api/webhooks/rifei` (a tela mostra, com **Copiar**).
    - **Token:** cole o token copiado no passo 1. A Rifei chama o token de opcional, mas **para o sistema ele é obrigatório**: sem ele, toda entrega é recusada e se perde.
-   - **Eventos:** os três: "Novo pedido", "Pedido pago" e "Pedido expirado".
+   - **Eventos:** os três de pedido: "Novo pedido", "Pedido aprovado" (o "Pedido pago" do artigo) e "Pedido expirado". Deixe **"Prêmio instantâneo" desmarcado** e não use "Selecionar todos".
+   - Ao tocar em **Adicionar**, a Rifei manda um teste e só aceita a URL se o sistema responder certo (RIFA-060). Se aparecer "A URL informada não retornou uma resposta válida!", confira a URL e o token e chame o SM.
    - Toque em **Adicionar** (ou salve).
 3. **Confira:** o teste de 2.3 item 6 passa a responder `nao_autenticado` (401), e não mais `nao_configurado`. Depois da compra de teste (seção 4), a tela **Webhook da Rifei** mostra o **último uso**; se continuar "ainda não usado" depois de um pedido, o token na Rifei não é o do site: gere outro e cole de novo.
 

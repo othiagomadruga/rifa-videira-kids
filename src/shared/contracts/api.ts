@@ -153,6 +153,17 @@ export const respostaWebhookRifeiSchema = z.object({
 export type RespostaWebhookRifei = z.infer<typeof respostaWebhookRifeiSchema>;
 
 /**
+ * 200 do evento de teste que a Rifei manda ao adicionar o webhook (RIFA-060; `{"event":"test"}`, sem pedido): a
+ * Rifei só aceita a URL com resposta 2xx em JSON. Só com o Bearer certo (a autenticação vem antes) e nada é gravado.
+ */
+export const respostaTesteWebhookRifeiSchema = z.object({
+  resultado: z.literal("teste"),
+});
+export type RespostaTesteWebhookRifei = z.infer<
+  typeof respostaTesteWebhookRifeiSchema
+>;
+
+/**
  * `detalhes` dos erros do webhook que gravam evento: 400 `json_invalido` ou `payload_invalido` e 413
  * `corpo_muito_grande`. Os problemas vêm agrupados e limitados (resumirDetalhes).
  */
@@ -2179,7 +2190,13 @@ export const ROTAS = {
     grupo: "rifei_bearer",
     situacao: "detalhada",
     corpo: payloadRifeiSchema,
-    sucesso: { status: 200, corpo: respostaWebhookRifeiSchema },
+    sucesso: {
+      status: 200,
+      corpo: z.union([
+        respostaWebhookRifeiSchema,
+        respostaTesteWebhookRifeiSchema,
+      ]),
+    },
   },
   obterCampanha: {
     metodo: "GET",
