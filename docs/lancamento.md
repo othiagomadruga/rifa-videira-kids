@@ -2,6 +2,8 @@
 
 Passo a passo para colocar a Rifa Videira Kids no ar e conduzir a campanha, que começa em **23/11/2026**. Escrito para o Thiago (PO, dono das contas) e para a coordenação. Site: https://rifa-videira-kids.madruga.workers.dev
 
+**Apresentação (simulação):** https://rifa-videira-kids.madruga.workers.dev/exemplo abre o site com a campanha simulada (as células e os discipuladores reais, a rede com o nome neutro "Igreja Videira", vendas fictícias; nada é gravado e nada vai para a API de verdade), com a barra "Ver como" para trocar de papel (Público, Coordenação, Líder e Discipulador); o telão ao vivo fica em `/exemplo/#/telao` (sempre com o `#`: `/exemplo/telao` abre o site oficial). Para atualizar, o SM grava de novo a partir da versão do site que se quer mostrar, constrói com `VITE_ROTEADOR=hash npx vite build --base /exemplo/`, troca a pasta `public/exemplo/` inteira numa branch e faz o merge na `main`, que publica; apagar a pasta tira a página do ar (D28; as ferramentas da gravação ainda não estão no repositório).
+
 ## Plano de 1 dia
 
 Para pôr tudo de pé num dia, sem perguntar nada ao suporte da Rifei (decisão do PO, 15/11/2026). O que as fontes da Rifei não dizem se descobre no painel, ao criar a campanha, ou na compra de teste, e o sistema já aguenta o que ainda não se sabe (lista abaixo). Os tempos são do trabalho de cada um, com este roteiro aberto: a análise da Efí e a liberação da campanha na Rifei não dependem de nós e ficam fora da conta.

@@ -2,7 +2,7 @@ import type { DataRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 
 type Props = {
-  // createBrowserRouter(rotas) no main.tsx; createMemoryRouter(rotas) nos testes
+  // criarRoteador(rotas) no main.tsx (o do navegador; roteador.ts); createMemoryRouter(rotas) nos testes
   // (veja test/renderizar.tsx).
   roteador: DataRouter;
 };
