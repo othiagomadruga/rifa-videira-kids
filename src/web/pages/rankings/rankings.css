@@ -15,7 +15,7 @@
  * O filtro de divisão sem ranking por divisão (D27): indisponível (aria-disabled, continua focável com a dica que diz
  * por quê), com a cara do campo desabilitado (Campos.css), sem mudar de tamanho.
  */
-.rankings-filtros .ui-campo__controle[aria-disabled="true"] {
+.rankings-filtros select[aria-disabled="true"] {
   background-color: var(--cor-superficie-2);
   cursor: not-allowed;
 }
