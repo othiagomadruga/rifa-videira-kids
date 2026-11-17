@@ -1558,8 +1558,8 @@ ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apr
   Kids"), `assets/` (o pacote do site construído com `VITE_ROTEADOR=hash` e `--base /exemplo/`) e `demo/` (`dados.js`,
   as respostas gravadas; `demo.js`, a API simulada e a barra "Ver como"; `demo.css`). Nada inline: a CSP do
   `public/_headers` vale também em `/exemplo` (por isso a apresentação não usa `<base>`: a CSP tem `base-uri 'none'`).
-  O ESLint e o Prettier ignoram a pasta. Peso: 42 arquivos, ~2,6 MiB no repositório e nos assets; o maior é o
-  `demo/dados.js` (~1,5 MiB; o limite da Cloudflare é 25 MiB por arquivo). O pacote do site não muda: sem a variável,
+  O ESLint e o Prettier ignoram a pasta. Peso: 42 arquivos, ~4,2 MiB no repositório e nos assets (RIFA-070); o maior
+  é o `demo/dados.js` (~3 MiB; o limite da Cloudflare é 25 MiB por arquivo). O pacote do site não muda: sem a variável,
   o Vite troca a comparação por `false` e o roteador de hash nem entra nele.
 - **Nada vai para a API de verdade.** O `demo.js` roda antes do pacote do site e troca o `window.fetch` de `/api/*`: GET
   devolve a resposta gravada do papel escolhido na barra; escrita não grava nada. A página está na mesma origem do site,
@@ -1569,12 +1569,21 @@ ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apr
   de dentro da página ("Pular para o conteúdo") levam ao elemento, sem virar tela no roteador de hash.
 - **noindex.** `<meta name="robots" content="noindex">`: a página é pública pelo link, mas tem vendas fictícias e não
   deve aparecer nos buscadores no lugar do site da campanha.
-- **Uma fotografia.** A apresentação é o site de quando foi montada (esta, com o ranking único da RIFA-061): mudança no
+- **Uma fotografia.** A apresentação é o site de quando foi montada (esta: a `main` com a RIFA-061, a RIFA-063 e a
+  RIFA-067, e a configuração real da RIFA-070): mudança no
   site não chega a `/exemplo` até ela ser refeita. Refazer: gravar de novo a partir da versão do site que se quer
   mostrar, `VITE_ROTEADOR=hash npx vite build --base /exemplo/` e trocar a pasta `public/exemplo/` inteira (os nomes dos
   arquivos de `assets/` mudam a cada build). Apagar `public/exemplo/` tira a página do ar no próximo push na `main`.
   Pendência (revisão): as ferramentas da gravação (o servidor local com o relógio simulado, o cenário das vendas
   fictícias, a gravação por papel e a montagem do `index.html`) ainda não estão no repositório; até entrarem (por
   exemplo em `scripts/apresentacao/`), refazer não sai só daqui.
+- **A configuração real da campanha (RIFA-070, 17/11).** Pedido do PO ("na simulação quero preço de 25 do
+  bilhete"): a gravação usa a configuração que está no D1 de produção (lida pelo SM, só leitura): bilhete a R$ 25, meta
+  fixa de 185 bilhetes por célula (7.030 nas 38), 3 períodos de 7 dias com 30%, 40% e 30%, início em 23/11, ranking por
+  bilhetes e único (sem divisão), o público vê o % da meta e as 10 primeiras, sem desconsiderar pedido, o acesso dos
+  discipuladores ligado e o das redes desligado (nenhum link de rede, nem na Trilha). O dia simulado é quinta, 03/12,
+  15:00 (Dia 11 de 21, no meio do Período 2, cuja meta é 74 bilhetes por célula): 3.208 bilhetes pagos nas células
+  (46% da meta da campanha; R$ 80.200), as 3 primeiras acima de 100% do período e algumas lá embaixo; no telão, mais
+  54 bilhetes entram em 9 minutos. Os valores em R$ são sempre a quantidade × R$ 25.
 - **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
   `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
