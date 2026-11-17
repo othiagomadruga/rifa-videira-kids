@@ -1,5 +1,6 @@
-// O extrato do banco lido NO NAVEGADOR (RIFA-059, D26): os lançamentos que os leitores (ofx.ts, texto-colado.ts e
-// csv.ts) tiram do arquivo ou do texto colado, o relógio do fuso da campanha e o filtro dos créditos que parecem Pix.
+// O extrato do banco lido NO NAVEGADOR (RIFA-059, D26): os lançamentos que os leitores (ofx.ts, texto-colado.ts,
+// csv.ts e, pelo texto colado, o pdf.ts da RIFA-068) tiram do arquivo ou do texto colado, o relógio do fuso da
+// campanha e o filtro dos créditos que parecem Pix.
 //
 // Privacidade (D26): nada daqui vai para o servidor, para o localStorage ou para o log. A descrição do lançamento (que
 // pode ter o nome de quem pagou) fica só na memória da tela, para a pessoa desempatar um Pix ambíguo.
@@ -21,7 +22,7 @@ export interface Lancamento {
   identificadores: string[];
 }
 
-export type FormatoExtrato = "ofx" | "texto" | "csv";
+export type FormatoExtrato = "ofx" | "texto" | "csv" | "pdf";
 
 /** Uma data do calendário (sem fuso). */
 export interface DataLocal {

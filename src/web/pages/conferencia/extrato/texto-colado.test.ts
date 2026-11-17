@@ -75,6 +75,28 @@ describe("formato 1: a tabela copiada da tela (tabulações, cabeçalho com Cré
       [123456, `PIX QR CODE DINAMICO 1400300 · REM: ${PAGADOR_DOIS} 17/11`],
     ]);
   });
+
+  it("RIFA-068: a data só na primeira linha do dia (a do saldo anterior, sem valor) vale para as de baixo", () => {
+    const texto = [
+      "Data\tHistórico\tDocto.\tCrédito (R$)\tDébito (R$)\tSaldo (R$)",
+      "16/11/2026\tSALDO ANTERIOR\t\t\t\t1.000,00",
+      "\tTRANSFERENCIA PIX\t1400200\t20,00\t\t1.020,00",
+      `\tREM: ${PAGADORA_UM} 16/11\t\t\t\t`,
+      "17/11/2026\tSALDO ANTERIOR\t\t\t\t1.020,00",
+      "\tTRANSFERENCIA PIX\t1400201\t30,00\t\t1.050,00",
+      // Uma data no meio de outro texto, na coluna Data (um rodapé), não muda o dia.
+      "Emitido em 18/11/2026\t\t\t\t\t",
+      "\tTRANSFERENCIA PIX\t1400202\t40,00\t\t1.090,00",
+    ].join("\n");
+    expect(
+      lido(texto).lancamentos.map((item) => [item.dia, item.centavos]),
+    ).toEqual([
+      ["2026-11-16", 2000],
+      ["2026-11-17", 3000],
+      ["2026-11-17", 4000],
+    ]);
+    expect(lido(texto).ilegiveis).toBe(0);
+  });
 });
 
 describe("formato 2: uma linha por lançamento, com hora, R$ e sinal", () => {
