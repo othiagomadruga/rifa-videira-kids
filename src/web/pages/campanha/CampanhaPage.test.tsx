@@ -69,7 +69,8 @@ const CORPO_DO_FORMULARIO_VALIDO = {
     { nome: "Período 2", dias: 7, percentual_bp: 2500 },
     { nome: "Período 3", dias: 7, percentual_bp: 4500 },
   ],
-  ranking: { criterio: "percentual_meta" },
+  // RIFA-061 (D27): a opção do ranking por divisão vai sempre, com o padrão (separa).
+  ranking: { criterio: "percentual_meta", por_divisao: true },
   publico: { mostra_percentual_meta: false, limite_ranking: 3 },
   // Pedidos, acesso e mensagens são só do admin (RIFA-042): a coordenação (a sessão destes testes) não os manda, e
   // a API grava os padrões no primeiro PUT. O PUT do admin está em RegrasDaCampanha.test.tsx.

@@ -121,7 +121,8 @@ describe("montarCorpo", () => {
           { nome: "Período 2", dias: 7, percentual_bp: 2500 },
           { nome: "Período 3", dias: 7, percentual_bp: 4500 },
         ],
-        ranking: { criterio: "arrecadacao" },
+        // RIFA-061 (D27): a opção do ranking por divisão vai sempre, com o padrão (separa).
+        ranking: { criterio: "arrecadacao", por_divisao: true },
         publico: { mostra_percentual_meta: false, limite_ranking: null },
         // Regras do admin (D20): do admin, os três grupos vão sempre, com o que está no formulário.
         pedidos: { ...PEDIDOS_PADRAO },

@@ -41,6 +41,7 @@ import {
   montarResumoPainel,
   percentualEsperadoBp,
   projecaoDoFim,
+  rankingPorDivisao,
   referenciaDaCampanha,
   situacaoDoRitmo,
   somarMetas,
@@ -70,6 +71,7 @@ import {
 } from "./calendario";
 import fonteCalendario from "./calendario.ts?raw";
 import { CRITERIOS_RANKING, DIVISOES, REGRAS_META } from "./dominio";
+import { RANKING_POR_DIVISAO_PADRAO } from "./regras";
 
 // ---------------------------------------------------------------------------------------------------
 // Cenário: 21 dias (7/7/7) com 35/25/45 (soma 105%), 10 bilhetes por pessoa, início em 23/11/2026.
@@ -1454,6 +1456,110 @@ describe("R8: ranking por nível, critério, janela, empates e vizinhos", () => 
       nome: "Discipulador Caleb",
     });
   });
+
+  describe("RIFA-061 (D27): ranking por divisão ligado e desligado", () => {
+    const UNICO: CampanhaCalculo = {
+      ...CAMPANHA,
+      ranking: { criterio: "percentual_meta", por_divisao: false },
+    };
+
+    it("a opção vale o padrão (separa) quando a campanha não a traz; true também separa", () => {
+      expect(rankingPorDivisao(CAMPANHA)).toBe(RANKING_POR_DIVISAO_PADRAO);
+      expect(RANKING_POR_DIVISAO_PADRAO).toBe(true);
+      expect(rankingPorDivisao({ ranking: { por_divisao: true } })).toBe(true);
+      expect(rankingPorDivisao(UNICO)).toBe(false);
+    });
+
+    it("ligada: a resposta é a de sempre, sem a marca, e o filtro separa a divisão", () => {
+      const ligada: CampanhaCalculo = {
+        ...CAMPANHA,
+        ranking: { criterio: "percentual_meta", por_divisao: true },
+      };
+      for (const campanha of [CAMPANHA, ligada]) {
+        const jovens = ranking(
+          vendas,
+          meioDia(9),
+          { divisao: "jovens" },
+          campanha,
+        );
+        expect(jovens).not.toHaveProperty("por_divisao");
+        expect(jovens.divisao).toBe("jovens");
+        expect(posicoes(jovens)).toEqual([
+          [1, "Célula Betel"],
+          [2, "Célula Ágape"],
+          [2, "Célula Canaã"],
+        ]);
+      }
+    });
+
+    it("desligada: a divisão da consulta é ignorada; um ranking só, de todas as células, com as posições e os vizinhos de todos", () => {
+      const geral = ranking(vendas, meioDia(9));
+      for (const divisao of [undefined, "jovens", "adultos"] as const) {
+        const unico = ranking(vendas, meioDia(9), { divisao }, UNICO);
+        expect(unico.por_divisao).toBe(false);
+        expect(unico.divisao).toBeNull();
+        expect(unico.itens).toEqual(geral.itens);
+        expect(posicoes(unico)).toEqual([
+          [1, "Célula Betel"],
+          [2, "Célula Ágape"],
+          [2, "Célula Canaã"],
+          [4, "Célula Dorcas"],
+          [5, "Célula Éfeso"],
+        ]);
+      }
+      // Dorcas (adultos) tem Ágape e Canaã (jovens, empatadas em 2º) logo acima: os vizinhos atravessam as divisões.
+      const dorcas = ranking(vendas, meioDia(9), {}, UNICO).itens[3];
+      expect(dorcas.acima?.posicao).toBe(2);
+      expect(["Célula Ágape", "Célula Canaã"]).toContain(dorcas.acima?.nome);
+      expect(dorcas.abaixo?.nome).toBe("Célula Éfeso");
+    });
+
+    it("desligada, nos níveis discipulador e rede também: todos juntos", () => {
+      const redes = ranking(
+        vendas,
+        meioDia(9),
+        { nivel: "rede", divisao: "adultos" },
+        UNICO,
+      );
+      expect(redes.itens.map((item) => item.nome)).toEqual([
+        "Rede Jovem Norte",
+        "Rede Adulta Sul",
+      ]);
+      const discipuladores = ranking(
+        vendas,
+        meioDia(9),
+        { nivel: "discipulador", divisao: "jovens" },
+        UNICO,
+      );
+      expect(discipuladores.itens).toHaveLength(3);
+    });
+
+    it("meta fixa igual para todas as células (a decisão do PO): o ranking único compara o % de cada uma", () => {
+      // 10 pessoas em todas (a planilha provisória), meta fixa de 50 bilhetes: o % e os bilhetes andam juntos.
+      const iguais = CELULAS.map((c) => ({ ...c, qtd_pessoas: 10 }));
+      const fixa: CampanhaCalculo = {
+        ...UNICO,
+        meta: { unidade: "bilhetes", regra: "fixa_por_celula", valor: 50 },
+      };
+      const resposta = ranking(vendas, meioDia(9), {}, fixa, iguais);
+      expect(resposta.itens.map((item) => item.meta)).toEqual([
+        50, 50, 50, 50, 50,
+      ]);
+      expect(
+        resposta.itens.map((item) => [
+          item.posicao,
+          item.nome,
+          item.percentual_meta_bp,
+        ]),
+      ).toEqual([
+        [1, "Célula Dorcas", 14_000],
+        [2, "Célula Ágape", 12_000],
+        [2, "Célula Canaã", 12_000],
+        [4, "Célula Betel", 9000],
+        [5, "Célula Éfeso", 0],
+      ]);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -1513,6 +1619,39 @@ describe("R9: ranking público (sem valores)", () => {
       "Célula Canaã",
       "Célula Dorcas",
     ]);
+  });
+
+  it("RIFA-061 (D27): sem ranking por divisão, a divisão da consulta é ignorada e a resposta vem marcada", () => {
+    const unico: CampanhaCalculo = {
+      ...CAMPANHA,
+      ranking: { criterio: "percentual_meta", por_divisao: false },
+    };
+    const consultar = (
+      campanha: CampanhaCalculo,
+      divisao?: "jovens" | "adultos",
+    ) => {
+      const resposta = montarRankingPublico(
+        entrada(vendas, campanha),
+        { nivel: "celula", periodo: "campanha", divisao },
+        meioDia(9),
+      );
+      expect(respostaRankingPublicoSchema.parse(resposta)).toEqual(resposta);
+      return resposta;
+    };
+    // Ligada (o padrão): adultos só com a Dorcas, como sempre, e sem a marca.
+    const adultos = consultar(CAMPANHA, "adultos");
+    expect(adultos).not.toHaveProperty("por_divisao");
+    expect(adultos.divisao).toBe("adultos");
+    expect(adultos.itens).toEqual([
+      { posicao: 1, nome: "Célula Dorcas", divisao: "adultos" },
+    ]);
+    // Desligada: o pedido de jovens ou de adultos devolve o ranking de todas (o mesmo top 3 com o empate).
+    for (const divisao of [undefined, "jovens", "adultos"] as const) {
+      const resposta = consultar(unico, divisao);
+      expect(resposta.por_divisao).toBe(false);
+      expect(resposta.divisao).toBeNull();
+      expect(resposta.itens).toEqual(publico().itens);
+    }
   });
 
   it("as posições são as do ranking da coordenação", () => {
@@ -1734,6 +1873,33 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
     const texto = bumbo(dia(9), CAMPANHA, BUMBO_PADRAO, vendas, soJovens);
     expect(texto).not.toContain("_Jovens_");
     expect(texto).toContain("1º Célula Betel");
+  });
+
+  it("RIFA-061 (D27): sem ranking por divisão, um ranking só, de todas as células, sem o título da divisão", () => {
+    const unico: CampanhaCalculo = {
+      ...CAMPANHA,
+      ranking: { criterio: "percentual_meta", por_divisao: false },
+    };
+    const texto = bumbo(dia(9), unico);
+    expect(texto).not.toMatch(/_Jovens_|_Adultos_/);
+    // Semana 2 até ontem (dia 8): Betel 5 de 15 (33%), Ágape 6 de 30 (20%), Dorcas 10 de 50 (20%).
+    expect(texto).toContain(
+      [
+        "*Ranking · Semana 2 (até ontem)*",
+        "1º Célula Betel",
+        "2º Célula Ágape",
+        "2º Célula Dorcas",
+        "",
+      ].join("\n"),
+    );
+    // O resto do texto é o de sempre.
+    const separado = bumbo(dia(9));
+    const semRanking = (t: string) => t.replace(/\*Ranking[^]*?\n\n/, "");
+    expect(semRanking(texto)).toBe(semRanking(separado));
+    // Sem nenhuma venda no período, a linha "ainda sem vendas" vem sem o nome da divisão.
+    expect(bumbo(dia(9), unico, BUMBO_PADRAO, [])).toContain(
+      "*Ranking · Semana 2 (até ontem)*\nAinda sem vendas.",
+    );
   });
 
   it("guarda: nunca R$, centavos nem bilhetes, com ou sem a opção (todas as fases, duas campanhas)", () => {

@@ -6,6 +6,7 @@ import {
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
   PUBLICO_PADRAO,
+  RANKING_POR_DIVISAO_PADRAO,
   TIPOS_MENSAGEM,
   problemasDoModelo,
   type Campanha,
@@ -145,6 +146,15 @@ export function itensDoResumo(
         ? `${TEXTO_CRITERIO[campanha.ranking.criterio].opcao}.`
         : null,
       campo: idDoCampo("ranking.criterio"),
+    },
+    {
+      nome: "Ranking por divisão",
+      valor:
+        (campanha?.ranking.por_divisao ?? RANKING_POR_DIVISAO_PADRAO)
+          ? "Separado: Jovens e Adultos disputam cada um o seu ranking."
+          : "Um ranking só, com todas as células juntas.",
+      padrao,
+      campo: idDoCampo("ranking.por_divisao"),
     },
     {
       nome: "O que o público vê",

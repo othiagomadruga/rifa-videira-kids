@@ -15,6 +15,7 @@ import {
   MENSAGENS_PADRAO,
   MOTIVOS_DESCONSIDERACAO,
   PEDIDOS_PADRAO,
+  RANKING_POR_DIVISAO_PADRAO,
   problemasDoModelo,
   type TipoMensagem,
 } from "./regras";
@@ -151,8 +152,24 @@ export const metaCampanhaSchema = z.object({
   valor: z.number().int().positive(),
 });
 
+/** O ranking como a campanha devolve (resposta). */
 export const rankingConfigSchema = z.object({
   criterio: z.enum(CRITERIOS_RANKING),
+  /**
+   * RIFA-061, D27: separa o ranking por divisão (Jovens e Adultos, cada um com o seu) ou não (um ranking só, de todas
+   * as células). Padrão: separa (RANKING_POR_DIVISAO_PADRAO). O `.default()` é da transição: enquanto a API não grava a
+   * opção (migração 0012), o parse do `montarCampanha` completa com o padrão, que é o que vale.
+   */
+  por_divisao: z.boolean().default(RANKING_POR_DIVISAO_PADRAO),
+});
+
+/**
+ * O ranking na entrada (PUT). `por_divisao` ausente mantém o gravado (no primeiro PUT, o padrão), como os grupos do
+ * admin (D20): um corpo que não conhece a opção (uma aba antiga do site) não a religa nem a desliga.
+ */
+export const rankingConfigEntradaSchema = z.object({
+  criterio: z.enum(CRITERIOS_RANKING),
+  por_divisao: z.boolean().optional(),
 });
 
 /** Visão pública (telão e grupo). Valores em R$ nunca aparecem em /api/publico, com qualquer configuração. */
@@ -266,7 +283,7 @@ export const campanhaEntradaSchema = z.object({
         message: "Pelo menos um período precisa ter percentual maior que zero",
       },
     ),
-  ranking: rankingConfigSchema,
+  ranking: rankingConfigEntradaSchema,
   publico: publicoConfigSchema.default(() => ({ ...PUBLICO_PADRAO })),
   /**
    * Regras do admin (Sprint 6, D20). Diferente de `publico`: cada grupo AUSENTE mantém o que está gravado (no

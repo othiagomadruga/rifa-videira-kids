@@ -298,6 +298,8 @@ describe("D20: as regras na resposta da campanha", () => {
   it("os grupos gravados saem como estão; fora do formato, a resposta é recusada", () => {
     const gravada = {
       ...respostaDeHoje,
+      // RIFA-061: a API grava e devolve também a opção do ranking por divisão (D27).
+      ranking: { criterio: "percentual_meta", por_divisao: true },
       pedidos: { desconsiderar: true },
       acesso: { discipuladores: false, redes: false, celulas_senha: false },
       mensagens: {

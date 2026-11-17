@@ -221,6 +221,8 @@ describe("CA3: o logo do Kids, discreto", () => {
       expect(rodape).toHaveTextContent(
         "Campanha em prol do espaço Videira Kids",
       );
+      // RIFA-067: o crédito de quem desenvolveu, no rodapé de toda tela aberta.
+      expect(rodape).toHaveTextContent("Sistema desenvolvido por GODy Tech");
       const [selo, ...outros] = imagensDoKids();
       expect(outros).toHaveLength(0);
       expect(rodape).toContainElement(selo);

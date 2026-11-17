@@ -1217,6 +1217,37 @@ describe("RIFA-042 (CA1): pedidos, acesso e mensagens da campanha são só do ad
     });
   });
 
+  it("RIFA-061 (D27): o ranking por divisão é do grupo ranking (como o critério): a coordenação e o admin mudam, com a trilha", async () => {
+    for (const [quem, por_divisao] of [
+      [coordenacao, false],
+      [admin, true],
+      [admin, false],
+    ] as const) {
+      const resposta = await salvarComo(quem, {
+        ranking: { criterio: "percentual_meta", por_divisao },
+      });
+      expect(resposta.status).toBe(200);
+      expect(campanhaSchema.parse(resposta.corpo).ranking.por_divisao).toBe(
+        por_divisao,
+      );
+      expect((await lerCampanha()).ranking.por_divisao).toBe(por_divisao);
+      expect(await ultimaDaTrilha("campanha.salvar")).toMatchObject({
+        resumo: `Alterado: ranking.por_divisao: ${por_divisao ? "desligado → ligado" : "ligado → desligado"}`,
+      });
+    }
+    // Sem a opção no corpo (uma aba antiga), nem a coordenação nem o admin a religam.
+    for (const quem of [coordenacao, admin])
+      expect(
+        campanhaSchema.parse(
+          (
+            await salvarComo(quem, {
+              ranking: { criterio: "percentual_meta" },
+            })
+          ).corpo,
+        ).ranking.por_divisao,
+      ).toBe(false);
+  });
+
   it("sem campanha ativa, o gravado é o padrão: a coordenação cria com os padrões (ou sem os grupos); fora deles, 403", async () => {
     await db.prepare("UPDATE campanhas SET ativa = 0 WHERE ativa = 1").run();
     const nova = { slug_rifei: "rifa-nova-da-coordenacao" };

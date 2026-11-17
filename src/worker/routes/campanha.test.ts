@@ -191,7 +191,8 @@ describe("CA1: PUT /api/admin/campanha grava campanha e períodos", () => {
       ],
       // 35% + 25% + 45% = 105%: aceito como está; quem normaliza é o cálculo.
       soma_percentuais_bp: 10500,
-      ranking: { criterio: "percentual_meta" },
+      // RIFA-061 (D27): a opção do ranking por divisão sai sempre, com o padrão (separa).
+      ranking: { criterio: "percentual_meta", por_divisao: true },
       publico: { mostra_percentual_meta: false, limite_ranking: 3 },
       // D20: os padrões das regras do admin (a API ainda não grava os grupos; o parse completa).
       pedidos: { desconsiderar: false },

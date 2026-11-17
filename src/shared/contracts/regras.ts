@@ -3,7 +3,8 @@
  * - RIFA-028: desconsiderar pedido (teste, fraude ou estorno), com a chave `pedidos.desconsiderar`;
  * - RIFA-029: acesso de discipuladores e de redes, com as chaves `acesso.discipuladores` e `acesso.redes`;
  * - RIFA-031: remover afiliado de teste (sem chave: só admin e só sem pedido que conte);
- * - RIFA-032: os modelos das mensagens do WhatsApp que levam os links de acesso (`mensagens`).
+ * - RIFA-032: os modelos das mensagens do WhatsApp que levam os links de acesso (`mensagens`);
+ * - RIFA-061: separar ou não o ranking por divisão (`ranking.por_divisao`, D27).
  *
  * Sem zod, como calculos.ts: o site importa daqui (constantes, padrões e o preenchimento das mensagens) sem levar
  * o zod para o pacote. Os schemas ficam em dominio.ts (configuração da campanha) e api.ts (rotas).
@@ -81,6 +82,18 @@ export function acessoDoPapelLigado(
     ? acesso[CHAVE_DE_ACESSO_DO_PAPEL[papel]]
     : true;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-061: ranking por divisão (D27)
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * `ranking.por_divisao` da campanha. Ligada (o padrão, o comportamento de sempre): Jovens e Adultos disputam cada um
+ * o seu ranking. Desligada: um ranking só, de todas as células juntas, em todo lugar que separava por divisão (ranking
+ * aberto e telão, rankings da coordenação, /minha, bumbo e relatório). A divisão continua na hierarquia (a planilha
+ * pede) e nos filtros de recorte do painel e do mapa: a opção muda só o ranking.
+ */
+export const RANKING_POR_DIVISAO_PADRAO = true;
 
 // ---------------------------------------------------------------------------------------------------
 // Chaves (`detalhes` do 409 acao_desligada)

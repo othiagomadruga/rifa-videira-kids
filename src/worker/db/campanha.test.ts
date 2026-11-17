@@ -65,6 +65,8 @@ describe("buscarCampanhaAtiva", () => {
       meta_regra: "por_pessoa",
       meta_valor: 10,
       ranking_criterio: "percentual_meta",
+      // 0012 (RIFA-061, D27): o padrão da coluna (separa o ranking por divisão).
+      ranking_por_divisao: 1,
       publico_mostra_percentual_meta: 0,
       publico_limite_ranking: 3,
       // 0008 (D20): os padrões das colunas (chave de desconsiderar desligada, acessos ligados, modelos padrão).
@@ -349,5 +351,85 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
     ).toBe(
       "Alterado: nome, pedidos.desconsiderar: desligado → ligado, acesso.redes: ligado → desligado, mensagens.link_lider, mensagens.link_rede",
     );
+  });
+  it("RIFA-061 (D27): ranking.por_divisao: o primeiro PUT sem a opção grava o padrão; com a opção grava; o seguinte sem ela mantém", async () => {
+    const porDivisao = async () =>
+      (await db
+        .prepare("SELECT ranking_por_divisao FROM campanhas WHERE ativa = 1")
+        .first<{ ranking_por_divisao: number }>())!.ranking_por_divisao;
+
+    expect((await salvar(BASE)).ranking).toEqual({
+      criterio: "percentual_meta",
+      por_divisao: true,
+    });
+    expect(await porDivisao()).toBe(1);
+    const desligada = await salvar({
+      ...BASE,
+      ranking: { criterio: "bilhetes", por_divisao: false },
+    });
+    expect(desligada.ranking).toEqual({
+      criterio: "bilhetes",
+      por_divisao: false,
+    });
+    expect(await porDivisao()).toBe(0);
+    // Sem a opção no corpo (uma aba antiga do site): o gravado fica; o critério muda.
+    expect((await salvar(BASE)).ranking).toEqual({
+      criterio: "percentual_meta",
+      por_divisao: false,
+    });
+    expect(
+      await salvar({
+        ...BASE,
+        ranking: { criterio: "percentual_meta", por_divisao: true },
+      }),
+    ).toMatchObject({
+      ranking: { por_divisao: true },
+    });
+    // A leitura de toda rota (montarCampanha) devolve o gravado.
+    const ativa = await buscarCampanhaAtiva(db);
+    expect(ativa && montarCampanha(ativa).ranking.por_divisao).toBe(true);
+  });
+
+  it("RIFA-061 (D27): a trilha diz quando a opção muda (antes e depois) e quando a campanha nasce sem separar", async () => {
+    const criacao = (corpo: CampanhaEntrada) =>
+      resumirMudancaDaCampanha(null, corpoSalvarCampanhaSchema.parse(corpo));
+    expect(
+      criacao({
+        ...BASE,
+        ranking: { criterio: "percentual_meta", por_divisao: false },
+      }),
+    ).toBe(
+      'Campanha criada: slug_rifei "rifa-teste", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado, acesso.celulas_senha: ligado, ranking.por_divisao: desligado',
+    );
+    // Ligada ao nascer (o padrão): o resumo de sempre.
+    expect(
+      criacao({
+        ...BASE,
+        ranking: { criterio: "percentual_meta", por_divisao: true },
+      }),
+    ).toBe(criacao(BASE));
+
+    await salvar(BASE);
+    const antes = await buscarCampanhaAtiva(db);
+    const resumo = (corpo: CampanhaEntrada) =>
+      resumirMudancaDaCampanha(antes, corpoSalvarCampanhaSchema.parse(corpo));
+    expect(
+      resumo({
+        ...BASE,
+        ranking: { criterio: "percentual_meta", por_divisao: true },
+      }),
+    ).toBe("Configuração salva sem mudanças");
+    expect(
+      resumo({
+        ...BASE,
+        ranking: { criterio: "percentual_meta", por_divisao: false },
+      }),
+    ).toBe("Alterado: ranking.por_divisao: ligado → desligado");
+    expect(
+      resumo({
+        ...BASE,
+        ranking: { criterio: "bilhetes", por_divisao: false },
+      }),
+    ).toBe("Alterado: ranking, ranking.por_divisao: ligado → desligado");
   });
 });

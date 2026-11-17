@@ -92,6 +92,12 @@ export const DADOS_CAMPANHA: DadosCampanha = campanhaEntradaSchema.parse({
   publico: { mostra_percentual_meta: false, limite_ranking: 3 },
 });
 
+/** RIFA-061 (D27): a mesma campanha, sem separar o ranking por divisão (um ranking só, de todas as células). */
+export const DADOS_CAMPANHA_RANKING_UNICO: DadosCampanha = {
+  ...DADOS_CAMPANHA,
+  ranking: { ...DADOS_CAMPANHA.ranking, por_divisao: false },
+};
+
 /** Data do dia `n` da campanha do cenário (1 = 23/11/2026). */
 export const dia = (n: number, inicio = DADOS_CAMPANHA.data_inicio) =>
   somarDias(inicio, n - 1);
@@ -641,6 +647,8 @@ export function textosDe(valor: unknown, textos: string[] = []): string[] {
 export const CAMPOS_PUBLICOS = new Set([
   "nivel",
   "divisao",
+  // RIFA-061 (D27): só a marca false, quando a campanha não separa o ranking por divisão.
+  "por_divisao",
   "janela",
   "tipo",
   "ordem",

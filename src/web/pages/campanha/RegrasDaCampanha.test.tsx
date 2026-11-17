@@ -150,6 +150,62 @@ describe("CA1: as chaves da campanha", () => {
   });
 });
 
+describe("RIFA-061 (D27): a opção do ranking por divisão", () => {
+  const ROTULO = "Separar o ranking por divisão (jovens e adultos)";
+
+  it("sem campanha, ligada (o padrão), com a descrição do que acontece ligada e desligada", async () => {
+    simularApi();
+    await abrirTela();
+    expect(caixa(ROTULO)).toBeChecked();
+    expect(caixa(ROTULO)).toHaveAccessibleDescription(
+      "Ligada: Jovens e Adultos disputam cada um o seu ranking, no telão, no ranking aberto, nos rankings e no bumbo. Desligada: um ranking só, com todas as células juntas, em todos esses lugares.",
+    );
+  });
+
+  it("desmarcar e salvar manda por_divisao: false; o resumo e a descrição mudam com a resposta (admin e coordenação)", async () => {
+    for (const usuario of [ADMIN_DE_TESTE, USUARIO_DE_TESTE]) {
+      const { puts } = simularApi({ campanha: CONFIGURADA });
+      const { unmount } = await abrirTela(usuario);
+      expect(caixa(ROTULO)).not.toHaveAttribute("aria-disabled");
+      fireEvent.click(caixa(ROTULO));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Salvar alterações" }),
+      );
+      expect(await screen.findByText("Alterações salvas.")).toBeInTheDocument();
+      expect(puts()[0].corpo).toMatchObject({
+        ranking: { criterio: "bilhetes", por_divisao: false },
+      });
+      expect(caixa(ROTULO)).not.toBeChecked();
+      expect(caixa(ROTULO)).toHaveAccessibleDescription(
+        /^Desligada: um ranking só, com todas as células juntas, em todos esses lugares\. Ligada: /,
+      );
+      expect(linhasDoResumo()).toEqual(
+        expect.arrayContaining([
+          [
+            "Ranking por divisão",
+            "Um ranking só, com todas as células juntas.",
+          ],
+        ]),
+      );
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("salva desligada, a caixa vem desmarcada, e o nome no resumo leva o foco a ela", async () => {
+    simularApi({
+      campanha: {
+        ...CONFIGURADA,
+        ranking: { criterio: "bilhetes", por_divisao: false },
+      },
+    });
+    await abrirTela();
+    expect(caixa(ROTULO)).not.toBeChecked();
+    fireEvent.click(screen.getByRole("link", { name: "Ranking por divisão" }));
+    expect(caixa(ROTULO)).toHaveFocus();
+  });
+});
+
 describe("o link para uma chave (aviso da tela Pedidos)", () => {
   it("abre a Campanha com o foco no campo do endereço (#campanha-pedidos-desconsiderar)", async () => {
     simularApi({ campanha: CONFIGURADA });
@@ -380,6 +436,11 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
         "Período 1: 35%, Período 2: 25% e Período 3: 45% (a soma dá 105%: o sistema divide cada um pela soma).",
       ],
       ["Critério do ranking", "Bilhetes vendidos."],
+      // RIFA-061 (D27): a linha nova da opção.
+      [
+        "Ranking por divisão",
+        "Separado: Jovens e Adultos disputam cada um o seu ranking.",
+      ],
       [
         "O que o público vê",
         "Todas as posições do ranking, com o percentual da meta. Nunca valores em R$.",
@@ -412,6 +473,11 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       ["Meta", "Falta preencher"],
       ["Percentuais dos períodos", "Falta preencher"],
       ["Critério do ranking", "Falta preencher"],
+      // RIFA-061 (D27): a linha nova da opção, com o padrão.
+      [
+        "Ranking por divisão",
+        "Separado: Jovens e Adultos disputam cada um o seu ranking. (padrão)",
+      ],
       [
         "O que o público vê",
         "As 3 primeiras posições do ranking, sem o percentual da meta. Nunca valores em R$. (padrão)",

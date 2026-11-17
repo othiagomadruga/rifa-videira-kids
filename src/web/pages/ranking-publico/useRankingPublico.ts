@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FaseCampanha } from "../../../shared/contracts/calculos";
 import {
+  RANKING_DESCONHECIDO,
   carregarRankingPublico,
   ehSemCampanha,
+  type RankingConhecido,
   type RankingPublico,
 } from "./ranking-publico-api";
 
@@ -34,8 +35,9 @@ export function useRankingPublico() {
   const [visivel, setVisivel] = useState(abaVisivel);
   // Cada rodada é uma consulta. Muda no temporizador, ao voltar para a aba e no "Tentar de novo".
   const [rodada, setRodada] = useState(0);
-  // Fase da última resposta: depois do fim da campanha, a próxima consulta já pede a janela certa.
-  const faseConhecida = useRef<FaseCampanha | null>(null);
+  // Fase e divisões da última resposta: depois do fim da campanha, a próxima consulta já pede a janela certa; sem
+  // ranking por divisão (D27), uma lista só.
+  const conhecido = useRef<RankingConhecido>(RANKING_DESCONHECIDO);
 
   useEffect(() => {
     function aoMudarVisibilidade() {
@@ -59,12 +61,15 @@ export function useRankingPublico() {
       );
     };
 
-    carregarRankingPublico(faseConhecida.current, {
+    carregarRankingPublico(conhecido.current, {
       signal: controle.signal,
     }).then(
       (ranking) => {
         if (controle.signal.aborted) return;
-        faseConhecida.current = ranking.referencia.fase;
+        conhecido.current = {
+          fase: ranking.referencia.fase,
+          porDivisao: ranking.porDivisao,
+        };
         setEstado({ tipo: "ok", ranking, falha: null });
         agendar();
       },

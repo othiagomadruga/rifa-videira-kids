@@ -129,6 +129,57 @@ describe("CA2: campanha (configuração)", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("RIFA-061 (D27): ranking.por_divisao: na entrada, opcional (ausente mantém o gravado); na resposta, padrão ligado", () => {
+    // Entrada: ausente fica ausente (a API mantém o gravado; no primeiro PUT, o padrão).
+    expect(campanhaEntradaSchema.parse(campanhaDaAta).ranking).toEqual({
+      criterio: "percentual_meta",
+    });
+    for (const por_divisao of [true, false])
+      expect(
+        campanhaEntradaSchema.parse({
+          ...campanhaDaAta,
+          ranking: { criterio: "bilhetes", por_divisao },
+        }).ranking,
+      ).toEqual({ criterio: "bilhetes", por_divisao });
+    expect(
+      campanhaEntradaSchema.safeParse({
+        ...campanhaDaAta,
+        ranking: { criterio: "bilhetes", por_divisao: "não" },
+      }).success,
+    ).toBe(false);
+    // Resposta: sempre presente; sem ela (antes da migração 0012), o padrão (separa).
+    const resposta = campanhaSchema.parse({
+      ...campanhaDaAta,
+      id: 1,
+      fuso_horario: "America/Belem",
+      data_fim: "2026-12-16",
+      periodos: [
+        {
+          ordem: 1,
+          nome: "Única",
+          dias: 24,
+          percentual_bp: 10_000,
+          data_inicio: "2026-11-23",
+          data_fim: "2026-12-16",
+        },
+      ],
+      soma_percentuais_bp: 10_000,
+      publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+      criado_em: AGORA,
+      atualizado_em: AGORA,
+    });
+    expect(resposta.ranking).toEqual({
+      criterio: "percentual_meta",
+      por_divisao: true,
+    });
+    expect(
+      campanhaSchema.parse({
+        ...resposta,
+        ranking: { criterio: "percentual_meta", por_divisao: false },
+      }).ranking.por_divisao,
+    ).toBe(false);
+  });
 });
 
 describe("CA2: hierarquia e afiliado", () => {

@@ -140,6 +140,9 @@ O PO decidiu que as regras da campanha ficam configuráveis pela coordenação, 
   - "Regra da meta": por pessoa da célula, total da campanha dividido pelas células, ou igual para todas as células;
   - o valor da meta (o nome do campo muda com a regra).
 - [ ] **Critério do ranking** (cartão "Ranking e público"): percentual da meta atingido, bilhetes vendidos ou valor arrecadado.
+- [x] **Ranking igual para todos (decisão de 17/11; D27):** a igreja não tem divisão jovens/adultos nem o número de pessoas de cada célula, então:
+  - "Regra da meta" **Igual para todas as células** (a meta não depende do número de pessoas; a planilha leva 10 pessoas em todas, provisório);
+  - no cartão "Ranking e público", **desmarque "Separar o ranking por divisão (jovens e adultos)"**: um ranking só, com todas as células, no ranking aberto, no telão, nos rankings, na visão dos líderes, no bumbo e no relatório. A divisão continua obrigatória na planilha (ela usa `jovens` em todas); com a caixa desmarcada, ninguém vê "Jovens" nem "Adultos" no ranking. Marcada (o padrão), Jovens e Adultos disputam cada um o seu ranking.
 - [ ] **O que o público vê** (cartão "Ranking e público", "O que o público vê"): "Mostrar também o percentual da meta atingido" e "Quantas posições o público vê" (padrão 3; em branco, todas).
 - [ ] **Pedidos e acessos** (cartão "Pedidos e acessos", uma caixa de marcar por regra):
   - "Permitir desconsiderar pedidos" (padrão desligada): ligada, o admin tira das contas um pedido de teste, fraude ou estorno, e desfaz, na tela **Pedidos** (4.4). Desligar depois não devolve às contas o que já foi desconsiderado;
@@ -372,7 +375,7 @@ No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5):
 - **Identificação:** "Nome da campanha" e **Slug da campanha na Rifei** (o fim do link da campanha, 1.3).
 - **Datas e períodos:** "Data de início" `23/11/2026`, "Fuso horário" `America/Belem` e os períodos (o botão **Usar o modelo de Santo André** preenche 10/7/7 dias com 35/25/45%).
 - **Bilhete e meta:** preço do bilhete (R$), unidade, regra e valor da meta.
-- **Ranking e público:** critério do ranking e o que o público vê (o % da meta e quantas posições).
+- **Ranking e público:** critério do ranking, **"Separar o ranking por divisão (jovens e adultos)"** (desmarque nesta campanha: um ranking só, 1.5; o resumo "Regras da campanha", no topo, mostra "Ranking por divisão: Um ranking só, com todas as células juntas.") e o que o público vê (o % da meta e quantas posições).
 - **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores" e "Acesso das redes". Só o admin muda estas regras e as mensagens (a coordenação as vê só leitura).
 - **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório, no começo ou depois de um espaço ou de uma quebra de linha; nenhum outro endereço na mensagem). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição. Se editar, mantenha as palavras "link pessoal" no texto: o guia do líder ("Perdi o link") manda procurar por elas na conversa.
 - **Ativar a campanha** (pede confirmação). A partir daí, as vendas da Rifei com esse slug contam.
@@ -382,6 +385,7 @@ Cuidados:
 - **Sem campanha ativa, ou com o slug errado, o webhook ignora os pedidos** (a entrega aparece como "Outra campanha" em **Pedidos → Entregas do webhook**) e o código do afiliado não aparece na Adesão. Trocar o slug depois pede confirmação.
 - O preço do bilhete também serve para marcar pedidos estranhos (seção 4.2): com um preço diferente do da Rifei, pedidos normais podem cair na lista de suspeitos.
 - Os números são recalculados na leitura: mudar meta, preço, períodos ou percentuais depois muda os números da campanha inteira, inclusive dos dias que passaram. Combine com o PO antes.
+- A caixa do ranking por divisão pode mudar a qualquer hora: muda só como o ranking é mostrado (as posições passam a ser entre todas as células, ou de novo por divisão), nenhum número de venda ou de meta. No telão e no ranking aberto, vale em até 2 minutos.
 - Cada salvamento fica na trilha de auditoria (`campanha.salvar`, com o slug e o preço de antes e de depois, as regras que mudaram e o nome da mensagem alterada). O primeiro, que ativa a campanha, registra "Campanha criada" com o slug, o preço, as três chaves (desconsiderar pedidos, acesso dos discipuladores e acesso das redes, cada uma ligada ou desligada) e o nome das mensagens editadas, sem o texto delas.
 
 ### 3.4 Planilha das 36 células [Coordenação]
@@ -538,7 +542,7 @@ O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de co
 
 ### 6.1 Bumbo no grupo (toda manhã) [Coordenação]
 
-**Coordenação → Bumbo** mostra a mensagem do dia, que fala de **ontem** (dia já fechado): venda de ontem em % da meta do dia, acumulado contra a curva, projeção, as 3 primeiras de cada divisão e quem mais subiu. Só percentuais e posições, **nunca valores em reais nem quantidade de bilhetes**.
+**Coordenação → Bumbo** mostra a mensagem do dia, que fala de **ontem** (dia já fechado): venda de ontem em % da meta do dia, acumulado contra a curva, projeção, as 3 primeiras de cada divisão (com o ranking único, as 3 primeiras de todas) e quem mais subiu. Só percentuais e posições, **nunca valores em reais nem quantidade de bilhetes**.
 
 - **Enviar no WhatsApp** abre o WhatsApp com o texto pronto; **Copiar mensagem** copia.
 - O seletor de data mostra a mensagem de dias anteriores (ex.: se esqueceu de mandar).
@@ -547,7 +551,7 @@ O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de co
 ### 6.2 Telão no culto [Coordenação]
 
 - No computador do telão, abra https://rifa-videira-kids.madruga.workers.dev/telao e deixe o navegador em tela cheia (F11 no Chrome e no Edge do Windows).
-- Não precisa de login. Mostra jovens e adultos lado a lado, só posições e nomes (e o % da meta, se a Campanha estiver configurada para mostrar). Atualiza sozinho a cada minuto; se a internet cair, fica com o último dado e volta sozinho.
+- Não precisa de login. Mostra jovens e adultos lado a lado (com o ranking único, uma lista só, "Células", na tela toda), só posições e nomes (e o % da meta, se a Campanha estiver configurada para mostrar). Atualiza sozinho a cada minuto; se a internet cair, fica com o último dado e volta sozinho.
 - Teste no projetor de verdade antes do primeiro culto.
 - O ranking público para mandar nos grupos é a página inicial: https://rifa-videira-kids.madruga.workers.dev/
 

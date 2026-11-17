@@ -66,6 +66,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `meta_regra` | TEXT | `por_pessoa`, `total_proporcional` ou `fixa_por_celula` ([regras-de-calculo.md](regras-de-calculo.md), R1) |
 | `meta_valor` | INTEGER > 0 | na unidade da meta; o significado depende da regra |
 | `ranking_criterio` | TEXT | `percentual_meta`, `bilhetes` ou `arrecadacao` |
+| `ranking_por_divisao` | INTEGER 0/1 | padrão 1 (migração 0012, D27): `ranking.por_divisao`. 1 = Jovens e Adultos com rankings separados; 0 = um ranking só, de todas as células |
 | `publico_mostra_percentual_meta` | INTEGER 0/1 | padrão 0: o público vê só posições |
 | `publico_limite_ranking` | INTEGER 1–100 ou NULL | padrão 3 (top 3); NULL mostra todas as posições |
 | `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |

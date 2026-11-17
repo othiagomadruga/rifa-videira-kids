@@ -23,6 +23,8 @@ export const MARCA = {
     altura: 128,
     frase: "Campanha em prol do espaço Videira Kids",
   },
+  /** Crédito de quem desenvolveu o sistema (pedido do PO, RIFA-067): no canto direito do rodapé das telas abertas. */
+  credito: "Sistema desenvolvido por GODy Tech",
 } as const;
 
 /** Título da aba do navegador para uma tela: "Pedidos · Rifa Videira Kids". */
