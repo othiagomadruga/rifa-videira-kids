@@ -54,7 +54,8 @@ type Resultado =
 /** O resultado de uma consulta: o caminho pedido à API identifica os filtros. */
 type Carga = { caminho: string; resultado: Resultado };
 
-// Rankings da coordenação: a disputa entre células, discipuladores e redes, por divisão e por janela
+// Rankings da coordenação: a disputa entre células, discipuladores e redes, por divisão (ou de todos juntos, quando
+// a campanha não separa: D27) e por janela
 // (período atual ou campanha inteira), com posição (empates dividem a posição), % da meta, realizado e
 // meta na unidade da campanha e situação. Os filtros ficam na URL; cada mudança consulta a API de novo.
 export function RankingsPage() {
@@ -63,11 +64,17 @@ export function RankingsPage() {
   const caminho = caminhoDoRanking(filtros);
   const [carga, setCarga] = useState<Carga | null>(null);
   const [tentativa, setTentativa] = useState(0);
+  // A campanha separa o ranking por divisão (D27)? A última resposta diz; antes dela, o padrão (separa). Desligado, o
+  // filtro de divisão fica no lugar, indisponível (nada anda na tela quando a resposta chega).
+  const [porDivisao, setPorDivisao] = useState(true);
 
   useEffect(() => {
     const controle = new AbortController();
     carregarRanking(caminho, { signal: controle.signal }).then(
-      (resposta) => setCarga({ caminho, resultado: { tipo: "ok", resposta } }),
+      (resposta) => {
+        setPorDivisao(resposta.por_divisao !== false);
+        setCarga({ caminho, resultado: { tipo: "ok", resposta } });
+      },
       (erro: unknown) => {
         if (controle.signal.aborted) return;
         setCarga({
@@ -98,20 +105,28 @@ export function RankingsPage() {
   const painel = (
     <div className="pilha rankings-painel">
       <div className="rankings-filtros">
-        <ComDica texto={DICAS.divisao}>
+        <ComDica texto={porDivisao ? DICAS.divisao : DICAS.divisaoUnica}>
           <Select
             rotulo="Divisão"
-            value={filtros.divisao ?? ""}
-            onChange={(evento) =>
-              mudarFiltros({ divisao: lerDivisao(evento.target.value) })
-            }
+            value={porDivisao ? (filtros.divisao ?? "") : ""}
+            aria-disabled={porDivisao ? undefined : true}
+            onChange={(evento) => {
+              if (porDivisao)
+                mudarFiltros({ divisao: lerDivisao(evento.target.value) });
+            }}
           >
-            <option value="">Todas</option>
-            {ORDEM_DIVISOES.map((divisao) => (
-              <option key={divisao} value={divisao}>
-                {NOMES_DIVISAO[divisao]}
-              </option>
-            ))}
+            {porDivisao ? (
+              <>
+                <option value="">Todas</option>
+                {ORDEM_DIVISOES.map((divisao) => (
+                  <option key={divisao} value={divisao}>
+                    {NOMES_DIVISAO[divisao]}
+                  </option>
+                ))}
+              </>
+            ) : (
+              <option value="">Todas as células</option>
+            )}
           </Select>
         </ComDica>
         <ComDica texto={DICAS.janela}>
