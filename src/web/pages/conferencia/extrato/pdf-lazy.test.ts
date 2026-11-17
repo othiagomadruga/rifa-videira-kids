@@ -14,6 +14,9 @@ import {
 
 const PASTA = `${RAIZ}pages/conferencia/extrato/`;
 const ehPdfjs = (nome: string) => /^pdfjs-dist(\/|$)/.test(nome);
+/** O código sem os comentários: um comentário que cita a opção (`useWasm: false`) não conta como a opção. */
+const semComentarios = (fonte: string) =>
+  fonte.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
 
 describe("o pdf.js só sob demanda", () => {
   it("o seguidor enxerga a seção do extrato (pela ConferenciaPeloCsv) e o leitor de PDF", () => {
@@ -53,11 +56,13 @@ describe("o pdf.js só sob demanda", () => {
       )
       .map(([arquivo]) => arquivo);
     expect(quemImportaOLeitor).toEqual([]);
-    expect(FONTES[`${PASTA}leitura.ts`]).toMatch(/await import\("\.\/pdf"\)/);
+    expect(semComentarios(FONTES[`${PASTA}leitura.ts`])).toMatch(
+      /await import\("\.\/pdf"\)/,
+    );
   });
 
   it("o worker do pdf.js vem do próprio site (o arquivo no build, a URL pelo Vite) e sem WebAssembly", () => {
-    const leitor = FONTES[`${PASTA}pdf.ts`];
+    const leitor = semComentarios(FONTES[`${PASTA}pdf.ts`]);
     expect(leitor).toMatch(
       /import enderecoDoWorker from "pdfjs-dist\/legacy\/build\/pdf\.worker\.min\.mjs\?url";/,
     );
@@ -66,7 +71,9 @@ describe("o pdf.js só sob demanda", () => {
     );
     expect(leitor).toMatch(/useWasm: false/);
     expect(leitor).toMatch(/disableWorkerRendering: true/);
-    // Nenhum endereço de fora (fontes, cMaps, WebAssembly): nada é buscado pela rede.
-    expect(leitor).not.toMatch(/cMapUrl|standardFontDataUrl|wasmUrl|https?:/);
+    // Nenhum endereço de fora (fontes, cMaps, WebAssembly): nada é buscado pela rede (nem citado nos comentários).
+    expect(FONTES[`${PASTA}pdf.ts`]).not.toMatch(
+      /cMapUrl|standardFontDataUrl|wasmUrl|https?:/,
+    );
   });
 });
