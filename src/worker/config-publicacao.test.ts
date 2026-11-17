@@ -438,6 +438,7 @@ describe(".github/workflows/ci.yml", () => {
   it("o publicar mantém a D11: só na main (push ou Run workflow) depois do ci, sem cancelar no meio, sem ambiente do GitHub, e confere /api/health", () => {
     const job = textoDoJob("publicar");
     // D22: o disparo manual (Run workflow) publica a main de novo sem commit; pull_request nunca publica.
+    // RIFA-072 (D18, adendo): o push só dispara na main, pela cota de minutos do Actions.
     expect(job).toContain(
       "\n    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'\n",
     );
