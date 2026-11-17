@@ -10,6 +10,7 @@ import {
 } from "../../components/ui";
 import { ErroApi, ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
+import { DICA_DO_MENU } from "../coordenacao/textos";
 import { AlertaWebhook } from "../pedidos/AlertaWebhook";
 import { AvisosVendas } from "./AvisosVendas";
 import { CartaoCampanha, CartaoHoje, CartaoPeriodo } from "./Cartoes";
@@ -73,7 +74,7 @@ export function VisaoGeralPage() {
 
   return (
     <>
-      <PageHeader titulo="Visão geral" />
+      <PageHeader titulo="Visão geral" ajuda={DICA_DO_MENU[""]} />
       {/* Alerta de webhook parado (RIFA-025): erros da Rifei, horas sem venda ou nenhuma venda ainda. */}
       <AlertaWebhook />
       <div className="visao-controles">

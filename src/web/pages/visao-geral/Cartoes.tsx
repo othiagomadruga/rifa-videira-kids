@@ -5,11 +5,14 @@ import type {
   Ritmo,
   UnidadeMeta,
 } from "../../../shared/contracts/calculos";
+import { useId, type ReactNode } from "react";
 import {
   Card,
+  ComAjuda,
   IndicadorSituacao,
   ProgressBar,
   Stat,
+  type TextoDeAjuda,
 } from "../../components/ui";
 import { formatarNumero, formatarPercentual } from "../../lib/formatadores";
 import {
@@ -25,6 +28,25 @@ import {
   valorCurto,
   type TextoSituacao,
 } from "./textos";
+import { ajuda } from "./ajuda-sob-demanda";
+
+/** O nome de um dado (<dt>) com a explicação ao passar o mouse e no "?" (RIFA-066): ritmo, projeção... */
+function Termo({
+  texto,
+  children,
+}: {
+  texto: TextoDeAjuda;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <dt>
+      <ComAjuda texto={texto} idDoTitulo={id}>
+        <span id={id}>{children}</span>
+      </ComAjuda>
+    </dt>
+  );
+}
 
 function Situacao({ situacao }: { situacao: TextoSituacao }) {
   return (
@@ -52,6 +74,7 @@ export function CartaoHoje({ hoje, unidade, ultimoDia }: PropsHoje) {
     <Card
       className="visao-cartao"
       icone="calendario"
+      ajuda={ajuda("hoje")}
       titulo={
         <>
           Hoje{" "}
@@ -64,6 +87,7 @@ export function CartaoHoje({ hoje, unidade, ultimoDia }: PropsHoje) {
         <div className="visao-cartao__numero">
           <Stat
             rotulo="Meta de hoje"
+            ajuda={ajuda("metaDeHoje")}
             valor={quantidade(hoje.meta, unidade)}
             tamanho="grande"
           />
@@ -103,7 +127,12 @@ export function CartaoCampanha({ resumo }: { resumo: RespostaPainelResumo }) {
   const { fase } = referencia;
   const ritmo = fase === "durante" ? textoDoRitmo(campanha.ritmo_bp) : null;
   return (
-    <Card titulo="Campanha" icone="campanha" className="visao-cartao">
+    <Card
+      titulo="Campanha"
+      icone="campanha"
+      ajuda={ajuda("campanha")}
+      className="visao-cartao"
+    >
       <div className="visao-cartao__corpo">
         <p className="visao-cartao__subtitulo">
           {fase === "antes"
@@ -123,7 +152,7 @@ export function CartaoCampanha({ resumo }: { resumo: RespostaPainelResumo }) {
         <dl className="visao-dados">
           {fase === "durante" && referencia.dia_campanha !== 1 && (
             <div>
-              <dt>Esperado até ontem</dt>
+              <Termo texto={ajuda("esperado")}>Esperado até ontem</Termo>
               <dd>
                 {quantidade(campanha.esperado, unidade)}
                 {campanha.percentual_esperado_bp !== null &&
@@ -133,17 +162,19 @@ export function CartaoCampanha({ resumo }: { resumo: RespostaPainelResumo }) {
           )}
           {ritmo && (
             <div>
-              <dt>Ritmo</dt>
+              <Termo texto={ajuda("ritmo")}>Ritmo</Termo>
               <dd>{ritmo}</dd>
             </div>
           )}
           <div>
-            <dt>{fase === "encerrada" ? "Resultado" : "Projeção"}</dt>
+            <Termo texto={ajuda("projecao")}>
+              {fase === "encerrada" ? "Resultado" : "Projeção"}
+            </Termo>
             <dd>{textoDaProjecao(resumo)}</dd>
           </div>
           {fase !== "antes" && (
             <div>
-              <dt>Vendas aprovadas</dt>
+              <Termo texto={ajuda("vendasAprovadas")}>Vendas aprovadas</Termo>
               <dd>{textoDasVendas(vendas)}</dd>
             </div>
           )}
@@ -165,7 +196,12 @@ export function CartaoPeriodo({ periodo, info, unidade }: PropsPeriodo) {
   return (
     // O período com o calendário do intervalo (RIFA-053: antes, o "trilha", que é o da Trilha; o "calendario" é do
     // cartão Hoje e o "campanha", do cartão Campanha, na mesma tela).
-    <Card titulo={info.nome} icone="periodo" className="visao-cartao">
+    <Card
+      titulo={info.nome}
+      icone="periodo"
+      ajuda={ajuda("periodo")}
+      className="visao-cartao"
+    >
       <div className="visao-cartao__corpo">
         <p className="visao-cartao__subtitulo">
           Dia {formatarNumero(info.dia_no_periodo)} de{" "}
@@ -175,7 +211,7 @@ export function CartaoPeriodo({ periodo, info, unidade }: PropsPeriodo) {
         <Situacao situacao={situacaoDoPeriodo(periodo, info, unidade)} />
         <dl className="visao-comparacao">
           <div>
-            <dt>Esperado até ontem</dt>
+            <Termo texto={ajuda("esperado")}>Esperado até ontem</Termo>
             <dd>{quantidade(periodo.esperado, unidade)}</dd>
           </div>
           <div>

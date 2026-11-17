@@ -69,10 +69,13 @@ function cartao(titulo: string | RegExp) {
   return within(elemento);
 }
 
+/** Os termos (dt) e o texto deles, que pode vir dentro da ajuda (RIFA-066: o "?" ao lado de "Ritmo"). */
+const TERMO = "dt, dt *";
+
 /** O valor (dd) de um termo (dt) dentro de um cartão. */
 function definicao(dentro: ReturnType<typeof within>, termo: string) {
-  const dt = dentro.getByText(termo, { selector: "dt" });
-  return dt.nextElementSibling?.textContent?.replace(/\s+/g, " ").trim();
+  const dt = dentro.getByText(termo, { selector: TERMO }).closest("dt");
+  return dt?.nextElementSibling?.textContent?.replace(/\s+/g, " ").trim();
 }
 
 const filtro = () => screen.getByRole("combobox", { name: "Filtrar por" });
@@ -257,9 +260,9 @@ describe("CA2: cartões Hoje, Campanha e período", () => {
     expect(definicao(campanha, "Projeção")).toBe(
       "Sem projeção ainda: ela aparece depois do 1º dia fechado.",
     );
-    expect(campanha.queryByText("Ritmo", { selector: "dt" })).toBeNull();
+    expect(campanha.queryByText("Ritmo", { selector: TERMO })).toBeNull();
     expect(
-      campanha.queryByText("Esperado até ontem", { selector: "dt" }),
+      campanha.queryByText("Esperado até ontem", { selector: TERMO }),
     ).toBeNull();
 
     const semana = cartao("Semana 1");

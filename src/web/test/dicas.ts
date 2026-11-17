@@ -219,14 +219,19 @@ export async function titulosSemAjuda(
         falhas.push(`${nome}: sem ajuda`);
         continue;
       }
-      passarOMouse(alvo);
+      // O mouse no texto do título (na legenda, o grupo fica dentro dela: o texto é o primeiro filho dele).
+      const texto =
+        grupo === alvo || !alvo.contains(grupo)
+          ? alvo
+          : (grupo.firstElementChild ?? grupo);
+      passarOMouse(texto);
       act(() => vi.advanceTimersByTime(ATRASO_DA_DICA_MS));
       const pelaMouse = ajudaAberta(grupo);
-      const texto = pelaMouse?.textContent?.trim();
-      if (!texto) falhas.push(`${nome}: o mouse não abre a explicação`);
-      else if (texto === CARREGANDO_A_AJUDA)
+      const explicacao = pelaMouse?.textContent?.trim();
+      if (!explicacao) falhas.push(`${nome}: o mouse não abre a explicação`);
+      else if (explicacao === CARREGANDO_A_AJUDA)
         falhas.push(`${nome}: a explicação não chegou`);
-      tirarOMouse(alvo);
+      tirarOMouse(texto);
       act(() => vi.advanceTimersByTime(FOLGA_DA_DICA_MS));
       if (ajudaAberta(grupo)) falhas.push(`${nome}: a explicação não sumiu`);
 

@@ -4,8 +4,16 @@ import {
   TIPOS_RELATORIO,
   type TipoRelatorio,
 } from "../../../shared/contracts/relatorio";
-import { Aviso, Button, Card, ComDica, Icone } from "../../components/ui";
+import {
+  Aviso,
+  Button,
+  Card,
+  ComAjuda,
+  ComDica,
+  Icone,
+} from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
+import { ajuda } from "./ajuda-sob-demanda";
 import { DICAS, TEXTOS_TIPO_RELATORIO } from "./textos";
 import { baixarRelatorio } from "./visao-geral-api";
 
@@ -102,6 +110,7 @@ export function RelatorioCampanha() {
     <Card
       titulo="Relatório da campanha"
       icone="documento"
+      ajuda={ajuda("relatorio")}
       className="visao-relatorio"
     >
       <div className="visao-relatorio__corpo">
@@ -110,8 +119,16 @@ export function RelatorioCampanha() {
           contas ou mostrar o resultado. Depois do fim da campanha, é o
           resultado final.
         </p>
-        <fieldset className="visao-relatorio__tipos">
-          <legend className="visao-relatorio__legenda">O que baixar</legend>
+        {/* O "?" da ajuda fica dentro da legenda (a primeira filha do fieldset): o nome do grupo vem só do texto. */}
+        <fieldset
+          className="visao-relatorio__tipos"
+          aria-labelledby={`${id}-legenda`}
+        >
+          <legend className="visao-relatorio__legenda">
+            <ComAjuda texto={ajuda("oQueBaixar")} idDoTitulo={`${id}-legenda`}>
+              <span id={`${id}-legenda`}>O que baixar</span>
+            </ComAjuda>
+          </legend>
           <div className="visao-relatorio__opcoes">
             {TIPOS_RELATORIO.map((opcao) => {
               const { rotulo, descricao } = TEXTOS_TIPO_RELATORIO[opcao];

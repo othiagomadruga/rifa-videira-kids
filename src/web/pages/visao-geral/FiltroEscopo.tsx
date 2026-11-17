@@ -4,6 +4,7 @@ import {
 } from "../../../shared/contracts/calculos";
 import { ComDica, Select } from "../../components/ui";
 import { LOCALIDADE } from "../../lib/formatadores";
+import { ajuda } from "./ajuda-sob-demanda";
 import { DICAS, ROTULO_DO_ESCOPO } from "./textos";
 import type { EstadoCelulas } from "./useCelulasDoFiltro";
 import {
@@ -83,6 +84,7 @@ export function FiltroEscopo({ escopo, celulas, nomeAtual, aoMudar }: Props) {
       <ComDica texto={DICAS.filtro}>
         <Select
           rotulo="Filtrar por"
+          ajuda={ajuda("filtro")}
           value={valor}
           onChange={(evento) =>
             aoMudar(escopoDosParams(new URLSearchParams(evento.target.value)))

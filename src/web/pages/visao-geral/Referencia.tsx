@@ -1,5 +1,7 @@
 import { Fragment, useId } from "react";
 import type { RespostaPainelResumo } from "../../../shared/contracts/calculos";
+import { ComAjuda } from "../../components/ui";
+import { ajuda } from "./ajuda-sob-demanda";
 import { ROTULO_DO_ESCOPO, textoDaFase } from "./textos";
 
 type Props = { resumo: RespostaPainelResumo };
@@ -22,15 +24,17 @@ export function Referencia({ resumo }: Props) {
         </span>{" "}
         <strong>{escopo.nome}</strong>
       </p>
-      <h2 id={idFase} className="visao-referencia__fase">
-        {/* Cada parte quebra de linha inteira, se couber: "Semana 2 (faltam 6 dias)" não se parte. */}
-        {fase.partes.map((parte, indice) => (
-          <Fragment key={indice}>
-            {indice > 0 && " · "}
-            <span className="visao-referencia__parte">{parte}</span>
-          </Fragment>
-        ))}
-      </h2>
+      <ComAjuda texto={ajuda("referencia")} idDoTitulo={idFase}>
+        <h2 id={idFase} className="visao-referencia__fase">
+          {/* Cada parte quebra de linha inteira, se couber: "Semana 2 (faltam 6 dias)" não se parte. */}
+          {fase.partes.map((parte, indice) => (
+            <Fragment key={indice}>
+              {indice > 0 && " · "}
+              <span className="visao-referencia__parte">{parte}</span>
+            </Fragment>
+          ))}
+        </h2>
+      </ComAjuda>
       <p className="visao-referencia__detalhe">{fase.detalhe}</p>
     </section>
   );
