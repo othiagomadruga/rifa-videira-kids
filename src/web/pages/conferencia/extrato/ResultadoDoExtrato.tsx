@@ -14,6 +14,7 @@ import {
   type ColunaTabela,
 } from "../../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../../lib/api";
+import { useUsuarioConectado } from "../../../lib/sessao";
 import {
   formatarData,
   formatarDataHora,
@@ -29,6 +30,7 @@ import {
   type ResultadoDoCruzamento,
 } from "./cruzamento";
 import type { PedidosBuscados } from "./extrato-api";
+import { MarcarNaRifei } from "./MarcarNaRifei";
 import type {
   ExtratoLido,
   FormatoExtrato,
@@ -74,6 +76,8 @@ type Props = {
   /** Recebe o foco quando o resultado chega. */
   refTitulo: RefObject<HTMLSpanElement | null>;
   aoTentarDeNovo: () => void;
+  /** Busca os pedidos de novo mesmo com a busca de antes cobrindo o extrato (depois de marcar na Rifei). */
+  aoBuscarDeNovo: () => void;
   aoAnunciar: (texto: string) => void;
 };
 
@@ -349,7 +353,8 @@ function CopiarNumeros({
   );
 }
 
-// O resultado do extrato: os números do cruzamento e as quatro listas. Só lê: nada do sistema muda aqui.
+// O resultado do extrato: os números do cruzamento e as quatro listas. Nada do sistema muda aqui; o admin pode mandar
+// a lista "Para marcar" à Rifei (RIFA-070, D27), e a venda passa a contar quando a Rifei avisar pelo webhook.
 export function ResultadoDoExtrato({
   origem,
   extrato,
@@ -359,9 +364,11 @@ export function ResultadoDoExtrato({
   resultado,
   refTitulo,
   aoTentarDeNovo,
+  aoBuscarDeNovo,
   aoAnunciar,
 }: Props) {
   const ignoradosTexto = textoDosIgnorados(ignorados);
+  const admin = useUsuarioConectado().papel === "admin";
   const titulo = (
     <span ref={refTitulo} tabIndex={-1} className="extrato-foco">
       {RESULTADO.titulo}
@@ -444,6 +451,15 @@ export function ResultadoDoExtrato({
                   <Aviso tom="alerta" anuncio="nenhum">
                     <p>{GRUPOS.paraMarcar.aviso}.</p>
                   </Aviso>
+                  {admin && (
+                    <MarcarNaRifei
+                      pedidos={resultado.paraMarcar.map(
+                        (casamento) => casamento.pedido.id,
+                      )}
+                      aoAnunciar={aoAnunciar}
+                      aoBuscarDeNovo={aoBuscarDeNovo}
+                    />
+                  )}
                   <CopiarNumeros
                     numeros={numerosParaCopiar(resultado)}
                     quantos={resultado.paraMarcar.length}

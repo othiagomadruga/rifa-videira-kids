@@ -233,3 +233,41 @@ export const DICAS = {
     "Copia os números dos pedidos desta lista, um por linha, para procurar e marcar como pago na Rifei.",
   numeros: "Os números para copiar à mão, um por linha.",
 };
+
+/** "Marcar como pago na Rifei" (RIFA-070, D27; só o admin): o sistema marca na Rifei pela API do painel. */
+export const MARCAR_NA_RIFEI = {
+  botao: (n: number) =>
+    `Marcar ${plural(n, "pedido", "pedidos")} como pago na Rifei`,
+  dica: "O sistema marca estes pedidos como pagos no painel da Rifei por você. Confira a lista antes: na Rifei, o pedido pago libera os bilhetes do comprador.",
+  titulo: (n: number) =>
+    `Marcar ${plural(n, "pedido", "pedidos")} como pago na Rifei?`,
+  descricao:
+    "Confira os números abaixo. O sistema aprova cada pedido na Rifei (e restaura o que tiver expirado lá). A venda passa a contar quando a Rifei avisar o sistema, em segundos.",
+  confirmar: "Marcar na Rifei",
+  marcando: "Marcando na Rifei…",
+  dicaMarcando: "Espere: a Rifei responde pedido a pedido (até um minuto).",
+  cancelar: "Cancelar",
+  dicaCancelar: "Fecha sem mudar nada na Rifei.",
+  resultadoTitulo: (marcados: number, total: number) =>
+    marcados === total
+      ? `${plural(marcados, "pedido marcado", "pedidos marcados")} como pago na Rifei`
+      : `${plural(marcados, "pedido marcado", "pedidos marcados")} de ${total}`,
+  resultadoTexto:
+    "A venda passa a contar quando a Rifei avisar o sistema. Clique em Buscar de novo daqui a pouco para conferir.",
+  naoMarcados: "Estes não foram marcados: faça no painel da Rifei",
+  buscarDeNovo: "Buscar os pedidos de novo",
+  dicaBuscarDeNovo:
+    "Busca de novo os pedidos do sistema e refaz a comparação com o extrato.",
+  semConfiguracao:
+    "A marcação automática ainda não está ligada no servidor. Use Copiar os números dos pedidos e marque no painel da Rifei.",
+  falhou: "Não foi possível marcar na Rifei",
+  resultados: {
+    marcado: "Marcado como pago",
+    restaurado_e_marcado: "Estava expirado: restaurado e marcado",
+    ja_pago: "Já estava pago no sistema",
+    desconsiderado: "Desconsiderado no sistema: não foi marcado",
+    fora_do_sistema: "Não é um pedido da campanha",
+    recusado_pela_rifei: "A Rifei não marcou",
+    falhou: "A Rifei não respondeu",
+  },
+} as const;

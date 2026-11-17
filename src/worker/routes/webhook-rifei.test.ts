@@ -739,6 +739,8 @@ describe("CA4: gravação do pedido", () => {
         criado_em: primeiro.recebido_em,
         vinculado_em: null,
         atualizado_em: primeiro.recebido_em,
+        // 0012 (RIFA-070): o código na Rifei só chega pela sincronização.
+        codigo_rifei: null,
       },
     ]);
     const { results } = await db

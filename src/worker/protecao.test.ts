@@ -34,6 +34,7 @@ import {
   ROTAS_ACESSO_HIERARQUIA,
   ROTAS_LINK_VENDAS,
   ROTAS_REGRAS_CAMPANHA,
+  ROTAS_RIFEI_API,
   ROTAS_RELATORIO,
   ROTAS_TOKEN_WEBHOOK,
   afiliadoResumoSchema,
@@ -112,7 +113,8 @@ interface RotaDaCoordenacao {
  * restrita, como a auditoria e as regras da campanha), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria
  * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin),
  * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação) e ROTAS_LINK_VENDAS (RIFA-046, D24: a lista de admin e coordenação
- * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora). O relatório entrou aqui
+ * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora) e ROTAS_RIFEI_API
+ * (RIFA-070, D27: só admin). O relatório entrou aqui
  * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
  * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
@@ -123,6 +125,7 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
     ...Object.values(ROTAS_RELATORIO),
     ...Object.values(ROTAS_LINK_VENDAS),
+    ...Object.values(ROTAS_RIFEI_API),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -218,6 +221,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
     ...Object.values(ROTAS_RELATORIO),
     ...Object.values(ROTAS_LINK_VENDAS),
+    ...Object.values(ROTAS_RIFEI_API),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,

@@ -1486,3 +1486,40 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
 - **Peso:** o JS inicial sobe 0,1 KiB (o `lazy` e o `Suspense` na `ConferenciaPage`), nenhuma dependência nova; a seção
   vem num pacote à parte de ~13 KiB em gzip, mais o leitor de valores e datas, que agora é dividido com a conferência
   pelo CSV (~5 KiB).
+
+## D27. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17)
+
+Decisão do PO (17/11): no Pix manual (D26), o último passo, marcar como pago no painel da Rifei, deixa de ser à mão; e
+os afiliados das células (dezenas) não são mais criados um a um. A D26 deixava isso de fora porque "a Rifei não tem API
+para marcar como pago". Ela não tem API **pública**, mas o painel (`app.rifei.com.br`) é um site que fala com
+`https://api.rifei.com.br/` com o token do login (`Authorization: Bearer`). As chamadas foram mapeadas no código do
+painel em 17/11/2026 (docs/integracao-rifei.md, seção 13) e o sistema faz as mesmas, pelo admin.
+
+- **Onde roda:** no Worker (Cloudflare), nunca no navegador: o token da Rifei fica no segredo `RIFEI_API_TOKEN`
+  (`wrangler secret put`), nunca no banco, no site, na trilha ou no log. Nada depende de um computador ligado.
+- **Nada roda sozinho:** cada chamada parte de um clique do admin (Conferência do extrato e Adesão). Sem cron, sem
+  robô, sem login automático (o login da Rifei tem captcha: o token vem de um login feito à mão; seção 13.2).
+- **Marcar como pago** (`POST /api/admin/rifei/marcar-pagos`): o banco decide o que vai à Rifei (só o pendente ou
+  expirado da campanha ativa, sem desconsideração; o resto volta como `ja_pago`, `desconsiderado` ou
+  `fora_do_sistema`). Na Rifei, um pedido por chamada (até 4 ao mesmo tempo): o PUT em lote do painel
+  (`raffles/orders/many`, que só aprova; o PUT de um pedido **alterna** aprovar/desaprovar e não é usado), a conferência
+  do status e, se o pedido sumiu dos reservados (expirou: a campanha expira a reserva em 24 h), a restauração
+  (`raffles/expired-orders/<id>/restore`) e a aprovação de novo. **O sistema não grava nada no pedido:** ele passa a
+  contar quando o "Pedido pago" chega pelo webhook, como antes; se não chegar, a conferência pelo CSV o mostra em
+  "Pagamento não registrado" (RIFA-056).
+- **Afiliados** (`GET /api/admin/rifei/afiliados` e `POST .../afiliados/sincronizar`): a Rifei não deixa o
+  organizador criar a conta do afiliado. A sincronização grava o **código** de cada afiliado (o `ref` do link de vendas:
+  `https://rifei.com.br/<slug>?ref=<código>`, migração 0012) e liga à célula o afiliado não vinculado cujo e-mail na
+  Rifei é o do líder de **exatamente uma** célula. Nunca troca um vínculo que já existe. O modelo do link de vendas (D24)
+  ganha o marcador `{codigo}`.
+- **Convites** (`POST /api/admin/rifei/convites`): um convite por célula (comissão 0%, todas as campanhas), de uso único
+  e válido por 1 dia (regra da Rifei). O link volta para a tela (Copiar e WhatsApp do líder) e nunca é gravado.
+- **Erros:** sem o segredo, 503 `nao_configurado` (a tela manda usar o caminho manual); a Rifei recusou o token, não
+  achou a campanha, não respondeu ou respondeu num formato desconhecido: 502 `rifei_falhou` com o `motivo`. Uma falha de
+  um pedido só (429/5xx/tempo) fica naquele pedido (`falhou`).
+- **Riscos aceitos pelo PO:** a API é interna e pode mudar sem aviso (tudo que vem dela é conferido; formato
+  desconhecido vira `resposta_inesperada`, nunca 500); os Termos de uso da Rifei (item 4.4) proíbem engenharia
+  reversa: o risco é a conta ser limitada. Por isso o volume é o de um admin clicando, e o caminho manual (Copiar os
+  números, painel da Rifei) continua na tela.
+- **SUPOSIÇÕES** a confirmar na compra de teste (seção 13.4): o `id` do webhook é o mesmo que a API usa; a aprovação
+  pela API dispara o `paid_order`; o pedido expirado mantém o `id` em "Pedidos expirados"; o `ref` aceita o código.

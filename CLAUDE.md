@@ -100,3 +100,8 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
 - **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test, build e a conferência do artefato (Node 22) em todo push e pull request, e publica na Cloudflare nos pushes da `main` (job `publicar`, D18).
 - **Dependências:** `wrangler`, `@cloudflare/vite-plugin` e `@cloudflare/vitest-plugin` têm versão fixa e sobem juntos.
   Vitest fica na 5.x e TypeScript na 6.0.x (limite do typescript-eslint). Veja `docs/decisions.md`.
+
+## DevMission
+
+Este repositório é o projeto "Projeto Kids" no DevMission (projectId=p-3b8209dc-5816-425e-b66e-fd829392291a, empresa Videira).
+Em toda sessão, sem o usuário pedir: no começo chame start_session do DevMission com projectId=p-3b8209dc-5816-425e-b66e-fd829392291a; no fim, log_progress com o resumo e os próximos passos e clientUpdate (1 frase para o cliente), e marque o que foi entregue como review.

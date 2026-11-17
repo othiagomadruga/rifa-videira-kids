@@ -84,7 +84,7 @@ function celula(
 
 describe("D24: o modelo do link de vendas", () => {
   it("marcadores {slug} e {afiliado}; só o endereço da Rifei; limites", () => {
-    expect(MARCADORES_LINK_VENDAS).toEqual(["slug", "afiliado"]);
+    expect(MARCADORES_LINK_VENDAS).toEqual(["slug", "afiliado", "codigo"]);
     expect(HOSTS_LINK_VENDAS).toEqual(["rifei.com.br"]);
     expect(LIMITE_CARACTERES_MODELO_LINK_VENDAS).toBe(300);
     expect(LIMITE_CARACTERES_LINK_VENDAS).toBe(2048);
@@ -133,18 +133,18 @@ describe("D24: o modelo do link de vendas", () => {
     }
   });
 
-  it("exige {afiliado}; recusa marcador desconhecido, chave solta e espaço, com a mensagem em português", () => {
+  it("exige {afiliado} ou {codigo}; recusa marcador desconhecido, chave solta e espaço, com a mensagem em português", () => {
     expect(problemasDoModeloLinkVendas("https://rifei.com.br/{slug}")).toEqual([
-      "O modelo precisa ter {afiliado}: é o número do afiliado que faz a venda contar para a célula.",
+      "O modelo precisa ter {afiliado} ou {codigo}: é o afiliado que faz a venda contar para a célula.",
     ]);
     expect(
       problemasDoModeloLinkVendas(
-        "https://rifei.com.br/{slug}?a={codigo}&b={Afiliado}&c={codigo}",
+        "https://rifei.com.br/{slug}?a={cod}&b={Afiliado}&c={cod}",
       ),
     ).toEqual([
-      "Marcador {codigo} não existe no link de vendas. Use: {slug} e {afiliado}.",
-      "Marcador {Afiliado} não existe no link de vendas. Use: {slug} e {afiliado}.",
-      "O modelo precisa ter {afiliado}: é o número do afiliado que faz a venda contar para a célula.",
+      "Marcador {cod} não existe no link de vendas. Use: {slug}, {afiliado} e {codigo}.",
+      "Marcador {Afiliado} não existe no link de vendas. Use: {slug}, {afiliado} e {codigo}.",
+      "O modelo precisa ter {afiliado} ou {codigo}: é o afiliado que faz a venda contar para a célula.",
     ]);
     for (const modelo of [
       "https://rifei.com.br/{slug}?a={afiliado",
@@ -153,7 +153,7 @@ describe("D24: o modelo do link de vendas", () => {
       "https://rifei.com.br/{}{afiliado}",
     ])
       expect(problemasDoModeloLinkVendas(modelo)).toContain(
-        "Há uma chave solta no modelo: as chaves só aparecem em {slug} e {afiliado}.",
+        "Há uma chave solta no modelo: as chaves só aparecem em {slug}, {afiliado} e {codigo}.",
       );
     for (const modelo of [
       "https://rifei.com.br/{slug} ?a={afiliado}",
@@ -656,5 +656,49 @@ describe("D24: o catálogo à parte", () => {
         .match(/^(?:import|export)\b[^;]*?\bfrom\s+"[^"]+";/gms) ?? [];
     for (const declaracao of declaracoes)
       expect(declaracao).toMatch(/^import type\b/);
+  });
+});
+
+describe("RIFA-070 (D27): o marcador {codigo}, o ref do link de vendas da Rifei", () => {
+  const MODELO_REF = "https://rifei.com.br/{slug}?ref={codigo}";
+
+  it("o modelo com {codigo} e sem {afiliado} é válido", () => {
+    expect(problemasDoModeloLinkVendas(MODELO_REF)).toEqual([]);
+    expect(modeloLinkVendasValido(MODELO_REF)).toBe(true);
+  });
+
+  it("monta o link com o código codificado; sem código, sem link", () => {
+    expect(
+      montarLinkDeVendas(MODELO_REF, {
+        slug: "projeto-kids-1",
+        affiliateId: 1978217,
+        codigo: "thiago",
+      }),
+    ).toBe("https://rifei.com.br/projeto-kids-1?ref=thiago");
+    expect(
+      montarLinkDeVendas(MODELO_REF, {
+        slug: "projeto-kids-1",
+        affiliateId: 1,
+        codigo: "célula 7",
+      }),
+    ).toBe("https://rifei.com.br/projeto-kids-1?ref=c%C3%A9lula%207");
+    for (const codigo of [null, undefined, "", "  "])
+      expect(
+        montarLinkDeVendas(MODELO_REF, {
+          slug: "projeto-kids-1",
+          affiliateId: 1,
+          codigo,
+        }),
+      ).toBeNull();
+  });
+
+  it("o código nunca muda o endereço de destino", () => {
+    const url = montarLinkDeVendas(MODELO_REF, {
+      slug: "x",
+      affiliateId: 1,
+      codigo: "a/../../golpe.example?b=",
+    });
+    expect(url).not.toBeNull();
+    expect(new URL(url ?? "").hostname).toBe("rifei.com.br");
   });
 });

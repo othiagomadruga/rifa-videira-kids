@@ -299,6 +299,8 @@ export function criarApiDoExtrato(
     porPagina?: number;
     campanha?: object | null;
     falharPedidos?: () => Response | null;
+    /** RIFA-070: a resposta do POST /api/admin/rifei/marcar-pagos (recebe os números do corpo). */
+    marcarNaRifei?: (pedidos: string[]) => Response;
   } = {},
 ) {
   const chamadas: Chamada[] = [];
@@ -348,6 +350,14 @@ export function criarApiDoExtrato(
       }
       if (endereco.pathname === "/api/admin/reconciliacao/recuperacoes")
         return respostaJson({ itens: [], proximo: null });
+      if (
+        endereco.pathname === "/api/admin/rifei/marcar-pagos" &&
+        metodo === "POST" &&
+        opcoes.marcarNaRifei
+      )
+        return opcoes.marcarNaRifei(
+          (JSON.parse(String(init?.body)) as { pedidos: string[] }).pedidos,
+        );
       return respostaJson(
         { erro: { codigo: "nao_encontrado", mensagem: "Rota não encontrada" } },
         404,

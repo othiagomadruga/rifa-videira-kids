@@ -562,3 +562,12 @@ CREATE INDEX pedidos_por_pagamento_recuperado ON pedidos (pagamento_recuperacao_
   cada pedido ganha só a coluna, NULL; o CHECK recusa o pendente, o expirado e a venda perdida (`origem =
   'conferencia'`) e aceita o pago no mesmo UPDATE; a FK recusa uma recuperação que não existe e segura a que tem um
   pagamento registrado; os planos das contagens e da lista usam o índice novo.
+
+## 13. Migração `0012_codigo_afiliado_rifei.sql` (RIFA-070; D27)
+
+Aditiva: `afiliados.codigo_rifei TEXT NULL` (1 a 120 caracteres), o código do afiliado na Rifei, que é o `ref` do link
+de vendas (`https://rifei.com.br/<slug>?ref=<código>`), diferente do `affiliate_id` do webhook. Nasce NULL e é gravado
+pela sincronização com a API da Rifei (`POST /api/admin/rifei/afiliados/sincronizar`), que também cria, com origem
+`manual` e sem célula, o afiliado da Rifei que o sistema ainda não conhecia. O link de vendas (D24) usa o código pelo
+marcador `{codigo}`; afiliado sem código fica sem link nesse modelo. Testes: `src/worker/test/migrations.test.ts`
+("0012 sobre dados que já existiam").

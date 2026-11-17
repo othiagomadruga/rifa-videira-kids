@@ -246,11 +246,11 @@ describe("CA3: o admin edita o modelo do link", () => {
     });
     expect(campo).toHaveAccessibleDescription(
       expect.stringContaining(
-        "Marcador {celula} não existe no link de vendas. Use: {slug} e {afiliado}.",
+        "Marcador {celula} não existe no link de vendas. Use: {slug}, {afiliado} e {codigo}.",
       ),
     );
     expect(campo).toHaveAccessibleDescription(
-      expect.stringContaining("O modelo precisa ter {afiliado}"),
+      expect.stringContaining("O modelo precisa ter {afiliado} ou {codigo}"),
     );
 
     // Salvar com problema: não manda nada e o foco volta ao campo.
@@ -700,7 +700,7 @@ describe("dicas nos botões e campos dos links de vendas", () => {
     const texto = (papel: "button" | "link" | "textbox", nome: string) =>
       textoDaDica(within(secao).getByRole(papel, { name: nome }));
     expect(texto("textbox", "Modelo do link de vendas")).toBe(
-      "O endereço do link de afiliado da Rifei, com {slug} e {afiliado}.",
+      "O endereço do link de afiliado da Rifei, com {slug} e {codigo} (ou {afiliado}).",
     );
     expect(texto("button", "Salvar modelo")).toBe(
       "Nada mudou desde o modelo gravado.",

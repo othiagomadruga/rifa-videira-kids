@@ -20,7 +20,8 @@ export type ExemploDaPrevia = {
 export const AFILIADO_DE_EXEMPLO = 1234;
 
 /** O exemplo do formato (o real ainda não está documentado pela Rifei; D24). */
-const EXEMPLO_DE_MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
+// RIFA-070 (D27): o link de vendas da Rifei é `?ref=<código do afiliado>`; o código vem da sincronização com a Rifei.
+const EXEMPLO_DE_MODELO = "https://rifei.com.br/{slug}?ref={codigo}";
 
 /**
  * Os problemas do modelo como a pessoa digitou (sem os espaços das pontas, que a API tira): os do contrato
@@ -178,8 +179,10 @@ function EditorDoModelo({ modelo, exemplo, aoSalvar }: Omit<Props, "admin">) {
           rotulo="Modelo do link de vendas"
           dica={
             <>
-              Use {"{slug}"} (o endereço da campanha na Rifei) e {"{afiliado}"}{" "}
-              (o código de afiliado de cada líder). Ex.: {EXEMPLO_DE_MODELO}
+              Use {"{slug}"} (o endereço da campanha na Rifei) e {"{codigo}"} (o
+              código de afiliado de cada líder, gravado por Sincronizar com a
+              Rifei) ou {"{afiliado}"} (o número do afiliado). Ex.:{" "}
+              {EXEMPLO_DE_MODELO}
             </>
           }
           erro={erros.length > 0 ? erros.join(" ") : undefined}

@@ -38,10 +38,13 @@ export const LIMITE_CARACTERES_LINK_VENDAS = 2048;
 /**
  * Marcadores do modelo, entre chaves:
  * - slug: o `slug_rifei` da campanha ativa (codificado com encodeURIComponent);
- * - afiliado: o `affiliate_id` do afiliado vinculado à célula (obrigatório: é ele que faz a venda contar para a
- *   célula).
+ * - afiliado: o `affiliate_id` do afiliado vinculado à célula;
+ * - codigo (RIFA-070, D27): o código do afiliado na Rifei (`afiliados.codigo_rifei`, gravado pela sincronização com a
+ *   API da Rifei; codificado com encodeURIComponent). É o `ref` do link de vendas real:
+ *   `https://rifei.com.br/{slug}?ref={codigo}`.
+ * O modelo precisa de {afiliado} ou de {codigo}: é o que faz a venda contar para a célula.
  */
-export const MARCADORES_LINK_VENDAS = ["slug", "afiliado"] as const;
+export const MARCADORES_LINK_VENDAS = ["slug", "afiliado", "codigo"] as const;
 export type MarcadorLinkVendas = (typeof MARCADORES_LINK_VENDAS)[number];
 
 /** Um marcador escrito no modelo: `{` + letras, dígitos ou `_` + `}` (a mesma forma das mensagens, regras.ts). */
@@ -62,7 +65,7 @@ const ESPACO_OU_INVISIVEL = /[\s\p{Cc}\p{Cf}]/u;
 const OUTRO_ENDERECO_NO_LINK = /\/\/|\\|www\./i;
 
 /** Valores de exemplo para conferir se o modelo forma um endereço (o slug e o id de verdade vêm do banco). */
-const EXEMPLO = { slug: "exemplo", affiliateId: 1 } as const;
+const EXEMPLO = { slug: "exemplo", affiliateId: 1, codigo: "exemplo" } as const;
 
 /** O que preenche os marcadores do modelo. */
 export interface ValoresLinkVendas {
@@ -70,6 +73,8 @@ export interface ValoresLinkVendas {
   slug: string;
   /** O `affiliate_id` (inteiro positivo) do afiliado vinculado à célula. */
   affiliateId: number;
+  /** O código do afiliado na Rifei (RIFA-070); null ou ausente = ainda não sincronizado (sem link com {codigo}). */
+  codigo?: string | null;
 }
 
 /** Preenche os marcadores numa passada só: um slug que contenha "{afiliado}" não é trocado de novo. */
@@ -79,9 +84,14 @@ function preencher(modelo: string, valores: ValoresLinkVendas): string {
       ? encodeURIComponent(valores.slug)
       : marcador === "afiliado"
         ? String(valores.affiliateId)
-        : trecho,
+        : marcador === "codigo" && valores.codigo
+          ? encodeURIComponent(valores.codigo)
+          : trecho,
   );
 }
+
+/** O texto que a tela e as mensagens usam para a lista dos marcadores. */
+const LISTA_DE_MARCADORES = "{slug}, {afiliado} e {codigo}";
 
 /** O endereço na forma canônica (`URL.href`), ou null se não for um link de vendas válido. */
 function normalizar(texto: string): string | null {
@@ -123,7 +133,7 @@ export function eLinkDeVendas(texto: string): boolean {
  *   fixo e os marcadores só entram depois da barra, então nenhum valor muda o site de destino;
  * - depois do endereço da Rifei, nenhum outro endereço (`//`, `\` ou `www.`; OUTRO_ENDERECO_NO_LINK);
  * - sem espaço, tabulação, quebra de linha, caractere de controle ou invisível;
- * - só os marcadores `{slug}` e `{afiliado}`, e o `{afiliado}` obrigatório;
+ * - só os marcadores `{slug}`, `{afiliado}` e `{codigo}`, e o `{afiliado}` ou o `{codigo}` obrigatório;
  * - nenhuma chave solta (`{` ou `}` fora de um marcador);
  * - preenchido com valores de exemplo, forma um link de vendas válido (`eLinkDeVendas`).
  */
@@ -151,15 +161,15 @@ export function problemasDoModeloLinkVendas(modelo: string): string[] {
     if (!aceitos.includes(marcador)) desconhecidos.add(marcador);
   for (const marcador of desconhecidos)
     problemas.push(
-      `Marcador {${marcador}} não existe no link de vendas. Use: {slug} e {afiliado}.`,
+      `Marcador {${marcador}} não existe no link de vendas. Use: ${LISTA_DE_MARCADORES}.`,
     );
-  if (!modelo.includes("{afiliado}"))
+  if (!modelo.includes("{afiliado}") && !modelo.includes("{codigo}"))
     problemas.push(
-      "O modelo precisa ter {afiliado}: é o número do afiliado que faz a venda contar para a célula.",
+      "O modelo precisa ter {afiliado} ou {codigo}: é o afiliado que faz a venda contar para a célula.",
     );
   if (/[{}]/.test(modelo.replace(MARCADOR_NO_TEXTO, "")))
     problemas.push(
-      "Há uma chave solta no modelo: as chaves só aparecem em {slug} e {afiliado}.",
+      `Há uma chave solta no modelo: as chaves só aparecem em ${LISTA_DE_MARCADORES}.`,
     );
   if (problemas.length === 0 && normalizar(preencher(modelo, EXEMPLO)) === null)
     problemas.push("O modelo não forma um endereço válido da Rifei.");
@@ -180,7 +190,8 @@ export function modeloLinkVendasValido(
 /**
  * O link de vendas de um afiliado, na forma canônica (`URL.href`), ou null: sem modelo (o PO ainda não confirmou o
  * formato), modelo com problema (gravado à mão), slug vazio (ou "." e ".."), slug que o `encodeURIComponent` recusa
- * (um surrogate solto), `affiliateId` que não é inteiro positivo, ou link montado fora de `eLinkDeVendas`. Null
+ * (um surrogate solto), `affiliateId` que não é inteiro positivo, modelo com {codigo} e o afiliado sem código (ainda não
+ * sincronizado com a Rifei, RIFA-070), ou link montado fora de `eLinkDeVendas`. Null
  * nunca vira erro na rota: a resposta sai com `configurado: false` (modelo) ou sem o link daquele afiliado, e o site
  * explica.
  */
@@ -191,6 +202,8 @@ export function montarLinkDeVendas(
   if (!modeloLinkVendasValido(modelo)) return null;
   if (!Number.isSafeInteger(valores.affiliateId) || valores.affiliateId <= 0)
     return null;
+  // Com {codigo}, o afiliado ainda não sincronizado (sem código) fica sem link: nunca um link com "{codigo}" cru.
+  if (modelo.includes("{codigo}") && !valores.codigo?.trim()) return null;
   const slug = valores.slug.trim();
   // "." e ".." viram segmentos de ponto, que o URL apaga do caminho (o encodeURIComponent não codifica o ponto).
   if (slug === "" || slug === "." || slug === "..") return null;

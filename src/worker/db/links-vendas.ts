@@ -46,6 +46,8 @@ export interface AfiliadoDoEscopo {
   affiliate_id: number;
   celula_id: number;
   vinculado_em: string;
+  /** O código na Rifei (RIFA-070, D27; o {codigo} do modelo); null antes da sincronização. */
+  codigo_rifei: string | null;
 }
 
 /**
@@ -107,7 +109,7 @@ export function sqlCelulasLinksVendas(escopo: EscopoLinksVendas): string {
  * A ordem dos links dentro de cada célula (do vínculo mais recente para o mais antigo) é da montagem.
  */
 export function sqlAfiliadosLinksVendas(escopo: EscopoLinksVendas): string {
-  return `SELECT affiliate_id, celula_id, vinculado_em FROM afiliados
+  return `SELECT affiliate_id, celula_id, vinculado_em, codigo_rifei FROM afiliados
     WHERE ${AFILIADOS_DO_ESCOPO[tipoDoEscopo(escopo)]}
     ORDER BY celula_id`;
 }

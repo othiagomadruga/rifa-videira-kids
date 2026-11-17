@@ -1877,7 +1877,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           .bind(campanhaId),
       ]);
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0011: a 0012 é aplicada depois, sobre tudo isto (describe "0012 sobre dados que já existiam").
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0012"),
+      );
     });
 
     it("a 0011 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -2032,6 +2036,67 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       expect(
         await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
       ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0012 (RIFA-070, D27): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0012 sobre dados que já existiam (RIFA-070)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0011 (aqui vale também rodando este sozinho).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0012"),
+      );
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0012 foi aplicada por último, sobre os dados (com afiliados gravados)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0012_codigo_afiliado_rifei.sql",
+      );
+      expect(antes.afiliados.length).toBeGreaterThan(0);
+      expect(antes.afiliados[0]).not.toHaveProperty("codigo_rifei");
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada afiliado ganha só codigo_rifei, NULL", async () => {
+      const { afiliados, ...depois } = await fotografarTodasAsTabelas(db);
+      const { afiliados: afiliadosAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(afiliados).toEqual(
+        afiliadosAntes.map((afiliado) => ({ ...afiliado, codigo_rifei: null })),
+      );
+    });
+
+    it("o CHECK: o código tem de 1 a 120 caracteres", async () => {
+      const affiliateId = (await db
+        .prepare(
+          "SELECT affiliate_id FROM afiliados ORDER BY affiliate_id LIMIT 1",
+        )
+        .first<{ affiliate_id: number }>())!.affiliate_id;
+      const gravar = (codigo: string | null) =>
+        db
+          .prepare(
+            "UPDATE afiliados SET codigo_rifei = ?1 WHERE affiliate_id = ?2",
+          )
+          .bind(codigo, affiliateId)
+          .run();
+      onTestFinished(async () => {
+        await gravar(null);
+      });
+      for (const codigo of ["", "x".repeat(121)])
+        await expect(gravar(codigo)).rejects.toThrow(/CHECK constraint failed/);
+      await gravar("lider-da-celula");
+      await gravar("x".repeat(120));
     });
   });
 });

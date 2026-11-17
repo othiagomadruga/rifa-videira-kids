@@ -417,6 +417,11 @@ export function ExtratoDoBanco() {
           resultado={resultado}
           refTitulo={refTitulo}
           aoTentarDeNovo={() => void garantirPedidos(lido, extrato)}
+          aoBuscarDeNovo={() => {
+            // Depois de marcar na Rifei (RIFA-070): a busca de antes já cobria o extrato, mas os pedidos mudaram.
+            cobertura.current = null;
+            void garantirPedidos(lido, extrato);
+          }}
           aoAnunciar={setAnuncio}
         />
       )}
