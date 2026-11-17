@@ -1,8 +1,5 @@
 import { useId } from "react";
-import {
-  NOMES_DIVISAO,
-  type ItemRankingPublico,
-} from "../../../shared/contracts/calculos";
+import type { ItemRankingPublico } from "../../../shared/contracts/calculos";
 import { TextoContado } from "../../components/movimento";
 import { Icone, Marca, TITULO_SEM_CONEXAO } from "../../components/ui";
 import { ehFalhaDeConexao } from "../../lib/api";
@@ -22,10 +19,11 @@ import {
   descricaoSemVendas,
   formatarPosicao,
   textoDaJanela,
+  tituloDaLista,
 } from "../ranking-publico/textos";
 import { useRankingPublico } from "../ranking-publico/useRankingPublico";
 import { useSubiu } from "../ranking-publico/useSubiu";
-import { faseDoTelao, listaDoTelao } from "./textos";
+import { colunasDaLista, faseDoTelao, listaDoTelao } from "./textos";
 import { useCursorEscondidoParado, useRelogio } from "./useTelao";
 import "./telao.css";
 
@@ -37,7 +35,7 @@ const META_BATIDA_BP = 10_000;
 // Modo telão (culto, 1920×1080, lido a ~8 m): tela cheia, tema escuro de alto contraste, sem rolagem,
 // sem navegação e sem cursor com o mouse parado. Mostra a disputa das células como o ranking público
 // ("/"), dos mesmos dados e com a mesma atualização a cada minuto (useRankingPublico): jovens e adultos
-// lado a lado, só posições e nomes (e o % da meta, quando a campanha permite). Tela pública: nunca
+// lado a lado (ou o ranking único, de todas, na tela toda: D27), só posições e nomes (e o % da meta, quando a campanha permite). Tela pública: nunca
 // valores em dinheiro nem quantidades (regra em docs/frontend.md, conferida em rotas.test.tsx e em
 // guarda-telao.test.ts) e só a rota aberta do ranking. Sem botões: falhas se resolvem sozinhas.
 // Marca (RIFA-020): o logo da Videira num selo claro no canto e um selo pequeno do Kids ao lado do relógio.
@@ -212,25 +210,32 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
       </div>
     );
 
-  // A lista escala pela maior divisão (telao.css): até 3 itens (o limite público), letras bem maiores.
+  // A lista escala pela maior divisão (telao.css): até 3 itens (o limite público), letras bem maiores. Sem ranking
+  // por divisão (D27), a lista única usa a tela toda: uma coluna larga ou, com muitos itens, duas colunas da mesma
+  // lista, e a escala é pelos itens de cada coluna.
   const itensDaMaior = Math.max(
     ...ranking.divisoes.map(({ itens }) => itens.length),
   );
+  const colunas = colunasDaLista(!ranking.porDivisao, itensDaMaior);
 
   return (
     <section
       className="telao__disputa"
       aria-labelledby={idJanela}
-      data-itens={itensDaMaior}
+      data-itens={Math.ceil(itensDaMaior / colunas)}
     >
       <h2 id={idJanela} className="telao__janela">
         {textoDaJanela(ranking.janela, ranking.referencia)}
       </h2>
-      <div className="telao__divisoes">
+      <div
+        className="telao__divisoes"
+        data-unica={ranking.porDivisao ? undefined : ""}
+      >
         {ranking.divisoes.map((divisao) => (
           <Divisao
-            key={divisao.divisao}
+            key={divisao.divisao ?? "todas"}
             {...divisao}
+            colunas={colunas}
             comPercentual={comPercentual}
           />
         ))}
@@ -242,10 +247,11 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
 function Divisao({
   divisao,
   itens,
+  colunas,
   comPercentual,
-}: RankingDaDivisao & { comPercentual: boolean }) {
+}: RankingDaDivisao & { colunas: 1 | 2; comPercentual: boolean }) {
   const idTitulo = useId();
-  const lista = listaDoTelao(itens);
+  const lista = listaDoTelao(itens, colunas);
   const comChaves = chavesPorNome(lista.itens);
   // A ordem das chaves muda quando alguém troca de lugar, entra ou sai: só aí a lista se mexe.
   const refLista = useListaAnimada<HTMLOListElement>(
@@ -258,7 +264,7 @@ function Divisao({
     <section className="telao__divisao" aria-labelledby={idTitulo}>
       <div className="telao__divisao-topo">
         <h3 id={idTitulo} className="telao__divisao-titulo">
-          {NOMES_DIVISAO[divisao]}
+          {tituloDaLista(divisao)}
         </h3>
         {comPercentual && (
           <p className="telao__legenda" aria-hidden="true">
@@ -271,7 +277,12 @@ function Divisao({
       ) : (
         <>
           {/* role="list": com list-style none, o Safari deixaria de anunciar a lista. */}
-          <ol ref={refLista} className="telao__lista" role="list">
+          <ol
+            ref={refLista}
+            className="telao__lista"
+            role="list"
+            data-colunas={colunas === 2 ? 2 : undefined}
+          >
             {comChaves.map(({ chave, item }) => (
               <Item
                 key={chave}

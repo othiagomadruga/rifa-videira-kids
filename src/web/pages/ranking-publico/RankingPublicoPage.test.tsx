@@ -119,6 +119,12 @@ const JOVENS = itens(
   [3, "Célula Canaã"],
 );
 const ADULTOS = itens("adultos", [1, "Célula Dorcas"], [2, "Célula Éfeso"]);
+/** RIFA-061 (D27): o ranking de todas, sem separar (a Dorcas, dos adultos, em 2º). */
+const TODAS = [
+  ...itens("jovens", [1, "Célula Ágape"]),
+  ...itens("adultos", [2, "Célula Dorcas"]),
+  ...itens("jovens", [3, "Célula Betel"]),
+];
 
 type Cenario = {
   referencia: ReferenciaCampanha;
@@ -128,6 +134,13 @@ type Cenario = {
   falhas: number;
   /** Erro fixo da API (ex.: 404 sem campanha ativa). */
   erro: { status: number; codigo: string; mensagem: string } | null;
+  /**
+   * RIFA-061 (D27): false = a campanha não separa por divisão. A API ignora a divisão pedida e responde a lista de
+   * todas (`todas`), com `divisao: null` e `por_divisao: false`. Com true, sem divisão na consulta, o ranking geral
+   * (também `todas`), sem a marca.
+   */
+  porDivisao: boolean;
+  todas: Record<JanelaRanking, ItemRankingPublico[]>;
 };
 
 let api: {
@@ -146,6 +159,8 @@ function simularApi(cenario: Partial<Cenario> = {}) {
     },
     falhas: 0,
     erro: null,
+    porDivisao: true,
+    todas: { atual: TODAS, campanha: TODAS },
     ...cenario,
   };
   const caminhos: string[] = [];
@@ -170,15 +185,20 @@ function simularApi(cenario: Partial<Cenario> = {}) {
         return respostaJson({ erro: { codigo, mensagem } }, status);
       }
       const periodo = url.searchParams.get("periodo") as JanelaRanking;
-      const divisao = url.searchParams.get("divisao") as Divisao;
+      const pedida = url.searchParams.get("divisao") as Divisao | null;
+      const divisao = completo.porDivisao ? pedida : null;
       const resposta: RespostaRankingPublico =
         respostaRankingPublicoSchema.parse({
           nivel: "celula",
           divisao,
+          ...(completo.porDivisao ? {} : { por_divisao: false }),
           janela: JANELAS[periodo],
           criterio: "percentual_meta",
           referencia: completo.referencia,
-          itens: completo.itens[periodo][divisao],
+          itens:
+            divisao === null
+              ? completo.todas[periodo]
+              : completo.itens[periodo][divisao],
           atualizado_em: AGORA,
         });
       return respostaJson(resposta);
@@ -203,8 +223,10 @@ function abrir(
   return renderizarRota("/", opcoes);
 }
 
-const caminho = (divisao: Divisao, periodo: JanelaRanking) =>
-  `/api/publico/ranking?nivel=celula&divisao=${divisao}&periodo=${periodo}`;
+const caminho = (divisao: Divisao | null, periodo: JanelaRanking) =>
+  divisao === null
+    ? `/api/publico/ranking?nivel=celula&periodo=${periodo}`
+    : `/api/publico/ranking?nivel=celula&divisao=${divisao}&periodo=${periodo}`;
 
 /** O texto que o leitor de tela lê num elemento: sem o que é só visual (aria-hidden, ex.: o "↑ subiu"). */
 function textoLido(elemento: Element): string {
@@ -215,12 +237,12 @@ function textoLido(elemento: Element): string {
 }
 
 /** Os itens da lista de uma divisão, como texto ("1º Célula Ágape", "1º Célula Ágape 75% da meta"). */
-function lista(divisao: "Jovens" | "Adultos"): string[] {
+function lista(divisao: "Jovens" | "Adultos" | "Células"): string[] {
   const secao = screen.getByRole("region", { name: divisao });
   return within(secao).queryAllByRole("listitem").map(textoLido);
 }
 
-const destaques = (divisao: "Jovens" | "Adultos") =>
+const destaques = (divisao: "Jovens" | "Adultos" | "Células") =>
   within(screen.getByRole("region", { name: divisao }))
     .getAllByRole("listitem")
     .map((item) => item.hasAttribute("data-destaque"));
@@ -647,6 +669,101 @@ describe("CA2: atualização automática e falhas", () => {
     await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
     await waitFor(() => expect(api.contagem().campanha).toBe(4));
     expect(api.contagem().atual).toBe(2);
+  });
+});
+
+describe("RIFA-061 (D27): sem ranking por divisão, uma lista só", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+    });
+  });
+
+  it('uma lista só, com o título neutro "Células" e as posições de todas; nada de Jovens nem Adultos', async () => {
+    const { container } = abrir({ porDivisao: false });
+    await esperarRanking();
+
+    expect(lista("Células")).toEqual([
+      "1º Célula Ágape",
+      "2º Célula Dorcas",
+      "3º Célula Betel",
+    ]);
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Células" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Jovens" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Adultos" })).toBeNull();
+    expect(screen.queryByText(/nesta divisão/)).toBeNull();
+    expect(destaques("Células")).toEqual([true, true, true]);
+    // Na largura toda (ranking-publico.css).
+    expect(
+      container.querySelector(".ranking-publico__divisoes"),
+    ).toHaveAttribute("data-unica", "");
+  });
+
+  it("a 1ª consulta (sem saber) pede as duas divisões, como sempre, e já recebe a lista única; as seguintes pedem uma só", async () => {
+    abrir({ porDivisao: false });
+    await esperarRanking();
+    expect(api.caminhos).toEqual([
+      caminho("jovens", "atual"),
+      caminho("adultos", "atual"),
+    ]);
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    await waitFor(() => expect(api.caminhos).toHaveLength(3));
+    expect(api.caminhos[2]).toBe(caminho(null, "atual"));
+    expect(lista("Células")).toHaveLength(3);
+  });
+
+  it("a coordenação volta a separar: a consulta sem divisão vê isso e pede de novo as duas, e as duas listas voltam", async () => {
+    abrir({ porDivisao: false });
+    await esperarRanking();
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    await waitFor(() => expect(api.caminhos).toHaveLength(3));
+
+    api.cenario.porDivisao = true;
+    await act(() => vi.advanceTimersByTimeAsync(INTERVALO_ATUALIZACAO_MS));
+    await waitFor(() => expect(api.caminhos).toHaveLength(6));
+    expect(api.caminhos.slice(3)).toEqual([
+      caminho(null, "atual"),
+      caminho("jovens", "atual"),
+      caminho("adultos", "atual"),
+    ]);
+    await waitFor(() =>
+      expect(lista("Jovens")).toEqual([
+        "1º Célula Ágape",
+        "2º Célula Betel",
+        "3º Célula Canaã",
+      ]),
+    );
+    expect(lista("Adultos")).toHaveLength(2);
+    expect(screen.queryByRole("region", { name: "Células" })).toBeNull();
+  });
+
+  it("sem venda nenhuma: o estado vazio de sempre (sem lista)", async () => {
+    abrir({ porDivisao: false, todas: { atual: [], campanha: [] } });
+    expect(
+      await screen.findByText("O ranking aparece com a primeira venda."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("list")).toBeNull();
+  });
+
+  it("campanha encerrada: a lista única da campanha inteira", async () => {
+    abrir({
+      porDivisao: false,
+      referencia: ENCERRADA,
+      todas: {
+        atual: [],
+        campanha: itens("adultos", [1, "Célula Éfeso"]),
+      },
+    });
+    await esperarRanking();
+    expect(lista("Células")).toEqual(["1º Célula Éfeso"]);
+    expect(api.caminhos).toEqual([
+      caminho("jovens", "atual"),
+      caminho("adultos", "atual"),
+      caminho(null, "campanha"),
+    ]);
   });
 });
 

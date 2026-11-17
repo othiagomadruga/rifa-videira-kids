@@ -1,10 +1,19 @@
 // Textos da tela pública: fase da campanha, janela do ranking e posição. Só datas, dias e posições:
 // nenhum valor em dinheiro nem quantidade (regra em docs/frontend.md).
-import type {
-  JanelaRankingResposta,
-  ReferenciaCampanha,
+import {
+  NOMES_DIVISAO,
+  type Divisao,
+  type JanelaRankingResposta,
+  type ReferenciaCampanha,
 } from "../../../shared/contracts/calculos";
 import { formatarData } from "../../lib/formatadores";
+
+/**
+ * O título de cada lista: o nome da divisão ou, sem ranking por divisão (D27), o título neutro do ranking único
+ * (no telão, em maiúsculas pelo CSS).
+ */
+export const tituloDaLista = (divisao: Divisao | null): string =>
+  divisao === null ? "Células" : NOMES_DIVISAO[divisao];
 
 /** Posição no ranking: 1 → "1º". Empatados mostram a mesma posição (1º, 2º, 3º, 3º). */
 export function formatarPosicao(posicao: number): string {

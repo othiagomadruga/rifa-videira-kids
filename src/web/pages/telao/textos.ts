@@ -54,14 +54,27 @@ export type ListaDoTelao = {
 };
 
 /**
- * A lista de uma divisão como cabe no telão. A API já corta no limite da campanha (top 3, com os
- * empatados no último lugar); se ainda passar de LINHAS_POR_DIVISAO, ficam os primeiros e uma linha
- * diz quantos faltam, como no bumbo.
+ * Quantas colunas a lista ocupa: com as duas divisões, uma cada. Sem ranking por divisão (D27), a lista única tem a
+ * tela toda: até LINHAS_POR_DIVISAO itens, uma coluna larga; acima disso, a mesma lista em duas colunas (de cima para
+ * baixo, depois a da direita), que cabem o dobro de linhas.
  */
-export function listaDoTelao(itens: ItemRankingPublico[]): ListaDoTelao {
-  if (itens.length <= LINHAS_POR_DIVISAO) return { itens, resto: null };
-  const visiveis = itens.slice(0, LINHAS_POR_DIVISAO - 1);
-  const sobra = itens.slice(LINHAS_POR_DIVISAO - 1);
+export function colunasDaLista(unica: boolean, itens: number): 1 | 2 {
+  return unica && itens > LINHAS_POR_DIVISAO ? 2 : 1;
+}
+
+/**
+ * A lista de uma divisão como cabe no telão. A API já corta no limite da campanha (top 3, com os
+ * empatados no último lugar); se ainda passar de LINHAS_POR_DIVISAO por coluna, ficam os primeiros e uma
+ * linha diz quantos faltam, como no bumbo.
+ */
+export function listaDoTelao(
+  itens: ItemRankingPublico[],
+  colunas: 1 | 2 = 1,
+): ListaDoTelao {
+  if (itens.length <= LINHAS_POR_DIVISAO * colunas)
+    return { itens, resto: null };
+  const visiveis = itens.slice(0, (LINHAS_POR_DIVISAO - 1) * colunas);
+  const sobra = itens.slice(visiveis.length);
   const posicoes = new Set(sobra.map((item) => item.posicao));
   const [posicao] = posicoes;
   const resto =

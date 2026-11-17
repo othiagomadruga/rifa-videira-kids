@@ -271,6 +271,30 @@ describe("RIFA-050 (P2.1): o telão escala pela quantidade de itens (data-itens)
     expect(valorDe(".telao__subiu-texto", "display")).toBe("none");
   });
 
+  it("RIFA-061 (D27): a lista única na largura toda; com mais de 5 itens, duas colunas da mesma lista, de cima para baixo", () => {
+    // No telão deitado (antes do @media do celular em pé, que empilha tudo numa coluna).
+    const deitado = regrasDe(
+      telaoCss.slice(0, telaoCss.indexOf("@media (max-aspect-ratio: 1/1)")),
+    );
+    expect(
+      valorDe(".telao__divisoes[data-unica]", "grid-template-columns", deitado),
+    ).toBe("minmax(0, 1fr)");
+    const duas = '.telao__lista[data-colunas="2"]';
+    expect(valorDe(duas, "grid-template-columns", deitado)).toBe(
+      "repeat(2, minmax(0, 1fr))",
+    );
+    expect(valorDe(duas, "grid-auto-flow", deitado)).toBe("column");
+    // As linhas de cada coluna pelos itens dela: 3 iguais (sem a do 1º maior, que cresceria a do topo da outra) e 4.
+    expect(valorDe(comItens(3, duas), "grid-template-rows", deitado)).toBe(
+      "repeat(3, minmax(0, 1fr))",
+    );
+    expect(valorDe(comItens(4, duas), "grid-template-rows", deitado)).toBe(
+      "repeat(4, minmax(0, 1fr))",
+    );
+    // Em pé, uma coluna só (a página rola).
+    expect(valorDe(duas, "grid-template-columns")).toBe("minmax(0, 1fr)");
+  });
+
   it("a disputa e as divisões esticam até o fim da tela; o nome continua em até 2 linhas; a lista (não o item) corta as partículas", () => {
     expect(valorDe(".telao__disputa", "grid-template-rows")).toBe(
       "auto minmax(0, 1fr)",

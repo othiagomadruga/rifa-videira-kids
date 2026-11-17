@@ -97,6 +97,18 @@ function blocosSemReduce(texto: string): string {
 }
 
 describe("RIFA-050: o CSS do ranking público", () => {
+  it("RIFA-061 (D27): a partir de 48rem, as divisões lado a lado; a lista única, na largura toda", () => {
+    expect(valorDe(".ranking-publico__divisoes", "grid-template-columns")).toBe(
+      "repeat(2, minmax(0, 1fr))",
+    );
+    expect(
+      valorDe(
+        ".ranking-publico__divisoes[data-unica]",
+        "grid-template-columns",
+      ),
+    ).toBe("minmax(0, 1fr)");
+  });
+
   it("usa só variáveis do tema que existem (nenhuma cor solta, nenhum rgba)", () => {
     const usadas = [...css.matchAll(/var\((--[\w-]+)\)/g)].map(
       ([, nome]) => nome,

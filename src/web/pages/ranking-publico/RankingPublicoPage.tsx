@@ -1,8 +1,5 @@
 import { useId } from "react";
-import {
-  NOMES_DIVISAO,
-  type ItemRankingPublico,
-} from "../../../shared/contracts/calculos";
+import type { ItemRankingPublico } from "../../../shared/contracts/calculos";
 import { TextoContado } from "../../components/movimento";
 import {
   EmptyState,
@@ -26,6 +23,7 @@ import {
   linhaDoTempo,
   textoDaFase,
   textoDaJanela,
+  tituloDaLista,
 } from "./textos";
 import { useRankingPublico } from "./useRankingPublico";
 import { useSubiu } from "./useSubiu";
@@ -36,7 +34,8 @@ const POSICOES_EM_DESTAQUE = 3;
 /** 100% da meta, em pontos-base: a meta batida ganha o destaque de comemoração. */
 const META_BATIDA_BP = 10_000;
 
-// Tela pública (link do grupo de WhatsApp): o ranking das células por divisão, só com posições e nomes
+// Tela pública (link do grupo de WhatsApp): o ranking das células por divisão (ou um só, de todas, quando a
+// campanha não separa: D27, com o título "Células"), só com posições e nomes
 // (e o % da meta, quando a campanha permite). Nunca valores em dinheiro nem quantidades: a rota aberta não
 // os devolve e esta pasta não os formata (regra em docs/frontend.md, conferida em rotas.test.tsx e em
 // guarda-publico.test.ts). Atualiza sozinha a cada minuto e não chama nenhuma rota da coordenação.
@@ -173,9 +172,13 @@ function Ranking({ ranking, falhou }: PropsRanking) {
               O % é quanto cada célula já fez da própria meta.
             </p>
           )}
-          <div className="ranking-publico__divisoes">
+          {/* Sem ranking por divisão (D27), uma lista só, na largura toda. */}
+          <div
+            className="ranking-publico__divisoes"
+            data-unica={ranking.porDivisao ? undefined : ""}
+          >
             {ranking.divisoes.map((divisao) => (
-              <Divisao key={divisao.divisao} {...divisao} />
+              <Divisao key={divisao.divisao ?? "todas"} {...divisao} />
             ))}
           </div>
         </section>
@@ -209,7 +212,7 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   return (
     <section className="ranking-publico__divisao" aria-labelledby={idTitulo}>
       <h3 id={idTitulo} className="ranking-publico__divisao-titulo">
-        {NOMES_DIVISAO[divisao]}
+        {tituloDaLista(divisao)}
       </h3>
       {itens.length === 0 ? (
         <p className="ranking-publico__sem-vendas">

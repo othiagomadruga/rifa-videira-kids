@@ -305,6 +305,11 @@
   .ranking-publico__divisoes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  /* Sem ranking por divisão (D27): a lista única ocupa a largura toda. */
+  .ranking-publico__divisoes[data-unica] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /*
