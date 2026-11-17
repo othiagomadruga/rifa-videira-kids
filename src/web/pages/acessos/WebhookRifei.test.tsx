@@ -254,7 +254,7 @@ describe("CA3: a geração direta mostra o token uma vez", () => {
     const passos = within(painel()).getByRole("heading", {
       level: 3,
       name: "Como colar na Rifei",
-    }).parentElement;
+    }).closest(".acessos-webhook__passos");
     expect(passos).toHaveTextContent("Integrações");
     expect(passos).toHaveTextContent("Outro");
     expect(passos).toHaveTextContent("Adicionar");

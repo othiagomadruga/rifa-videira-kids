@@ -2,6 +2,7 @@
 // (`ajuda-sob-demanda.ts`), logo depois da primeira tela: o JS inicial não leva os textos, e um `import()` só (em
 // vez de um por tela) pesa menos nele. Cada tela escreve os dela no próprio `ajuda.ts`; as chaves não se repetem
 // entre as telas (`ajuda-das-telas.test.ts` confere). As telas `lazy` deixam os textos no `textos.ts` delas.
+import { AJUDA as ACESSOS } from "./acessos/ajuda";
 import { AJUDA as ADESAO } from "./adesao/ajuda";
 import { AJUDA as BUMBO } from "./bumbo/ajuda";
 import { AJUDA as HIERARQUIA } from "./hierarquia/ajuda";
@@ -15,6 +16,7 @@ export const AJUDA_DAS_TELAS = [
   ADESAO,
   RANKINGS,
   BUMBO,
+  ACESSOS,
 ] as const;
 
 export const AJUDA = {
@@ -23,4 +25,5 @@ export const AJUDA = {
   ...ADESAO,
   ...RANKINGS,
   ...BUMBO,
+  ...ACESSOS,
 };

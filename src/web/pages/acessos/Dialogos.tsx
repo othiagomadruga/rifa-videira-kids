@@ -41,6 +41,7 @@ import {
   primeiroNome,
 } from "./textos";
 import type { Mensagens } from "./regras";
+import { ajuda } from "../ajuda-sob-demanda";
 
 // ---------------------------------------------------------------------------------------------------
 // Nova pessoa
@@ -192,47 +193,46 @@ export function DialogoNovaPessoa({
             <p>{mensagem}</p>
           </Aviso>
         )}
-        <ComDica texto={DICAS.nome}>
-          <Input
-            rotulo="Nome"
-            name="nome"
-            value={valores.nome}
-            onChange={mudar("nome")}
-            maxLength={LIMITES.nome}
-            autoComplete="off"
-            erro={erros.nome}
-          />
-        </ComDica>
-        <ComDica texto={DICAS.email}>
-          <Input
-            rotulo="E-mail (opcional)"
-            name="email"
-            type="email"
-            inputMode="email"
-            value={valores.email}
-            onChange={mudar("email")}
-            maxLength={LIMITES.email}
-            autoComplete="off"
-            dica="Só para referência: a entrada é pelo link."
-            erro={erros.email}
-          />
-        </ComDica>
-        <ComDica texto={DICAS.papel}>
-          <Select
-            rotulo="Papel"
-            name="papel"
-            value={valores.papel}
-            onChange={mudar("papel")}
-            dica="Admin também cria pessoas e gera e revoga links. Coordenação usa as demais telas."
-            erro={erros.papel}
-          >
-            {PAPEIS_DO_FORMULARIO.map((papel) => (
-              <option key={papel} value={papel}>
-                {ROTULO_PAPEL[papel]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
+        <Input
+          ajuda={ajuda("nomePessoa")}
+          rotulo="Nome"
+          name="nome"
+          value={valores.nome}
+          onChange={mudar("nome")}
+          maxLength={LIMITES.nome}
+          autoComplete="off"
+          erro={erros.nome}
+        />
+
+        <Input
+          ajuda={ajuda("emailPessoa")}
+          rotulo="E-mail (opcional)"
+          name="email"
+          type="email"
+          inputMode="email"
+          value={valores.email}
+          onChange={mudar("email")}
+          maxLength={LIMITES.email}
+          autoComplete="off"
+          dica="Só para referência: a entrada é pelo link."
+          erro={erros.email}
+        />
+
+        <Select
+          ajuda={ajuda("papelPessoa")}
+          rotulo="Papel"
+          name="papel"
+          value={valores.papel}
+          onChange={mudar("papel")}
+          dica="Admin também cria pessoas e gera e revoga links. Coordenação usa as demais telas."
+          erro={erros.papel}
+        >
+          {PAPEIS_DO_FORMULARIO.map((papel) => (
+            <option key={papel} value={papel}>
+              {ROTULO_PAPEL[papel]}
+            </option>
+          ))}
+        </Select>
       </div>
     </Dialogo>
   );
@@ -306,17 +306,17 @@ export function DialogoLink({
             até {formatarData(link.expira_em)}.
           </p>
         </Aviso>
-        <ComDica texto={DICAS.campoLink}>
-          <Textarea
-            ref={refCampo}
-            rotulo="Link de acesso"
-            value={link.url}
-            readOnly
-            rows={3}
-            className="acessos-url"
-            onFocus={(evento) => evento.currentTarget.select()}
-          />
-        </ComDica>
+        <Textarea
+          ajuda={ajuda("linkDeAcesso")}
+          ref={refCampo}
+          rotulo="Link de acesso"
+          value={link.url}
+          readOnly
+          rows={3}
+          className="acessos-url"
+          onFocus={(evento) => evento.currentTarget.select()}
+        />
+
         <div className="acessos-link-acoes">
           <ComDica texto={DICAS.copiarLink}>
             <Button ref={refCopiar} onClick={() => void copiar()}>

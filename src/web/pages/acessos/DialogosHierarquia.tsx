@@ -27,6 +27,7 @@ import {
   telefoneParaWhatsApp,
 } from "./textos";
 import "./acessos-hierarquia.css";
+import { ajuda } from "../ajuda-sob-demanda";
 
 // ---------------------------------------------------------------------------------------------------
 // Trocar acesso: revoga os links válidos do alvo (o aparelho antigo sai) e gera um link novo
@@ -381,17 +382,16 @@ function LinkGerado({
             <span className="visualmente-oculto">para {destinatario}</span>
           </summary>
         </ComDica>
-        <ComDica texto={DICAS.campoMensagem}>
-          <Textarea
-            ref={refCampo}
-            rotulo={`Mensagem para ${destinatario}`}
-            value={mensagem}
-            readOnly
-            rows={6}
-            className="acessos-url"
-            onFocus={(evento) => evento.currentTarget.select()}
-          />
-        </ComDica>
+        <Textarea
+          ajuda={ajuda("mensagemComLink")}
+          ref={refCampo}
+          rotulo={`Mensagem para ${destinatario}`}
+          value={mensagem}
+          readOnly
+          rows={6}
+          className="acessos-url"
+          onFocus={(evento) => evento.currentTarget.select()}
+        />
       </details>
     </li>
   );
