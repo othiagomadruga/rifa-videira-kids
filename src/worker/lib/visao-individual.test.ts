@@ -424,9 +424,10 @@ describe("montarVisaoIndividual: schema e números do painel em todos os cenári
               }
         });
 
-  it("RIFA-061 (D27): sem ranking por divisão, todos os alvos, fases e janelas conferem com os montadores (o de todos)", () => {
-    for (const regra of REGRAS_META)
-      for (const criterio of CRITERIOS_RANKING) {
+  // RIFA-061 (D27): um teste por regra e critério (como os de cima), para cada um caber no tempo do teste sob carga.
+  for (const regra of REGRAS_META)
+    for (const criterio of CRITERIOS_RANKING)
+      it(`RIFA-061 (D27): sem ranking por divisão, ${regra}, critério ${criterio}: todos os alvos, fases e janelas conferem com os montadores (o de todos)`, () => {
         const entrada = entradaEsperada(
           campanhaCom({ regra, criterio, porDivisao: false }),
         );
@@ -441,13 +442,12 @@ describe("montarVisaoIndividual: schema e números do painel em todos os cenári
                 expect(visao.ranking.divisao).toEqual(visao.ranking.geral);
               } catch (erro) {
                 throw new Error(
-                  `${regra}, ${criterio}, ${fase}, ${periodo}, ${quem.tipo} ${quem.id}: ${String(erro)}`,
+                  `${fase}, ${periodo}, ${quem.tipo} ${quem.id}: ${String(erro)}`,
                   { cause: erro },
                 );
               }
             }
-      }
-  });
+      });
 
   it("RIFA-061 (D27): ligada (true ou ausente), a visão é a de sempre, sem a marca", () => {
     for (const porDivisao of [undefined, true])
