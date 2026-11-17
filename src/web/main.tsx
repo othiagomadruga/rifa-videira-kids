@@ -2,8 +2,8 @@
 import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter } from "react-router";
 import { App } from "./App";
+import { criarRoteador } from "./roteador";
 import { rotas } from "./rotas";
 
 const raiz = document.getElementById("root");
@@ -11,7 +11,8 @@ if (!raiz) {
   throw new Error("Elemento #root não encontrado no index.html");
 }
 
-const roteador = createBrowserRouter(rotas);
+// O do navegador; só o build da apresentação de /exemplo usa o de hash (roteador.ts, D28).
+const roteador = criarRoteador(rotas);
 
 createRoot(raiz).render(
   <StrictMode>
