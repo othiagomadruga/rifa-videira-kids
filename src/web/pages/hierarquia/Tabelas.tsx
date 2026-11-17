@@ -165,7 +165,10 @@ export function TabelaCelulas({
 
   return (
     <div className="hierarquia-painel">
-      <div className="hierarquia-filtros">
+      <div
+        className="hierarquia-filtros"
+        data-sem-rede={redeUnica ? "" : undefined}
+      >
         <ComDica
           texto={
             redeUnica ? DICAS_REDE_UNICA.filtroDivisao : DICAS.filtroDivisao
