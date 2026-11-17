@@ -5,7 +5,7 @@ import {
   formatarNumero,
   formatarPercentual,
 } from "../../lib/formatadores";
-import { DICAS, dataCurta, descricaoDaCurva } from "./textos";
+import { DICAS, dataCurta, descricaoDaCurva, AJUDA } from "./textos";
 
 const percentual = (pontosBase: number) => formatarPercentual(pontosBase);
 
@@ -14,7 +14,11 @@ const percentual = (pontosBase: number) => formatarPercentual(pontosBase);
 export function CurvaIndividual({ visao }: { visao: RespostaVisaoIndividual }) {
   const { curva, referencia } = visao;
   return (
-    <Card titulo="Curva da campanha" className="minha-curva">
+    <Card
+      titulo="Curva da campanha"
+      ajuda={AJUDA.curva}
+      className="minha-curva"
+    >
       {curva.length === 0 ? (
         <p className="minha-curva__subtitulo">
           Ainda não há meta para desenhar a curva.

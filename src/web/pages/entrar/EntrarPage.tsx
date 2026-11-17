@@ -6,6 +6,7 @@ import {
   IconeDaTela,
   Loading,
   PageHeader,
+  ComAjuda,
 } from "../../components/ui";
 import {
   destinoDoPapel,
@@ -14,6 +15,7 @@ import {
   useSessao,
 } from "../../lib/sessao";
 import "./entrar.css";
+import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 
 // Como entrar (sem sessão): o acesso é pelo link pessoal que chega no WhatsApp, sem senha. Quem já tem
 // sessão vai direto para a área do papel (/coordenacao ou /minha), ou para a tela que tinha pedido, quando
@@ -44,6 +46,7 @@ export function EntrarPage() {
     <>
       <PageHeader
         titulo="Entrar"
+        ajuda={ajudaAberta("entrar")}
         descricao="Coordenação, líderes, discipuladores e redes da Rifa Videira Kids."
       />
       {conferindo ? (
@@ -64,7 +67,14 @@ export function EntrarPage() {
             <div className="entrar-explicacao">
               {/* O ícone do link no topo do cartão (RIFA-050), acima do título. */}
               <IconeDaTela nome="link" />
-              <h2 className="entrar-titulo">Como entrar</h2>
+              <ComAjuda
+                texto={ajudaAberta("comoEntrar")}
+                idDoTitulo="entrar-como"
+              >
+                <h2 id="entrar-como" className="entrar-titulo">
+                  Como entrar
+                </h2>
+              </ComAjuda>
               <p>
                 O acesso é pelo seu <strong>link pessoal</strong>, sem senha. O
                 link chega pelo <strong>WhatsApp</strong>, mandado pela

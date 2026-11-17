@@ -509,6 +509,47 @@ export function tituloSemAdesao(quantas: number): string {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Ajuda (RIFA-066, D31): a explicação dos títulos, com o mouse no título e no "?" ao lado (foco e toque), para quem
+// nunca viu o sistema: o que é, para que serve e um exemplo. O cabeçalho, que fica no pacote inicial, pede estes
+// textos sob demanda (este módulo já vem no pacote da visão): só textos, sem dinheiro.
+// ---------------------------------------------------------------------------------------------------
+
+export const AJUDA = {
+  cabecalhoCelula:
+    "A visão da sua célula na campanha: quanto da meta já foi vendido, a posição no ranking e o link de vendas. Só percentuais e bilhetes, sem dinheiro.",
+  cabecalhoDiscipulador:
+    "A sua visão de discipulador: a meta e o ranking das células que você acompanha, e o link de vendas de cada uma. Só percentuais e bilhetes, sem dinheiro.",
+  cabecalhoRede:
+    "A visão da sua rede: a meta, o ranking dos discipuladores e das células da rede e os links de vendas. Só percentuais e bilhetes, sem dinheiro.",
+  cabecalho:
+    "A sua visão da campanha: a meta, o ranking e o link de vendas, só com percentuais e bilhetes.",
+  contagem:
+    "Quantos dias faltam para as vendas começarem. A meta já aparece abaixo, para você se preparar.",
+  metaDaCampanha:
+    "Quanto da meta da campanha inteira já foi vendido. Ex.: 50% quer dizer que metade dos bilhetes da meta já saiu.",
+  hoje: "Quanto vender hoje para ficar em dia com a meta e quanto já foi vendido hoje. Se ontem faltou, a falta entra na meta de hoje.",
+  periodo:
+    "A etapa em que a campanha está agora, normalmente uma semana, com a sua parte da meta e um ranking próprio. Toda semana é uma nova chance de subir.",
+  curva:
+    "O gráfico do que se esperava vender até cada dia contra o que foi vendido, em % da meta. Se a linha do vendido fica abaixo, é hora de acelerar.",
+  ranking:
+    "A sua posição na disputa e quem está logo acima e logo abaixo. Ex.: passar do 5º para o 3º lugar nesta semana.",
+  naSuaDivisao:
+    "A sua posição entre os da sua divisão (Jovens ou Adultos), que disputam entre si. Abaixo, quem está logo acima e logo abaixo.",
+  geral: "A sua posição entre todos, com as duas divisões juntas.",
+  suaPosicao:
+    "A sua posição entre todos da disputa. Abaixo, quem está logo acima e logo abaixo.",
+  primeiros:
+    "Quem está na frente agora nesta disputa. Serve de alvo: veja quanto falta para chegar lá.",
+  equipeRede:
+    "Os discipuladores da sua rede e as células de cada um, com a posição e quanto da meta já fizeram. Serve para ver quem precisa de uma força.",
+  equipeCelulas:
+    "As células que você acompanha, com a posição e quanto da meta cada uma já fez. Serve para ver quem precisa de uma força.",
+  links:
+    "O link da Rifei da célula: toda compra feita por ele conta para a meta dela. Mande para quem vai comprar, pelo WhatsApp ou pelo QR code.",
+} as const;
+
+// ---------------------------------------------------------------------------------------------------
 // Dicas (RIFA-045): a explicação que aparece com o mouse parado (ou o foco do teclado) em cada botão e campo da
 // visão individual. Dizem para que serve e o que acontece, sem repetir o rótulo. O "Sair" da moldura fica em
 // textos-moldura.ts (vai no pacote inicial, como o minha-moldura.css); os do link de vendas, em components/qr.

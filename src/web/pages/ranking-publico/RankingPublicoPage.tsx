@@ -7,6 +7,7 @@ import {
   Icone,
   Loading,
   PageHeader,
+  ComAjuda,
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora, formatarPercentual } from "../../lib/formatadores";
@@ -28,6 +29,7 @@ import {
 import { useRankingPublico } from "./useRankingPublico";
 import { useSubiu } from "./useSubiu";
 import "./ranking-publico.css";
+import { ajudaAberta } from "./ajuda-sob-demanda";
 
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
 const POSICOES_EM_DESTAQUE = 3;
@@ -48,7 +50,7 @@ export function RankingPublicoPage() {
   const { estado, tentarDeNovo } = useRankingPublico();
   return (
     <>
-      <PageHeader titulo="Ranking da campanha" />
+      <PageHeader titulo="Ranking da campanha" ajuda={ajudaAberta("ranking")} />
       {estado.tipo === "carregando" && (
         <div className="ranking-publico__carregando">
           <Loading texto="Carregando o ranking…" />
@@ -164,9 +166,11 @@ function Ranking({ ranking, falhou }: PropsRanking) {
           className="ranking-publico__disputa"
           aria-labelledby={idDisputa}
         >
-          <h2 id={idDisputa} className="ranking-publico__janela">
-            {textoDaJanela(ranking.janela, ranking.referencia)}
-          </h2>
+          <ComAjuda texto={ajudaAberta("disputa")} idDoTitulo={idDisputa}>
+            <h2 id={idDisputa} className="ranking-publico__janela">
+              {textoDaJanela(ranking.janela, ranking.referencia)}
+            </h2>
+          </ComAjuda>
           {comPercentual && (
             <p className="ranking-publico__legenda">
               O % é quanto cada célula já fez da própria meta.
@@ -211,9 +215,14 @@ function Divisao({ divisao, itens }: RankingDaDivisao) {
   );
   return (
     <section className="ranking-publico__divisao" aria-labelledby={idTitulo}>
-      <h3 id={idTitulo} className="ranking-publico__divisao-titulo">
-        {tituloDaLista(divisao)}
-      </h3>
+      <ComAjuda
+        texto={ajudaAberta(divisao === null ? "todas" : "divisao")}
+        idDoTitulo={idTitulo}
+      >
+        <h3 id={idTitulo} className="ranking-publico__divisao-titulo">
+          {tituloDaLista(divisao)}
+        </h3>
+      </ComAjuda>
       {itens.length === 0 ? (
         <p className="ranking-publico__sem-vendas">
           Ainda sem vendas nesta divisão.

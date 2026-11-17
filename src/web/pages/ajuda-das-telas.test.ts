@@ -4,7 +4,14 @@
 // texto fica com a revisão.
 import { describe, expect, it } from "vitest";
 import { AJUDA, AJUDA_DAS_TELAS } from "./ajuda-das-telas";
+import { AJUDA as AJUDA_DO_QR } from "../components/qr/textos";
 import { AJUDA as AJUDA_CAMPANHA } from "./campanha/textos";
+import { AJUDA as AJUDA_EXTRATO } from "./conferencia/extrato/textos";
+import { AJUDA as AJUDA_CONFERENCIA } from "./conferencia/textos";
+import { AJUDA as AJUDA_MAPA } from "./mapa/textos";
+import { AJUDA as AJUDA_MINHA } from "./minha/textos";
+import { AJUDA as AJUDA_PEDIDOS } from "./pedidos/textos";
+import { AJUDA as AJUDA_ABERTA } from "./ranking-publico/ajuda";
 
 /** Todos os textos de um objeto de ajuda (os de dentro de grupos e os de funções, com um valor de exemplo). */
 function textos(objeto: object, prefixo = ""): [string, string][] {
@@ -37,9 +44,13 @@ describe("os textos de ajuda", () => {
     expect(Object.keys(AJUDA)).toHaveLength(chaves.length);
   });
 
-  it("os textos das telas da coordenação que carregam com o site não falam de dinheiro em R$ (o bumbo também os usa)", () => {
-    for (const [chave, texto] of textos(AJUDA))
-      expect(texto, chave).not.toMatch(/R\$/);
+  it("os textos das telas da coordenação que carregam com o site, os da /minha e os das telas abertas não falam em R$ (o bumbo, a /minha e o público nunca recebem valores)", () => {
+    for (const [chave, texto] of [
+      ...textos(AJUDA),
+      ...textos(AJUDA_MINHA, "minha."),
+      ...textos(AJUDA_ABERTA, "aberta."),
+    ])
+      expect(texto, chave).not.toMatch(/R\$|reais/);
   });
 
   it.each(TODOS)(

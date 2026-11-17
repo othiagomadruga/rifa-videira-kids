@@ -18,6 +18,7 @@ import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { linksDaCelula } from "./links-vendas-api";
 import { useMeusLinksVendas } from "./useMeusLinksVendas";
 import "./minha-links.css";
+import { AJUDA } from "./textos";
 
 // O link de vendas (RIFA-046, D24): a venda só conta para a célula quando é feita na Rifei pelo link de afiliado do
 // líder. O líder vê o link da célula dele, com o QR code em destaque ("Seu link de vendas"); o discipulador e a rede,
@@ -48,6 +49,7 @@ export function LinksDeVendas({
     <section className="minha-links" aria-labelledby={idTitulo}>
       <Card
         icone="link"
+        ajuda={AJUDA.links}
         titulo={<span id={idTitulo}>{tituloDoCartao(doAlvo)}</span>}
       >
         {estado.tipo === "carregando" && (
@@ -183,7 +185,9 @@ function LinksDaCelula({
   return (
     <article className="minha-links__celula">
       <div className="minha-links__identidade">
-        <h3 className="minha-links__nome">{celula.celula_nome}</h3>
+        <h3 className="minha-links__nome" data-sem-ajuda="nome da célula">
+          {celula.celula_nome}
+        </h3>
         <p className="minha-links__detalhe">
           Líder: {celula.lider_nome}
           {comDiscipulador && ` · Discipulador: ${celula.discipulador_nome}`}

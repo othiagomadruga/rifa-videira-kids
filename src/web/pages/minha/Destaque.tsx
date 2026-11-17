@@ -13,6 +13,7 @@ import {
   Icone,
   IndicadorSituacao,
   ProgressBar,
+  ComAjuda,
 } from "../../components/ui";
 import { formatarNumero, formatarPercentual } from "../../lib/formatadores";
 import { CLASSE_COMEMORA, useComemoracao } from "../../lib/useComemoracao";
@@ -28,6 +29,7 @@ import {
   textoDeHoje,
   textoDoPeriodo,
   type TextoSituacao,
+  AJUDA,
 } from "./textos";
 
 function Situacao({ situacao }: { situacao: TextoSituacao }) {
@@ -87,9 +89,11 @@ export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
         data-fase="antes"
       >
         <Card variante="destaque" className="minha-destaque__cartao">
-          <h2 id={idTitulo} className="minha-destaque__contagem">
-            {fase.destaque}
-          </h2>
+          <ComAjuda texto={AJUDA.contagem} idDoTitulo={idTitulo}>
+            <h2 id={idTitulo} className="minha-destaque__contagem">
+              {fase.destaque}
+            </h2>
+          </ComAjuda>
           <p className="minha-destaque__detalhe">{fase.detalhe}</p>
           {meta && <p className="minha-destaque__meta">{meta}</p>}
         </Card>
@@ -110,9 +114,11 @@ export function Destaque({ visao }: { visao: RespostaVisaoIndividual }) {
         <p className="minha-destaque__fase">
           <strong>{fase.destaque}</strong> · {fase.detalhe}
         </p>
-        <h2 id={idTitulo} className="minha-destaque__rotulo">
-          Meta da campanha
-        </h2>
+        <ComAjuda texto={AJUDA.metaDaCampanha} idDoTitulo={idTitulo}>
+          <h2 id={idTitulo} className="minha-destaque__rotulo">
+            Meta da campanha
+          </h2>
+        </ComAjuda>
         <div className="minha-destaque__valor">
           <p
             ref={refNumero}
@@ -170,9 +176,12 @@ function Hoje({
       aria-labelledby={idHoje}
       data-batida={texto.batida ? "" : undefined}
     >
-      <h3 id={idHoje} className="minha-hoje__titulo">
-        Hoje <span className="minha-hoje__data">· {dataCurta(hoje.data)}</span>
-      </h3>
+      <ComAjuda texto={AJUDA.hoje} idDoTitulo={idHoje}>
+        <h3 id={idHoje} className="minha-hoje__titulo">
+          Hoje{" "}
+          <span className="minha-hoje__data">· {dataCurta(hoje.data)}</span>
+        </h3>
+      </ComAjuda>
       <p className="minha-hoje__destaque">
         {texto.batida && <Icone nome="check" className="minha-hoje__icone" />}
         {texto.destaque}
@@ -193,7 +202,7 @@ export function CartaoPeriodo({ periodo, info, unidade }: PropsPeriodo) {
   const meta = emBilhetes(periodo.meta, unidade);
   const realizado = emBilhetes(periodo.realizado, unidade);
   return (
-    <Card titulo={info.nome} className="minha-periodo">
+    <Card titulo={info.nome} ajuda={AJUDA.periodo} className="minha-periodo">
       <div className="minha-periodo__corpo">
         <p className="minha-periodo__subtitulo">{textoDoPeriodo(info)}</p>
         <Situacao situacao={situacaoDoPeriodo(periodo, info, unidade)} />

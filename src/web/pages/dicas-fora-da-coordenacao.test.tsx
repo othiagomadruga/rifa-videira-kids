@@ -44,28 +44,21 @@ import { DICAS as DICAS_404 } from "./nao-encontrada/textos";
 const ESPERA_DO_PACOTE = { timeout: 5000 };
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set([
-  "Campanha",
-  "Visão geral",
-  "Hierarquia",
-  "Adesão",
-  "Rankings",
-  "Bumbo",
-  "Acessos",
-  "Pedidos",
-  "Pedidos suspeitos",
-  "Trilha",
-  "Mapa",
-  "Conferência",
-]);
+/**
+ * Telas sem botão nem campo (RIFA-045): fora o "?" da ajuda dos títulos (RIFA-066), nenhum controle; e todo título
+ * com a explicação.
+ */
+async function conferirSemControles() {
+  const ajudas = document.querySelectorAll("[data-ajuda-botao]").length;
+  expect(contarControles() - ajudas).toBe(0);
+  expect(await titulosSemAjuda()).toEqual([]);
+}
 
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);
   expect(controlesSemDica()).toEqual([]);
   // RIFA-066: e todo título de seção e todo rótulo de campo com a explicação (mouse no título e toque no "?").
-  // Enquanto as telas recebem a ajuda, uma por commit, a lista diz quais já têm (sai quando todas tiverem).
-  const tela = document.querySelector("h1")?.textContent ?? "";
-  if (TELAS_COM_AJUDA.has(tela)) expect(await titulosSemAjuda()).toEqual([]);
+  expect(await titulosSemAjuda()).toEqual([]);
 }
 
 /** O texto da dica que abre com o mouse parado no controle (e some ao tirar o mouse), como na varredura. */
@@ -206,7 +199,8 @@ describe("/minha (visão individual, com a moldura)", () => {
       expect(api.chamadasA("GET", "/api/minha/visao")).toHaveLength(1),
     );
     expect(document.querySelector(".minha-moldura__esqueleto")).not.toBeNull();
-    expect(contarControles()).toBe(1);
+    // O Sair e o "?" da ajuda do título (RIFA-066).
+    expect(contarControles()).toBe(2);
     await conferirDicas(1);
     expect(textoDaDica(botao("Sair"))).toBe(DICAS_DA_MOLDURA.sair);
   });
@@ -281,13 +275,13 @@ describe("/acesso (link pessoal)", () => {
     await screen.findByText(
       "Este link não vale mais: peça um link novo à coordenação.",
     );
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
   });
 
   it("link incompleto: sem botão nem campo", async () => {
     abrir(pendente, "curto-demais");
     await screen.findByText("Este link está incompleto.");
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
   });
 });
 
@@ -301,7 +295,7 @@ describe("/entrar", () => {
     );
     renderizarRota("/entrar", { usuario: null });
     await screen.findByRole("heading", { level: 2, name: "Como entrar" });
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
   });
 });
 
@@ -374,7 +368,7 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     simularRanking();
     const { unmount } = renderizarRota("/", { usuario: null });
     expect(await screen.findAllByText("Célula Ágape")).not.toHaveLength(0);
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
     unmount();
 
     simularRanking({ falhar: true });
@@ -387,7 +381,11 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     simularRanking();
     const { unmount } = renderizarRota("/telao", { usuario: null });
     expect(await screen.findAllByText("Célula Ágape")).not.toHaveLength(0);
+    // O telão não tem controles, nem o "?": a ajuda dos títulos só com o mouse (RIFA-066).
     expect(contarControles()).toBe(0);
+    expect(await titulosSemAjuda(document.body, { semBotao: true })).toEqual(
+      [],
+    );
     unmount();
 
     simularRanking({ falhar: true });
@@ -404,7 +402,7 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     );
     const { unmount } = renderizarRota("/status", { usuario: null });
     await screen.findByText("API ok");
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
     unmount();
 
     vi.stubGlobal(

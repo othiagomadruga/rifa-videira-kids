@@ -83,28 +83,11 @@ import {
 import { DICAS as DICAS_VISAO_GERAL } from "../visao-geral/textos";
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-const TELAS_COM_AJUDA = new Set([
-  "Campanha",
-  "Visão geral",
-  "Hierarquia",
-  "Adesão",
-  "Rankings",
-  "Bumbo",
-  "Acessos",
-  "Pedidos",
-  "Pedidos suspeitos",
-  "Trilha",
-  "Mapa",
-  "Conferência",
-]);
-
 async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);
   expect(controlesSemDica()).toEqual([]);
   // RIFA-066: e todo título de seção e todo rótulo de campo com a explicação (mouse no título e toque no "?").
-  // Enquanto as telas recebem a ajuda, uma por commit, a lista diz quais já têm (sai quando todas tiverem).
-  const tela = document.querySelector("h1")?.textContent ?? "";
-  if (TELAS_COM_AJUDA.has(tela)) expect(await titulosSemAjuda()).toEqual([]);
+  expect(await titulosSemAjuda()).toEqual([]);
 }
 
 /** O texto da dica que abre com o mouse parado no controle (e some ao tirar o mouse), como na varredura. */
