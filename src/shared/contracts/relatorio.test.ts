@@ -41,6 +41,7 @@ import {
   montarCsvRelatorio,
   nomeDoArquivoRelatorio,
   pareceFormulaNoCsv,
+  TITULO_POSICAO_RANKING_UNICO,
   tituloDaColuna,
   type ColunaRelatorio,
   type TipoRelatorio,
@@ -277,6 +278,23 @@ describe("D23: tipos e colunas (nomes e ordem)", () => {
       );
     },
   );
+
+  it('RIFA-061 (D27): sem ranking por divisão, só o título da posição muda ("Posição no ranking"); ligado, igual', () => {
+    for (const tipo of TIPOS_RELATORIO)
+      for (const unidade of UNIDADES_META) {
+        const ligado = cabecalhoDoRelatorio(tipo, unidade);
+        expect(cabecalhoDoRelatorio(tipo, unidade, true)).toEqual(ligado);
+        expect(cabecalhoDoRelatorio(tipo, unidade, false)).toEqual(
+          ligado.map((titulo) =>
+            titulo === "Posição na divisão" ? "Posição no ranking" : titulo,
+          ),
+        );
+      }
+    expect(TITULO_POSICAO_RANKING_UNICO).toBe("Posição no ranking");
+    expect(cabecalhoDoRelatorio("celulas", "bilhetes", false)).toContain(
+      "Divisão",
+    );
+  });
 
   it("célula, discipulador e rede: os mesmos totais (meta, pedidos, bilhetes, R$, % da meta e posição), no fim da linha", () => {
     const totais = [

@@ -12,8 +12,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota } from "../../test/renderizar";
 import {
+  CAMPANHA,
   CAMPANHA_EM_REAIS,
   INSTANTES,
+  VENDAS,
   respostaDoBumbo,
   simularApi,
   type ApiDoBumbo,
@@ -238,6 +240,32 @@ describe("CA1: a mensagem do dia", () => {
     // A mensagem pode sair assim mesmo.
     expect(
       screen.getByRole("button", { name: "Copiar mensagem" }),
+    ).toBeInTheDocument();
+  });
+
+  it("RIFA-061 (D27): sem ranking por divisão, a mensagem traz um ranking só, sem _Jovens_ nem _Adultos_ (com e sem vendas)", async () => {
+    const unico = {
+      ...CAMPANHA,
+      ranking: { criterio: "percentual_meta" as const, por_divisao: false },
+    };
+    const { unmount } = abrir({ campanha: unico });
+    const texto = await textoNaTela();
+    expect(texto.textContent).toBe(
+      respostaDoBumbo(INSTANTES.durante, undefined, VENDAS, unico).texto,
+    );
+    expect(texto.textContent).toMatch(/\*Ranking · [^\n]+\*\n1º /);
+    expect(texto.textContent).not.toMatch(/_Jovens_|_Adultos_/);
+    expect(
+      screen.queryByText("Ainda sem vendas no ranking."),
+    ).not.toBeInTheDocument();
+    unmount();
+    vi.unstubAllGlobals();
+
+    abrir({ campanha: unico, vendas: [] });
+    const vazio = await textoNaTela();
+    expect(vazio.textContent).toMatch(/\*\nAinda sem vendas\.\n/);
+    expect(
+      screen.getByText("Ainda sem vendas no ranking."),
     ).toBeInTheDocument();
   });
 

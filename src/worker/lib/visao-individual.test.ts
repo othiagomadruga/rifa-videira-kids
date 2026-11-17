@@ -7,7 +7,8 @@
 //   primeiros conferem com montarRankingPublico e cada ponto da curva com o percentual da meta e o esperado do
 //   painel no fim daquele dia;
 // - com meta em centavos, nenhuma quantidade na unidade da meta (seria dinheiro) e os bilhetes de hoje somados;
-// - `eu` vem pelo id, `diferenca` sai sempre null e o alvo sem células fica fora do ranking.
+// - `eu` vem pelo id, `diferenca` sai sempre null e o alvo sem células fica fora do ranking;
+// - sem ranking por divisão (RIFA-061, D27), o mesmo, com o ranking de todos no lugar do da divisão.
 import { describe, expect, it } from "vitest";
 import {
   CRITERIOS_RANKING,
@@ -17,6 +18,7 @@ import {
   montarRankingPainel,
   montarRankingPublico,
   montarResumoPainel,
+  rankingPorDivisao,
   respostaVisaoIndividualSchema,
   somarDias,
   type Alvo,
@@ -114,13 +116,20 @@ function campanhaCom(opcoes: {
   regra?: RegraMeta;
   criterio?: CriterioRanking;
   limite?: number | null;
+  /** RIFA-061 (D27): ausente, como a campanha de antes da opção (separa). */
+  porDivisao?: boolean;
 }): CampanhaCalculo {
   const unidade = opcoes.unidade ?? "bilhetes";
   const regra = opcoes.regra ?? "por_pessoa";
   return campanhaEntradaSchema.parse({
     ...DADOS_CAMPANHA,
     meta: { unidade, regra, valor: VALOR_DA_META[unidade][regra] },
-    ranking: { criterio: opcoes.criterio ?? "percentual_meta" },
+    ranking: {
+      criterio: opcoes.criterio ?? "percentual_meta",
+      ...(opcoes.porDivisao === undefined
+        ? {}
+        : { por_divisao: opcoes.porDivisao }),
+    },
     publico: {
       mostra_percentual_meta: false,
       limite_ranking: opcoes.limite === undefined ? 3 : opcoes.limite,
@@ -288,10 +297,12 @@ function conferirContraOPainel(
     agora,
     quem.divisao,
   );
+  // Sem ranking por divisão (D27), os montadores ignoram a divisão: o "da divisão" esperado já é o de todos.
   expect(visao.ranking).toEqual({
     nivel: quem.tipo,
     janela: geral.janela,
     criterio: entrada.campanha.ranking.criterio,
+    ...(rankingPorDivisao(entrada.campanha) ? {} : { por_divisao: false }),
     geral: geral.posicao,
     divisao: naDivisao.posicao,
     primeiros: expect.any(Array),
@@ -413,6 +424,41 @@ describe("montarVisaoIndividual: schema e números do painel em todos os cenári
               }
         });
 
+  // RIFA-061 (D27): um teste por regra e critério (como os de cima), para cada um caber no tempo do teste sob carga.
+  for (const regra of REGRAS_META)
+    for (const criterio of CRITERIOS_RANKING)
+      it(`RIFA-061 (D27): sem ranking por divisão, ${regra}, critério ${criterio}: todos os alvos, fases e janelas conferem com os montadores (o de todos)`, () => {
+        const entrada = entradaEsperada(
+          campanhaCom({ regra, criterio, porDivisao: false }),
+        );
+        for (const [fase, agora] of Object.entries(INSTANTES))
+          for (const periodo of JANELAS_RANKING)
+            for (const quem of ALVOS) {
+              const visao = visaoDe(entrada, quem, periodo, agora);
+              try {
+                conforme(visao);
+                conferirContraOPainel(visao, entrada, quem, periodo, agora);
+                expect(visao.ranking.por_divisao).toBe(false);
+                expect(visao.ranking.divisao).toEqual(visao.ranking.geral);
+              } catch (erro) {
+                throw new Error(
+                  `${fase}, ${periodo}, ${quem.tipo} ${quem.id}: ${String(erro)}`,
+                  { cause: erro },
+                );
+              }
+            }
+      });
+
+  it("RIFA-061 (D27): ligada (true ou ausente), a visão é a de sempre, sem a marca", () => {
+    for (const porDivisao of [undefined, true])
+      for (const quem of ALVOS) {
+        const entrada = entradaEsperada(campanhaCom({ porDivisao }));
+        const visao = visaoDe(entrada, quem, "atual", AGORA);
+        expect(visao.ranking).not.toHaveProperty("por_divisao");
+        expect(visao).toEqual(visaoDe(entradaEsperada(), quem, "atual", AGORA));
+      }
+  });
+
   it("limite do público: null mostra todos os que venderam; 1 só o primeiro (com empates)", () => {
     for (const limite of [null, 1, 3])
       for (const periodo of JANELAS_RANKING)
@@ -497,6 +543,28 @@ describe("montarVisaoIndividual: o que a visão mostra de cada alvo", () => {
     const davi = adulta.equipe.find((item) => item.id === 40)!;
     expect(davi.posicao_divisao).toBeNull();
     expect(davi.desempenho.campanha.situacao).toBe("sem_meta");
+  });
+
+  it("RIFA-061 (D27): sem ranking por divisão, a rede adulta vê as posições entre todos (células e discipuladores) e os primeiros de todos", () => {
+    const unico = entradaEsperada(campanhaCom({ porDivisao: false }));
+    const adulta = visaoDe(unico, alvo("rede", 2), "atual", AGORA);
+    const separada = visaoDe(entrada, alvo("rede", 2), "atual", AGORA);
+    // Dorcas é a 1ª dos adultos e a 2ª de todas; Caleb é o 1º dos adultos e o 3º de todos (Abel e Boaz na frente).
+    const posicao = (visao: RespostaVisaoIndividual, id: number) =>
+      visao.equipe.find((item) => item.id === id)!.posicao_divisao;
+    expect([posicao(separada, 4), posicao(adulta, 4)]).toEqual([1, 2]);
+    expect([posicao(separada, 30), posicao(adulta, 30)]).toEqual([1, 3]);
+    expect(adulta.ranking.divisao).toEqual(adulta.ranking.geral);
+    // Os primeiros da Betel (líder dos jovens) passam a ter a Dorcas, dos adultos.
+    const betel = visaoDe(unico, alvo("celula", 2), "atual", AGORA);
+    expect(betel.ranking.primeiros.map((item) => item.nome)).toContain(
+      "Célula Dorcas",
+    );
+    expect(
+      visaoDe(entrada, alvo("celula", 2), "atual", AGORA).ranking.primeiros.map(
+        (item) => item.nome,
+      ),
+    ).not.toContain("Célula Dorcas");
   });
 
   it("alvo sem células (discipulador Davi): fora do ranking, sem curva e sem equipe", () => {

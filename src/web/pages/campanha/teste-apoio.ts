@@ -5,6 +5,7 @@ import {
   ACESSO_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
+  RANKING_POR_DIVISAO_PADRAO,
   calcularCalendario,
   respostaCampanhaSchema,
   somarPercentuais,
@@ -36,7 +37,11 @@ export function campanhaDaEntrada(
       ...calendario.periodos[indice],
     })),
     soma_percentuais_bp: somarPercentuais(entrada.periodos),
-    ranking: entrada.ranking,
+    // RIFA-061: a API devolve sempre a opção (ausente no PUT, o padrão).
+    ranking: {
+      criterio: entrada.ranking.criterio,
+      por_divisao: entrada.ranking.por_divisao ?? RANKING_POR_DIVISAO_PADRAO,
+    },
     publico: entrada.publico ?? {
       mostra_percentual_meta: false,
       limite_ranking: 3,

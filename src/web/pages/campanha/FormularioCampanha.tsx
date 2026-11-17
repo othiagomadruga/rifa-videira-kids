@@ -59,7 +59,13 @@ import {
 } from "./RegrasDoAdmin";
 import { ResumoRegras } from "./ResumoRegras";
 import { SituacaoCampanha } from "./SituacaoCampanha";
-import { DICAS, TEXTO_CRITERIO, TEXTO_REGRA, TEXTO_UNIDADE } from "./textos";
+import {
+  DICAS,
+  TEXTO_CRITERIO,
+  TEXTO_POR_DIVISAO,
+  TEXTO_REGRA,
+  TEXTO_UNIDADE,
+} from "./textos";
 
 type Confirmacao =
   | { tipo: "ativar"; corpo: CorpoCampanha }
@@ -532,6 +538,48 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   ))}
                 </Select>
               </ComDica>
+
+              {/* RIFA-061 (D27): como as chaves da campanha, a caixa e uma linha do que acontece ligada e desligada. */}
+              <div className="campanha-chave campanha-chave--ranking">
+                <ComDica
+                  id={`${idDoCampo("ranking.por_divisao")}-dica`}
+                  texto={DICAS.porDivisao}
+                >
+                  <label
+                    className="campanha-opcao"
+                    htmlFor={idDoCampo("ranking.por_divisao")}
+                  >
+                    <input
+                      id={idDoCampo("ranking.por_divisao")}
+                      type="checkbox"
+                      checked={formulario.ranking_por_divisao}
+                      aria-describedby={`${idDoCampo("ranking.por_divisao")}-explicacao ${idDoCampo("ranking.por_divisao")}-dica`}
+                      onChange={(evento) =>
+                        alterar(
+                          { ranking_por_divisao: evento.target.checked },
+                          "ranking.por_divisao",
+                        )
+                      }
+                    />
+                    <span>{TEXTO_POR_DIVISAO.rotulo}</span>
+                  </label>
+                </ComDica>
+                <p
+                  id={`${idDoCampo("ranking.por_divisao")}-explicacao`}
+                  className="campanha-chave__explicacao"
+                >
+                  <span className="campanha-chave__estado">
+                    {formulario.ranking_por_divisao
+                      ? TEXTO_POR_DIVISAO.ligada
+                      : TEXTO_POR_DIVISAO.desligada}
+                  </span>{" "}
+                  <span className="campanha-texto-suave">
+                    {formulario.ranking_por_divisao
+                      ? TEXTO_POR_DIVISAO.desligada
+                      : TEXTO_POR_DIVISAO.ligada}
+                  </span>
+                </p>
+              </div>
 
               <div className="campanha-publico">
                 <h3 className="campanha-subtitulo">O que o público vê</h3>

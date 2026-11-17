@@ -212,7 +212,7 @@ export const DICAS = {
   redeDoDiscipulador:
     "Mude quando o discipulador passar para outra rede. Ele e as células dele ficam com a divisão da rede nova.",
   divisaoDaRede:
-    "Jovens ou Adultos. O painel, os rankings e o mapa podem ser filtrados por divisão.",
+    "Jovens ou Adultos. O painel e o mapa podem ser filtrados por divisão; os rankings separam as duas se a Campanha estiver assim.",
   responsavel:
     "Quem responde pela rede. Aparece na tabela das redes. Pode ficar em branco.",
   cancelarEdicao: "Fecha sem salvar. Nada muda na hierarquia.",

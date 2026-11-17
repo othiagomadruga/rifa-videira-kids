@@ -5,7 +5,15 @@
 // normalizada e erros fora do cache.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   DIAS_DO_BUMBO_DEPOIS_DO_FIM,
   JANELAS_RANKING,
@@ -31,6 +39,7 @@ import {
   CAMPOS_PUBLICOS,
   CAMPO_DE_VALOR,
   DADOS_CAMPANHA,
+  DADOS_CAMPANHA_RANKING_UNICO,
   TEXTO_DE_VALOR,
   bancoQueConta,
   camposDe,
@@ -449,6 +458,55 @@ describe("GET /api/publico/bumbo: a data fica na janela da campanha (do 1º dia 
     expect(contagem.linhasLidas).toBeGreaterThan(0);
     expect(await pedir("/api/publico/bumbo?data=2026-11-30")).toBe(200);
     expect(contagem.idas).toBe(3 + 3);
+  });
+});
+
+describe("RIFA-061 (D27): sem ranking por divisão, um ranking só, de todas as células", () => {
+  const unico = DADOS_CAMPANHA_RANKING_UNICO;
+
+  beforeAll(async () => {
+    await semearCenario({ campanha: unico });
+  });
+  afterAll(async () => {
+    await semearCenario();
+  });
+
+  it.each(CONSULTAS)(
+    "%o responde o ranking de todas (a divisão pedida é ignorada), com a marca por_divisao: false",
+    async (consulta) => {
+      const corpo = await rankingPublico(parametros(consulta));
+      expect(corpo).toEqual(
+        montarRankingPublico(
+          entradaEsperada(unico),
+          { nivel: consulta.nivel, periodo: consulta.periodo },
+          AGORA,
+        ),
+      );
+      expect(corpo.por_divisao).toBe(false);
+      expect(corpo.divisao).toBeNull();
+    },
+  );
+
+  it("jovens, adultos e sem divisão dão a mesma lista: as posições de todas, com o empate (1, 2, 3, 3)", async () => {
+    const todas = await rankingPublico();
+    expect(todas.itens).toEqual([
+      { posicao: 1, nome: "Célula Betel", divisao: "jovens" },
+      { posicao: 2, nome: "Célula Dorcas", divisao: "adultos" },
+      { posicao: 3, nome: "Célula Ágape", divisao: "jovens" },
+      { posicao: 3, nome: "Célula Canaã", divisao: "jovens" },
+    ]);
+    expect(await rankingPublico("?divisao=jovens")).toEqual(todas);
+    expect(await rankingPublico("?divisao=adultos")).toEqual(todas);
+  });
+
+  it("o bumbo traz um ranking só, sem o título das divisões", async () => {
+    const { texto } = await bumbo();
+    expect(texto).not.toContain("_Jovens_");
+    expect(texto).not.toContain("_Adultos_");
+    expect(texto).toContain("*Ranking · Semana 2 (até ontem)*");
+    expect(await bumbo()).toEqual(
+      montarBumbo(entradaEsperada(unico), {}, AGORA),
+    );
   });
 });
 

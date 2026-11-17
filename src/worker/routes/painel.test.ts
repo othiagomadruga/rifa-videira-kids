@@ -4,7 +4,15 @@
 // (é do index.ts; protecao.test.ts confere no app real).
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   JANELAS_RANKING,
   NIVEIS_RANKING,
@@ -22,6 +30,7 @@ import { erroNaoTratado, rotaInexistente } from "../lib/respostas-erro";
 import {
   AGORA,
   DADOS_CAMPANHA,
+  DADOS_CAMPANHA_RANKING_UNICO,
   entradaEsperada,
   limparBanco,
   semearCenario,
@@ -441,6 +450,65 @@ describe("GET /api/painel/ranking", () => {
     expect(erro.detalhes).toEqual([
       expect.objectContaining({ caminho: ["data"], codigo: "data_futura" }),
     ]);
+  });
+});
+
+describe("RIFA-061 (D27): GET /api/painel/ranking sem ranking por divisão", () => {
+  const unico = DADOS_CAMPANHA_RANKING_UNICO;
+
+  beforeAll(async () => {
+    await semearCenario({ campanha: unico });
+  });
+  afterAll(async () => {
+    await semearCenario();
+  });
+
+  it.each(NIVEIS_RANKING)(
+    "nível %s: com jovens, adultos ou sem divisão, o ranking de todos, com a marca e divisao null",
+    async (nivel) => {
+      const todos = montarRankingPainel(
+        entradaEsperada(unico),
+        { nivel, periodo: "atual" },
+        AGORA,
+      );
+      expect(todos.por_divisao).toBe(false);
+      for (const divisao of ["", "&divisao=jovens", "&divisao=adultos"])
+        expect(await ranking(`?nivel=${nivel}${divisao}`)).toEqual(todos);
+    },
+  );
+
+  it("as posições, os vizinhos e a situação valem entre todas as células (Dorcas, dos adultos, em 2º entre jovens)", async () => {
+    const corpo = await ranking("?divisao=adultos");
+    expect(corpo.divisao).toBeNull();
+    expect(
+      corpo.itens.map((item) => [item.posicao, item.nome, item.divisao]),
+    ).toEqual([
+      [1, "Célula Betel", "jovens"],
+      [2, "Célula Dorcas", "adultos"],
+      [3, "Célula Ágape", "jovens"],
+      [3, "Célula Canaã", "jovens"],
+      [5, "Célula Éfeso", "adultos"],
+    ]);
+    expect(corpo.itens[1].acima).toMatchObject({ nome: "Célula Betel" });
+  });
+
+  it("o resumo do painel não muda: o recorte por divisão continua (é recorte, não ranking)", async () => {
+    const corpo = await resumo("?escopo=divisao&divisao=adultos");
+    expect(corpo.escopo).toMatchObject({ tipo: "divisao", divisao: "adultos" });
+    expect(corpo).toEqual(
+      montarResumoPainel(
+        entradaEsperada(unico),
+        {
+          escopo: {
+            tipo: "divisao",
+            id: null,
+            divisao: "adultos",
+            nome: corpo.escopo.nome,
+          },
+        },
+        AGORA,
+      ),
+    );
   });
 });
 

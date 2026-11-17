@@ -10,6 +10,12 @@ import type {
   ItemRanking,
   NivelRanking,
 } from "../../../shared/contracts/calculos";
+import { dicaDe } from "../../test/dicas";
+import {
+  chegarPeloTab,
+  esperarDisponivel,
+  esperarIndisponivel,
+} from "../../test/indisponivel";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
   item,
@@ -637,5 +643,96 @@ describe("CA1: ranking da coordenação (/coordenacao/rankings)", () => {
     expect(anuncio()).toHaveTextContent(
       "1 célula no ranking: Semana 2, Jovens.",
     );
+  });
+});
+
+describe("RIFA-061 (D27): sem ranking por divisão", () => {
+  /** A API ignora a divisão pedida: o ranking de todos, com divisao null e a marca. */
+  const unico: Responder = (consulta) =>
+    respostaDaConsulta(consulta, CELULAS, {
+      divisao: null,
+      por_divisao: false,
+    });
+
+  it("uma lista só, de todas as células, sem a divisão na legenda nem no vínculo; o filtro fica no lugar, indisponível, com a dica", async () => {
+    abrir(TELA, unico);
+    await tabela();
+
+    expect(screen.getByRole("table")).toHaveAccessibleName(
+      "Ranking: células · Semana 2",
+    );
+    expect(posicoes()).toEqual(["1º", "2º", "3º", "4º", "5º"]);
+    // A célula dos adultos no meio das dos jovens, sem "Adultos" no vínculo.
+    expect(lerLinha(linhas()[1]).nome).toBe(
+      "Célula Ficticia 03, Discipulador Ficticio B · Rede Adulta Ficticia",
+    );
+    expect(painel()).not.toHaveTextContent(/Jovens|Adultos/);
+
+    const divisao = campo("Divisão");
+    esperarIndisponivel(divisao);
+    expect([...divisao.options].map((opcao) => opcao.text)).toEqual([
+      "Todas as células",
+    ]);
+    chegarPeloTab(divisao);
+    expect(dicaDe(divisao)).toHaveTextContent(
+      "Indisponível: a campanha usa um ranking só, com todas as células juntas. Para separar Jovens e Adultos, ligue a opção na tela Campanha.",
+    );
+  });
+
+  it("a URL com uma divisão (de antes) mostra o ranking de todos, e mudar o filtro não faz nada", async () => {
+    const { roteador } = abrir(`${TELA}?divisao=adultos`, unico);
+    await tabela();
+    expect(posicoes()).toHaveLength(5);
+    expect(campo("Divisão").value).toBe("");
+    const pedidos = api.caminhos.length;
+    fireEvent.change(campo("Divisão"), { target: { value: "jovens" } });
+    expect(roteador.state.location.search).toBe("?divisao=adultos");
+    expect(api.caminhos).toHaveLength(pedidos);
+  });
+
+  it("no nível rede, a rede fica sem a divisão no vínculo", async () => {
+    abrir(`${TELA}?nivel=rede`, (consulta) =>
+      respostaDaConsulta(
+        consulta,
+        [
+          item({
+            posicao: 1,
+            id: 1,
+            nome: "Rede Jovem Ficticia",
+            realizado: 9,
+            meta: 51,
+            esperado: 9,
+            nivel: "rede",
+          }),
+          item({
+            posicao: 2,
+            id: 2,
+            nome: "Rede Adulta Ficticia",
+            realizado: 5,
+            meta: 66,
+            esperado: 11,
+            divisao: "adultos",
+            nivel: "rede",
+          }),
+        ],
+        { divisao: null, por_divisao: false },
+      ),
+    );
+    await tabela();
+    expect(linhas().map((linha) => lerLinha(linha).nome)).toEqual([
+      "Rede Jovem Ficticia",
+      "Rede Adulta Ficticia",
+    ]);
+  });
+
+  it("ligada (sem a marca na resposta), o filtro de sempre, disponível", async () => {
+    abrir();
+    await tabela();
+    esperarDisponivel(campo("Divisão"));
+    expect([...campo("Divisão").options].map((opcao) => opcao.text)).toEqual([
+      "Todas",
+      "Jovens",
+      "Adultos",
+    ]);
   });
 });

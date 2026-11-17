@@ -31,6 +31,7 @@ import {
 import {
   AGORA,
   DADOS_CAMPANHA,
+  DADOS_CAMPANHA_RANKING_UNICO,
   PEDIDOS,
   aprovado,
   desconsiderado,
@@ -330,6 +331,53 @@ function conferirContas(arquivos: Record<TipoRelatorio, string>): Totais {
   expect(somar(registros("ddd", arquivos.ddd).map(vendas))).toEqual(totais);
   return totais;
 }
+
+describe("RIFA-061 (D27): sem ranking por divisão, o relatório segue o ranking de todos", () => {
+  beforeAll(async () => {
+    await semearCenario({
+      pedidos: PEDIDOS_COM_TELEFONE,
+      campanha: DADOS_CAMPANHA_RANKING_UNICO,
+    });
+  });
+
+  it('células: uma lista só, na ordem do ranking de todas, com "Posição no ranking" (a coluna Divisão continua)', async () => {
+    expect(await baixar("celulas")).toBe(
+      "﻿" +
+        "Divisão;Rede;Discipulador;Célula;Líder;Meta (bilhetes);Pedidos aprovados;Bilhetes;Arrecadação (R$);% da meta;" +
+        "Posição no ranking\r\n" +
+        "Jovens;Rede Jovem Ficticia;Discipulador Abel;Célula Ágape;Líder da Célula Ágape;120;9;48;960,00;40,00;1\r\n" +
+        "Jovens;Rede Jovem Ficticia;Discipulador Abel;Célula Betel;Líder da Célula Betel;60;4;18;360,00;30,00;2\r\n" +
+        "Adultos;Rede Adulta Ficticia;Discipulador Caleb;Célula Dorcas;Líder da Célula Dorcas;200;5;47;924,00;23,50;3\r\n" +
+        "Jovens;Rede Jovem Ficticia;Discipulador Boaz;Célula Canaã;Líder da Célula Canaã;120;3;24;480,00;20,00;4\r\n" +
+        "Adultos;Rede Adulta Ficticia;Discipulador Caleb;Célula Éfeso;Líder da Célula Éfeso;100;1;5;100,00;5,00;5\r\n",
+    );
+  });
+
+  it("todos os tipos com o cabeçalho do contrato para a opção desligada; discipuladores e redes numa lista só", async () => {
+    for (const tipo of TIPOS_RELATORIO) {
+      const csv = await baixar(tipo);
+      expect({ tipo, cabecalho: csv.slice(1).split("\r\n")[0] }).toEqual({
+        tipo,
+        cabecalho: cabecalhoDoRelatorio(tipo, "bilhetes", false).join(";"),
+      });
+    }
+    for (const tipo of ["discipuladores", "redes"] as const) {
+      const posicoes = registros(tipo, await baixar(tipo)).map((linha) =>
+        Number((linha as Record<string, string>).posicao_divisao),
+      );
+      expect(posicoes).toEqual([...posicoes].sort((a, b) => a - b));
+      expect(posicoes[0]).toBe(1);
+    }
+  });
+
+  it("as contas continuam fechando entre os arquivos", async () => {
+    expect(conferirContas(await baixarTodos())).toEqual({
+      pedidos: 25,
+      bilhetes: 149,
+      centavos: 296400,
+    });
+  });
+});
 
 describe("CA2: as contas fecham entre os arquivos (cenário do painel com telefones)", () => {
   beforeAll(async () => {

@@ -131,7 +131,8 @@ describe("CA1: o cartão, os tipos, a consulta e o nome do arquivo", () => {
     expect(
       within(grupo).getByRole("radio", { name: "Por célula" }),
     ).toHaveAccessibleDescription(
-      "Cada célula com rede, discipulador, líder, vendas, % da meta e posição na divisão.",
+      // RIFA-061 (D27): neutro, vale com e sem ranking por divisão.
+      "Cada célula com rede, discipulador, líder, vendas, % da meta e posição no ranking.",
     );
 
     expect(botaoBaixar()).toBeEnabled();

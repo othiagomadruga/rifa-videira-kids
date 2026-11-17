@@ -125,6 +125,8 @@ type Cenario = {
   falhas: number;
   /** Erro fixo da API (ex.: 404 sem campanha ativa). */
   erro: { status: number; codigo: string; mensagem: string } | null;
+  /** RIFA-061 (D27): sem ranking por divisão, a API responde `todas` (divisao null e a marca) a qualquer pedido. */
+  todas: ItemRankingPublico[] | null;
 };
 
 let api: { cenario: Cenario; caminhos: string[] };
@@ -135,6 +137,7 @@ function simularApi(cenario: Partial<Cenario> = {}) {
     itens: { jovens: JOVENS, adultos: ADULTOS },
     falhas: 0,
     erro: null,
+    todas: null,
     ...cenario,
   };
   const caminhos: string[] = [];
@@ -162,11 +165,12 @@ function simularApi(cenario: Partial<Cenario> = {}) {
       const resposta: RespostaRankingPublico =
         respostaRankingPublicoSchema.parse({
           nivel: "celula",
-          divisao,
+          divisao: completo.todas ? null : divisao,
+          ...(completo.todas ? { por_divisao: false } : {}),
           janela: JANELAS[periodo],
           criterio: "percentual_meta",
           referencia: completo.referencia,
-          itens: completo.itens[divisao],
+          itens: completo.todas ?? completo.itens[divisao],
           atualizado_em: ATUALIZADO_EM,
         });
       return respostaJson(resposta);
@@ -196,7 +200,7 @@ function textoLido(elemento: Element): string {
 }
 
 /** Os itens da lista de uma divisão, como texto ("1º Célula Ágape", "1º Célula Ágape 75% da meta"). */
-function lista(divisao: "Jovens" | "Adultos"): string[] {
+function lista(divisao: "Jovens" | "Adultos" | "Células"): string[] {
   return within(screen.getByRole("region", { name: divisao }))
     .queryAllByRole("listitem")
     .map(textoLido);
@@ -576,6 +580,82 @@ describe("CA2: o telão (/telao)", () => {
 
 // RIFA-057: o topo em todas as fases. O tamanho do destaque vem do data-fase (telao.css: antes e depois, os textos são
 // mais longos e ficam menores, para caber entre a marca e a hora); o selo do Kids fica na linha do relógio.
+describe("RIFA-061 (D27): sem ranking por divisão, o telão mostra uma lista só, na tela toda", () => {
+  /** `quantas` células de todas, com o % (as duas divisões misturadas). */
+  const todas = (quantas: number) =>
+    Array.from({ length: quantas }, (_, indice) =>
+      itens(indice % 2 === 0 ? "jovens" : "adultos", [
+        indice + 1,
+        `Célula ${indice + 1}`,
+        12_000 - indice * 500,
+      ]),
+    ).flat();
+  const ordem = () => document.querySelector(".telao__lista");
+
+  it("até 5 itens: uma coluna larga, com o título neutro CÉLULAS (sem JOVENS nem ADULTOS) e a escala de sempre", async () => {
+    abrir({ todas: todas(3) });
+    await esperarRanking();
+
+    expect(lista("Células")).toEqual([
+      "1º Célula 1 120% da meta",
+      "2º Célula 2 115% da meta",
+      "3º Célula 3 110% da meta",
+    ]);
+    expect(screen.queryByRole("region", { name: "Jovens" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Adultos" })).toBeNull();
+    expect(screen.queryByText(/nesta divisão/)).toBeNull();
+    expect(screen.getAllByText("% da meta")).toHaveLength(1);
+    expect(document.querySelector(".telao__divisoes")).toHaveAttribute(
+      "data-unica",
+      "",
+    );
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      "3",
+    );
+    expect(ordem()).not.toHaveAttribute("data-colunas");
+    esperarSemNavegacao();
+  });
+
+  it("de 6 a 10 itens: duas colunas da mesma lista, todos à vista, e a escala pelos itens de cada coluna", async () => {
+    abrir({ todas: todas(7) });
+    await esperarRanking();
+
+    expect(lista("Células")).toHaveLength(7);
+    expect(ordem()).toHaveAttribute("data-colunas", "2");
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      "4",
+    );
+    expect(document.querySelector(".telao__resto")).toBeNull();
+  });
+
+  it("6 itens: duas colunas de 4 linhas (4 e 2), nunca a escala de até 3 itens, que cortaria o nome na meia tela", async () => {
+    abrir({ todas: todas(6) });
+    await esperarRanking();
+
+    expect(lista("Células")).toHaveLength(6);
+    expect(ordem()).toHaveAttribute("data-colunas", "2");
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      String(LINHAS_POR_DIVISAO - 1),
+    );
+    expect(document.querySelector(".telao__resto")).toBeNull();
+  });
+
+  it("mais de 10: 8 nas duas colunas (4 em cada) e a linha com os que faltam", async () => {
+    abrir({ todas: todas(14) });
+    await esperarRanking();
+
+    expect(lista("Células")).toHaveLength(2 * (LINHAS_POR_DIVISAO - 1));
+    expect(screen.getByText("e mais 6 células")).toBeInTheDocument();
+    expect(document.querySelector(".telao__disputa")).toHaveAttribute(
+      "data-itens",
+      "7",
+    );
+  });
+});
+
 describe("RIFA-057: o topo do telão em todas as fases", () => {
   const fase = () => document.querySelector(".telao__fase");
 

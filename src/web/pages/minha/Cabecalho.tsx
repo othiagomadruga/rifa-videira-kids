@@ -14,9 +14,13 @@ const ROTULO_DO_ALVO: Record<Alvo["tipo"], string> = {
   rede: "Rede",
 };
 
-/** "Célula · Jovens". */
-export function descricaoDoAlvo(alvo: Pick<Alvo, "tipo" | "divisao">): string {
-  return `${ROTULO_DO_ALVO[alvo.tipo]} · ${NOMES_DIVISAO[alvo.divisao]}`;
+/** "Célula · Jovens"; sem ranking por divisão (D27), só "Célula". */
+export function descricaoDoAlvo(
+  alvo: Pick<Alvo, "tipo" | "divisao">,
+  porDivisao = true,
+): string {
+  const tipo = ROTULO_DO_ALVO[alvo.tipo];
+  return porDivisao ? `${tipo} · ${NOMES_DIVISAO[alvo.divisao]}` : tipo;
 }
 
 // O cabeçalho da visão individual: o alvo (o <h1> e o título da aba), o tipo e a divisão dele e quem entrou.
@@ -24,10 +28,13 @@ export function descricaoDoAlvo(alvo: Pick<Alvo, "tipo" | "divisao">): string {
 export function Cabecalho({
   alvo,
   nome,
+  porDivisao = true,
 }: {
   alvo: Alvo | null;
   /** Quem entrou (o nome do usuário da sessão). */
   nome: string;
+  /** D27: a campanha separa o ranking por divisão (antes da visão chegar, o padrão). */
+  porDivisao?: boolean;
 }) {
   return (
     <PageHeader
@@ -36,7 +43,7 @@ export function Cabecalho({
         <>
           {alvo && (
             <span className="minha-cabecalho__alvo">
-              {descricaoDoAlvo(alvo)}
+              {descricaoDoAlvo(alvo, porDivisao)}
             </span>
           )}{" "}
           <span className="minha-cabecalho__pessoa">

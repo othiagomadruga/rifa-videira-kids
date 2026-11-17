@@ -481,6 +481,11 @@ export type Cenario = {
   /** Líder: a célula lidera a divisão (sem ninguém acima). */
   primeiroLugar?: boolean;
   criterio?: CriterioRanking;
+  /**
+   * RIFA-061 (D27): false = a campanha não separa o ranking por divisão. A resposta vem com a marca, a posição "na
+   * divisão" igual à geral e as posições da equipe as de todos (aqui, as mesmas do cenário).
+   */
+  porDivisao?: boolean;
 };
 
 /** A resposta de GET /api/minha/visao no cenário, conferida pelo schema do contrato. */
@@ -494,6 +499,7 @@ export function visaoDe(cenario: Cenario = {}): RespostaVisaoIndividual {
     afiliados = 2,
     primeiroLugar = false,
     criterio = "percentual_meta",
+    porDivisao = true,
   } = cenario;
   const desempenho = (numeros: Numeros) => {
     const calculado = desempenhoDe(numeros, fase);
@@ -667,8 +673,9 @@ export function visaoDe(cenario: Cenario = {}): RespostaVisaoIndividual {
       nivel: alvo.tipo,
       janela: JANELAS[fase],
       criterio,
-      geral,
-      divisao,
+      ...(porDivisao
+        ? { geral, divisao }
+        : { por_divisao: false, geral, divisao: geral }),
       primeiros,
     },
     equipe,
@@ -771,6 +778,12 @@ export function todosOsCenarios(): [string, Cenario][] {
             { papel, fase, unidade, semCelulas: true },
           ]);
       }
+  // RIFA-061 (D27): sem ranking por divisão, nos três papéis.
+  for (const papel of ["lider", "discipulador", "rede"] as const)
+    lista.push([
+      `${papel}, ranking único (D27)`,
+      { papel, porDivisao: false, unidade: "centavos" },
+    ]);
   for (const unidade of ["bilhetes", "centavos"] as const) {
     lista.push([`lider sem vendas, ${unidade}`, { semVendas: true, unidade }]);
     lista.push([
