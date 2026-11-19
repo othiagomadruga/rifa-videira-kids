@@ -1,10 +1,11 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
-// 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql e 0015_senha_admin.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
-// testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010, a 0011, a 0012 e a 0013 também são aplicadas num
-// D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua
-// lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061; RIFA-064).
+// 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql, 0014_codigo_afiliado_rifei.sql e 0015_senha_admin.sql),
+// aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006 até a 0015 também são
+// aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que
+// existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061;
+// RIFA-064; RIFA-070; RIFA-073).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -2100,7 +2101,7 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       );
       await applyD1Migrations(db, ate0012);
       antes = await fotografarTodasAsTabelas(db);
-      // Até a 0013: a 0015 (RIFA-073) é aplicada depois, no describe dela (abaixo).
+      // Até a 0013: a 0014 (RIFA-070) e a 0015 (RIFA-073) são aplicadas depois, nos describes delas (abaixo).
       await applyD1Migrations(
         db,
         TEST_MIGRATIONS.filter((migracao) => migracao.name < "0014"),
@@ -2363,6 +2364,109 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       await expect(inserir(outro!.id, "pastor")).rejects.toThrow(
         /UNIQUE constraint failed/,
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0014 (RIFA-070, D32): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0014 sobre dados que já existiam (RIFA-070)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0013 (aqui vale também rodando este sozinho).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0014"),
+      );
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0014 foi aplicada por último, sobre os dados (com afiliados gravados)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0014_codigo_afiliado_rifei.sql",
+      );
+      expect(antes.afiliados.length).toBeGreaterThan(0);
+      expect(antes.afiliados[0]).not.toHaveProperty("codigo_rifei");
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada afiliado ganha só codigo_rifei, NULL", async () => {
+      const {
+        afiliados,
+        rifei_conexao: conexao,
+        ...depois
+      } = await fotografarTodasAsTabelas(db);
+      const { afiliados: afiliadosAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      // A tabela nova (D32) nasce vazia: o token só chega quando o admin cola na tela.
+      expect(conexao).toEqual([]);
+      expect(afiliados).toEqual(
+        afiliadosAntes.map((afiliado) => ({ ...afiliado, codigo_rifei: null })),
+      );
+    });
+
+    it("rifei_conexao: uma linha só, o token só no formato cifrado e os instantes no formato único", async () => {
+      const inserir = (
+        id: number,
+        cifrado: string,
+        final: string,
+        em: string,
+      ) =>
+        db
+          .prepare(
+            "INSERT INTO rifei_conexao (id, token_cifrado, final_token, conectado_em) VALUES (?1, ?2, ?3, ?4)",
+          )
+          .bind(id, cifrado, final, em)
+          .run();
+      const cifrado = `v1:${"A".repeat(16)}:${"B".repeat(40)}`;
+      const em = "2026-11-19T12:00:00.000Z";
+      await inserir(1, cifrado, "abcd", em);
+      onTestFinished(async () => {
+        await db.prepare("DELETE FROM rifei_conexao").run();
+      });
+      await expect(inserir(2, cifrado, "abcd", em)).rejects.toThrow(/CHECK/);
+      await db.prepare("DELETE FROM rifei_conexao").run();
+      // Token em claro (sem o "v1:"), final de outro tamanho e instante fora do formato: recusados.
+      await expect(
+        inserir(
+          1,
+          "eyJhbGciOiJIUzI1NiJ9.token-em-claro.assinatura",
+          "abcd",
+          em,
+        ),
+      ).rejects.toThrow(/CHECK/);
+      await expect(inserir(1, cifrado, "abc", em)).rejects.toThrow(/CHECK/);
+      await expect(inserir(1, cifrado, "abcd", "19/11/2026")).rejects.toThrow(
+        /CHECK/,
+      );
+    });
+
+    it("o CHECK: o código tem de 1 a 120 caracteres", async () => {
+      const affiliateId = (await db
+        .prepare(
+          "SELECT affiliate_id FROM afiliados ORDER BY affiliate_id LIMIT 1",
+        )
+        .first<{ affiliate_id: number }>())!.affiliate_id;
+      const gravar = (codigo: string | null) =>
+        db
+          .prepare(
+            "UPDATE afiliados SET codigo_rifei = ?1 WHERE affiliate_id = ?2",
+          )
+          .bind(codigo, affiliateId)
+          .run();
+      onTestFinished(async () => {
+        await gravar(null);
+      });
+      for (const codigo of ["", "x".repeat(121)])
+        await expect(gravar(codigo)).rejects.toThrow(/CHECK constraint failed/);
+      await gravar("lider-da-celula");
+      await gravar("x".repeat(120));
     });
   });
 });

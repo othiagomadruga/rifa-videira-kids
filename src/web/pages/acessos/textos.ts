@@ -353,6 +353,8 @@ export const DICAS = {
     "As pessoas que entram na área da coordenação (admin e coordenação), com os links de cada uma.",
   abaHierarquia:
     "Os links pessoais dos líderes, discipuladores e redes. Quem entra por eles vê só a própria visão, sem valores em R$.",
+  abaConexaoRifei:
+    "O token do seu login na Rifei, para o sistema marcar os pedidos como pagos lá por você.",
   abaWebhook:
     "O token que a Rifei usa para mandar as vendas ao sistema. Ele é gerado aqui e colado na Rifei.",
   novaPessoa:

@@ -551,3 +551,73 @@ Ordem: devolva na Efí → remova ou ajuste o pedido na Rifei, se der (**antes d
 9. Quando eu marco um pedido como pago à mão (Pix manual), a Rifei manda o evento `paid_order` no webhook, com o afiliado do pedido?
 
 Se perguntar, passe as respostas ao SM, para a seção 9 e o DevMission.
+
+## 13. API interna do painel da Rifei (RIFA-070, D32)
+
+A Rifei não tem API pública, mas o painel (`app.rifei.com.br`) é um site que chama `https://api.rifei.com.br/` com o
+token do login. O sistema usa as mesmas chamadas, pelo admin, para marcar pagos os pedidos da Conferência do extrato,
+sincronizar os afiliados e gerar os convites (D32; rotas em [api.md](api.md#api-interna-da-rifei-rifa-070-docsdecisionsmd-d29)).
+
+### 13.1 O que foi mapeado (código do painel, 17/11/2026)
+
+| Uso | Chamada do painel |
+|---|---|
+| Login (com captcha) | `POST auth/login { email, password, recaptcha_token \| turnstile_token }` → `token.token` |
+| Campanha pelo slug | `GET raffles/<slug>` → `id`, `version`, `time_to_expire_orders` |
+| Aprovar (só aprova) | `PUT raffles/orders/many { orders: [id] }` |
+| Alternar aprovar/desaprovar (não usado) | `PUT raffles/<raffleId>/orders/<id>` sem corpo |
+| Conferir um pedido | `GET raffles/<raffleId>/orders/<id>` |
+| Restaurar expirado | `PUT [v2/]raffles/expired-orders/<id>/restore` |
+| Afiliados da conta | `GET my-affiliates` → `affiliate_id`, `code`, `affiliate.{name,email}` |
+| Convite de afiliado | `POST affiliates { commission_type, commission_value, products_type, products }` → `{ link }` |
+
+Cabeçalhos: `Authorization: Bearer <token>`, `x-rate-limit: true`. O link de vendas do afiliado é
+`https://rifei.com.br/<slug>?ref=<code>` (a página da campanha lê o `ref`). A campanha do Projeto Kids expira a reserva
+em 24 h (`time_to_expire_orders: 1440`): o extrato do dia anterior pode achar pedidos já expirados, que a marcação
+restaura. Para reduzir isso, o PO pode subir o prazo da reserva no painel da Rifei.
+
+### 13.2 Configurar o token (admin, pela tela; RIFA-070 revisão, D32)
+
+O token vai pela tela **Acessos → Conexão com a Rifei** (o PO não usa terminal). O sistema testa o token na Rifei
+(`GET raffles/<slug>` da campanha ativa) e só guarda se a Rifei aceitar, **cifrado** no D1 (AES-GCM com a chave do
+segredo do Worker `RIFEI_CHAVE_CIFRA`, que o SM cria uma vez: lancamento.md 3.7). O token nunca volta ao navegador,
+ao log nem à trilha: a tela mostra só desde quando, os 4 últimos caracteres, o último teste ok, a recusa da Rifei e a
+validade, se o próprio token trouxer (`exp` de um JWT). O segredo `RIFEI_API_TOKEN` (terminal) continua valendo só
+quando não há token da tela.
+
+1. Numa **janela anônima**, entre em `app.rifei.com.br` com a conta da campanha (o captcha é feito à mão).
+2. F12 → Console: `copy(decodeURIComponent(document.cookie.match(/auth_token=([^;]+)/)[1]))` (o token vai para a área
+   de transferência; não cole em chat, e-mail ou WhatsApp).
+3. Cole em **Acessos → Conexão com a Rifei** e toque em **Salvar e testar**.
+4. **Feche a janela anônima sem clicar em "Sair"**: o "Sair" da Rifei (`auth/logout`) invalida o token.
+
+Toda chamada real à Rifei grava o resultado na linha da conexão: sucesso → `testado_em` (e limpa a recusa); 401/403
+→ `recusado_em` (a primeira recusa). A tela de Conexão e o topo do Extrato do banco mostram "Conectado: testado …" ou
+"A Rifei recusou o token: cole um novo". Trocar e apagar também pela tela (trilha `rifei.conectar` e
+`rifei.desconectar`, só com o final do token).
+
+### 13.3 Como usar
+
+- **Conferência → Extrato do banco:** em "Para marcar como pago na Rifei", cada pedido tem uma caixa (todas marcadas
+  ao abrir; **Selecionar todos**/**Desmarcar todos**). **Marcar N selecionados como pago na Rifei** pede confirmação
+  com os números; depois, a tabela mostra o resultado de cada pedido (marcado, já estava pago, expirado e restaurado,
+  a Rifei não marcou ou falhou, com o motivo) e **Atualizar** confere se o webhook chegou. **Marcar um pedido à mão**
+  acha o pedido da campanha pelo número do pedido ou de um bilhete (`pedidos.numeros`), mostra célula, bilhetes,
+  valor e situação e marca com confirmação (pedido já pago: avisa; não achou: diz o que conferir). Só admin. O
+  **Copiar os números** continua ao lado (caminho manual).
+- **Adesão → Afiliados na Rifei:** **Ler os afiliados da Rifei** mostra quem já é afiliado; **Sincronizar** grava os
+  códigos e liga à célula quem tem o e-mail do líder; **Gerar os convites** cria um convite por célula sem afiliado, com
+  Copiar e Enviar no WhatsApp. Depois que o líder cria a conta, Sincronizar de novo. Por fim, o modelo do link de vendas
+  (D24) passa a ser `https://rifei.com.br/{slug}?ref={codigo}`.
+
+A campanha do Projeto Kids na Rifei (`GET raffles/projeto-kids-1`, público, 19/11): id 1671784, 7005 números,
+`time_to_expire_orders` 1440 (24 h).
+
+### 13.4 O que confirmar na compra de teste (SUPOSIÇÕES)
+
+1. O `id` do pedido no webhook é o mesmo que `raffles/orders/many` aceita (o painel usa o `id` da lista de pedidos).
+2. Marcar pela API dispara o "Pedido pago" no webhook (o exemplo oficial traz `status_detail: changed_by_admin`).
+3. O pedido expirado continua com o mesmo `id` em "Pedidos expirados" e a restauração o devolve aos reservados.
+4. O `ref` do link de vendas é o `code` do afiliado (ex.: `?ref=thiago`) e a venda chega com o `affiliate_id` dele.
+5. O convite gerado pela API aparece no painel e cria o afiliado com o e-mail que o líder digitar.
+

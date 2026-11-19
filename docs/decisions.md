@@ -1780,6 +1780,55 @@ discipulador → célula.
   valores dos campos e as dicas, para admin, coordenação, líder e discipulador). As API falsas dos Rankings, da Campanha e
   dos Acessos respondem a lista das redes com duas (a tela como sempre foi) e guardam o pedido à parte.
 
+## D32. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17; renumerada de D29 em 19/11)
+
+Decisão do PO (17/11): no Pix manual (D26), o último passo, marcar como pago no painel da Rifei, deixa de ser à mão; e
+os afiliados das células (dezenas) não são mais criados um a um. A D26 deixava isso de fora porque "a Rifei não tem API
+para marcar como pago". Ela não tem API **pública**, mas o painel (`app.rifei.com.br`) é um site que fala com
+`https://api.rifei.com.br/` com o token do login (`Authorization: Bearer`). As chamadas foram mapeadas no código do
+painel em 17/11/2026 (docs/integracao-rifei.md, seção 13) e o sistema faz as mesmas, pelo admin.
+
+- **Onde roda:** no Worker (Cloudflare), nunca no navegador: o token da Rifei fica no segredo `RIFEI_API_TOKEN`
+  (`wrangler secret put`), nunca no banco, no site, na trilha ou no log. Nada depende de um computador ligado.
+- **Nada roda sozinho:** cada chamada parte de um clique do admin (Conferência do extrato e Adesão). Sem cron, sem
+  robô, sem login automático (o login da Rifei tem captcha: o token vem de um login feito à mão; seção 13.2).
+- **Marcar como pago** (`POST /api/admin/rifei/marcar-pagos`): o banco decide o que vai à Rifei (só o pendente ou
+  expirado da campanha ativa, sem desconsideração; o resto volta como `ja_pago`, `desconsiderado` ou
+  `fora_do_sistema`). Na Rifei, um pedido por chamada (até 4 ao mesmo tempo): o PUT em lote do painel
+  (`raffles/orders/many`, que só aprova; o PUT de um pedido **alterna** aprovar/desaprovar e não é usado), a conferência
+  do status e, se o pedido sumiu dos reservados (expirou: a campanha expira a reserva em 24 h), a restauração
+  (`raffles/expired-orders/<id>/restore`) e a aprovação de novo. **O sistema não grava nada no pedido:** ele passa a
+  contar quando o "Pedido pago" chega pelo webhook, como antes; se não chegar, a conferência pelo CSV o mostra em
+  "Pagamento não registrado" (RIFA-056).
+- **Afiliados** (`GET /api/admin/rifei/afiliados` e `POST .../afiliados/sincronizar`): a Rifei não deixa o
+  organizador criar a conta do afiliado. A sincronização grava o **código** de cada afiliado (o `ref` do link de vendas:
+  `https://rifei.com.br/<slug>?ref=<código>`, migração 0014) e liga à célula o afiliado não vinculado cujo e-mail na
+  Rifei é o do líder de **exatamente uma** célula. Nunca troca um vínculo que já existe. O modelo do link de vendas (D24)
+  ganha o marcador `{codigo}`.
+- **Convites** (`POST /api/admin/rifei/convites`): um convite por célula (comissão 0%, todas as campanhas), de uso único
+  e válido por 1 dia (regra da Rifei). O link volta para a tela (Copiar e WhatsApp do líder) e nunca é gravado.
+- **Erros:** sem o segredo, 503 `nao_configurado` (a tela manda usar o caminho manual); a Rifei recusou o token, não
+  achou a campanha, não respondeu ou respondeu num formato desconhecido: 502 `rifei_falhou` com o `motivo`. Uma falha de
+  um pedido só (429/5xx/tempo) fica naquele pedido (`falhou`).
+- **Riscos aceitos pelo PO:** a API é interna e pode mudar sem aviso (tudo que vem dela é conferido; formato
+  desconhecido vira `resposta_inesperada`, nunca 500); os Termos de uso da Rifei (item 4.4) proíbem engenharia
+  reversa: o risco é a conta ser limitada. Por isso o volume é o de um admin clicando, e o caminho manual (Copiar os
+  números, painel da Rifei) continua na tela.
+- **SUPOSIÇÕES** a confirmar na compra de teste (seção 13.4): o `id` do webhook é o mesmo que a API usa; a aprovação
+  pela API dispara o `paid_order`; o pedido expirado mantém o `id` em "Pedidos expirados"; o `ref` aceita o código.
+- **Adendo (19/11, revisão da RIFA-070; pedido do PO):**
+  - **Token pela tela, não pelo terminal.** Acessos → Conexão com a Rifei: colar, testar, trocar e apagar. O token
+    fica no D1 **cifrado** (tabela `rifei_conexao`, migração 0014; AES-GCM com a chave do segredo do Worker
+    `RIFEI_CHAVE_CIFRA`, `lib/cifra-rifei.ts`) e nunca volta ao navegador, ao log ou à trilha. O token da tela tem
+    prioridade; o segredo `RIFEI_API_TOKEN` vale só sem ele. Sem a chave, nada é guardado (503). Chave trocada ou
+    perdida: a tela pede um token novo. Por quê cifrar e não só fazer hash: o sistema precisa do token em claro para
+    chamar a Rifei.
+  - **Estado da conexão gravado a cada chamada real:** sucesso → `testado_em`; 401/403 → `recusado_em` (a primeira);
+    mostrado na tela da Conexão e no topo do Extrato do banco. A validade vem do `exp` do próprio token, se for JWT.
+  - **Seleção e marcar à mão:** caixa por pedido em "Para marcar" e busca pelo número do pedido ou de um bilhete
+    (`GET /api/admin/rifei/pedido`), que reaproveita o `POST marcar-pagos` (o banco continua decidindo o que vai à
+    Rifei). Só admin (`protecao.test.ts`).
+
 ## D33. Login do admin com usuário e senha (RIFA-073; contrato, 2026-11-19)
 
 Pedido do PO (19/11): o pastor (admin) entra no painel com usuário e senha, para marcar pagamentos sem depender do link

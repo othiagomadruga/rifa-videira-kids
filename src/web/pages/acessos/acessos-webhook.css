@@ -62,3 +62,16 @@
   margin: 0;
   padding-left: var(--espaco-5);
 }
+
+/* RIFA-070 (D32): a linha do console para copiar o token da Rifei, quebrando no celular. */
+.acessos-webhook__codigo {
+  display: block;
+  margin-top: var(--espaco-2);
+  padding: var(--espaco-2) var(--espaco-3);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie-2);
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

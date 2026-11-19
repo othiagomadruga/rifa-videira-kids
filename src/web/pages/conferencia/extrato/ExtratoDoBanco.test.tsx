@@ -155,6 +155,8 @@ function conferirPrivacidade(chamadas: Chamada[]) {
       "/api/admin/campanha",
       "/api/admin/pedidos",
       "/api/admin/reconciliacao/recuperacoes",
+      // RIFA-070 (D32): a situação da conexão com a Rifei (GET, sem corpo), no topo para o admin.
+      "/api/admin/rifei/conexao",
     ]).toContain(endereco.pathname);
     if (endereco.pathname === "/api/admin/pedidos")
       expect(

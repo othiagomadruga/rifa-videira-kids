@@ -65,7 +65,8 @@ export const DICAS = {
   removendo: "Indisponível enquanto o afiliado é removido.",
 
   // Seção "Links de vendas" (RIFA-046).
-  modelo: "O endereço do link de afiliado da Rifei, com {slug} e {afiliado}.",
+  modelo:
+    "O endereço do link de afiliado da Rifei, com {slug} e {codigo} (ou {afiliado}).",
   modeloSoLeitura: "Só o admin muda o modelo.",
   salvarModelo: "Grava o modelo; os links de todas as células mudam na hora.",
   salvarModeloSemMudanca: "Nada mudou desde o modelo gravado.",
