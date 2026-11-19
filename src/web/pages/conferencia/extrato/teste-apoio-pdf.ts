@@ -404,3 +404,136 @@ export const pdfDeComprovante = (
 export const textoDoComprovante = (
   linhas: readonly LinhaDoComprovante[],
 ): string => linhas.map((linha) => linha.join(" ")).join("\n");
+
+// ---------------------------------------------------------------------------------------------------
+// O relatório "Pix recebidos" do Bradesco (RIFA-077; o layout de um PDF real, com dados fictícios)
+// ---------------------------------------------------------------------------------------------------
+
+/** Um lançamento do relatório: um bloco vertical, com o nome e o banco quebrados em várias linhas. */
+export interface BlocoDePixRecebido {
+  /** O dia (o mês sai embaixo, "NOV"): só no primeiro lançamento do dia. */
+  dia?: string;
+  nome: readonly string[];
+  banco: readonly string[];
+  e2e: string;
+  hora: string;
+  entrada?: string;
+  saida?: string;
+}
+
+export const E2E_PIX_UM = "E00000000202611191411FICTICIO101";
+export const E2E_PIX_DOIS = "E11111111202611181741FICTICIO102";
+export const E2E_PIX_TRES = "E22222222202611181403FICTICIO103";
+
+/** Três lançamentos: um Pix de R$ 25,00 em 19/11, uma saída e um Pix de R$ 813,26 em 18/11 (sem a data: a de cima). */
+export const BLOCOS_PIX_RECEBIDOS: readonly BlocoDePixRecebido[] = [
+  {
+    dia: "19",
+    nome: ["Pagadora Ficticia", "Um da Silva", "Teste"],
+    banco: ["ITAÚ", "UNIBANCO", "S.A."],
+    e2e: E2E_PIX_UM,
+    hora: "11:12:04",
+    entrada: "25,00",
+  },
+  {
+    dia: "18",
+    nome: ["Empresa", "Ficticia de", "Testes e", "Servicos"],
+    banco: ["Banco Bradesco", "S.A."],
+    e2e: E2E_PIX_DOIS,
+    hora: "14:41:43",
+    saida: "2863,28",
+  },
+  {
+    nome: ["Pagador", "Ficticio", "Dois de", "Oliveira", "Santos"],
+    banco: ["NU", "PAGAMENTOS", "- IP"],
+    e2e: E2E_PIX_TRES,
+    hora: "11:03:38",
+    entrada: "813,26",
+  },
+];
+
+/** Os nomes de quem pagou, como devem sair (as linhas juntas, sem o banco). */
+export const PAGADORES_PIX_RECEBIDOS = [
+  "Pagadora Ficticia Um da Silva Teste",
+  "Empresa Ficticia de Testes e Servicos",
+  "Pagador Ficticio Dois de Oliveira Santos",
+];
+
+/**
+ * A página do relatório, nas posições do PDF real (iText): o cabeçalho em duas linhas, e cada bloco com o nome e o
+ * banco centrados na linha do meio (o E2E, o horário e o valor), o banco num parágrafo à parte (um vão maior), a data
+ * em duas linhas e o "Ver detalhes" à direita.
+ */
+export function paginaDePixRecebidos(
+  blocos: readonly BlocoDePixRecebido[] = BLOCOS_PIX_RECEBIDOS,
+): TextoNaPagina[] {
+  const textos: TextoNaPagina[] = [
+    { x: 45.7, y: 790, texto: "Data", tamanho: 12 },
+    { x: 90.5, y: 790, texto: "Referência", tamanho: 12 },
+    { x: 177.8, y: 790, texto: "Identificação", tamanho: 12 },
+    { x: 403.5, y: 796.9, texto: "Horário", tamanho: 12 },
+    { x: 403.5, y: 783.1, texto: "até", tamanho: 12 },
+    { x: 449.1, y: 796.9, texto: "Entradas", tamanho: 12 },
+    { x: 473.8, y: 783.1, texto: "(R$)", tamanho: 12 },
+    { x: 519.3, y: 796.9, texto: "Saídas", tamanho: 12 },
+    { x: 530, y: 783.1, texto: "(R$)", tamanho: 12 },
+  ];
+  const alturaDoBloco = (bloco: BlocoDePixRecebido) =>
+    (bloco.nome.length - 1) * 13.8 + 14.9 + (bloco.banco.length - 1) * 13.4;
+  let meio = 730;
+  blocos.forEach((bloco, indice) => {
+    const linhas = [
+      ...bloco.nome.map((texto, i) => ({ texto, desce: i * 13.8 })),
+      ...bloco.banco.map((texto, i) => ({
+        texto,
+        desce: (bloco.nome.length - 1) * 13.8 + 14.9 + i * 13.4,
+      })),
+    ];
+    const topo = meio + (linhas.at(-1)?.desce ?? 0) / 2;
+    for (const linha of linhas)
+      textos.push({
+        x: 92,
+        y: topo - linha.desce,
+        texto: linha.texto,
+        tamanho: 12,
+      });
+    if (bloco.dia) {
+      textos.push(
+        { x: 47.5, y: meio + 6.7, texto: bloco.dia, tamanho: 13.5 },
+        { x: 44.3, y: meio - 8.5, texto: "NOV", tamanho: 9 },
+      );
+    }
+    textos.push(
+      { x: 184.5, y: meio, texto: bloco.e2e, tamanho: 12 },
+      { x: 403.5, y: meio, texto: bloco.hora, tamanho: 12 },
+      { x: 565.6, y: meio + 6.7, texto: "Ver", tamanho: 12 },
+      { x: 545, y: meio - 6.7, texto: "detalhes", tamanho: 9 },
+    );
+    if (bloco.entrada)
+      textos.push({
+        x: 481.5,
+        y: meio,
+        texto: bloco.entrada,
+        tamanho: 12,
+        direita: true,
+      });
+    if (bloco.saida)
+      textos.push({
+        x: 537.7,
+        y: meio,
+        texto: bloco.saida,
+        tamanho: 12,
+        direita: true,
+      });
+    // A próxima linha da tabela: metade de cada célula e o espaço entre as linhas (20,6, como no PDF real).
+    const proximo = blocos[indice + 1];
+    if (proximo)
+      meio -= alturaDoBloco(bloco) / 2 + alturaDoBloco(proximo) / 2 + 20.6;
+  });
+  return textos;
+}
+
+/** O relatório "Pix recebidos" em PDF, numa página. */
+export const pdfDePixRecebidos = (
+  blocos?: readonly BlocoDePixRecebido[],
+): Uint8Array<ArrayBuffer> => criarPdf([paginaDePixRecebidos(blocos)]);

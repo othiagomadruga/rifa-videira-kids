@@ -10,7 +10,9 @@
 //   Sem cabeçalho, a linha é o texto, com espaços;
 // - um vão vertical grande (o rodapé, outro bloco) e a troca de página viram uma linha em branco, que encerra o
 //   lançamento de cima (o "REM: <nome>" do Bradesco só entra na descrição quando vem logo abaixo).
+// O relatório "Pix recebidos" do Bradesco (RIFA-077), em blocos verticais, sai pelo pix-recebidos.ts.
 // Módulo puro (sem o pdf.js), testado com pedaços sintéticos em pdf-linhas.test.ts.
+import { textoDosPixRecebidos } from "./pix-recebidos";
 import { colunasDoCabecalho } from "./texto-colado";
 
 /** Um pedaço de texto da página, como o pdf.js entrega (TextItem), no sistema do PDF (o y cresce para cima). */
@@ -147,6 +149,9 @@ const ehCabecalho = (linha: Linha) =>
 export function textoDasPaginas(
   paginas: readonly (readonly TextoDoPdf[])[],
 ): string {
+  // O relatório "Pix recebidos" do Bradesco (RIFA-077): blocos verticais, lidos pelas posições (pix-recebidos.ts).
+  const pixRecebidos = textoDosPixRecebidos(paginas);
+  if (pixRecebidos !== null) return pixRecebidos;
   const saida: string[] = [];
   let colunas: Trecho[] | null = null;
   for (const pedacos of paginas) {

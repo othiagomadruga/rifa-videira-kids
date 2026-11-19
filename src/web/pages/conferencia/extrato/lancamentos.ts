@@ -28,6 +28,10 @@ export interface Lancamento {
   idDaTransacao?: string;
   /** RIFA-074: o identificador (txid) do comprovante, inteiro: igual ao número de um pedido, é "Certo". */
   txid?: string;
+  /** RIFA-077: o lançamento é um Pix pelo próprio relatório ("Pix recebidos"): as palavras do Pix não valem. */
+  pix?: true;
+  /** RIFA-077: o banco de quem pagou (a Referência do "Pix recebidos", sem o nome): só na tela. */
+  banco?: string;
 }
 
 /** "comprovante": o comprovante de Pix em PDF; "varios": mais de um arquivo de uma vez (RIFA-074). */
@@ -202,8 +206,10 @@ export function filtrarPix(
     else if (lancamento.centavos === 0) ignorados.ilegiveis++;
     else if (lancamento.centavos < 0) ignorados.debitos++;
     else if (
-      // O comprovante é sempre de um Pix (RIFA-074): as palavras do extrato não valem para ele.
+      // O comprovante é sempre de um Pix (RIFA-074), e o relatório "Pix recebidos" também (RIFA-077): as palavras
+      // do extrato não valem para eles.
       lancamento.origem !== "comprovante" &&
+      lancamento.pix !== true &&
       palavras.length > 0 &&
       !palavras.some((palavra) => descricao.includes(palavra))
     )
