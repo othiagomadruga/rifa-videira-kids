@@ -1779,3 +1779,62 @@ discipulador → célula.
 - **Testes:** `lib/redes.test.ts` e `pages/rede-unica.test.tsx` (cada tela com uma rede só: o texto, os atributos, os
   valores dos campos e as dicas, para admin, coordenação, líder e discipulador). As API falsas dos Rankings, da Campanha e
   dos Acessos respondem a lista das redes com duas (a tela como sempre foi) e guardam o pedido à parte.
+
+## D34. O comprovante de Pix em PDF e vários arquivos na conferência do extrato (RIFA-074, 2026-11-19; adendo da D26)
+
+Pedido do PO (19/11): o pastor (admin) sobe o extrato **ou o comprovante** do Pix no painel, um ou vários de uma vez, e
+o site lista os pedidos pagos. Na Rifei, o Pix manual usa o número do pedido como identificador do Pix. A tarefa só
+lê e cai no mesmo cruzamento da D26; marcar na Rifei é a RIFA-070 (D32).
+
+- **O comprovante** (`extrato/comprovante.ts`, puro): o texto do PDF (as linhas do `pdf-linhas.ts`) é comprovante quando
+  fala de Pix, diz "comprovante" (ou tem os blocos de quem pagou e de quem recebeu), tem de 1 a 6 valores, nenhuma
+  tabela e nenhuma linha com a data e o valor juntos (a linha de lançamento do extrato). Senão, é extrato, como antes.
+  Do comprovante saem: o valor (o campo Valor; sem ele, a linha só com "R$ 20,00"), a data e a hora (o campo Data e
+  hora, Data/Hora, Data do pagamento...; sem ele, a primeira linha com data e hora, como "16 NOV 2026 - 14:30:12"), o
+  nome de quem pagou (o Nome do bloco "Dados de quem pagou", "Origem", "Pagador" ou "De:"; nunca o do bloco de quem
+  recebeu), o **identificador** (txid: Identificador, Identificação, TXID) e o **ID da transação** (o E2E do Banco
+  Central, `E` + 20 algarismos + 11 letras ou algarismos, achado em qualquer lugar, mesmo quebrado em duas linhas; sem
+  ele, o campo ID da transação ou Número de controle). O rótulo e o valor podem vir na mesma linha (ou lado a lado)
+  ou o valor na linha de baixo. Vira um lançamento só (`formato: "comprovante"`), com a descrição "Comprovante de Pix ·
+  <nome> · identificador <txid>" e `origem: "comprovante"`.
+- **O layout pesquisado** (fontes públicas, só cópias de comprovantes de terceiros e guias; nenhum banco publica o
+  modelo): Bradesco (app e Net Empresa) com "Comprovante de Transação Pix", "Dados de quem recebeu", "Dados de quem
+  pagou" (Nome, CPF/CNPJ mascarado, Instituição), "Dados da transação" (Valor, "Data e hora: 20/12/2024 - 15:16:05"),
+  "Identificador" ou "Número de controle"; bancos digitais (o jeito do Nubank) com "Comprovante de transferência", a
+  data no topo, "Destino" e "Origem" e "ID da transação"; outros (o jeito do Itaú) com "de:" e "para:" e o valor na
+  linha de baixo; o E2E de 32 caracteres com E (Banco Central). Os testes usam PDFs sintéticos nesses três jeitos
+  (`teste-apoio-pdf.ts`), com dados fictícios. NÃO DOCUMENTADO e a conferir na compra de teste: o nome do campo do
+  identificador no comprovante do Bradesco e se ele traz o número do pedido da Rifei.
+- **Certo pelo identificador:** o `txid` inteiro igual ao número de um pedido é "Certo" mesmo curto e só de algarismos
+  (o mínimo de 8 algarismos da D26 é para pedaços achados no meio do texto do extrato; o campo do identificador é o
+  próprio número). Sem identificador, o comprovante cai no Provável/Ambíguo pelo valor e pela hora, como o extrato
+  (o comprovante tem a hora: o cruzamento fica mais preciso). O comprovante passa sempre pelo filtro das palavras do
+  Pix. O formato do resultado do cruzamento não muda (a RIFA-070 usa a lista "Para marcar"); o `Lancamento` (e o `Pix`)
+  ganham só campos opcionais: `origem`, `txid`, `idDaTransacao` e `pagador`.
+- **Vários arquivos** (`SeletorArquivo` com `aoEscolherVarios`, o `multiple` do campo): cada arquivo é lido (o PDF pelo
+  mesmo leitor sob demanda), a tela mostra **Arquivos lidos** com o resultado de cada um (o extrato com os
+  lançamentos, o comprovante com o valor e a hora, quantos Pix já estavam noutro arquivo, ou a falha) e os lidos viram
+  um extrato só (`extrato/juntar.ts`, `formato: "varios"`, "Lido dos arquivos"). O CSV sem colunas reconhecidas
+  precisa ser escolhido sozinho (o mapeamento na tela é de um CSV). Um arquivo só segue o caminho de antes.
+- **O mesmo Pix em dois arquivos conta uma vez:** o mesmo ID da transação é o mesmo Pix (IDs diferentes, Pix
+  diferentes); senão, o mesmo valor, a hora a até 2 minutos (sem a hora num dos lados, o mesmo dia) e o mesmo nome
+  (dois comprovantes: o mesmo nome; comprovante e extrato: o primeiro e o último nome do comprovante na descrição do
+  extrato, o "REM: <nome>"; sem nome no extrato, só com a hora dos dois a até 2 minutos); dois extratos (períodos que se
+  cruzam): a mesma linha (valor, instante e descrição). Identificadores (txid) diferentes nunca são o mesmo Pix (o mesmo
+  comprador pagando dois pedidos de mesmo valor no mesmo minuto), e, se mais de um lançamento serve, fica o mais perto
+  na hora (revisão). Os lançamentos de um mesmo arquivo nunca se juntam. Juntos, fica
+  o lançamento do extrato (o banco confirma), com o identificador, o ID e o nome do comprovante: o Pix ambíguo do
+  extrato vira Certo com o comprovante.
+- **Comprovante pode ser adulterado** (a própria Rifei avisa): o Pix que veio só de comprovante leva a marca "Só no
+  comprovante: confira no extrato antes de marcar", e o resultado mostra o aviso enquanto houver um. O jeito seguro é
+  escolher o extrato junto. Pix agendado ("agendado"/"agendamento" sem "concluído", "efetivado", "realizado") é uma
+  falha clara. Comprovante de Pix **enviado** pela igreja não é distinguido (a tela não sabe a conta da igreja):
+  pergunta ao PO.
+- **Foto ou print** (tipo `image/*`, extensão de imagem ou a assinatura JPEG, PNG ou HEIC): falha "Esta é uma foto ou
+  um print", que pede o PDF (OCR fica fora). O campo aceita `image/*` para a pessoa receber essa mensagem em vez de não
+  achar o arquivo. O PDF sem texto (escaneado) continua "Este PDF é uma imagem", agora com o caminho do comprovante.
+- **Privacidade (D26 inteira):** nada sai do navegador e nada é gravado; o nome de quem pagou, o identificador e o E2E
+  ficam só no estado da tela (`ExtratoDoBanco.test.tsx` varre as chamadas também com os comprovantes). O pdf.js
+  continua sob demanda.
+- **Peso:** o JS inicial fica em 397,17 KiB (119,06 KiB em gzip; +0,02 KiB pelo `SeletorArquivo`, que é do pacote
+  inicial); a seção do extrato vai de 13,6 para 17,7 KiB em gzip (o leitor do comprovante, a junção e a lista dos arquivos); o pacote do pdf.js não muda.
