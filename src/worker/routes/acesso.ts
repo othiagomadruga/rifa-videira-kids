@@ -13,6 +13,9 @@
  *   é derivada do nome da célula na hora e comparada em tempo constante: nunca é gravada nem vai para log ou trilha.
  *   Toda recusa (senha errada, célula que não existe, nome ambíguo, usuário desativado, chave desligada) é o MESMO
  *   401, sem dizer se a célula existe.
+ * - POST /api/sessao/admin { usuario, senha } (RIFA-073, D33): o login do admin com o usuário e a senha que ele definiu
+ *   em /api/admin/minha-senha abre a MESMA sessão do link do admin (sem link). A senha é conferida pelo PBKDF2
+ *   (lib/senha.ts) mesmo quando o usuário não existe (o tempo não diz se ele existe), e toda recusa é o MESMO 401.
  *
  * Os POSTs são abertos (não exigem sessão), mas só da mesma origem do site (CSRF). No login (RIFA-013b),
  * depois da origem: o limite de tentativas por IP (429, lib/limite-requisicoes.ts) e o de tamanho do corpo,
@@ -25,6 +28,8 @@ import {
   VALIDADE_SESSAO_DIAS,
   corpoCriarSessaoSchema,
   corpoEntrarComSenhaSchema,
+  corpoEntrarComoAdminSchema,
+  normalizarUsuarioAdmin,
   formaDaSenhaDigitada,
   normalizarNomeCelula,
   senhaPadraoDaCelula,
@@ -37,9 +42,11 @@ import {
   criarSessao,
 } from "../db/acessos";
 import { abrirSessaoDaCelula, lerCelulasParaLogin } from "../db/login-celula";
+import { abrirSessaoDoAdmin, buscarCredencialAdmin } from "../db/senha-admin";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import { LIMITE_LOGIN, limitarRequisicoes } from "../lib/limite-requisicoes";
 import { responderErro } from "../lib/respostas-erro";
+import { SENHA_ADMIN_QUE_NUNCA_CONFERE, senhaConfere } from "../lib/senha";
 import { textosIguaisEmTempoConstante } from "../lib/tempo-constante";
 import {
   LIMITE_CORPO_SESSAO_BYTES,
@@ -176,6 +183,59 @@ sessao.post(
     // Quem entrou, como GET /api/sessao devolve (com o alvo lido da hierarquia na hora).
     const aberta = await buscarSessao(c.env.DB, idHash, agora.toISOString());
     if (aberta === null) return respostaSenhaRecusada(c);
+
+    gravarCookieSessao(c, idSessao, expiraEm, agora);
+    return c.json({ usuario: aberta.usuario } satisfies RespostaSessao, 200);
+  },
+);
+
+/**
+ * A recusa do login do admin (RIFA-073): a MESMA resposta para todo caso, sem dizer se o usuário existe nem por que não
+ * entrou (usuário que não existe, senha errada, usuário desativado ou que não é mais admin, senha removida no meio).
+ */
+function respostaAdminRecusado(c: Context) {
+  return responderErro(
+    c,
+    "nao_autenticado",
+    "Não foi possível entrar com este usuário e esta senha",
+  );
+}
+
+sessao.post(
+  "/admin",
+  exigirMesmaOrigem,
+  limitarRequisicoes(LIMITE_LOGIN),
+  limitarCorpo(LIMITE_CORPO_SESSAO_BYTES),
+  validarJson(corpoEntrarComoAdminSchema),
+  async (c) => {
+    c.header("Cache-Control", "no-store");
+    const { usuario, senha } = c.req.valid("json");
+    const nome = normalizarUsuarioAdmin(usuario);
+    const credencial =
+      nome === "" ? null : await buscarCredencialAdmin(c.env.DB, nome);
+    // O PBKDF2 roda sempre (com a senha fixa que nunca confere quando não há usuário): o tempo não diz se ele existe.
+    const confere = await senhaConfere(
+      senha,
+      credencial ?? SENHA_ADMIN_QUE_NUNCA_CONFERE,
+    );
+    if (credencial === null || !confere) return respostaAdminRecusado(c);
+
+    const agora = new Date();
+    const idSessao = gerarSegredo();
+    const idHash = await sha256Hex(idSessao);
+    const anterior = lerCookieSessao(c);
+    const expiraEm = await abrirSessaoDoAdmin(c.env.DB, {
+      usuarioId: credencial.usuarioId,
+      idHash,
+      criadoEm: agora.toISOString(),
+      expiraEm: new Date(
+        agora.getTime() + VALIDADE_SESSAO_DIAS * DIA_MS,
+      ).toISOString(),
+      idHashAnterior: anterior === null ? null : await sha256Hex(anterior),
+    });
+    if (expiraEm === null) return respostaAdminRecusado(c);
+    const aberta = await buscarSessao(c.env.DB, idHash, agora.toISOString());
+    if (aberta === null) return respostaAdminRecusado(c);
 
     gravarCookieSessao(c, idSessao, expiraEm, agora);
     return c.json({ usuario: aberta.usuario } satisfies RespostaSessao, 200);

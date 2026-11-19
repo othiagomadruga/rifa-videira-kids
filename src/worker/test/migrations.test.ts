@@ -1,7 +1,7 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
-// 0012_ranking_por_divisao.sql e 0013_login_celulas_senha.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
+// 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql e 0015_senha_admin.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
 // testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010, a 0011, a 0012 e a 0013 também são aplicadas num
 // D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua
 // lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061; RIFA-064).
@@ -44,6 +44,8 @@ const TABELAS = [
   "recuperacoes",
   "redes",
   "sessoes",
+  // 0015 (RIFA-073, D33): o hash PBKDF2 da senha de login do admin.
+  "senhas_admin",
   // 0009 (RIFA-039, D21): o SHA-256 do token do webhook gerado pela tela (uma linha no máximo).
   "token_webhook",
   "usuarios",
@@ -2098,7 +2100,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       );
       await applyD1Migrations(db, ate0012);
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0013: a 0015 (RIFA-073) é aplicada depois, no describe dela (abaixo).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0014"),
+      );
     });
 
     it("a 0013 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -2255,7 +2261,44 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ).toBe(MODELO);
       }
     });
+  });
 
+  // -------------------------------------------------------------------------------------------------
+  // 0015 (RIFA-073, D33): a senha de login do admin, uma tabela nova aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0015 sobre dados que já existiam (RIFA-073)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+    const SAL = "a".repeat(32);
+    const HASH = "b".repeat(64);
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0013.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0015"),
+      );
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0015 foi aplicada sobre os dados e nada muda: só nasce a tabela senhas_admin, vazia", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toContain(
+        "0015_senha_admin.sql",
+      );
+      expect(antes.usuarios.length).toBeGreaterThan(0);
+      expect(antes.sessoes.length).toBeGreaterThan(0);
+      const { senhas_admin: senhas, ...depois } =
+        await fotografarTodasAsTabelas(db);
+      expect(depois).toEqual(antes);
+      expect(senhas).toEqual([]);
+    });
+
+    // Veio do describe da 0013: a consulta da sessão lê senhas_admin (0015), então roda sobre o schema completo.
     it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
       expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
         linkId: 1,
@@ -2268,6 +2311,54 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       expect(
         await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
       ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
+    });
+
+    it("os CHECKs: usuário no formato, sal e hash em hex do tamanho certo, 100.000 iterações ou mais; usuário único", async () => {
+      const inserir = (
+        usuarioId: number,
+        usuario: string,
+        sal = SAL,
+        hashSenha = HASH,
+        iteracoes = 100_000,
+      ) =>
+        db
+          .prepare(
+            `INSERT INTO senhas_admin (usuario_id, usuario, sal, hash, iteracoes, criada_em, atualizada_em)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`,
+          )
+          .bind(
+            usuarioId,
+            usuario,
+            sal,
+            hashSenha,
+            iteracoes,
+            AGORA_DA_MIGRACAO,
+          )
+          .run();
+      for (const [usuario, sal, hashSenha, iteracoes] of [
+        ["Pastor", SAL, HASH, 100_000],
+        ["ab", SAL, HASH, 100_000],
+        [".pastor", SAL, HASH, 100_000],
+        ["pastor", "a".repeat(31), HASH, 100_000],
+        ["pastor", SAL, "B".repeat(64), 100_000],
+        ["pastor", SAL, HASH, 99_999],
+      ] as const)
+        await expect(
+          inserir(1, usuario, sal, hashSenha, iteracoes),
+        ).rejects.toThrow(/CHECK constraint failed/);
+      await inserir(1, "pastor");
+      onTestFinished(async () => {
+        await db.prepare("DELETE FROM senhas_admin").run();
+      });
+      const outro = await db
+        .prepare(
+          "INSERT INTO usuarios (nome, papel, criado_em) VALUES ('Outro admin', 'admin', ?1) RETURNING id",
+        )
+        .bind(AGORA_DA_MIGRACAO)
+        .first<{ id: number }>();
+      await expect(inserir(outro!.id, "pastor")).rejects.toThrow(
+        /UNIQUE constraint failed/,
+      );
     });
   });
 });
