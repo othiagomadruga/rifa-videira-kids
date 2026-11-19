@@ -28,6 +28,7 @@ import {
   pedidosSuspeitos,
 } from "./routes/pedidos-suspeitos";
 import { PREFIXO_PUBLICO, publico } from "./routes/publico";
+import { PREFIXO_SENHA_ADMIN, senhaAdmin } from "./routes/senha-admin";
 import { PREFIXO_RECONCILIACAO, reconciliacao } from "./routes/reconciliacao";
 import {
   PREFIXO_WEBHOOK_COORDENACAO,
@@ -55,7 +56,8 @@ app.route(ROTAS.health.caminho, health);
 
 // 3. Sessão da equipe (RIFA-007): POST abre a sessão com o link pessoal, GET diz quem está
 // conectado, POST /sair encerra. POST /senha (RIFA-064, D29) abre a sessão do líder de uma célula com o nome
-// dela e a senha padrão, com o mesmo limite de tentativas do link. Os POSTs só aceitam a mesma origem (CSRF).
+// dela e a senha padrão, com o mesmo limite de tentativas do link. POST /admin (RIFA-073, D33) abre a sessão do admin
+// com o usuário e a senha dele, com o mesmo limite. Os POSTs só aceitam a mesma origem (CSRF).
 app.route(ROTAS_ACESSO.entrar.caminho, sessao);
 
 // 4. Coordenação: todo /api/admin/* e /api/painel/* exige sessão (e a mesma origem nas escritas),
@@ -82,6 +84,9 @@ app.route("/api/admin", adminUsuarios);
 app.route(PREFIXO_AUDITORIA, auditoria);
 // Acessos da hierarquia (RIFA-014): lista dos alvos e links em lote, só admin (o sub-app também exige).
 app.route(PREFIXO_ACESSOS_HIERARQUIA, acessosHierarquia);
+// Senha de login do próprio admin (RIFA-073, D33): GET, PUT e DELETE /api/admin/minha-senha, só admin (o sub-app
+// exige no caminho dele).
+app.route(PREFIXO_SENHA_ADMIN, senhaAdmin);
 
 // 6. Demais rotas.
 // Webhook da Rifei: público, autenticado só pelo Bearer (D6), fora da sessão: o token gerado pela tela (D21, lido

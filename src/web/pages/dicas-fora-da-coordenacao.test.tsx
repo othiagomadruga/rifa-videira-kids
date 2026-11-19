@@ -269,7 +269,7 @@ describe("/acesso (link pessoal)", () => {
 });
 
 describe("/entrar", () => {
-  it("sem sessão: o login da célula (RIFA-064) com dica nos dois campos e no botão; o cartão do link, sem controle", async () => {
+  it("sem sessão: o login da célula (RIFA-064) com dica nos dois campos e no botão, e o 'Sou administrador' (RIFA-073); o cartão do link, sem controle", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -281,10 +281,13 @@ describe("/entrar", () => {
       level: 2,
       name: "Como entrar pelo link",
     });
-    expect(contarControles()).toBe(3);
-    conferirDicas(3);
+    expect(contarControles()).toBe(4);
+    conferirDicas(4);
+    expect(
+      textoDaDica(screen.getByRole("button", { name: "Sou administrador" })),
+    ).toBe(DICAS_ENTRAR.souAdmin);
     expect(textoDaDica(screen.getByLabelText("Célula"))).toBe(
-      DICAS_ENTRAR.celula,
+      DICAS_ENTRAR.nome,
     );
     expect(textoDaDica(screen.getByLabelText("Senha"))).toBe(
       DICAS_ENTRAR.senha,

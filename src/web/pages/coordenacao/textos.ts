@@ -25,6 +25,8 @@ export const DICA_DO_MENU = {
     "Quem entra no sistema: cria pessoas, gera e revoga os links pessoais e o token do webhook da Rifei.",
   trilha:
     "O registro de quem mudou o quê no sistema, do mais novo para o mais antigo.",
+  "minha-senha":
+    "O seu usuário e a sua senha para entrar sem o link: crie, troque ou remova.",
 } as const;
 
 /**

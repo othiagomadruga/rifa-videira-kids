@@ -607,6 +607,13 @@ export async function criarSessao(
   return criacao.results[0]?.expira_em ?? null;
 }
 
+/**
+ * Trecho SQL (constante) da consulta da sessão: a sessão sem link do usuário `u` vale se ele é admin e ainda tem a
+ * senha. RIFA-073 (D33; migração 0015, db/senha-admin.ts).
+ */
+export const SQL_SESSAO_SEM_LINK_DO_ADMIN_VALE =
+  "(u.papel = 'admin' AND EXISTS (SELECT 1 FROM senhas_admin AS sa WHERE sa.usuario_id = u.id))";
+
 /** A sessão que vale: quem está conectado e a chave de acesso do papel dele (RIFA-029). */
 export interface SessaoEncontrada {
   usuario: UsuarioSessao;
@@ -614,7 +621,8 @@ export interface SessaoEncontrada {
   acessoLigado: boolean;
   /**
    * O link que abriu a sessão (`sessoes.link_id`): a lista dos acessos o marca como "este aparelho" (RIFA-043).
-   * null na sessão aberta pela senha da célula (RIFA-064, D29: db/login-celula.ts), que não tem link.
+   * null na sessão aberta pela senha da célula (RIFA-064, D29: db/login-celula.ts) e na aberta pelo usuário e senha
+   * do admin (RIFA-073, D33: db/senha-admin.ts), que não têm link.
    */
   linkId: number | null;
 }
@@ -639,6 +647,9 @@ export async function buscarUsuarioDaSessao(
  * RIFA-064 (D29): a sessão aberta pela senha da célula (sem link, `link_id` NULL) só vale com a chave
  * `acesso.celulas_senha` ligada, lida na mesma consulta (+1 linha, só nessa sessão: com link, o OR nem lê a campanha).
  * Desligada, ela deixa de valer (401, e o cookie é expirado), como uma sessão vencida.
+ * RIFA-073 (D33): a sessão sem link do ADMIN é a aberta pelo usuário e senha dele: vale enquanto ele tiver a senha
+ * (senhas_admin), e não depende da chave das células. Remover a senha a derruba (e remove a linha da sessão). A sessão
+ * sem link de qualquer outro papel não vale (só a célula e o admin entram por senha).
  */
 export async function buscarSessao(
   db: D1Database,
@@ -651,7 +662,10 @@ export async function buscarSessao(
          ${sqlAcessoDoPapel("u.papel")} AS acesso_ligado
        FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id ${JUNTAR_ALVO}
        WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1
-         AND (s.link_id IS NOT NULL OR ${SQL_LOGIN_CELULAS_SENHA_LIGADO})`,
+         AND CASE WHEN s.link_id IS NOT NULL THEN 1
+                  WHEN u.papel = 'admin' THEN ${SQL_SESSAO_SEM_LINK_DO_ADMIN_VALE}
+                  WHEN u.papel = 'lider' THEN ${SQL_LOGIN_CELULAS_SENHA_LIGADO}
+                  ELSE 0 END`,
     )
     .bind(idHash, agora, limiteDeInatividade(agora))
     .first<

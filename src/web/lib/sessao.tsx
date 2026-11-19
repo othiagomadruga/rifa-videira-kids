@@ -27,12 +27,13 @@ import { ErroApi, aoReceber401, api } from "./api";
 
 /**
  * ROTAS_ACESSO.entrar e obterSessao (POST e GET /api/sessao), sair e entrarComSenha (RIFA-064: o login da célula com
- * a senha padrão) (.caminho).
+ * a senha padrão) e entrarComoAdmin (RIFA-073: o login do admin com usuário e senha) (.caminho).
  */
 export const CAMINHOS_SESSAO = {
   sessao: "/api/sessao",
   sair: "/api/sessao/sair",
   senha: "/api/sessao/senha",
+  admin: "/api/sessao/admin",
 } as const;
 
 /** Nome do papel para mostrar na tela. */
@@ -70,6 +71,11 @@ export type ValorSessao = {
    * célula. 401: célula ou senha que não conferem (a API não diz qual).
    */
   entrarComSenha: (celula: string, senha: string) => Promise<UsuarioSessao>;
+  /**
+   * RIFA-073 (D33): entra com o usuário e a senha do admin (POST /api/sessao/admin): a mesma sessão do link do admin.
+   * 401: usuário ou senha que não conferem (a API não diz qual).
+   */
+  entrarComoAdmin: (usuario: string, senha: string) => Promise<UsuarioSessao>;
   /** Encerra a sessão deste aparelho (POST /api/sessao/sair). */
   sair: () => Promise<void>;
 };
@@ -139,6 +145,19 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
     return usuario;
   }, []);
 
+  const entrarComoAdmin = useCallback(
+    async (usuario: string, senha: string) => {
+      const { usuario: conectado } = await api.post<RespostaSessao>(
+        CAMINHOS_SESSAO.admin,
+        { usuario, senha },
+      );
+      versao.current += 1;
+      setEstado({ situacao: "conectada", usuario: conectado });
+      return conectado;
+    },
+    [],
+  );
+
   const sair = useCallback(async () => {
     await api.post(CAMINHOS_SESSAO.sair);
     versao.current += 1;
@@ -163,8 +182,15 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
   );
 
   const valor = useMemo(
-    () => ({ estado, verificar, entrar, entrarComSenha, sair }),
-    [estado, verificar, entrar, entrarComSenha, sair],
+    () => ({
+      estado,
+      verificar,
+      entrar,
+      entrarComSenha,
+      entrarComoAdmin,
+      sair,
+    }),
+    [estado, verificar, entrar, entrarComSenha, entrarComoAdmin, sair],
   );
   return <ContextoSessao value={valor}>{children}</ContextoSessao>;
 }

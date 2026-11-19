@@ -95,6 +95,8 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
     Da sessão de nuvem do Claude o upload dos assets falha (o proxy troca o JWT do upload), então não rode
     `npm run deploy` daqui; comandos D1 remotos funcionam. Segredos do Worker: `npx wrangler secret put <NOME>`.
   - Primeiro admin em produção: `npm run acesso:criar -- --nome "<nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev`.
+  - Usuário e senha de um admin (RIFA-073, D33): `npm run acesso:senha -- --admin <id|nome> --usuario <login> [--remote]`;
+    a senha vem do stdin (nunca de argumento). O próprio admin também cria em Minha senha. docs/acesso.md §11.
   - **Lançamento:** roteiro em `docs/lancamento.md` (contas do PO, 1ª publicação, configuração em produção, compra de teste, reunião dos líderes, dia a dia e contingência).
 - **Segredos locais:** copie `.dev.vars.example` para `.dev.vars` (ignorado pelo git) e troque os valores.
 - **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test, build e a conferência do artefato (Node 22) nos pushes da `main`, nos pull requests e no Run workflow (push de outra branch não roda o CI: vale o portão local; D18, adendo da RIFA-072), e publica na Cloudflare nos pushes da `main` (job `publicar`, D18).

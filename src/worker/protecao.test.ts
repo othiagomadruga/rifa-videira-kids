@@ -14,6 +14,8 @@
 //    `acesso_desligado` em todo /api/minha e no login, o líder não muda, e tudo volta com a chave;
 // i) o login da célula com a senha padrão (RIFA-064, D29) abre só a sessão do líder da célula: 403 em toda a
 //    coordenação, a /minha só da própria célula, CSRF, e a chave desligada derruba a sessão aberta pela senha;
+// j) o login do admin com usuário e senha (RIFA-073, D33) abre a sessão do admin (a mesma do link); a senha do admin é
+//    só do papel admin (coordenação e hierarquia: 403), o login é aberto mas com CSRF, e remover a senha derruba a sessão;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -1804,6 +1806,152 @@ describe("i) RIFA-064 (D29): login da célula com a senha padrão, só na /minha
     await chaveDaSenha(1);
     expect(
       (await requisitar("GET", "/api/minha/visao", sessaoPorSenha)).status,
+    ).toBe(200);
+  });
+});
+
+describe("j) RIFA-073 (D33): login do admin com usuário e senha", () => {
+  const SENHA = "senha de teste da protecao";
+  const USUARIO = "admin.protecao";
+  let doLink: Record<string, string>;
+  let pelaSenha: Record<string, string>;
+
+  const entrarComoAdmin = (
+    corpo: object,
+    cabecalhos: Record<string, string> = { Origin: ORIGEM },
+  ) =>
+    exports.default.fetch(`${ORIGEM}${ROTAS_ACESSO.entrarComoAdmin.caminho}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...cabecalhos },
+      body: JSON.stringify(corpo),
+    });
+
+  beforeAll(async () => {
+    doLink = await cabecalhosDeSessao("admin");
+    const definida = await requisitar(
+      "PUT",
+      ROTAS_ACESSO.definirMinhaSenhaAdmin.caminho,
+      doLink,
+      JSON.stringify({ usuario: USUARIO, senha: SENHA }),
+    );
+    expect(definida.status).toBe(200);
+    const res = await entrarComoAdmin({ usuario: USUARIO, senha: SENHA });
+    expect(res.status).toBe(200);
+    const cookie = /^__Host-sessao=([^;]+)/.exec(
+      res.headers.get("Set-Cookie") ?? "",
+    )?.[1];
+    pelaSenha = { Cookie: `__Host-sessao=${cookie}`, Origin: ORIGEM };
+  });
+
+  it("o contrato declara POST /api/sessao/admin aberto e a senha do admin só de admin; tudo montado no app", async () => {
+    expect(GRUPO_NO_CONTRATO.get("POST /api/sessao/admin")).toBe("aberto");
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    expect(registradas).toContain("POST /api/sessao/admin");
+    for (const rota of [
+      ROTAS_ACESSO.obterMinhaSenhaAdmin,
+      ROTAS_ACESSO.definirMinhaSenhaAdmin,
+      ROTAS_ACESSO.removerMinhaSenhaAdmin,
+    ]) {
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+      expect(
+        ROTAS_DA_COORDENACAO.find(
+          (item) =>
+            item.metodo === rota.metodo && item.caminho === rota.caminho,
+        )?.papeis,
+      ).toEqual(["admin"]);
+    }
+    const vazio = await requisitar("POST", "/api/sessao/admin", {
+      Origin: ORIGEM,
+    });
+    expect(vazio.status).toBe(400);
+    esperarCabecalhosDeSeguranca(vazio);
+  });
+
+  it("a sessão aberta pela senha é a do admin e passa em TODA rota da coordenação (inclusive as só de admin)", async () => {
+    const { usuario } = respostaSessaoSchema.parse(
+      await (await requisitar("GET", "/api/sessao", pelaSenha)).json(),
+    );
+    expect(usuario.papel).toBe("admin");
+    // Menos remover a própria senha, que derruba esta sessão (o último teste confere).
+    for (const rota of ROTAS_DA_COORDENACAO.filter(
+      (item) =>
+        `${item.metodo} ${item.caminho}` !== "DELETE /api/admin/minha-senha",
+    ))
+      await esperarQuePassou(
+        await requisitar(rota.metodo, concreto(rota.caminho), pelaSenha),
+      );
+    // A hierarquia continua fora: a sessão do admin leva 403 em /api/minha.
+    await esperarErro(
+      await requisitar("GET", "/api/minha/visao", pelaSenha),
+      403,
+      "proibido",
+    );
+  });
+
+  it("a senha do admin: sem sessão 401; coordenação, líder, discipulador e rede 403", async () => {
+    const sessoes = [
+      coordenacao,
+      await cabecalhosDeSessaoDaHierarquia("lider", 1),
+      await cabecalhosDeSessaoDaHierarquia("discipulador", 10),
+      await cabecalhosDeSessaoDaHierarquia("rede", 1),
+    ];
+    for (const metodo of ["GET", "PUT", "DELETE"] as const) {
+      await esperarErro(
+        await requisitar(metodo, "/api/admin/minha-senha", { Origin: ORIGEM }),
+        401,
+        "nao_autenticado",
+      );
+      for (const sessao of sessoes)
+        await esperarErro(
+          await requisitar(
+            metodo,
+            "/api/admin/minha-senha",
+            sessao,
+            JSON.stringify({ usuario: "outro.usuario", senha: SENHA }),
+          ),
+          403,
+          "proibido",
+        );
+    }
+  });
+
+  it("CSRF: login de outra origem 403 sem cookie; escrita da senha de outra origem 403, mesmo com a sessão do admin", async () => {
+    const login = await entrarComoAdmin(
+      { usuario: USUARIO, senha: SENHA },
+      { Origin: "https://site-malicioso.example" },
+    );
+    await esperarErro(login, 403, "proibido");
+    expect(login.headers.get("Set-Cookie")).toBeNull();
+    for (const metodo of ["PUT", "DELETE"] as const)
+      await esperarErro(
+        await requisitar(
+          metodo,
+          "/api/admin/minha-senha",
+          { ...pelaSenha, Origin: "https://site-malicioso.example" },
+          JSON.stringify({ usuario: "outro.usuario", senha: SENHA }),
+        ),
+        403,
+        "proibido",
+      );
+  });
+
+  it("removida a senha, a sessão aberta por ela cai (401) e o login recusa; a do link continua", async () => {
+    const res = await requisitar("DELETE", "/api/admin/minha-senha", doLink);
+    expect(res.status).toBe(204);
+    await esperarErro(
+      await requisitar("GET", "/api/admin/usuarios", pelaSenha),
+      401,
+      "nao_autenticado",
+    );
+    await esperarErro(
+      await entrarComoAdmin({ usuario: USUARIO, senha: SENHA }),
+      401,
+      "nao_autenticado",
+    );
+    expect(
+      (await requisitar("GET", "/api/admin/usuarios", doLink)).status,
     ).toBe(200);
   });
 });
