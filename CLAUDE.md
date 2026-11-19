@@ -37,6 +37,11 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
 - **Contrato primeiro:** front e back em paralelo só depois que o contrato da API estiver na `main`. Só o SM altera o contrato.
 - **Definition of Done (tarefa):** teste automatizado por critério de aceite; testes, lint e build verdes;
   revisão APROVADA por um agente diferente do autor; push da branch; merge pelo SM com a `main` verde; status no DevMission.
+- **Fluxo rápido (decisão do PO, 19/11): construir primeiro, testar intercalado.** O autor escreve o código e os testes
+  dos critérios, mas roda só `npm run typecheck`, `npm run lint`, `npm run build` (e no máximo os testes do próprio
+  arquivo); a suíte completa NÃO roda na sessão. O SM junta na `main` com esse portão rápido; a suíte completa roda no CI
+  do GitHub antes de publicar. Agentes de teste/revisão passam depois pelas entregas já juntadas e abrem correções, sem
+  travar a produção.
 - **Dúvida de produto:** não inventar; vai para PERGUNTAS AO PO. Dúvida técnica: opção mais simples e reversível, declarada em SUPOSIÇÕES.
 - **Antes de pedir algo ao Thiago:** tentar fazer de fato (CLI, API, MCP); só pedir o que for impossível daqui, dizendo o que foi tentado. Decisões reversíveis ou técnicas: tomar e informar.
 
