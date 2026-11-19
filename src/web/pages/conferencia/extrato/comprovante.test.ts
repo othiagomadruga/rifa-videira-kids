@@ -217,6 +217,36 @@ describe("o cruzamento do comprovante", () => {
     });
   });
 
+  it("o identificador em minúsculas dá o Certo; parecido (um a mais, um a menos, com prefixo) não é Certo", () => {
+    const comTxid = (txid: string) => {
+      const comprovante = lerComprovante(
+        textoDoComprovante(
+          COMPROVANTE_BRADESCO.map(([rotulo, valor]) =>
+            rotulo === "Identificador" ? [rotulo, txid] : [rotulo, valor],
+          ),
+        ),
+        CONTEXTO,
+      );
+      if ("ok" in comprovante) throw new Error(comprovante.titulo);
+      return cruzamento(extratoDoComprovante(comprovante));
+    };
+    expect(comTxid("pedteste0101").paraMarcar[0]).toMatchObject({
+      grau: "certo",
+      pedido: { id: "PEDTESTE0101" },
+    });
+    for (const parecido of [
+      "PEDTESTE010",
+      "PEDTESTE01011",
+      "XPEDTESTE0101",
+      "PEDTESTE0101X",
+    ]) {
+      const resultado = comTxid(parecido);
+      expect(
+        resultado.paraMarcar.filter((casado) => casado.grau === "certo"),
+      ).toEqual([]);
+    }
+  });
+
   it("sem o identificador: pelo valor, a data e a hora (Provável), como o extrato", async () => {
     const resultado = cruzamento(
       extratoDe(await lerPdf(pdfDeComprovante(COMPROVANTE_DIGITAL))),
@@ -324,6 +354,59 @@ describe("vários arquivos de uma vez", () => {
     expect(
       juntarArquivos([{ extrato: dobrado }]).extrato.lancamentos,
     ).toHaveLength(2);
+  });
+
+  it("o mesmo comprador, o mesmo valor, a 1 minuto: identificadores diferentes são dois Pix; o comprovante vai para o lançamento mais perto", () => {
+    const comprovante = (txid: string | null, minutos: number) =>
+      extratoDoComprovante({
+        centavos: 2000,
+        dia: "2026-11-16",
+        instante: Date.parse("2026-11-16T10:05:00-03:00") + minutos * 60_000,
+        pagador: PAGADORA_UM,
+        idDaTransacao: null,
+        txid,
+        mensagens: [],
+      });
+    const dois = juntarArquivos([
+      { extrato: comprovante("PEDTESTE0101", 0) },
+      { extrato: comprovante("pedteste0105", 1) },
+    ]);
+    expect(dois.extrato.lancamentos).toHaveLength(2);
+    expect(dois.repetidos).toEqual([0, 0]);
+    // O mesmo identificador (em maiúsculas ou não) é o mesmo Pix.
+    expect(
+      juntarArquivos([
+        { extrato: comprovante("PEDTESTE0101", 0) },
+        { extrato: comprovante("pedteste0101", 1) },
+      ]).extrato.lancamentos,
+    ).toHaveLength(1);
+    // Dois Pix iguais no extrato, a 1 minuto: cada comprovante fica com o seu (o mais perto na hora).
+    const [base] = comprovante(null, 0).lancamentos;
+    const doExtrato: ExtratoLido = {
+      ok: true,
+      formato: "texto",
+      lancamentos: [0, 1].map((minutos, indice) => ({
+        ...base,
+        origem: undefined,
+        pagador: undefined,
+        ordem: indice + 1,
+        instante: base.instante! + minutos * 60_000,
+        descricao: `PIX RECEBIDO REM: ${PAGADORA_UM}`,
+        identificadores: [],
+      })),
+      ilegiveis: 0,
+      semHora: false,
+    };
+    const juntado = juntarArquivos([
+      { extrato: doExtrato },
+      { extrato: comprovante("PEDTESTE0105", 1) },
+      { extrato: comprovante("PEDTESTE0101", 0) },
+    ]);
+    expect(juntado.repetidos).toEqual([0, 1, 1]);
+    expect(juntado.extrato.lancamentos.map((item) => item.txid)).toEqual([
+      "PEDTESTE0101",
+      "PEDTESTE0105",
+    ]);
   });
 
   it("dois extratos com períodos que se cruzam: as linhas iguais contam uma vez", () => {

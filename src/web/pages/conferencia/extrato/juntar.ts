@@ -3,7 +3,8 @@
 // - o mesmo ID da transação (o E2E do comprovante) é o mesmo Pix; IDs diferentes, Pix diferentes;
 // - senão, o mesmo valor, a mesma hora (até 2 minutos de diferença; sem a hora num deles, o mesmo dia) e o mesmo nome
 //   de quem pagou (o nome do comprovante na descrição do extrato, o "REM: <nome>"). Sem o nome num dos lados, só com a
-//   hora dos dois a menos de 2 minutos;
+//   hora dos dois a menos de 2 minutos; identificadores (txid) diferentes nunca são o mesmo Pix; havendo mais de um, o
+//   mais perto na hora;
 // - dois extratos (períodos que se cruzam): o mesmo valor, o mesmo dia e hora e a mesma descrição.
 // Os Pix de um mesmo arquivo nunca se juntam entre si (o extrato é a fonte; dois Pix iguais podem ser dois Pix).
 // Quando o comprovante e o extrato são o mesmo Pix, fica o lançamento do extrato (o banco confirma), com o
@@ -65,6 +66,9 @@ export function mesmoPix(a: Lancamento, b: Lancamento): boolean {
   if (a.centavos !== b.centavos || a.centavos === 0) return false;
   if (a.idDaTransacao && b.idDaTransacao)
     return a.idDaTransacao === b.idDaTransacao;
+  // Identificadores (txid) diferentes são Pix de pedidos diferentes (o mesmo comprador pagando dois pedidos).
+  if (a.txid && b.txid && a.txid.toUpperCase() !== b.txid.toUpperCase())
+    return false;
   const comHora = a.instante !== null && b.instante !== null;
   if (comHora) {
     if (
@@ -131,12 +135,25 @@ export function juntarArquivos(partes: readonly ParteLida[]): Juntado {
     let repetidosAqui = 0;
     const usados = new Set<number>();
     for (const lancamento of parte.extrato.lancamentos) {
-      const indice = lancamentos.findIndex(
-        (outro, posicao) =>
-          arquivoDe[posicao] !== arquivo &&
-          !usados.has(posicao) &&
-          mesmoPix(outro, lancamento),
-      );
+      // O mais perto na hora entre os que são o mesmo Pix (dois Pix iguais no extrato a 1 minuto um do outro).
+      let indice = -1;
+      let distancia = Infinity;
+      lancamentos.forEach((outro, posicao) => {
+        if (
+          arquivoDe[posicao] === arquivo ||
+          usados.has(posicao) ||
+          !mesmoPix(outro, lancamento)
+        )
+          return;
+        const diferenca =
+          outro.instante !== null && lancamento.instante !== null
+            ? Math.abs(outro.instante - lancamento.instante)
+            : FOLGA_DO_MESMO_PIX_MS;
+        if (diferenca < distancia) {
+          indice = posicao;
+          distancia = diferenca;
+        }
+      });
       if (indice >= 0) {
         lancamentos[indice] = juntarDois(lancamentos[indice], lancamento);
         usados.add(indice);
