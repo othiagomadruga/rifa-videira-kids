@@ -575,6 +575,12 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - sessao.entrar_com_senha (RIFA-064, D29): ROTAS_ACESSO.entrarComSenha, cada login da célula com a senha padrão que
  *   abriu sessão; quem fez é o usuário líder da célula, alvo `celula:<id>`; resumo sem a senha (que nunca é gravada).
  *   A tentativa recusada não registra.
+ * - sessao.entrar_como_admin (RIFA-073, D33): ROTAS_ACESSO.entrarComoAdmin, cada login do admin com usuário e senha que
+ *   abriu sessão; quem fez é o próprio admin, alvo `usuario:<id>`; resumo sem a senha e sem o usuário de login. A
+ *   tentativa recusada não registra.
+ * - senha_admin.definir, senha_admin.trocar e senha_admin.remover (RIFA-073, D33): ROTAS_ACESSO.definirMinhaSenhaAdmin e
+ *   removerMinhaSenhaAdmin, alvo `usuario:<id>` (o próprio admin); resumo sem a senha, sem o hash e sem o usuário de
+ *   login (só se ele mudou e, na troca e na remoção, quantas sessões abertas pela senha foram encerradas).
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -598,6 +604,10 @@ export const ACOES_AUDITORIA = [
   "afiliado.remover",
   "webhook.gerar_token",
   "sessao.entrar_com_senha",
+  "sessao.entrar_como_admin",
+  "senha_admin.definir",
+  "senha_admin.trocar",
+  "senha_admin.remover",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 

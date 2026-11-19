@@ -87,7 +87,7 @@ describe("CA4: só admin administra os acessos", () => {
     return papeis !== null && !papeis.includes("coordenacao");
   });
 
-  it("as rotas só de admin são as 5 de usuários e links e as 2 dos acessos da hierarquia", () => {
+  it("as rotas só de admin são as 5 de usuários e links, as 2 dos acessos da hierarquia e as 3 da senha do admin", () => {
     expect(
       rotasAdmin.map((rota) => `${rota.metodo} ${rota.caminho}`).sort(),
     ).toEqual(
@@ -99,6 +99,10 @@ describe("CA4: só admin administra os acessos", () => {
         "DELETE /api/admin/links/:id",
         "GET /api/admin/acessos-hierarquia",
         "POST /api/admin/acessos-hierarquia/links",
+        // RIFA-073 (D33): a senha do próprio admin.
+        "GET /api/admin/minha-senha",
+        "PUT /api/admin/minha-senha",
+        "DELETE /api/admin/minha-senha",
       ].sort(),
     );
   });

@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 18 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 22 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -192,6 +192,11 @@ describe("GET /api/admin/auditoria", () => {
       "webhook.gerar_token",
       // RIFA-064 (D29): o login da célula com a senha padrão.
       "sessao.entrar_com_senha",
+      // RIFA-073 (D33): o login do admin com usuário e senha e a senha dele (definir, trocar, remover).
+      "sessao.entrar_como_admin",
+      "senha_admin.definir",
+      "senha_admin.trocar",
+      "senha_admin.remover",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
     for (const acao of ACOES_AUDITORIA)

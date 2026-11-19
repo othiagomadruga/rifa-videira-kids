@@ -15,6 +15,8 @@ export const AJUDA = {
     "Como entrar no sistema da campanha: o líder entra com o nome da célula e a senha; a coordenação e os discipuladores, pelo link pessoal que chegou no WhatsApp.",
   entrarComCelula:
     "O jeito de o líder entrar: o nome da célula, como aparece no ranking, e a senha que a coordenação passou. Ex.: a senha começa com @ e termina com 1234.",
+  entrarComoAdmin:
+    "O jeito de o administrador entrar sem o link: o usuário e a senha que ele criou em Minha senha. Ex.: depois de trocar de celular, entre por aqui.",
   comoEntrar:
     "O passo a passo para entrar pelo link pessoal que chegou no WhatsApp, sem senha. Ex.: se perdeu o link, peça um novo à coordenação.",
   acesso:

@@ -8,6 +8,7 @@ import { CampanhaPage } from "../campanha/CampanhaPage";
 import { ConferenciaPage } from "../conferencia/ConferenciaPage";
 import { HierarquiaPage } from "../hierarquia/HierarquiaPage";
 import { MapaPage } from "../mapa/MapaPage";
+import { MinhaSenhaPage } from "../minha-senha/MinhaSenhaPage";
 import { PedidosPage } from "../pedidos/PedidosPage";
 import { PedidosSuspeitosPage } from "../pedidos-suspeitos/PedidosSuspeitosPage";
 import { RankingsPage } from "../rankings/RankingsPage";
@@ -121,6 +122,15 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
     dica: DICA_DO_MENU.trilha,
     icone: "trilha",
     Component: TrilhaPage,
+    papeis: ["admin"],
+  },
+  // RIFA-073 (D33): o usuário e a senha do próprio admin (GET, PUT e DELETE /api/admin/minha-senha, só admin).
+  {
+    segmento: "minha-senha",
+    rotulo: "Minha senha",
+    dica: DICA_DO_MENU["minha-senha"],
+    icone: "chave",
+    Component: MinhaSenhaPage,
     papeis: ["admin"],
   },
 ];
