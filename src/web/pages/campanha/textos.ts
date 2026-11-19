@@ -106,6 +106,10 @@ export const DICAS = {
     `Indisponível: a campanha já tem o máximo de ${limite} períodos.`,
   preco:
     "Quanto custa cada bilhete na Rifei. O sistema usa para conferir se o valor de cada pedido bate com os bilhetes.",
+  quantidadeNumeros:
+    "Quantos números a rifa tem na Rifei. A tela Bilhetes usa para desenhar a grade de pagos, reservados e livres. Ex.: 7005.",
+  numeroInicial:
+    "Se a Rifei numera a partir do 0 ou do 1. Em automático, o sistema descobre pelos números dos pedidos (se aparecer o 0, começa em 0).",
   unidadeMeta:
     "Escolha se a meta conta bilhetes vendidos ou reais arrecadados.",
   regraMeta:

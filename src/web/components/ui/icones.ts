@@ -14,6 +14,9 @@ export const ICONES = {
   adesao:
     "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM3 21v-1a6 6 0 0 1 9.5-4.9M15 17l2 2 4-4",
   pedidos: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
+  // Um bilhete com o picote no meio (RIFA-075: tela Bilhetes).
+  bilhetes:
+    "M3 7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 4v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-4zM14 6v2M14 11v2M14 16v2",
   suspeito:
     "M10.3 4.2 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01",
   ranking: "M3 20h18M4.5 20v-7h4.5v7M9.5 20V6h5v14M15 20v-4.5h4.5V20",

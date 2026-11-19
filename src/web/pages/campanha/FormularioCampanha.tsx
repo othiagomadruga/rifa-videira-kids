@@ -434,6 +434,48 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                   }
                 />
               </ComDica>
+              {/* RIFA-075 (D35): os números da rifa, para a tela Bilhetes. */}
+              <div className="grade">
+                <ComDica texto={DICAS.quantidadeNumeros}>
+                  <Input
+                    id={idDoCampo("bilhetes.quantidade")}
+                    rotulo="Quantidade de números da rifa (como na Rifei)"
+                    dica="Quantos números a rifa tem na Rifei. A tela Bilhetes desenha a grade com eles. Ex.: 7005."
+                    value={formulario.bilhetes_quantidade}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    erro={erros["bilhetes.quantidade"]}
+                    onChange={(evento) =>
+                      alterar(
+                        { bilhetes_quantidade: evento.target.value },
+                        "bilhetes.quantidade",
+                      )
+                    }
+                  />
+                </ComDica>
+                <ComDica texto={DICAS.numeroInicial}>
+                  <Select
+                    id={idDoCampo("bilhetes.numero_inicial")}
+                    rotulo="Número inicial"
+                    dica="Como a Rifei numera: do 0 ou do 1. Na dúvida, deixe automático e confira na compra de teste."
+                    value={formulario.bilhetes_numero_inicial}
+                    erro={erros["bilhetes.numero_inicial"]}
+                    onChange={(evento) =>
+                      alterar(
+                        {
+                          bilhetes_numero_inicial: evento.target.value as
+                            "" | "0" | "1",
+                        },
+                        "bilhetes.numero_inicial",
+                      )
+                    }
+                  >
+                    <option value="">Automático (pelos pedidos)</option>
+                    <option value="0">Começa no 0</option>
+                    <option value="1">Começa no 1</option>
+                  </Select>
+                </ComDica>
+              </div>
               <div className="grade">
                 <ComDica texto={DICAS.unidadeMeta}>
                   <Select

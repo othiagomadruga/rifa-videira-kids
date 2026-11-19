@@ -4,6 +4,7 @@
 // lê o que foi digitado e se traduz cada problema para o campo certo.
 import {
   ACESSO_PADRAO,
+  BILHETES_PADRAO,
   FUSO_PADRAO,
   LIMITE_CARACTERES_MENSAGEM,
   MENSAGENS_PADRAO,
@@ -60,6 +61,10 @@ export type Formulario = {
   acesso_redes: boolean;
   /** Os modelos das mensagens do link pessoal (RIFA-032), como digitados. */
   mensagens: Record<TipoMensagem, string>;
+  /** RIFA-075 (D35): quantos números a rifa tem, como digitado. */
+  bilhetes_quantidade: string;
+  /** "" = automático (null na API), "0" ou "1". */
+  bilhetes_numero_inicial: "" | "0" | "1";
 };
 
 /** Corpo do PUT já validado pelo contrato (espaços tirados, padrões aplicados). */
@@ -125,6 +130,8 @@ export function formularioVazio(): Formulario {
     acesso_discipuladores: ACESSO_PADRAO.discipuladores,
     acesso_redes: ACESSO_PADRAO.redes,
     mensagens: { ...MENSAGENS_PADRAO },
+    bilhetes_quantidade: String(BILHETES_PADRAO.quantidade),
+    bilhetes_numero_inicial: "",
   };
 }
 
@@ -159,6 +166,16 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
     acesso_discipuladores: campanha.acesso.discipuladores,
     acesso_redes: campanha.acesso.redes,
     mensagens: { ...campanha.mensagens },
+    // RIFA-075: uma resposta sem o grupo (API de antes dele) vale o padrão.
+    bilhetes_quantidade: String(
+      campanha.bilhetes?.quantidade ?? BILHETES_PADRAO.quantidade,
+    ),
+    bilhetes_numero_inicial:
+      campanha.bilhetes?.numero_inicial === 0
+        ? "0"
+        : campanha.bilhetes?.numero_inicial === 1
+          ? "1"
+          : "",
   };
 }
 
@@ -383,6 +400,20 @@ export function montarCorpo(
           ? null
           : (lerInteiro(formulario.publico_limite_ranking) ?? -1),
     },
+    // RIFA-075 (D35): os números da rifa vão sempre (a coordenação também muda, como o ranking).
+    bilhetes: {
+      quantidade: ler(
+        "bilhetes.quantidade",
+        formulario.bilhetes_quantidade,
+        lerInteiro,
+        "Informe quantos números a rifa tem.",
+        "Use um número inteiro de 1 a 1.000.000.",
+      ),
+      numero_inicial:
+        formulario.bilhetes_numero_inicial === ""
+          ? null
+          : Number(formulario.bilhetes_numero_inicial),
+    },
     // Os três grupos vão sempre que é o admin (D20: o grupo presente substitui o gravado); da coordenação, nunca
     // (RIFA-042: grupo ausente mantém o gravado).
     ...(regrasDoAdmin && {
@@ -436,6 +467,8 @@ const MENSAGEM_DO_CAMPO: Record<string, string> = {
   "periodos.*.percentual_bp": "Use um percentual de 0 a 100.",
   "ranking.criterio": "Escolha o critério do ranking.",
   "ranking.por_divisao": "Marque ou desmarque esta opção.",
+  "bilhetes.quantidade": "Use um número inteiro de 1 a 1.000.000.",
+  "bilhetes.numero_inicial": "Escolha 0, 1 ou automático.",
   "publico.mostra_percentual_meta": "Marque ou desmarque esta opção.",
   "publico.limite_ranking":
     "Use um número inteiro de 1 a 100, ou deixe em branco para mostrar todas.",
@@ -505,6 +538,8 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   periodos: "Períodos",
   "ranking.criterio": "Critério do ranking",
   "ranking.por_divisao": "Separar o ranking por divisão",
+  "bilhetes.quantidade": "Quantidade de números da rifa",
+  "bilhetes.numero_inicial": "Número inicial da rifa",
   "publico.mostra_percentual_meta": "Percentual da meta no ranking público",
   "publico.limite_ranking": "Posições no ranking público",
   "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
@@ -532,6 +567,8 @@ const ORDEM_DOS_CAMPOS = [
   "meta.unidade",
   "meta.regra",
   "meta.valor",
+  "bilhetes.quantidade",
+  "bilhetes.numero_inicial",
   "ranking.criterio",
   "ranking.por_divisao",
   "publico.mostra_percentual_meta",
