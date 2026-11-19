@@ -395,6 +395,12 @@ describe("RIFA-070 (D32): achar o pedido pelo número do pedido ou do bilhete", 
     ]);
   });
 
+  it("número parecido não acha outro pedido: bilhete 4, 420 ou 142 não traz o do 42; parte do id não traz o pedido", async () => {
+    for (const numero of ["4", "420", "142", "PED", "PED-PAG"])
+      expect(await buscar(numero)).toEqual([]);
+    expect((await buscar("8")).map((a) => a.pedido.id)).toEqual(["PED-PAGO"]);
+  });
+
   it("não achou: lista vazia; número vazio: 400; sem chamar a Rifei", async () => {
     expect(await buscar("123456")).toEqual([]);
     await esperarErro(
