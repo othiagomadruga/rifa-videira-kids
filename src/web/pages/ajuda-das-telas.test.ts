@@ -63,6 +63,29 @@ describe("os textos de ajuda", () => {
       expect(texto, chave).not.toMatch(/R\$|reais/);
   });
 
+  it("os módulos que o bumbo, o telão e as telas abertas carregam sob demanda só têm textos (nenhum import)", () => {
+    // O bumbo e o telão podem importar o carregador da ajuda (guarda-bumbo e guarda-telao) porque estes módulos são
+    // só textos: um import aqui levaria código (dados, dinheiro, API) para dentro do pacote deles sem a guarda ver.
+    const fontes = import.meta.glob<string>(
+      ["./ajuda-das-telas.ts", "./*/ajuda.ts"],
+      { query: "?raw", import: "default", eager: true },
+    );
+    const ajudas = Object.keys(fontes).filter(
+      (arquivo) => arquivo !== "./ajuda-das-telas.ts",
+    );
+    expect(ajudas).toContain("./ranking-publico/ajuda.ts");
+    expect(ajudas.length).toBeGreaterThanOrEqual(7);
+    for (const arquivo of ajudas)
+      expect(fontes[arquivo], arquivo).not.toMatch(/^\s*import\b|import\(/m);
+    // O agregador só importa os ajuda.ts das telas.
+    const destinos = [
+      ...(fontes["./ajuda-das-telas.ts"] ?? "").matchAll(/from\s*"([^"]+)"/g),
+    ].map((achado) => achado[1]);
+    expect(destinos.length).toBeGreaterThanOrEqual(6);
+    for (const destino of destinos)
+      expect(destino).toMatch(/^\.\/[\w-]+\/ajuda$/);
+  });
+
   it.each(TODOS)(
     "%s: até 3 frases curtas (até 260 caracteres), com ponto final",
     (_chave, texto) => {
