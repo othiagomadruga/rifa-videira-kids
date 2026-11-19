@@ -39,6 +39,7 @@ const MENU_ADMIN = [
   ...MENU_COORDENACAO,
   ["Acessos", "/coordenacao/acessos"],
   ["Trilha", "/coordenacao/trilha"],
+  // RIFA-073 (D33): o usuário e a senha do próprio admin.
   ["Minha senha", "/coordenacao/minha-senha"],
 ] as const;
 
