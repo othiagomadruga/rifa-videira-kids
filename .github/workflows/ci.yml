@@ -1,7 +1,11 @@
 name: CI
 
 on:
+  # Só na main (RIFA-072): o repositório é privado e cada rodada gasta minutos da cota do GitHub Actions. As branches
+  # dos agentes passam pelo portão local (testes, lint, typecheck e build) antes do merge; numa branch, o CI roda
+  # pelo Run workflow ou por um pull request.
   push:
+    branches: [main]
   pull_request:
   # Publicar a main de novo sem commit (RIFA-035, D22): Actions → CI → Run workflow, na main. Refaz o build e a
   # publicação, como um push; noutra branch, só o job ci.

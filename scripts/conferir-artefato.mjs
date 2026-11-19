@@ -45,8 +45,8 @@ const SEGREDO_LOCAL = /^\.(dev\.vars|env)(\.|$)/;
  * o plugin muda (conferido na RIFA-021 com o wrangler 4.156.1 e o plugin 1.67.0, que sobem juntos, D4): o
  * Worker já empacotado (index.js, no_bundle, a regra de módulos ES e os source maps), os assets em ../client
  * e as migrations com o caminho a partir de dist/rifa_videira_kids. `build`, `define` e `unsafe` (do
- * empacotamento do próprio wrangler) o plugin não grava. Se uma versão nova mudar isso, o job "ci" falha
- * aqui, antes de chegar à main: ajuste esta função junto com a subida.
+ * empacotamento do próprio wrangler) o plugin não grava. Se uma versão nova mudar isso, a conferência
+ * falha aqui (no portão local da subida, antes da main, ou no job "ci"): ajuste esta função junto com a subida.
  */
 export function configEsperada(lida, raiz = ".") {
   const {
