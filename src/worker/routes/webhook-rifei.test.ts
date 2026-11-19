@@ -185,8 +185,13 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
     desconsiderado_em,
     desconsiderado_motivo,
     desconsiderado_observacao,
+    // RIFA-076 (D36): o contato do comprador tem o teste dele (routes/compradores.test.ts); fora da comparação.
+    comprador_nome,
+    comprador_telefone,
     ...linha
   } = completa;
+  void comprador_nome;
+  void comprador_telefone;
   expect({
     origem,
     recuperacao_id,
@@ -1644,8 +1649,8 @@ describe("CA5: idempotência e ordem dos eventos (D3, D4)", () => {
 // CA6: privacidade (D1)
 // ---------------------------------------------------------------------------------------------------
 
-describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
-  it("depois de todas as fixtures (processadas, ignoradas e rejeitadas), nenhuma coluna de nenhuma tabela tem dado pessoal", async () => {
+describe("CA6: nenhum dado pessoal de comprador no banco (D1), fora do nome e do telefone no pedido (RIFA-076, D36)", () => {
+  it("depois de todas as fixtures (processadas, ignoradas e rejeitadas), nenhuma coluna de nenhuma tabela tem dado pessoal, exceto pedidos.comprador_nome e pedidos.comprador_telefone", async () => {
     const fixtures = Object.values(TODAS_AS_FIXTURES);
     expect(fixtures.length).toBeGreaterThanOrEqual(8);
 
@@ -1699,7 +1704,15 @@ describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
       '"comprador":{"ddd":"91","pais":"55"}':
         "webhook_eventos.payload_redigido",
       '"caminho":["buyer","name"]': "webhook_eventos.avisos",
+      // RIFA-076 (D36): o nome e o telefone ficam só nas duas colunas do pedido.
+      "Comprador Ficticio Um": "pedidos.comprador_nome",
+      "+5591900000001": "pedidos.comprador_telefone",
     };
+    // As únicas colunas onde nome e telefone podem aparecer.
+    const CONTATO = new Set([
+      "pedidos.comprador_nome",
+      "pedidos.comprador_telefone",
+    ]);
 
     const { tabelas, ocorrencias } = await varrerBanco([
       ...pessoais,
@@ -1715,8 +1728,25 @@ describe("CA6: nenhum dado pessoal de comprador no banco (D1)", () => {
       ]),
     );
     const vazamentos = pessoais.flatMap((valor) =>
-      (ocorrencias.get(valor) ?? []).map((lugar) => `${lugar}: ${valor}`),
+      (ocorrencias.get(valor) ?? [])
+        .filter((lugar) => !CONTATO.has(lugar))
+        .map((lugar) => `${lugar}: ${valor}`),
     );
+    // Nas colunas do contato, nada além do nome e do telefone (nem e-mail, documento, nascimento ou endereço).
+    const { results: contatos } = await db
+      .prepare(
+        "SELECT comprador_nome, comprador_telefone FROM pedidos WHERE comprador_nome IS NOT NULL OR comprador_telefone IS NOT NULL",
+      )
+      .all<{
+        comprador_nome: string | null;
+        comprador_telefone: string | null;
+      }>();
+    expect(contatos.length).toBeGreaterThan(0);
+    for (const { comprador_nome, comprador_telefone } of contatos) {
+      expect(comprador_nome ?? "").not.toMatch(/@|\d{5}/);
+      if (comprador_telefone !== null)
+        expect(comprador_telefone).toMatch(/^\+[1-9]\d{6,14}$/);
+    }
     expect(vazamentos).toEqual([]);
     for (const [controle, lugar] of Object.entries(controles)) {
       expect(ocorrencias.get(controle)).toContain(lugar);

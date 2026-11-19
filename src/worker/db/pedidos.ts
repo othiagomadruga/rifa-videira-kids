@@ -1,4 +1,5 @@
-// pedidos (D3, D4): estado atual de cada pedido da Rifei, sem nenhum dado pessoal (D1).
+// pedidos (D3, D4): estado atual de cada pedido da Rifei. Do comprador, só ddd e pais (D1) e, desde a RIFA-076 (D36),
+// o nome e o telefone (comprador_nome, comprador_telefone), que só o admin vê e que a trilha nunca guarda.
 import {
   STATUS_PEDIDO,
   TRANSICOES_PERMITIDAS,
@@ -6,6 +7,7 @@ import {
   decidirTransicaoPedido,
   reaisParaCentavos,
   type AvisoPayloadRifei,
+  type ContatoComprador,
   type PayloadRifeiRedigido,
   type RespostaWebhookRifei,
   type StatusPedido,
@@ -66,6 +68,7 @@ function centavosOuNulo(reais: number | null): number | null {
 interface GravacaoPedido {
   campanhaId: number;
   payload: PayloadRifeiRedigido;
+  contato: ContatoComprador;
   atual: PedidoAtual | null;
   statusResultante: StatusPedido;
   recebidoEm: string;
@@ -86,7 +89,7 @@ function prepararGravacaoPedido(
   db: D1Database,
   gravacao: GravacaoPedido,
 ): D1PreparedStatement {
-  const { payload, statusResultante, recebidoEm } = gravacao;
+  const { payload, contato, statusResultante, recebidoEm } = gravacao;
   // Pedido aprovado sem approved_at: vale o instante do recebimento (CHECK da tabela).
   const aprovadoEm =
     utcOuNulo(payload.approved_at) ??
@@ -98,10 +101,11 @@ function prepararGravacaoPedido(
          qtd_bilhetes, numeros, subtotal_centavos, total_centavos,
          desconto_promocao_centavos, desconto_cupom_centavos, cupom_id, metodo_pagamento, rifinha,
          ddd, pais, utm_source, utm_campaign, utm_medium, utm_content, utm_term,
-         criado_em, expira_em, aprovado_em, expirado_em, registrado_em, atualizado_em
+         criado_em, expira_em, aprovado_em, expirado_em, registrado_em, atualizado_em,
+         comprador_nome, comprador_telefone
        )
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-         ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?27
+         ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?27, ?31, ?32
        WHERE (SELECT status FROM pedidos WHERE id = ?1) IS ?28
          AND (SELECT affiliate_id FROM pedidos WHERE id = ?1) IS ?29
        ON CONFLICT (id) DO UPDATE SET
@@ -132,6 +136,8 @@ function prepararGravacaoPedido(
          expira_em = COALESCE(excluded.expira_em, pedidos.expira_em),
          aprovado_em = COALESCE(excluded.aprovado_em, pedidos.aprovado_em),
          expirado_em = COALESCE(excluded.expirado_em, pedidos.expirado_em),
+         comprador_nome = COALESCE(excluded.comprador_nome, pedidos.comprador_nome),
+         comprador_telefone = COALESCE(excluded.comprador_telefone, pedidos.comprador_telefone),
          atualizado_em = excluded.atualizado_em
        WHERE pedidos.status IN (SELECT value FROM json_each(?30))`,
     )
@@ -166,7 +172,32 @@ function prepararGravacaoPedido(
       gravacao.atual?.status ?? null,
       gravacao.atual?.affiliate_id ?? null,
       JSON.stringify(origensPermitidas(statusResultante)),
+      contato.nome,
+      contato.telefone,
     );
+}
+
+/**
+ * RIFA-076 (D36): o evento que não grava o pedido (duplicado, transição ignorada) ainda atualiza o contato do
+ * comprador, quando traz um valor e ele é diferente do gravado (um valor ausente nunca apaga). Assim os pedidos
+ * gravados antes da migração 0017 ganham nome e telefone no próximo evento. Não mexe em status nem afiliado (a guarda
+ * da concorrência otimista fica intacta) nem em atualizado_em (o que mudou é só o contato).
+ */
+function prepararContatoDoComprador(
+  db: D1Database,
+  pedidoId: string,
+  contato: ContatoComprador,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE pedidos SET
+         comprador_nome = COALESCE(?2, comprador_nome),
+         comprador_telefone = COALESCE(?3, comprador_telefone)
+       WHERE id = ?1
+         AND (comprador_nome IS NOT COALESCE(?2, comprador_nome)
+           OR comprador_telefone IS NOT COALESCE(?3, comprador_telefone))`,
+    )
+    .bind(pedidoId, contato.nome, contato.telefone);
 }
 
 /**
@@ -240,6 +271,8 @@ interface EventoDoPedido {
   precoBilheteCentavos: number;
   /** Payload já redigido (D1) e da campanha ativa (D5). */
   payload: PayloadRifeiRedigido;
+  /** RIFA-076 (D36): nome e telefone de quem reservou (só para as colunas do pedido). Padrão: nada. */
+  contato?: ContatoComprador;
   /** Diferenças do payload em relação à doc (analisarPayloadRifei). */
   avisos: readonly AvisoPayloadRifei[];
   recebidoEm: string;
@@ -263,6 +296,7 @@ export async function processarEventoPedido(
     campanhaId,
     precoBilheteCentavos,
     payload,
+    contato = { nome: null, telefone: null },
     avisos,
     recebidoEm,
   }: EventoDoPedido,
@@ -326,6 +360,7 @@ export async function processarEventoPedido(
         prepararGravacaoPedido(db, {
           campanhaId,
           payload,
+          contato,
           atual,
           statusResultante: decisao.status_resultante,
           recebidoEm,
@@ -349,6 +384,12 @@ export async function processarEventoPedido(
         prepararAfiliadoTardio(db, payload, atual.status, recebidoEm),
       );
     }
+    if (
+      !processado &&
+      atual !== null &&
+      (contato.nome !== null || contato.telefone !== null)
+    )
+      comandos.push(prepararContatoDoComprador(db, payload.id, contato));
 
     const resultados = await db.batch<{ id: number }>(comandos);
     const eventoId = resultados[posicaoEvento]?.results[0]?.id;

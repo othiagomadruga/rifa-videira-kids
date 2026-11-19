@@ -212,7 +212,8 @@ export async function aplicarDesconsideracao(
   ]);
   const mudado = item.results[0] as LinhaPedido | undefined;
   if (gravado.meta.changes > 0 && mudado)
-    return { ok: true, item: itemDaLinha(mudado), mudou: true };
+    // Só o admin desconsidera (D20): o item volta com o comprador (RIFA-076, D36), como na lista dele.
+    return { ok: true, item: itemDaLinha(mudado, true), mudou: true };
 
   const curta = await db
     .prepare(LER_CURTA)
@@ -226,7 +227,7 @@ export async function aplicarDesconsideracao(
   if (linha.id === null) return { ok: false, motivo: "pedido_nao_encontrado" };
   return {
     ok: true,
-    item: itemDaLinha({ ...linha, id: linha.id }),
+    item: itemDaLinha({ ...linha, id: linha.id }, true),
     mudou: false,
   };
 }

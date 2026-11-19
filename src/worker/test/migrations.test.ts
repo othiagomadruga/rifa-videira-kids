@@ -1,7 +1,7 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql e
-// 0012_ranking_por_divisao.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A
+// 0012_ranking_por_divisao.sql e, da RIFA-076, 0017_comprador_contato.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A
 // 0006, a 0007, a 0008, a 0009, a 0010, a 0011 e a 0012 também são aplicadas num D1 à parte (DB_MIGRACAO,
 // vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7;
 // RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061).
@@ -68,7 +68,7 @@ describe("migrações: schema do D1", () => {
     expect(results).toContainEqual({ type: "view", name: "vendas_aprovadas" });
   });
 
-  it("D1/LGPD: nenhuma tabela tem coluna de dado pessoal do comprador (pragma_table_info)", async () => {
+  it("D1/LGPD: nenhuma tabela tem coluna de dado pessoal do comprador, fora o nome e o telefone no pedido (D36) (pragma_table_info)", async () => {
     const { results } = await env.DB.prepare(
       `SELECT m.name AS tabela, c.name AS coluna
        FROM sqlite_master AS m JOIN pragma_table_info(m.name) AS c
@@ -82,11 +82,16 @@ describe("migrações: schema do D1", () => {
     // equipe da igreja, não do comprador. A observação da desconsideração (0008, D20) é a nota curta do ADMIN
     // sobre o pedido (teste, fraude, estorno), não um dado do comprador: o contrato recusa "@" e 8 dígitos
     // seguidos (observacaoTemContato) e a tela pede para não escrever nome, telefone ou e-mail.
+    // RIFA-076 (D36, decisão do PO em 19/11, que substitui em parte a regra): o nome e o telefone de quem reserva ou
+    // compra, só no pedido e só para o admin. E-mail, documento, nascimento e endereço continuam proibidos, e a trilha
+    // (webhook_eventos) continua sem nada do comprador.
     const equipe = new Set([
       "celulas.lider_email",
       "celulas.lider_telefone",
       "usuarios.email",
       "pedidos.desconsiderado_observacao",
+      "pedidos.comprador_nome",
+      "pedidos.comprador_telefone",
     ]);
     const suspeitas = results
       .filter(
@@ -2024,7 +2029,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       );
       await applyD1Migrations(db, ate0011);
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0012: as seguintes têm o describe delas, sobre estes mesmos dados (a 0017, RIFA-076, no fim do arquivo).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0013"),
+      );
     });
 
     it("a 0012 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
@@ -2167,6 +2176,73 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
             ?.link_vendas_modelo,
         ).toBe(MODELO);
       }
+    });
+  });
+  // -------------------------------------------------------------------------------------------------
+  // 0017 (RIFA-076, D36): o nome e o telefone de quem reserva ou compra, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0017 sobre dados que já existiam (RIFA-076)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram as migrações até a 0016.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0017"),
+      );
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0017 foi aplicada sobre os pedidos que existiam; nenhum dado muda e cada pedido ganha as duas colunas em NULL", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toContain(
+        "0017_comprador_contato.sql",
+      );
+      expect(antes.pedidos.length).toBeGreaterThan(0);
+      expect(antes.pedidos[0]).not.toHaveProperty("comprador_nome");
+      const { pedidos, ...depois } = await fotografarTodasAsTabelas(db);
+      const { pedidos: pedidosAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(pedidos).toEqual(
+        pedidosAntes.map((pedido) => ({
+          ...pedido,
+          comprador_nome: null,
+          comprador_telefone: null,
+        })),
+      );
+    });
+
+    it("os CHECKs: nome de 1 a 120 caracteres; telefone só em E.164", async () => {
+      const { id } = antes.pedidos[0] as { id: string };
+      const gravar = (nome: string | null, telefone: string | null) =>
+        db
+          .prepare(
+            "UPDATE pedidos SET comprador_nome = ?1, comprador_telefone = ?2 WHERE id = ?3",
+          )
+          .bind(nome, telefone, id)
+          .run();
+      onTestFinished(async () => {
+        await gravar(null, null);
+      });
+      await gravar("Comprador Ficticio", "+5591900000001");
+      await gravar("x".repeat(120), "+1415555");
+      for (const [nome, telefone] of [
+        ["   ", null],
+        ["x".repeat(121), null],
+        [null, "5591900000001"],
+        [null, "+0591900000001"],
+        [null, "+55 91 90000-0001"],
+        [null, "+55919000000011234"],
+        [null, "+5591"],
+      ] as const)
+        await expect(gravar(nome, telefone)).rejects.toThrow(
+          /CHECK constraint failed/,
+        );
     });
   });
 });

@@ -2,7 +2,7 @@
  * Lista de pedidos da coordenação (RIFA-025, D16; docs/api.md, GET /api/admin/pedidos): os pedidos da campanha
  * ativa, do registrado mais novo para o mais antigo (empate pelo id), com a célula resolvida pelo afiliado na
  * leitura (D7), `suspeito` (pedidos_suspeitos, D11), `desconsiderado` (D20), `origem` (D16, RIFA-012), totais por
- * status e cursor opaco. Só lê; nada do comprador além do DDD (D1).
+ * status e cursor opaco. Só lê. Do comprador, o DDD (D1) e, só para o admin, o nome e o telefone (RIFA-076, D36).
  *
  * Desconsiderados (RIFA-028, D20): ficam na lista, com o selo, e fora dos totais (que contam só o que conta). O
  * filtro `desconsiderado=true` sem célula usa o índice parcial da migração 0008
@@ -115,7 +115,8 @@ const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 export const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p.affiliate_id, a.celula_id,
     c.nome AS celula_nome, p.ddd, p.criado_em, p.aprovado_em, p.expirado_em, p.registrado_em, p.atualizado_em,
     EXISTS (SELECT 1 FROM pedidos_suspeitos AS s WHERE s.pedido_id = p.id) AS suspeito, p.origem,
-    p.desconsiderado_em, p.desconsiderado_motivo, p.desconsiderado_observacao`;
+    p.desconsiderado_em, p.desconsiderado_motivo, p.desconsiderado_observacao,
+    p.comprador_nome, p.comprador_telefone`;
 
 /** O que conta (D20): sem a desconsideração do admin. */
 const CONTA = "p.desconsiderado_em IS NULL";
@@ -245,21 +246,31 @@ function semIndiceDaCampanha(condicao: string): string {
 /** Uma linha de COLUNAS_ITEM, como o D1 devolve. */
 export interface LinhaPedido extends Omit<
   ItemPedido,
-  "suspeito" | "desconsiderado"
+  "suspeito" | "desconsiderado" | "comprador"
 > {
   suspeito: number;
+  comprador_nome: string | null;
+  comprador_telefone: string | null;
   desconsiderado_em: string | null;
   desconsiderado_motivo: MotivoDesconsideracao | null;
   desconsiderado_observacao: string | null;
 }
 
-/** A linha lida (COLUNAS_ITEM) como um item da lista: a desconsideração vira o selo `desconsiderado`. */
-export function itemDaLinha(linha: LinhaPedido): ItemPedido {
+/**
+ * A linha lida (COLUNAS_ITEM) como um item da lista: a desconsideração vira o selo `desconsiderado`. RIFA-076 (D36):
+ * `comComprador` (SÓ para a sessão de admin) põe o `comprador`; sem ele, o campo nem existe no item.
+ */
+export function itemDaLinha(
+  linha: LinhaPedido,
+  comComprador = false,
+): ItemPedido {
   const {
     suspeito,
     desconsiderado_em: em,
     desconsiderado_motivo: motivo,
     desconsiderado_observacao: observacao,
+    comprador_nome: nome,
+    comprador_telefone: telefone,
     ...resto
   } = linha;
   return {
@@ -267,6 +278,7 @@ export function itemDaLinha(linha: LinhaPedido): ItemPedido {
     suspeito: suspeito === 1,
     desconsiderado:
       em === null || motivo === null ? null : { motivo, observacao, em },
+    ...(comComprador ? { comprador: { nome, telefone } } : {}),
   };
 }
 
@@ -293,6 +305,8 @@ export async function listarPedidos(
   db: D1Database,
   consulta: ConsultaPedidos,
   cursor: CursorPedidos | null,
+  /** RIFA-076 (D36): só a sessão de admin recebe o `comprador`. */
+  opcoes: { comComprador?: boolean } = {},
 ): Promise<RespostaPedidos> {
   const lista = comandoListaPedidos(consulta, cursor, consulta.limite);
   const comandos = [db.prepare(lista.sql).bind(...lista.valores)];
@@ -302,7 +316,9 @@ export async function listarPedidos(
   }
   const [linhas, linhasTotais] = await db.batch(comandos);
   const resultados = linhas.results as LinhaPedido[];
-  const itens = resultados.slice(0, consulta.limite).map(itemDaLinha);
+  const itens = resultados
+    .slice(0, consulta.limite)
+    .map((linha) => itemDaLinha(linha, opcoes.comComprador === true));
   const ultimo = itens.at(-1);
   let totais: RespostaPedidos["totais"] = null;
   if (linhasTotais !== undefined) {
