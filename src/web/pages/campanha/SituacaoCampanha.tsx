@@ -7,6 +7,7 @@ import {
 } from "../../../shared/contracts";
 import { Badge, Card, type TomBadge } from "../../components/ui";
 import { formatarData } from "../../lib/formatadores";
+import { AJUDA } from "./textos";
 
 const BADGE_DA_FASE: Record<FaseCampanha, { tom: TomBadge; texto: string }> = {
   antes: { tom: "info", texto: "Antes do início" },
@@ -23,7 +24,7 @@ type Props = {
 export function SituacaoCampanha({ campanha }: Props) {
   if (!campanha) {
     return (
-      <Card titulo="Situação">
+      <Card titulo="Situação" ajuda={AJUDA.situacao}>
         <div className="campanha-situacao">
           <p>
             <Badge tom="alerta">Não ativada</Badge>
@@ -41,7 +42,7 @@ export function SituacaoCampanha({ campanha }: Props) {
   const fase = faseDaCampanha(hoje, campanha.data_inicio, campanha.data_fim);
   const badge = BADGE_DA_FASE[fase];
   return (
-    <Card titulo="Situação">
+    <Card titulo="Situação" ajuda={AJUDA.situacao}>
       <div className="campanha-situacao">
         <p className="campanha-situacao__selos">
           <Badge tom="sucesso">Ativa</Badge>

@@ -1,7 +1,12 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import type { RespostaMapaDdd } from "../../../shared/contracts/api";
 import { NOME_DA_UF, type Uf } from "../../../shared/contracts/ddd";
-import { ComDica, DataTable, type ColunaTabela } from "../../components/ui";
+import {
+  ComAjuda,
+  ComDica,
+  DataTable,
+  type ColunaTabela,
+} from "../../components/ui";
 import { formatarMoeda, formatarNumero } from "../../lib/formatadores";
 import {
   POSICAO_DA_UF,
@@ -10,6 +15,7 @@ import {
   type Direcao,
 } from "./grade";
 import {
+  AJUDA,
   DICAS,
   ROTULO_DA_FAIXA,
   faixaDaUf,
@@ -131,9 +137,11 @@ export function MapaDoBrasil({ resposta }: { resposta: RespostaMapaDdd }) {
 
   return (
     <section className="mapa-secao mapa-brasil" aria-labelledby={idTitulo}>
-      <h2 id={idTitulo} className="mapa-secao__titulo">
-        Por estado
-      </h2>
+      <ComAjuda texto={AJUDA.porEstado} idDoTitulo={idTitulo}>
+        <h2 id={idTitulo} className="mapa-secao__titulo">
+          Por estado
+        </h2>
+      </ComAjuda>
       <p className="mapa-secao__texto">
         Toque num estado ou passe o mouse: os números aparecem no quadro do
         canto do mapa.{" "}

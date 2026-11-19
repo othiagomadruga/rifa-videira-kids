@@ -30,7 +30,9 @@ describe("404 (NaoEncontradaPage)", () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       // RIFA-053: no mesmo bloco do título (o PageHeader com o ícone), e um só na tela.
-      expect(icone?.parentElement).toBe(titulo.parentElement);
+      expect(icone?.parentElement).toBe(
+        titulo.closest(".ui-page-header__textos"),
+      );
       expect(icone?.closest("header")).toHaveClass("ui-page-header--com-icone");
       expect(document.querySelectorAll(".ui-icone-da-tela")).toHaveLength(1);
       const voltar = screen.getByRole("link", { name: "Voltar ao início" });

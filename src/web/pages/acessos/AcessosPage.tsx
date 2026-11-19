@@ -34,6 +34,7 @@ import { PessoaCartao, idBotaoAtivo, idBotaoGerar } from "./PessoaCartao";
 import { useRegrasDosAcessos, type Mensagens } from "./regras";
 import { DICAS } from "./textos";
 import "./acessos.css";
+import { DICA_DO_MENU } from "../coordenacao/textos";
 
 /** Pessoas carregadas e o erro da última carga (com dados, o erro é de uma recarga). */
 type Carga = { dados: Usuario[] | null; erro: unknown };
@@ -91,6 +92,7 @@ export function AcessosPage() {
     <>
       <PageHeader
         titulo="Acessos"
+        ajuda={DICA_DO_MENU.acessos}
         descricao="Quem entra no sistema. Cada um entra pelo próprio link, mandado pelo WhatsApp; o link só aparece na hora em que é criado."
       />
       <Abas

@@ -85,6 +85,8 @@ describe("CA3: o código do telão não mostra dinheiro nem quantidades", () => 
     );
     expect(new Set(importadosDoPublico())).toEqual(
       new Set([
+        // A ajuda dos títulos (RIFA-066): só textos, sem dinheiro (entra na conferência abaixo).
+        `${PUBLICO}ajuda-sob-demanda`,
         `${PUBLICO}ranking-publico-api`,
         `${PUBLICO}textos`,
         `${PUBLICO}useRankingPublico`,

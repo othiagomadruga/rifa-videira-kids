@@ -18,6 +18,7 @@ import {
   Aviso,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   Dialogo,
   ErrorState,
@@ -32,6 +33,8 @@ import {
   removerMinhaSenha,
   salvarMinhaSenha,
 } from "./minha-senha-api";
+import { DICA_DO_MENU } from "../coordenacao/textos";
+import { ajuda } from "../ajuda-sob-demanda";
 import { DICAS, TEXTOS } from "./textos";
 import "./minha-senha.css";
 
@@ -168,7 +171,11 @@ export function MinhaSenhaPage() {
 
   return (
     <>
-      <PageHeader titulo={TEXTOS.titulo} descricao={TEXTOS.descricao} />
+      <PageHeader
+        titulo={TEXTOS.titulo}
+        ajuda={DICA_DO_MENU["minha-senha"]}
+        descricao={TEXTOS.descricao}
+      />
       {carga.tipo === "carregando" && <Loading texto="Carregando…" />}
       {carga.tipo === "erro" && (
         <ErrorState
@@ -206,68 +213,72 @@ export function MinhaSenhaPage() {
               noValidate
               onSubmit={aoSalvar}
             >
-              <h2 className="minha-senha-titulo">
-                {carga.senha.definida
-                  ? TEXTOS.tituloFormularioTrocar
-                  : TEXTOS.tituloFormularioCriar}
-              </h2>
-              <ComDica texto={DICAS.usuario}>
-                <Input
-                  ref={refUsuario}
-                  rotulo={TEXTOS.rotuloUsuario}
-                  dica={TEXTOS.ajudaUsuario}
-                  name="usuario"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={MAXIMO_USUARIO_ADMIN}
-                  value={usuario}
-                  erro={erros.usuario}
-                  onChange={(evento) => {
-                    setUsuario(evento.target.value);
-                    if (erros.usuario)
-                      setErros({ ...erros, usuario: undefined });
-                  }}
-                />
-              </ComDica>
-              <ComDica texto={DICAS.senha}>
-                <Input
-                  ref={refSenha}
-                  rotulo={TEXTOS.rotuloSenha}
-                  dica={TEXTOS.ajudaSenha}
-                  name="nova-senha"
-                  type="password"
-                  autoComplete="new-password"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={200}
-                  value={senha}
-                  erro={erros.senha}
-                  onChange={(evento) => {
-                    setSenha(evento.target.value);
-                    if (erros.senha) setErros({ ...erros, senha: undefined });
-                  }}
-                />
-              </ComDica>
-              <ComDica texto={DICAS.confirmacao}>
-                <Input
-                  ref={refConfirmacao}
-                  rotulo={TEXTOS.rotuloConfirmacao}
-                  name="confirmacao"
-                  type="password"
-                  autoComplete="new-password"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={200}
-                  value={confirmacao}
-                  erro={erros.confirmacao}
-                  onChange={(evento) => {
-                    setConfirmacao(evento.target.value);
-                    if (erros.confirmacao)
-                      setErros({ ...erros, confirmacao: undefined });
-                  }}
-                />
-              </ComDica>
+              <ComAjuda
+                texto={ajuda("formularioSenha")}
+                idDoTitulo="minha-senha-titulo"
+              >
+                <h2 id="minha-senha-titulo" className="minha-senha-titulo">
+                  {carga.senha.definida
+                    ? TEXTOS.tituloFormularioTrocar
+                    : TEXTOS.tituloFormularioCriar}
+                </h2>
+              </ComAjuda>
+              <Input
+                ajuda={DICAS.usuario}
+                ref={refUsuario}
+                rotulo={TEXTOS.rotuloUsuario}
+                dica={TEXTOS.ajudaUsuario}
+                name="usuario"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={MAXIMO_USUARIO_ADMIN}
+                value={usuario}
+                erro={erros.usuario}
+                onChange={(evento) => {
+                  setUsuario(evento.target.value);
+                  if (erros.usuario) setErros({ ...erros, usuario: undefined });
+                }}
+              />
+
+              <Input
+                ajuda={DICAS.senha}
+                ref={refSenha}
+                rotulo={TEXTOS.rotuloSenha}
+                dica={TEXTOS.ajudaSenha}
+                name="nova-senha"
+                type="password"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={200}
+                value={senha}
+                erro={erros.senha}
+                onChange={(evento) => {
+                  setSenha(evento.target.value);
+                  if (erros.senha) setErros({ ...erros, senha: undefined });
+                }}
+              />
+
+              <Input
+                ajuda={DICAS.confirmacao}
+                ref={refConfirmacao}
+                rotulo={TEXTOS.rotuloConfirmacao}
+                name="confirmacao"
+                type="password"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={200}
+                value={confirmacao}
+                erro={erros.confirmacao}
+                onChange={(evento) => {
+                  setConfirmacao(evento.target.value);
+                  if (erros.confirmacao)
+                    setErros({ ...erros, confirmacao: undefined });
+                }}
+              />
+
               <div
                 ref={refResultado}
                 tabIndex={-1}

@@ -8,6 +8,7 @@ import {
 import { Aviso, Button, Card, ComDica } from "../../components/ui";
 import { copiarTexto } from "../../components/qr/compartilhar";
 import { DICAS, compararNomes } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** "“Pão Vivo” e “Pao Vivo”", "“A”, “B” e “C”". */
 function juntarNomes(celulas: readonly { nome: string }[]): string {
@@ -46,7 +47,7 @@ export function LoginDasCelulas({ celulas }: { celulas: readonly Celula[] }) {
   }
 
   return (
-    <Card titulo="Login das células com senha">
+    <Card titulo="Login das células com senha" ajuda={ajuda("loginDasCelulas")}>
       <div className="hierarquia-login">
         <p className="hierarquia-login__texto">
           Cada célula entra na tela Entrar com o nome dela e a senha padrão: @,

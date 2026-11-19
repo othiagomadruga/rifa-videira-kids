@@ -16,14 +16,21 @@ import {
   type TipoMensagem,
   type ValoresMensagem,
 } from "../../../shared/contracts";
-import { Aviso, Button, Card, ComDica, Textarea } from "../../components/ui";
+import {
+  Aviso,
+  Button,
+  Card,
+  ComAjuda,
+  ComDica,
+  Textarea,
+} from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
 import {
   ROTULO_MENSAGEM,
   type ErrosFormulario,
   type Formulario,
 } from "./formulario";
-import { DICAS } from "./textos";
+import { AJUDA, DICAS } from "./textos";
 
 /** As chaves da campanha, pelo campo do formulário. */
 export type ChaveDoFormulario =
@@ -131,7 +138,7 @@ export function ChavesDaCampanha({
 }: PropsChaves) {
   const idAviso = useId();
   return (
-    <Card titulo="Pedidos e acessos">
+    <Card titulo="Pedidos e acessos" ajuda={AJUDA.pedidosEAcessos}>
       <div className="campanha-campos">
         {somenteLeitura && <AvisoSoAdmin id={idAviso} />}
         <p className="campanha-texto-suave">
@@ -147,12 +154,16 @@ export function ChavesDaCampanha({
             const ligada = formulario[chave];
             return (
               <li key={chave} className="campanha-chave">
-                {/* A dica fica na linha toda (caixa e texto); a caixa a tem na descrição (`id` da dica). */}
-                <ComDica
+                {/* A ajuda fica na linha toda (caixa e texto) e no "?"; a caixa a tem na descrição (`id` dela). Só
+                    leitura, ela diz também por que a caixa está indisponível. */}
+                <ComAjuda
                   id={`${id}-dica`}
                   texto={
-                    somenteLeitura ? DICAS.chaveSoLeitura : DICAS.chave[chave]
+                    somenteLeitura
+                      ? `${AJUDA.chave[chave]} ${DICAS.chaveSoLeitura}`
+                      : AJUDA.chave[chave]
                   }
+                  idDoTitulo={`${id}-rotulo`}
                 >
                   <label className="campanha-opcao" htmlFor={id}>
                     <input
@@ -172,9 +183,9 @@ export function ChavesDaCampanha({
                           aoAlterar(chave, evento.target.checked);
                       }}
                     />
-                    <span>{texto.rotulo}</span>
+                    <span id={`${id}-rotulo`}>{texto.rotulo}</span>
                   </label>
-                </ComDica>
+                </ComAjuda>
                 <p
                   id={`${id}-explicacao`}
                   className="campanha-chave__explicacao"
@@ -273,7 +284,7 @@ export function MensagensDoLink({
 }: PropsMensagens) {
   const idAviso = useId();
   return (
-    <Card titulo="Mensagens do link pessoal">
+    <Card titulo="Mensagens do link pessoal" ajuda={AJUDA.mensagens}>
       <div className="campanha-campos">
         {somenteLeitura && <AvisoSoAdmin id={idAviso} />}
         <p className="campanha-texto-suave">
@@ -339,32 +350,29 @@ function EditorMensagem({
 
   return (
     <div className="campanha-mensagem">
-      <ComDica
-        texto={
-          somenteLeitura ? DICAS.mensagemSoLeitura(tipo) : DICAS.mensagem(tipo)
+      <Textarea
+        id={id}
+        rotulo={ROTULO_MENSAGEM[tipo]}
+        ajuda={
+          somenteLeitura ? DICAS.mensagemSoLeitura(tipo) : AJUDA.mensagem(tipo)
         }
-      >
-        <Textarea
-          id={id}
-          rotulo={ROTULO_MENSAGEM[tipo]}
-          dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
-            .map((marcador) =>
-              redeUnica && marcador === "alvo"
-                ? EXPLICACAO_DO_ALVO_REDE_UNICA
-                : EXPLICACAO_DO_MARCADOR[marcador],
-            )
-            .join("; ")}.`}
-          erro={erro}
-          value={texto}
-          rows={5}
-          spellCheck={!somenteLeitura}
-          readOnly={somenteLeitura}
-          aria-describedby={idAvisoSoAdmin ?? undefined}
-          onChange={(evento) => {
-            if (!somenteLeitura) aoAlterar(evento.target.value);
-          }}
-        />
-      </ComDica>
+        dica={`Marcadores: ${MARCADORES_DO_MODELO[tipo]
+          .map((marcador) =>
+            redeUnica && marcador === "alvo"
+              ? EXPLICACAO_DO_ALVO_REDE_UNICA
+              : EXPLICACAO_DO_MARCADOR[marcador],
+          )
+          .join("; ")}.`}
+        erro={erro}
+        value={texto}
+        rows={5}
+        spellCheck={!somenteLeitura}
+        readOnly={somenteLeitura}
+        aria-describedby={idAvisoSoAdmin ?? undefined}
+        onChange={(evento) => {
+          if (!somenteLeitura) aoAlterar(evento.target.value);
+        }}
+      />
       <div className="campanha-mensagem__rodape">
         <p id={idContagem} className="campanha-texto-suave">
           {formatarNumero(texto.trim().length)} de{" "}

@@ -24,6 +24,7 @@ import {
   dicaDe,
   passarOMouse,
   tirarOMouse,
+  titulosSemAjuda,
 } from "../test/dicas";
 import { esperarIndisponivel } from "../test/indisponivel";
 import { renderizarRota, respostaJson } from "../test/renderizar";
@@ -44,9 +45,21 @@ import { DICAS as DICAS_404 } from "./nao-encontrada/textos";
 const ESPERA_DO_PACOTE = { timeout: 5000 };
 
 /** Confere a página inteira (com os diálogos abertos): nenhum controle sem dica, e a varredura achou controles. */
-function conferirDicas(minimo: number) {
+/**
+ * Telas sem botão nem campo (RIFA-045): fora o "?" da ajuda dos títulos (RIFA-066), nenhum controle; e todo título
+ * com a explicação.
+ */
+async function conferirSemControles() {
+  const ajudas = document.querySelectorAll("[data-ajuda-botao]").length;
+  expect(contarControles() - ajudas).toBe(0);
+  expect(await titulosSemAjuda()).toEqual([]);
+}
+
+async function conferirDicas(minimo: number) {
   expect(contarControles()).toBeGreaterThanOrEqual(minimo);
   expect(controlesSemDica()).toEqual([]);
+  // RIFA-066: e todo título de seção e todo rótulo de campo com a explicação (mouse no título e toque no "?").
+  expect(await titulosSemAjuda()).toEqual([]);
 }
 
 /** O texto da dica que abre com o mouse parado no controle (e some ao tirar o mouse), como na varredura. */
@@ -69,6 +82,10 @@ const botao = (nome: string | RegExp) =>
 
 /** Uma resposta que nunca chega (o botão fica em "Saindo…", "Entrando…"...). Sair da tela no fim a descarta. */
 const pendente = () => new Promise<Response>(() => {});
+
+// As varreduras passam o mouse em cada controle, título e rótulo da tela e tocam em cada "?" (RIFA-066): com a
+// máquina ocupada (a suíte inteira em paralelo), uma tela grande passa dos 5 s padrão do Vitest.
+vi.setConfig({ testTimeout: 20_000 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -105,7 +122,7 @@ describe("/minha (visão individual, com a moldura)", () => {
   it("líder: Sair, 'Ver os dados em tabela' da curva e o cartão do link de vendas", async () => {
     await abrir("lider");
     expect(screen.getByText("Ver os dados em tabela")).toBeInTheDocument();
-    conferirDicas(7);
+    await conferirDicas(7);
     expect(textoDaDica(botao("Sair"))).toBe(DICAS_DA_MOLDURA.sair);
     expect(textoDaDica(screen.getByText("Ver os dados em tabela"))).toBe(
       DICAS_MINHA.dadosDaCurva,
@@ -117,7 +134,7 @@ describe("/minha (visão individual, com a moldura)", () => {
     expect(
       screen.getAllByRole("button", { name: /^Ver QR code/ }).length,
     ).toBeGreaterThan(0);
-    conferirDicas(10);
+    await conferirDicas(10);
   });
 
   it("rede: a equipe agrupada e os links de todas as células", async () => {
@@ -125,7 +142,7 @@ describe("/minha (visão individual, com a moldura)", () => {
     expect(
       screen.getAllByRole("button", { name: /^Ver QR code/ }).length,
     ).toBeGreaterThan(1);
-    conferirDicas(14);
+    await conferirDicas(14);
   });
 
   it("saindo: 'Saindo…' diz por que está indisponível", async () => {
@@ -136,7 +153,7 @@ describe("/minha (visão individual, com a moldura)", () => {
     const saindo = await screen.findByRole("button", { name: "Saindo…" });
     esperarIndisponivel(saindo);
     expect(textoDaDica(saindo)).toBe(DICAS_DA_MOLDURA.saindo);
-    conferirDicas(7);
+    await conferirDicas(7);
   });
 
   it("falha ao carregar os números: 'Tentar de novo', com o Sair", async () => {
@@ -154,7 +171,7 @@ describe("/minha (visão individual, com a moldura)", () => {
       ESPERA_DO_PACOTE,
     );
     expect(botao("Sair")).toBeInTheDocument();
-    conferirDicas(2);
+    await conferirDicas(2);
   });
 
   it("sem conexão ao carregar os números (RIFA-051): o cartão neutro, com 'Tentar de novo' e o Sair", async () => {
@@ -171,7 +188,7 @@ describe("/minha (visão individual, com a moldura)", () => {
     );
     expect(tentar.closest(".ui-estado--conexao")).not.toBeNull();
     expect(botao("Sair")).toBeInTheDocument();
-    conferirDicas(2);
+    await conferirDicas(2);
   });
 
   it("carregando os números (RIFA-051, o esqueleto): só o Sair, com a dica", async () => {
@@ -183,8 +200,9 @@ describe("/minha (visão individual, com a moldura)", () => {
       expect(api.chamadasA("GET", "/api/minha/visao")).toHaveLength(1),
     );
     expect(document.querySelector(".minha-moldura__esqueleto")).not.toBeNull();
-    expect(contarControles()).toBe(1);
-    conferirDicas(1);
+    // O Sair e o "?" da ajuda do título (RIFA-066).
+    expect(contarControles()).toBe(2);
+    await conferirDicas(1);
     expect(textoDaDica(botao("Sair"))).toBe(DICAS_DA_MOLDURA.sair);
   });
 
@@ -197,7 +215,7 @@ describe("/minha (visão individual, com a moldura)", () => {
     vi.stubGlobal("fetch", api.fetch);
     renderizarRota("/minha", { usuario: null });
     await screen.findByText("Não foi possível conferir o seu acesso.");
-    conferirDicas(1);
+    await conferirDicas(1);
   });
 
   it("endereço desconhecido dentro de /minha: 'Voltar ao início' leva à visão", async () => {
@@ -206,7 +224,7 @@ describe("/minha (visão individual, com a moldura)", () => {
     const voltar = await screen.findByRole("link", {
       name: "Voltar ao início",
     });
-    conferirDicas(2);
+    await conferirDicas(2);
     expect(textoDaDica(voltar)).toBe(DICAS_404.voltarAoInicio["/minha"]);
   });
 });
@@ -231,14 +249,14 @@ describe("/acesso (link pessoal)", () => {
   it("pronto: Entrar; entrando, 'Entrando…' diz por que está indisponível", async () => {
     abrir(pendente);
     const entrar = await screen.findByRole("button", { name: "Entrar" });
-    conferirDicas(1);
+    await conferirDicas(1);
     expect(textoDaDica(entrar)).toBe(DICAS_ACESSO.entrar);
 
     fireEvent.click(entrar);
     const entrando = await screen.findByRole("button", { name: "Entrando…" });
     esperarIndisponivel(entrando);
     expect(textoDaDica(entrando)).toBe(DICAS_ACESSO.entrando);
-    conferirDicas(1);
+    await conferirDicas(1);
   });
 
   it("falha ao entrar (sem conexão): o aviso e Entrar de novo", async () => {
@@ -247,7 +265,7 @@ describe("/acesso (link pessoal)", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Entrar" }));
     await screen.findByText("Não foi possível entrar agora.");
-    conferirDicas(1);
+    await conferirDicas(1);
   });
 
   it("link que não vale mais: sem botão nem campo", async () => {
@@ -258,13 +276,13 @@ describe("/acesso (link pessoal)", () => {
     await screen.findByText(
       "Este link não vale mais: peça um link novo à coordenação.",
     );
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
   });
 
   it("link incompleto: sem botão nem campo", async () => {
     abrir(pendente, "curto-demais");
     await screen.findByText("Este link está incompleto.");
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
   });
 });
 
@@ -281,8 +299,10 @@ describe("/entrar", () => {
       level: 2,
       name: "Como entrar pelo link",
     });
-    expect(contarControles()).toBe(4);
-    conferirDicas(4);
+    // Célula, Senha, Entrar e "Sou administrador", e os 5 "?" da ajuda (RIFA-066): o título da tela, os dois
+    // títulos e os dois campos.
+    expect(contarControles()).toBe(9);
+    await conferirDicas(4);
     expect(
       textoDaDica(screen.getByRole("button", { name: "Sou administrador" })),
     ).toBe(DICAS_ENTRAR.souAdmin);
@@ -367,20 +387,24 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     simularRanking();
     const { unmount } = renderizarRota("/", { usuario: null });
     expect(await screen.findAllByText("Célula Ágape")).not.toHaveLength(0);
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
     unmount();
 
     simularRanking({ falhar: true });
     renderizarRota("/", { usuario: null });
     await screen.findByRole("button", { name: "Tentar de novo" });
-    conferirDicas(1);
+    await conferirDicas(1);
   });
 
   it("telão: sem botão nem campo, com o ranking e na falha (ele tenta de novo sozinho)", async () => {
     simularRanking();
     const { unmount } = renderizarRota("/telao", { usuario: null });
     expect(await screen.findAllByText("Célula Ágape")).not.toHaveLength(0);
+    // O telão não tem controles, nem o "?": a ajuda dos títulos só com o mouse (RIFA-066).
     expect(contarControles()).toBe(0);
+    expect(await titulosSemAjuda(document.body, { semBotao: true })).toEqual(
+      [],
+    );
     unmount();
 
     simularRanking({ falhar: true });
@@ -397,7 +421,7 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     );
     const { unmount } = renderizarRota("/status", { usuario: null });
     await screen.findByText("API ok");
-    expect(contarControles()).toBe(0);
+    await conferirSemControles();
     unmount();
 
     vi.stubGlobal(
@@ -406,7 +430,7 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     );
     renderizarRota("/status", { usuario: null });
     await screen.findByRole("button", { name: "Tentar de novo" });
-    conferirDicas(1);
+    await conferirDicas(1);
   });
 
   it("404: 'Voltar ao início' diz para onde leva, nas telas abertas e na coordenação", async () => {
@@ -414,7 +438,7 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     const voltar = await screen.findByRole("link", {
       name: "Voltar ao início",
     });
-    conferirDicas(1);
+    await conferirDicas(1);
     expect(textoDaDica(voltar)).toBe(DICAS_404.voltarAoInicio["/"]);
     unmount();
 
@@ -427,7 +451,7 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     const voltarNaCoordenacao = await screen.findByRole("link", {
       name: "Voltar ao início",
     });
-    conferirDicas(13);
+    await conferirDicas(13);
     expect(textoDaDica(voltarNaCoordenacao)).toBe(
       DICAS_404.voltarAoInicio["/coordenacao"],
     );

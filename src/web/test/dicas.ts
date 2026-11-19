@@ -2,7 +2,11 @@
 // passa o mouse em cada botão e campo de uma tela e diz quais ficaram sem dica (a fase 2 reaproveita nas telas dela).
 import { act, fireEvent } from "@testing-library/react";
 import { vi } from "vitest";
-import { ATRASO_DA_DICA_MS, FOLGA_DA_DICA_MS } from "../components/ui";
+import {
+  ATRASO_DA_DICA_MS,
+  CARREGANDO_A_AJUDA,
+  FOLGA_DA_DICA_MS,
+} from "../components/ui";
 
 /** O que precisa de dica: botões, campos, abas, links com cara de botão, os links do menu e o "abrir" de um <details>. */
 export const SELETOR_COM_DICA = [
@@ -75,9 +79,14 @@ function nomeDoControle(controle: HTMLElement): string {
  * também roda os timers da tela).
  */
 export function controlesSemDica(raiz: ParentNode = document.body): string[] {
+  // O "?" da ajuda (RIFA-066) fica para a varredura das ajudas (`titulosSemAjuda`), que passa o mouse no título do
+  // mesmo grupo e toca nele: conferir de novo aqui só dobrava o tempo da varredura.
   const controles = Array.from(
     raiz.querySelectorAll<HTMLElement>(SELETOR_COM_DICA),
-  ).filter(participa);
+  ).filter(
+    (controle) =>
+      participa(controle) && !controle.matches("[data-ajuda-botao]"),
+  );
   const falhas: string[] = [];
   const relogioJaFalso = vi.isFakeTimers();
   if (!relogioJaFalso) {
@@ -103,7 +112,10 @@ export function controlesSemDica(raiz: ParentNode = document.body): string[] {
   return falhas;
 }
 
-/** Quantos controles a varredura confere em `raiz` (para o teste garantir que ela achou o que devia). */
+/**
+ * Quantos controles há em `raiz` (para o teste garantir que a varredura achou o que devia). Conta também o "?" das
+ * ajudas, que é um botão (o telão, sem controles, continua com 0).
+ */
 export function contarControles(raiz: ParentNode = document.body): number {
   return Array.from(
     raiz.querySelectorAll<HTMLElement>(SELETOR_COM_DICA),
@@ -137,4 +149,146 @@ export function textosDasDicas(raiz: ParentNode = document.body): string[] {
     if (!relogioJaFalso) vi.useRealTimers();
   }
   return textos;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Ajuda dos títulos e rótulos (RIFA-066, D31): a varredura que prova que todo título de seção e todo rótulo de campo
+// da tela tem explicação ao passar o mouse nele e ao tocar no "?" ao lado (o foco do teclado no "?" é o mesmo da
+// dica dos botões, conferido em components/ui/Ajuda.test.tsx).
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * O que precisa de ajuda: o título da tela e os de seção (h1, h2, h3: o Card com título, os subtítulos como
+ * "Períodos"), os rótulos de campo (os do Input, Select, Textarea e SeletorArquivo, as caixas de marcar e a legenda
+ * de um grupo de campos) e os rótulos dos números (Stat).
+ */
+export const SELETOR_COM_AJUDA = [
+  "h1",
+  "h2",
+  "h3",
+  "label",
+  "legend",
+  ".ui-stat__rotulo",
+].join(", ");
+
+/**
+ * Fica de fora: o título de um diálogo (o diálogo já tem a descrição dele), o que é só para o leitor de tela, o
+ * botão do SeletorArquivo (um <label> com cara de botão, que já tem dica), a opção de um grupo de rádio (a ajuda
+ * fica na legenda do grupo) e o que a tela marca com `data-sem-ajuda`
+ * (o nome de um item numa lista, como a célula, a pessoa ou o afiliado: não é título de seção). Fora de painel
+ * oculto e do que um diálogo deixou `inert`, como na varredura dos botões.
+ */
+function precisaDeAjuda(elemento: HTMLElement): boolean {
+  if (!participa(elemento)) return false;
+  if (elemento.closest(".visualmente-oculto, [data-sem-ajuda]")) return false;
+  if (elemento.matches(".ui-seletor-arquivo__botao")) return false;
+  // Uma opção de um grupo de rádio é uma escolha, não um campo: a ajuda fica na legenda do grupo.
+  if (
+    elemento.matches("label") &&
+    elemento.querySelector("input[type='radio']")
+  )
+    return false;
+  if (
+    elemento.matches("h1, h2, h3") &&
+    elemento.closest("[role='dialog'], [role='alertdialog']")
+  )
+    return false;
+  return true;
+}
+
+/** Os títulos e rótulos que a varredura de ajuda confere em `raiz`. */
+function alvosDeAjuda(raiz: ParentNode): HTMLElement[] {
+  return Array.from(
+    raiz.querySelectorAll<HTMLElement>(SELETOR_COM_AJUDA),
+  ).filter(precisaDeAjuda);
+}
+
+/** Quantos títulos e rótulos a varredura de ajuda confere em `raiz`. */
+export function contarAjudas(raiz: ParentNode = document.body): number {
+  return alvosDeAjuda(raiz).length;
+}
+
+function nomeDoAlvo(alvo: HTMLElement): string {
+  return `${alvo.tagName.toLowerCase()} "${(alvo.textContent ?? "").replace(/\s+/g, " ").trim()}"`;
+}
+
+/** A ajuda aberta (role="tooltip" com o id do grupo), ou null. */
+function ajudaAberta(grupo: HTMLElement): HTMLElement | null {
+  const id = grupo.dataset.ajuda;
+  const ajuda = id ? document.getElementById(id) : null;
+  return ajuda?.getAttribute("role") === "tooltip" ? ajuda : null;
+}
+
+/**
+ * Confere cada título e rótulo de `raiz` (padrão: o <body>, com os diálogos abertos; veja `SELETOR_COM_AJUDA`):
+ * está num grupo de ajuda, o mouse parado nele abre a explicação (role="tooltip", com texto e já carregada) e ela
+ * some ao tirar o mouse; o "?" ao lado tem o nome "Ajuda: <o título>", com a explicação no aria-describedby, e o
+ * toque nele abre e o toque seguinte fecha. Com `semBotao` (o telão), só o mouse. Espera antes os textos sob demanda.
+ * Devolve o que falhou (vazio: todos têm). Como `controlesSemDica`, usa o relógio falso só durante a varredura.
+ */
+export async function titulosSemAjuda(
+  raiz: ParentNode = document.body,
+  { semBotao = false }: { semBotao?: boolean } = {},
+): Promise<string[]> {
+  // Os textos sob demanda (import() do ajuda.ts da tela) chegam e entram na tela antes de conferir.
+  await act(() => vi.dynamicImportSettled());
+  const falhas: string[] = [];
+  const relogioJaFalso = vi.isFakeTimers();
+  if (!relogioJaFalso) {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  }
+  try {
+    for (const alvo of alvosDeAjuda(raiz)) {
+      const nome = nomeDoAlvo(alvo);
+      // O grupo fica em volta do título; na legenda (que tem de ser a primeira filha do <fieldset>), dentro dela.
+      const grupo =
+        alvo.closest<HTMLElement>("[data-ajuda]") ??
+        alvo.querySelector<HTMLElement>(":scope > [data-ajuda]");
+      if (!grupo) {
+        falhas.push(`${nome}: sem ajuda`);
+        continue;
+      }
+      // O mouse no texto do título (na legenda, o grupo fica dentro dela: o texto é o primeiro filho dele).
+      const texto =
+        grupo === alvo || !alvo.contains(grupo)
+          ? alvo
+          : (grupo.firstElementChild ?? grupo);
+      passarOMouse(texto);
+      act(() => vi.advanceTimersByTime(ATRASO_DA_DICA_MS));
+      const pelaMouse = ajudaAberta(grupo);
+      const explicacao = pelaMouse?.textContent?.trim();
+      if (!explicacao) falhas.push(`${nome}: o mouse não abre a explicação`);
+      else if (explicacao === CARREGANDO_A_AJUDA)
+        falhas.push(`${nome}: a explicação não chegou`);
+      tirarOMouse(texto);
+      act(() => vi.advanceTimersByTime(FOLGA_DA_DICA_MS));
+      if (ajudaAberta(grupo)) falhas.push(`${nome}: a explicação não sumiu`);
+
+      const botao = grupo.querySelector<HTMLElement>("[data-ajuda-botao]");
+      if (!botao) {
+        if (!semBotao) falhas.push(`${nome}: sem o "?" ao lado`);
+        continue;
+      }
+      const nomeDoBotao = botao.getAttribute("aria-label") ?? "";
+      const tituloNoNome = (alvo.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (nomeDoBotao !== `Ajuda: ${tituloNoNome}`)
+        falhas.push(`${nome}: o "?" se chama "${nomeDoBotao}"`);
+      fireEvent.click(botao);
+      const peloToque = ajudaAberta(grupo);
+      if (!peloToque?.textContent?.trim())
+        falhas.push(`${nome}: o toque no "?" não abre a explicação`);
+      else if (
+        !(botao.getAttribute("aria-describedby") ?? "")
+          .split(/\s+/)
+          .includes(peloToque.id)
+      )
+        falhas.push(`${nome}: a explicação fora do aria-describedby do "?"`);
+      fireEvent.click(botao);
+      if (ajudaAberta(grupo))
+        falhas.push(`${nome}: o segundo toque no "?" não fecha`);
+    }
+  } finally {
+    if (!relogioJaFalso) vi.useRealTimers();
+  }
+  return falhas;
 }

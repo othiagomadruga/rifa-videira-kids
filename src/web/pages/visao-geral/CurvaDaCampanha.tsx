@@ -9,6 +9,7 @@ import {
   valorCurto,
   valorDoEixo,
 } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Props = { resumo: RespostaPainelResumo };
 
@@ -21,6 +22,7 @@ export function CurvaDaCampanha({ resumo }: Props) {
     <Card
       titulo="Curva: esperado × realizado"
       icone="grafico"
+      ajuda={ajuda("curva")}
       className="visao-curva"
     >
       <p className="visao-curva__subtitulo">

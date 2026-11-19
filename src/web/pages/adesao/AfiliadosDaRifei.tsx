@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   DataTable,
   Loading,
@@ -20,6 +21,7 @@ import {
   type RespostaAfiliadosRifei,
   type RespostaConvitesRifei,
 } from "./afiliados-rifei-api";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Afiliado = RespostaAfiliadosRifei["afiliados"][number];
 type Convite = RespostaConvitesRifei["convites"][number];
@@ -178,7 +180,7 @@ export function AfiliadosDaRifei({ aoMudar }: { aoMudar: () => void }) {
     dados?.afiliados.filter((a) => a.sugestao !== null).length ?? 0;
 
   return (
-    <Card titulo={TEXTOS.titulo}>
+    <Card titulo={TEXTOS.titulo} ajuda={ajuda("afiliadosNaRifei")}>
       <div className="adesao-rifei">
         <p className="adesao-rifei__suave">{TEXTOS.explicacao}</p>
         <div className="adesao-rifei__acoes">
@@ -249,9 +251,17 @@ export function AfiliadosDaRifei({ aoMudar }: { aoMudar: () => void }) {
               />
             )}
 
-            <h3 className="adesao-rifei__subtitulo">
-              Convites das células sem afiliado
-            </h3>
+            <ComAjuda
+              texto={ajuda("convites")}
+              idDoTitulo="adesao-rifei-convites"
+            >
+              <h3
+                id="adesao-rifei-convites"
+                className="adesao-rifei__subtitulo"
+              >
+                Convites das células sem afiliado
+              </h3>
+            </ComAjuda>
             {semAfiliado.length === 0 ? (
               <p className="adesao-rifei__suave">
                 Todas as células já têm afiliado.

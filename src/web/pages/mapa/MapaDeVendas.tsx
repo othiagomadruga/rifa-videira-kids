@@ -34,6 +34,7 @@ import {
 import { MapaDoBrasil } from "./MapaDoBrasil";
 import { TabelaDdd } from "./TabelaDdd";
 import {
+  AJUDA,
   DICAS,
   TEXTO_PERIODO,
   temVenda,
@@ -132,37 +133,36 @@ export function MapaDeVendas() {
         {atual && respondido ? anuncio(atual) : ""}
       </p>
       <div className="mapa-filtros">
-        <ComDica texto={DICAS.periodo}>
-          <Select
-            rotulo="Período"
-            value={filtros.periodo}
-            onChange={(evento) =>
-              mudarFiltros({ periodo: lerPeriodo(evento.target.value) })
-            }
-          >
-            {PERIODOS.map((periodo) => (
-              <option key={periodo} value={periodo}>
-                {TEXTO_PERIODO[periodo]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.divisao}>
-          <Select
-            rotulo="Divisão"
-            value={filtros.divisao ?? ""}
-            onChange={(evento) =>
-              mudarFiltros({ divisao: lerDivisao(evento.target.value) })
-            }
-          >
-            <option value="">Todas</option>
-            {ORDEM_DIVISOES.map((divisao) => (
-              <option key={divisao} value={divisao}>
-                {NOMES_DIVISAO[divisao]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
+        <Select
+          ajuda={AJUDA.periodo}
+          rotulo="Período"
+          value={filtros.periodo}
+          onChange={(evento) =>
+            mudarFiltros({ periodo: lerPeriodo(evento.target.value) })
+          }
+        >
+          {PERIODOS.map((periodo) => (
+            <option key={periodo} value={periodo}>
+              {TEXTO_PERIODO[periodo]}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          ajuda={AJUDA.divisao}
+          rotulo="Divisão"
+          value={filtros.divisao ?? ""}
+          onChange={(evento) =>
+            mudarFiltros({ divisao: lerDivisao(evento.target.value) })
+          }
+        >
+          <option value="">Todas</option>
+          {ORDEM_DIVISOES.map((divisao) => (
+            <option key={divisao} value={divisao}>
+              {NOMES_DIVISAO[divisao]}
+            </option>
+          ))}
+        </Select>
       </div>
       {filtros.divisao && (
         <p className="mapa-nota-divisao">

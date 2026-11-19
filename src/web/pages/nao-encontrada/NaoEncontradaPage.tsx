@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router";
 import { classesBotao, ComDica, PageHeader } from "../../components/ui";
 import { dicaVoltarAoInicio } from "./textos";
+import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 
 type Props = {
   /** Para onde o botão leva: "/" nas telas abertas, "/coordenacao" na coordenação. */
@@ -16,6 +17,7 @@ export function NaoEncontradaPage({ inicio = "/" }: Props) {
       <PageHeader
         icone="bussola"
         titulo="Página não encontrada"
+        ajuda={ajudaAberta("naoEncontrada")}
         descricao={
           <>
             Não existe nada no endereço <code>{pathname}</code>.

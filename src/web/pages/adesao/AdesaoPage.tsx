@@ -32,6 +32,7 @@ import type {
   AvisoDeSucesso,
 } from "./vinculo";
 import "./adesao.css";
+import { DICA_DO_MENU } from "../coordenacao/textos";
 
 // Os links de vendas e o QR code de cada célula (RIFA-046, D24) vêm num pacote à parte, com o próprio CSS: o gerador
 // de QR code (`qr`) nunca entra no pacote inicial do site.
@@ -123,6 +124,7 @@ export function AdesaoPage() {
     <>
       <PageHeader
         titulo="Adesão"
+        ajuda={DICA_DO_MENU.adesao}
         descricao="Quem já virou afiliado na Rifei e quem falta."
       />
       {estado.tipo === "carregando" && (

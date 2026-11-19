@@ -14,6 +14,7 @@ import type {
 import {
   Aviso,
   Button,
+  ComAjuda,
   ComDica,
   Dialogo,
   Input,
@@ -45,6 +46,7 @@ import {
   dadosDesatualizados,
   type Entidade,
 } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type PropsEdicao<T> = {
   item: T;
@@ -207,105 +209,113 @@ export function DialogoCelula({
     >
       <div className="hierarquia-formulario">
         <ErroDoEnvio mensagem={formulario.mensagem} />
-        <ComDica texto={DICAS.nome.celula}>
-          <Input
-            rotulo={ROTULOS_CELULA.nome}
-            name="nome"
-            value={valores.nome}
-            onChange={mudar("nome")}
-            maxLength={LIMITES.nome}
-            autoComplete="off"
-            erro={erros.nome}
-          />
-        </ComDica>
-        <ComDica
-          texto={
+        <Input
+          ajuda={ajuda("nomeCelula")}
+          rotulo={ROTULOS_CELULA.nome}
+          name="nome"
+          value={valores.nome}
+          onChange={mudar("nome")}
+          maxLength={LIMITES.nome}
+          autoComplete="off"
+          erro={erros.nome}
+        />
+
+        <Select
+          ajuda={
             redeUnica
               ? DICAS_REDE_UNICA.discipuladorDaCelula
-              : DICAS.discipuladorDaCelula
+              : ajuda("discipuladorDaCelula")
           }
+          rotulo={ROTULOS_CELULA.discipulador_id}
+          name="discipulador_id"
+          dica={
+            redeUnica
+              ? undefined
+              : "A célula fica na rede do discipulador escolhido."
+          }
+          value={valores.discipulador_id}
+          onChange={mudar("discipulador_id")}
+          erro={erros.discipulador_id}
         >
-          <Select
-            rotulo={ROTULOS_CELULA.discipulador_id}
-            name="discipulador_id"
-            dica={
-              redeUnica
-                ? undefined
-                : "A célula fica na rede do discipulador escolhido."
-            }
-            value={valores.discipulador_id}
-            onChange={mudar("discipulador_id")}
-            erro={erros.discipulador_id}
-          >
-            {redeUnica
-              ? [...discipuladores]
-                  .sort((a, b) => compararNomes(a.nome, b.nome))
-                  .map((discipulador) => (
+          {redeUnica
+            ? [...discipuladores]
+                .sort((a, b) => compararNomes(a.nome, b.nome))
+                .map((discipulador) => (
+                  <option key={discipulador.id} value={discipulador.id}>
+                    {discipulador.nome}
+                  </option>
+                ))
+            : gruposPorRede(discipuladores).map((grupo) => (
+                <optgroup key={grupo.id} label={grupo.rotulo}>
+                  {grupo.itens.map((discipulador) => (
                     <option key={discipulador.id} value={discipulador.id}>
                       {discipulador.nome}
                     </option>
-                  ))
-              : gruposPorRede(discipuladores).map((grupo) => (
-                  <optgroup key={grupo.id} label={grupo.rotulo}>
-                    {grupo.itens.map((discipulador) => (
-                      <option key={discipulador.id} value={discipulador.id}>
-                        {discipulador.nome}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.pessoas}>
+                  ))}
+                </optgroup>
+              ))}
+        </Select>
+
+        <Input
+          ajuda={ajuda("qtdPessoas")}
+          rotulo={ROTULOS_CELULA.qtd_pessoas}
+          name="qtd_pessoas"
+          dica={`Número inteiro de ${LIMITES.pessoasMin} a ${LIMITES.pessoasMax}: é a base da meta da célula.`}
+          inputMode="numeric"
+          autoComplete="off"
+          value={valores.qtd_pessoas}
+          onChange={mudar("qtd_pessoas")}
+          erro={erros.qtd_pessoas}
+        />
+
+        {/* O "?" da ajuda fica dentro da legenda (a primeira filha do fieldset): o nome do grupo vem só do texto. */}
+        <fieldset
+          className="hierarquia-grupo"
+          aria-labelledby="hierarquia-grupo-lider"
+        >
+          <legend className="hierarquia-grupo__titulo">
+            <ComAjuda
+              texto={ajuda("lider")}
+              idDoTitulo="hierarquia-grupo-lider"
+            >
+              <span id="hierarquia-grupo-lider">Líder</span>
+            </ComAjuda>
+          </legend>
           <Input
-            rotulo={ROTULOS_CELULA.qtd_pessoas}
-            name="qtd_pessoas"
-            dica={`Número inteiro de ${LIMITES.pessoasMin} a ${LIMITES.pessoasMax}: é a base da meta da célula.`}
-            inputMode="numeric"
+            ajuda={ajuda("liderNome")}
+            rotulo={ROTULOS_CELULA.lider_nome}
+            name="lider_nome"
+            value={valores.lider_nome}
+            onChange={mudar("lider_nome")}
+            maxLength={LIMITES.nome}
             autoComplete="off"
-            value={valores.qtd_pessoas}
-            onChange={mudar("qtd_pessoas")}
-            erro={erros.qtd_pessoas}
+            erro={erros.lider_nome}
           />
-        </ComDica>
-        <fieldset className="hierarquia-grupo">
-          <legend className="hierarquia-grupo__titulo">Líder</legend>
-          <ComDica texto={DICAS.liderNome}>
-            <Input
-              rotulo={ROTULOS_CELULA.lider_nome}
-              name="lider_nome"
-              value={valores.lider_nome}
-              onChange={mudar("lider_nome")}
-              maxLength={LIMITES.nome}
-              autoComplete="off"
-              erro={erros.lider_nome}
-            />
-          </ComDica>
-          <ComDica texto={DICAS.liderEmail}>
-            <Input
-              rotulo="E-mail (opcional)"
-              name="lider_email"
-              type="email"
-              value={valores.lider_email}
-              onChange={mudar("lider_email")}
-              maxLength={LIMITES.email}
-              autoComplete="off"
-              erro={erros.lider_email}
-            />
-          </ComDica>
-          <ComDica texto={DICAS.liderTelefone}>
-            <Input
-              rotulo="Telefone (opcional)"
-              name="lider_telefone"
-              type="tel"
-              dica="Com DDD, ex.: (91) 90000-0001."
-              value={valores.lider_telefone}
-              onChange={mudar("lider_telefone")}
-              maxLength={LIMITES.telefone}
-              autoComplete="off"
-              erro={erros.lider_telefone}
-            />
-          </ComDica>
+
+          <Input
+            ajuda={ajuda("liderEmail")}
+            rotulo="E-mail (opcional)"
+            name="lider_email"
+            type="email"
+            value={valores.lider_email}
+            onChange={mudar("lider_email")}
+            maxLength={LIMITES.email}
+            autoComplete="off"
+            erro={erros.lider_email}
+          />
+
+          <Input
+            ajuda={ajuda("liderTelefone")}
+            rotulo="Telefone (opcional)"
+            name="lider_telefone"
+            type="tel"
+            dica="Com DDD, ex.: (91) 90000-0001."
+            value={valores.lider_telefone}
+            onChange={mudar("lider_telefone")}
+            maxLength={LIMITES.telefone}
+            autoComplete="off"
+            erro={erros.lider_telefone}
+          />
         </fieldset>
       </div>
     </Dialogo>
@@ -404,36 +414,35 @@ export function DialogoDiscipulador({
     >
       <div className="hierarquia-formulario">
         <ErroDoEnvio mensagem={formulario.mensagem} />
-        <ComDica texto={DICAS.nome.discipulador}>
-          <Input
-            rotulo={ROTULOS_DISCIPULADOR.nome}
-            name="nome"
-            value={valores.nome}
-            onChange={mudar("nome")}
-            maxLength={LIMITES.nome}
-            autoComplete="off"
-            erro={erros.nome}
-          />
-        </ComDica>
+        <Input
+          ajuda={ajuda("nomeDiscipulador")}
+          rotulo={ROTULOS_DISCIPULADOR.nome}
+          name="nome"
+          value={valores.nome}
+          onChange={mudar("nome")}
+          maxLength={LIMITES.nome}
+          autoComplete="off"
+          erro={erros.nome}
+        />
+
         {!redeUnica && (
-          <ComDica texto={DICAS.redeDoDiscipulador}>
-            <Select
-              rotulo={ROTULOS_DISCIPULADOR.rede_id}
-              name="rede_id"
-              dica="As células do discipulador vão junto para a rede escolhida."
-              value={valores.rede_id}
-              onChange={mudar("rede_id")}
-              erro={erros.rede_id}
-            >
-              {[...redes]
-                .sort((a, b) => compararNomes(a.nome, b.nome))
-                .map((rede) => (
-                  <option key={rede.id} value={rede.id}>
-                    {rede.nome} ({ROTULO_DIVISAO[rede.divisao]})
-                  </option>
-                ))}
-            </Select>
-          </ComDica>
+          <Select
+            ajuda={ajuda("redeDoDiscipulador")}
+            rotulo={ROTULOS_DISCIPULADOR.rede_id}
+            name="rede_id"
+            dica="As células do discipulador vão junto para a rede escolhida."
+            value={valores.rede_id}
+            onChange={mudar("rede_id")}
+            erro={erros.rede_id}
+          >
+            {[...redes]
+              .sort((a, b) => compararNomes(a.nome, b.nome))
+              .map((rede) => (
+                <option key={rede.id} value={rede.id}>
+                  {rede.nome} ({ROTULO_DIVISAO[rede.divisao]})
+                </option>
+              ))}
+          </Select>
         )}
       </div>
     </Dialogo>
@@ -517,45 +526,44 @@ export function DialogoRede({
     >
       <div className="hierarquia-formulario">
         <ErroDoEnvio mensagem={formulario.mensagem} />
-        <ComDica texto={DICAS.nome.rede}>
-          <Input
-            rotulo={ROTULOS_REDE.nome}
-            name="nome"
-            value={valores.nome}
-            onChange={mudar("nome")}
-            maxLength={LIMITES.nome}
-            autoComplete="off"
-            erro={erros.nome}
-          />
-        </ComDica>
-        <ComDica texto={DICAS.divisaoDaRede}>
-          <Select
-            rotulo={ROTULOS_REDE.divisao}
-            name="divisao"
-            dica="Mudar a divisão muda também a das células da rede."
-            value={valores.divisao}
-            onChange={mudar("divisao")}
-            erro={erros.divisao}
-          >
-            {DIVISOES.map((divisao) => (
-              <option key={divisao} value={divisao}>
-                {ROTULO_DIVISAO[divisao]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.responsavel}>
-          <Input
-            rotulo="Responsável (opcional)"
-            name="responsavel_nome"
-            dica="Pastor ou obreiro da rede."
-            value={valores.responsavel_nome}
-            onChange={mudar("responsavel_nome")}
-            maxLength={LIMITES.nome}
-            autoComplete="off"
-            erro={erros.responsavel_nome}
-          />
-        </ComDica>
+        <Input
+          ajuda={ajuda("nomeRede")}
+          rotulo={ROTULOS_REDE.nome}
+          name="nome"
+          value={valores.nome}
+          onChange={mudar("nome")}
+          maxLength={LIMITES.nome}
+          autoComplete="off"
+          erro={erros.nome}
+        />
+
+        <Select
+          ajuda={ajuda("divisaoRede")}
+          rotulo={ROTULOS_REDE.divisao}
+          name="divisao"
+          dica="Mudar a divisão muda também a das células da rede."
+          value={valores.divisao}
+          onChange={mudar("divisao")}
+          erro={erros.divisao}
+        >
+          {DIVISOES.map((divisao) => (
+            <option key={divisao} value={divisao}>
+              {ROTULO_DIVISAO[divisao]}
+            </option>
+          ))}
+        </Select>
+
+        <Input
+          ajuda={ajuda("responsavel")}
+          rotulo="Responsável (opcional)"
+          name="responsavel_nome"
+          dica="Pastor ou obreiro da rede."
+          value={valores.responsavel_nome}
+          onChange={mudar("responsavel_nome")}
+          maxLength={LIMITES.nome}
+          autoComplete="off"
+          erro={erros.responsavel_nome}
+        />
       </div>
     </Dialogo>
   );

@@ -32,6 +32,7 @@ import {
   type FiltrosEntregas,
 } from "./pedidos-api";
 import {
+  AJUDA,
   DICAS,
   RESULTADO,
   ROTULO_FILTRO_RESULTADO,
@@ -106,28 +107,27 @@ export function EntregasWebhook({ filtros, aoMudar }: Props) {
         dias da campanha, ou quando chega pedido com erro.
       </p>
       <div className="pedidos-filtros">
-        <ComDica texto={DICAS.filtroResultado}>
-          <Select
-            ref={filtroResultado}
-            rotulo="Resultado"
-            value={filtros.resultado ?? ""}
-            onChange={(evento) =>
-              aoMudar({
-                resultado:
-                  RESULTADOS_ENTREGA.find(
-                    (resultado) => resultado === evento.target.value,
-                  ) ?? null,
-              })
-            }
-          >
-            <option value="">Todos os resultados</option>
-            {RESULTADOS_ENTREGA.map((resultado) => (
-              <option key={resultado} value={resultado}>
-                {ROTULO_FILTRO_RESULTADO[resultado]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
+        <Select
+          ajuda={AJUDA.filtroResultado}
+          ref={filtroResultado}
+          rotulo="Resultado"
+          value={filtros.resultado ?? ""}
+          onChange={(evento) =>
+            aoMudar({
+              resultado:
+                RESULTADOS_ENTREGA.find(
+                  (resultado) => resultado === evento.target.value,
+                ) ?? null,
+            })
+          }
+        >
+          <option value="">Todos os resultados</option>
+          {RESULTADOS_ENTREGA.map((resultado) => (
+            <option key={resultado} value={resultado}>
+              {ROTULO_FILTRO_RESULTADO[resultado]}
+            </option>
+          ))}
+        </Select>
       </div>
       <Conteudo
         estado={estado}

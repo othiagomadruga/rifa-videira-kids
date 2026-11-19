@@ -206,13 +206,47 @@ export const DESCONSIDERADOS = {
 
 const ESPERE = "Espere um instante.";
 
+/**
+ * Ajuda (RIFA-066, D31): a explicação dos títulos e dos rótulos, com o mouse no título (ou no campo) e no "?" ao lado
+ * dele: o que é, para que serve e um exemplo. Nos campos, é também a dica do campo. Os grupos do resultado usam a
+ * explicação que já aparece abaixo do título (DIVERGENCIAS e DESCONSIDERADOS).
+ */
+export const AJUDA = {
+  comoConferir:
+    "O passo a passo para comparar as vendas da Rifei com as que o sistema recebeu. Serve para achar venda que se perdeu no caminho e recuperá-la.",
+  arquivoDaRifei:
+    "A planilha de vendas que a Rifei deixa baixar no painel da campanha. O sistema lê o arquivo no seu aparelho e compara com o que recebeu.",
+  arquivo:
+    "O arquivo CSV exportado do painel da Rifei, com os pedidos da campanha. Ex.: “pedidos.csv”, baixado em Exportar.",
+  colunasDoArquivo:
+    "Qual coluna do arquivo traz cada dado: o código do pedido, o status, o valor... O sistema reconhece pelo nome; troque o que estiver errado.",
+  coluna:
+    "Qual coluna do arquivo da Rifei traz este dado. Ex.: a coluna “Status” para o status do pagamento.",
+  resultado:
+    "O que a comparação achou: quantos pedidos pagos há no arquivo e no sistema, quantos conferem e quais têm diferença, com o que fazer em cada caso.",
+  avisos:
+    "Coisas no arquivo que o sistema não conseguiu ler bem, como uma linha sem valor. Confira antes de confiar no resultado.",
+  recuperacoes:
+    "As vendas que já foram recuperadas por esta tela, com quem fez e quando. Serve para não recuperar a mesma venda duas vezes.",
+  pagosNoArquivo:
+    "Os pedidos pagos que estão no arquivo da Rifei, com os bilhetes e o valor. É o que a Rifei diz que foi vendido.",
+  pagosNoSistema:
+    "Os pedidos pagos que o sistema recebeu da Rifei no mesmo período. Se for menor que o do arquivo, alguma venda se perdeu.",
+  conferem:
+    "Pedidos que estão iguais no arquivo e no sistema. Não precisam de nada.",
+  comDiferenca:
+    "Pedidos que estão diferentes no arquivo e no sistema, ou só num dos dois. Abaixo, cada grupo diz o que fazer.",
+  porAfiliado:
+    "Os totais de cada afiliado (vendedor) no arquivo e no sistema, lado a lado. Ex.: ache o afiliado cujas vendas não chegaram.",
+  porDia:
+    "Os totais de cada dia no arquivo e no sistema, lado a lado. Ex.: ache o dia em que as vendas pararam de chegar.",
+} as const;
+
 export const DICAS = {
   escolherArquivo:
     "Abre a escolha do arquivo no aparelho. A tela lê o arquivo aqui e já compara com as vendas do sistema; nada é gravado.",
   escolherArquivoOcupado: `Indisponível enquanto o arquivo é lido e conferido. ${ESPERE}`,
   // Colunas do arquivo
-  coluna:
-    "A coluna do arquivo que tem este dado. Trocou? Confira de novo para ver o resultado com a coluna nova.",
   colunaOcupada: `Indisponível enquanto a conferência roda. ${ESPERE}`,
   conferirColunas:
     "Compara o arquivo de novo com as vendas do sistema, usando as colunas escolhidas. Nada é gravado.",

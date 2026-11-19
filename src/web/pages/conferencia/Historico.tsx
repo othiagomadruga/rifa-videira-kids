@@ -17,7 +17,7 @@ import {
   formatarNumero,
 } from "../../lib/formatadores";
 import { listarRecuperacoes } from "./conferencia-api";
-import { DICAS, plural } from "./textos";
+import { AJUDA, DICAS, plural } from "./textos";
 
 type Estado =
   | { tipo: "carregando" }
@@ -194,7 +194,7 @@ export function Historico({ versao }: { versao: number }) {
 
   const proximo = estado.tipo === "ok" ? estado.proximo : null;
   return (
-    <Card titulo="Recuperações feitas">
+    <Card titulo="Recuperações feitas" ajuda={AJUDA.recuperacoes}>
       {estado.tipo === "carregando" && <Loading texto="Carregando…" />}
       {estado.tipo === "erro" && (
         <ErrorState

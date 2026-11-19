@@ -26,6 +26,7 @@ import {
   plural,
   type Entidade,
 } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type AcoesDaLinha<T> = {
   aoEditar: (item: T) => void;
@@ -169,54 +170,50 @@ export function TabelaCelulas({
         className="hierarquia-filtros"
         data-sem-rede={redeUnica ? "" : undefined}
       >
-        <ComDica
-          texto={
-            redeUnica ? DICAS_REDE_UNICA.filtroDivisao : DICAS.filtroDivisao
+        <Select
+          ajuda={
+            redeUnica ? DICAS_REDE_UNICA.filtroDivisao : ajuda("filtroDivisao")
           }
+          rotulo="Divisão"
+          value={divisao}
+          onChange={(evento) => {
+            const nova = evento.currentTarget.value as Divisao | "";
+            setDivisao(nova);
+            const rede = redes.find((item) => String(item.id) === redeId);
+            if (nova !== "" && rede && rede.divisao !== nova) setRedeId("");
+          }}
         >
+          <option value="">Todas</option>
+          {DIVISOES.map((item) => (
+            <option key={item} value={item}>
+              {ROTULO_DIVISAO[item]}
+            </option>
+          ))}
+        </Select>
+
+        {!redeUnica && (
           <Select
-            rotulo="Divisão"
-            value={divisao}
-            onChange={(evento) => {
-              const nova = evento.currentTarget.value as Divisao | "";
-              setDivisao(nova);
-              const rede = redes.find((item) => String(item.id) === redeId);
-              if (nova !== "" && rede && rede.divisao !== nova) setRedeId("");
-            }}
+            ajuda={ajuda("filtroRede")}
+            rotulo="Rede"
+            value={redeFiltro}
+            onChange={(evento) => setRedeId(evento.currentTarget.value)}
           >
-            <option value="">Todas</option>
-            {DIVISOES.map((item) => (
-              <option key={item} value={item}>
-                {ROTULO_DIVISAO[item]}
+            <option value="">Todas as redes</option>
+            {redesDaDivisao.map((rede) => (
+              <option key={rede.id} value={rede.id}>
+                {rede.nome}
               </option>
             ))}
           </Select>
-        </ComDica>
-        {!redeUnica && (
-          <ComDica texto={DICAS.filtroRede}>
-            <Select
-              rotulo="Rede"
-              value={redeFiltro}
-              onChange={(evento) => setRedeId(evento.currentTarget.value)}
-            >
-              <option value="">Todas as redes</option>
-              {redesDaDivisao.map((rede) => (
-                <option key={rede.id} value={rede.id}>
-                  {rede.nome}
-                </option>
-              ))}
-            </Select>
-          </ComDica>
         )}
-        <ComDica texto={DICAS.busca}>
-          <Input
-            rotulo="Buscar por nome"
-            dica="Célula, líder ou discipulador"
-            type="search"
-            value={busca}
-            onChange={(evento) => setBusca(evento.currentTarget.value)}
-          />
-        </ComDica>
+        <Input
+          ajuda={ajuda("busca")}
+          rotulo="Buscar por nome"
+          dica="Célula, líder ou discipulador"
+          type="search"
+          value={busca}
+          onChange={(evento) => setBusca(evento.currentTarget.value)}
+        />
       </div>
       <p className="hierarquia-contagem" role="status">
         {temFiltro

@@ -19,6 +19,7 @@ import {
   type AoSalvarVinculo,
   type AvisoDeSucesso,
 } from "./vinculo";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Props = {
   /** Afiliados sem célula, o mais recente primeiro. */
@@ -143,6 +144,7 @@ export function SemCelula({
   return (
     <section aria-labelledby={idTitulo}>
       <Card
+        ajuda={ajuda("semCelula")}
         titulo={
           <span
             id={idTitulo}
@@ -241,7 +243,9 @@ function ItemOrfao({
   return (
     <article className="adesao-item">
       <div className="adesao-item__cabecalho">
-        <h3 className="adesao-item__titulo">Afiliado {codigo}</h3>
+        <h3 className="adesao-item__titulo" data-sem-ajuda="o afiliado">
+          Afiliado {codigo}
+        </h3>
         <p className="adesao-item__quando">
           apareceu{" "}
           <time

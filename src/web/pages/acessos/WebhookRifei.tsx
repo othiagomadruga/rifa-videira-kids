@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   Dialogo,
   ErrorState,
@@ -24,6 +25,7 @@ import {
 } from "./webhook-api";
 import { DICAS } from "./textos";
 import "./acessos-webhook.css";
+import { ajuda } from "../ajuda-sob-demanda";
 
 // Aba "Webhook da Rifei" de Acessos (RIFA-039, D21; só admin, como a tela). Mostra qual credencial autentica o
 // webhook (o token gerado aqui, o segredo do Worker ou nenhuma), desde quando e o último uso, a URL para colar na
@@ -226,22 +228,26 @@ export function WebhookRifei() {
       {estado && (
         <>
           <Situacao estado={estado} />
-          <Card titulo="Colar na Rifei" className="acessos-webhook__rifei">
+          <Card
+            titulo="Colar na Rifei"
+            ajuda={ajuda("colarNaRifei")}
+            className="acessos-webhook__rifei"
+          >
             <div className="acessos-webhook__corpo">
               <div className="acessos-webhook__campo">
-                <ComDica texto={DICAS.campoUrl}>
-                  <Textarea
-                    ref={refUrl}
-                    rotulo="URL do webhook"
-                    dica="Vai no campo URL do webhook na Rifei."
-                    value={estado.url}
-                    readOnly
-                    rows={2}
-                    spellCheck={false}
-                    className="acessos-url"
-                    onFocus={(evento) => evento.currentTarget.select()}
-                  />
-                </ComDica>
+                <Textarea
+                  ajuda={ajuda("urlWebhook")}
+                  ref={refUrl}
+                  rotulo="URL do webhook"
+                  dica="Vai no campo URL do webhook na Rifei."
+                  value={estado.url}
+                  readOnly
+                  rows={2}
+                  spellCheck={false}
+                  className="acessos-url"
+                  onFocus={(evento) => evento.currentTarget.select()}
+                />
+
                 <ComDica texto={DICAS.copiarUrl}>
                   <Button
                     variante="secundario"
@@ -321,7 +327,7 @@ export function WebhookRifei() {
 function Situacao({ estado }: { estado: EstadoTokenWebhook }) {
   const credencial = CREDENCIAL[estado.vigente ?? "nenhuma"];
   return (
-    <Card titulo="Situação">
+    <Card titulo="Situação" ajuda={ajuda("situacaoWebhook")}>
       <div className="acessos-webhook__corpo">
         <dl className="acessos-dados">
           <div>
@@ -421,23 +427,23 @@ function TokenGerado({
         </p>
       </Aviso>
       <div className="acessos-webhook__campo">
-        <ComDica texto={DICAS.campoToken}>
-          <Textarea
-            ref={refToken}
-            id={ID_TOKEN}
-            rotulo="Token do webhook"
-            dica="Vai no campo Token do webhook na Rifei."
-            value={token}
-            readOnly
-            rows={3}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoComplete="off"
-            translate="no"
-            className="acessos-url"
-            onFocus={(evento) => evento.currentTarget.select()}
-          />
-        </ComDica>
+        <Textarea
+          ajuda={ajuda("tokenWebhook")}
+          ref={refToken}
+          id={ID_TOKEN}
+          rotulo="Token do webhook"
+          dica="Vai no campo Token do webhook na Rifei."
+          value={token}
+          readOnly
+          rows={3}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          translate="no"
+          className="acessos-url"
+          onFocus={(evento) => evento.currentTarget.select()}
+        />
+
         <ComDica texto={DICAS.copiarToken}>
           <Button
             ref={refCopiar}
@@ -450,7 +456,17 @@ function TokenGerado({
         {copia && <p className="acessos-copia">{TEXTO_COPIA.token[copia]}</p>}
       </div>
       <div className="acessos-webhook__passos">
-        <h3 className="acessos-webhook__subtitulo">Como colar na Rifei</h3>
+        <ComAjuda
+          texto={ajuda("comoColar")}
+          idDoTitulo="acessos-webhook-como-colar"
+        >
+          <h3
+            id="acessos-webhook-como-colar"
+            className="acessos-webhook__subtitulo"
+          >
+            Como colar na Rifei
+          </h3>
+        </ComAjuda>
         <ol>
           <li>
             Na Rifei, toque no ícone do usuário e em{" "}

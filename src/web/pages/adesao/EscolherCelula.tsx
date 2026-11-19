@@ -5,6 +5,7 @@ import { useRedes } from "../../lib/redes";
 import type { CelulaAdesao } from "./adesao-api";
 import { celulaCombina, ordenarParaEscolha } from "./formatos";
 import { DICAS, DICAS_REDE_UNICA } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** Quantas células a lista mostra de uma vez (a busca encontra as outras). */
 export const LIMITE_OPCOES = 8;
@@ -68,20 +69,20 @@ export function EscolherCelula({
 
   return (
     <form className="adesao-escolha" onSubmit={confirmar} noValidate>
-      <ComDica
-        texto={
-          redeUnica ? DICAS_REDE_UNICA.buscarNaEscolha : DICAS.buscarNaEscolha
+      <Input
+        ajuda={
+          redeUnica
+            ? DICAS_REDE_UNICA.buscarNaEscolha
+            : ajuda("buscarNaEscolha")
         }
-      >
-        <Input
-          rotulo="Buscar célula ou líder"
-          type="search"
-          autoComplete="off"
-          value={busca}
-          onChange={(evento) => setBusca(evento.target.value)}
-          autoFocus
-        />
-      </ComDica>
+        rotulo="Buscar célula ou líder"
+        type="search"
+        autoComplete="off"
+        value={busca}
+        onChange={(evento) => setBusca(evento.target.value)}
+        autoFocus
+      />
+
       <fieldset className="adesao-escolha__opcoes">
         <legend className="visualmente-oculto">{legenda}</legend>
         {visiveis.map((celula) => {

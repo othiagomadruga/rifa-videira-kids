@@ -1,5 +1,12 @@
 // Componentes base do site. Importe daqui: import { Card, Button } from "../../components/ui".
 export { Abas, idDaAba, type Aba } from "./Abas";
+export {
+  CARREGANDO_A_AJUDA,
+  ComAjuda,
+  ajudasSobDemanda,
+  type AjudaSobDemanda,
+  type TextoDeAjuda,
+} from "./Ajuda";
 export { AppShell, type ItemNavegacao } from "./AppShell";
 export { Aviso, type AnuncioAviso, type TomAviso } from "./Aviso";
 export { Badge, type TomBadge } from "./Badge";

@@ -9,6 +9,7 @@ import {
   Input,
   Loading,
   PageHeader,
+  ComAjuda,
   type NomeIcone,
 } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
@@ -27,6 +28,7 @@ import {
   type TextosFormulario,
 } from "./textos";
 import "./entrar.css";
+import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 
 type Envio =
   | { tipo: "pronto" }
@@ -45,6 +47,8 @@ type ConfigFormulario = {
   icone: NomeIcone;
   textos: TextosFormulario;
   dicas: DicasFormulario;
+  /** A ajuda do título do formulário (RIFA-066). */
+  ajudaDoTitulo: "entrarComCelula" | "entrarComoAdmin";
   /** O campo do nome (a célula ou o usuário). */
   campoNome: {
     name: string;
@@ -60,6 +64,7 @@ function FormularioDeEntrada({
   icone,
   textos,
   dicas,
+  ajudaDoTitulo,
   campoNome,
   entrarCom,
 }: ConfigFormulario) {
@@ -111,43 +116,50 @@ function FormularioDeEntrada({
   return (
     <form className="entrar-formulario" noValidate onSubmit={aoEnviar}>
       <IconeDaTela nome={icone} />
-      <h2 className="entrar-titulo">{textos.tituloSenha}</h2>
+      <ComAjuda
+        texto={ajudaAberta(ajudaDoTitulo)}
+        idDoTitulo="entrar-formulario"
+      >
+        <h2 id="entrar-formulario" className="entrar-titulo">
+          {textos.tituloSenha}
+        </h2>
+      </ComAjuda>
       <p>{textos.explicacaoSenha}</p>
-      <ComDica texto={dicas.nome}>
-        <Input
-          ref={refNome}
-          rotulo={textos.rotuloNome}
-          name={campoNome.name}
-          autoComplete="username"
-          autoCapitalize={campoNome.autoCapitalize}
-          spellCheck={false}
-          maxLength={200}
-          value={nome}
-          erro={faltas.nome ? textos.faltaNome : undefined}
-          onChange={(evento) => {
-            setNome(evento.target.value);
-            if (faltas.nome) setFaltas({ ...faltas, nome: false });
-          }}
-        />
-      </ComDica>
-      <ComDica texto={dicas.senha}>
-        <Input
-          ref={refSenha}
-          rotulo={textos.rotuloSenha}
-          name="senha"
-          type="password"
-          autoComplete="current-password"
-          autoCapitalize="none"
-          spellCheck={false}
-          maxLength={200}
-          value={senha}
-          erro={faltas.senha ? textos.faltaSenha : undefined}
-          onChange={(evento) => {
-            setSenha(evento.target.value);
-            if (faltas.senha) setFaltas({ ...faltas, senha: false });
-          }}
-        />
-      </ComDica>
+      <Input
+        ajuda={dicas.nome}
+        ref={refNome}
+        rotulo={textos.rotuloNome}
+        name={campoNome.name}
+        autoComplete="username"
+        autoCapitalize={campoNome.autoCapitalize}
+        spellCheck={false}
+        maxLength={200}
+        value={nome}
+        erro={faltas.nome ? textos.faltaNome : undefined}
+        onChange={(evento) => {
+          setNome(evento.target.value);
+          if (faltas.nome) setFaltas({ ...faltas, nome: false });
+        }}
+      />
+
+      <Input
+        ajuda={dicas.senha}
+        ref={refSenha}
+        rotulo={textos.rotuloSenha}
+        name="senha"
+        type="password"
+        autoComplete="current-password"
+        autoCapitalize="none"
+        spellCheck={false}
+        maxLength={200}
+        value={senha}
+        erro={faltas.senha ? textos.faltaSenha : undefined}
+        onChange={(evento) => {
+          setSenha(evento.target.value);
+          if (faltas.senha) setFaltas({ ...faltas, senha: false });
+        }}
+      />
+
       <div ref={refResultado} tabIndex={-1} className="entrar-resultado">
         {envio.tipo === "recusada" && (
           <Aviso tom="perigo" titulo={textos.recusada}>
@@ -203,6 +215,7 @@ function EntrarComSenha() {
           icone: "celula",
           textos: TEXTOS,
           dicas: DICAS,
+          ajudaDoTitulo: "entrarComCelula",
           campoNome: { name: "celula", autoCapitalize: "words" },
           entrarCom: entrarComSenha,
         }
@@ -210,6 +223,7 @@ function EntrarComSenha() {
           icone: "chave",
           textos: TEXTOS_ADMIN,
           dicas: DICAS_ADMIN,
+          ajudaDoTitulo: "entrarComoAdmin",
           campoNome: { name: "usuario", autoCapitalize: "none" },
           entrarCom: entrarComoAdmin,
         };
@@ -268,6 +282,7 @@ export function EntrarPage() {
     <>
       <PageHeader
         titulo="Entrar"
+        ajuda={ajudaAberta("entrar")}
         descricao="Coordenação, líderes e discipuladores da Rifa Videira Kids."
       />
       {conferindo ? (
@@ -295,7 +310,14 @@ export function EntrarPage() {
             <div className="entrar-explicacao">
               {/* O ícone do link no topo do cartão (RIFA-050), acima do título. */}
               <IconeDaTela nome="link" />
-              <h2 className="entrar-titulo">Como entrar pelo link</h2>
+              <ComAjuda
+                texto={ajudaAberta("comoEntrar")}
+                idDoTitulo="entrar-como"
+              >
+                <h2 id="entrar-como" className="entrar-titulo">
+                  Como entrar pelo link
+                </h2>
+              </ComAjuda>
               <p>
                 Coordenação e discipuladores (e o líder que recebeu um) entram
                 pelo <strong>link pessoal</strong>, sem senha. O link chega pelo{" "}

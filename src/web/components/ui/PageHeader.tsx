@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { tituloDaAba } from "../../tema/marca";
+import { ComAjuda, type TextoDeAjuda } from "./Ajuda";
 import { juntarClasses } from "./classes";
 import { IconeDaTela } from "./IconeDaTela";
 import type { NomeIcone } from "./icones";
@@ -8,6 +9,8 @@ import "./PageHeader.css";
 type Props = {
   /** Título da tela: vira o <h1> e o título da aba do navegador. */
   titulo: string;
+  /** Para que serve a tela, em 2 ou 3 frases curtas (RIFA-066): aparece no título e no "?" ao lado (Ajuda.tsx). */
+  ajuda?: TextoDeAjuda;
   descricao?: ReactNode;
   /** Botões ou links à direita do título (embaixo dele no celular). */
   acoes?: ReactNode;
@@ -19,7 +22,8 @@ type Props = {
 };
 
 // Cabeçalho de toda tela: um <h1> por página. O <title> é levado ao <head> pelo React.
-export function PageHeader({ titulo, descricao, acoes, icone }: Props) {
+export function PageHeader({ titulo, ajuda, descricao, acoes, icone }: Props) {
+  const idTitulo = useId();
   return (
     <header
       className={juntarClasses(
@@ -30,7 +34,11 @@ export function PageHeader({ titulo, descricao, acoes, icone }: Props) {
       <title>{tituloDaAba(titulo)}</title>
       <div className="ui-page-header__textos">
         {icone && <IconeDaTela nome={icone} />}
-        <h1 className="ui-page-header__titulo">{titulo}</h1>
+        <ComAjuda texto={ajuda} idDoTitulo={idTitulo}>
+          <h1 id={idTitulo} className="ui-page-header__titulo">
+            {titulo}
+          </h1>
+        </ComAjuda>
         {descricao && <p className="ui-page-header__descricao">{descricao}</p>}
       </div>
       {acoes && <div className="ui-page-header__acoes">{acoes}</div>}

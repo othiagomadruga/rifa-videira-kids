@@ -26,6 +26,8 @@ import { LoginDasCelulas } from "./LoginDasCelulas";
 import { TabelaCelulas, TabelaDiscipuladores, TabelaRedes } from "./Tabelas";
 import { DICAS, DICAS_REDE_UNICA, type Entidade } from "./textos";
 import "./hierarquia.css";
+import { DICA_DO_MENU, DICA_DO_MENU_SEM_REDE } from "../coordenacao/textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 const ID_ABAS = "hierarquia";
 type IdAba = "celulas" | "discipuladores" | "redes" | "importar";
@@ -117,6 +119,11 @@ export function HierarquiaPage() {
     <>
       <PageHeader
         titulo="Hierarquia"
+        ajuda={
+          redes.citar
+            ? DICA_DO_MENU.hierarquia
+            : DICA_DO_MENU_SEM_REDE.hierarquia
+        }
         descricao={
           redes.citar
             ? "Redes, discipuladores e células da campanha, com o número de pessoas de cada célula."
@@ -310,6 +317,7 @@ function Resumo({
       {!redeUnica && (
         <Stat
           rotulo="Redes"
+          ajuda={ajuda("redes")}
           valor={formatarNumero(dados.redes.length)}
           icone="hierarquia"
           tom="marca"
@@ -317,18 +325,21 @@ function Resumo({
       )}
       <Stat
         rotulo="Discipuladores"
+        ajuda={ajuda("discipuladores")}
         valor={formatarNumero(dados.discipuladores.length)}
         icone="adesao"
         tom="marca"
       />
       <Stat
         rotulo="Células"
+        ajuda={ajuda("celulas")}
         valor={formatarNumero(dados.celulas.length)}
         icone="celula"
         tom="marca"
       />
       <Stat
         rotulo="Total de pessoas"
+        ajuda={ajuda("pessoas")}
         valor={formatarNumero(pessoas)}
         icone="pessoas"
         tom="marca"

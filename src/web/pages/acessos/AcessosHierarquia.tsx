@@ -51,6 +51,7 @@ import {
   textoDosAparelhos,
 } from "./textos";
 import "./acessos-hierarquia.css";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** Alvos carregados do papel e o erro da última carga (com dados, o erro é de uma recarga). */
 type Carga = {
@@ -307,28 +308,25 @@ export function AcessosHierarquia({ regras, aoDesligar }: Props) {
       </p>
       <div className="acessos-hierarquia__controles">
         <div className="acessos-hierarquia__papel">
-          <ComDica
-            texto={
+          <Select
+            ajuda={
               redeUnica
                 ? DICAS.papelDaHierarquiaRedeUnica
-                : DICAS.papelDaHierarquia
+                : ajuda("papelDaHierarquia")
             }
+            rotulo="Papel"
+            value={papel}
+            onChange={(evento) => {
+              setPapel(evento.currentTarget.value as PapelHierarquia);
+              setResultado(null);
+            }}
           >
-            <Select
-              rotulo="Papel"
-              value={papel}
-              onChange={(evento) => {
-                setPapel(evento.currentTarget.value as PapelHierarquia);
-                setResultado(null);
-              }}
-            >
-              {papeis.map((opcao) => (
-                <option key={opcao} value={opcao}>
-                  {PAPEL_NO_PLURAL[opcao]}
-                </option>
-              ))}
-            </Select>
-          </ComDica>
+            {papeis.map((opcao) => (
+              <option key={opcao} value={opcao}>
+                {PAPEL_NO_PLURAL[opcao]}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="acessos-hierarquia__lote">
           <ComDica

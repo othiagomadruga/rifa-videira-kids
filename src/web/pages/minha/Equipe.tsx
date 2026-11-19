@@ -9,6 +9,7 @@ import {
   Badge,
   DataTable,
   type ColunaTabela,
+  ComAjuda,
 } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
 import {
@@ -16,6 +17,7 @@ import {
   percentualDaMeta,
   situacaoCurta,
   tituloSemAdesao,
+  AJUDA,
 } from "./textos";
 
 type Referencia = RespostaVisaoIndividual["referencia"];
@@ -45,9 +47,14 @@ export function Equipe({ visao }: { visao: RespostaVisaoIndividual }) {
   return (
     <section className="minha-equipe" aria-labelledby={idTitulo}>
       <div className="minha-equipe__cabecalho">
-        <h2 id={idTitulo} className="minha-equipe__titulo">
-          {alvo.tipo === "rede" ? "Sua rede" : "Suas células"}
-        </h2>
+        <ComAjuda
+          texto={alvo.tipo === "rede" ? AJUDA.equipeRede : AJUDA.equipeCelulas}
+          idDoTitulo={idTitulo}
+        >
+          <h2 id={idTitulo} className="minha-equipe__titulo">
+            {alvo.tipo === "rede" ? "Sua rede" : "Suas células"}
+          </h2>
+        </ComAjuda>
         <p className="minha-equipe__descricao">
           {alvo.tipo === "rede"
             ? `Os discipuladores da rede e as células de cada um. A posição é a de cada um ${entre.rede}, no mesmo período do seu ranking.`
@@ -135,7 +142,12 @@ function GrupoDoDiscipulador({
   const situacao = situacaoCurta(desempenho, referencia);
   return (
     <section className="minha-grupo" aria-labelledby={idGrupo}>
-      <h3 id={idGrupo} className="minha-grupo__titulo">
+      <h3
+        id={idGrupo}
+        className="minha-grupo__titulo"
+        // O nome do discipulador, não um título de seção (RIFA-066).
+        data-sem-ajuda="nome do discipulador"
+      >
         {discipulador.nome}
       </h3>
       <dl className="minha-grupo__resumo">

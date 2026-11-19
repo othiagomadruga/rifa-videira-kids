@@ -827,7 +827,8 @@ describe("RIFA-027: teclado no mapa (tabindex móvel)", () => {
 
     const antes = ordem[ordem.indexOf(pa) - 1];
     act(() => antes.focus());
-    expect(antes).toHaveTextContent("Atualizar");
+    // Antes do mapa, o "?" da ajuda do título "Por estado" (RIFA-066).
+    expect(antes).toHaveAccessibleName("Ajuda: Por estado");
     expect(tab()).toBe(pa);
     expect(textoDoQuadro()).toContain("Pará65,0%");
 

@@ -127,6 +127,9 @@ export function textoDosIgnorados(ignorados: Ignorados): string | null {
 export const GRUPOS = {
   paraMarcar: {
     titulo: "Para marcar como pago na Rifei",
+    /** A ajuda do título (RIFA-066); os outros grupos usam a explicação que aparece abaixo dele. */
+    explicacao:
+      "Pix do extrato que bateram com um pedido ainda não pago no sistema. Marque cada um como pago no painel da Rifei: a venda passa a contar quando a Rifei avisar o sistema.",
     aviso:
       "Marque como pago no painel da Rifei; a venda passa a contar quando a Rifei avisar o sistema",
     vazio: "Nenhum pedido para marcar.",
@@ -333,25 +336,54 @@ export const ROTULO_NUMEROS = "Números dos pedidos para marcar";
 
 const ESPERE = "Espere um instante.";
 
+/**
+ * Ajuda (RIFA-066, D31): a explicação dos títulos e dos rótulos, com o mouse no título (ou no campo) e no "?" ao lado
+ * dele: o que é, para que serve e um exemplo. Nos campos, é também a dica do campo.
+ */
+export const AJUDA = {
+  extrato:
+    "Confere o Pix que caiu na conta da igreja com os pedidos da Rifei, para quem pagou por fora. Mostra quais pedidos marcar como pagos na Rifei.",
+  arquivo:
+    "O extrato da conta, salvo no site ou no aplicativo do banco: o PDF do extrato, o OFX ou o CSV. Ex.: o PDF do extrato do mês da campanha, baixado no aplicativo do banco.",
+  texto:
+    "Se o banco não salva arquivo, copie as linhas do extrato na tela e cole aqui. Cada linha precisa da data e do valor.",
+  janela:
+    "Até quanto tempo depois da reserva na Rifei o Pix pode ter chegado para contar como do mesmo pedido. Ex.: 24 horas.",
+  palavras:
+    "Só entram os créditos com uma destas palavras na descrição, separadas por vírgula. Ex.: “pix” deixa de fora transferências e depósitos.",
+  colunas:
+    "Qual coluna do CSV do banco traz cada dado: a data, a descrição, o valor... A tela reconhece pelo nome; troque o que estiver errado.",
+  coluna:
+    "Qual coluna do extrato do banco traz este dado. Ex.: a coluna “Valor” para o valor do Pix.",
+  resultado:
+    "O que o cruzamento achou: quantos Pix foram lidos, quais batem com um pedido e quais pedem atenção.",
+  numeros:
+    "Os números dos pedidos para marcar como pagos, um por linha, prontos para copiar. Ex.: cole numa conversa para quem tem acesso ao painel da Rifei.",
+  lidos: "Quantos Pix de entrada o extrato tem, depois do filtro das palavras.",
+  paraMarcar:
+    "Pix que batem com um pedido ainda não pago no sistema: marque esses pedidos como pagos na Rifei.",
+  ambiguos:
+    "Pix que batem com mais de um pedido: confira o nome de quem pagou antes de marcar.",
+  semPedido:
+    "Pix que não batem com nenhum pedido livre: pode ser de fora da campanha ou com o valor errado.",
+  marcarAMao:
+    "Marca como pago na Rifei um pedido que o extrato não achou sozinho, pelo número dele. Ex.: o Pix caiu com outro nome e você sabe de qual pedido é.",
+  numeroAMao:
+    "O número do pedido na Rifei, ou o de um bilhete dele, para achar o pedido que vai ser marcado como pago. Ex.: 1234.",
+  jaContados:
+    "Pix de pedidos que já estão pagos no sistema: não precisa fazer nada.",
+} as const;
+
 export const DICAS = {
   escolherArquivo:
     "Abre a escolha dos arquivos no aparelho (PDF, OFX ou CSV; um ou vários). O extrato e os comprovantes são lidos aqui e comparados com os pedidos; nada é gravado nem enviado.",
   escolherArquivoOcupado: `Indisponível enquanto o extrato é lido. ${ESPERE}`,
-  texto:
-    "Cole aqui as linhas do extrato copiadas da tela do banco. O texto fica só nesta tela e some ao sair dela.",
   lerTexto:
     "Lê o texto da caixa aqui no navegador e compara cada Pix com os pedidos. Nada é gravado nem enviado.",
   lerTextoVazio: "Indisponível: cole antes a tabela do extrato na caixa.",
   lerTextoOcupado: `Indisponível enquanto o extrato é lido. ${ESPERE}`,
-  janela:
-    "O Pix que chegou mais tarde que isso depois da reserva não casa com o pedido pelo valor. O resultado muda na hora.",
-  palavras:
-    "Troque se o seu banco escreve o Pix de outro jeito (ex.: PIX, TRANSF, TED). Vazio, entram todos os créditos.",
-  coluna:
-    "A coluna do arquivo que tem este dado. Trocou? O resultado muda na hora.",
   copiar:
     "Copia os números dos pedidos desta lista, um por linha, para procurar e marcar como pago na Rifei.",
-  numeros: "Os números para copiar à mão, um por linha.",
 };
 
 /** "Marcar como pago na Rifei" (RIFA-070, D32; só o admin): o sistema marca na Rifei pela API do painel. */

@@ -45,9 +45,6 @@ export const DESCRICAO_TELA =
 export const DICAS = {
   atualizar:
     "Busca de novo agora. A tela também se atualiza sozinha a cada 30 segundos enquanto está aberta.",
-  filtro: "Destaca na grade só os números da situação escolhida.",
-  busca:
-    "Digite o número do bilhete para ver o pedido dele: a célula, a situação e a data. Também dá para tocar num quadrado da grade.",
 } as const;
 
 export const plural = (n: number, um: string, varios: string) =>

@@ -36,8 +36,14 @@
 
 .ui-page-header--com-icone .ui-page-header__textos::before,
 .ui-page-header--com-icone .ui-page-header__titulo,
+.ui-page-header--com-icone .ui-page-header__textos > .ui-ajuda,
 .ui-page-header--com-icone .ui-page-header__descricao {
   grid-column: 2;
+}
+
+/* O título com o "?" da ajuda (RIFA-066): do tamanho do texto, à esquerda (a dica fica centrada no título). */
+.ui-page-header__textos > .ui-ajuda {
+  justify-self: start;
 }
 
 .ui-page-header--com-icone .ui-icone-da-tela {

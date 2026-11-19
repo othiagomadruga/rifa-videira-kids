@@ -89,7 +89,7 @@ describe("PageHeader com o ícone da tela (RIFA-053)", () => {
       ".ui-page-header--com-icone .ui-page-header__textos { grid-template-columns: auto minmax(0, 1fr);",
     );
     expect(css).toMatch(
-      /\.ui-page-header--com-icone \.ui-page-header__textos::before, \.ui-page-header--com-icone \.ui-page-header__titulo, \.ui-page-header--com-icone \.ui-page-header__descricao \{ grid-column: 2; \}/,
+      /\.ui-page-header--com-icone \.ui-page-header__textos::before, \.ui-page-header--com-icone \.ui-page-header__titulo, \.ui-page-header--com-icone \.ui-page-header__textos > \.ui-ajuda, \.ui-page-header--com-icone \.ui-page-header__descricao \{ grid-column: 2; \}/,
     );
     expect(css).toMatch(
       /\.ui-page-header--com-icone \.ui-icone-da-tela \{ grid-column: 1; grid-row: 1 \/ span 2;/,

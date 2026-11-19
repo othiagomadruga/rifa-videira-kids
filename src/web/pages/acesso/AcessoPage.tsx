@@ -16,6 +16,7 @@ import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { destinoDoPapel, retirarDestino, useSessao } from "../../lib/sessao";
 import { DICAS } from "./textos";
 import "./acesso.css";
+import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 
 /** PREFIXO_LINK_ACESSO sem a barra final: o endereço que fica no lugar do link (cópia do contrato). */
 export const CAMINHO_ACESSO = "/acesso";
@@ -99,6 +100,7 @@ export function AcessoPage() {
     <div className="acesso">
       <PageHeader
         titulo="Entrar no sistema da Rifa Videira Kids"
+        ajuda={ajudaAberta("acesso")}
         descricao="Pelo seu link pessoal, sem senha."
       />
       <Card>

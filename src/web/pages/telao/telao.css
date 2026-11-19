@@ -251,6 +251,11 @@
   text-align: center;
 }
 
+/* A ajuda do título (RIFA-066, só com o mouse, sem o "?"): o grupo fica do tamanho do título, no centro. */
+.telao__disputa > .ui-ajuda {
+  justify-self: center;
+}
+
 .telao__divisoes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

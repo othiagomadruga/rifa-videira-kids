@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { TextoContado } from "../movimento";
+import { ComAjuda, type TextoDeAjuda } from "./Ajuda";
 import { juntarClasses } from "./classes";
 import { Icone } from "./Icone";
 import type { NomeIcone } from "./icones";
@@ -12,6 +13,8 @@ export type TomStat = "neutro" | "marca" | "sucesso" | "alerta";
 
 type Props = {
   rotulo: string;
+  /** O que o número quer dizer e de onde ele vem (RIFA-066): no rótulo e no "?" ao lado (Ajuda.tsx). */
+  ajuda?: TextoDeAjuda;
   /** Valor já formatado (use lib/formatadores). */
   valor: ReactNode;
   variacao?: {
@@ -53,13 +56,21 @@ const TOM_PADRAO: Record<SentidoVariacao, TomVariacao> = {
 // coloridas de cada tela).
 export function Stat({
   rotulo,
+  ajuda,
   valor,
   variacao,
   tamanho = "normal",
   icone,
   tom = "neutro",
 }: Props) {
-  const textoDoRotulo = <p className="ui-stat__rotulo">{rotulo}</p>;
+  const idRotulo = useId();
+  const textoDoRotulo = (
+    <ComAjuda texto={ajuda} idDoTitulo={idRotulo}>
+      <p id={idRotulo} className="ui-stat__rotulo">
+        {rotulo}
+      </p>
+    </ComAjuda>
+  );
   return (
     <div
       className={juntarClasses(

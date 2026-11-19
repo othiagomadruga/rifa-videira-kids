@@ -30,6 +30,7 @@ import {
   type AvisoDeSucesso,
   type LocalDoAviso,
 } from "./vinculo";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Props = {
   celulas: CelulaAdesao[];
@@ -67,21 +68,24 @@ export function TodasAsCelulas({
 
   return (
     <section aria-labelledby={idTitulo}>
-      <Card titulo={<span id={idTitulo}>Todas as células</span>}>
+      <Card
+        titulo={<span id={idTitulo}>Todas as células</span>}
+        ajuda={ajuda("todasAsCelulas")}
+      >
         <div className="pilha adesao-secao">
-          <ComDica
-            texto={
-              redeUnica ? DICAS_REDE_UNICA.buscarCelulas : DICAS.buscarCelulas
+          <Input
+            ajuda={
+              redeUnica
+                ? DICAS_REDE_UNICA.buscarCelulas
+                : ajuda("buscarCelulas")
             }
-          >
-            <Input
-              rotulo="Buscar célula, líder ou código"
-              type="search"
-              autoComplete="off"
-              value={busca}
-              onChange={(evento) => setBusca(evento.target.value)}
-            />
-          </ComDica>
+            rotulo="Buscar célula, líder ou código"
+            type="search"
+            autoComplete="off"
+            value={busca}
+            onChange={(evento) => setBusca(evento.target.value)}
+          />
+
           <p className="adesao-contagem">
             {busca.trim()
               ? `${quantidade(filtradas.length, "célula encontrada", "células encontradas")} de ${celulas.length}`
@@ -152,6 +156,8 @@ function CartaoCelula({
           id={idTituloDaCelula(celula.celula_id)}
           tabIndex={-1}
           className="adesao-item__titulo adesao-alvo-foco"
+          // O nome da célula, não um título de seção (RIFA-066).
+          data-sem-ajuda="nome da célula"
         >
           {celula.celula_nome}
         </h3>
@@ -510,31 +516,30 @@ function FormCodigo({
     <form className="adesao-codigo" onSubmit={aoEnviar} noValidate>
       <div className="adesao-codigo__linha">
         <div className="adesao-codigo__campo">
-          <ComDica texto={DICAS.codigoAfiliado}>
-            <Input
-              rotulo={
-                <>
-                  Código de afiliado{" "}
-                  <span className="visualmente-oculto">
-                    ({celula.celula_nome})
-                  </span>
-                </>
-              }
-              inputMode="numeric"
-              autoComplete="off"
-              value={codigo}
-              erro={erro ?? undefined}
-              // Gravando, o campo fica só leitura (RIFA-047): digitar limpava a pergunta da troca no meio da gravação.
-              // O motivo está à vista ("Salvando…" ao lado).
-              readOnly={enviando}
-              onChange={(evento) => {
-                if (enviando) return;
-                setCodigo(evento.target.value);
-                setErro(null);
-                setTroca(null);
-              }}
-            />
-          </ComDica>
+          <Input
+            ajuda={ajuda("codigoAfiliado")}
+            rotulo={
+              <>
+                Código de afiliado{" "}
+                <span className="visualmente-oculto">
+                  ({celula.celula_nome})
+                </span>
+              </>
+            }
+            inputMode="numeric"
+            autoComplete="off"
+            value={codigo}
+            erro={erro ?? undefined}
+            // Gravando, o campo fica só leitura (RIFA-047): digitar limpava a pergunta da troca no meio da gravação.
+            // O motivo está à vista ("Salvando…" ao lado).
+            readOnly={enviando}
+            onChange={(evento) => {
+              if (enviando) return;
+              setCodigo(evento.target.value);
+              setErro(null);
+              setTroca(null);
+            }}
+          />
         </div>
         <ComDica texto={enviando ? DICAS.salvandoCodigo : DICAS.salvarCodigo}>
           <Button type="submit" aria-disabled={enviando || undefined}>

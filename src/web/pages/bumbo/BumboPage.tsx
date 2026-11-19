@@ -28,6 +28,8 @@ import {
 } from "./textos";
 import { useBumbo } from "./useBumbo";
 import "./bumbo.css";
+import { DICA_DO_MENU } from "../coordenacao/textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 // Bumbo (RIFA-011): quem anima a campanha no grupo de WhatsApp dos líderes abre esta tela todo dia, vê a
 // mensagem pronta e a envia com um toque. O texto vem de GET /api/publico/bumbo e aparece exatamente como
@@ -43,6 +45,7 @@ export function BumboPage() {
     <>
       <PageHeader
         titulo="Bumbo"
+        ajuda={DICA_DO_MENU.bumbo}
         descricao="A mensagem do dia para o grupo de WhatsApp dos líderes: só percentuais e posições, sem valores em dinheiro."
       />
       {estado.tipo === "sem_campanha" ? (
@@ -70,7 +73,11 @@ export function BumboPage() {
               aoMudar={(valor) => setData(valor === "" ? null : valor)}
             />
           )}
-          <Card titulo="Mensagem do dia" className="bumbo__cartao">
+          <Card
+            titulo="Mensagem do dia"
+            ajuda={ajuda("mensagemDoDia")}
+            className="bumbo__cartao"
+          >
             {estado.tipo === "carregando" && (
               <Loading texto="Carregando a mensagem…" />
             )}
@@ -107,20 +114,19 @@ type PropsSeletor = {
 function SeletorDoDia({ opcoes, valor, aoMudar }: PropsSeletor) {
   return (
     <div className="bumbo__seletor">
-      <ComDica texto={DICAS.dia}>
-        <Select
-          rotulo="Dia da mensagem"
-          dica="A mensagem fala sempre do dia anterior, já fechado."
-          value={valor}
-          onChange={(evento) => aoMudar(evento.target.value)}
-        >
-          {opcoes.map((opcao) => (
-            <option key={opcao.data} value={opcao.valor}>
-              {opcao.rotulo}
-            </option>
-          ))}
-        </Select>
-      </ComDica>
+      <Select
+        ajuda={ajuda("diaDaMensagem")}
+        rotulo="Dia da mensagem"
+        dica="A mensagem fala sempre do dia anterior, já fechado."
+        value={valor}
+        onChange={(evento) => aoMudar(evento.target.value)}
+      >
+        {opcoes.map((opcao) => (
+          <option key={opcao.data} value={opcao.valor}>
+            {opcao.rotulo}
+          </option>
+        ))}
+      </Select>
     </div>
   );
 }

@@ -251,10 +251,12 @@ describe("CA3: a geração direta mostra o token uma vez", () => {
     expect(campo).toHaveValue(token);
     expect(campo).toHaveAttribute("readonly");
     expect(painel()).toHaveTextContent("Este token só aparece agora.");
-    const passos = within(painel()).getByRole("heading", {
-      level: 3,
-      name: "Como colar na Rifei",
-    }).parentElement;
+    const passos = within(painel())
+      .getByRole("heading", {
+        level: 3,
+        name: "Como colar na Rifei",
+      })
+      .closest(".acessos-webhook__passos");
     expect(passos).toHaveTextContent("Integrações");
     expect(passos).toHaveTextContent("Outro");
     expect(passos).toHaveTextContent("Adicionar");

@@ -11,13 +11,16 @@ import {
   Aviso,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   DataTable,
   SeletorArquivo,
   classesBotao,
   type ColunaTabela,
+  type TextoDeAjuda,
 } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
+import { ajuda } from "../ajuda-sob-demanda";
 import { CAMINHO_MODELO_CSV, importarPlanilha } from "./hierarquia-api";
 import {
   COLUNAS_DA_PLANILHA,
@@ -163,7 +166,7 @@ export function ImportarPlanilha({
       "Grava o que a conferência mostrou: cria o que é novo e atualiza o que mudou. Nada é apagado.";
 
   return (
-    <Card titulo="Importar a planilha das células">
+    <Card titulo="Importar a planilha das células" ajuda={ajuda("importar")}>
       <div className="hierarquia-importar">
         <p>
           {redeUnica
@@ -174,7 +177,9 @@ export function ImportarPlanilha({
         </p>
         <ol className="hierarquia-passos">
           <li className="hierarquia-passo">
-            <TituloDoPasso numero={1}>Baixe o modelo</TituloDoPasso>
+            <TituloDoPasso numero={1} ajuda={ajuda("passoModelo")}>
+              Baixe o modelo
+            </TituloDoPasso>
             <p>
               Preencha uma linha por célula. A linha 1 é o cabeçalho: não mude
               os nomes das colunas.
@@ -214,9 +219,12 @@ export function ImportarPlanilha({
           </li>
 
           <li className="hierarquia-passo">
-            <TituloDoPasso numero={2}>Escolha o arquivo</TituloDoPasso>
+            <TituloDoPasso numero={2} ajuda={ajuda("passoArquivo")}>
+              Escolha o arquivo
+            </TituloDoPasso>
             <SeletorArquivo
               rotulo="Planilha em CSV"
+              ajuda={ajuda("planilha")}
               dica="No Excel, salve em Arquivo > Salvar como > “CSV UTF-8 (delimitado por vírgulas)”."
               aceitar=".csv,text/csv"
               arquivo={arquivo}
@@ -239,7 +247,9 @@ export function ImportarPlanilha({
           </li>
 
           <li className="hierarquia-passo">
-            <TituloDoPasso numero={3}>Confira</TituloDoPasso>
+            <TituloDoPasso numero={3} ajuda={ajuda("passoConferir")}>
+              Confira
+            </TituloDoPasso>
             <p>
               O sistema lê a planilha e mostra quantos{" "}
               {redeUnica
@@ -283,7 +293,9 @@ export function ImportarPlanilha({
           </li>
 
           <li className="hierarquia-passo">
-            <TituloDoPasso numero={4}>Importe</TituloDoPasso>
+            <TituloDoPasso numero={4} ajuda={ajuda("passoImportar")}>
+              Importe
+            </TituloDoPasso>
             <p id={idDicaImportar}>{dicaImportar}</p>
             <div>
               <ComDica texto={DICAS.importar}>
@@ -324,15 +336,20 @@ export function ImportarPlanilha({
 /** "1 Baixe o modelo": o número fica no título (os itens da lista são grade, sem marcador). */
 function TituloDoPasso({
   numero,
+  ajuda: texto,
   children,
 }: {
   numero: number;
+  ajuda: TextoDeAjuda;
   children: ReactNode;
 }) {
+  const id = useId();
   return (
-    <h3 className="hierarquia-passo__titulo">
-      <span className="hierarquia-passo__numero">{numero}</span> {children}
-    </h3>
+    <ComAjuda texto={texto} idDoTitulo={id}>
+      <h3 id={id} className="hierarquia-passo__titulo">
+        <span className="hierarquia-passo__numero">{numero}</span> {children}
+      </h3>
+    </ComAjuda>
   );
 }
 

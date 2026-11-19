@@ -138,10 +138,6 @@ export const DICAS = {
       "Cada discipulador, com as vendas e as metas das células dele somadas.",
     rede: "Cada rede, com as vendas e as metas das células dela somadas.",
   } satisfies Record<NivelRanking, string>,
-  divisao:
-    "Mostra só a disputa dos Jovens ou só a dos Adultos. A escolha fica no endereço da página.",
   divisaoUnica:
     "Indisponível: a campanha usa um ranking só, com todas as células juntas. Para separar Jovens e Adultos, ligue a opção na tela Campanha.",
-  janela:
-    "Escolhe o tempo da disputa: só o período de agora ou a campanha inteira. As datas aparecem logo abaixo.",
 } as const;

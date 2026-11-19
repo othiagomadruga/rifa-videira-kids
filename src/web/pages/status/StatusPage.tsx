@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, PageHeader } from "../../components/ui";
 import { ApiStatus } from "./ApiStatus";
 import { consultarStatusApi, type StatusApi } from "./status-api";
+import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 
 export function StatusPage() {
   const [status, setStatus] = useState<StatusApi | null>(null);
@@ -24,6 +25,7 @@ export function StatusPage() {
     <>
       <PageHeader
         titulo="Status do sistema"
+        ajuda={ajudaAberta("status")}
         descricao="Saúde da API e do banco de dados."
       />
       <Card>

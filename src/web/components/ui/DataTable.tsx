@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+import { ComAjuda, type TextoDeAjuda } from "./Ajuda";
 import { EmptyState } from "./EmptyState";
 import "./DataTable.css";
 
@@ -7,6 +8,11 @@ export type ColunaTabela<T> = {
   chave: string;
   /** Cabeçalho da coluna; no celular, vira o rótulo do valor no cartão. */
   titulo: string;
+  /**
+   * O que a coluna mostra (RIFA-066): no cabeçalho e no "?" ao lado (Ajuda.tsx). No celular o cabeçalho some (cada
+   * valor leva o rótulo no cartão), e a ajuda vai junto: use nas colunas cujo nome não basta.
+   */
+  ajuda?: TextoDeAjuda;
   /** Conteúdo da célula (já formatado). */
   celula: (linha: T) => ReactNode;
   /** "fim" alinha à direita no computador (números e valores). */
@@ -39,6 +45,7 @@ export function DataTable<T>({
   mostrarLegenda = false,
   vazio,
 }: Props<T>) {
+  const idTabela = useId();
   if (linhas.length === 0) {
     return vazio ?? <EmptyState titulo="Nenhum registro para mostrar." />;
   }
@@ -61,8 +68,23 @@ export function DataTable<T>({
                 scope="col"
                 role="columnheader"
                 data-alinhamento={coluna.alinhamento}
+                // Com a ajuda, a coluna se chama só pelo texto (sem o "Ajuda: ..." do "?" de dentro).
+                aria-labelledby={
+                  coluna.ajuda ? `${idTabela}-${coluna.chave}` : undefined
+                }
               >
-                {coluna.titulo}
+                {coluna.ajuda ? (
+                  <ComAjuda
+                    texto={coluna.ajuda}
+                    idDoTitulo={`${idTabela}-${coluna.chave}`}
+                  >
+                    <span id={`${idTabela}-${coluna.chave}`}>
+                      {coluna.titulo}
+                    </span>
+                  </ComAjuda>
+                ) : (
+                  coluna.titulo
+                )}
               </th>
             ))}
           </tr>

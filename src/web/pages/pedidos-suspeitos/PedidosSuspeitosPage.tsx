@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Aviso, Loading, PageHeader } from "../../components/ui";
+import { DICA_DO_MENU } from "../coordenacao/textos";
 
 // Pedidos suspeitos (RIFA-024, coordenação): os pedidos aprovados que o webhook marcou para conferir na Rifei.
 // A lista vem num pacote à parte, carregado só aqui (como a configuração da Campanha e a /minha), com o
@@ -15,6 +16,7 @@ export function PedidosSuspeitosPage() {
     <>
       <PageHeader
         titulo="Pedidos suspeitos"
+        ajuda={DICA_DO_MENU["pedidos-suspeitos"]}
         descricao="Pedidos aprovados que o sistema marcou para conferir na Rifei: bilhetes demais num pedido só ou total fora de bilhetes × preço do bilhete."
       />
       <Aviso

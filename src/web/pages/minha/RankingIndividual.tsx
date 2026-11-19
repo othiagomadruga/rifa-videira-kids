@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { RespostaVisaoIndividual } from "../../../shared/contracts/api";
 import { NOMES_DIVISAO } from "../../../shared/contracts/calculos";
-import { Badge, Card } from "../../components/ui";
+import { Badge, Card, ComAjuda } from "../../components/ui";
 import {
   TEXTO_DO_CRITERIO,
   formatarPosicao,
@@ -12,6 +12,7 @@ import {
   textoDoVizinho,
   textoDosPares,
   type PosicaoIndividual,
+  AJUDA,
 } from "./textos";
 
 // A posição do alvo entre os pares (na divisão, que é a da premiação, e no geral), com o nome e a posição do
@@ -32,7 +33,7 @@ export function RankingIndividual({
   const semVendas = desempenho.bilhetes.campanha === 0;
 
   return (
-    <Card titulo="Ranking" className="minha-ranking">
+    <Card titulo="Ranking" ajuda={AJUDA.ranking} className="minha-ranking">
       <div className="minha-ranking__corpo">
         <p className="minha-ranking__janela">
           {textoDaJanela(ranking.janela, referencia)}
@@ -49,11 +50,13 @@ export function RankingIndividual({
               <>
                 <Posicao
                   titulo="Na sua divisão"
+                  ajuda={AJUDA.naSuaDivisao}
                   pares={textoDosPares(ranking.nivel, alvo.divisao)}
                   posicao={ranking.divisao}
                 />
                 <Posicao
                   titulo="Geral"
+                  ajuda={AJUDA.geral}
                   pares={textoDosPares(ranking.nivel, null)}
                   posicao={ranking.geral}
                 />
@@ -61,6 +64,7 @@ export function RankingIndividual({
             ) : (
               <Posicao
                 titulo="Sua posição"
+                ajuda={AJUDA.suaPosicao}
                 pares={textoDosPares(ranking.nivel, null, false)}
                 posicao={ranking.geral}
               />
@@ -68,9 +72,11 @@ export function RankingIndividual({
           </div>
         )}
         <section className="minha-primeiros" aria-labelledby={idPrimeiros}>
-          <h3 id={idPrimeiros} className="minha-primeiros__titulo">
-            {porDivisao ? `Os primeiros dos ${divisao}` : "Os primeiros"}
-          </h3>
+          <ComAjuda texto={AJUDA.primeiros} idDoTitulo={idPrimeiros}>
+            <h3 id={idPrimeiros} className="minha-primeiros__titulo">
+              {porDivisao ? `Os primeiros dos ${divisao}` : "Os primeiros"}
+            </h3>
+          </ComAjuda>
           {ranking.primeiros.length === 0 ? (
             <p className="minha-ranking__nota">
               Ninguém vendeu ainda nesta disputa.
@@ -113,19 +119,24 @@ export function RankingIndividual({
 
 function Posicao({
   titulo,
+  ajuda,
   pares,
   posicao,
 }: {
   titulo: string;
+  /** A explicação do título (RIFA-066). */
+  ajuda: string;
   pares: string;
   posicao: PosicaoIndividual;
 }) {
   const id = useId();
   return (
     <section className="minha-posicao" aria-labelledby={id}>
-      <h3 id={id} className="minha-posicao__titulo">
-        {titulo}
-      </h3>
+      <ComAjuda texto={ajuda} idDoTitulo={id}>
+        <h3 id={id} className="minha-posicao__titulo">
+          {titulo}
+        </h3>
+      </ComAjuda>
       <p className="minha-posicao__numero">{textoDaColocacao(posicao)}</p>
       <p className="minha-posicao__pares">{pares}</p>
       <dl className="minha-vizinhos">

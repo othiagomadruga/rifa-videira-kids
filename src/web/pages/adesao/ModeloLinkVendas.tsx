@@ -9,6 +9,7 @@ import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarNumero } from "../../lib/formatadores";
 import { carregarSlug, problemasDoErro } from "./links-vendas-api";
 import { DICAS } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** O afiliado da prévia: um de verdade (o primeiro vinculado, com a célula dele) ou, sem nenhum, um de exemplo. */
 export type ExemploDaPrevia = {
@@ -73,17 +74,16 @@ function ModeloSoLeitura({ modelo }: { modelo: string | null }) {
       <p id={idAviso} className="adesao-links__so-admin">
         Só o admin muda o modelo.
       </p>
-      <ComDica texto={DICAS.modeloSoLeitura}>
-        <Input
-          rotulo="Modelo do link de vendas"
-          value={modelo ?? ""}
-          placeholder="Ainda sem modelo"
-          readOnly
-          spellCheck={false}
-          aria-describedby={idAviso}
-          className="adesao-links__campo-modelo"
-        />
-      </ComDica>
+      <Input
+        ajuda={ajuda("modeloSoLeitura")}
+        rotulo="Modelo do link de vendas"
+        value={modelo ?? ""}
+        placeholder="Ainda sem modelo"
+        readOnly
+        spellCheck={false}
+        aria-describedby={idAviso}
+        className="adesao-links__campo-modelo"
+      />
     </div>
   );
 }
@@ -172,34 +172,34 @@ function EditorDoModelo({ modelo, exemplo, aoSalvar }: Omit<Props, "admin">) {
 
   return (
     <form className="adesao-links__modelo" onSubmit={salvar} noValidate>
-      <ComDica texto={DICAS.modelo}>
-        <Input
-          ref={refCampo}
-          id={idCampo}
-          rotulo="Modelo do link de vendas"
-          dica={
-            <>
-              Use {"{slug}"} (o endereço da campanha na Rifei) e {"{codigo}"} (o
-              código de afiliado de cada líder, gravado por Sincronizar com a
-              Rifei) ou {"{afiliado}"} (o número do afiliado). Ex.:{" "}
-              {EXEMPLO_DE_MODELO}
-            </>
-          }
-          erro={erros.length > 0 ? erros.join(" ") : undefined}
-          value={texto}
-          inputMode="url"
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          aria-describedby={idContagem}
-          className="adesao-links__campo-modelo"
-          onChange={(evento) => {
-            setTexto(evento.target.value);
-            setProblemasDaApi([]);
-            setResultado(null);
-          }}
-        />
-      </ComDica>
+      <Input
+        ajuda={ajuda("modelo")}
+        ref={refCampo}
+        id={idCampo}
+        rotulo="Modelo do link de vendas"
+        dica={
+          <>
+            Use {"{slug}"} (o endereço da campanha na Rifei) e {"{codigo}"} (o
+            código de afiliado de cada líder, gravado por Sincronizar com a
+            Rifei) ou {"{afiliado}"} (o número do afiliado). Ex.:{" "}
+            {EXEMPLO_DE_MODELO}
+          </>
+        }
+        erro={erros.length > 0 ? erros.join(" ") : undefined}
+        value={texto}
+        inputMode="url"
+        autoComplete="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        aria-describedby={idContagem}
+        className="adesao-links__campo-modelo"
+        onChange={(evento) => {
+          setTexto(evento.target.value);
+          setProblemasDaApi([]);
+          setResultado(null);
+        }}
+      />
+
       <p id={idContagem} className="adesao-links__contagem">
         {formatarNumero(valor.length)} de{" "}
         {formatarNumero(LIMITE_CARACTERES_MODELO_LINK_VENDAS)} caracteres

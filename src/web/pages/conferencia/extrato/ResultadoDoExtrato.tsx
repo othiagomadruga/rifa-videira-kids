@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   DataTable,
   ErrorState,
@@ -38,6 +39,7 @@ import type {
   Pix,
 } from "./lancamentos";
 import {
+  AJUDA,
   AVISO_EXPIRADO,
   COPIADO,
   COPIAR,
@@ -51,14 +53,14 @@ import {
   MAIS_CANDIDATOS,
   MAXIMO_AMBIGUOS_NA_TELA,
   MAXIMO_CANDIDATOS_NA_TELA,
+  motivoSemPedido,
+  plural,
   RESULTADO,
   ROTULO_NUMEROS,
   SEM_AREA_DE_TRANSFERENCIA,
   STATUS,
-  UM_DESTES,
-  motivoSemPedido,
-  plural,
   textoDosIgnorados,
+  UM_DESTES,
   valorDiferente,
 } from "./textos";
 
@@ -108,18 +110,23 @@ function DoPix({ pix, comValor = false }: { pix: Pix; comValor?: boolean }) {
 function Grupo({
   titulo,
   explicacao,
+  ajuda,
   children,
 }: {
   titulo: string;
   explicacao?: string;
+  /** A ajuda do título (RIFA-066): o que é o grupo e o que fazer com ele. */
+  ajuda: string;
   children: ReactNode;
 }) {
   const id = useId();
   return (
     <section className="extrato-grupo" aria-labelledby={id}>
-      <h3 id={id} className="extrato-subtitulo">
-        {titulo}
-      </h3>
+      <ComAjuda texto={ajuda} idDoTitulo={id}>
+        <h3 id={id} className="extrato-subtitulo">
+          {titulo}
+        </h3>
+      </ComAjuda>
       {explicacao && <p className="extrato-suave">{explicacao}</p>}
       {children}
     </section>
@@ -341,16 +348,15 @@ function CopiarNumeros({
       {semAreaDeTransferencia && (
         <>
           <p className="extrato-atencao">{SEM_AREA_DE_TRANSFERENCIA}</p>
-          <ComDica texto={DICAS.numeros}>
-            <Textarea
-              ref={campo}
-              rotulo={ROTULO_NUMEROS}
-              readOnly
-              rows={Math.min(8, Math.max(2, quantos))}
-              value={numeros}
-              onFocus={(evento) => evento.currentTarget.select()}
-            />
-          </ComDica>
+          <Textarea
+            ajuda={AJUDA.numeros}
+            ref={campo}
+            rotulo={ROTULO_NUMEROS}
+            readOnly
+            rows={Math.min(8, Math.max(2, quantos))}
+            value={numeros}
+            onFocus={(evento) => evento.currentTarget.select()}
+          />
         </>
       )}
     </div>
@@ -379,7 +385,7 @@ export function ResultadoDoExtrato({
     </span>
   );
   return (
-    <Card titulo={titulo}>
+    <Card titulo={titulo} ajuda={AJUDA.resultado}>
       <div className="extrato-bloco">
         <p className="extrato-suave">
           {RESULTADO.formato[origem]}:{" "}
@@ -424,37 +430,45 @@ export function ResultadoDoExtrato({
             <div className="grade extrato-numeros">
               <Stat
                 rotulo={RESULTADO.numeros.lidos}
+                ajuda={AJUDA.lidos}
                 valor={plural(totalDePix, "Pix", "Pix")}
                 icone="documento"
                 tom="marca"
               />
               <Stat
                 rotulo={RESULTADO.numeros.paraMarcar}
+                ajuda={AJUDA.paraMarcar}
                 valor={plural(resultado.paraMarcar.length, "pedido", "pedidos")}
                 icone={resultado.paraMarcar.length > 0 ? "alerta" : "check"}
                 tom={resultado.paraMarcar.length > 0 ? "alerta" : "neutro"}
               />
               <Stat
                 rotulo={RESULTADO.numeros.ambiguos}
+                ajuda={AJUDA.ambiguos}
                 valor={plural(resultado.ambiguos.length, "Pix", "Pix")}
                 icone="info"
                 tom={resultado.ambiguos.length > 0 ? "alerta" : "neutro"}
               />
               <Stat
                 rotulo={RESULTADO.numeros.semPedido}
+                ajuda={AJUDA.semPedido}
                 valor={plural(resultado.semPedido.length, "Pix", "Pix")}
                 icone="suspeito"
                 tom="neutro"
               />
               <Stat
                 rotulo={RESULTADO.numeros.jaContados}
+                ajuda={AJUDA.jaContados}
                 valor={plural(resultado.jaContados.length, "Pix", "Pix")}
                 icone="check"
                 tom="sucesso"
               />
             </div>
 
-            <Grupo titulo={GRUPOS.paraMarcar.titulo}>
+            <Grupo
+              titulo={GRUPOS.paraMarcar.titulo}
+              ajuda={GRUPOS.paraMarcar.explicacao}
+            >
               {resultado.paraMarcar.length === 0 ? (
                 <p className="extrato-suave">{GRUPOS.paraMarcar.vazio}</p>
               ) : (
@@ -491,6 +505,7 @@ export function ResultadoDoExtrato({
             {resultado.ambiguos.length > 0 && (
               <Grupo
                 titulo={GRUPOS.ambiguos.titulo}
+                ajuda={GRUPOS.ambiguos.explicacao}
                 explicacao={GRUPOS.ambiguos.explicacao}
               >
                 <Ambiguos itens={resultado.ambiguos} />
@@ -500,6 +515,7 @@ export function ResultadoDoExtrato({
             {resultado.semPedido.length > 0 && (
               <Grupo
                 titulo={GRUPOS.semPedido.titulo}
+                ajuda={GRUPOS.semPedido.explicacao}
                 explicacao={GRUPOS.semPedido.explicacao}
               >
                 <DataTable
@@ -514,6 +530,7 @@ export function ResultadoDoExtrato({
             {resultado.jaContados.length > 0 && (
               <Grupo
                 titulo={GRUPOS.jaContados.titulo}
+                ajuda={GRUPOS.jaContados.explicacao}
                 explicacao={GRUPOS.jaContados.explicacao}
               >
                 <DataTable

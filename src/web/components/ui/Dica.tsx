@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type FocusEvent,
+  type MouseEvent,
   type PointerEvent,
   type ReactElement,
   type ReactNode,
@@ -28,6 +29,9 @@ import "./Dica.css";
 //   rolagem lateral. A posição vem do JS pelo CSSOM (o CSP proíbe style="..." no HTML, não o CSSOM).
 // - Uma dica por vez (RIFA-047): a que abre fecha a que estava aberta (ex.: a do foco do teclado, quando o mouse para
 //   em outro controle). Sem isso, as duas ficavam na tela, uma por cima da outra.
+// - Com `fixarNoBotao` (a ajuda dos títulos e rótulos, RIFA-066, `Ajuda.tsx`): o clique ou o toque no botão de ajuda
+//   (`[data-ajuda-botao]`, dentro do filho) abre na hora e deixa a dica fixa (o mouse saindo não fecha); outro clique
+//   nele, um toque fora, Esc ou o foco saindo fecham. É o jeito de abrir no celular, que não tem mouse.
 
 /** Tempo com o mouse parado em cima do controle até a dica aparecer. */
 export const ATRASO_DA_DICA_MS = 600;
@@ -110,6 +114,7 @@ type ManipuladorFoco = (evento: FocusEvent<HTMLElement>) => void;
 /** O que o envoltório lê e troca no filho. */
 type PropsDoAlvo = {
   "aria-describedby"?: string;
+  onClick?: (evento: MouseEvent<HTMLElement>) => void;
   onPointerEnter?: ManipuladorPonteiro;
   onPointerMove?: ManipuladorPonteiro;
   onPointerLeave?: ManipuladorPonteiro;
@@ -132,23 +137,32 @@ type Props = {
    * no `aria-describedby` do controle (com a dica fechada, o id não aponta para nada e fica de fora da descrição).
    */
   id?: string;
+  /** O clique ou o toque num `[data-ajuda-botao]` dentro do filho abre e fixa a dica (RIFA-066; veja o topo). */
+  fixarNoBotao?: boolean;
 };
 
 /** Põe uma dica (tooltip) no controle filho. Veja o comentário do topo deste arquivo. */
-export function ComDica({ texto, children, id }: Props) {
+export function ComDica({ texto, children, id, fixarNoBotao }: Props) {
   if (texto === undefined || texto === null || texto === "" || texto === false)
     return children;
   return (
-    <DicaAtiva texto={texto} id={id}>
+    <DicaAtiva texto={texto} id={id} fixarNoBotao={fixarNoBotao}>
       {children}
     </DicaAtiva>
   );
+}
+
+/** O alvo do evento é o botão de ajuda (ou está dentro dele). */
+function ehBotaoDeAjuda(alvo: EventTarget | null) {
+  return alvo instanceof Element && alvo.closest("[data-ajuda-botao]") !== null;
 }
 
 type Pendencias = {
   mouse: boolean;
   foco: boolean;
   sobreADica: boolean;
+  /** Aberta pelo clique ou pelo toque no botão de ajuda: só fecha com outro clique, toque fora, Esc ou o foco saindo. */
+  fixada: boolean;
   abrir: ReturnType<typeof setTimeout> | undefined;
   fechar: ReturnType<typeof setTimeout> | undefined;
 };
@@ -157,10 +171,12 @@ function DicaAtiva({
   texto,
   children,
   id: idDeFora,
+  fixarNoBotao,
 }: {
   texto: ReactNode;
   children: ReactElement<PropsDoAlvo>;
   id: string | undefined;
+  fixarNoBotao: boolean | undefined;
 }) {
   const idAutomatico = useId();
   const id = idDeFora ?? idAutomatico;
@@ -172,6 +188,7 @@ function DicaAtiva({
     mouse: false,
     foco: false,
     sobreADica: false,
+    fixada: false,
     abrir: undefined,
     fechar: undefined,
   });
@@ -198,10 +215,29 @@ function DicaAtiva({
       clearTimeout(pendencias.fechar);
       pendencias.abrir = undefined;
       pendencias.fechar = undefined;
+      pendencias.fixada = false;
+      setAberta(false);
+    };
+    // Fixada (pelo toque no botão de ajuda): um toque ou clique fora dela e fora do alvo fecha (no iPhone, o toque não
+    // tira o foco do botão, então o desfocar não basta).
+    const aoTocarFora = (evento: globalThis.PointerEvent) => {
+      const alvo = evento.target;
+      if (
+        !pendencias.fixada ||
+        !(alvo instanceof Node) ||
+        refAlvo.current?.contains(alvo) ||
+        refDica.current?.contains(alvo)
+      )
+        return;
+      pendencias.fixada = false;
       setAberta(false);
     };
     document.addEventListener("keydown", aoTeclar, true);
-    return () => document.removeEventListener("keydown", aoTeclar, true);
+    document.addEventListener("pointerdown", aoTocarFora, true);
+    return () => {
+      document.removeEventListener("keydown", aoTeclar, true);
+      document.removeEventListener("pointerdown", aoTocarFora, true);
+    };
   }, [aberta]);
 
   // Uma dica por vez: ao abrir, fecha a que estava aberta (antes de pintar: as duas nunca aparecem juntas). A outra
@@ -215,6 +251,7 @@ function DicaAtiva({
         clearTimeout(pendencias.fechar);
         pendencias.abrir = undefined;
         pendencias.fechar = undefined;
+        pendencias.fixada = false;
         setAberta(false);
       },
     };
@@ -269,7 +306,12 @@ function DicaAtiva({
     cancelar("fechar");
     pendencias.fechar = setTimeout(() => {
       pendencias.fechar = undefined;
-      if (!pendencias.mouse && !pendencias.foco && !pendencias.sobreADica)
+      if (
+        !pendencias.mouse &&
+        !pendencias.foco &&
+        !pendencias.sobreADica &&
+        !pendencias.fixada
+      )
         setAberta(false);
     }, FOLGA_DA_DICA_MS);
   }
@@ -277,6 +319,7 @@ function DicaAtiva({
   function fecharJa() {
     cancelar("abrir");
     cancelar("fechar");
+    refPendencias.current.fixada = false;
     setAberta(false);
   }
 
@@ -306,10 +349,27 @@ function DicaAtiva({
     agendarFechamento();
   }
 
-  // Clicou (ou tocou): a dica sai da frente do que vem depois e só volta com o mouse entrando de novo.
+  // Clicou (ou tocou): a dica sai da frente do que vem depois e só volta com o mouse entrando de novo. No botão de
+  // ajuda, quem decide é o clique (abre e fixa, ou fecha a fixada).
   function aoPressionar(evento: PointerEvent<HTMLElement>) {
     doFilho.onPointerDown?.(evento);
+    if (fixarNoBotao && ehBotaoDeAjuda(evento.target)) return;
     fecharJa();
+  }
+
+  function aoClicar(evento: MouseEvent<HTMLElement>) {
+    doFilho.onClick?.(evento);
+    if (!fixarNoBotao || !ehBotaoDeAjuda(evento.target)) return;
+    const pendencias = refPendencias.current;
+    if (pendencias.fixada) {
+      fecharJa();
+      return;
+    }
+    refAlvo.current = evento.currentTarget;
+    pendencias.fixada = true;
+    cancelar("abrir");
+    cancelar("fechar");
+    setAberta(true);
   }
 
   function aoFocar(evento: FocusEvent<HTMLElement>) {
@@ -345,6 +405,7 @@ function DicaAtiva({
         onPointerMove={aoMover}
         onPointerLeave={aoSair}
         onPointerDown={aoPressionar}
+        onClick={fixarNoBotao ? aoClicar : doFilho.onClick}
         onFocus={aoFocar}
         onBlur={aoDesfocar}
       />
@@ -377,14 +438,19 @@ function DicaAtiva({
  * tela, com a seta apontando para o meio do controle.
  */
 function posicionar(alvo: HTMLElement, dica: HTMLElement) {
-  const controle = alvo.getBoundingClientRect();
+  // Num campo com ajuda (RIFA-066), a dica aponta para o rótulo (a âncora) e, sem lugar acima, fica abaixo do campo
+  // inteiro: não cobre o que se digita.
+  const controle = (
+    alvo.querySelector("[data-ajuda-ancora]") ?? alvo
+  ).getBoundingClientRect();
+  const base = alvo.getBoundingClientRect().bottom;
   const { width: largura, height: altura } = dica.getBoundingClientRect();
   const larguraTela = document.documentElement.clientWidth || window.innerWidth;
   const alturaTela =
     document.documentElement.clientHeight || window.innerHeight;
 
   const topoAcima = controle.top - AFASTAMENTO_PX - altura;
-  const topoAbaixo = controle.bottom + AFASTAMENTO_PX;
+  const topoAbaixo = base + AFASTAMENTO_PX;
   const cabeAcima = topoAcima >= MARGEM_DA_TELA_PX;
   const cabeAbaixo = topoAbaixo + altura <= alturaTela - MARGEM_DA_TELA_PX;
   // Sem lugar inteiro nos dois lados (tela baixa): o lado com mais espaço, preso dentro da tela.
@@ -392,7 +458,7 @@ function posicionar(alvo: HTMLElement, dica: HTMLElement) {
     ? "acima"
     : cabeAbaixo
       ? "abaixo"
-      : controle.top >= alturaTela - controle.bottom
+      : controle.top >= alturaTela - base
         ? "acima"
         : "abaixo";
   const topo = Math.max(

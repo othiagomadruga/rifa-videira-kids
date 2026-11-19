@@ -1780,6 +1780,36 @@ discipulador → célula.
   valores dos campos e as dicas, para admin, coordenação, líder e discipulador). As API falsas dos Rankings, da Campanha e
   dos Acessos respondem a lista das redes com duas (a tela como sempre foi) e guardam o pedido à parte.
 
+## D31. Ajuda nos títulos e rótulos: o "?" e o texto de quem nunca viu o sistema (RIFA-066, 2026-11-17)
+
+Pedido do PO na Campanha, em "Períodos": "Período do quê? Quando eu coloco o mouse em cima, deveria explicar para que
+serve isso. E essa explicação tem que estar em todo o sistema." A dica dos botões e campos (RIFA-045) não cobria os
+títulos de seção, os rótulos, os números nem as colunas, não abria no celular e explicava o mecanismo, não o
+propósito. Decidido pelo SM e pelo developer de front em 17/11; o PO pode trocar textos ao ver a demonstração.
+
+- **Onde**: todo título (o da tela, o de cada seção e os subtítulos como "Períodos"), todo campo, os números (`Stat`)
+  e as colunas cujo nome não basta. A prova é a varredura `titulosSemAjuda()` nos casos por tela das dicas (todas as
+  telas da coordenação, a `/minha` dos três papéis e as telas abertas). Fica de fora o que não é seção: o título de
+  um diálogo (já tem descrição), a opção de um rádio e o nome de um item numa lista (`data-sem-ajuda`).
+- **Como aparece**: um "?" discreto ao lado do título ou do rótulo, e a explicação com o mouse parado no próprio
+  título (o que o PO tentou), no foco do teclado e **no toque do "?"**, que deixa a explicação fixa até outro toque,
+  um toque fora ou Esc. É a mesma dica da RIFA-045 (`ComDica`, modo `fixarNoBotao`): uma por vez, Esc fecha só ela,
+  sempre dentro da tela, WCAG 1.4.13. O "?" é um botão "Ajuda: <título>", com a explicação no `aria-describedby`;
+  o título e o rótulo não mudam de nome. O telão não tem controles: lá, só o mouse no título.
+- **Um texto só por campo**: o campo com `ajuda` mostra a explicação no rótulo, no "?" e no próprio campo (é a dica
+  dele). As dicas antigas desses campos saíram do `textos.ts`: o texto, reescrito, está na ajuda. Escolhemos a prop
+  nos componentes base (e o `ComAjuda` para o resto), e não um `ComDica` em volta do título, porque o título precisa
+  de um alvo de toque (o "?") e o nome dele não pode mudar (os testes e os leitores de tela acham a seção pelo nome).
+- **O texto**: o que é, para que serve na campanha e, quando há algo a escolher, um exemplo, em 2 ou 3 frases curtas
+  (até 260 caracteres, conferido em `pages/ajuda-das-telas.test.ts`). Nas telas da `/minha` e nas abertas, sem R$.
+- **Peso**: as telas `lazy` levam os textos no pedaço delas. As que carregam com o site (Visão geral, Hierarquia,
+  Adesão, Rankings, Bumbo e Acessos) pedem os textos sob demanda, num pedaço só (`pages/ajuda-das-telas.ts`, um
+  `import()` em vez de um por tela), que chega logo depois da tela; as telas abertas, num pedaço delas; o título das
+  telas da coordenação usa o texto do link do menu, que já estava no pacote inicial. Com as dicas dos campos
+  movidas para a ajuda, o JS inicial sobe 0,7 KiB (163,4 → 164,1 KiB em gzip, contra a `main` de 19/11) e o CSS
+  inicial 0,1 KiB; nenhuma dependência nova. Até o pedaço chegar, a ajuda diz "Carregando a explicação…".
+- **Fora**: ajuda em cada célula de tabela, em mensagens (avisos, estados vazios) e no nome de itens de lista; um
+  "?" no telão.
 ## D32. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17; renumerada de D29 em 19/11)
 
 Decisão do PO (17/11): no Pix manual (D26), o último passo, marcar como pago no painel da Rifei, deixa de ser à mão; e
@@ -1828,7 +1858,6 @@ painel em 17/11/2026 (docs/integracao-rifei.md, seção 13) e o sistema faz as m
   - **Seleção e marcar à mão:** caixa por pedido em "Para marcar" e busca pelo número do pedido ou de um bilhete
     (`GET /api/admin/rifei/pedido`), que reaproveita o `POST marcar-pagos` (o banco continua decidindo o que vai à
     Rifei). Só admin (`protecao.test.ts`).
-
 ## D33. Login do admin com usuário e senha (RIFA-073; contrato, 2026-11-19)
 
 Pedido do PO (19/11): o pastor (admin) entra no painel com usuário e senha, para marcar pagamentos sem depender do link

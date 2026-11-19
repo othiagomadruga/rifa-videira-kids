@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from "react";
+import { ComAjuda, type TextoDeAjuda } from "./Ajuda";
 import { classesBotao } from "./Button";
 import { ComDica } from "./Dica";
 import "./Campos.css";
@@ -7,6 +8,8 @@ import "./SeletorArquivo.css";
 type Props = {
   /** Rótulo do campo (acima do botão). */
   rotulo: ReactNode;
+  /** A explicação do rótulo (RIFA-066): que arquivo é, para que serve e de onde tirar (veja Ajuda.tsx). */
+  ajuda?: TextoDeAjuda;
   dica?: ReactNode;
   /** Mensagem de erro; quando presente, o campo fica inválido. */
   erro?: ReactNode;
@@ -39,6 +42,7 @@ type Props = {
 // Depois de cada escolha o campo é limpo: escolher de novo o mesmo arquivo (corrigido) também avisa.
 export function SeletorArquivo({
   rotulo,
+  ajuda,
   dica,
   erro,
   aceitar,
@@ -73,9 +77,15 @@ export function SeletorArquivo({
       className="ui-campo ui-seletor-arquivo"
       data-invalido={erro ? "" : undefined}
     >
-      <label className="ui-campo__rotulo" htmlFor={idCampo}>
-        {rotulo}
-      </label>
+      <ComAjuda texto={ajuda} idDoTitulo={`${idCampo}-rotulo`}>
+        <label
+          id={`${idCampo}-rotulo`}
+          className="ui-campo__rotulo"
+          htmlFor={idCampo}
+        >
+          {rotulo}
+        </label>
+      </ComAjuda>
       {dica && (
         <p id={idDica} className="ui-campo__dica">
           {dica}

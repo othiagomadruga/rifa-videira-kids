@@ -1,7 +1,12 @@
 import { useId } from "react";
 import type { ItemRankingPublico } from "../../../shared/contracts/calculos";
 import { TextoContado } from "../../components/movimento";
-import { Icone, Marca, TITULO_SEM_CONEXAO } from "../../components/ui";
+import {
+  Icone,
+  Marca,
+  TITULO_SEM_CONEXAO,
+  ComAjuda,
+} from "../../components/ui";
 import { ehFalhaDeConexao } from "../../lib/api";
 import { formatarHora, formatarPercentual } from "../../lib/formatadores";
 import {
@@ -31,6 +36,7 @@ import {
 } from "./textos";
 import { useCursorEscondidoParado, useRelogio } from "./useTelao";
 import "./telao.css";
+import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 
 /** Posições até esta ganham destaque (empatados no 3º lugar também), como no ranking público. */
 const POSICOES_EM_DESTAQUE = 3;
@@ -229,9 +235,11 @@ function Disputa({ ranking }: { ranking: RankingPublico }) {
       aria-labelledby={idJanela}
       data-itens={itensDaEscala(itensDaMaior, colunas)}
     >
-      <h2 id={idJanela} className="telao__janela">
-        {textoDaJanela(ranking.janela, ranking.referencia)}
-      </h2>
+      <ComAjuda texto={ajudaAberta("disputa")} idDoTitulo={idJanela} semBotao>
+        <h2 id={idJanela} className="telao__janela">
+          {textoDaJanela(ranking.janela, ranking.referencia)}
+        </h2>
+      </ComAjuda>
       <div
         className="telao__divisoes"
         data-unica={ranking.porDivisao ? undefined : ""}
@@ -268,9 +276,16 @@ function Divisao({
   return (
     <section className="telao__divisao" aria-labelledby={idTitulo}>
       <div className="telao__divisao-topo">
-        <h3 id={idTitulo} className="telao__divisao-titulo">
-          {tituloDaLista(divisao)}
-        </h3>
+        {/* O telão não tem controles: a ajuda só com o mouse no título, sem o "?" (RIFA-066). */}
+        <ComAjuda
+          texto={ajudaAberta(divisao === null ? "todas" : "divisao")}
+          idDoTitulo={idTitulo}
+          semBotao
+        >
+          <h3 id={idTitulo} className="telao__divisao-titulo">
+            {tituloDaLista(divisao)}
+          </h3>
+        </ComAjuda>
         {comPercentual && (
           <p className="telao__legenda" aria-hidden="true">
             % da meta

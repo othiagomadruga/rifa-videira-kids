@@ -43,6 +43,7 @@ import { ConexaoNoExtrato } from "./ConexaoNoExtrato";
 import { MarcarAMao } from "./MarcarAMao";
 import { ResultadoDoExtrato } from "./ResultadoDoExtrato";
 import {
+  AJUDA,
   CAMPOS,
   COLUNAS_CSV,
   DICAS,
@@ -387,7 +388,7 @@ export function ExtratoDoBanco() {
       </p>
       {/* RIFA-070 (D32): a conexão com a Rifei, para o admin saber antes de marcar. */}
       {admin && <ConexaoNoExtrato versao={versaoConexao} />}
-      <Card titulo={TITULO}>
+      <Card titulo={TITULO} ajuda={AJUDA.extrato}>
         <div className="extrato-bloco">
           <ol className="extrato-passos">
             {PASSOS.map((passo) => (
@@ -399,6 +400,7 @@ export function ExtratoDoBanco() {
           </Aviso>
           <SeletorArquivo
             rotulo={CAMPOS.arquivo.rotulo}
+            ajuda={AJUDA.arquivo}
             dica={CAMPOS.arquivo.dica}
             aceitar=".pdf,.ofx,.qfx,.csv,.txt,application/pdf,application/x-ofx,text/csv,text/plain,image/*"
             arquivo={arquivos[0] ?? null}
@@ -415,18 +417,18 @@ export function ExtratoDoBanco() {
             }
           />
           <div className="extrato-colar">
-            <ComDica texto={DICAS.texto}>
-              <Textarea
-                rotulo={CAMPOS.texto.rotulo}
-                dica={CAMPOS.texto.dica}
-                rows={5}
-                value={colado}
-                onChange={(evento) => setColado(evento.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                translate="no"
-              />
-            </ComDica>
+            <Textarea
+              ajuda={AJUDA.texto}
+              rotulo={CAMPOS.texto.rotulo}
+              dica={CAMPOS.texto.dica}
+              rows={5}
+              value={colado}
+              onChange={(evento) => setColado(evento.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              translate="no"
+            />
+
             <div className="extrato-acoes">
               <ComDica texto={dicaLerTexto}>
                 <Button
@@ -445,33 +447,30 @@ export function ExtratoDoBanco() {
             </div>
           </div>
           <div className="extrato-opcoes">
-            <ComDica texto={DICAS.janela}>
-              <Select
-                rotulo={CAMPOS.janela.rotulo}
-                dica={CAMPOS.janela.dica}
-                value={String(janelaHoras)}
-                onChange={(evento) =>
-                  setJanelaHoras(Number(evento.target.value))
-                }
-              >
-                {JANELAS_HORAS.map((horas) => (
-                  <option key={horas} value={horas}>
-                    {rotuloDaJanela(horas)}
-                  </option>
-                ))}
-              </Select>
-            </ComDica>
-            <ComDica texto={DICAS.palavras}>
-              <Input
-                rotulo={CAMPOS.palavras.rotulo}
-                dica={CAMPOS.palavras.dica}
-                value={palavras}
-                maxLength={200}
-                onChange={(evento) => setPalavras(evento.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </ComDica>
+            <Select
+              ajuda={AJUDA.janela}
+              rotulo={CAMPOS.janela.rotulo}
+              dica={CAMPOS.janela.dica}
+              value={String(janelaHoras)}
+              onChange={(evento) => setJanelaHoras(Number(evento.target.value))}
+            >
+              {JANELAS_HORAS.map((horas) => (
+                <option key={horas} value={horas}>
+                  {rotuloDaJanela(horas)}
+                </option>
+              ))}
+            </Select>
+
+            <Input
+              ajuda={AJUDA.palavras}
+              rotulo={CAMPOS.palavras.rotulo}
+              dica={CAMPOS.palavras.dica}
+              value={palavras}
+              maxLength={200}
+              onChange={(evento) => setPalavras(evento.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
           </div>
           {porArquivo && <ArquivosLidos arquivos={porArquivo} />}
           {lendo && <Loading texto="Lendo o extrato…" />}
@@ -486,31 +485,27 @@ export function ExtratoDoBanco() {
       </Card>
 
       {csv && mapeamento && (
-        <Card titulo={COLUNAS_CSV.titulo}>
+        <Card titulo={COLUNAS_CSV.titulo} ajuda={AJUDA.colunas}>
           <div className="extrato-bloco">
             <p className="extrato-suave">{COLUNAS_CSV.explicacao}</p>
             <div className="extrato-campos">
               {CAMPOS_CSV.map((campo) => (
-                <ComDica key={campo} texto={DICAS.coluna}>
-                  <Select
-                    rotulo={COLUNAS_CSV.campos[campo]}
-                    value={
-                      mapeamento[campo] === null
-                        ? ""
-                        : String(mapeamento[campo])
-                    }
-                    onChange={(evento) =>
-                      mudarColuna(campo, evento.target.value)
-                    }
-                  >
-                    <option value="">{COLUNAS_CSV.semColuna}</option>
-                    {csv.colunas.map((nome, indice) => (
-                      <option key={`${indice}-${nome}`} value={indice}>
-                        {nome}
-                      </option>
-                    ))}
-                  </Select>
-                </ComDica>
+                <Select
+                  key={campo}
+                  rotulo={COLUNAS_CSV.campos[campo]}
+                  ajuda={AJUDA.coluna}
+                  value={
+                    mapeamento[campo] === null ? "" : String(mapeamento[campo])
+                  }
+                  onChange={(evento) => mudarColuna(campo, evento.target.value)}
+                >
+                  <option value="">{COLUNAS_CSV.semColuna}</option>
+                  {csv.colunas.map((nome, indice) => (
+                    <option key={`${indice}-${nome}`} value={indice}>
+                      {nome}
+                    </option>
+                  ))}
+                </Select>
               ))}
             </div>
             {extrato && !extrato.ok && (

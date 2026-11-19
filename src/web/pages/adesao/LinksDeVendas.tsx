@@ -13,6 +13,7 @@ import {
   Aviso,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   EmptyState,
   ErrorState,
@@ -37,6 +38,7 @@ import {
 } from "./ModeloLinkVendas";
 import { DICAS } from "./textos";
 import "./links-vendas.css";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type CelulaComLinks = RespostaLinksVendas["itens"][number];
 
@@ -121,7 +123,10 @@ export function LinksDeVendas({ celulas }: { celulas: CelulaAdesao[] }) {
 
   return (
     <section aria-labelledby={idTitulo}>
-      <Card titulo={<span id={idTitulo}>Links de vendas</span>}>
+      <Card
+        titulo={<span id={idTitulo}>Links de vendas</span>}
+        ajuda={ajuda("linksDeVendas")}
+      >
         <div className="adesao-links">
           <p className="adesao-links__explicacao">
             A venda conta para a célula quando é feita na Rifei pelo link de
@@ -228,9 +233,11 @@ function LinksDasCelulas({
       aria-labelledby={idTitulo}
     >
       <div className="adesao-links__cabecalho">
-        <h3 id={idTitulo} className="adesao-links__subtitulo">
-          Link de cada célula
-        </h3>
+        <ComAjuda texto={ajuda("linkDeCadaCelula")} idDoTitulo={idTitulo}>
+          <h3 id={idTitulo} className="adesao-links__subtitulo">
+            Link de cada célula
+          </h3>
+        </ComAjuda>
         <ComDica
           texto={
             paraImprimir.length > 0
@@ -253,15 +260,15 @@ function LinksDasCelulas({
         Uma página por célula com link: o QR code, o nome da célula e o link em
         texto.
       </p>
-      <ComDica texto={DICAS.buscar}>
-        <Input
-          rotulo="Buscar nos links: célula, líder ou código"
-          type="search"
-          autoComplete="off"
-          value={busca}
-          onChange={(evento) => setBusca(evento.target.value)}
-        />
-      </ComDica>
+      <Input
+        ajuda={ajuda("buscarLinks")}
+        rotulo="Buscar nos links: célula, líder ou código"
+        type="search"
+        autoComplete="off"
+        value={busca}
+        onChange={(evento) => setBusca(evento.target.value)}
+      />
+
       <p className="adesao-contagem">
         {termos.length > 0
           ? `${quantidade(filtradas.length, "célula encontrada", "células encontradas")} de ${dados.itens.length}`

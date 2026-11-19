@@ -7,19 +7,21 @@ type Props = {
   papeis: readonly Papel[];
   /** Título da tela (o mesmo do menu): vira o <h1> do aviso. */
   titulo: string;
+  /** Para que serve a tela (RIFA-066): a ajuda do título, o texto do link do menu. */
+  ajuda?: string;
   children: ReactNode;
 };
 
 // Tela só para alguns papéis (TELAS_COORDENACAO, `papeis`): quem não tem o papel vê "sem permissão" e a
 // tela nem chega a ser montada (nada é pedido à API). A API recusa do mesmo jeito (403).
-export function ExigirPapel({ papeis, titulo, children }: Props) {
+export function ExigirPapel({ papeis, titulo, ajuda, children }: Props) {
   const usuario = useUsuarioConectado();
   if (papeis.includes(usuario.papel)) return children;
 
   const quem = papeis.map((papel) => ROTULO_PAPEL[papel]).join(" ou ");
   return (
     <>
-      <PageHeader titulo={titulo} />
+      <PageHeader titulo={titulo} ajuda={ajuda} />
       <Aviso tom="alerta" titulo="Sem permissão para esta tela">
         <p>
           Esta tela é só para quem tem o papel {quem}. Se precisar de um link

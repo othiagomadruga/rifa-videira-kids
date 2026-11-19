@@ -32,6 +32,7 @@ import {
   reconsiderarPedido,
 } from "./pedidos-api";
 import {
+  AJUDA,
   DICAS,
   ROTULO_MOTIVO,
   ROTULO_STATUS,
@@ -217,45 +218,45 @@ export function DialogoDesconsiderar({
     >
       <div className="pedidos-dialogo">
         <p className="pedidos-suave">{resumoDoPedido(pedido)}</p>
-        <ComDica texto={DICAS.motivo}>
-          <Select
-            ref={refMotivo}
-            rotulo="Motivo"
-            value={motivo}
-            erro={erros.motivo}
-            required
-            onChange={(evento) => {
-              setMotivo(
-                MOTIVOS_DESCONSIDERACAO.find(
-                  (opcao) => opcao === evento.target.value,
-                ) ?? "",
-              );
-              setErros((atuais) => ({ ...atuais, motivo: undefined }));
-            }}
-          >
-            <option value="">Escolha…</option>
-            {MOTIVOS_DESCONSIDERACAO.map((opcao) => (
-              <option key={opcao} value={opcao}>
-                {ROTULO_MOTIVO[opcao]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.observacao}>
-          <Textarea
-            ref={refObservacao}
-            rotulo="Observação (opcional)"
-            dica={`Até ${LIMITE_OBSERVACAO} caracteres. Não escreva nome, telefone, e-mail nem documento do comprador.`}
-            value={observacao}
-            maxLength={LIMITE_OBSERVACAO}
-            rows={3}
-            erro={erros.observacao}
-            onChange={(evento) => {
-              setObservacao(evento.target.value);
-              setErros((atuais) => ({ ...atuais, observacao: undefined }));
-            }}
-          />
-        </ComDica>
+        <Select
+          ajuda={AJUDA.motivo}
+          ref={refMotivo}
+          rotulo="Motivo"
+          value={motivo}
+          erro={erros.motivo}
+          required
+          onChange={(evento) => {
+            setMotivo(
+              MOTIVOS_DESCONSIDERACAO.find(
+                (opcao) => opcao === evento.target.value,
+              ) ?? "",
+            );
+            setErros((atuais) => ({ ...atuais, motivo: undefined }));
+          }}
+        >
+          <option value="">Escolha…</option>
+          {MOTIVOS_DESCONSIDERACAO.map((opcao) => (
+            <option key={opcao} value={opcao}>
+              {ROTULO_MOTIVO[opcao]}
+            </option>
+          ))}
+        </Select>
+
+        <Textarea
+          ajuda={AJUDA.observacao}
+          ref={refObservacao}
+          rotulo="Observação (opcional)"
+          dica={`Até ${LIMITE_OBSERVACAO} caracteres. Não escreva nome, telefone, e-mail nem documento do comprador.`}
+          value={observacao}
+          maxLength={LIMITE_OBSERVACAO}
+          rows={3}
+          erro={erros.observacao}
+          onChange={(evento) => {
+            setObservacao(evento.target.value);
+            setErros((atuais) => ({ ...atuais, observacao: undefined }));
+          }}
+        />
+
         {falha && (
           <Aviso tom="perigo" titulo="Não foi possível desconsiderar">
             <p>{falha.texto}</p>

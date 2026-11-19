@@ -4,7 +4,8 @@ import type {
   RespostaPainelResumo,
   TotaisVendas,
 } from "../../../shared/contracts/calculos";
-import { Icone } from "../../components/ui";
+import { ComAjuda, Icone } from "../../components/ui";
+import { ajuda } from "../ajuda-sob-demanda";
 import { useRedes } from "../../lib/redes";
 import { textoDosTotais } from "./textos";
 
@@ -70,9 +71,11 @@ export function AvisosVendas({ resumo }: Props) {
 
   return (
     <section className="visao-avisos" aria-labelledby={idTitulo}>
-      <h2 id={idTitulo} className="visao-avisos__titulo">
-        Para conferir
-      </h2>
+      <ComAjuda texto={ajuda("paraConferir")} idDoTitulo={idTitulo}>
+        <h2 id={idTitulo} className="visao-avisos__titulo">
+          Para conferir
+        </h2>
+      </ComAjuda>
       <ul className="visao-avisos__lista">
         {avisos.map((aviso) => (
           <li key={aviso.chave}>

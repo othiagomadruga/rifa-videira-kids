@@ -3,9 +3,22 @@ import { NOMES_DIVISAO } from "../../../shared/contracts/calculos";
 import {
   Esqueleto,
   PageHeader,
+  ajudasSobDemanda,
   type BlocoEsqueleto,
 } from "../../components/ui";
 import "./minha-moldura.css";
+
+/**
+ * A ajuda do título (RIFA-066): sob demanda, do textos.ts da visão (que vem no pacote dela, logo depois): o pacote
+ * inicial não leva os textos.
+ */
+const ajuda = ajudasSobDemanda(() => import("./textos"));
+
+const AJUDA_DO_ALVO = {
+  celula: "cabecalhoCelula",
+  discipulador: "cabecalhoDiscipulador",
+  rede: "cabecalhoRede",
+} as const satisfies Record<Alvo["tipo"], string>;
 
 /** Tipo do alvo para mostrar ao lado do nome. */
 const ROTULO_DO_ALVO: Record<Alvo["tipo"], string> = {
@@ -39,6 +52,7 @@ export function Cabecalho({
   return (
     <PageHeader
       titulo={alvo?.nome ?? "Sua visão da campanha"}
+      ajuda={ajuda(alvo ? AJUDA_DO_ALVO[alvo.tipo] : "cabecalho")}
       descricao={
         <>
           {alvo && (

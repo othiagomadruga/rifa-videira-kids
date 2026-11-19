@@ -4,7 +4,7 @@ import type {
   MapeamentoReconciliacao,
 } from "../../../shared/contracts";
 import { Button, Card, ComDica, Select } from "../../components/ui";
-import { CAMPOS, DICAS } from "./textos";
+import { AJUDA, CAMPOS, DICAS } from "./textos";
 
 type Props = {
   colunas: readonly ColunaArquivoReconciliacao[];
@@ -41,7 +41,7 @@ export function Mapeamento({
   const conferirIndisponivel = !alterado || ocupado;
 
   return (
-    <Card titulo="Colunas do arquivo">
+    <Card titulo="Colunas do arquivo" ajuda={AJUDA.colunasDoArquivo}>
       <div className="conferencia-bloco">
         <p>
           {detectado && !alterado
@@ -50,32 +50,29 @@ export function Mapeamento({
         </p>
         <div className="conferencia-campos">
           {CAMPOS_EM_ORDEM.map((campo) => (
-            <ComDica
+            <Select
               key={campo}
-              texto={ocupado ? DICAS.colunaOcupada : DICAS.coluna}
+              rotulo={CAMPOS[campo].rotulo}
+              ajuda={ocupado ? DICAS.colunaOcupada : AJUDA.coluna}
+              dica={CAMPOS[campo].dica}
+              value={mapeamento[campo] ?? ""}
+              disabled={ocupado}
+              onChange={(evento) =>
+                aoMudar(
+                  campo,
+                  evento.currentTarget.value === ""
+                    ? null
+                    : Number(evento.currentTarget.value),
+                )
+              }
             >
-              <Select
-                rotulo={CAMPOS[campo].rotulo}
-                dica={CAMPOS[campo].dica}
-                value={mapeamento[campo] ?? ""}
-                disabled={ocupado}
-                onChange={(evento) =>
-                  aoMudar(
-                    campo,
-                    evento.currentTarget.value === ""
-                      ? null
-                      : Number(evento.currentTarget.value),
-                  )
-                }
-              >
-                <option value="">{CAMPOS[campo].semColuna ?? "Não tem"}</option>
-                {usaveis.map((coluna) => (
-                  <option key={coluna.indice} value={coluna.indice}>
-                    {`${coluna.nome} (coluna ${coluna.indice + 1})`}
-                  </option>
-                ))}
-              </Select>
-            </ComDica>
+              <option value="">{CAMPOS[campo].semColuna ?? "Não tem"}</option>
+              {usaveis.map((coluna) => (
+                <option key={coluna.indice} value={coluna.indice}>
+                  {`${coluna.nome} (coluna ${coluna.indice + 1})`}
+                </option>
+              ))}
+            </Select>
           ))}
         </div>
         {pessoais.length > 0 && (

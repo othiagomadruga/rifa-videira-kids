@@ -7,7 +7,6 @@ import {
 } from "../../../shared/contracts/calculos";
 import {
   Abas,
-  ComDica,
   EmptyState,
   ErrorState,
   Loading,
@@ -45,6 +44,8 @@ import {
   textoDaReferencia,
 } from "./textos";
 import "./rankings.css";
+import { DICA_DO_MENU, DICA_DO_MENU_SEM_REDE } from "../coordenacao/textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 const ID_ABAS = "rankings";
 
@@ -119,45 +120,44 @@ export function RankingsPage() {
   const painel = (
     <div className="pilha rankings-painel">
       <div className="rankings-filtros">
-        <ComDica texto={porDivisao ? DICAS.divisao : DICAS.divisaoUnica}>
-          <Select
-            rotulo="Divisão"
-            value={porDivisao ? (filtros.divisao ?? "") : ""}
-            aria-disabled={porDivisao ? undefined : true}
-            onChange={(evento) => {
-              if (porDivisao)
-                mudarFiltros({ divisao: lerDivisao(evento.target.value) });
-            }}
-          >
-            {porDivisao ? (
-              <>
-                <option value="">Todas</option>
-                {ORDEM_DIVISOES.map((divisao) => (
-                  <option key={divisao} value={divisao}>
-                    {NOMES_DIVISAO[divisao]}
-                  </option>
-                ))}
-              </>
-            ) : (
-              <option value="">Todas as células</option>
-            )}
-          </Select>
-        </ComDica>
-        <ComDica texto={DICAS.janela}>
-          <Select
-            rotulo="Janela"
-            value={filtros.periodo}
-            onChange={(evento) =>
-              mudarFiltros({ periodo: lerJanela(evento.target.value) })
-            }
-          >
-            {JANELAS.map((janela) => (
-              <option key={janela} value={janela}>
-                {TEXTO_JANELA[janela]}
-              </option>
-            ))}
-          </Select>
-        </ComDica>
+        {/* O campo tem a ajuda do rótulo como dica (RIFA-066); indisponível, ela diz por quê. */}
+        <Select
+          rotulo="Divisão"
+          ajuda={porDivisao ? ajuda("divisaoRankings") : DICAS.divisaoUnica}
+          value={porDivisao ? (filtros.divisao ?? "") : ""}
+          aria-disabled={porDivisao ? undefined : true}
+          onChange={(evento) => {
+            if (porDivisao)
+              mudarFiltros({ divisao: lerDivisao(evento.target.value) });
+          }}
+        >
+          {porDivisao ? (
+            <>
+              <option value="">Todas</option>
+              {ORDEM_DIVISOES.map((divisao) => (
+                <option key={divisao} value={divisao}>
+                  {NOMES_DIVISAO[divisao]}
+                </option>
+              ))}
+            </>
+          ) : (
+            <option value="">Todas as células</option>
+          )}
+        </Select>
+        <Select
+          rotulo="Janela"
+          ajuda={ajuda("janela")}
+          value={filtros.periodo}
+          onChange={(evento) =>
+            mudarFiltros({ periodo: lerJanela(evento.target.value) })
+          }
+        >
+          {JANELAS.map((janela) => (
+            <option key={janela} value={janela}>
+              {TEXTO_JANELA[janela]}
+            </option>
+          ))}
+        </Select>
       </div>
       <ConteudoDoRanking
         resultado={resultado}
@@ -171,6 +171,9 @@ export function RankingsPage() {
     <>
       <PageHeader
         titulo="Rankings"
+        ajuda={
+          redes.citar ? DICA_DO_MENU.rankings : DICA_DO_MENU_SEM_REDE.rankings
+        }
         descricao={
           redes.citar
             ? "A disputa entre células, discipuladores e redes: posição, % da meta e quem está em dia."

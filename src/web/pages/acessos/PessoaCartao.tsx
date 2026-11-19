@@ -7,6 +7,7 @@ import {
 } from "../../lib/formatadores";
 import { ROTULO_PAPEL } from "../../lib/sessao";
 import { DICAS } from "./textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 /** Ids dos botões de cada pessoa (para devolver o foco depois de revogar um link). */
 export const idBotaoGerar = (usuarioId: number) => `acessos-gerar-${usuarioId}`;
@@ -39,7 +40,11 @@ export function PessoaCartao({
   const outros = pessoa.links.length - validos.length;
 
   return (
-    <Card titulo={pessoa.nome} className="acessos-pessoa">
+    <Card
+      titulo={pessoa.nome}
+      ajuda={ajuda("pessoa")}
+      className="acessos-pessoa"
+    >
       <div className="acessos-pessoa__corpo">
         <p className="acessos-selos">
           <Badge tom={pessoa.papel === "admin" ? "info" : "neutro"}>

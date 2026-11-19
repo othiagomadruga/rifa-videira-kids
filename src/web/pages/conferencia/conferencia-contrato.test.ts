@@ -82,13 +82,14 @@ describe("a tela da conferência e o contrato", () => {
     expect(pagina).toMatch(
       /lazy\(\(\) =>\s*import\("\.\/ConferenciaPeloCsv"\)/,
     );
-    // Importações estáticas da página: só o React e os componentes base. Uma importação da conferência
-    // aqui poria o leitor do CSV e o resultado de volta no pacote principal (aviso de 500 kB no build).
+    // Importações estáticas da página: só o React, os componentes base e o texto do menu (a ajuda do título,
+    // RIFA-066, que já está no pacote principal). Uma importação da conferência aqui poria o leitor do CSV e o
+    // resultado de volta no pacote principal (aviso de 500 kB no build).
     expect(
       [...pagina.matchAll(/^import\s+(?:[^"';]*?\bfrom\s*)?"([^"]+)"/gm)].map(
         (achado) => achado[1],
       ),
-    ).toEqual(["react", "../../components/ui"]);
+    ).toEqual(["react", "../../components/ui", "../coordenacao/textos"]);
     // Nada mais importa o módulo pesado de forma estática.
     for (const [arquivo, fonte] of Object.entries(FONTES))
       expect(fonte, arquivo).not.toMatch(/from\s*"\.\/ConferenciaPeloCsv"/);
