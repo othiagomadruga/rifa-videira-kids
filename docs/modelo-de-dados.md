@@ -572,3 +572,9 @@ pela sincronização com a API da Rifei (`POST /api/admin/rifei/afiliados/sincro
 `manual` e sem célula, o afiliado da Rifei que o sistema ainda não conhecia. O link de vendas (D24) usa o código pelo
 marcador `{codigo}`; afiliado sem código fica sem link nesse modelo. Testes: `src/worker/test/migrations.test.ts`
 ("0014 sobre dados que já existiam").
+
+A mesma migração cria `rifei_conexao` (D32, revisão de 19/11): no máximo uma linha (`id = 1`) com o token do login na
+Rifei colado em Acessos → Conexão com a Rifei, **só cifrado** (`token_cifrado` = `v1:<iv>:<cifra>`, AES-GCM com a
+chave do segredo `RIFEI_CHAVE_CIFRA`; o CHECK recusa texto sem o prefixo), `final_token` (4 caracteres, o que a tela
+mostra), `expira_em` (o `exp` do token, se houver), `conectado_em`, `testado_em` (última chamada ok) e `recusado_em`
+(primeira recusa 401/403 depois dela). Quem colou ou apagou fica na trilha. Nasce vazia.

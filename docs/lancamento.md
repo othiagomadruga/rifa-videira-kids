@@ -425,6 +425,16 @@ O link de vendas de uma célula é o link de afiliado do líder na Rifei, montad
 
 ---
 
+### 3.7 Conexão com a Rifei para marcar pagos pelo sistema [SM, depois Thiago] (RIFA-070, D32)
+
+1. **[SM, uma vez]** crie a chave que cifra o token no banco: `openssl rand -base64 32 | npx wrangler secret put RIFEI_CHAVE_CIFRA`
+   (o valor não aparece em lugar nenhum; não anote). Sem ela, a tela avisa "Falta a chave RIFEI_CHAVE_CIFRA".
+2. **[Thiago, no computador]** **Acessos → Conexão com a Rifei**: siga o passo a passo da tela (janela anônima,
+   entrar na Rifei, F12 → Console, colar a linha, voltar e **Salvar e testar**). A tela mostra **Conectado: testado …**
+   e "termina em …abcd". **Feche a janela anônima sem clicar em "Sair"** (o "Sair" derruba o token).
+3. Se um dia aparecer **"A Rifei recusou o token: cole um novo"** (na tela de Conexão ou no topo do Extrato do banco),
+   repita o passo 2. Enquanto isso, o caminho manual (Copiar os números e marcar no painel da Rifei) continua valendo.
+
 ## 4. Compra de teste de ponta a ponta
 
 **Quando:** depois de 3.1 a 3.4, com o Pix manual ligado na Rifei (1.6; ou a Efí, 1.4, se ela entrar), e **antes de 23/11** (veja 4.4). **Quem:** Thiago com uma segunda conta da Rifei como afiliada, cadastrada pelo convite gerado no painel (1.3), e um admin olhando o sistema. É esta compra que responde ao que as fontes da Rifei não dizem e que antes ia para o suporte: a lista está na [seção 9 de integracao-rifei.md](integracao-rifei.md#9-o-que-confirmar-com-uma-campanha-de-teste).
@@ -490,6 +500,26 @@ O bilhete comprado é de verdade e entra no sorteio. Decisão do PO (1.5): mante
 3. **Sistema [Admin]:** a Rifei não avisa estorno nem remoção (só pedido novo, pago e expirado), então o pedido continua no sistema como aprovado. Desconsidere-o em **Pedidos**, com o motivo **Estorno** (como acima).
 
 Se um teste for feito **depois de 23/11**, ele conta como venda (e é: o dinheiro entrou). Tirar das contas é decisão do PO: **Desconsiderar** em **Pedidos**, com o motivo **Teste** (fica na trilha e dá para desfazer).
+
+### 4.5 Compra de teste com a marcação pelo sistema (Pix e comprovante; RIFA-070, D32) [Thiago, como admin]
+
+Depois de 3.7 (conexão **Conectado**). Faça com 2 compras de 1 bilhete, pelo link de vendas de uma célula:
+
+1. **Compra A, paga com Pix:** pague na chave. Baixe o extrato do dia (6.6) e suba em **Conferência → Extrato do
+   banco**. O pedido aparece em **Para marcar como pago na Rifei**, com a caixa marcada. Toque em **Marcar 1
+   selecionado como pago na Rifei**, confira o número na confirmação e confirme.
+2. **O resultado:** a tabela "O que aconteceu com cada pedido" mostra **Marcado como pago** (ou **Estava expirado:
+   restaurado e marcado**). Toque em **Atualizar**: em segundos o pedido vai para **Já contados**. Confira também em
+   **Pedidos → Entregas do webhook** a entrega **Pedido pago** e, na **Trilha**, "Pedidos marcados como pagos na Rifei"
+   com o seu nome e o número do pedido.
+3. **Compra B, pelo comprovante:** inicie a compra e pague; com o comprovante na mão (sem subir extrato), use
+   **Marcar um pedido à mão**: digite o **número do pedido** (ou o número de um bilhete dele) e toque em **Procurar**.
+   Confira célula, bilhetes, valor e situação, toque em **Marcar como pago na Rifei** e confirme. Procure de novo o
+   mesmo número: a tela diz **Este pedido já está pago**.
+4. **Anote para o SM** (integracao-rifei.md, 13.4): se o **Pedido pago** chegou pelo webhook depois da marcação pelo
+   sistema; se o número do pedido digitado é o mesmo que a Rifei mostra; quanto tempo levou.
+5. **Se der errado:** "A Rifei recusou o token" → cole um novo (3.7). "A Rifei não marcou" ou "Falhou" → marque no
+   painel da Rifei como antes (6.6, passo 4) e mande ao SM só a mensagem da tela (sem dados do comprador).
 
 ---
 
@@ -617,7 +647,12 @@ No Pix manual (1.6), a venda só conta depois de marcada como paga no painel da 
    - **Pix sem pedido**: nenhum pedido serve. Pode ser um Pix de fora da campanha, um valor errado ou um Pix em dobro (a tela diz). Não marque nada: veja na Rifei ou fale com quem pagou.
    - **Já contados**: o pedido já está pago no sistema. Nada a fazer.
    - **Tempo entre a reserva e o Pix** (padrão 24 horas): se um Pix que você sabe que é da campanha aparece sem pedido, aumente; se aparecem ambíguos demais, diminua. O resultado muda na hora.
-4. **Na Rifei**, procure cada número copiado nos pedidos da campanha e marque como pago. A venda passa a contar quando a Rifei avisar o sistema (em segundos, se o aviso funcionar: 1.6).
+4. **[Admin] Marque pelo sistema** (com a conexão de 3.7): escolha os pedidos (todos vêm marcados; **Selecionar
+   todos** / **Desmarcar todos**), toque em **Marcar N selecionados como pago na Rifei** e confirme. A tela mostra o
+   resultado de cada pedido; **Atualizar** confere se a Rifei avisou o sistema. O Pix que o extrato não achou (ou um
+   comprovante): **Marcar um pedido à mão**, pelo número do pedido ou do bilhete. **Sem a conexão (ou a coordenação):**
+   na Rifei, procure cada número copiado nos pedidos da campanha e marque como pago. A venda passa a contar quando a
+   Rifei avisar o sistema (em segundos, se o aviso funcionar: 1.6).
 5. **Confira depois:** suba o mesmo extrato de novo (ou abra **Pedidos**): os marcados passam para **Já contados**. Se continuarem em **Para marcar**, a Rifei não avisou o sistema: faça a **conferência pelo CSV** (6.4) e, como **[Admin]**, **Registrar pagamento**.
 
 Quando: pelo menos uma vez por dia (no fim do dia) e, nos dias de muita venda, de manhã e à tarde, para o ranking ficar em dia. Um extrato de vários dias também serve (a tela busca os pedidos do período, até 12 mil).

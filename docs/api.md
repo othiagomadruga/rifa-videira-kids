@@ -1092,7 +1092,8 @@ de 4 módulos (`MARGEM_QR_LINK_VENDAS_MODULOS`), preto no branco; a imagem para 
 ## API interna da Rifei (RIFA-070; docs/decisions.md D32)
 
 Rotas **só de admin** (o "só admin" vai no handler, antes do corpo: a coordenação leva 403). Todas chamam a Rifei pela
-API interna do painel (`https://api.rifei.com.br/`) com o segredo do Worker `RIFEI_API_TOKEN`. Catálogo:
+API interna do painel (`https://api.rifei.com.br/`) com o token colado em Acessos → Conexão com a Rifei (ou, sem ele, o
+segredo do Worker `RIFEI_API_TOKEN`). Catálogo:
 `ROTAS_RIFEI_API` (`src/shared/contracts/api.ts`); regras, limites e textos em `src/shared/contracts/rifei-api.ts`.
 
 Erros comuns: 401 sem sessão; 403 da coordenação, da hierarquia ou de outra origem; 503 `nao_configurado` sem o segredo
@@ -1137,6 +1138,24 @@ Corpo: `{ "celulas": [3, 4] }` (1 a 50, sem repetidas). 404 `nao_encontrado` se 
 na Rifei). 201: `{ convites: [{ celula_id, celula_nome, lider_nome, lider_telefone, link }], falhas: [{ celula_id,
 mensagem }] }`. O link é da Rifei (`https://*.rifei.com.br`), de uso único e válido por 1 dia; nunca é gravado. Trilha
 `rifei.gerar_convites` (alvo `rifei`, sem os links) quando algum convite saiu.
+
+### Conexão com a Rifei e busca do pedido (RIFA-070, D32; **só admin**)
+
+Catálogo `ROTAS_CONEXAO_RIFEI`. Nenhuma resposta traz o token.
+
+- `GET /api/admin/rifei/conexao` → 200 `{ origem: "tela"|"segredo"|null, conectado_em, final, testado_em, recusado_em,
+  expira_em, chave_configurada, token_legivel, segredo_configurado }`.
+- `PUT /api/admin/rifei/conexao` `{ token }` → testa na Rifei (`GET raffles/<slug>`) e só então grava cifrado; 200
+  `{ estado, campanha_rifei_id }`. 400 texto que não é token; 404 sem campanha ativa; 502 `rifei_falhou` (ex.:
+  `token_invalido`: "A Rifei recusou o token: cole um novo em Conexão com a Rifei…"); 503 sem `RIFEI_CHAVE_CIFRA`.
+  Trilha `rifei.conectar` (alvo `rifei`, só o final).
+- `POST /api/admin/rifei/conexao/testar` `{}` → 200 `{ estado, campanha_rifei_id }`; 502/503 como acima.
+- `DELETE /api/admin/rifei/conexao` → 200 estado. Trilha `rifei.desconectar` (só se havia token).
+- `GET /api/admin/rifei/pedido?numero=<pedido ou bilhete>` → 200 `{ pedidos: [{ achado_por: "pedido"|"bilhete",
+  pedido: <item da lista de Pedidos> }] }` (até 10; vazio = não achou). Só lê.
+
+As rotas de marcar, afiliados e convites (acima) usam o token da tela; sem ele, o segredo `RIFEI_API_TOKEN`; sem
+nenhum, 503 `nao_configurado`.
 
 ## Conferência pelo CSV da Rifei (Sprint 4, RIFA-012)
 

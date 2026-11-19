@@ -1700,3 +1700,15 @@ painel em 17/11/2026 (docs/integracao-rifei.md, seção 13) e o sistema faz as m
   números, painel da Rifei) continua na tela.
 - **SUPOSIÇÕES** a confirmar na compra de teste (seção 13.4): o `id` do webhook é o mesmo que a API usa; a aprovação
   pela API dispara o `paid_order`; o pedido expirado mantém o `id` em "Pedidos expirados"; o `ref` aceita o código.
+- **Adendo (19/11, revisão da RIFA-070; pedido do PO):**
+  - **Token pela tela, não pelo terminal.** Acessos → Conexão com a Rifei: colar, testar, trocar e apagar. O token
+    fica no D1 **cifrado** (tabela `rifei_conexao`, migração 0014; AES-GCM com a chave do segredo do Worker
+    `RIFEI_CHAVE_CIFRA`, `lib/cifra-rifei.ts`) e nunca volta ao navegador, ao log ou à trilha. O token da tela tem
+    prioridade; o segredo `RIFEI_API_TOKEN` vale só sem ele. Sem a chave, nada é guardado (503). Chave trocada ou
+    perdida: a tela pede um token novo. Por quê cifrar e não só fazer hash: o sistema precisa do token em claro para
+    chamar a Rifei.
+  - **Estado da conexão gravado a cada chamada real:** sucesso → `testado_em`; 401/403 → `recusado_em` (a primeira);
+    mostrado na tela da Conexão e no topo do Extrato do banco. A validade vem do `exp` do próprio token, se for JWT.
+  - **Seleção e marcar à mão:** caixa por pedido em "Para marcar" e busca pelo número do pedido ou de um bilhete
+    (`GET /api/admin/rifei/pedido`), que reaproveita o `POST marcar-pagos` (o banco continua decidindo o que vai à
+    Rifei). Só admin (`protecao.test.ts`).
