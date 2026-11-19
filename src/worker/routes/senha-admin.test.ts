@@ -306,6 +306,30 @@ describe("RIFA-073 (critério 2): login do admin em /entrar", () => {
     expect(mensagens[0]).not.toMatch(/existe|senha errada|desativ/i);
   });
 
+  it("o PBKDF2 (100.000 iterações) roda e a comparação é em tempo constante também quando o usuário não existe", async () => {
+    const { sessao } = await adminComLink();
+    const usuario = usuarioNovo();
+    await definirSenha(sessao, usuario);
+    const derivar = vi.spyOn(crypto.subtle, "deriveBits");
+    const comparar = vi.spyOn(crypto.subtle, "timingSafeEqual");
+    for (const corpo of [
+      { usuario, senha: "senha errada demais" },
+      { usuario: "ninguem.aqui", senha: SENHA },
+      { usuario: "", senha: "" },
+    ]) {
+      derivar.mockClear();
+      comparar.mockClear();
+      await esperarRecusa(await entrarComoAdmin(corpo));
+      expect(derivar).toHaveBeenCalledTimes(1);
+      expect(derivar.mock.calls[0]?.[0]).toMatchObject({
+        name: "PBKDF2",
+        hash: "SHA-256",
+        iterations: ITERACOES_SENHA,
+      });
+      expect(comparar).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("a mesma senha digitada com o acento composto de outro teclado confere (NFC)", async () => {
     const { sessao } = await adminComLink();
     const usuario = usuarioNovo();
@@ -362,6 +386,15 @@ describe("RIFA-073 (critério 2): login do admin em /entrar", () => {
     const minutos = (Date.parse(linha!.bloqueada_ate) - Date.now()) / 60_000;
     expect(minutos).toBeGreaterThan(14);
     expect(minutos).toBeLessThanOrEqual(15);
+    // Durante o bloqueio, os erros não contam nem estendem o bloqueio (um atacante não o prolonga para sempre).
+    await errar(6);
+    expect(
+      await env.DB.prepare(
+        "SELECT falhas, bloqueada_ate FROM senhas_admin WHERE usuario_id = ?1",
+      )
+        .bind(usuarioId)
+        .first(),
+    ).toEqual(linha);
     // O link pessoal continua entrando.
     expect((await pedir("GET", "/api/sessao", doLink)).status).toBe(200);
 
