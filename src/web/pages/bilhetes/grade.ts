@@ -62,3 +62,23 @@ export function indiceNoPonto(
   const indice = linha * medidas.colunas + coluna;
   return indice < quantidade ? indice : null;
 }
+
+/**
+ * A densidade do canvas: a da tela, limitada para o canvas não passar do que os navegadores desenham (lado de até
+ * ~32.767 px e área de ~16,7 milhões de px no Safari do iPhone). Acima disso o canvas fica em branco: com 100.000
+ * números em 390 px a grade tem ~18.000 px de altura, e com densidade 2 ou 3 passaria do limite.
+ */
+export function escalaDoCanvas(
+  densidade: number,
+  largura: number,
+  altura: number,
+): number {
+  const LADO_MAXIMO = 32_000;
+  const AREA_MAXIMA = 16_000_000;
+  return Math.min(
+    densidade,
+    LADO_MAXIMO / Math.max(1, largura),
+    LADO_MAXIMO / Math.max(1, altura),
+    Math.sqrt(AREA_MAXIMA / Math.max(1, largura * altura)),
+  );
+}

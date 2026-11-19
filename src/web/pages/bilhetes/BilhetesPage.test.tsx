@@ -18,6 +18,7 @@ import {
   respostaJson,
 } from "../../test/renderizar";
 import {
+  escalaDoCanvas,
   gradeDaResposta,
   indiceNoPonto,
   medirGrade,
@@ -271,5 +272,15 @@ describe("grade.ts (RIFA-075)", () => {
       colunas: 100,
       linhas: 71,
     });
+  });
+
+  it("densidade do canvas (revisão): a da tela com 7005 números; limitada com 100.000 em 390 px", () => {
+    // 7005 em 390 px: 352 × 1280 px; densidade 3 cabe.
+    expect(escalaDoCanvas(3, 352, 1280)).toBe(3);
+    // 100.000 em 390 px: 44 colunas × 2273 linhas de 8 px = 352 × 18.184 px; densidade 2 passaria de 32.767.
+    const escala = escalaDoCanvas(2, 352, 18_184);
+    expect(escala).toBeLessThan(2);
+    expect(18_184 * escala).toBeLessThanOrEqual(32_000);
+    expect(352 * escala * 18_184 * escala).toBeLessThanOrEqual(16_000_001);
   });
 });

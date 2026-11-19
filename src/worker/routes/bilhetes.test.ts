@@ -231,6 +231,68 @@ describe("GET /api/painel/bilhetes (RIFA-075)", () => {
     });
     expect(numerosPorSituacao(r).pago).toEqual([1, 2, 3, 25]);
   });
+
+  it.each([
+    { inicial: 1 as const, ultimo: 20, depois: 21 },
+    { inicial: 0 as const, ultimo: 19, depois: 20 },
+  ])(
+    "último número (revisão): começando em $inicial, o $ultimo entra na grade e o $depois fica fora",
+    async ({ inicial, ultimo, depois }) => {
+      await limparBanco();
+      const id = await semearCampanha(env.DB, {
+        ...DADOS_CAMPANHA,
+        bilhetes: { quantidade: 20, numero_inicial: inicial },
+      });
+      await gravarPedidos(id, [
+        {
+          id: "U1",
+          status: "approved",
+          numeros: [inicial, ultimo, depois],
+          registrado_em: "2026-11-24T10:00:00.000Z",
+        },
+      ]);
+      const r = await grade();
+      expect(numerosPorSituacao(r).pago).toEqual([inicial, ultimo]);
+      expect(r).toMatchObject({
+        fora_da_faixa: 1,
+        contagem: { pagos: 2, reservados: 0, livres: 18 },
+      });
+    },
+  );
+
+  it("número recomprado (revisão): expirado e depois pago fica pago; expirado e depois reservado fica reservado", async () => {
+    const campanha = await env.DB.prepare(
+      "SELECT id FROM campanhas WHERE ativa = 1",
+    ).first<{ id: number }>();
+    await gravarPedidos(campanha!.id, [
+      {
+        id: "R1",
+        status: "approved",
+        numeros: [7],
+        registrado_em: "2026-11-24T10:10:00.000Z",
+      },
+      {
+        id: "R2",
+        status: "in_process",
+        numeros: [6],
+        expira_em: FUTURO,
+        registrado_em: "2026-11-24T10:11:00.000Z",
+      },
+    ]);
+    const r = await grade();
+    // 7: P4 expirado e R1 pago; 6: P3 vencido e R2 reservado.
+    expect(numerosPorSituacao(r)).toEqual({
+      pago: [1, 2, 3, 7],
+      reservado: [4, 5, 6, 9],
+    });
+    expect(await (await pedir("/api/painel/bilhetes/7")).json()).toMatchObject({
+      situacao: "pago",
+      pedidos: [
+        { id: "R1", situacao: "pago" },
+        { id: "P4", situacao: "expirado" },
+      ],
+    });
+  });
 });
 
 describe("GET /api/painel/bilhetes/:numero (RIFA-075)", () => {

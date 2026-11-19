@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { bitLigado } from "../../../shared/contracts/bilhetes";
 import { formatarNumero } from "../../lib/formatadores";
-import { indiceNoPonto, medirGrade, type Grade } from "./grade";
+import { escalaDoCanvas, indiceNoPonto, medirGrade, type Grade } from "./grade";
 import type { FiltroGrade } from "./textos";
 
 type Props = {
@@ -55,9 +55,13 @@ export function GradeBilhetes({
     const contexto = elemento?.getContext?.("2d");
     if (!elemento || !contexto || !contem.current) return;
     const { lado, colunas, linhas } = medidas;
-    const escala = window.devicePixelRatio || 1;
-    elemento.width = colunas * lado * escala;
-    elemento.height = linhas * lado * escala;
+    const escala = escalaDoCanvas(
+      window.devicePixelRatio || 1,
+      colunas * lado,
+      linhas * lado,
+    );
+    elemento.width = Math.floor(colunas * lado * escala);
+    elemento.height = Math.floor(linhas * lado * escala);
     contexto.setTransform(escala, 0, 0, escala, 0, 0);
     contexto.clearRect(0, 0, colunas * lado, linhas * lado);
 
