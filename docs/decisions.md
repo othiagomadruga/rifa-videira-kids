@@ -1734,3 +1734,37 @@ ranking e o link para vender para aquela célula, então não tem problema ser u
   suporte, sem ganho, porque o PO quer a senha padrão; mudar o `POST /api/sessao` para aceitar `{ token }` ou
   `{ celula, senha }`: uma rota à parte deixa o contrato e os testes do link como estão; coluna nova em `sessoes` para
   marcar a sessão da senha: `link_id` NULL já diz isso, sem migração na tabela que cada requisição lê.
+
+## D33. Login do admin com usuário e senha (RIFA-073; contrato, 2026-11-19)
+
+Pedido do PO (19/11): o pastor (admin) entra no painel com usuário e senha, para marcar pagamentos sem depender do link
+no celular. Contrato em `src/shared/contracts/` (`senha-admin.ts`, sem zod; `acesso.ts`; `api.ts`), migração
+`0015_senha_admin.sql`, API em `src/worker/routes/acesso.ts` (login), `src/worker/routes/senha-admin.ts` e
+`src/worker/db/senha-admin.ts`, hash em `src/worker/lib/senha.ts`, script `scripts/definir-senha-admin.mjs`.
+
+- **Só o papel admin.** Coordenação, líder, discipulador e rede continuam como estão (link; a célula, também a senha
+  padrão da D29). As rotas da senha (`/api/admin/minha-senha`) são só de admin e só mexem na senha **de quem está
+  conectado**; o login confere `papel = 'admin'` e `ativo = 1` na hora.
+- **A senha é segredo, ao contrário da D29:** só o PBKDF2-SHA256 é gravado, com sal aleatório de 16 bytes por senha e
+  100.000 iterações (o máximo que o Workers aceita no PBKDF2; o número fica na linha, para subir sem invalidar as
+  senhas). A senha é normalizada em NFC antes do hash. Senha forte = mínimo de 10 caracteres e diferente do usuário
+  (`problemaDaSenhaAdmin`, a mesma regra na tela, na API e no script). Custo: dezenas de ms de CPU por conferência,
+  dentro do Workers Paid que a D19 já exige.
+- **Tabela própria (`senhas_admin`), não colunas em `usuarios`:** a tabela que cada sessão lê fica como está, e
+  remover a senha é apagar uma linha. O usuário de login é único, em minúsculas (`FORMATO_USUARIO_ADMIN`).
+- **Login (`POST /api/sessao/admin`)**: a mesma pilha do link e da célula (mesma origem, `LIMITE_LOGIN` por IP, teto de
+  4 KiB). O PBKDF2 roda **sempre**, contra um hash fictício quando o usuário não existe, e toda recusa é o **mesmo** 401:
+  nem a mensagem nem o tempo dizem se o usuário existe. **Limite por conta**, além do por IP: 5 erros seguidos bloqueiam
+  o login da conta por 15 minutos, com o mesmo 401 até para a senha certa (dizer "bloqueada" revelaria a conta); o
+  acerto e a troca de senha zeram. O link pessoal do admin continua entrando, então o bloqueio nunca prende ninguém.
+- **A sessão é a do link do admin, sem link** (`sessoes.link_id` NULL, como a da célula). A consulta da sessão distingue
+  pelo papel: a do admin vale enquanto ele tiver a senha (não depende da chave das células); a do líder, enquanto a
+  chave da D29 estiver ligada; a de outro papel, nunca. Trocar a senha encerra as **outras** sessões dele abertas pela
+  senha; remover encerra todas elas. A trilha registra `senha_admin.definir`, `.trocar`, `.remover` e cada
+  `sessao.entrar_como_admin`, sem a senha nem o usuário de login.
+- **Como a senha nasce:** o admin entra pelo link e cria na tela **Minha senha**; ou o SM roda
+  `npm run acesso:senha -- --admin <id|nome> --usuario <login> [--remote]`, que lê a senha do **stdin** (nunca de
+  argumento, que iria para o histórico do shell), grava só o hash e registra na trilha.
+- **Descartado:** senha para a coordenação (o pedido é do admin; mais contas com senha é mais superfície); "esqueci a
+  senha" por e-mail (o link pessoal já é a recuperação); bloqueio que responde 429 ou "conta bloqueada" (revelaria quem
+  existe).

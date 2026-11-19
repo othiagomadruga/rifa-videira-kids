@@ -239,3 +239,16 @@ Pedido do PO: cada célula entra com o nome dela e uma senha padrão, porque o m
 - **Segurança:** o mesmo limite de tentativas do link (`LIMITE_LOGIN`, 60 por minuto por IP, no mesmo contador), a mesma resposta para toda recusa (não diz se a célula existe), mesma origem (CSRF), teto de 4 KiB do corpo, e a trilha registra cada login por senha (`sessao.entrar_com_senha`, do usuário líder, alvo `celula:<id>`, sem a senha).
 - **A senha de cada célula para a coordenação:** na tela **Hierarquia** (admin e coordenação), "Login das células com senha" → **Ver a senha de cada célula**, com **Copiar** em cada uma, para mandar ao líder. Nunca aparece para os papéis da hierarquia.
 - **Excluir a célula:** depois de um login por senha, a trilha guarda o usuário da célula como autor e a exclusão é recusada (a mensagem da seção 9). Célula com afiliado já não se exclui, e a de nome repetido nunca entra pela senha.
+
+## 11. Login do admin com usuário e senha (RIFA-073, D33)
+
+Além do link pessoal, o **admin** (só esse papel) pode entrar com usuário e senha. Detalhes e porquês na [D33](decisions.md#d33-login-do-admin-com-usuário-e-senha-rifa-073-contrato-2026-11-19).
+
+- **Criar ou trocar:** entre pelo link e abra **Minha senha** no menu (`/coordenacao/minha-senha`): usuário (3 a 40 caracteres, letras sem acento, números, ponto, hífen ou sublinhado), senha (mínimo de 10 caracteres, diferente do usuário) e a confirmação. Cada um só mexe na própria senha. Pela linha de comando: `npm run acesso:senha -- --admin <id|nome> --usuario <login> [--remote]`, com a senha pelo teclado (duas vezes, sem aparecer) ou pela primeira linha da entrada padrão; nunca como argumento.
+- **Entrar:** tela **Entrar → Sou administrador** → usuário e senha → a coordenação. É a mesma sessão do link do admin (`__Host-sessao`, 45 dias, parada há 7 dias deixa de valer), sem link (`sessoes.link_id` NULL).
+- **Rotas:** `POST /api/sessao/admin` (aberta; mesma origem, `LIMITE_LOGIN`, teto de 4 KiB); `GET`, `PUT` e `DELETE /api/admin/minha-senha` (só admin, a senha do admin da sessão; `PUT` com usuário de outro admin: 409 `em_uso`).
+- **Banco:** `senhas_admin` (migração 0015): usuário, sal, hash PBKDF2-SHA256 (100.000 iterações), erros seguidos e bloqueio. A senha nunca é gravada, nem em log, resposta ou trilha.
+- **Segurança:** toda recusa é o mesmo 401 (usuário que não existe, senha errada, desativado, bloqueado) e o PBKDF2 roda mesmo sem usuário; 60 tentativas por minuto por IP (o contador do link e da célula) e 5 erros seguidos bloqueiam a conta por 15 minutos (o link continua entrando).
+- **Trocar** encerra as outras sessões abertas pela senha (a deste aparelho e as do link continuam). **Remover** encerra todas as sessões abertas pela senha; o link continua. **Desativar** o admin (Acessos) barra o link e a senha.
+- **Trilha:** `senha_admin.definir`, `senha_admin.trocar`, `senha_admin.remover` e `sessao.entrar_como_admin`, alvo `usuario:<id>`, sem a senha nem o usuário de login.
+- **Esqueceu a senha:** entre pelo link pessoal e crie outra em Minha senha.
