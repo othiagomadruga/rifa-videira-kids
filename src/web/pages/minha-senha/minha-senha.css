@@ -31,3 +31,8 @@
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
 }
+
+/* Remover fica à esquerda, no tamanho do texto (não no meio da coluna). */
+.minha-senha-remover {
+  justify-self: start;
+}

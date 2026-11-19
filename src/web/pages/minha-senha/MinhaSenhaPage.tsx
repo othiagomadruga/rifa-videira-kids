@@ -307,14 +307,16 @@ export function MinhaSenhaPage() {
             </form>
           </Card>
           {carga.senha.definida && (
-            <ComDica texto={DICAS.remover}>
-              <Button
-                variante="perigo-discreto"
-                onClick={() => setConfirmandoRemocao(true)}
-              >
-                {TEXTOS.remover}
-              </Button>
-            </ComDica>
+            <div className="minha-senha-remover">
+              <ComDica texto={DICAS.remover}>
+                <Button
+                  variante="perigo-discreto"
+                  onClick={() => setConfirmandoRemocao(true)}
+                >
+                  {TEXTOS.remover}
+                </Button>
+              </ComDica>
+            </div>
           )}
           <Dialogo
             aberto={confirmandoRemocao}
