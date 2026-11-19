@@ -167,7 +167,7 @@ const CUIDADO_HIERARQUIA =
  */
 export const MENSAGENS_PADRAO = {
   link_coordenacao:
-    "{saudacao} Este é o seu link pessoal para entrar no sistema da Projeto Videira Kids. Ele é só seu, não repasse:\n{link}",
+    "{saudacao} Este é o seu link pessoal para entrar no sistema do Projeto Videira Kids. Ele é só seu, não repasse:\n{link}",
   link_lider: `{saudacao} Este é o seu link pessoal para acompanhar a sua célula ({alvo})${CUIDADO_HIERARQUIA}`,
   link_discipulador: `{saudacao} Este é o seu link pessoal para acompanhar as suas células (discipulador {alvo})${CUIDADO_HIERARQUIA}`,
   link_rede: `{saudacao} Este é o seu link pessoal para acompanhar a sua rede ({alvo})${CUIDADO_HIERARQUIA}`,

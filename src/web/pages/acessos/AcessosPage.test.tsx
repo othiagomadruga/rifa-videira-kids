@@ -258,7 +258,7 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
       `https://wa.me/?text=${encodeURIComponent(mensagemWhatsApp("Fábio Fictício", url))}`,
     );
     expect(mensagemWhatsApp("Fábio Fictício", url)).toBe(
-      `Olá, Fábio! Este é o seu link pessoal para entrar no sistema da Projeto Videira Kids. Ele é só seu, não repasse:\n${url}`,
+      `Olá, Fábio! Este é o seu link pessoal para entrar no sistema do Projeto Videira Kids. Ele é só seu, não repasse:\n${url}`,
     );
     expect(whatsapp).toHaveAttribute("target", "_blank");
     expect(whatsapp).toHaveAttribute("rel", "noopener noreferrer");

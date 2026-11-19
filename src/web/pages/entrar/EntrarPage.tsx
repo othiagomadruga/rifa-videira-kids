@@ -283,7 +283,7 @@ export function EntrarPage() {
       <PageHeader
         titulo="Entrar"
         ajuda={ajudaAberta("entrar")}
-        descricao="Coordenação, líderes e discipuladores da Projeto Videira Kids."
+        descricao="Coordenação, líderes e discipuladores do Projeto Videira Kids."
       />
       {conferindo ? (
         <Loading texto="Conferindo o seu acesso…" />

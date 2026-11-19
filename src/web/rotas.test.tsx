@@ -112,7 +112,7 @@ describe("CA1: cada rota mostra a tela certa", () => {
       ["/entrar", "Entrar"],
       [
         `/acesso/${"a".repeat(43)}`,
-        "Entrar no sistema da Projeto Videira Kids",
+        "Entrar no sistema do Projeto Videira Kids",
       ],
     ] as const) {
       const { unmount } = renderizarRota(caminho, { usuario: null });

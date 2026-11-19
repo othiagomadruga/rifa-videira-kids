@@ -78,7 +78,7 @@ describe("CA2: o logo da Videira", () => {
   it.each([
     ["/", "Ranking da campanha"],
     ["/entrar", "Entrar"],
-    [`/acesso/${TOKEN}`, "Entrar no sistema da Projeto Videira Kids"],
+    [`/acesso/${TOKEN}`, "Entrar no sistema do Projeto Videira Kids"],
   ])("tela aberta %s: no cabeçalho, com o alt certo", async (rota, titulo) => {
     renderizarRota(rota, { usuario: null });
     await screen.findByRole("heading", { level: 1, name: titulo });
@@ -210,7 +210,7 @@ describe("CA3: o logo do Kids, discreto", () => {
   it.each([
     ["/", "Ranking da campanha"],
     ["/entrar", "Entrar"],
-    [`/acesso/${TOKEN}`, "Entrar no sistema da Projeto Videira Kids"],
+    [`/acesso/${TOKEN}`, "Entrar no sistema do Projeto Videira Kids"],
   ])(
     "tela aberta %s: só no rodapé, com a frase da campanha",
     async (rota, titulo) => {

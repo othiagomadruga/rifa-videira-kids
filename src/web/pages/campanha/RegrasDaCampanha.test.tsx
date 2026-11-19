@@ -283,7 +283,7 @@ describe("CA1: as mensagens do link pessoal", () => {
     expect(voltar).toHaveAttribute("aria-disabled", "true");
     // Indisponível com a explicação: a contagem ao lado diz que já é o texto padrão.
     expect(voltar).toHaveAccessibleDescription(
-      "115 de 1.000 caracteres · é o texto padrão",
+      "118 de 1.000 caracteres · é o texto padrão",
     );
     expect(
       screen.getAllByText(/de 1\.000 caracteres · é o texto padrão/),

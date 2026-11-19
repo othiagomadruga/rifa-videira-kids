@@ -99,7 +99,7 @@ export function AcessoPage() {
   return (
     <div className="acesso">
       <PageHeader
-        titulo="Entrar no sistema da Projeto Videira Kids"
+        titulo="Entrar no sistema do Projeto Videira Kids"
         ajuda={ajudaAberta("acesso")}
         descricao="Pelo seu link pessoal, sem senha."
       />

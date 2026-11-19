@@ -26,7 +26,7 @@ import { DICAS } from "./textos";
 /** Token fictício no formato do contrato (43 caracteres base64url). */
 const TOKEN = "TokenFicticioDeTeste_0123456789-abcdefghijk";
 const USUARIO = { id: 7, nome: "Coordenadora Fictícia", papel: "coordenacao" };
-const TITULO = "Entrar no sistema da Projeto Videira Kids";
+const TITULO = "Entrar no sistema do Projeto Videira Kids";
 
 type Chamada = { metodo: string; caminho: string; corpo: unknown };
 
