@@ -366,6 +366,10 @@ export const AJUDA = {
     "Pix que batem com mais de um pedido: confira o nome de quem pagou antes de marcar.",
   semPedido:
     "Pix que não batem com nenhum pedido livre: pode ser de fora da campanha ou com o valor errado.",
+  marcarAMao:
+    "Marca como pago na Rifei um pedido que o extrato não achou sozinho, pelo número dele. Ex.: o Pix caiu com outro nome e você sabe de qual pedido é.",
+  numeroAMao:
+    "O número do pedido na Rifei, ou o de um bilhete dele, para achar o pedido que vai ser marcado como pago. Ex.: 1234.",
   jaContados:
     "Pix de pedidos que já estão pagos no sistema: não precisa fazer nada.",
 } as const;

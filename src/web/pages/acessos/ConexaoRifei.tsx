@@ -3,6 +3,7 @@ import {
   Aviso,
   Button,
   Card,
+  ComAjuda,
   ComDica,
   Dialogo,
   ErrorState,
@@ -29,6 +30,18 @@ import "./acessos-webhook.css";
 type Carga = { estado: EstadoConexaoRifei | null; erro: unknown };
 type Ocupado = "salvando" | "testando" | "apagando" | null;
 type Mensagem = { tom: "sucesso" | "perigo"; texto: string };
+
+/** Ajuda dos títulos e do campo (RIFA-066, D31): o que é, para que serve e um exemplo. A aba é `lazy`: o texto fica aqui. */
+const AJUDA = {
+  token:
+    "O token que a Rifei dá à conta da campanha, para o sistema marcar pedidos pagos e ler os afiliados por você. Ex.: um texto longo copiado no passo 2.",
+  colar:
+    "Onde se cola (ou se troca) o token da Rifei. Serve para o sistema agir na Rifei pela campanha, sem ninguém entrar lá. Troque quando a Rifei derrubar o token.",
+  comoPegar:
+    "O passo a passo, no computador, para copiar o token na Rifei. Ex.: numa janela anônima, sem clicar em Sair no fim.",
+  situacao:
+    "Se o sistema está conectado à Rifei agora: se há token, desde quando e se o teste passou. Serve para saber, antes de marcar pagos, se a conexão funciona.",
+} as const;
 
 const DICAS = {
   token:
@@ -169,6 +182,7 @@ export function ConexaoRifei() {
             titulo={
               estado.origem === "tela" ? "Trocar o token" : "Colar o token"
             }
+            ajuda={AJUDA.colar}
           >
             <form className="acessos-webhook__corpo" onSubmit={salvar}>
               {semChave && (
@@ -180,9 +194,17 @@ export function ConexaoRifei() {
                 </Aviso>
               )}
               <div className="acessos-webhook__passos">
-                <h3 className="acessos-webhook__subtitulo">
-                  Como pegar o token na Rifei (no computador)
-                </h3>
+                <ComAjuda
+                  texto={AJUDA.comoPegar}
+                  idDoTitulo="conexao-rifei-como-pegar"
+                >
+                  <h3
+                    id="conexao-rifei-como-pegar"
+                    className="acessos-webhook__subtitulo"
+                  >
+                    Como pegar o token na Rifei (no computador)
+                  </h3>
+                </ComAjuda>
                 <ol>
                   <li>
                     Abra uma <strong>janela anônima</strong> do navegador
@@ -208,19 +230,19 @@ export function ConexaoRifei() {
                   </li>
                 </ol>
               </div>
-              <ComDica texto={DICAS.token}>
-                <Input
-                  rotulo="Token da Rifei"
-                  dica="Cole o texto inteiro, sem espaços."
-                  type="password"
-                  value={token}
-                  onChange={(evento) => setToken(evento.target.value)}
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  disabled={semChave}
-                />
-              </ComDica>
+              <Input
+                ajuda={AJUDA.token}
+                rotulo="Token da Rifei"
+                dica="Cole o texto inteiro, sem espaços."
+                type="password"
+                value={token}
+                onChange={(evento) => setToken(evento.target.value)}
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                disabled={semChave}
+              />
+
               <div className="acessos-webhook__acao">
                 <ComDica
                   texto={ocupado === "salvando" ? DICAS.ocupado : DICAS.salvar}
@@ -306,7 +328,7 @@ function Situacao({
 }) {
   const situacao = situacaoDaConexao(estado);
   return (
-    <Card titulo="Situação">
+    <Card titulo="Situação" ajuda={AJUDA.situacao}>
       <div className="acessos-webhook__corpo">
         <Aviso tom={situacao.tom} anuncio="nenhum">
           <p>{situacao.texto}</p>

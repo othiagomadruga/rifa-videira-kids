@@ -13,6 +13,7 @@ import { formatarMoeda } from "../../../lib/formatadores";
 import { buscarPedidoParaMarcar } from "./marcar-na-rifei-api";
 import { MarcacaoNaRifei, useMarcacaoNaRifei } from "./MarcarNaRifei";
 import { MARCAR_A_MAO as TEXTOS, STATUS, plural } from "./textos";
+import { AJUDA as AJUDA_DO_EXTRATO } from "./textos";
 
 type Achado = RespostaBuscarPedidoRifei["pedidos"][number];
 type Busca =
@@ -72,21 +73,21 @@ export function MarcarAMao({
   }
 
   return (
-    <Card titulo={TEXTOS.titulo}>
+    <Card titulo={TEXTOS.titulo} ajuda={AJUDA_DO_EXTRATO.marcarAMao}>
       <div className="extrato-bloco">
         <p className="extrato-suave">{TEXTOS.explicacao}</p>
         <form className="extrato-busca" onSubmit={enviar}>
-          <ComDica texto={TEXTOS.dicaCampo}>
-            <Input
-              rotulo={TEXTOS.rotulo}
-              value={numero}
-              maxLength={128}
-              onChange={(evento) => setNumero(evento.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              inputMode="text"
-            />
-          </ComDica>
+          <Input
+            ajuda={AJUDA_DO_EXTRATO.numeroAMao}
+            rotulo={TEXTOS.rotulo}
+            value={numero}
+            maxLength={128}
+            onChange={(evento) => setNumero(evento.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            inputMode="text"
+          />
+
           <ComDica texto={TEXTOS.dicaBuscar}>
             <Button
               type="submit"

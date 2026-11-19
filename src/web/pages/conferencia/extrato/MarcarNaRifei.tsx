@@ -241,7 +241,11 @@ export function MarcarNaRifei({ pedidos, aoAnunciar, aoBuscarDeNovo }: Props) {
         <ul className="extrato-selecao__lista">
           {pedidos.map((pedido) => (
             <li key={pedido.id}>
-              <label className="extrato-escolha">
+              <label
+                className="extrato-escolha"
+                // A escolha de um pedido da lista, não um rótulo de campo (RIFA-066).
+                data-sem-ajuda="escolha de um pedido"
+              >
                 <input
                   type="checkbox"
                   className="extrato-escolha__caixa"

@@ -4,6 +4,7 @@
 // entre as telas (`ajuda-das-telas.test.ts` confere). As telas `lazy` deixam os textos no `textos.ts` delas.
 import { AJUDA as ACESSOS } from "./acessos/ajuda";
 import { AJUDA as ADESAO } from "./adesao/ajuda";
+import { AJUDA as BILHETES } from "./bilhetes/ajuda";
 import { AJUDA as BUMBO } from "./bumbo/ajuda";
 import { AJUDA as HIERARQUIA } from "./hierarquia/ajuda";
 import { AJUDA as MINHA_SENHA } from "./minha-senha/ajuda";
@@ -19,6 +20,7 @@ export const AJUDA_DAS_TELAS = [
   BUMBO,
   ACESSOS,
   MINHA_SENHA,
+  BILHETES,
 ] as const;
 
 export const AJUDA = {
@@ -29,4 +31,5 @@ export const AJUDA = {
   ...BUMBO,
   ...ACESSOS,
   ...MINHA_SENHA,
+  ...BILHETES,
 };

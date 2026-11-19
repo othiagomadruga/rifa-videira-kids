@@ -50,6 +50,8 @@ import {
   type FiltroGrade,
 } from "./textos";
 import "./bilhetes.css";
+import { DICA_DO_MENU } from "../coordenacao/textos";
+import { ajuda } from "../ajuda-sob-demanda";
 
 type Estado =
   | { tipo: "carregando" }
@@ -165,7 +167,11 @@ export function BilhetesPage() {
 
   return (
     <>
-      <PageHeader titulo="Bilhetes" descricao={DESCRICAO_TELA} />
+      <PageHeader
+        titulo="Bilhetes"
+        ajuda={DICA_DO_MENU.bilhetes}
+        descricao={DESCRICAO_TELA}
+      />
       <div className="pilha bilhetes-tela">
         {estado.tipo === "carregando" && (
           <Loading texto="Carregando os bilhetes…" />
@@ -286,19 +292,26 @@ function Conteudo({
       <div className="bilhetes-contadores">
         <Stat
           rotulo="Pagos"
+          ajuda={ajuda("pagos")}
           valor={formatarNumero(contagem.pagos)}
           icone="check"
           tom="sucesso"
         />
         <Stat
           rotulo="Reservados"
+          ajuda={ajuda("reservados")}
           valor={formatarNumero(contagem.reservados)}
           icone="periodo"
           tom="alerta"
         />
-        <Stat rotulo="Livres" valor={formatarNumero(contagem.livres)} />
+        <Stat
+          rotulo="Livres"
+          ajuda={ajuda("livres")}
+          valor={formatarNumero(contagem.livres)}
+        />
         <Stat
           rotulo="Vendido"
+          ajuda={ajuda("vendido")}
           valor={formatarPercentual(resposta.vendido_bp, { casasDecimais: 1 })}
           icone="grafico"
           tom="marca"
@@ -350,40 +363,39 @@ function Conteudo({
         </p>
       )}
 
-      <Card titulo="Buscar um número">
+      <Card titulo="Buscar um número" ajuda={ajuda("buscarUmNumero")}>
         <form className="bilhetes-busca" onSubmit={aoBuscar} role="search">
-          <ComDica texto={DICAS.busca}>
-            <Input
-              rotulo="Número do bilhete"
-              inputMode="numeric"
-              autoComplete="off"
-              value={textoBusca}
-              onChange={(evento) => aoDigitar(evento.target.value)}
-            />
-          </ComDica>
+          <Input
+            ajuda={ajuda("numeroDoBilhete")}
+            rotulo="Número do bilhete"
+            inputMode="numeric"
+            autoComplete="off"
+            value={textoBusca}
+            onChange={(evento) => aoDigitar(evento.target.value)}
+          />
+
           <Button type="submit">Buscar</Button>
         </form>
         <ResultadoBusca busca={busca} grade={grade} />
       </Card>
 
-      <Card titulo="Todos os números">
+      <Card titulo="Todos os números" ajuda={ajuda("todosOsNumeros")}>
         <div className="pilha">
           <div className="bilhetes-barra">
-            <ComDica texto={DICAS.filtro}>
-              <Select
-                rotulo="Mostrar na grade"
-                value={filtro}
-                onChange={(evento) =>
-                  aoFiltrar(evento.target.value as FiltroGrade)
-                }
-              >
-                {FILTROS.map(({ valor, rotulo }) => (
-                  <option key={valor} value={valor}>
-                    {rotulo}
-                  </option>
-                ))}
-              </Select>
-            </ComDica>
+            <Select
+              ajuda={ajuda("mostrarNaGrade")}
+              rotulo="Mostrar na grade"
+              value={filtro}
+              onChange={(evento) =>
+                aoFiltrar(evento.target.value as FiltroGrade)
+              }
+            >
+              {FILTROS.map(({ valor, rotulo }) => (
+                <option key={valor} value={valor}>
+                  {rotulo}
+                </option>
+              ))}
+            </Select>
           </div>
           <ul className="bilhetes-legenda" aria-label="Legenda da grade">
             {SITUACOES_BILHETE.map((situacao) => (
