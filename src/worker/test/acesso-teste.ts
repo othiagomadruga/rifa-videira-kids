@@ -22,6 +22,7 @@ import {
   acessosHierarquia,
 } from "../routes/acessos-hierarquia";
 import { adminUsuarios } from "../routes/admin-usuarios";
+import { PREFIXO_SENHA_ADMIN, senhaAdmin } from "../routes/senha-admin";
 
 /** Origem das requisições de `app.request("/api/...")`. */
 export const ORIGEM = "http://localhost";
@@ -46,6 +47,7 @@ export function criarAppDeTeste() {
   app.use("/api/minha/*", exigirSessao(["lider", "discipulador", "rede"]));
   app.route("/api/admin", adminUsuarios);
   app.route(PREFIXO_ACESSOS_HIERARQUIA, acessosHierarquia);
+  app.route(PREFIXO_SENHA_ADMIN, senhaAdmin);
   // --- rotas da coordenação e da hierarquia montadas depois (como as das outras tarefas) ---
   app.route("/api/admin/exemplo", rotasDeExemplo());
   app.route("/api/painel/exemplo", rotasDeExemplo());
