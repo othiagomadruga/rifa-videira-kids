@@ -1921,3 +1921,43 @@ lê e cai no mesmo cruzamento da D26; marcar na Rifei é a RIFA-070 (D32).
   continua sob demanda.
 - **Peso:** o JS inicial fica em 397,17 KiB (119,06 KiB em gzip; +0,02 KiB pelo `SeletorArquivo`, que é do pacote
   inicial); a seção do extrato vai de 13,6 para 17,7 KiB em gzip (o leitor do comprovante, a junção e a lista dos arquivos); o pacote do pdf.js não muda.
+
+## D35. Bilhetes pagos, reservados e livres (RIFA-075, 2026-11-19)
+
+**Contexto.** O PO quer ver, durante a campanha (início em 23/11), quais números da rifa já estão pagos, quais estão
+reservados (pedido aguardando o Pix) e quais estão livres, e achar o pedido de um número (para a marcação de pagos da
+RIFA-070). A rifa "projeto-kids-1" da Rifei tem **7005 números** (campo `numbers` da página pública, informado pelo SM).
+Cada pedido do webhook já traz os números em `pedidos.numeros` (array JSON; nulo no pedido recuperado pela
+Conferência, que não sai do navegador com os números).
+
+**Decisão.**
+
+- **Campanha, grupo `bilhetes`** (migração 0016): `quantidade` (1 a 1.000.000; padrão 7005) e `numero_inicial` (0, 1
+  ou null = **automático**). Automático vale 0 se algum pedido pago ou reservado trouxe o número 0, e 1 se não: a
+  Rifei não documenta se numera do 0 ou do 1, e a compra de teste confirma (lançamento 4.2). No PUT, o grupo ausente
+  mantém o gravado (como `ranking.por_divisao`); admin e coordenação mudam (é configuração, não regra do admin).
+  A trilha registra `bilhetes (antes → depois)`.
+- **Situação de um número:** **pago** se está num pedido `approved`; **reservado** se está num `in_process` com
+  `expira_em` nulo ou ainda no futuro; **livre** no resto. Pago vence reservado (o número que expirou e foi comprado
+  de novo). O pedido **desconsiderado** pelo admin (D20) não conta, como em todo lugar que soma pedidos; a busca o
+  mostra com o selo.
+- **API compacta:** `GET /api/painel/bilhetes` (admin e coordenação, no prefixo do painel, atrás do login, no-store)
+  devolve um **mapa de bits em base64 por situação** (bit i = número `numero_inicial + i`; byte i >> 3, bit i & 7):
+  7005 números = 876 bytes por mapa; 100.000 = 12,5 KB (~17 KB em base64). Faixas (intervalos) seriam piores com
+  números sorteados. Mais os contadores, o % vendido (pagos ÷ quantidade, pontos-base), os pedidos sem números e a
+  contagem de números fora da faixa (configuração errada). Duas idas ao D1 (a campanha e os pedidos pagos ou
+  reservados com `numeros` em texto); o Worker faz o `JSON.parse` e liga os bits. Medido em
+  `src/worker/routes/bilhetes.test.ts` com 100.000 números em 20.000 pedidos (teto folgado de 5 s, só contra desastre).
+- **Busca por número:** `GET /api/painel/bilhetes/:numero` percorre os números no D1 (`json_each`, sem índice: uma
+  consulta por toque, não por atualização) e devolve até 20 pedidos (os mais recentes) com id, situação
+  (pago, reservado ou expirado, inclusive o pendente vencido sem aviso da Rifei), célula, data e bilhetes. Nenhum dado
+  do comprador (schema estrito).
+- **Tela Bilhetes** (`/coordenacao/bilhetes`, toda a coordenação): contadores, legenda com as contagens, filtro (só
+  pagos, só reservados, só livres: os outros ficam apagados na grade), busca, e a grade num **canvas** (três passadas,
+  uma por cor; nenhum nó do DOM por número). Quadrados de 8 px no celular (44 colunas em 390 px, sem rolagem lateral)
+  e 10 px no computador. Tocar num quadrado busca o número. Atualiza **a cada 30 s com a aba visível** (e logo que ela
+  volta a ficar visível) e no **Atualizar agora**; uma falha mantém a grade com o aviso.
+
+**Consequências.** Pedido recuperado (sem números) não aparece na grade: a tela avisa com a contagem de pedidos e de
+bilhetes. Números fora da faixa (quantidade ou número inicial errados na Campanha) viram um aviso com o link para a
+Campanha. O % vendido é dos números conhecidos (os da grade).

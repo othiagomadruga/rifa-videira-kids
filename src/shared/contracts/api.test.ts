@@ -117,6 +117,9 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/admin/webhook/estado",
         // Sprint 5 (RIFA-015): mapa de vendas por DDD.
         "GET /api/painel/mapa-ddd",
+        // RIFA-075 (D35): bilhetes pagos, reservados e livres.
+        "GET /api/painel/bilhetes",
+        "GET /api/painel/bilhetes/:numero",
       ].sort(),
     );
   });

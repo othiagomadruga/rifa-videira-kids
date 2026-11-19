@@ -49,6 +49,12 @@ import {
   type CorpoConferencia,
   type CorpoRecuperacao,
 } from "./conferencia";
+import {
+  LIMITE_PEDIDOS_POR_NUMERO,
+  LIMITE_QUANTIDADE_NUMEROS,
+  SITUACOES_BILHETE,
+  SITUACOES_PEDIDO_BILHETE,
+} from "./bilhetes";
 import { detalheResumidoSchema } from "./erros";
 import { UF_DO_DDD, UFS } from "./ddd";
 import {
@@ -2217,6 +2223,69 @@ export type RespostaListaRecuperacoes = z.infer<
 >;
 
 // ---------------------------------------------------------------------------------------------------
+// Bilhetes pagos, reservados e livres (RIFA-075, D35): GET /api/painel/bilhetes e /api/painel/bilhetes/:numero
+// ---------------------------------------------------------------------------------------------------
+
+const contagemSchema = z.number().int().nonnegative();
+const mapaBase64Schema = z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/);
+
+/**
+ * A grade da rifa. `pagos` e `reservados` são mapas de bits em base64 (bilhetes.ts: bit i = número
+ * `numero_inicial + i`), cada um com ceil(quantidade / 8) bytes; um número nunca está nos dois (pago vence).
+ */
+export const respostaBilhetesSchema = z.strictObject({
+  quantidade: z.number().int().min(1).max(LIMITE_QUANTIDADE_NUMEROS),
+  /** O número inicial que vale (o configurado, ou o deduzido: 0 se algum pedido trouxe o 0). */
+  numero_inicial: z.union([z.literal(0), z.literal(1)]),
+  /** true quando o número inicial foi deduzido (a Campanha está em branco). */
+  numero_inicial_automatico: z.boolean(),
+  pagos: mapaBase64Schema,
+  reservados: mapaBase64Schema,
+  contagem: z.strictObject({
+    pagos: contagemSchema,
+    reservados: contagemSchema,
+    livres: contagemSchema,
+  }),
+  /** Pagos ÷ quantidade, em pontos-base truncados. */
+  vendido_bp: z.number().int().min(0).max(10_000),
+  /** Pedidos pagos ou reservados sem a lista de números (recuperados pela conferência): ficam fora da grade. */
+  sem_numeros: z.strictObject({
+    pedidos: contagemSchema,
+    bilhetes: contagemSchema,
+  }),
+  /** Números de pedidos pagos ou reservados fora da faixa (quantidade ou número inicial errados na Campanha). */
+  fora_da_faixa: contagemSchema,
+  atualizado_em: instanteSchema,
+});
+export type RespostaBilhetes = z.infer<typeof respostaBilhetesSchema>;
+
+export const parametroNumeroBilheteSchema = z.object({
+  numero: z.coerce.number().int().min(0).max(LIMITE_QUANTIDADE_NUMEROS),
+});
+
+/** Um pedido que tem o número (sem dado do comprador). */
+export const pedidoDoBilheteSchema = z.strictObject({
+  id: z.string().min(1).max(128),
+  situacao: z.enum(SITUACOES_PEDIDO_BILHETE),
+  /** A célula do afiliado; null = sem afiliado ou afiliado não vinculado. */
+  celula: z.string().min(1).max(120).nullable(),
+  /** Pago: quando foi pago; senão, quando foi criado (ou registrado aqui). */
+  data: instanteSchema,
+  qtd_bilhetes: contagemSchema,
+  /** Desconsiderado pelo admin (D20): não conta na grade. */
+  desconsiderado: z.boolean(),
+});
+
+/** Busca por número: a situação dele na grade e os pedidos que o têm (os mais recentes primeiro, até o limite). */
+export const respostaBilheteSchema = z.strictObject({
+  numero: z.number().int().nonnegative(),
+  situacao: z.enum(SITUACOES_BILHETE),
+  pedidos: z.array(pedidoDoBilheteSchema).max(LIMITE_PEDIDOS_POR_NUMERO),
+});
+export type RespostaBilhete = z.infer<typeof respostaBilheteSchema>;
+export type PedidoDoBilhete = z.infer<typeof pedidoDoBilheteSchema>;
+
+// ---------------------------------------------------------------------------------------------------
 // Catálogo de rotas
 // ---------------------------------------------------------------------------------------------------
 
@@ -2470,6 +2539,23 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaMapaDddSchema,
     sucesso: { status: 200, corpo: respostaMapaDddSchema },
+  },
+  /** RIFA-075 (D35). Sem campanha ativa: 404 `nao_encontrado`. */
+  painelBilhetes: {
+    metodo: "GET",
+    caminho: "/api/painel/bilhetes",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaBilhetesSchema },
+  },
+  /** RIFA-075 (D35). Número fora da faixa ou sem pedido: 200 com `livre` e lista vazia (ou só os expirados). */
+  painelBilhete: {
+    metodo: "GET",
+    caminho: "/api/painel/bilhetes/:numero",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    parametros: parametroNumeroBilheteSchema,
+    sucesso: { status: 200, corpo: respostaBilheteSchema },
   },
   painelRanking: {
     metodo: "GET",

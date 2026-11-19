@@ -1,0 +1,120 @@
+/* Tela Bilhetes (RIFA-075, D35): contadores, legenda, filtro, busca e a grade em canvas. Celular primeiro: em 390 px
+   a grade ocupa a largura do conteúdo, com quadrados de 8 px, sem rolagem lateral. As cores do canvas vêm destas
+   variáveis (o canvas lê pelo getComputedStyle). */
+.bilhetes-tela {
+  --pilha-espaco: var(--espaco-4);
+  --bilhete-pago: var(--cor-sucesso);
+  --bilhete-reservado: #d18b00;
+  --bilhete-livre: var(--cor-borda);
+  --bilhete-apagado: color-mix(in srgb, var(--cor-borda) 35%, transparent);
+  --bilhete-selecao: var(--marca-roxo);
+  min-width: 0;
+}
+
+.bilhetes-contadores {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-3);
+}
+
+@media (min-width: 48rem) {
+  .bilhetes-contadores {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.bilhetes-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.bilhetes-barra__hora {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.bilhetes-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bilhetes-legenda li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.bilhetes-legenda__cor {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 2px;
+  border: 1px solid var(--cor-borda);
+}
+
+.bilhetes-legenda__cor[data-situacao="pago"] {
+  background: var(--bilhete-pago);
+}
+
+.bilhetes-legenda__cor[data-situacao="reservado"] {
+  background: var(--bilhete-reservado);
+}
+
+.bilhetes-legenda__cor[data-situacao="livre"] {
+  background: var(--bilhete-livre);
+}
+
+.bilhetes-grade {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bilhetes-grade__nota {
+  margin: 0 0 var(--espaco-2);
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.bilhetes-grade__canvas {
+  display: block;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.bilhetes-busca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.bilhetes-busca > :first-child {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.bilhetes-resultado__pedidos {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: var(--espaco-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bilhetes-resultado__pedidos li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-1) var(--espaco-3);
+  align-items: center;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  overflow-wrap: anywhere;
+}

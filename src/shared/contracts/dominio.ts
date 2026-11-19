@@ -7,6 +7,11 @@
  * `*EntradaSchema` = corpo de criação/edição; `*Schema` = como a API devolve.
  */
 import { z } from "zod";
+import {
+  BILHETES_PADRAO,
+  LIMITE_QUANTIDADE_NUMEROS,
+  NUMEROS_INICIAIS,
+} from "./bilhetes";
 import { detalheResumidoSchema } from "./erros";
 import {
   ACESSO_PADRAO,
@@ -186,6 +191,18 @@ export const PUBLICO_PADRAO = {
 } as const;
 
 /**
+ * Os números da rifa (RIFA-075, D35): quantos são, como na Rifei, e de qual número começam (0 ou 1; null = automático,
+ * deduzido dos números que chegam nos pedidos). A tela Bilhetes usa os dois para desenhar a grade. Padrão:
+ * BILHETES_PADRAO (7005, automático).
+ */
+export const bilhetesConfigSchema = z.object({
+  quantidade: z.number().int().min(1).max(LIMITE_QUANTIDADE_NUMEROS),
+  numero_inicial: z
+    .union([z.literal(NUMEROS_INICIAIS[0]), z.literal(NUMEROS_INICIAIS[1])])
+    .nullable(),
+});
+
+/**
  * Pedidos (RIFA-028, D20). `desconsiderar` liga a ação do admin de tirar um pedido de todas as contas (teste,
  * fraude ou estorno) e de desfazer. Desligar a chave NÃO devolve às contas o que já foi desconsiderado: só
  * impede desconsiderar e desfazer até ligar de novo. Padrão: desligada (PEDIDOS_PADRAO).
@@ -293,6 +310,8 @@ export const campanhaEntradaSchema = z.object({
   pedidos: pedidosConfigSchema.optional(),
   acesso: acessoConfigEntradaSchema.optional(),
   mensagens: mensagensConfigSchema.optional(),
+  /** RIFA-075 (D35): ausente mantém o gravado (no primeiro PUT, o padrão), como os grupos do admin. */
+  bilhetes: bilhetesConfigSchema.optional(),
 });
 export type CampanhaEntrada = z.input<typeof campanhaEntradaSchema>;
 
@@ -318,6 +337,8 @@ export const campanhaSchema = z.object({
   pedidos: pedidosConfigSchema.default(() => ({ ...PEDIDOS_PADRAO })),
   acesso: acessoConfigSchema.default(() => ({ ...ACESSO_PADRAO })),
   mensagens: mensagensGravadasSchema.default(() => ({ ...MENSAGENS_PADRAO })),
+  /** RIFA-075 (D35). O `.default()` é da transição (antes da migração 0016 vale o padrão). */
+  bilhetes: bilhetesConfigSchema.default(() => ({ ...BILHETES_PADRAO })),
   criado_em: instanteSchema,
   atualizado_em: instanteSchema,
 });

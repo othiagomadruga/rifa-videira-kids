@@ -580,6 +580,10 @@ describe("CA3: o bumbo nunca exibe R$", () => {
       ).texto,
     );
     expect(texto.textContent).toMatch(/\d+% da meta/);
-    expect(document.body.textContent).not.toMatch(/R\$|centavo|bilhete/i);
+    // O conteúdo da tela (o menu da coordenação tem o link "Bilhetes", RIFA-075, que não é um valor).
+    expect(screen.getByRole("main").textContent).not.toMatch(
+      /R\$|centavo|bilhete/i,
+    );
+    expect(document.body.textContent).not.toMatch(/R\$|centavo/i);
   });
 });

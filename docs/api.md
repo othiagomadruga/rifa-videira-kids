@@ -157,6 +157,7 @@ Configuração da campanha ativa: tudo que é regra de campanha vive aqui, e nã
 - **PUT**: o corpo é `campanhaEntradaSchema`, em JSON.
   - **O primeiro PUT cria a campanha já ativa**: o contrato não tem rascunho nem passo separado de ativação. A partir dele, o webhook passa a contar as vendas da Rifei com esse `slug_rifei` (D5). Preço e meta podem entrar provisórios e ser corrigidos depois.
   - Os PUTs seguintes substituem a configuração da mesma campanha (mesmo `id`: os pedidos já gravados continuam ligados a ela), e os períodos são substituídos inteiros. Campanha e períodos vão numa transação: se algo falha, nada muda. Nunca há duas campanhas ativas.
+  - Grupo `bilhetes` (RIFA-075, D35): `quantidade` (1 a 1.000.000; padrão 7005) e `numero_inicial` (0, 1 ou null = automático). Ausente mantém o gravado (no primeiro PUT, o padrão). A tela Bilhetes desenha a grade com ele.
   - **200** `Campanha`, como ficou gravada.
   - **400** `json_invalido`: o corpo não é JSON, ou veio sem `Content-Type: application/json` (ou `application/<tipo>+json`), mesmo que o texto seja JSON.
   - **400** `requisicao_invalida`: fora do schema (`detalhes` = problemas).
@@ -771,6 +772,33 @@ fora, como no painel). Só a coordenação; a versão aberta depende do PO.
   (8.172 com jovens na campanha inteira, 2.796 com adultos numa semana).
 - **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404
   `nao_encontrado` (sem campanha ativa).
+
+## Bilhetes pagos, reservados e livres (RIFA-075; docs/decisions.md D35)
+
+### `GET /api/painel/bilhetes` (`coordenacao`)
+
+A grade da rifa da campanha ativa. Admin e coordenação; a hierarquia leva 403 e sem sessão 401 (prefixo do painel;
+`src/worker/protecao.test.ts`). `Cache-Control: no-store`. **404** `nao_encontrado` sem campanha ativa.
+
+- **200** `respostaBilhetesSchema` (estrito): `quantidade` e `numero_inicial` (o configurado no grupo `bilhetes` da
+  campanha ou, em branco, o deduzido: 0 se algum pedido trouxe o 0), `numero_inicial_automatico`, `pagos` e
+  `reservados` (mapas de bits em base64: bit i = número `numero_inicial + i`, byte `i >> 3`, bit `i & 7` do menos
+  significativo; leitura em `src/shared/contracts/bilhetes.ts`), `contagem` (`pagos`, `reservados`, `livres`),
+  `vendido_bp`, `sem_numeros` (`pedidos` e `bilhetes` pagos ou reservados sem a lista de números, como os recuperados
+  pela Conferência), `fora_da_faixa` (números distintos fora de `numero_inicial` a `numero_inicial + quantidade − 1`) e
+  `atualizado_em`.
+- Pago = pedido `approved`; reservado = `in_process` com `expira_em` nulo ou no futuro; pago vence reservado; o
+  desconsiderado (D20) não conta.
+
+### `GET /api/painel/bilhetes/:numero` (`coordenacao`)
+
+Os pedidos que têm o número, para achar o pedido de um bilhete. `:numero` inteiro de 0 a 1.000.000 (senão **400**
+`requisicao_invalida`). **404** sem campanha ativa.
+
+- **200** `respostaBilheteSchema`: `numero`, `situacao` (`pago`, `reservado` ou `livre`, pelos pedidos que contam) e
+  `pedidos` (até 20, o mais recente primeiro): `id` (o da Rifei), `situacao` (`pago`, `reservado` ou `expirado`),
+  `celula` (nome, ou null), `data` (do pagamento, se pago; senão da criação), `qtd_bilhetes` e `desconsiderado`.
+  Nenhum dado do comprador.
 
 ## Relatório da campanha para baixar (RIFA-038; docs/decisions.md D23)
 
