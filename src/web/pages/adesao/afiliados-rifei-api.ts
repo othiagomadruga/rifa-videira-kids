@@ -1,4 +1,4 @@
-// Os afiliados da Rifei na Adesão (RIFA-070, D29; só o admin): ler os afiliados da conta, sincronizar (código e
+// Os afiliados da Rifei na Adesão (RIFA-070, D32; só o admin): ler os afiliados da conta, sincronizar (código e
 // vínculo pelo e-mail do líder) e gerar os convites das células sem afiliado. Do contrato vêm só TIPOS e o limite de
 // rifei-api.ts (módulo sem zod); os caminhos são cópias, conferidas pelo tipo e por AfiliadosDaRifei.test.tsx.
 import type {

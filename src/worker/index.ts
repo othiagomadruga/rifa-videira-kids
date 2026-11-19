@@ -111,7 +111,7 @@ app.route(PREFIXO_AFILIADOS_ADESAO, afiliadosAdesao);
 app.route(PREFIXO_LINKS_VENDAS, linksVendas);
 // Conferência pelo CSV da Rifei (RIFA-012): análise, "Recuperar" e auditoria sob /api/admin (passo 4).
 app.route(PREFIXO_RECONCILIACAO, reconciliacao);
-// API interna da Rifei (RIFA-070, D29): marcar pagos (Conferência do extrato), afiliados e convites, sob /api/admin
+// API interna da Rifei (RIFA-070, D32): marcar pagos (Conferência do extrato), afiliados e convites, sob /api/admin
 // (passo 4). Só admin: o sub-app exige no handler de cada rota, antes do corpo.
 app.route(PREFIXO_RIFEI_API, rifeiApi);
 // Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.

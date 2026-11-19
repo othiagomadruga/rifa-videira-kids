@@ -229,7 +229,7 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Pedido voltou a contar",
       "Afiliado removido",
       "Token do webhook gerado",
-      // RIFA-070 (D29): a API da Rifei.
+      // RIFA-070 (D32): a API da Rifei.
       "Pedidos marcados como pagos na Rifei",
       "Afiliados sincronizados com a Rifei",
       "Convites de afiliado gerados na Rifei",

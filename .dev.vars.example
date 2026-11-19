@@ -6,6 +6,6 @@
 # da coordenação no D1 local (o da tela tem prioridade: docs/decisions.md, D21).
 RIFEI_WEBHOOK_TOKEN=troque-me
 
-# Token do login na Rifei para a API interna do painel (RIFA-070, D29): marcar pagos na Rifei, afiliados e
+# Token do login na Rifei para a API interna do painel (RIFA-070, D32): marcar pagos na Rifei, afiliados e
 # convites. Vazio: as rotas /api/admin/rifei/* respondem 503. No dev, deixe vazio ou use uma conta de teste.
 RIFEI_API_TOKEN=

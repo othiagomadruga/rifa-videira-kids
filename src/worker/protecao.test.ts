@@ -114,7 +114,7 @@ interface RotaDaCoordenacao {
  * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin),
  * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação) e ROTAS_LINK_VENDAS (RIFA-046, D24: a lista de admin e coordenação
  * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora) e ROTAS_RIFEI_API
- * (RIFA-070, D29: só admin). O relatório entrou aqui
+ * (RIFA-070, D32: só admin). O relatório entrou aqui
  * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
  * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */

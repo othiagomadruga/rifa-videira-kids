@@ -739,7 +739,7 @@ describe("CA4: gravação do pedido", () => {
         criado_em: primeiro.recebido_em,
         vinculado_em: null,
         atualizado_em: primeiro.recebido_em,
-        // 0013 (RIFA-070): o código na Rifei só chega pela sincronização.
+        // 0014 (RIFA-070): o código na Rifei só chega pela sincronização.
         codigo_rifei: null,
       },
     ]);

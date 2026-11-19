@@ -552,11 +552,11 @@ Ordem: devolva na Efí → remova ou ajuste o pedido na Rifei, se der (**antes d
 
 Se perguntar, passe as respostas ao SM, para a seção 9 e o DevMission.
 
-## 13. API interna do painel da Rifei (RIFA-070, D29)
+## 13. API interna do painel da Rifei (RIFA-070, D32)
 
 A Rifei não tem API pública, mas o painel (`app.rifei.com.br`) é um site que chama `https://api.rifei.com.br/` com o
 token do login. O sistema usa as mesmas chamadas, pelo admin, para marcar pagos os pedidos da Conferência do extrato,
-sincronizar os afiliados e gerar os convites (D29; rotas em [api.md](api.md#api-interna-da-rifei-rifa-070-docsdecisionsmd-d29)).
+sincronizar os afiliados e gerar os convites (D32; rotas em [api.md](api.md#api-interna-da-rifei-rifa-070-docsdecisionsmd-d29)).
 
 ### 13.1 O que foi mapeado (código do painel, 17/11/2026)
 

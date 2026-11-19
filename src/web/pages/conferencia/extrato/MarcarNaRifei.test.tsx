@@ -1,4 +1,4 @@
-// RIFA-070 (D29): "Marcar como pago na Rifei" na lista "Para marcar" do extrato, pela rota de verdade e com a API
+// RIFA-070 (D32): "Marcar como pago na Rifei" na lista "Para marcar" do extrato, pela rota de verdade e com a API
 // falsa. Só o admin vê o botão; a confirmação mostra os números; para a API vão só os NÚMEROS dos pedidos (nada do
 // extrato); o resultado diz quantos foram marcados e quais não, com o motivo; sem a configuração, a tela manda usar o
 // "Copiar os números". O caminho é a cópia do contrato.

@@ -44,7 +44,7 @@ const FONTES = {
 
 /**
  * Módulos do contrato sem zod (o site pode importar valores deles). O "./csv" é o leitor do extrato em CSV
- * (extrato/csv.ts, RIFA-059), que só importa o shared/csv. O rifei-api (RIFA-070, D29) tem só os limites e os textos
+ * (extrato/csv.ts, RIFA-059), que só importa o shared/csv. O rifei-api (RIFA-070, D32) tem só os limites e os textos
  * da API da Rifei (o "Marcar como pago na Rifei" do extrato).
  */
 const SEM_ZOD =

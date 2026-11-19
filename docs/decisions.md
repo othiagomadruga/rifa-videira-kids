@@ -1664,7 +1664,7 @@ ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apr
 - **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
   `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
 
-## D29. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17)
+## D32. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17; renumerada de D29 em 19/11)
 
 Decisão do PO (17/11): no Pix manual (D26), o último passo, marcar como pago no painel da Rifei, deixa de ser à mão; e
 os afiliados das células (dezenas) não são mais criados um a um. A D26 deixava isso de fora porque "a Rifei não tem API
@@ -1686,7 +1686,7 @@ painel em 17/11/2026 (docs/integracao-rifei.md, seção 13) e o sistema faz as m
   "Pagamento não registrado" (RIFA-056).
 - **Afiliados** (`GET /api/admin/rifei/afiliados` e `POST .../afiliados/sincronizar`): a Rifei não deixa o
   organizador criar a conta do afiliado. A sincronização grava o **código** de cada afiliado (o `ref` do link de vendas:
-  `https://rifei.com.br/<slug>?ref=<código>`, migração 0013) e liga à célula o afiliado não vinculado cujo e-mail na
+  `https://rifei.com.br/<slug>?ref=<código>`, migração 0014) e liga à célula o afiliado não vinculado cujo e-mail na
   Rifei é o do líder de **exatamente uma** célula. Nunca troca um vínculo que já existe. O modelo do link de vendas (D24)
   ganha o marcador `{codigo}`.
 - **Convites** (`POST /api/admin/rifei/convites`): um convite por célula (comissão 0%, todas as campanhas), de uso único

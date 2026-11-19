@@ -23,7 +23,7 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "afiliado.remover": "Afiliado removido",
   // RIFA-039 (D21): o token do webhook gerado pela tela (aba Webhook da Rifei de Acessos; alvo `webhook`).
   "webhook.gerar_token": "Token do webhook gerado",
-  // RIFA-070 (D29): a API da Rifei (Conferência do extrato e Adesão; alvo `campanha:<id>` ou `rifei`).
+  // RIFA-070 (D32): a API da Rifei (Conferência do extrato e Adesão; alvo `campanha:<id>` ou `rifei`).
   "rifei.marcar_pagos": "Pedidos marcados como pagos na Rifei",
   "rifei.sincronizar_afiliados": "Afiliados sincronizados com a Rifei",
   "rifei.gerar_convites": "Convites de afiliado gerados na Rifei",
@@ -50,7 +50,7 @@ const TIPO_DO_ALVO: Record<string, string> = {
   pedido: "Pedido",
   // D21: webhook.gerar_token (ALVO_AUDITORIA_TOKEN_WEBHOOK, sem id: há um token só).
   webhook: "Webhook da Rifei",
-  // D29: rifei.sincronizar_afiliados e rifei.gerar_convites (ALVO_AUDITORIA_AFILIADOS_RIFEI, sem id).
+  // D32: rifei.sincronizar_afiliados e rifei.gerar_convites (ALVO_AUDITORIA_AFILIADOS_RIFEI, sem id).
   rifei: "Conta da Rifei",
 };
 

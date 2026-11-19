@@ -364,7 +364,7 @@
   min-height: var(--alvo-toque);
 }
 
-/* RIFA-070 (D29): afiliados e convites pela API da Rifei (só o admin). */
+/* RIFA-070 (D32): afiliados e convites pela API da Rifei (só o admin). */
 .adesao-rifei {
   display: flex;
   flex-direction: column;

@@ -166,7 +166,7 @@ export function AdesaoPage() {
           >
             <LinksDeVendas celulas={estado.painel.adesao.itens} />
           </Suspense>
-          {/* RIFA-070 (D29): afiliados e convites pela API da Rifei, só o admin. */}
+          {/* RIFA-070 (D32): afiliados e convites pela API da Rifei, só o admin. */}
           {admin && <AfiliadosDaRifei aoMudar={atualizarAgora} />}
         </>
       )}

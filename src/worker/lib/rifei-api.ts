@@ -1,5 +1,5 @@
 /**
- * Cliente da API interna do painel da Rifei (RIFA-070; docs/decisions.md D29; docs/integracao-rifei.md, seção 13).
+ * Cliente da API interna do painel da Rifei (RIFA-070; docs/decisions.md D32; docs/integracao-rifei.md, seção 13).
  *
  * As chamadas são as mesmas que o painel (app.rifei.com.br) faz, mapeadas do código dele em 17/11/2026: base
  * `https://api.rifei.com.br/`, `Authorization: Bearer <token do login>` e `x-rate-limit: true`. A API não é

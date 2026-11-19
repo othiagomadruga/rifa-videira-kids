@@ -581,7 +581,7 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - webhook.gerar_token (RIFA-039, D21): ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook, alvo `webhook`
  *   (ALVO_AUDITORIA_TOKEN_WEBHOOK); resumo com o que deixou de valer (nada, o segredo do Worker ou o token da tela
  *   gerado em <instante>), NUNCA o token nem o hash. O 409 (sem `substituir`) não registra.
- * - rifei.marcar_pagos, rifei.sincronizar_afiliados e rifei.gerar_convites (RIFA-070, D29): ROTAS_RIFEI_API, alvo
+ * - rifei.marcar_pagos, rifei.sincronizar_afiliados e rifei.gerar_convites (RIFA-070, D32): ROTAS_RIFEI_API, alvo
  *   `campanha:<id>` na marcação e `rifei` (ALVO_AUDITORIA_AFILIADOS_RIFEI) nos afiliados; resumo só com contagens e,
  *   na marcação, os números dos pedidos marcados se couberem (nunca o token, o link do convite nem o e-mail do
  *   afiliado). Registram só quando a Rifei aceitou algo (a marcação, o convite) ou quando a sincronização mudou algo.
@@ -3021,7 +3021,7 @@ export const ROTAS_LINK_VENDAS = {
 export type NomeRotaLinkVendas = keyof typeof ROTAS_LINK_VENDAS;
 
 // ---------------------------------------------------------------------------------------------------
-// API interna da Rifei (RIFA-070, D29; só admin): marcar como pagos os pedidos da Conferência do extrato, ler e
+// API interna da Rifei (RIFA-070, D32; só admin): marcar como pagos os pedidos da Conferência do extrato, ler e
 // sincronizar os afiliados da conta e gerar os convites das células. Regras puras, limites e textos em ./rifei-api.
 // ---------------------------------------------------------------------------------------------------
 
@@ -3176,7 +3176,7 @@ export const respostaConvitesRifeiSchema = z.strictObject({
 export type RespostaConvitesRifei = z.infer<typeof respostaConvitesRifeiSchema>;
 
 /**
- * Rotas da API da Rifei (RIFA-070, D29), só admin (no handler de cada rota). Todas chamam a Rifei com o segredo
+ * Rotas da API da Rifei (RIFA-070, D32), só admin (no handler de cada rota). Todas chamam a Rifei com o segredo
  * `RIFEI_API_TOKEN`; sem ele: 503 `nao_configurado`. Sem campanha ativa: 404. Falha inteira da Rifei: 502
  * `rifei_falhou` com detalhesRifeiFalhouSchema. Saem com `Cache-Control: no-store` (do exigirSessao).
  */

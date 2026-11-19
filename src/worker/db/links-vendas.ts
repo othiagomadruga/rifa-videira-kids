@@ -46,7 +46,7 @@ export interface AfiliadoDoEscopo {
   affiliate_id: number;
   celula_id: number;
   vinculado_em: string;
-  /** O código na Rifei (RIFA-070, D29; o {codigo} do modelo); null antes da sincronização. */
+  /** O código na Rifei (RIFA-070, D32; o {codigo} do modelo); null antes da sincronização. */
   codigo_rifei: string | null;
 }
 

@@ -1,10 +1,10 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
-// 0012_ranking_por_divisao.sql e 0013_codigo_afiliado_rifei.sql), aplicado pelo setup apply-migrations.ts no D1 local
-// dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010, a 0011, a 0012 e a 0013 também são aplicadas num D1 à parte (DB_MIGRACAO,
+// 0012_ranking_por_divisao.sql e 0014_codigo_afiliado_rifei.sql), aplicado pelo setup apply-migrations.ts no D1 local
+// dos testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010, a 0011, a 0012 e a 0014 também são aplicadas num D1 à parte (DB_MIGRACAO,
 // vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7;
-// RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061).
+// RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061; RIFA-070).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -2175,29 +2175,29 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
   });
 
   // -------------------------------------------------------------------------------------------------
-  // 0013 (RIFA-070, D29): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
+  // 0014 (RIFA-070, D32): o código do afiliado na Rifei, aplicada sobre tudo o que já existia
   // -------------------------------------------------------------------------------------------------
 
-  describe("0013 sobre dados que já existiam (RIFA-070)", () => {
+  describe("0014 sobre dados que já existiam (RIFA-070)", () => {
     const db = DB_MIGRACAO;
     let antes: Record<string, Record<string, unknown>[]>;
 
     beforeAll(async () => {
-      // Idempotente: os describes anteriores já aplicaram até a 0012 (aqui vale também rodando este sozinho).
+      // Idempotente: os describes anteriores já aplicaram até a 0013 (aqui vale também rodando este sozinho).
       await applyD1Migrations(
         db,
-        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0013"),
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0014"),
       );
       antes = await fotografarTodasAsTabelas(db);
       await applyD1Migrations(db, TEST_MIGRATIONS);
     });
 
-    it("a 0013 foi aplicada por último, sobre os dados (com afiliados gravados)", async () => {
+    it("a 0014 foi aplicada por último, sobre os dados (com afiliados gravados)", async () => {
       const { results } = await db
         .prepare("SELECT name FROM d1_migrations ORDER BY id")
         .all<{ name: string }>();
       expect(results.map((linha) => linha.name).at(-1)).toBe(
-        "0013_codigo_afiliado_rifei.sql",
+        "0014_codigo_afiliado_rifei.sql",
       );
       expect(antes.afiliados.length).toBeGreaterThan(0);
       expect(antes.afiliados[0]).not.toHaveProperty("codigo_rifei");
