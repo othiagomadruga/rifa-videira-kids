@@ -168,13 +168,16 @@ export const ALVO_AUDITORIA_CONEXAO_RIFEI = "rifei";
  */
 export function limparTokenRifei(texto: string): string | null {
   let token = texto.trim();
-  if (/^bearer\s+/i.test(token)) token = token.replace(/^bearer\s+/i, "");
-  if (
-    token.length >= 2 &&
-    ((token.startsWith('"') && token.endsWith('"')) ||
-      (token.startsWith("'") && token.endsWith("'")))
-  )
-    token = token.slice(1, -1).trim();
+  // Aspas em volta e o "Bearer " na frente, em qualquer ordem.
+  for (let volta = 0; volta < 2; volta++) {
+    if (
+      token.length >= 2 &&
+      ((token.startsWith('"') && token.endsWith('"')) ||
+        (token.startsWith("'") && token.endsWith("'")))
+    )
+      token = token.slice(1, -1).trim();
+    token = token.replace(/^bearer\s+/i, "");
+  }
   if (
     token.length < MINIMO_CARACTERES_TOKEN_RIFEI ||
     token.length > LIMITE_CARACTERES_TOKEN_RIFEI
