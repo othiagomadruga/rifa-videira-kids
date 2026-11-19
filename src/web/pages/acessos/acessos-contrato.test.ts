@@ -53,6 +53,8 @@ describe("cópias do contrato do acesso no site", () => {
     expect(CAMINHOS_SESSAO).toEqual({
       sessao: ROTAS_ACESSO.entrar.caminho,
       sair: ROTAS_ACESSO.sair.caminho,
+      // RIFA-064 (D29): o login da célula com a senha padrão.
+      senha: ROTAS_ACESSO.entrarComSenha.caminho,
     });
     expect(ROTAS_ACESSO.obterSessao.caminho).toBe(CAMINHOS_SESSAO.sessao);
     expect(ROTAS_ACESSO.listarUsuarios.caminho).toBe(CAMINHOS.usuarios);

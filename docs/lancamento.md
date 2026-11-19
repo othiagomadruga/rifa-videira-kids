@@ -148,7 +148,8 @@ O PO decidiu que as regras da campanha ficam configuráveis pela coordenação, 
 - [ ] **O que o público vê** (cartão "Ranking e público", "O que o público vê"): "Mostrar também o percentual da meta atingido" e "Quantas posições o público vê" (padrão 3; em branco, todas).
 - [ ] **Pedidos e acessos** (cartão "Pedidos e acessos", uma caixa de marcar por regra):
   - "Permitir desconsiderar pedidos" (padrão desligada): ligada, o admin tira das contas um pedido de teste, fraude ou estorno, e desfaz, na tela **Pedidos** (4.4). Desligar depois não devolve às contas o que já foi desconsiderado;
-  - "Acesso dos discipuladores" e "Acesso das redes" (padrão ligados): links pessoais também para discipuladores e redes (5.1, item 1), que veem as células deles, sem reais. Desligado, eles não entram nem recebem link novo; os links já mandados voltam a valer quando religar. O líder de célula entra sempre.
+  - "Acesso dos discipuladores" e "Acesso das redes" (padrão ligados): links pessoais também para discipuladores e redes (5.1, item 1), que veem as células deles, sem reais. Desligado, eles não entram nem recebem link novo; os links já mandados voltam a valer quando religar. O líder de célula entra sempre;
+  - "Login das células com senha padrão" (padrão **ligado**; RIFA-064, D29; pedido do PO em 17/11, **deixe ligado nesta campanha**): cada célula entra em `/entrar` com o nome dela e a senha `@` + nome da célula sem acentos e sem espaços + `1234` (ex.: `@geracaoqueclama1234`) e vê só a página da célula (ranking, meta, link e QR de vendas, sem reais). A senha não é segredo: quem souber o nome da célula entra como ela. Desligado, ninguém entra pela senha e quem entrou assim sai na hora; o link pessoal continua.
 - [ ] **Mensagens do link pessoal** (cartão "Mensagens do link pessoal"; opcional): o texto do WhatsApp de cada tipo de link (coordenação, líder, discipulador e rede). O padrão é o texto de 5.1; a tela mostra como fica e não deixa salvar sem o `{link}`. O bumbo não muda aqui.
 
 Mudar datas, períodos, preço, meta ou critério depois muda os números da campanha inteira, inclusive dos dias que passaram (3.3). Para entender como o sistema conta, leia as suposições S1 a S22 de [regras-de-calculo.md](regras-de-calculo.md#3-suposições-para-o-po).
@@ -378,7 +379,7 @@ No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5):
 - **Datas e períodos:** "Data de início" `23/11/2026`, "Fuso horário" `America/Belem` e os períodos (o botão **Usar o modelo de Santo André** preenche 10/7/7 dias com 35/25/45%).
 - **Bilhete e meta:** preço do bilhete (R$), unidade, regra e valor da meta.
 - **Ranking e público:** critério do ranking, **"Separar o ranking por divisão (jovens e adultos)"** (desmarque nesta campanha: um ranking só, 1.5; o resumo "Regras da campanha", no topo, mostra "Ranking por divisão: Um ranking só, com todas as células juntas.") e o que o público vê (o % da meta e quantas posições).
-- **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores" e "Acesso das redes". Só o admin muda estas regras e as mensagens (a coordenação as vê só leitura).
+- **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores", "Acesso das redes" e "Login das células com senha padrão" (deixe ligado: 1.5 e 5.1, item 1). Só o admin muda estas regras e as mensagens (a coordenação as vê só leitura).
 - **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório, no começo ou depois de um espaço ou de uma quebra de linha; nenhum outro endereço na mensagem). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição. Se editar, mantenha as palavras "link pessoal" no texto: o guia do líder ("Perdi o link") manda procurar por elas na conversa.
 - **Ativar a campanha** (pede confirmação). A partir daí, as vendas da Rifei com esse slug contam.
 
@@ -499,6 +500,11 @@ Se um teste for feito **depois de 23/11**, ele conta como venda (e é: o dinheir
 
 ### 5.1 Antes
 
+0. **Senhas das células [Coordenação]** (RIFA-064, D29): é o jeito mais simples de o líder entrar, sem link nenhum.
+   - Em **Coordenação → Hierarquia**, no cartão **Login das células com senha**: se aparecer o aviso "… não entram com a senha padrão", duas células ficaram com o mesmo nome no login (ex.: "Pão Vivo" e "Pao Vivo") ou um nome não tem letra nem número. Mude o nome de uma delas (**Editar**, na aba **Células**) antes da reunião: até lá, nenhuma das duas entra pela senha.
+   - **Ver a senha de cada célula** → **Copiar** na linha da célula e mande no privado do líder, com o endereço `rifa-videira-kids.madruga.workers.dev/entrar` (ou mande só a regra: o guia do líder, seção 2, já explica com um exemplo).
+   - Confira na Campanha que "Login das células com senha padrão" está ligado (3.3).
+   - Com a senha, os links do item 1 ficam opcionais para os líderes (servem para quem preferir o link); para discipuladores e redes, continuam sendo o único jeito de entrar.
 1. **Links em lote [Admin]:** **Acessos → Líderes, discipuladores e redes** → Papel **Líderes de célula** → **Gerar links para quem ainda não tem (36)**.
    - Abre uma janela com um link por líder. Em cada um: **Abrir no WhatsApp** (abre a conversa com o número da planilha e a mensagem pronta) ou **Copiar mensagem** (sem telefone ou com número estranho).
    - **Os links só aparecem agora**: mande todos antes de tocar em **Pronto**. Se fechar antes, use **Novo link** na linha do líder.
@@ -518,7 +524,7 @@ Se um teste for feito **depois de 23/11**, ele conta como venda (e é: o dinheir
 
 O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de convite-reuniao.md](convite-reuniao.md#3-roteiro-da-reunião-20-minutos). Os passos:
 
-1. **Cada líder abre o link pessoal** que recebeu e toca em **Entrar**. Ele vê a tela da célula dele (`/minha`), ainda com a contagem regressiva. O limite de 60 entradas por minuto do mesmo Wi-Fi comporta a reunião.
+1. **Cada líder entra no sistema:** abre `rifa-videira-kids.madruga.workers.dev/entrar`, escreve o nome da célula e a senha (`@nomedacelula1234`, 5.1, item 0) e toca em **Entrar**, ou abre o link pessoal que recebeu e toca em **Entrar**. Ele vê a tela da célula dele (`/minha`), ainda com a contagem regressiva. O limite de 60 entradas por minuto do mesmo Wi-Fi comporta a reunião (a senha e o link contam juntos). "Célula ou senha não conferem."? Confira o nome como está no ranking e, se a célula estiver no aviso da Hierarquia, use o link.
 2. **Adesão na Rifei:** cada líder abre o convite de afiliado que recebeu (5.1, item 4), faz o cadastro com o e-mail e entra pela **"Área de afiliados"** (menu da página da campanha). Depois pega o link de afiliado dele ([12.3](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes)).
 3. **Vincular o afiliado à célula, um líder por vez:**
    1. O líder abre o próprio link de afiliado e **inicia uma compra sem pagar**.
@@ -662,6 +668,7 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta (passar da Visã
   - **Se alguém pode ter entrado com o link:** veja na trilha de auditoria (4.2) o que esse usuário fez depois do vazamento. Um link de coordenação muda campanha, hierarquia e vínculos; um de admin também cria pessoas e links (`usuario.criar`, `link.criar`, `acessos_hierarquia.gerar_links`). Desfaça o que não foi a equipe: em **Acessos**, revogue os links que ele gerou e desative as pessoas que ele criou.
 - **De um líder, discipulador ou rede** (vê só os números do alvo dele, sem reais): **Acessos → Líderes, discipuladores e redes** → **Trocar acesso** na linha. Gera um link novo, revoga os anteriores e tira do sistema o aparelho que estava com o link velho. Mande o novo para a pessoa certa. Com o acesso do papel desligado na Campanha (discipuladores ou redes), **Trocar acesso** e **Novo link** ficam indisponíveis: use **Revogar link** em cada link válido da pessoa (o vazado não volta a valer quando religar) e, depois de religar, mande um **Novo link**.
 - **Os links públicos** (`/` e `/telao`) não têm segredo: não há o que revogar.
+- **A senha das células** (RIFA-064, D29) não é segredo e não se troca: é sempre `@` + nome da célula + `1234`. Se alguém estiver entrando como uma célula que não é a dele: **[Admin]** desligue "Login das células com senha padrão" na Campanha (todos que entraram pela senha saem na hora; quem tem o link continua) ou, só para aquela célula, **Desativar acesso** na linha dela em **Acessos → Líderes, discipuladores e redes** (o link e a senha param de entrar; reative e mande um link novo ao líder). Cada entrada pela senha fica na trilha (**Célula entrou com a senha padrão**, com a célula).
 - **Vazou um token [Thiago]:**
   - **Token do webhook:** gere outro no site (3.2, passo 1: o anterior para de valer na hora) e cole na Rifei. As entregas entre os dois passos se perdem: confira pelo CSV (6.4). Se estiver na alternativa do wrangler, gerar pelo site também neutraliza o `RIFEI_WEBHOOK_TOKEN` vazado (o do site tem prioridade).
   - `CLOUDFLARE_API_TOKEN`: em **API Tokens** na Cloudflare, apague ou renove o token e cadastre o novo no segredo `CLOUDFLARE_API_TOKEN` do GitHub (1.2; no ambiente `producao`, se o reforço da D18 estiver ligado).
@@ -670,7 +677,7 @@ O alerta consulta o sistema a cada 5 minutos, com a tela aberta (passar da Visã
 ### 7.4 Um líder trocou (trocar acesso)
 
 1. **Hierarquia → Células → Editar célula:** novo nome e telefone do líder (ou corrija a planilha e importe de novo).
-2. **[Admin]** **Acessos → Líderes, discipuladores e redes → Trocar acesso** na célula: o link novo vai para o novo líder e o aparelho do antigo sai.
+2. **[Admin]** **Acessos → Líderes, discipuladores e redes → Trocar acesso** na célula: o link novo vai para o novo líder e o aparelho do antigo sai. A senha da célula não muda (é a do nome da célula): o líder antigo que entrou pela senha continua até tocar em **Sair**; para tirá-lo, use **Desativar acesso** e depois reative e mande o link novo.
 3. O novo líder recebe o convite de afiliado da Rifei (5.1, item 4), e a coordenação vincula o código dele na **Adesão** (**Adicionar outro código** na célula). Com o modelo do link de vendas gravado (3.6), o link do novo código aparece em destaque em **Seu link de vendas** (o mais recente primeiro); o do líder antigo continua listado e contando.
 4. **Mantenha o código do líder antigo vinculado**, para as vendas dele continuarem na célula. Desvincular tira todas as vendas dele da célula, inclusive as antigas. O vínculo não tem data: se o líder antigo continuar vendendo pelo link dele, a venda continua indo para a célula.
 

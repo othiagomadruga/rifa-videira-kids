@@ -21,6 +21,7 @@ import {
 } from "./Dialogos";
 import { carregarHierarquia, type Hierarquia } from "./hierarquia-api";
 import { ImportarPlanilha } from "./ImportarPlanilha";
+import { LoginDasCelulas } from "./LoginDasCelulas";
 import { TabelaCelulas, TabelaDiscipuladores, TabelaRedes } from "./Tabelas";
 import { DICAS, type Entidade } from "./textos";
 import "./hierarquia.css";
@@ -151,6 +152,8 @@ export function HierarquiaPage() {
             </Aviso>
           )}
           <Resumo dados={dados} />
+          {/* RIFA-064 (D29): o aviso das células que não entram pela senha e a senha de cada uma, para repassar. */}
+          <LoginDasCelulas celulas={dados.celulas} />
           <Abas<IdAba>
             id={ID_ABAS}
             rotulo="Partes da hierarquia"

@@ -76,7 +76,7 @@ describe("CA4: o acesso de um papel desligado na Campanha", () => {
   it("discipuladores desligados: aviso com o caminho da Campanha, e gerar e trocar o link ficam indisponíveis", async () => {
     const api = criarApiFalsa();
     api.regras.campanha = {
-      acesso: { discipuladores: false, redes: true },
+      acesso: { discipuladores: false, redes: true, celulas_senha: true },
       mensagens: { ...MENSAGENS_PADRAO },
     };
     await abrirTela(api);
@@ -133,7 +133,7 @@ describe("CA4: o acesso de um papel desligado na Campanha", () => {
   it("409 acao_desligada (desligaram as redes com a tela aberta): explica e deixa a geração indisponível", async () => {
     const api = criarApiFalsa();
     api.regras.campanha = {
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: { ...MENSAGENS_PADRAO },
     };
     await abrirTela(api);
@@ -169,7 +169,7 @@ describe("CA4: as mensagens saem do modelo da campanha", () => {
     const modeloLider = "{saudacao} A {alvo} já pode acompanhar a rifa: {link}";
     const api = criarApiFalsa();
     api.regras.campanha = {
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: {
         ...MENSAGENS_PADRAO,
         link_lider: modeloLider,
@@ -244,7 +244,7 @@ describe("CA4: as mensagens saem do modelo da campanha", () => {
       "{saudacao} Seu acesso à coordenação da rifa ({nome}):\n{link}";
     const api = criarApiFalsa();
     api.regras.campanha = {
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: { ...MENSAGENS_PADRAO, link_coordenacao: modelo },
     };
     await abrirTela(api);

@@ -1663,3 +1663,74 @@ ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apr
   54 bilhetes entram em 9 minutos. Os valores em R$ são sempre a quantidade × R$ 25.
 - **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
   `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
+
+## D29. Login de cada célula com o nome e a senha padrão (RIFA-064; contrato, 2026-11-17)
+
+Pedido do PO (17/11): "Quero que cada célula tenha login e senha, algo simples: login o nome da célula e a senha com
+os nomes das células, exemplo: @celula1234. Senhas padrões: arroba, nome da célula e 1234. O máximo que podem ver é o
+ranking e o link para vender para aquela célula, então não tem problema ser uma senha padrão." Contrato em
+`src/shared/contracts/` (`login-celula.ts`, sem zod; `acesso.ts`; `regras.ts`; `dominio.ts`; `api.ts`), migração
+`0013_login_celulas_senha.sql`, API em `src/worker/routes/acesso.ts` e `src/worker/db/login-celula.ts`.
+
+- **A senha não é segredo, e o desenho parte disso.** Quem conhece a regra e o nome de uma célula (que está no ranking
+  aberto) entra como ela. Por isso a senha **não é gravada em lugar nenhum** (nem hash): o Worker a deriva do nome da
+  célula a cada tentativa (`senhaPadraoDaCelula`) e compara com a digitada em tempo constante
+  (`textosIguaisEmTempoConstante`, a do webhook). Não há tabela de senhas para vazar, nada a "trocar" e nada a cadastrar:
+  uma célula nova ou renomeada já tem a senha certa. O que protege é o que a sessão pode ver.
+- **Senha padrão:** `"@" + nome normalizado + "1234"`. Normalizado = minúsculas, sem acentos (NFD sem as marcas),
+  sem espaços e sem pontuação: sobram só `a-z` e `0-9` ("Geração que Clama" → `@geracaoqueclama1234`, "Kairós1" →
+  `@kairos11234`, "Pão Vivo" → `@paovivo1234`). O nome digitado no campo "Célula" passa pela mesma normalização. A
+  senha digitada também (`formaDaSenhaDigitada`), com o "@" do começo obrigatório: o teclado do celular que põe
+  maiúscula, acento ou espaço não atrapalha, e isso não enfraquece nada (a senha já é previsível).
+- **Colisão:** dois nomes que ficam iguais depois da normalização ("Pão Vivo" e "Pao Vivo"; o `UNIQUE COLLATE NOCASE`
+  de `celulas.nome` só pega maiúsculas sem acento) tornam o login **ambíguo: recusado para as duas**, com o mesmo 401.
+  A coordenação vê o aviso na tela Hierarquia (`problemasDoLoginDasCelulas`), com o que fazer (renomear uma delas). Um
+  nome sem letra nem dígito ("!!!") não tem senha (o mesmo aviso). Não há trava no cadastro: a planilha e o CRUD
+  continuam aceitando os nomes de hoje; o aviso basta para 36 células.
+- **A sessão é a do papel `lider` da célula, a mesma do link (D12).** `POST /api/sessao/senha { celula, senha }` abre
+  a sessão com o usuário líder da célula (um por célula, 0006): a /minha da célula (ranking, meta, link e QR de vendas),
+  nunca R$, nenhuma rota da coordenação, nenhuma escrita além da própria sessão. O alvo vem só da sessão, como sempre.
+  `protecao.test.ts` (seção i) prova o 403 em toda rota de `/api/admin` e `/api/painel` e a /minha só da célula.
+- **A célula sem líder de verdade:** se a célula ainda não tem o usuário líder (nenhum link gerado), o login por senha
+  o cria, com o `lider_nome` da hierarquia, que é o líder da importação, mesmo provisório (a planilha exige o nome). A
+  cada login por senha, o nome do usuário acompanha o `lider_nome` atual, como o lote de links já fazia. Quando a
+  coordenação gerar o link do líder, o lote reaproveita o mesmo usuário: link e senha abrem sessões do mesmo usuário.
+- **A sessão aberta pela senha não tem link** (`sessoes.link_id` NULL, que a 0002 já aceitava): é assim que a consulta
+  da sessão a reconhece. Ela segue as regras de sempre (`__Host-sessao`, 45 dias, parada há 7 dias deixa de valer,
+  "Sair", desativar o usuário derruba), sem o encurtamento pelo fim do link. Revogar um link não a derruba (ela não veio
+  de link); para tirar o acesso de uma célula, desative o usuário dela (Acessos), o que também barra o link e a senha.
+- **Liga/desliga na Campanha (D20):** `acesso.celulas_senha`, "Login das células com senha padrão", **só o admin muda**
+  (grupo `acesso`, RIFA-042; a coordenação vê só leitura). Na resposta, sempre presente (`.default()`); na entrada,
+  opcional, e ausente mantém o gravado, como o `ranking.por_divisao` da D27 (uma aba antiga do site não liga nem
+  desliga). **Padrão: ligado**, como os outros acessos: o PO pediu para esta campanha, e desligado ninguém entraria pela
+  senha no dia 23/11 se alguém esquecesse de ligar. A 0013 grava 1 na campanha que já existe. Desligado: o login por
+  senha recusa (o mesmo 401) e **as sessões abertas pela senha deixam de valer na hora** (401, o cookie expira), porque
+  a chave é lida na mesma consulta da sessão (+1 linha só nessa sessão; com link, o `OR` nem lê a campanha, e as linhas
+  travadas da /minha não mudaram). O link pessoal do líder não depende da chave. É diferente do 403 `acesso_desligado`
+  dos discipuladores e das redes de propósito: aqui não há o que guardar para quando religar (a senha é a mesma) e a
+  recusa não diz nada a quem tenta.
+- **Segurança mínima, mesmo com senha previsível:**
+  - **limite de tentativas:** o mesmo `LIMITE_LOGIN` do link (60 por minuto por IP), no mesmo contador: 30 pelo link e
+    30 pela senha esgotam o IP. Barra a varredura e protege CPU e banco; na reunião dos líderes, 60 por minuto atrás do
+    mesmo Wi-Fi bastam;
+  - **a resposta não diz se a célula existe:** senha errada, célula que não existe, nome ambíguo ou sem senha, usuário
+    desativado e chave desligada dão o **mesmo** 401 `nao_autenticado`, com a mesma mensagem e os mesmos cabeçalhos; a
+    comparação em tempo constante acontece também sem célula (contra uma senha que nunca confere). Campo vazio também
+    é 401 (só a falta do campo, um não texto ou mais de 200 caracteres dão 400);
+  - **CSRF e corpo:** mesma origem (`exigirMesmaOrigem`) e o teto de 4 KiB do `POST /api/sessao`;
+  - **trilha:** cada login por senha que abriu sessão vira uma linha `sessao.entrar_com_senha`, do usuário líder da
+    célula, alvo `celula:<id>`, no mesmo lote da sessão; o resumo não tem a senha (ela nem chega à camada do banco). A
+    tentativa recusada não registra. Um teste varre todas as tabelas e o console atrás da senha digitada e da derivada.
+- **Consequência aceita:** a trilha segura (RESTRICT, 0005) o usuário que aparece como autor. Depois de um login por
+  senha, a célula não pode ser excluída (a mensagem de hoje já diz "o acesso dela aparece como autor na trilha"). Na
+  campanha isso não pesa: célula com afiliado já não se exclui, e a célula de nome repetido, a que mais se excluiria,
+  nunca entra pela senha.
+- **Site:** `/entrar` ganha o cartão "Entrar com a sua célula" (campos Célula e Senha, com dica; o botão Entrar com
+  `aria-disabled` enquanto confere; "Célula ou senha não conferem." no 401; depois, a /minha); o cartão do link continua,
+  para todos os papéis. A Campanha ganha a chave e a linha no resumo. A Hierarquia (admin e coordenação, nunca a
+  hierarquia) mostra o aviso das células que não entram pela senha e, num `<details>` fechado, a senha de cada célula
+  com "Copiar", calculada no navegador pela mesma regra (`login-celula.ts`, sem zod), para repassar ao líder.
+- **Alternativas descartadas:** senha guardada por célula (hash), com troca e "esqueci a senha": mais tela e mais
+  suporte, sem ganho, porque o PO quer a senha padrão; mudar o `POST /api/sessao` para aceitar `{ token }` ou
+  `{ celula, senha }`: uma rota à parte deixa o contrato e os testes do link como estão; coluna nova em `sessoes` para
+  marcar a sessão da senha: `link_id` NULL já diz isso, sem migração na tabela que cada requisição lê.

@@ -572,6 +572,9 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - webhook.gerar_token (RIFA-039, D21): ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook, alvo `webhook`
  *   (ALVO_AUDITORIA_TOKEN_WEBHOOK); resumo com o que deixou de valer (nada, o segredo do Worker ou o token da tela
  *   gerado em <instante>), NUNCA o token nem o hash. O 409 (sem `substituir`) não registra.
+ * - sessao.entrar_com_senha (RIFA-064, D29): ROTAS_ACESSO.entrarComSenha, cada login da célula com a senha padrão que
+ *   abriu sessão; quem fez é o usuário líder da célula, alvo `celula:<id>`; resumo sem a senha (que nunca é gravada).
+ *   A tentativa recusada não registra.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -594,6 +597,7 @@ export const ACOES_AUDITORIA = [
   "pedido.reconsiderar",
   "afiliado.remover",
   "webhook.gerar_token",
+  "sessao.entrar_com_senha",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 

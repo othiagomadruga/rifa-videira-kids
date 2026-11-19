@@ -1,5 +1,5 @@
-// As regras do admin na Campanha (D20): as três chaves (desconsiderar pedido e o acesso de discipuladores e de
-// redes) e os quatro modelos das mensagens do link pessoal, com a pré-visualização preenchida por
+// As regras do admin na Campanha (D20): as chaves (desconsiderar pedido, o acesso de discipuladores e de redes e,
+// desde a RIFA-064 (D29), o login das células com a senha padrão) e os quatro modelos das mensagens do link pessoal, com a pré-visualização preenchida por
 // `preencherMensagem` (a mesma que a tela Acessos usa) e os problemas do modelo enquanto a pessoa digita.
 // Só o admin muda esses três grupos (RIFA-042): para a coordenação, os dois cartões ficam só leitura, com o aviso
 // "Só o admin muda estas regras." (as caixas com `aria-disabled` e os textos com `readOnly`, focáveis e descritos
@@ -26,13 +26,17 @@ import { DICAS } from "./textos";
 
 /** As chaves da campanha, pelo campo do formulário. */
 export type ChaveDoFormulario =
-  "pedidos_desconsiderar" | "acesso_discipuladores" | "acesso_redes";
+  | "pedidos_desconsiderar"
+  | "acesso_discipuladores"
+  | "acesso_redes"
+  | "acesso_celulas_senha";
 
 /** O caminho de cada chave no contrato (para os erros e os ids dos campos). */
 export const CAMINHO_DA_CHAVE: Record<ChaveDoFormulario, string> = {
   pedidos_desconsiderar: "pedidos.desconsiderar",
   acesso_discipuladores: "acesso.discipuladores",
   acesso_redes: "acesso.redes",
+  acesso_celulas_senha: "acesso.celulas_senha",
 };
 
 /** Cada chave: o nome e uma linha do que acontece ligada e desligada. */
@@ -61,12 +65,21 @@ export const TEXTO_DA_CHAVE: Record<
     desligada:
       "Desligado: elas não entram nem recebem link novo; os links guardados voltam a valer quando religar.",
   },
+  // RIFA-064 (D29): a senha é a mesma regra para todas (não é segredo): o máximo que se vê é a página da célula.
+  acesso_celulas_senha: {
+    rotulo: "Login das células com senha padrão",
+    ligada:
+      "Ligado: cada célula entra com o nome dela e a senha @ + nome da célula + 1234 e vê só a página dela (ranking, meta e link de vendas).",
+    desligada:
+      "Desligado: ninguém entra pela senha, e quem entrou assim sai na hora; o link pessoal do líder continua.",
+  },
 };
 
 const ORDEM_DAS_CHAVES: readonly ChaveDoFormulario[] = [
   "pedidos_desconsiderar",
   "acesso_discipuladores",
   "acesso_redes",
+  "acesso_celulas_senha",
 ];
 
 /** O título do aviso dos grupos só do admin, para a coordenação (RIFA-042). */
@@ -89,7 +102,7 @@ type PropsChaves = {
   aoAlterar: (chave: ChaveDoFormulario, ligada: boolean) => void;
 };
 
-/** As três chaves: uma caixa de marcar cada, com o que acontece ligada e desligada. */
+/** As quatro chaves: uma caixa de marcar cada, com o que acontece ligada e desligada. */
 export function ChavesDaCampanha({
   formulario,
   somenteLeitura,
@@ -105,7 +118,7 @@ export function ChavesDaCampanha({
           {somenteLeitura
             ? "O que se pode fazer com os pedidos e quem entra no sistema."
             : "Ligue ou desligue o que a coordenação pode fazer e quem entra no sistema."}{" "}
-          Os líderes de célula entram sempre.
+          Os líderes de célula entram sempre pelo link pessoal.
         </p>
         <ul className="campanha-chaves">
           {ORDEM_DAS_CHAVES.map((chave) => {

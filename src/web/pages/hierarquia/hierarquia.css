@@ -209,3 +209,78 @@
     grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
   }
 }
+
+/*
+ * Login das células com senha (RIFA-064, D29): o texto, o aviso das que não entram e, fechada, a lista com a senha de
+ * cada célula e o "Copiar". No celular, a senha desce para a linha de baixo do nome; nada passa da largura.
+ */
+.hierarquia-login {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.hierarquia-login__texto {
+  color: var(--cor-texto-suave);
+}
+
+.hierarquia-login__problemas {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding-left: var(--espaco-5);
+}
+
+/* O <summary> fica com o triângulo de abrir (display de lista) e o alvo de toque inteiro. */
+.hierarquia-login__senhas > summary {
+  cursor: pointer;
+  font-weight: var(--peso-forte);
+  min-height: var(--alvo-toque);
+  padding-block: var(--espaco-2);
+}
+
+.hierarquia-login__copia:empty {
+  display: none;
+}
+
+.hierarquia-login__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hierarquia-login__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-3);
+  padding-block: var(--espaco-1);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+/* No celular, o nome numa linha e, embaixo, a senha e o "Copiar" (o mesmo desenho em toda célula); a partir de 40rem,
+   tudo numa linha. */
+.hierarquia-login__celula {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 40rem) {
+  .hierarquia-login__celula {
+    flex-basis: 12rem;
+  }
+}
+
+.hierarquia-login__senha {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--texto-sm);
+}
+
+.hierarquia-login__sem-senha {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}

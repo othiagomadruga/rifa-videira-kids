@@ -187,6 +187,14 @@ export function itensDoResumo(
       campo: idDoCampo("acesso.redes"),
     },
     {
+      nome: "Login das células com senha",
+      valor: acesso.celulas_senha
+        ? "Ligado: cada célula entra com o nome e a senha padrão."
+        : "Desligado: só pelo link pessoal.",
+      padrao,
+      campo: idDoCampo("acesso.celulas_senha"),
+    },
+    {
       nome: "Mensagens do link pessoal",
       valor: textoDasMensagens(campanha?.mensagens ?? MENSAGENS_PADRAO),
       padrao,

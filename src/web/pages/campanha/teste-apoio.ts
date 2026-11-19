@@ -48,7 +48,8 @@ export function campanhaDaEntrada(
     },
     // Regras do admin (D20): a API devolve sempre (o grupo ausente no PUT fica com o padrão).
     pedidos: entrada.pedidos ?? { ...PEDIDOS_PADRAO },
-    acesso: entrada.acesso ?? { ...ACESSO_PADRAO },
+    // RIFA-064 (D29): a chave do login das células com senha ausente no PUT fica como estava (aqui, o padrão).
+    acesso: { ...ACESSO_PADRAO, ...entrada.acesso },
     mensagens: entrada.mensagens ?? { ...MENSAGENS_PADRAO },
     criado_em: "2026-11-06T18:00:00.000Z",
     atualizado_em: "2026-11-06T18:00:00.000Z",
