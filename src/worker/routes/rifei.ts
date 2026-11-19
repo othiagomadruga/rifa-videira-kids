@@ -15,7 +15,19 @@
 import { Hono, type Context } from "hono";
 import {
   ALVO_AUDITORIA_AFILIADOS_RIFEI,
+  LIMITE_PEDIDOS_BUSCA_RIFEI,
   MENSAGEM_FALHA_RIFEI,
+  ROTAS_CONEXAO_RIFEI,
+  SEGREDO_CHAVE_CIFRA_RIFEI,
+  chaveCifraRifeiConfigurada,
+  estadoConexaoRifeiSchema,
+  expiracaoDoTokenRifei,
+  finalDoTokenRifei,
+  limparTokenRifei,
+  numeroDeBilhete,
+  respostaBuscarPedidoRifeiSchema,
+  respostaTesteConexaoRifeiSchema,
+  type EstadoConexaoRifei,
   RESULTADOS_MARCADOS_NA_RIFEI,
   ROTAS_RIFEI_API,
   SEGREDO_API_RIFEI,
@@ -29,13 +41,21 @@ import {
 } from "../../shared/contracts";
 import type { Autoria } from "../db/auditoria";
 import { buscarCampanhaAtiva } from "../db/campanha";
+import { itemDaLinha } from "../db/lista-pedidos";
 import {
+  apagarConexaoRifei,
+  buscarPedidosParaMarcar,
+  gravarConexaoRifei,
+  lerConexaoRifei,
+  registrarUsoDaConexaoRifei,
+  type LinhaConexaoRifei,
   gravarSincronizacao,
   lerCelulas,
   lerCelulasEAfiliados,
   lerPedidosParaMarcar,
   registrarNaTrilha,
 } from "../db/rifei";
+import { cifrarTokenRifei, decifrarTokenRifei } from "../lib/cifra-rifei";
 import { responderErro } from "../lib/respostas-erro";
 import {
   montarAfiliadosRifei,
@@ -53,11 +73,18 @@ import {
   exigirSessao,
   type AmbienteSessao,
 } from "../middleware/sessao";
-import { validarJson } from "../middleware/validacao";
+import { validarConsulta, validarJson } from "../middleware/validacao";
 
 type Ambiente = AmbienteSessao;
 type Contexto = Context<Ambiente>;
 
+const {
+  obterConexaoRifei: OBTER_CONEXAO,
+  salvarConexaoRifei: SALVAR_CONEXAO,
+  testarConexaoRifei: TESTAR_CONEXAO,
+  apagarConexaoRifei: APAGAR_CONEXAO,
+  buscarPedidoRifei: BUSCAR_PEDIDO,
+} = ROTAS_CONEXAO_RIFEI;
 const {
   marcarPagosRifei: MARCAR,
   afiliadosRifei: AFILIADOS,
@@ -77,23 +104,73 @@ const PARALELAS_CONVITES = 2;
 const MENSAGEM_SEM_CAMPANHA =
   "Nenhuma campanha ativa: configure a campanha (com o slug da Rifei) antes de marcar os pedidos";
 const MENSAGEM_NAO_CONFIGURADO =
-  "A integração com a Rifei não está configurada no servidor: falta o segredo RIFEI_API_TOKEN (veja o roteiro na documentação da integração)";
+  "A conexão com a Rifei não está configurada: cole o token em Acessos → Conexão com a Rifei";
+const MENSAGEM_TOKEN_ILEGIVEL =
+  "O token salvo não pode ser lido (a chave do servidor mudou ou sumiu): cole um novo em Acessos → Conexão com a Rifei";
+const MENSAGEM_SEM_CHAVE =
+  "Falta o segredo RIFEI_CHAVE_CIFRA no servidor: sem ele o token não pode ser guardado. Peça ao suporte do sistema";
+const MENSAGEM_TOKEN_MAL_FORMADO =
+  "Isso não parece o token da Rifei: cole o texto inteiro copiado no passo 2 (sem espaços no meio)";
 const MENSAGEM_SEM_LINK =
   "A Rifei não devolveu o link do convite: gere no painel da Rifei (Afiliados → Convidar).";
 
-/** O cliente da Rifei com o token do segredo, ou null sem o segredo. */
-function clienteDaRifei(c: Contexto): ClienteRifei | null {
-  const token = c.env[SEGREDO_API_RIFEI];
-  return apiRifeiConfigurada(token) ? criarClienteRifei(token ?? "") : null;
+/**
+ * O token que vale (D32): o da tela (no D1, cifrado) tem prioridade; sem ele, o segredo RIFEI_API_TOKEN. `uso` junta o
+ * que a Rifei respondeu nesta requisição, para gravar o último sucesso ou a recusa do token da tela.
+ */
+interface ConexaoEmUso {
+  api: ClienteRifei;
+  /** O token cifrado da linha da tela (null quando vale o segredo do Worker). */
+  tokenCifrado: string | null;
+  uso: { ok: boolean; recusado: boolean };
 }
 
-function responderNaoConfigurado(c: Contexto) {
-  return responderErro(c, "nao_configurado", MENSAGEM_NAO_CONFIGURADO);
+/** O token da tela aberto com a chave; null sem chave ou se a chave não abre. */
+async function abrirTokenDaTela(
+  c: Contexto,
+  linha: LinhaConexaoRifei,
+): Promise<string | null> {
+  const chave = c.env[SEGREDO_CHAVE_CIFRA_RIFEI];
+  if (!chaveCifraRifeiConfigurada(chave)) return null;
+  return decifrarTokenRifei(linha.token_cifrado, chave ?? "");
 }
 
-/** Roda a ação; uma FalhaRifei vira 502 `rifei_falhou` com o motivo (o resto segue para o onError: 500). */
+function clienteComUso(token: string, uso: ConexaoEmUso["uso"]): ClienteRifei {
+  return criarClienteRifei(token, {
+    aoResponder: (status) => {
+      if (status === 401 || status === 403) uso.recusado = true;
+      else if (status < 500 && status !== 429) uso.ok = true;
+    },
+  });
+}
+
+/** A conexão para chamar a Rifei, ou a resposta 503 (sem token, ou o da tela ilegível). */
+async function abrirConexao(c: Contexto): Promise<ConexaoEmUso | Response> {
+  const uso = { ok: false, recusado: false };
+  const linha = await lerConexaoRifei(c.env.DB);
+  if (linha) {
+    const token = await abrirTokenDaTela(c, linha);
+    if (token === null)
+      return responderErro(c, "nao_configurado", MENSAGEM_TOKEN_ILEGIVEL);
+    return {
+      api: clienteComUso(token, uso),
+      tokenCifrado: linha.token_cifrado,
+      uso,
+    };
+  }
+  const segredo = c.env[SEGREDO_API_RIFEI];
+  if (!apiRifeiConfigurada(segredo))
+    return responderErro(c, "nao_configurado", MENSAGEM_NAO_CONFIGURADO);
+  return { api: clienteComUso(segredo ?? "", uso), tokenCifrado: null, uso };
+}
+
+/**
+ * Roda a ação; uma FalhaRifei vira 502 `rifei_falhou` com o motivo (o resto segue para o onError: 500). No fim, grava
+ * o que a Rifei respondeu ao token da tela: recusa (401/403) ou sucesso.
+ */
 async function comRifei(
   c: Contexto,
+  conexao: ConexaoEmUso,
   acao: () => Promise<Response>,
 ): Promise<Response> {
   try {
@@ -109,7 +186,36 @@ async function comRifei(
         },
       );
     throw erro;
+  } finally {
+    const { uso, tokenCifrado } = conexao;
+    if (tokenCifrado !== null && (uso.ok || uso.recusado))
+      await registrarUsoDaConexaoRifei(
+        c.env.DB,
+        tokenCifrado,
+        uso.recusado ? "recusado" : "ok",
+        new Date().toISOString(),
+      );
   }
+}
+
+/** O estado da conexão para a tela (nunca o token). */
+async function estadoDaConexao(c: Contexto): Promise<EstadoConexaoRifei> {
+  const linha = await lerConexaoRifei(c.env.DB);
+  const chaveConfigurada = chaveCifraRifeiConfigurada(
+    c.env[SEGREDO_CHAVE_CIFRA_RIFEI],
+  );
+  const segredoConfigurado = apiRifeiConfigurada(c.env[SEGREDO_API_RIFEI]);
+  return estadoConexaoRifeiSchema.parse({
+    origem: linha ? "tela" : segredoConfigurado ? "segredo" : null,
+    conectado_em: linha?.conectado_em ?? null,
+    final: linha?.final_token ?? null,
+    testado_em: linha?.testado_em ?? null,
+    recusado_em: linha?.recusado_em ?? null,
+    expira_em: linha?.expira_em ?? null,
+    chave_configurada: chaveConfigurada,
+    token_legivel: linha ? (await abrirTokenDaTela(c, linha)) !== null : false,
+    segredo_configurado: segredoConfigurado,
+  });
 }
 
 /** Quem faz e quando: a rota roda depois de exigirSessao. */
@@ -144,8 +250,9 @@ rifeiApi.post(
   validarJson(MARCAR.corpo),
   async (c) => {
     const { pedidos } = c.req.valid("json");
-    const api = clienteDaRifei(c);
-    if (api === null) return responderNaoConfigurado(c);
+    const conexao = await abrirConexao(c);
+    if (conexao instanceof Response) return conexao;
+    const { api } = conexao;
     const db = c.env.DB;
     const campanha = await buscarCampanhaAtiva(db);
     if (!campanha)
@@ -179,7 +286,7 @@ rifeiApi.post(
     });
 
     // 2. A Rifei, um pedido por vez (até PARALELAS_PEDIDOS ao mesmo tempo).
-    return comRifei(c, async () => {
+    return comRifei(c, conexao, async () => {
       if (paraRifei.length > 0) {
         const campanhaRifei = await api.buscarCampanha(campanha.slug_rifei);
         const resultados = await emLotes(paraRifei, PARALELAS_PEDIDOS, (id) =>
@@ -233,9 +340,10 @@ rifeiApi.get(
   local(AFILIADOS.caminho),
   exigirSessao(AFILIADOS.papeis),
   async (c) => {
-    const api = clienteDaRifei(c);
-    if (api === null) return responderNaoConfigurado(c);
-    return comRifei(c, async () => {
+    const conexao = await abrirConexao(c);
+    if (conexao instanceof Response) return conexao;
+    const { api } = conexao;
+    return comRifei(c, conexao, async () => {
       const [daRifei, leitura] = await Promise.all([
         api.listarAfiliados(),
         lerCelulasEAfiliados(c.env.DB),
@@ -261,10 +369,11 @@ rifeiApi.post(
   exigirSessao(SINCRONIZAR.papeis),
   validarJson(SINCRONIZAR.corpo),
   async (c) => {
-    const api = clienteDaRifei(c);
-    if (api === null) return responderNaoConfigurado(c);
+    const conexao = await abrirConexao(c);
+    if (conexao instanceof Response) return conexao;
+    const { api } = conexao;
     const db = c.env.DB;
-    return comRifei(c, async () => {
+    return comRifei(c, conexao, async () => {
       const [daRifei, antes] = await Promise.all([
         api.listarAfiliados(),
         lerCelulasEAfiliados(db),
@@ -306,8 +415,9 @@ rifeiApi.post(
   validarJson(CONVITES.corpo),
   async (c) => {
     const { celulas: ids } = c.req.valid("json");
-    const api = clienteDaRifei(c);
-    if (api === null) return responderNaoConfigurado(c);
+    const conexao = await abrirConexao(c);
+    if (conexao instanceof Response) return conexao;
+    const { api } = conexao;
     const db = c.env.DB;
     const lidas = await lerCelulas(db, ids);
     const porId = new Map(lidas.map((celula) => [celula.celula_id, celula]));
@@ -321,7 +431,7 @@ rifeiApi.post(
       );
     const celulas = ids.map((id) => porId.get(id)!);
 
-    return comRifei(c, async () => {
+    return comRifei(c, conexao, async () => {
       const resposta: RespostaConvitesRifei = { convites: [], falhas: [] };
       const resultados = await emLotes(
         celulas,
@@ -373,5 +483,137 @@ rifeiApi.post(
         );
       return c.json(respostaConvitesRifeiSchema.parse(resposta), 201);
     });
+  },
+);
+
+// ---------------------------------------------------------------------------------------------------
+// Conexão com a Rifei pela tela e busca do pedido (RIFA-070, D32)
+// ---------------------------------------------------------------------------------------------------
+
+rifeiApi.get(
+  local(OBTER_CONEXAO.caminho),
+  exigirSessao(OBTER_CONEXAO.papeis),
+  async (c) => c.json(await estadoDaConexao(c), 200),
+);
+
+rifeiApi.put(
+  local(SALVAR_CONEXAO.caminho),
+  // Só admin, antes de ler o corpo (o corpo traz o token: nunca vai para log nem para mensagem de erro).
+  exigirSessao(SALVAR_CONEXAO.papeis),
+  validarJson(SALVAR_CONEXAO.corpo),
+  async (c) => {
+    const chave = c.env[SEGREDO_CHAVE_CIFRA_RIFEI];
+    if (!chaveCifraRifeiConfigurada(chave))
+      return responderErro(c, "nao_configurado", MENSAGEM_SEM_CHAVE);
+    const token = limparTokenRifei(c.req.valid("json").token);
+    if (token === null)
+      return responderErro(
+        c,
+        "requisicao_invalida",
+        MENSAGEM_TOKEN_MAL_FORMADO,
+      );
+    const db = c.env.DB;
+    const campanha = await buscarCampanhaAtiva(db);
+    if (!campanha)
+      return responderErro(c, "nao_encontrado", MENSAGEM_SEM_CAMPANHA);
+    // Testa antes de gravar: um token que a Rifei recusa nunca é guardado.
+    let campanhaRifeiId: string;
+    try {
+      campanhaRifeiId = (
+        await criarClienteRifei(token).buscarCampanha(campanha.slug_rifei)
+      ).id;
+    } catch (erro) {
+      if (erro instanceof FalhaRifei)
+        return responderErro(
+          c,
+          "rifei_falhou",
+          MENSAGEM_FALHA_RIFEI[erro.motivo],
+          { motivo: erro.motivo },
+        );
+      throw erro;
+    }
+    const antes = await lerConexaoRifei(db);
+    await gravarConexaoRifei(
+      db,
+      {
+        tokenCifrado: await cifrarTokenRifei(token, chave ?? ""),
+        final: finalDoTokenRifei(token),
+        expiraEm: expiracaoDoTokenRifei(token),
+        trocou: antes !== null,
+      },
+      autoria(c),
+    );
+    return c.json(
+      respostaTesteConexaoRifeiSchema.parse({
+        estado: await estadoDaConexao(c),
+        campanha_rifei_id: campanhaRifeiId,
+      }),
+      200,
+    );
+  },
+);
+
+rifeiApi.post(
+  local(TESTAR_CONEXAO.caminho),
+  exigirSessao(TESTAR_CONEXAO.papeis),
+  validarJson(TESTAR_CONEXAO.corpo),
+  async (c) => {
+    const conexao = await abrirConexao(c);
+    if (conexao instanceof Response) return conexao;
+    const campanha = await buscarCampanhaAtiva(c.env.DB);
+    if (!campanha)
+      return responderErro(c, "nao_encontrado", MENSAGEM_SEM_CAMPANHA);
+    let campanhaRifeiId = "";
+    const resposta = await comRifei(c, conexao, async () => {
+      campanhaRifeiId = (await conexao.api.buscarCampanha(campanha.slug_rifei))
+        .id;
+      return new Response(null, { status: 204 });
+    });
+    if (resposta.status !== 204) return resposta;
+    return c.json(
+      respostaTesteConexaoRifeiSchema.parse({
+        estado: await estadoDaConexao(c),
+        campanha_rifei_id: campanhaRifeiId,
+      }),
+      200,
+    );
+  },
+);
+
+rifeiApi.delete(
+  local(APAGAR_CONEXAO.caminho),
+  exigirSessao(APAGAR_CONEXAO.papeis),
+  async (c) => {
+    await apagarConexaoRifei(c.env.DB, autoria(c));
+    return c.json(await estadoDaConexao(c), 200);
+  },
+);
+
+rifeiApi.get(
+  local(BUSCAR_PEDIDO.caminho),
+  exigirSessao(BUSCAR_PEDIDO.papeis),
+  validarConsulta(BUSCAR_PEDIDO.consulta),
+  async (c) => {
+    const { numero } = c.req.valid("query");
+    const db = c.env.DB;
+    const campanha = await buscarCampanhaAtiva(db);
+    if (!campanha)
+      return responderErro(c, "nao_encontrado", MENSAGEM_SEM_CAMPANHA);
+    const linhas = await buscarPedidosParaMarcar(
+      db,
+      campanha.id,
+      numero,
+      numeroDeBilhete(numero),
+      LIMITE_PEDIDOS_BUSCA_RIFEI,
+    );
+    return c.json(
+      respostaBuscarPedidoRifeiSchema.parse({
+        pedidos: linhas.map(({ achado_por, ...linha }) => ({
+          achado_por,
+          pedido: itemDaLinha(linha),
+        })),
+      }),
+      200,
+    );
   },
 );

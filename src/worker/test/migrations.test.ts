@@ -2204,11 +2204,53 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
     });
 
     it("nenhum dado muda: toda tabela fica igual, e cada afiliado ganha só codigo_rifei, NULL", async () => {
-      const { afiliados, ...depois } = await fotografarTodasAsTabelas(db);
+      const {
+        afiliados,
+        rifei_conexao: conexao,
+        ...depois
+      } = await fotografarTodasAsTabelas(db);
       const { afiliados: afiliadosAntes, ...resto } = antes;
       expect(depois).toEqual(resto);
+      // A tabela nova (D32) nasce vazia: o token só chega quando o admin cola na tela.
+      expect(conexao).toEqual([]);
       expect(afiliados).toEqual(
         afiliadosAntes.map((afiliado) => ({ ...afiliado, codigo_rifei: null })),
+      );
+    });
+
+    it("rifei_conexao: uma linha só, o token só no formato cifrado e os instantes no formato único", async () => {
+      const inserir = (
+        id: number,
+        cifrado: string,
+        final: string,
+        em: string,
+      ) =>
+        db
+          .prepare(
+            "INSERT INTO rifei_conexao (id, token_cifrado, final_token, conectado_em) VALUES (?1, ?2, ?3, ?4)",
+          )
+          .bind(id, cifrado, final, em)
+          .run();
+      const cifrado = `v1:${"A".repeat(16)}:${"B".repeat(40)}`;
+      const em = "2026-11-19T12:00:00.000Z";
+      await inserir(1, cifrado, "abcd", em);
+      onTestFinished(async () => {
+        await db.prepare("DELETE FROM rifei_conexao").run();
+      });
+      await expect(inserir(2, cifrado, "abcd", em)).rejects.toThrow(/CHECK/);
+      await db.prepare("DELETE FROM rifei_conexao").run();
+      // Token em claro (sem o "v1:"), final de outro tamanho e instante fora do formato: recusados.
+      await expect(
+        inserir(
+          1,
+          "eyJhbGciOiJIUzI1NiJ9.token-em-claro.assinatura",
+          "abcd",
+          em,
+        ),
+      ).rejects.toThrow(/CHECK/);
+      await expect(inserir(1, cifrado, "abc", em)).rejects.toThrow(/CHECK/);
+      await expect(inserir(1, cifrado, "abcd", "19/11/2026")).rejects.toThrow(
+        /CHECK/,
       );
     });
 

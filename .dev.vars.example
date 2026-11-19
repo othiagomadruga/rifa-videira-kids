@@ -7,5 +7,10 @@
 RIFEI_WEBHOOK_TOKEN=troque-me
 
 # Token do login na Rifei para a API interna do painel (RIFA-070, D32): marcar pagos na Rifei, afiliados e
-# convites. Vazio: as rotas /api/admin/rifei/* respondem 503. No dev, deixe vazio ou use uma conta de teste.
+# convites. É a alternativa ao token colado na tela (Acessos → Conexão com a Rifei), que tem prioridade.
+# No dev, deixe vazio ou use uma conta de teste.
 RIFEI_API_TOKEN=
+
+# Chave que cifra no D1 o token colado na tela (RIFA-070, D32): ao menos 32 caracteres aleatórios
+# (`openssl rand -base64 32`). Sem ela, a tela de Conexão com a Rifei não guarda o token.
+RIFEI_CHAVE_CIFRA=troque-me-por-uma-chave-aleatoria-de-32-caracteres

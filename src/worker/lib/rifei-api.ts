@@ -114,6 +114,8 @@ export interface OpcoesClienteRifei {
   /** O fetch usado (os testes trocam). Padrão: o global. */
   fetch?: typeof fetch;
   tempoLimiteMs?: number;
+  /** Chamado a cada resposta da Rifei com o status (a rota grava o último teste ok ou a recusa do token, D32). */
+  aoResponder?: (status: number) => void;
 }
 
 export function criarClienteRifei(
@@ -147,6 +149,7 @@ export function criarClienteRifei(
       // Rede, DNS ou tempo esgotado. O erro original pode trazer a URL; não vai para o log.
       throw new FalhaRifei("indisponivel");
     }
+    opcoes.aoResponder?.(resposta.status);
     if (resposta.status === 401 || resposta.status === 403)
       throw new FalhaRifei("token_invalido");
     if (resposta.status === 429 || resposta.status >= 500)
