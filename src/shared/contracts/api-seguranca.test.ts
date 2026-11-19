@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 20 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 22 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -194,6 +194,9 @@ describe("GET /api/admin/auditoria", () => {
       "rifei.marcar_pagos",
       "rifei.sincronizar_afiliados",
       "rifei.gerar_convites",
+      // RIFA-070 (D32): a conexão com a Rifei pela tela.
+      "rifei.conectar",
+      "rifei.desconectar",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
     for (const acao of ACOES_AUDITORIA)

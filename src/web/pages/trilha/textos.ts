@@ -27,6 +27,9 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "rifei.marcar_pagos": "Pedidos marcados como pagos na Rifei",
   "rifei.sincronizar_afiliados": "Afiliados sincronizados com a Rifei",
   "rifei.gerar_convites": "Convites de afiliado gerados na Rifei",
+  // RIFA-070 (D32): a conexão com a Rifei pela tela (Acessos → Conexão com a Rifei; alvo `rifei`).
+  "rifei.conectar": "Conexão com a Rifei salva",
+  "rifei.desconectar": "Conexão com a Rifei apagada",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */

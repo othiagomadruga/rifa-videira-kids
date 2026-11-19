@@ -81,7 +81,7 @@ export type MotivoFalhaRifei = (typeof MOTIVOS_FALHA_RIFEI)[number];
 /** A mensagem de cada motivo, para a API e para a tela. */
 export const MENSAGEM_FALHA_RIFEI: Record<MotivoFalhaRifei, string> = {
   token_invalido:
-    "A Rifei recusou o token: entre de novo na Rifei, copie o token novo e troque o segredo RIFEI_API_TOKEN.",
+    "A Rifei recusou o token: cole um novo em Conexão com a Rifei (Acessos → Conexão com a Rifei).",
   campanha_nao_encontrada:
     "A campanha do sistema não foi achada na conta da Rifei: confira o slug da campanha.",
   indisponivel:
@@ -129,5 +129,117 @@ export function eLinkDeConviteRifei(texto: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Conexão com a Rifei pela tela (RIFA-070, D32): o admin cola o token do login na Rifei no painel (sem terminal).
+// O token fica no D1 CIFRADO (AES-GCM com a chave do segredo do Worker RIFEI_CHAVE_CIFRA) e nunca volta ao
+// navegador, ao log ou à trilha: a tela vê só desde quando e os 4 últimos caracteres.
+// ---------------------------------------------------------------------------------------------------
+
+/** O segredo do Worker com a chave que cifra o token no D1 (`openssl rand -base64 32`; ao menos 32 caracteres). */
+export const SEGREDO_CHAVE_CIFRA_RIFEI = "RIFEI_CHAVE_CIFRA";
+
+/** Tamanho mínimo da chave (o segredo RIFEI_CHAVE_CIFRA): menor que isso conta como não configurada. */
+export const MINIMO_CARACTERES_CHAVE_CIFRA_RIFEI = 32;
+
+/**
+ * De onde vem o token que o sistema usa na Rifei:
+ * - tela: o colado em Conexão com a Rifei (no D1, cifrado); tem prioridade;
+ * - segredo: o segredo do Worker RIFEI_API_TOKEN (pelo terminal), só quando não há token da tela.
+ */
+export const ORIGENS_TOKEN_RIFEI = ["tela", "segredo"] as const;
+export type OrigemTokenRifei = (typeof ORIGENS_TOKEN_RIFEI)[number];
+
+/** Quantos caracteres do fim do token a tela mostra ("termina em …abcd"). */
+export const CARACTERES_FINAL_TOKEN_RIFEI = 4;
+
+/** Limites do token colado (o token do login da Rifei é um texto longo, sem espaços). */
+export const MINIMO_CARACTERES_TOKEN_RIFEI = 20;
+export const LIMITE_CARACTERES_TOKEN_RIFEI = 4096;
+
+/** O `alvo` da trilha nas ações da conexão (rifei.conectar e rifei.desconectar). */
+export const ALVO_AUDITORIA_CONEXAO_RIFEI = "rifei";
+
+/**
+ * O token como o sistema guarda: sem espaços nas pontas, sem aspas em volta (o `copy()` do console às vezes as
+ * traz) e sem o "Bearer " na frente. Null se não parece um token: curto, longo demais ou com espaço/controle no meio.
+ */
+export function limparTokenRifei(texto: string): string | null {
+  let token = texto.trim();
+  if (/^bearer\s+/i.test(token)) token = token.replace(/^bearer\s+/i, "");
+  if (
+    token.length >= 2 &&
+    ((token.startsWith('"') && token.endsWith('"')) ||
+      (token.startsWith("'") && token.endsWith("'")))
+  )
+    token = token.slice(1, -1).trim();
+  if (
+    token.length < MINIMO_CARACTERES_TOKEN_RIFEI ||
+    token.length > LIMITE_CARACTERES_TOKEN_RIFEI
+  )
+    return null;
+  // Só ASCII visível (o token do login é JWT ou parecido): nada de espaço, quebra de linha ou caractere invisível.
+  if (!/^[\x21-\x7e]+$/.test(token)) return null;
+  return token;
+}
+
+/** Os últimos caracteres do token, para a tela ("…abcd"). */
+export function finalDoTokenRifei(token: string): string {
+  return token.slice(-CARACTERES_FINAL_TOKEN_RIFEI);
+}
+
+/** A chave de cifra conta como configurada com ao menos MINIMO_CARACTERES_CHAVE_CIFRA_RIFEI caracteres. */
+export function chaveCifraRifeiConfigurada(valor: string | undefined): boolean {
+  return (
+    valor !== undefined &&
+    valor.trim().length >= MINIMO_CARACTERES_CHAVE_CIFRA_RIFEI
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Marcar à mão (RIFA-070, D32): o admin digita o número do pedido ou de um bilhete e o sistema acha o pedido.
+// ---------------------------------------------------------------------------------------------------
+
+/** Tamanho máximo do que se digita no campo "Número do pedido ou do bilhete". */
+export const LIMITE_CARACTERES_BUSCA_PEDIDO_RIFEI = 128;
+
+/** Quantos pedidos a busca devolve no máximo (um bilhete pode estar num pedido expirado e num novo). */
+export const LIMITE_PEDIDOS_BUSCA_RIFEI = 10;
+
+/** Como o pedido foi achado: pelo número do pedido ou por um bilhete dele. */
+export const ACHADO_POR_BUSCA_RIFEI = ["pedido", "bilhete"] as const;
+export type AchadoPorBuscaRifei = (typeof ACHADO_POR_BUSCA_RIFEI)[number];
+
+/** O número de bilhete digitado (só dígitos, zeros à esquerda aceitos: "0042" = 42), ou null se não é um. */
+export function numeroDeBilhete(texto: string): number | null {
+  const limpo = texto.trim();
+  if (!/^\d{1,9}$/.test(limpo)) return null;
+  return Number(limpo);
+}
+
+/**
+ * A validade que o próprio token traz, se ele for um JWT com `exp` (segundos desde 1970), como instante ISO; null se
+ * não for JWT, não tiver `exp` ou o `exp` for inválido. Só lê o meio do token (não confere a assinatura).
+ */
+export function expiracaoDoTokenRifei(token: string): string | null {
+  const partes = token.split(".");
+  if (partes.length !== 3) return null;
+  try {
+    const base64 = partes[1].replaceAll("-", "+").replaceAll("_", "/");
+    const conteudo = JSON.parse(
+      atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)),
+    ) as unknown;
+    const exp =
+      conteudo && typeof conteudo === "object"
+        ? (conteudo as Record<string, unknown>).exp
+        : undefined;
+    if (typeof exp !== "number" || !Number.isFinite(exp) || exp <= 0)
+      return null;
+    const data = new Date(exp * 1000);
+    return Number.isNaN(data.getTime()) ? null : data.toISOString();
+  } catch {
+    return null;
   }
 }

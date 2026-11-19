@@ -68,6 +68,12 @@ import {
 import { BOM_UTF8, TIPOS_RELATORIO, TIPO_CONTEUDO_CSV } from "./relatorio";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
 import {
+  ACHADO_POR_BUSCA_RIFEI,
+  CARACTERES_FINAL_TOKEN_RIFEI,
+  LIMITE_CARACTERES_BUSCA_PEDIDO_RIFEI,
+  LIMITE_CARACTERES_TOKEN_RIFEI,
+  LIMITE_PEDIDOS_BUSCA_RIFEI,
+  ORIGENS_TOKEN_RIFEI,
   LIMITE_CONVITES_RIFEI,
   LIMITE_MENSAGEM_RIFEI,
   LIMITE_PEDIDOS_MARCAR_NA_RIFEI,
@@ -585,6 +591,8 @@ export type RespostaPedidosSuspeitos = z.infer<
  *   `campanha:<id>` na marcação e `rifei` (ALVO_AUDITORIA_AFILIADOS_RIFEI) nos afiliados; resumo só com contagens e,
  *   na marcação, os números dos pedidos marcados se couberem (nunca o token, o link do convite nem o e-mail do
  *   afiliado). Registram só quando a Rifei aceitou algo (a marcação, o convite) ou quando a sincronização mudou algo.
+ * - rifei.conectar e rifei.desconectar (RIFA-070, D32): ROTAS_CONEXAO_RIFEI, alvo `rifei` (ALVO_AUDITORIA_CONEXAO_RIFEI);
+ *   resumo com o final do token ("termina em …abcd"), NUNCA o token. Testar não registra.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -610,6 +618,8 @@ export const ACOES_AUDITORIA = [
   "rifei.marcar_pagos",
   "rifei.sincronizar_afiliados",
   "rifei.gerar_convites",
+  "rifei.conectar",
+  "rifei.desconectar",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -3229,3 +3239,138 @@ export const ROTAS_RIFEI_API = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRotaRifeiApi = keyof typeof ROTAS_RIFEI_API;
+
+// ---------------------------------------------------------------------------------------------------
+// Conexão com a Rifei pela tela e marcar à mão (RIFA-070, D32; só admin). Regras e limites em ./rifei-api.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * A conexão com a Rifei como a tela vê (NUNCA o token):
+ * - origem: de onde vem o token que vale (`tela`, `segredo`) ou null (nenhum: marcar na Rifei responde 503);
+ * - conectado_em e final: quando o token da tela foi colado e os 4 últimos caracteres dele (null sem token da tela);
+ * - testado_em: a última chamada à Rifei que deu certo com o token da tela (teste, marcar, afiliados; null = nunca);
+ * - recusado_em: a primeira recusa (401/403) da Rifei a esse token depois do último sucesso (null = não recusado):
+ *   a tela diz "A Rifei recusou o token: cole um novo";
+ * - expira_em: a validade que o próprio token traz (o `exp` de um JWT), ou null se ele não traz;
+ * - chave_configurada: o segredo do Worker RIFEI_CHAVE_CIFRA existe (sem ele não dá para colar o token pela tela);
+ * - token_legivel: false quando há token da tela mas a chave não o abre (a chave sumiu ou mudou: cole de novo);
+ * - segredo_configurado: o segredo do Worker RIFEI_API_TOKEN existe (vale só sem o token da tela).
+ */
+export const estadoConexaoRifeiSchema = z.strictObject({
+  origem: z.enum(ORIGENS_TOKEN_RIFEI).nullable(),
+  conectado_em: instanteSchema.nullable(),
+  final: z.string().length(CARACTERES_FINAL_TOKEN_RIFEI).nullable(),
+  testado_em: instanteSchema.nullable(),
+  recusado_em: instanteSchema.nullable(),
+  expira_em: instanteSchema.nullable(),
+  chave_configurada: z.boolean(),
+  token_legivel: z.boolean(),
+  segredo_configurado: z.boolean(),
+});
+export type EstadoConexaoRifei = z.infer<typeof estadoConexaoRifeiSchema>;
+
+/** PUT /api/admin/rifei/conexao: o token colado (o Worker limpa com limparTokenRifei). */
+export const corpoSalvarConexaoRifeiSchema = z.strictObject({
+  token: z
+    .string()
+    .min(1)
+    .max(LIMITE_CARACTERES_TOKEN_RIFEI + 64),
+});
+export type CorpoSalvarConexaoRifei = z.input<
+  typeof corpoSalvarConexaoRifeiSchema
+>;
+
+/** POST /api/admin/rifei/conexao/testar: sem dados ({}). */
+export const corpoTestarConexaoRifeiSchema = z.strictObject({});
+
+/** 200 do PUT e do teste: o estado e o id da campanha que a Rifei achou pelo slug (prova de que o token vale). */
+export const respostaTesteConexaoRifeiSchema = z.strictObject({
+  estado: estadoConexaoRifeiSchema,
+  campanha_rifei_id: z.string().min(1).max(64),
+});
+export type RespostaTesteConexaoRifei = z.infer<
+  typeof respostaTesteConexaoRifeiSchema
+>;
+
+/** GET /api/admin/rifei/pedido?numero=: o número do pedido ou de um bilhete. */
+export const consultaBuscarPedidoRifeiSchema = z.strictObject({
+  numero: z.string().trim().min(1).max(LIMITE_CARACTERES_BUSCA_PEDIDO_RIFEI),
+});
+
+/**
+ * 200: os pedidos da campanha ativa achados (no máximo LIMITE_PEDIDOS_BUSCA_RIFEI; lista vazia = não achou), cada um
+ * como na tela de Pedidos (itemPedidoSchema: célula, quantidade, valor, situação; nada do comprador além do DDD) e
+ * como foi achado. O pedido pelo número vem primeiro; pelo bilhete, os pendentes antes.
+ */
+export const respostaBuscarPedidoRifeiSchema = z.strictObject({
+  pedidos: z
+    .array(
+      z.strictObject({
+        achado_por: z.enum(ACHADO_POR_BUSCA_RIFEI),
+        pedido: itemPedidoSchema,
+      }),
+    )
+    .max(LIMITE_PEDIDOS_BUSCA_RIFEI),
+});
+export type RespostaBuscarPedidoRifei = z.infer<
+  typeof respostaBuscarPedidoRifeiSchema
+>;
+
+/**
+ * Rotas da conexão e da busca (RIFA-070, D32), só admin (no handler). Saem com `Cache-Control: no-store`.
+ * PUT e teste chamam a Rifei (`GET raffles/<slug>` da campanha ativa): 404 sem campanha ativa; 502 `rifei_falhou`
+ * (token_invalido, campanha_nao_encontrada, indisponivel, resposta_inesperada); o PUT só grava se o teste passou.
+ * 503 `nao_configurado`: o PUT sem a chave RIFEI_CHAVE_CIFRA; o teste sem token nenhum.
+ */
+export const ROTAS_CONEXAO_RIFEI = {
+  /** 200: o estado da conexão. Só lê. */
+  obterConexaoRifei: {
+    metodo: "GET",
+    caminho: "/api/admin/rifei/conexao",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: estadoConexaoRifeiSchema },
+  },
+  /** 200: testa o token colado na Rifei e, se valeu, grava cifrado (troca o anterior). Trilha: `rifei.conectar`. */
+  salvarConexaoRifei: {
+    metodo: "PUT",
+    caminho: "/api/admin/rifei/conexao",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoSalvarConexaoRifeiSchema,
+    sucesso: { status: 200, corpo: respostaTesteConexaoRifeiSchema },
+  },
+  /** 200: testa o token que vale agora (o da tela ou o segredo); grava `testado_em` do token da tela. */
+  testarConexaoRifei: {
+    metodo: "POST",
+    caminho: "/api/admin/rifei/conexao/testar",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoTestarConexaoRifeiSchema,
+    sucesso: { status: 200, corpo: respostaTesteConexaoRifeiSchema },
+  },
+  /** 200: apaga o token da tela (vale o segredo, se houver). Trilha: `rifei.desconectar` (só se havia token). */
+  apagarConexaoRifei: {
+    metodo: "DELETE",
+    caminho: "/api/admin/rifei/conexao",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: estadoConexaoRifeiSchema },
+  },
+  /** 200: acha o pedido pelo número do pedido ou de um bilhete. 400 com o número vazio; 404 sem campanha ativa. */
+  buscarPedidoRifei: {
+    metodo: "GET",
+    caminho: "/api/admin/rifei/pedido",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    consulta: consultaBuscarPedidoRifeiSchema,
+    sucesso: { status: 200, corpo: respostaBuscarPedidoRifeiSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaConexaoRifei = keyof typeof ROTAS_CONEXAO_RIFEI;
