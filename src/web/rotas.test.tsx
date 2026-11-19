@@ -28,6 +28,7 @@ const MENU_COORDENACAO = [
   ["Adesão", "/coordenacao/adesao"],
   ["Pedidos", "/coordenacao/pedidos"],
   ["Pedidos suspeitos", "/coordenacao/pedidos-suspeitos"],
+  ["Bilhetes", "/coordenacao/bilhetes"],
   ["Rankings", "/coordenacao/rankings"],
   ["Mapa", "/coordenacao/mapa"],
   ["Bumbo", "/coordenacao/bumbo"],

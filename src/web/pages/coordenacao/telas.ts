@@ -71,6 +71,13 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
     icone: "pedidos",
     Component: PedidosPage,
   },
+  {
+    segmento: "pedidos-suspeitos",
+    rotulo: "Pedidos suspeitos",
+    dica: DICA_DO_MENU["pedidos-suspeitos"],
+    icone: "suspeito",
+    Component: PedidosSuspeitosPage,
+  },
   // Bilhetes pagos, reservados e livres (RIFA-075, D35): GET /api/painel/bilhetes é de toda a coordenação.
   {
     segmento: "bilhetes",
@@ -78,13 +85,6 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
     dica: DICA_DO_MENU.bilhetes,
     icone: "bilhetes",
     Component: BilhetesPage,
-  },
-  {
-    segmento: "pedidos-suspeitos",
-    rotulo: "Pedidos suspeitos",
-    dica: DICA_DO_MENU["pedidos-suspeitos"],
-    icone: "suspeito",
-    Component: PedidosSuspeitosPage,
   },
   {
     segmento: "rankings",

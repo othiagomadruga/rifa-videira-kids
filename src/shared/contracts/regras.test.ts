@@ -296,6 +296,8 @@ describe("D20: as regras na resposta da campanha", () => {
         ...MENSAGENS_PADRAO,
         link_lider: "{saudacao} Link da célula {alvo}: {link}",
       },
+      // RIFA-075 (D35): os números da rifa.
+      bilhetes: { quantidade: 7005, numero_inicial: 0 },
     };
     expect(campanhaSchema.parse(gravada)).toEqual(gravada);
     expect(
