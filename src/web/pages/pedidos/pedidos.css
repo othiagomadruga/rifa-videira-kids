@@ -520,7 +520,8 @@
   }
 
   .pedidos-quando,
-  .pedidos-valor {
+  .pedidos-valor,
+  .pedidos-comprador__telefone {
     white-space: nowrap;
   }
 
