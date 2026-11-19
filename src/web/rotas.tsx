@@ -48,9 +48,15 @@ export const rotas: RouteObject[] = [
             ErrorBoundary: ErroRota,
             children: [
               ...TELAS_COORDENACAO.map(
-                ({ segmento, rotulo, papeis, Component }): RouteObject => {
+                ({
+                  segmento,
+                  rotulo,
+                  dica,
+                  papeis,
+                  Component,
+                }): RouteObject => {
                   const element = papeis ? (
-                    <ExigirPapel papeis={papeis} titulo={rotulo}>
+                    <ExigirPapel papeis={papeis} titulo={rotulo} ajuda={dica}>
                       <Component />
                     </ExigirPapel>
                   ) : (

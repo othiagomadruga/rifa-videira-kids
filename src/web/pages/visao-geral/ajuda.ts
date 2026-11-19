@@ -5,7 +5,7 @@
 export const AJUDA = {
   hoje: "Quanto vender hoje para a campanha seguir em dia e quanto já entrou hoje. Se ontem faltou, a falta entra na meta de hoje; se sobrou, ela diminui.",
   metaDeHoje:
-    "O que falta vender hoje para fechar o dia em dia com a meta. Ex.: se ontem faltaram 4 bilhetes, eles entram na meta de hoje.",
+    "O que vender hoje para a campanha terminar o dia em dia com a meta. Ex.: se ontem faltaram 4 bilhetes, eles entram na meta de hoje.",
   campanha:
     "A campanha inteira (ou o recorte escolhido no filtro) contra a meta: se está em dia, o ritmo e onde deve chegar no fim. Só contam as vendas aprovadas.",
   periodo:
@@ -29,5 +29,5 @@ export const AJUDA = {
   projecao:
     "Onde a campanha deve chegar no último dia se continuar vendendo no ritmo de agora. Ex.: “chega a 110% da meta”. Depois do fim, vira o resultado final.",
   vendasAprovadas:
-    "Os pedidos pagos que contam para a meta. Pedidos pendentes, cancelados ou desconsiderados ficam de fora.",
+    "Os pedidos pagos, que são os que contam para a meta. Os que aguardam pagamento, os expirados e os desconsiderados ficam de fora.",
 } as const;
