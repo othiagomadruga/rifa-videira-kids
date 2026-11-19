@@ -45,7 +45,7 @@ erDiagram
 - **Datas locais** da campanha em `YYYY-MM-DD`, no fuso da campanha (D8).
 - Os formatos de data e instante são checados com `date()` e `strftime()` (`CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', x) IS x)`), e não com `GLOB`: o D1 recusa padrões GLOB/LIKE longos ("LIKE or GLOB pattern too complex"). A checagem também recusa datas impossíveis, como 30/02.
 - O D1 sempre aplica chaves estrangeiras. As exclusões são `RESTRICT`, e a API responde `409 em_uso`. As exceções (`CASCADE`): `campanha_periodos`, que cai junto com a campanha; os links e as sessões, junto com o usuário (0002); e o usuário de um papel da hierarquia, junto com o alvo dele (0006).
-- **D1/LGPD**: nenhuma coluna guarda nome, e-mail, documento, data de nascimento, endereço ou telefone completo do comprador. Os dados do **líder** de célula (nome, e-mail, telefone) são da equipe da igreja e fazem parte do cadastro da hierarquia.
+- **D1/LGPD** (em parte substituída pela D36, RIFA-076): nenhuma coluna guarda e-mail, documento, data de nascimento ou endereço do comprador. Desde a migração 0017, o pedido guarda o **nome** e o **telefone** (E.164) de quem reservou, que só o admin vê (`pedidos.comprador_nome`, `pedidos.comprador_telefone`); a trilha (`webhook_eventos`) continua sem os dois. Os dados do **líder** de célula (nome, e-mail, telefone) são da equipe da igreja e fazem parte do cadastro da hierarquia.
 
 ## 3. Tabelas
 
@@ -147,6 +147,8 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `desconsiderado_em` | TEXT (UTC) NULL | migração 0008 (RIFA-028, D20): o admin tirou o pedido de todas as contas; NULL = o pedido conta |
 | `desconsiderado_motivo` | TEXT NULL | `teste`, `fraude`, `estorno` ou `outro`; preenchido **se e somente se** `desconsiderado_em` (CHECK) |
 | `desconsiderado_observacao` | TEXT NULL, 1–140 | só com `desconsiderado_em` (CHECK); nota do admin, sem dado pessoal (o contrato recusa "@" e 8 dígitos seguidos) |
+| `comprador_nome` | TEXT NULL, 1–120 | migração 0017 (RIFA-076, D36): `buyer.name`, espaços juntados; **só o admin vê**. Atualizado por todo evento do pedido que o traz (ausente não apaga) |
+| `comprador_telefone` | TEXT NULL, E.164 | migração 0017 (D36): `buyer.phone` normalizado (`+5591988887777`); fora do E.164, NULL (CHECK). **Só o admin vê** (lista de pedidos e planilha de compradores) |
 
 **Desconsiderado** (RIFA-028, D20): sai de toda soma (painel, rankings, público, bumbo, `/minha`, mapa, adesão, totais do afiliado, totais da lista de pedidos e as somas da conferência), porque toda consulta que soma repete `desconsiderado_em IS NULL` (e o índice da 0003 e a view já não o têm); continua na lista de pedidos (com o selo e o filtro), na de suspeitos e na conferência, à parte. Quem desconsiderou fica na trilha (`auditoria`), não no pedido. O webhook nunca escreve nessas colunas: um evento que chega depois muda o status, mas o pedido continua desconsiderado.
 
@@ -284,7 +286,7 @@ As regras de cálculo (metas e soma por nível, curva com normalização, meta d
 
 ## 8. O que não é guardado (D1)
 
-- Do comprador: nome, e-mail, documento (CPF), data de nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. Ficam só `ddd` e `pais`.
+- Do comprador: e-mail, documento (CPF), data de nascimento, endereço, `observation`, `fbp` e `fbc`. Ficam `ddd` e `pais` e, desde a 0017 (D36), o nome e o telefone só no pedido (`comprador_nome`, `comprador_telefone`, só para o admin, sem limpeza automática). A trilha (`webhook_eventos.payload_redigido`) e os logs continuam sem nome e sem telefone.
 - O payload bruto do webhook nunca é gravado, só o redigido.
 - O CSV da conferência (RIFA-012), que traz dados pessoais, é lido no navegador e não vai para a API: ela recebe só as colunas mapeadas que não são pessoais. Do arquivo ficam só o SHA-256 e os nomes das colunas usadas (`recuperacoes`) e, do pedido recuperado, o que o pedido precisa (código, quantidade, valor, afiliado e instante).
 - Segredos (como os tokens dos links e os ids das sessões, 0002): o token do webhook gerado pela tela (0009, D21) fica só como SHA-256 em `token_webhook`; nem ele nem o hash vão para a trilha (`auditoria`) ou para outra tabela (varredura em `src/worker/routes/webhook-token.test.ts`).
