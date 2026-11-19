@@ -15,6 +15,13 @@ type Props = {
   /** Arquivo escolhido, controlado por quem usa: o nome aparece ao lado do botão. */
   arquivo: File | null;
   aoEscolher: (arquivo: File) => void;
+  /**
+   * Vários arquivos de uma vez (RIFA-074): o campo aceita mais de um (`multiple`) e entrega todos aqui (o
+   * `aoEscolher` não é chamado). O texto ao lado do botão vem de `textoArquivo`.
+   */
+  aoEscolherVarios?: (arquivos: File[]) => void;
+  /** O texto ao lado do botão no lugar do nome do arquivo (com vários, "3 arquivos: ..."). */
+  textoArquivo?: ReactNode;
   textoBotao?: string;
   textoSemArquivo?: string;
   desabilitado?: boolean;
@@ -37,6 +44,8 @@ export function SeletorArquivo({
   aceitar,
   arquivo,
   aoEscolher,
+  aoEscolherVarios,
+  textoArquivo,
   textoBotao = "Escolher arquivo",
   textoSemArquivo = "Nenhum arquivo escolhido",
   desabilitado = false,
@@ -86,13 +95,16 @@ export function SeletorArquivo({
               type="file"
               className="ui-seletor-arquivo__input"
               accept={aceitar}
+              multiple={aoEscolherVarios ? true : undefined}
               disabled={desabilitado}
               aria-invalid={erro ? true : undefined}
               aria-describedby={descritoPor}
               onChange={(evento) => {
-                const escolhido = evento.currentTarget.files?.[0];
+                const escolhidos = [...(evento.currentTarget.files ?? [])];
                 evento.currentTarget.value = "";
-                if (escolhido) aoEscolher(escolhido);
+                if (escolhidos.length === 0) return;
+                if (aoEscolherVarios) aoEscolherVarios(escolhidos);
+                else aoEscolher(escolhidos[0]);
               }}
             />
             <label
@@ -107,7 +119,7 @@ export function SeletorArquivo({
           </span>
         </ComDica>
         <span id={idNome} className="ui-seletor-arquivo__nome">
-          {arquivo ? arquivo.name : textoSemArquivo}
+          {textoArquivo ?? (arquivo ? arquivo.name : textoSemArquivo)}
         </span>
       </div>
     </div>

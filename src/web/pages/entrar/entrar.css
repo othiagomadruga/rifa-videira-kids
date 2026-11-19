@@ -1,16 +1,33 @@
 /*
- * Como entrar: o ícone do link no topo do cartão (RIFA-050), o título, texto curto e passos numerados (os números no
- * roxo da Videira, sem tirar a semântica da lista).
+ * Como entrar: o login da célula com a senha (RIFA-064) e o link pessoal, cada um num cartão com o ícone no topo
+ * (RIFA-050), o título, texto curto e, no do link, passos numerados (os números no roxo da Videira, sem tirar a
+ * semântica da lista).
  */
-.entrar-explicacao {
+.entrar-explicacao,
+.entrar-formulario {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--espaco-3);
 }
 
-.entrar-explicacao > :not(.ui-icone-da-tela) {
+.entrar-explicacao > :not(.ui-icone-da-tela),
+.entrar-formulario > :not(.ui-icone-da-tela) {
   align-self: stretch;
+  /* Nenhum filho passa da largura do cartão (a 390 px, sem rolagem lateral). */
+  min-width: 0;
+}
+
+/*
+ * Login da célula (RIFA-064): os campos e o botão na largura do cartão; a mensagem de erro só ocupa lugar quando
+ * existe. Ela recebe o foco só para o leitor de tela lê-la; a mensagem já se destaca.
+ */
+.entrar-resultado:empty {
+  display: none;
+}
+
+.entrar-resultado:focus {
+  outline: none;
 }
 
 .entrar-titulo {
@@ -41,4 +58,11 @@
   background: var(--cor-primaria-suave);
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
+}
+
+/* O cartão do login com senha (RIFA-073): o formulário e, embaixo, a troca entre a célula e o administrador. */
+.entrar-cartao-senha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
 }

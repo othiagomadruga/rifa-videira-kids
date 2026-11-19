@@ -1664,6 +1664,214 @@ ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apr
 - **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
   `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
 
+## D29. Login de cada célula com o nome e a senha padrão (RIFA-064; contrato, 2026-11-17)
+
+Pedido do PO (17/11): "Quero que cada célula tenha login e senha, algo simples: login o nome da célula e a senha com
+os nomes das células, exemplo: @celula1234. Senhas padrões: arroba, nome da célula e 1234. O máximo que podem ver é o
+ranking e o link para vender para aquela célula, então não tem problema ser uma senha padrão." Contrato em
+`src/shared/contracts/` (`login-celula.ts`, sem zod; `acesso.ts`; `regras.ts`; `dominio.ts`; `api.ts`), migração
+`0013_login_celulas_senha.sql`, API em `src/worker/routes/acesso.ts` e `src/worker/db/login-celula.ts`.
+
+- **A senha não é segredo, e o desenho parte disso.** Quem conhece a regra e o nome de uma célula (que está no ranking
+  aberto) entra como ela. Por isso a senha **não é gravada em lugar nenhum** (nem hash): o Worker a deriva do nome da
+  célula a cada tentativa (`senhaPadraoDaCelula`) e compara com a digitada em tempo constante
+  (`textosIguaisEmTempoConstante`, a do webhook). Não há tabela de senhas para vazar, nada a "trocar" e nada a cadastrar:
+  uma célula nova ou renomeada já tem a senha certa. O que protege é o que a sessão pode ver.
+- **Senha padrão:** `"@" + nome normalizado + "1234"`. Normalizado = minúsculas, sem acentos (NFD sem as marcas),
+  sem espaços e sem pontuação: sobram só `a-z` e `0-9` ("Geração que Clama" → `@geracaoqueclama1234`, "Kairós1" →
+  `@kairos11234`, "Pão Vivo" → `@paovivo1234`). O nome digitado no campo "Célula" passa pela mesma normalização. A
+  senha digitada também (`formaDaSenhaDigitada`), com o "@" do começo obrigatório: o teclado do celular que põe
+  maiúscula, acento ou espaço não atrapalha, e isso não enfraquece nada (a senha já é previsível).
+- **Colisão:** dois nomes que ficam iguais depois da normalização ("Pão Vivo" e "Pao Vivo"; o `UNIQUE COLLATE NOCASE`
+  de `celulas.nome` só pega maiúsculas sem acento) tornam o login **ambíguo: recusado para as duas**, com o mesmo 401.
+  A coordenação vê o aviso na tela Hierarquia (`problemasDoLoginDasCelulas`), com o que fazer (renomear uma delas). Um
+  nome sem letra nem dígito ("!!!") não tem senha (o mesmo aviso). Não há trava no cadastro: a planilha e o CRUD
+  continuam aceitando os nomes de hoje; o aviso basta para 36 células.
+- **A sessão é a do papel `lider` da célula, a mesma do link (D12).** `POST /api/sessao/senha { celula, senha }` abre
+  a sessão com o usuário líder da célula (um por célula, 0006): a /minha da célula (ranking, meta, link e QR de vendas),
+  nunca R$, nenhuma rota da coordenação, nenhuma escrita além da própria sessão. O alvo vem só da sessão, como sempre.
+  `protecao.test.ts` (seção i) prova o 403 em toda rota de `/api/admin` e `/api/painel` e a /minha só da célula.
+- **A célula sem líder de verdade:** se a célula ainda não tem o usuário líder (nenhum link gerado), o login por senha
+  o cria, com o `lider_nome` da hierarquia, que é o líder da importação, mesmo provisório (a planilha exige o nome). A
+  cada login por senha, o nome do usuário acompanha o `lider_nome` atual, como o lote de links já fazia. Quando a
+  coordenação gerar o link do líder, o lote reaproveita o mesmo usuário: link e senha abrem sessões do mesmo usuário.
+- **A sessão aberta pela senha não tem link** (`sessoes.link_id` NULL, que a 0002 já aceitava): é assim que a consulta
+  da sessão a reconhece. Ela segue as regras de sempre (`__Host-sessao`, 45 dias, parada há 7 dias deixa de valer,
+  "Sair", desativar o usuário derruba), sem o encurtamento pelo fim do link. Revogar um link não a derruba (ela não veio
+  de link); para tirar o acesso de uma célula, desative o usuário dela (Acessos), o que também barra o link e a senha.
+- **Liga/desliga na Campanha (D20):** `acesso.celulas_senha`, "Login das células com senha padrão", **só o admin muda**
+  (grupo `acesso`, RIFA-042; a coordenação vê só leitura). Na resposta, sempre presente (`.default()`); na entrada,
+  opcional, e ausente mantém o gravado, como o `ranking.por_divisao` da D27 (uma aba antiga do site não liga nem
+  desliga). **Padrão: ligado**, como os outros acessos: o PO pediu para esta campanha, e desligado ninguém entraria pela
+  senha no dia 23/11 se alguém esquecesse de ligar. A 0013 grava 1 na campanha que já existe. Desligado: o login por
+  senha recusa (o mesmo 401) e **as sessões abertas pela senha deixam de valer na hora** (401, o cookie expira), porque
+  a chave é lida na mesma consulta da sessão (+1 linha só nessa sessão; com link, o `OR` nem lê a campanha, e as linhas
+  travadas da /minha não mudaram). O link pessoal do líder não depende da chave. É diferente do 403 `acesso_desligado`
+  dos discipuladores e das redes de propósito: aqui não há o que guardar para quando religar (a senha é a mesma) e a
+  recusa não diz nada a quem tenta.
+- **Segurança mínima, mesmo com senha previsível:**
+  - **limite de tentativas:** o mesmo `LIMITE_LOGIN` do link (60 por minuto por IP), no mesmo contador: 30 pelo link e
+    30 pela senha esgotam o IP. Barra a varredura e protege CPU e banco; na reunião dos líderes, 60 por minuto atrás do
+    mesmo Wi-Fi bastam;
+  - **a resposta não diz se a célula existe:** senha errada, célula que não existe, nome ambíguo ou sem senha, usuário
+    desativado e chave desligada dão o **mesmo** 401 `nao_autenticado`, com a mesma mensagem e os mesmos cabeçalhos; a
+    comparação em tempo constante acontece também sem célula (contra uma senha que nunca confere). Campo vazio também
+    é 401 (só a falta do campo, um não texto ou mais de 200 caracteres dão 400);
+  - **CSRF e corpo:** mesma origem (`exigirMesmaOrigem`) e o teto de 4 KiB do `POST /api/sessao`;
+  - **trilha:** cada login por senha que abriu sessão vira uma linha `sessao.entrar_com_senha`, do usuário líder da
+    célula, alvo `celula:<id>`, no mesmo lote da sessão; o resumo não tem a senha (ela nem chega à camada do banco). A
+    tentativa recusada não registra. Um teste varre todas as tabelas e o console atrás da senha digitada e da derivada.
+- **Consequência aceita:** a trilha segura (RESTRICT, 0005) o usuário que aparece como autor. Depois de um login por
+  senha, a célula não pode ser excluída (a mensagem de hoje já diz "o acesso dela aparece como autor na trilha"). Na
+  campanha isso não pesa: célula com afiliado já não se exclui, e a célula de nome repetido, a que mais se excluiria,
+  nunca entra pela senha.
+- **Site:** `/entrar` ganha o cartão "Entrar com a sua célula" (campos Célula e Senha, com dica; o botão Entrar com
+  `aria-disabled` enquanto confere; "Célula ou senha não conferem." no 401; depois, a /minha); o cartão do link continua,
+  para todos os papéis. A Campanha ganha a chave e a linha no resumo. A Hierarquia (admin e coordenação, nunca a
+  hierarquia) mostra o aviso das células que não entram pela senha e, num `<details>` fechado, a senha de cada célula
+  com "Copiar", calculada no navegador pela mesma regra (`login-celula.ts`, sem zod), para repassar ao líder.
+- **Alternativas descartadas:** senha guardada por célula (hash), com troca e "esqueci a senha": mais tela e mais
+  suporte, sem ganho, porque o PO quer a senha padrão; mudar o `POST /api/sessao` para aceitar `{ token }` ou
+  `{ celula, senha }`: uma rota à parte deixa o contrato e os testes do link como estão; coluna nova em `sessoes` para
+  marcar a sessão da senha: `link_id` NULL já diz isso, sem migração na tabela que cada requisição lê.
+
+## D30. Rede única: com uma rede só, o site esconde o nível rede (RIFA-065, 2026-11-17)
+
+Pedido do PO (17/11): "Não quero que tenha o nome das redes, apenas dos discipuladores." A planilha da igreja não tem
+rede (8 discipuladores e 38 células); a importação usa uma rede só ("Exploradores"), porque o modelo exige rede →
+discipulador → célula.
+
+- **A regra, só no site** (sem mudar o contrato nem a API): com uma rede só na hierarquia, o nível rede some de todas as
+  telas; com duas ou mais (ou nenhuma), tudo como antes. A rede continua no banco, na API, na planilha (a coluna `rede`
+  segue obrigatória: o mesmo nome em todas as linhas) e nos arquivos do relatório.
+- **De onde o site sabe** (`src/web/lib/redes.ts`): das listas que as telas já recebem com a hierarquia toda: as redes
+  (Hierarquia) e as células (Visão geral, Pedidos e Adesão, contadas pela `rede_id`). Rankings, Campanha e Acessos não
+  recebem a hierarquia (o ranking com o filtro de divisão traz só parte das redes): perguntam `GET /api/admin/redes`
+  (rota que já existia), uma vez por página aberta e só se o site ainda não souber. O que se sabe fica no módulo, vale
+  entre as telas e o menu usa. Sem saber, as abas, colunas e campos ficam como sempre; os textos que só enumeram os
+  níveis (dicas do menu e descrições) saem sem a rede até se saber que há mais de uma.
+- **Onde muda, com uma rede só:**
+
+  | Tela | Com uma rede só |
+  | --- | --- |
+  | Hierarquia | Sem o número "Redes", a aba Redes, as colunas Rede (células e discipuladores) e o filtro Rede; no "Editar célula", os discipuladores numa lista só; no "Editar discipulador", sem o campo Rede (o PUT manda a mesma). A aba "Importar planilha" é a exceção: a dica e a explicação da coluna dizem que a rede pode ser uma só, e o resultado só tem a linha "Redes" se a planilha cria ou muda uma rede |
+  | Visão geral | O filtro sem o grupo Rede; o aviso das vendas sem célula diz "em nenhuma divisão nem célula"; o relatório sem o tipo "Por rede" |
+  | Rankings | Sem a aba Redes (uma URL de antes com `?nivel=rede` mostra as células) e sem a rede no vínculo |
+  | Pedidos | O filtro de célula numa lista só, sem o grupo com o nome da rede |
+  | Adesão | "Líder: …" sem a rede nos cartões; as dicas das buscas sem citar a rede |
+  | Acessos | A aba "Líderes e discipuladores", sem o papel Rede: não se oferece criar acesso de rede |
+  | Campanha | Sem a caixa "Acesso das redes", a linha do resumo e a "Mensagem do link da rede" (os valores gravados ficam e vão iguais no PUT); o `{alvo}` sem a rede |
+  | Menu e `/entrar` | As dicas da Hierarquia e dos Rankings sem a rede; o `/entrar` (tela aberta, sem a hierarquia) diz "Coordenação, líderes e discipuladores" sempre |
+
+- **O que fica:** o relatório em CSV continua com a coluna "Rede" (é o arquivo de trabalho, montado pela API: tirá-la
+  mudaria o contrato do relatório; com uma rede, ela repete o mesmo nome e pode ser apagada no Excel) e a API aceita
+  `tipo=redes`; a trilha cita a rede quando ela é criada ou mudada (é o registro do que aconteceu); o líder e o
+  discipulador já não viam a rede na `/minha` (o teste confere); a `/minha` do papel rede fica como era (sem o acesso de
+  rede oferecido, ninguém novo entra com ele); a apresentação em `/exemplo` (D28) é uma fotografia do site de antes e
+  só esconde a rede quando for refeita.
+- **Uma rede vazia** (sem células; a importação só cria rede com célula) conta na Hierarquia, nos Rankings, na Campanha e
+  nos Acessos (que contam as redes), mas não na Visão geral, nos Pedidos e na Adesão (que contam pelas células).
+- **Peso e navegador** (a ferramenta de capturas, com as gravações da demonstração numa rede só e 3 discipuladores): o JS
+  inicial sobe 1,1 KiB em gzip e o CSS fica igual; nenhuma dependência nova; nenhum CLS subiu, sem rolagem lateral a 390
+  px, sem erro no console e sem "R$" na tela do líder e do discipulador. A varredura das telas (Visão geral, Rankings,
+  Hierarquia com os diálogos, Acessos, Adesão, Campanha, Pedidos, `/minha` do líder e do discipulador e `/entrar`, a 390
+  e a 1366 px, com as dicas) só achou a rede na dica da aba "Importar planilha", a exceção combinada.
+- **Testes:** `lib/redes.test.ts` e `pages/rede-unica.test.tsx` (cada tela com uma rede só: o texto, os atributos, os
+  valores dos campos e as dicas, para admin, coordenação, líder e discipulador). As API falsas dos Rankings, da Campanha e
+  dos Acessos respondem a lista das redes com duas (a tela como sempre foi) e guardam o pedido à parte.
+
+## D33. Login do admin com usuário e senha (RIFA-073; contrato, 2026-11-19)
+
+Pedido do PO (19/11): o pastor (admin) entra no painel com usuário e senha, para marcar pagamentos sem depender do link
+no celular. Contrato em `src/shared/contracts/` (`senha-admin.ts`, sem zod; `acesso.ts`; `api.ts`), migração
+`0015_senha_admin.sql`, API em `src/worker/routes/acesso.ts` (login), `src/worker/routes/senha-admin.ts` e
+`src/worker/db/senha-admin.ts`, hash em `src/worker/lib/senha.ts`, script `scripts/definir-senha-admin.mjs`.
+
+- **Só o papel admin.** Coordenação, líder, discipulador e rede continuam como estão (link; a célula, também a senha
+  padrão da D29). As rotas da senha (`/api/admin/minha-senha`) são só de admin e só mexem na senha **de quem está
+  conectado**; o login confere `papel = 'admin'` e `ativo = 1` na hora.
+- **A senha é segredo, ao contrário da D29:** só o PBKDF2-SHA256 é gravado, com sal aleatório de 16 bytes por senha e
+  100.000 iterações (o máximo que o Workers aceita no PBKDF2; o número fica na linha, para subir sem invalidar as
+  senhas). A senha é normalizada em NFC antes do hash. Senha forte = mínimo de 10 caracteres e diferente do usuário
+  (`problemaDaSenhaAdmin`, a mesma regra na tela, na API e no script). Custo: dezenas de ms de CPU por conferência,
+  dentro do Workers Paid que a D19 já exige.
+- **Tabela própria (`senhas_admin`), não colunas em `usuarios`:** a tabela que cada sessão lê fica como está, e
+  remover a senha é apagar uma linha. O usuário de login é único, em minúsculas (`FORMATO_USUARIO_ADMIN`).
+- **Login (`POST /api/sessao/admin`)**: a mesma pilha do link e da célula (mesma origem, `LIMITE_LOGIN` por IP, teto de
+  4 KiB). O PBKDF2 roda **sempre**, contra um hash fictício quando o usuário não existe, e toda recusa é o **mesmo** 401:
+  nem a mensagem nem o tempo dizem se o usuário existe. **Limite por conta**, além do por IP: 5 erros seguidos bloqueiam
+  o login da conta por 15 minutos, com o mesmo 401 até para a senha certa (dizer "bloqueada" revelaria a conta); o
+  acerto e a troca de senha zeram. O link pessoal do admin continua entrando, então o bloqueio nunca prende ninguém.
+- **A sessão é a do link do admin, sem link** (`sessoes.link_id` NULL, como a da célula). A consulta da sessão distingue
+  pelo papel: a do admin vale enquanto ele tiver a senha (não depende da chave das células); a do líder, enquanto a
+  chave da D29 estiver ligada; a de outro papel, nunca. Trocar a senha encerra as **outras** sessões dele abertas pela
+  senha; remover encerra todas elas. A trilha registra `senha_admin.definir`, `.trocar`, `.remover` e cada
+  `sessao.entrar_como_admin`, sem a senha nem o usuário de login.
+- **Como a senha nasce:** o admin entra pelo link e cria na tela **Minha senha**; ou o SM roda
+  `npm run acesso:senha -- --admin <id|nome> --usuario <login> [--remote]`, que lê a senha do **stdin** (nunca de
+  argumento, que iria para o histórico do shell), grava só o hash e registra na trilha.
+- **Descartado:** senha para a coordenação (o pedido é do admin; mais contas com senha é mais superfície); "esqueci a
+  senha" por e-mail (o link pessoal já é a recuperação); bloqueio que responde 429 ou "conta bloqueada" (revelaria quem
+  existe).
+
+## D34. O comprovante de Pix em PDF e vários arquivos na conferência do extrato (RIFA-074, 2026-11-19; adendo da D26)
+
+Pedido do PO (19/11): o pastor (admin) sobe o extrato **ou o comprovante** do Pix no painel, um ou vários de uma vez, e
+o site lista os pedidos pagos. Na Rifei, o Pix manual usa o número do pedido como identificador do Pix. A tarefa só
+lê e cai no mesmo cruzamento da D26; marcar na Rifei é a RIFA-070 (D32).
+
+- **O comprovante** (`extrato/comprovante.ts`, puro): o texto do PDF (as linhas do `pdf-linhas.ts`) é comprovante quando
+  fala de Pix, diz "comprovante" (ou tem os blocos de quem pagou e de quem recebeu), tem de 1 a 6 valores, nenhuma
+  tabela e nenhuma linha com a data e o valor juntos (a linha de lançamento do extrato). Senão, é extrato, como antes.
+  Do comprovante saem: o valor (o campo Valor; sem ele, a linha só com "R$ 20,00"), a data e a hora (o campo Data e
+  hora, Data/Hora, Data do pagamento...; sem ele, a primeira linha com data e hora, como "16 NOV 2026 - 14:30:12"), o
+  nome de quem pagou (o Nome do bloco "Dados de quem pagou", "Origem", "Pagador" ou "De:"; nunca o do bloco de quem
+  recebeu), o **identificador** (txid: Identificador, Identificação, TXID) e o **ID da transação** (o E2E do Banco
+  Central, `E` + 20 algarismos + 11 letras ou algarismos, achado em qualquer lugar, mesmo quebrado em duas linhas; sem
+  ele, o campo ID da transação ou Número de controle). O rótulo e o valor podem vir na mesma linha (ou lado a lado)
+  ou o valor na linha de baixo. Vira um lançamento só (`formato: "comprovante"`), com a descrição "Comprovante de Pix ·
+  <nome> · identificador <txid>" e `origem: "comprovante"`.
+- **O layout pesquisado** (fontes públicas, só cópias de comprovantes de terceiros e guias; nenhum banco publica o
+  modelo): Bradesco (app e Net Empresa) com "Comprovante de Transação Pix", "Dados de quem recebeu", "Dados de quem
+  pagou" (Nome, CPF/CNPJ mascarado, Instituição), "Dados da transação" (Valor, "Data e hora: 20/12/2024 - 15:16:05"),
+  "Identificador" ou "Número de controle"; bancos digitais (o jeito do Nubank) com "Comprovante de transferência", a
+  data no topo, "Destino" e "Origem" e "ID da transação"; outros (o jeito do Itaú) com "de:" e "para:" e o valor na
+  linha de baixo; o E2E de 32 caracteres com E (Banco Central). Os testes usam PDFs sintéticos nesses três jeitos
+  (`teste-apoio-pdf.ts`), com dados fictícios. NÃO DOCUMENTADO e a conferir na compra de teste: o nome do campo do
+  identificador no comprovante do Bradesco e se ele traz o número do pedido da Rifei.
+- **Certo pelo identificador:** o `txid` inteiro igual ao número de um pedido é "Certo" mesmo curto e só de algarismos
+  (o mínimo de 8 algarismos da D26 é para pedaços achados no meio do texto do extrato; o campo do identificador é o
+  próprio número). Sem identificador, o comprovante cai no Provável/Ambíguo pelo valor e pela hora, como o extrato
+  (o comprovante tem a hora: o cruzamento fica mais preciso). O comprovante passa sempre pelo filtro das palavras do
+  Pix. O formato do resultado do cruzamento não muda (a RIFA-070 usa a lista "Para marcar"); o `Lancamento` (e o `Pix`)
+  ganham só campos opcionais: `origem`, `txid`, `idDaTransacao` e `pagador`.
+- **Vários arquivos** (`SeletorArquivo` com `aoEscolherVarios`, o `multiple` do campo): cada arquivo é lido (o PDF pelo
+  mesmo leitor sob demanda), a tela mostra **Arquivos lidos** com o resultado de cada um (o extrato com os
+  lançamentos, o comprovante com o valor e a hora, quantos Pix já estavam noutro arquivo, ou a falha) e os lidos viram
+  um extrato só (`extrato/juntar.ts`, `formato: "varios"`, "Lido dos arquivos"). O CSV sem colunas reconhecidas
+  precisa ser escolhido sozinho (o mapeamento na tela é de um CSV). Um arquivo só segue o caminho de antes.
+- **O mesmo Pix em dois arquivos conta uma vez:** o mesmo ID da transação é o mesmo Pix (IDs diferentes, Pix
+  diferentes); senão, o mesmo valor, a hora a até 2 minutos (sem a hora num dos lados, o mesmo dia) e o mesmo nome
+  (dois comprovantes: o mesmo nome; comprovante e extrato: o primeiro e o último nome do comprovante na descrição do
+  extrato, o "REM: <nome>"; sem nome no extrato, só com a hora dos dois a até 2 minutos); dois extratos (períodos que se
+  cruzam): a mesma linha (valor, instante e descrição). Identificadores (txid) diferentes nunca são o mesmo Pix (o mesmo
+  comprador pagando dois pedidos de mesmo valor no mesmo minuto), e, se mais de um lançamento serve, fica o mais perto
+  na hora (revisão). Os lançamentos de um mesmo arquivo nunca se juntam. Juntos, fica
+  o lançamento do extrato (o banco confirma), com o identificador, o ID e o nome do comprovante: o Pix ambíguo do
+  extrato vira Certo com o comprovante.
+- **Comprovante pode ser adulterado** (a própria Rifei avisa): o Pix que veio só de comprovante leva a marca "Só no
+  comprovante: confira no extrato antes de marcar", e o resultado mostra o aviso enquanto houver um. O jeito seguro é
+  escolher o extrato junto. Pix agendado ("agendado"/"agendamento" sem "concluído", "efetivado", "realizado") é uma
+  falha clara. Comprovante de Pix **enviado** pela igreja não é distinguido (a tela não sabe a conta da igreja):
+  pergunta ao PO.
+- **Foto ou print** (tipo `image/*`, extensão de imagem ou a assinatura JPEG, PNG ou HEIC): falha "Esta é uma foto ou
+  um print", que pede o PDF (OCR fica fora). O campo aceita `image/*` para a pessoa receber essa mensagem em vez de não
+  achar o arquivo. O PDF sem texto (escaneado) continua "Este PDF é uma imagem", agora com o caminho do comprovante.
+- **Privacidade (D26 inteira):** nada sai do navegador e nada é gravado; o nome de quem pagou, o identificador e o E2E
+  ficam só no estado da tela (`ExtratoDoBanco.test.tsx` varre as chamadas também com os comprovantes). O pdf.js
+  continua sob demanda.
+- **Peso:** o JS inicial fica em 397,17 KiB (119,06 KiB em gzip; +0,02 KiB pelo `SeletorArquivo`, que é do pacote
+  inicial); a seção do extrato vai de 13,6 para 17,7 KiB em gzip (o leitor do comprovante, a junção e a lista dos arquivos); o pacote do pdf.js não muda.
 ## D36. Nome e telefone de quem reserva ou compra, só para o admin (RIFA-076, 2026-11-19)
 
 **Substitui em parte** a regra de privacidade do início (D1 da integração, `docs/integracao-rifei.md`; comentário da

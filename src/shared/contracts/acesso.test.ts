@@ -73,12 +73,14 @@ const usuarioExemplo = {
 };
 
 describe("contrato do acesso (RIFA-007): catálogo", () => {
-  it("traz as 8 rotas de sessão e de administração", () => {
+  it("traz as 13 rotas de sessão e de administração", () => {
     expect(
       rotas.map(([, rota]) => `${rota.metodo} ${rota.caminho}`).sort(),
     ).toEqual(
       [
         "POST /api/sessao",
+        // RIFA-064 (D29): o login da célula com a senha padrão.
+        "POST /api/sessao/senha",
         "GET /api/sessao",
         "POST /api/sessao/sair",
         "POST /api/admin/usuarios",
@@ -86,6 +88,11 @@ describe("contrato do acesso (RIFA-007): catálogo", () => {
         "PATCH /api/admin/usuarios/:id",
         "POST /api/admin/usuarios/:id/links",
         "DELETE /api/admin/links/:id",
+        // RIFA-073 (D33): o login do admin com usuário e senha e a senha do próprio admin.
+        "POST /api/sessao/admin",
+        "GET /api/admin/minha-senha",
+        "PUT /api/admin/minha-senha",
+        "DELETE /api/admin/minha-senha",
       ].sort(),
     );
   });
@@ -103,7 +110,8 @@ describe("contrato do acesso (RIFA-007): catálogo", () => {
     for (const [nome, rota] of rotas) {
       const esperado =
         rota.caminho.startsWith("/api/admin/usuarios") ||
-        rota.caminho.startsWith("/api/admin/links")
+        rota.caminho.startsWith("/api/admin/links") ||
+        rota.caminho === "/api/admin/minha-senha"
           ? ["admin"]
           : rota.metodo === "GET"
             ? [...PAPEIS]

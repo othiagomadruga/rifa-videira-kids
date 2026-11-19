@@ -20,9 +20,19 @@ export interface Lancamento {
   descricao: string;
   /** Campos que podem trazer o número do pedido além da descrição (FITID, documento): só para achar o "Certo". */
   identificadores: string[];
+  /** RIFA-074: o Pix veio só de um comprovante (sem: do extrato do banco, ou também do extrato). */
+  origem?: "comprovante";
+  /** RIFA-074: o nome de quem pagou, do comprovante (acha o mesmo Pix noutro arquivo): só na tela. */
+  pagador?: string;
+  /** RIFA-074: o ID da transação do comprovante (o E2E): o mesmo ID em dois arquivos é o mesmo Pix. */
+  idDaTransacao?: string;
+  /** RIFA-074: o identificador (txid) do comprovante, inteiro: igual ao número de um pedido, é "Certo". */
+  txid?: string;
 }
 
-export type FormatoExtrato = "ofx" | "texto" | "csv" | "pdf";
+/** "comprovante": o comprovante de Pix em PDF; "varios": mais de um arquivo de uma vez (RIFA-074). */
+export type FormatoExtrato =
+  "ofx" | "texto" | "csv" | "pdf" | "comprovante" | "varios";
 
 /** Uma data do calendário (sem fuso). */
 export interface DataLocal {
@@ -192,6 +202,8 @@ export function filtrarPix(
     else if (lancamento.centavos === 0) ignorados.ilegiveis++;
     else if (lancamento.centavos < 0) ignorados.debitos++;
     else if (
+      // O comprovante é sempre de um Pix (RIFA-074): as palavras do extrato não valem para ele.
+      lancamento.origem !== "comprovante" &&
       palavras.length > 0 &&
       !palavras.some((palavra) => descricao.includes(palavra))
     )

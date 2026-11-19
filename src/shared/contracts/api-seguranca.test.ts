@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 18 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 23 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -190,6 +190,13 @@ describe("GET /api/admin/auditoria", () => {
       "afiliado.remover",
       // RIFA-039 (D21): o token do webhook gerado pela tela.
       "webhook.gerar_token",
+      // RIFA-064 (D29): o login da célula com a senha padrão.
+      "sessao.entrar_com_senha",
+      // RIFA-073 (D33): o login do admin com usuário e senha e a senha dele (definir, trocar, remover).
+      "sessao.entrar_como_admin",
+      "senha_admin.definir",
+      "senha_admin.trocar",
+      "senha_admin.remover",
       // RIFA-076 (D36): a planilha de compradores baixada pelo admin.
       "compradores.exportar",
     ]);

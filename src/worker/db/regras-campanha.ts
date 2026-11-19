@@ -40,6 +40,14 @@ export function sqlAcessoDoPapel(papel: string): string {
     ELSE 1 END`;
 }
 
+/**
+ * A chave `acesso.celulas_senha` da campanha ativa (RIFA-064, D29), em SQL: verdadeiro = o login das células com a
+ * senha padrão vale. Sem campanha ativa, o padrão (ligado: ACESSO_PADRAO.celulas_senha, o DEFAULT 1 da 0013). Lida
+ * na hora, na mesma consulta (subconsulta pelo índice campanhas_uma_ativa): no login por senha (db/login-celula.ts) e
+ * na consulta da sessão aberta pela senha (db/acessos.ts), nunca do cache da visão (D14).
+ */
+export const SQL_LOGIN_CELULAS_SENHA_LIGADO = `coalesce((SELECT acesso_celulas_senha FROM campanhas WHERE ativa = 1), ${comoNumero(ACESSO_PADRAO.celulas_senha)}) = 1`;
+
 /** A chave do papel (o `chave` do 409 `acao_desligada`). */
 export const CHAVE_DO_PAPEL = {
   discipulador: "acesso.discipuladores",

@@ -1,10 +1,11 @@
 // Schema do D1 (migrations/0000_setup.sql, 0001_init.sql, 0002_acessos.sql, 0003_vendas_por_dia.sql,
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
-// 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql e
-// 0012_ranking_por_divisao.sql e, da RIFA-076, 0017_comprador_contato.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A
-// 0006, a 0007, a 0008, a 0009, a 0010, a 0011 e a 0012 também são aplicadas num D1 à parte (DB_MIGRACAO,
-// vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7;
-// RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061).
+// 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
+// 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql, 0015_senha_admin.sql e, da RIFA-076,
+// 0017_comprador_contato.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
+// testes, dentro do workerd. A 0006, a 0007, a 0008, a 0009, a 0010, a 0011, a 0012 e a 0013 também são aplicadas num
+// D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações anteriores: o que existia continua
+// lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061; RIFA-064).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -44,6 +45,8 @@ const TABELAS = [
   "recuperacoes",
   "redes",
   "sessoes",
+  // 0015 (RIFA-073, D33): o hash PBKDF2 da senha de login do admin.
+  "senhas_admin",
   // 0009 (RIFA-039, D21): o SHA-256 do token do webhook gerado pela tela (uma linha no máximo).
   "token_webhook",
   "usuarios",
@@ -68,7 +71,7 @@ describe("migrações: schema do D1", () => {
     expect(results).toContainEqual({ type: "view", name: "vendas_aprovadas" });
   });
 
-  it("D1/LGPD: nenhuma tabela tem coluna de dado pessoal do comprador, fora o nome e o telefone no pedido (D36) (pragma_table_info)", async () => {
+  it("D1/LGPD: nenhuma tabela tem coluna de dado pessoal do comprador (pragma_table_info)", async () => {
     const { results } = await env.DB.prepare(
       `SELECT m.name AS tabela, c.name AS coluna
        FROM sqlite_master AS m JOIN pragma_table_info(m.name) AS c
@@ -1794,8 +1797,8 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
     });
   });
 
-  // O "UPSERT do PUT não apaga o modelo" (RIFA-046) roda no describe da 0012: o PUT de hoje nomeia a coluna da 0012
-  // (ranking_por_divisao), então só roda sobre o schema completo.
+  // O "UPSERT do PUT não apaga o modelo" (RIFA-046) roda no describe da 0013: o PUT de hoje nomeia as colunas da 0012
+  // (ranking_por_divisao) e da 0013 (acesso_celulas_senha), então só roda sobre o schema completo.
 
   // -------------------------------------------------------------------------------------------------
   // 0011 (RIFA-056): o pagamento registrado pela conferência, aplicada sobre tudo o que já existia
@@ -1849,7 +1852,7 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
           .bind(campanhaId),
       ]);
       antes = await fotografarTodasAsTabelas(db);
-      // Até a 0011: a 0012 é aplicada depois, sobre tudo isto (describe "0012 sobre dados que já existiam").
+      // Até a 0011: a 0012 e a 0013 são aplicadas depois, sobre tudo isto (os describes delas, abaixo).
       await applyD1Migrations(
         db,
         TEST_MIGRATIONS.filter((migracao) => migracao.name < "0012"),
@@ -1995,20 +1998,6 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         ),
       ]);
     });
-
-    it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
-      expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
-        linkId: 1,
-        usuario: { id: 1, nome: "Admin Antes da 0006", papel: "admin" },
-        acessoLigado: true,
-      });
-      expect(
-        await buscarLinkValido(db, hash("b"), AGORA_DA_MIGRACAO),
-      ).toBeNull();
-      expect(
-        await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
-      ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
-    });
   });
 
   // -------------------------------------------------------------------------------------------------
@@ -2029,7 +2018,7 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       );
       await applyD1Migrations(db, ate0011);
       antes = await fotografarTodasAsTabelas(db);
-      // Até a 0012: as seguintes têm o describe delas, sobre estes mesmos dados (a 0017, RIFA-076, no fim do arquivo).
+      // Até a 0012: a 0013 (RIFA-064) é aplicada depois, sobre tudo isto (describe "0013 sobre dados que já existiam").
       await applyD1Migrations(
         db,
         TEST_MIGRATIONS.filter((migracao) => migracao.name < "0013"),
@@ -2079,7 +2068,121 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         },
       ]);
     });
+    // O PUT (salvarCampanhaAtiva) nomeia a coluna da 0013: os testes dele rodam no describe da 0013.
+  });
 
+  // -------------------------------------------------------------------------------------------------
+  // 0013 (RIFA-064, D29): a chave do login das células com a senha padrão, aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0013 sobre dados que já existiam (RIFA-064)", () => {
+    const db = DB_MIGRACAO;
+    const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    const modelos = async () =>
+      (
+        await db
+          .prepare(
+            "SELECT id, ativa, link_vendas_modelo FROM campanhas ORDER BY id",
+          )
+          .all<{
+            id: number;
+            ativa: number;
+            link_vendas_modelo: string | null;
+          }>()
+      ).results;
+    const apagarModelos = async () => {
+      await db.prepare("UPDATE campanhas SET link_vendas_modelo = NULL").run();
+    };
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0011 (aqui vale também rodando este sozinho).
+      const ate0012 = TEST_MIGRATIONS.filter(
+        (migracao) => migracao.name < "0013",
+      );
+      expect(ate0012.map((migracao) => migracao.name)).not.toContain(
+        "0013_login_celulas_senha.sql",
+      );
+      await applyD1Migrations(db, ate0012);
+      antes = await fotografarTodasAsTabelas(db);
+      // Até a 0013: a 0015 (RIFA-073) é aplicada depois, no describe dela (abaixo).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0014"),
+      );
+    });
+
+    it("a 0013 foi aplicada por último, sobre os dados (não num banco vazio)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name).at(-1)).toBe(
+        "0013_login_celulas_senha.sql",
+      );
+      // A ativa e a inativa, sem a coluna antes da 0013; e a hierarquia, os acessos, as sessões e a trilha.
+      expect(antes.campanhas.length).toBeGreaterThanOrEqual(2);
+      expect(antes.campanhas[0]).not.toHaveProperty("acesso_celulas_senha");
+      for (const tabela of [
+        "celulas",
+        "usuarios",
+        "links_acesso",
+        "sessoes",
+        "auditoria",
+      ])
+        expect({ tabela, vazia: antes[tabela].length === 0 }).toEqual({
+          tabela,
+          vazia: false,
+        });
+    });
+
+    it("nenhum dado muda: toda tabela fica igual, e cada campanha ganha só acesso_celulas_senha = 1 (ligado, o padrão)", async () => {
+      const { campanhas, ...depois } = await fotografarTodasAsTabelas(db);
+      const { campanhas: campanhasAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(campanhas).toEqual(
+        campanhasAntes.map((campanha) => ({
+          ...campanha,
+          acesso_celulas_senha: 1,
+        })),
+      );
+      const { results: coluna } = await db
+        .prepare(
+          `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('campanhas')
+           WHERE name = 'acesso_celulas_senha'`,
+        )
+        .all();
+      expect(coluna).toEqual([
+        {
+          name: "acesso_celulas_senha",
+          type: "INTEGER",
+          notnull: 1,
+          dflt_value: "1",
+          pk: 0,
+        },
+      ]);
+    });
+
+    it("o CHECK aceita só 0 e 1", async () => {
+      for (const valor of [2, -1, "sim"])
+        await expect(
+          db
+            .prepare(
+              "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1",
+            )
+            .bind(valor)
+            .run(),
+        ).rejects.toThrow(/CHECK constraint failed/);
+      for (const valor of [0, 1])
+        await db
+          .prepare(
+            "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1",
+          )
+          .bind(valor)
+          .run();
+    });
+
+    // RIFA-061 (veio do describe da 0012): o PUT de hoje nomeia a coluna da 0013, então roda sobre o schema completo.
     it("a campanha que já existia sai com o ranking por divisão ligado; o PUT sem a opção mantém, com a opção grava", async () => {
       const ativa = async () =>
         (await db
@@ -2128,29 +2231,16 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         db.prepare("UPDATE campanhas SET ranking_por_divisao = 2").run(),
       ).rejects.toThrow(/CHECK constraint failed/);
     });
-    // RIFA-046 (veio do describe da 0010): o PUT de hoje nomeia a coluna da 0012, então roda sobre o schema completo.
+
     it("o UPSERT do PUT da campanha (salvarCampanhaAtiva, que nomeia as colunas) não apaga o modelo, com e sem os grupos do admin", async () => {
-      const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
-      const modelos = async () =>
-        (
-          await db
-            .prepare(
-              "SELECT ativa, link_vendas_modelo FROM campanhas ORDER BY id",
-            )
-            .all<{ ativa: number; link_vendas_modelo: string | null }>()
-        ).results;
-      onTestFinished(async () => {
-        await db
-          .prepare("UPDATE campanhas SET link_vendas_modelo = NULL")
-          .run();
-      });
+      onTestFinished(apagarModelos);
       await db
         .prepare("UPDATE campanhas SET link_vendas_modelo = ?1 WHERE ativa = 1")
         .bind(MODELO)
         .run();
       const dados = {
-        nome: "Campanha Depois da 0010",
-        slug_rifei: "campanha-depois-da-0010",
+        nome: "Campanha Depois da 0013",
+        slug_rifei: "campanha-depois-da-0013",
         data_inicio: "2026-11-23",
         preco_bilhete_centavos: 2000,
         meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
@@ -2163,7 +2253,7 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         // Com os grupos do admin (o PUT do admin): o UPSERT também não nomeia o modelo.
         campanhaEntradaSchema.parse({
           ...dados,
-          slug_rifei: "campanha-depois-da-0010-b",
+          slug_rifei: "campanha-depois-da-0013-b",
           pedidos: PEDIDOS_PADRAO,
           acesso: ACESSO_PADRAO,
           mensagens: MENSAGENS_PADRAO,
@@ -2178,6 +2268,110 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       }
     });
   });
+
+  // -------------------------------------------------------------------------------------------------
+  // 0015 (RIFA-073, D33): a senha de login do admin, uma tabela nova aplicada sobre tudo o que já existia
+  // -------------------------------------------------------------------------------------------------
+
+  describe("0015 sobre dados que já existiam (RIFA-073)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+    const SAL = "a".repeat(32);
+    const HASH = "b".repeat(64);
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram até a 0013 (e a 0014, quando a RIFA-070 entrar, vem aqui).
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0015"),
+      );
+      antes = await fotografarTodasAsTabelas(db);
+      // Só até a 0015: o describe não depende da 0014 (RIFA-070, que só soma) nem das que vierem depois.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0016"),
+      );
+    });
+
+    it("a 0015 foi aplicada sobre os dados e nada muda: só nasce a tabela senhas_admin, vazia", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toContain(
+        "0015_senha_admin.sql",
+      );
+      expect(antes.usuarios.length).toBeGreaterThan(0);
+      expect(antes.sessoes.length).toBeGreaterThan(0);
+      const { senhas_admin: senhas, ...depois } =
+        await fotografarTodasAsTabelas(db);
+      expect(depois).toEqual(antes);
+      expect(senhas).toEqual([]);
+    });
+
+    // Veio do describe da 0013: a consulta da sessão lê senhas_admin (0015), então roda sobre o schema completo.
+    it("o admin de antes da 0006 continua entrando depois de todas as migrações: o link e a sessão dele valem", async () => {
+      expect(await buscarLinkValido(db, hash("a"), AGORA_DA_MIGRACAO)).toEqual({
+        linkId: 1,
+        usuario: { id: 1, nome: "Admin Antes da 0006", papel: "admin" },
+        acessoLigado: true,
+      });
+      expect(
+        await buscarLinkValido(db, hash("b"), AGORA_DA_MIGRACAO),
+      ).toBeNull();
+      expect(
+        await buscarUsuarioDaSessao(db, hash("d"), AGORA_DA_MIGRACAO),
+      ).toEqual({ id: 1, nome: "Admin Antes da 0006", papel: "admin" });
+    });
+
+    it("os CHECKs: usuário no formato, sal e hash em hex do tamanho certo, 100.000 iterações ou mais; usuário único", async () => {
+      const inserir = (
+        usuarioId: number,
+        usuario: string,
+        sal = SAL,
+        hashSenha = HASH,
+        iteracoes = 100_000,
+      ) =>
+        db
+          .prepare(
+            `INSERT INTO senhas_admin (usuario_id, usuario, sal, hash, iteracoes, criada_em, atualizada_em)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`,
+          )
+          .bind(
+            usuarioId,
+            usuario,
+            sal,
+            hashSenha,
+            iteracoes,
+            AGORA_DA_MIGRACAO,
+          )
+          .run();
+      for (const [usuario, sal, hashSenha, iteracoes] of [
+        ["Pastor", SAL, HASH, 100_000],
+        ["ab", SAL, HASH, 100_000],
+        [".pastor", SAL, HASH, 100_000],
+        ["pastor", "a".repeat(31), HASH, 100_000],
+        ["pastor", SAL, "B".repeat(64), 100_000],
+        ["pastor", SAL, HASH, 99_999],
+      ] as const)
+        await expect(
+          inserir(1, usuario, sal, hashSenha, iteracoes),
+        ).rejects.toThrow(/CHECK constraint failed/);
+      await inserir(1, "pastor");
+      onTestFinished(async () => {
+        await db.prepare("DELETE FROM senhas_admin").run();
+      });
+      const outro = await db
+        .prepare(
+          "INSERT INTO usuarios (nome, papel, criado_em) VALUES ('Outro admin', 'admin', ?1) RETURNING id",
+        )
+        .bind(AGORA_DA_MIGRACAO)
+        .first<{ id: number }>();
+      await expect(inserir(outro!.id, "pastor")).rejects.toThrow(
+        /UNIQUE constraint failed/,
+      );
+    });
+  });
+
   // -------------------------------------------------------------------------------------------------
   // 0017 (RIFA-076, D36): o nome e o telefone de quem reserva ou compra, aplicada sobre tudo o que já existia
   // -------------------------------------------------------------------------------------------------

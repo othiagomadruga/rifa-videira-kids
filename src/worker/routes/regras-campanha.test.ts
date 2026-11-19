@@ -1269,7 +1269,7 @@ describe("RIFA-042 (CA1): pedidos, acesso e mensagens da campanha são só do ad
     expect(criada.status).toBe(200);
     expect(gruposDe(campanhaSchema.parse(criada.corpo))).toEqual({
       pedidos: { desconsiderar: false },
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: MENSAGENS_PADRAO,
     });
   });
@@ -1292,10 +1292,56 @@ describe("RIFA-042 (CA1): pedidos, acesso e mensagens da campanha são só do ad
     expect(resposta.status).toBe(200);
     expect(gruposDe(campanhaSchema.parse(resposta.corpo))).toEqual({
       pedidos: { desconsiderar: false },
-      acesso: { discipuladores: true, redes: false },
+      acesso: { discipuladores: true, redes: false, celulas_senha: true },
       mensagens: { ...MENSAGENS_PADRAO, link_rede: modeloDoAdmin },
     });
     expect((await lerCampanha()).nome).toBe("Rifa da coordenação");
+  });
+
+  it("RIFA-064 (D29): acesso.celulas_senha é do admin (403 para a coordenação que a muda); ausente mantém o gravado; a trilha diz o antes e o depois", async () => {
+    const antes = await lerCampanha();
+    expect(antes.acesso.celulas_senha).toBe(true);
+    const trilha = await contarTrilha("campanha.salvar");
+
+    const daCoordenacao = await salvarComo(coordenacao, {
+      ...gruposDe(antes),
+      acesso: { ...antes.acesso, celulas_senha: false },
+    });
+    expect(daCoordenacao).toEqual({ status: 403, corpo: erro("proibido") });
+    expect(await lerCampanha()).toEqual(antes);
+    expect(await contarTrilha("campanha.salvar")).toBe(trilha);
+
+    const doAdmin = await salvarComo(admin, {
+      ...gruposDe(antes),
+      acesso: { ...antes.acesso, celulas_senha: false },
+    });
+    expect(doAdmin.status).toBe(200);
+    expect(campanhaSchema.parse(doAdmin.corpo).acesso).toEqual({
+      discipuladores: true,
+      redes: true,
+      celulas_senha: false,
+    });
+    expect((await ultimaDaTrilha("campanha.salvar"))?.resumo).toBe(
+      "Alterado: acesso.celulas_senha: ligado → desligado",
+    );
+
+    // Sem a chave no grupo (uma aba antiga) ou sem o grupo: continua desligada, para os dois papéis.
+    for (const [quem, corpo] of [
+      [admin, { acesso: { discipuladores: true, redes: true } }],
+      [coordenacao, { acesso: { discipuladores: true, redes: true } }],
+      [coordenacao, {}],
+    ] as const) {
+      const res = await salvarComo(quem, corpo);
+      expect(res.status).toBe(200);
+      expect(campanhaSchema.parse(res.corpo).acesso.celulas_senha).toBe(false);
+    }
+
+    const religada = await salvarComo(admin, {
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
+    });
+    expect(campanhaSchema.parse(religada.corpo).acesso.celulas_senha).toBe(
+      true,
+    );
   });
 });
 

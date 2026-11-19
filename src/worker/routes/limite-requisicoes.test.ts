@@ -2,16 +2,21 @@
 // wrangler.jsonc (simulado pelo Miniflare no workerd local: janela fixa alinhada ao relógio, por período).
 // - POST /api/sessao: 60 por minuto por IP desde a D12 (eram 10), toda tentativa conta; 60 logins de verdade
 //   do mesmo IP passam e o 61º leva 429 (RIFA-014, CA9: a reunião dos líderes atrás do Wi-Fi da igreja);
+// - POST /api/sessao/senha (RIFA-064, D29): o mesmo limite e o mesmo contador do POST /api/sessao;
 // - /api/publico/*: 60 idas ao banco por minuto por IP; resposta do cache não conta.
 // Cada teste usa IPs próprios (aleatórios): os contadores do binding valem para o arquivo todo.
 import { env, exports } from "cloudflare:workers";
 import { Hono } from "hono";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { STATUS_HTTP_DO_ERRO, erroApiSchema } from "../../shared/contracts";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  STATUS_HTTP_DO_ERRO,
+  erroApiSchema,
+  senhaPadraoDaCelula,
+} from "../../shared/contracts";
 import { SEM_CACHE } from "../lib/cache-publico";
 import { LIMITE_LOGIN, LIMITE_PUBLICO } from "../lib/limite-requisicoes";
 import { ORIGEM, criarAcessoNoBanco } from "../test/acesso-teste";
-import { semearCampanha } from "../test/painel-apoio";
+import { CELULAS, semearCampanha, semearCenario } from "../test/painel-apoio";
 import { PREFIXO_PUBLICO, criarPublico } from "./publico";
 
 /** Um IPv4 de documentação diferente a cada chamada. */
@@ -155,6 +160,67 @@ describe("POST /api/sessao: 60 tentativas por minuto por IP (D12; eram 10)", () 
   it("sem CF-Connecting-IP (só nos testes; a Cloudflare sempre põe), não há limite", async () => {
     for (let vez = 0; vez < LIMITE_LOGIN.limite + 3; vez++)
       expect((await entrar(null)).status).toBe(401);
+  });
+});
+
+describe("RIFA-064 (D29): POST /api/sessao/senha usa o mesmo limite de tentativas por IP do link", () => {
+  function entrarComSenha(ip: string, corpo: object) {
+    return exports.default.fetch(`${ORIGEM}/api/sessao/senha`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: ORIGEM,
+        "CF-Connecting-IP": ip,
+      },
+      body: JSON.stringify(corpo),
+    });
+  }
+
+  beforeAll(async () => {
+    await semearCenario();
+  });
+
+  // O login certo grava a trilha, que segura o usuário do líder: limpa para os testes de baixo poderem semear de novo.
+  afterAll(async () => {
+    await env.DB.prepare(
+      "DELETE FROM auditoria WHERE acao = 'sessao.entrar_com_senha'",
+    ).run();
+  });
+
+  it("60 senhas erradas do mesmo IP levam 401; a 61ª, 429, mesmo com a senha certa; outro IP entra", async () => {
+    const certa = {
+      celula: CELULAS[0].nome,
+      senha: senhaPadraoDaCelula(CELULAS[0].nome)!,
+    };
+    await esperarJanelaInteira(LIMITE_LOGIN.periodoSegundos, 20_000);
+    const ip = ipNovo();
+    for (let vez = 1; vez <= LIMITE_LOGIN.limite; vez++) {
+      const res = await entrarComSenha(ip, {
+        celula: CELULAS[0].nome,
+        senha: `@tentativa${vez}`,
+      });
+      expect({ vez, status: res.status }).toEqual({ vez, status: 401 });
+    }
+    const sessentaEUm = await entrarComSenha(ip, certa);
+    expect(sessentaEUm.headers.get("Set-Cookie")).toBeNull();
+    await esperar429(sessentaEUm);
+    expect((await entrarComSenha(ipNovo(), certa)).status).toBe(200);
+  });
+
+  it("o contador é o mesmo do link: 30 tentativas pelo link e 30 pela senha esgotam o IP", async () => {
+    await esperarJanelaInteira(LIMITE_LOGIN.periodoSegundos, 20_000);
+    const ip = ipNovo();
+    const metade = LIMITE_LOGIN.limite / 2;
+    for (let vez = 0; vez < metade; vez++)
+      expect((await entrar(ip)).status).toBe(401);
+    for (let vez = 0; vez < metade; vez++)
+      expect(
+        (await entrarComSenha(ip, { celula: "x", senha: "@x1234" })).status,
+      ).toBe(401);
+    await esperar429(
+      await entrarComSenha(ip, { celula: "x", senha: "@x1234" }),
+    );
+    await esperar429(await entrar(ip));
   });
 });
 

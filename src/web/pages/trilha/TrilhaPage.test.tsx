@@ -229,6 +229,12 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Pedido voltou a contar",
       "Afiliado removido",
       "Token do webhook gerado",
+      "Célula entrou com a senha padrão",
+      // RIFA-073 (D33): o login do admin com usuário e senha e a senha dele.
+      "Administrador entrou com usuário e senha",
+      "Senha do administrador criada",
+      "Senha do administrador trocada",
+      "Senha do administrador removida",
       "Planilha de compradores baixada",
     ]);
     for (const acao of ACOES_AUDITORIA) {

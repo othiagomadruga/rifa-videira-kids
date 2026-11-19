@@ -16,7 +16,7 @@ Cada linha descreve uma célula e repete o discipulador e a rede dela. É assim 
 
 | Coluna | Obrigatória | O que preencher | Exemplo |
 |---|---|---|---|
-| `rede` | sim | nome da rede (até 120 caracteres) | Rede Jovem Norte |
+| `rede` | sim | nome da rede (até 120 caracteres); pode ser uma só, com o mesmo nome em todas as linhas (com uma rede só, o site não mostra a rede: D30) | Rede Jovem Norte |
 | `divisao` | sim | `jovens` ou `adultos` (maiúsculas também valem) | jovens |
 | `rede_responsavel` | não | pastor ou obreiro da rede; basta preencher em uma das linhas da rede | Pastor Fulano |
 | `discipulador` | sim | nome do discipulador (até 120 caracteres) | Discipulador Beltrano |

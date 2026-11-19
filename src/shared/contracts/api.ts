@@ -577,6 +577,15 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - webhook.gerar_token (RIFA-039, D21): ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook, alvo `webhook`
  *   (ALVO_AUDITORIA_TOKEN_WEBHOOK); resumo com o que deixou de valer (nada, o segredo do Worker ou o token da tela
  *   gerado em <instante>), NUNCA o token nem o hash. O 409 (sem `substituir`) não registra.
+ * - sessao.entrar_com_senha (RIFA-064, D29): ROTAS_ACESSO.entrarComSenha, cada login da célula com a senha padrão que
+ *   abriu sessão; quem fez é o usuário líder da célula, alvo `celula:<id>`; resumo sem a senha (que nunca é gravada).
+ *   A tentativa recusada não registra.
+ * - sessao.entrar_como_admin (RIFA-073, D33): ROTAS_ACESSO.entrarComoAdmin, cada login do admin com usuário e senha que
+ *   abriu sessão; quem fez é o próprio admin, alvo `usuario:<id>`; resumo sem a senha e sem o usuário de login. A
+ *   tentativa recusada não registra.
+ * - senha_admin.definir, senha_admin.trocar e senha_admin.remover (RIFA-073, D33): ROTAS_ACESSO.definirMinhaSenhaAdmin e
+ *   removerMinhaSenhaAdmin, alvo `usuario:<id>` (o próprio admin); resumo sem a senha, sem o hash e sem o usuário de
+ *   login (só se ele mudou e, na troca e na remoção, quantas sessões abertas pela senha foram encerradas).
  * - compradores.exportar (RIFA-076, D36): ROTAS.exportarCompradores, alvo `compradores`; resumo só com o filtro e
  *   quantas linhas saíram, NUNCA nomes ou telefones.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
@@ -601,6 +610,11 @@ export const ACOES_AUDITORIA = [
   "pedido.reconsiderar",
   "afiliado.remover",
   "webhook.gerar_token",
+  "sessao.entrar_com_senha",
+  "sessao.entrar_como_admin",
+  "senha_admin.definir",
+  "senha_admin.trocar",
+  "senha_admin.remover",
   "compradores.exportar",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];

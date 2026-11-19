@@ -25,6 +25,15 @@ import {
   type TipoAlvo,
 } from "./dominio";
 import { PAPEIS_COM_CHAVE_DE_ACESSO } from "./regras";
+import {
+  FORMATO_USUARIO_ADMIN,
+  LIMITE_CAMPO_LOGIN_ADMIN,
+  MAXIMO_USUARIO_ADMIN,
+  MENSAGEM_PROBLEMA_SENHA_ADMIN,
+  MENSAGEM_USUARIO_ADMIN_INVALIDO,
+  normalizarUsuarioAdmin,
+  problemaDaSenhaAdmin,
+} from "./senha-admin";
 
 // ---------------------------------------------------------------------------------------------------
 // Papéis e parâmetros do acesso
@@ -127,7 +136,83 @@ export const corpoCriarSessaoSchema = z.object({
   token: z.string().max(512),
 });
 
-/** 200 de POST /api/sessao (junto com o Set-Cookie) e de GET /api/sessao. */
+/**
+ * Tamanho máximo de cada campo do login da célula (RIFA-064): o nome da célula tem até 120 caracteres e a senha
+ * padrão, "@" + o nome normalizado + "1234". Acima disso, 400 (nada a ver com a célula existir).
+ */
+export const LIMITE_CAMPO_LOGIN_CELULA = 200;
+
+/**
+ * POST /api/sessao/senha (RIFA-064, D29): o login da célula com a senha padrão (login-celula.ts). Os dois campos são
+ * texto livre: vazio, um nome que não é de célula ou uma senha errada dão o MESMO 401 (a resposta não diz se a
+ * célula existe). Só a falta de um campo (ou um não texto) e o texto acima do limite dão 400.
+ */
+export const corpoEntrarComSenhaSchema = z.object({
+  /** O nome da célula, como a pessoa digitou: comparado normalizado (sem maiúsculas, acentos, espaços e pontuação). */
+  celula: z.string().max(LIMITE_CAMPO_LOGIN_CELULA),
+  /** A senha padrão: "@" + o nome da célula normalizado + "1234" (comparada com formaDaSenhaDigitada). */
+  senha: z.string().max(LIMITE_CAMPO_LOGIN_CELULA),
+});
+export type CorpoEntrarComSenha = z.input<typeof corpoEntrarComSenhaSchema>;
+
+/**
+ * POST /api/sessao/admin (RIFA-073, D33): o login do admin com usuário e senha (senha-admin.ts). Os dois campos são
+ * texto livre: vazio, um usuário que não existe ou uma senha errada dão o MESMO 401 (a resposta não diz se o usuário
+ * existe). Só a falta de um campo (ou um não texto) e o texto acima do limite dão 400.
+ */
+export const corpoEntrarComoAdminSchema = z.object({
+  /** O usuário de login, como a pessoa digitou: comparado normalizado (sem espaços nas pontas, em minúsculas). */
+  usuario: z.string().max(LIMITE_CAMPO_LOGIN_ADMIN),
+  senha: z.string().max(LIMITE_CAMPO_LOGIN_ADMIN),
+});
+export type CorpoEntrarComoAdmin = z.input<typeof corpoEntrarComoAdminSchema>;
+
+/**
+ * PUT /api/admin/minha-senha (RIFA-073, D33): define ou troca o usuário e a senha de login do PRÓPRIO admin (o da
+ * sessão). O usuário é gravado normalizado (normalizarUsuarioAdmin) e tem de seguir FORMATO_USUARIO_ADMIN; a senha,
+ * problemaDaSenhaAdmin (mínimo de 10 caracteres, diferente do usuário). A confirmação da senha é da tela.
+ */
+export const corpoDefinirSenhaAdminSchema = z
+  .object({
+    usuario: z
+      .string()
+      .max(LIMITE_CAMPO_LOGIN_ADMIN)
+      .transform(normalizarUsuarioAdmin)
+      .pipe(
+        z
+          .string()
+          .max(MAXIMO_USUARIO_ADMIN)
+          .regex(FORMATO_USUARIO_ADMIN, MENSAGEM_USUARIO_ADMIN_INVALIDO),
+      ),
+    senha: z.string().max(LIMITE_CAMPO_LOGIN_ADMIN),
+  })
+  .superRefine(({ usuario, senha }, ctx) => {
+    const problema = problemaDaSenhaAdmin(senha, usuario);
+    if (problema !== null)
+      ctx.addIssue({
+        code: "custom",
+        path: ["senha"],
+        message: MENSAGEM_PROBLEMA_SENHA_ADMIN[problema],
+      });
+  });
+export type CorpoDefinirSenhaAdmin = z.input<
+  typeof corpoDefinirSenhaAdminSchema
+>;
+
+/**
+ * 200 de GET e de PUT /api/admin/minha-senha: se o admin da sessão tem senha, o usuário de login e quando foi
+ * definida ou trocada pela última vez. Nunca a senha nem o hash.
+ */
+export const respostaSenhaAdminSchema = z.strictObject({
+  definida: z.boolean(),
+  /** null quando não há senha. */
+  usuario: z.string().regex(FORMATO_USUARIO_ADMIN).nullable(),
+  /** null quando não há senha. */
+  atualizada_em: instanteSchema.nullable(),
+});
+export type RespostaSenhaAdmin = z.infer<typeof respostaSenhaAdminSchema>;
+
+/** 200 de POST /api/sessao, de POST /api/sessao/senha e de POST /api/sessao/admin (junto com o Set-Cookie) e de GET /api/sessao. */
 export const respostaSessaoSchema = z.object({ usuario: usuarioSessaoSchema });
 export type RespostaSessao = z.infer<typeof respostaSessaoSchema>;
 
@@ -253,6 +338,43 @@ export const ROTAS_ACESSO = {
     corpo: corpoCriarSessaoSchema,
     sucesso: { status: 200, corpo: respostaSessaoSchema },
   },
+  /**
+   * RIFA-064 (D29): o login da célula com o nome dela e a senha padrão ("@" + nome normalizado + "1234";
+   * login-celula.ts). Abre a sessão do papel `lider` preso à célula, igual à do link (cookie `__Host-sessao`, 45 dias,
+   * parada há 7 dias deixa de valer), com o mesmo usuário do link do líder; a célula que ainda não tem esse usuário
+   * ganha um, com o `lider_nome` da hierarquia (o líder da importação, mesmo provisório). Mesma origem (CSRF), o mesmo
+   * limite de tentativas por IP do POST /api/sessao (429) e o mesmo teto do corpo (413).
+   * 401 `nao_autenticado`, com a MESMA mensagem em todos os casos (a resposta não diz se a célula existe): senha
+   * errada, nome que não é de nenhuma célula, dois nomes de célula iguais depois da normalização (ambíguo: a
+   * coordenação vê o aviso na Hierarquia), o usuário da célula desativado e a chave `acesso.celulas_senha` desligada
+   * na Campanha. A senha nunca é gravada (nem na trilha, que registra cada login por senha, sem ela).
+   */
+  entrarComSenha: {
+    metodo: "POST",
+    caminho: "/api/sessao/senha",
+    grupo: "aberto",
+    papeis: null,
+    situacao: "detalhada",
+    corpo: corpoEntrarComSenhaSchema,
+    sucesso: { status: 200, corpo: respostaSessaoSchema },
+  },
+  /**
+   * RIFA-073 (D33): o login do admin com usuário e senha (definidos por ele em PUT /api/admin/minha-senha). Abre a
+   * MESMA sessão do link do admin (cookie `__Host-sessao`, 45 dias, parada há 7 dias deixa de valer), sem link
+   * (`sessoes.link_id` NULL). Mesma origem (CSRF), o mesmo limite de tentativas por IP do POST /api/sessao (429) e o
+   * mesmo teto do corpo (413). 401 `nao_autenticado`, com a MESMA mensagem em todos os casos (a resposta não diz se o
+   * usuário existe): usuário que não existe, senha errada, usuário desativado ou que não é mais admin. A trilha
+   * registra cada login que abriu sessão (`sessao.entrar_como_admin`), sem a senha.
+   */
+  entrarComoAdmin: {
+    metodo: "POST",
+    caminho: "/api/sessao/admin",
+    grupo: "aberto",
+    papeis: null,
+    situacao: "detalhada",
+    corpo: corpoEntrarComoAdminSchema,
+    sucesso: { status: 200, corpo: respostaSessaoSchema },
+  },
   obterSessao: {
     metodo: "GET",
     caminho: "/api/sessao",
@@ -321,6 +443,43 @@ export const ROTAS_ACESSO = {
     papeis: ["admin"],
     situacao: "detalhada",
     parametros: parametroIdSchema,
+    sucesso: { status: 204, corpo: null },
+  },
+  /** RIFA-073 (D33): a senha de login do admin da sessão (sem a senha e sem o hash). */
+  obterMinhaSenhaAdmin: {
+    metodo: "GET",
+    caminho: "/api/admin/minha-senha",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaSenhaAdminSchema },
+  },
+  /**
+   * RIFA-073 (D33): define ou troca o usuário e a senha de login do admin da sessão. Trocar encerra as OUTRAS sessões
+   * dele abertas pela senha (a deste aparelho continua; as abertas pelo link também). A trilha registra
+   * `senha_admin.definir` ou `senha_admin.trocar` (alvo `usuario:<id>`), sem a senha e sem o usuário de login.
+   * 409 `em_uso`: o usuário de login já é de outro admin.
+   */
+  definirMinhaSenhaAdmin: {
+    metodo: "PUT",
+    caminho: "/api/admin/minha-senha",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoDefinirSenhaAdminSchema,
+    sucesso: { status: 200, corpo: respostaSenhaAdminSchema },
+  },
+  /**
+   * RIFA-073 (D33): remove a senha de login do admin da sessão e encerra as sessões dele abertas pela senha (inclusive
+   * a deste aparelho, se foi aberta pela senha); as do link continuam. Sem senha, 204 sem mudar nada. A trilha
+   * registra `senha_admin.remover` só quando havia senha.
+   */
+  removerMinhaSenhaAdmin: {
+    metodo: "DELETE",
+    caminho: "/api/admin/minha-senha",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
     sucesso: { status: 204, corpo: null },
   },
 } as const satisfies Record<string, DefinicaoRotaAcesso>;

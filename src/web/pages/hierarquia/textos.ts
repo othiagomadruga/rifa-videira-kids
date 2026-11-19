@@ -166,6 +166,11 @@ export const DICAS = {
     "Cadastra ou atualiza de uma vez as redes, os discipuladores e as células por uma planilha.",
   tentarDeNovo:
     "Lê as tabelas de novo. Enquanto isso, a tela continua com os dados que já tinha.",
+  // Login das células com senha (RIFA-064, D29)
+  verSenhas:
+    "Mostra a senha padrão de cada célula, para repassar ao líder pelo WhatsApp. A senha sai do nome da célula.",
+  copiarSenha:
+    "Copia a senha desta célula, para colar na conversa com o líder.",
   // Tabela das células
   filtroDivisao:
     "Mostra só as células de Jovens ou de Adultos. A lista de redes ao lado segue a escolha.",
@@ -240,4 +245,23 @@ export const DICAS = {
   importar:
     "Grava a planilha conferida, e as tabelas da hierarquia mudam na hora. Só libera depois de uma conferência sem erros.",
   verCelulas: "Volta para a aba Células, que já mostra o que foi importado.",
+} as const;
+
+/**
+ * Com uma rede só (RIFA-065, D30), as dicas que citavam a rede, sem ela. A da importação explica que a planilha
+ * continua com a coluna `rede`, com o mesmo nome em todas as linhas.
+ */
+export const DICAS_REDE_UNICA = {
+  abaCelulas:
+    "Cada célula com o discipulador, a divisão, as pessoas e o líder. Dá para filtrar, editar e excluir.",
+  abaDiscipuladores:
+    "Cada discipulador com quantas células e pessoas tem. Dá para editar e excluir.",
+  abaImportar:
+    "Cadastra ou atualiza de uma vez os discipuladores e as células por uma planilha. A coluna rede continua obrigatória, mas a rede pode ser uma só: o mesmo nome em todas as linhas.",
+  filtroDivisao: "Mostra só as células de Jovens ou de Adultos.",
+  limparFiltros: "Tira a divisão e a busca e mostra todas as células de novo.",
+  editarDiscipulador:
+    "Abre o formulário para corrigir o nome deste discipulador.",
+  discipuladorDaCelula:
+    "Quem acompanha a célula. Nos rankings e no painel, ela passa a contar, com as vendas de antes, para este discipulador.",
 } as const;

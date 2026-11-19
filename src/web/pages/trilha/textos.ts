@@ -23,6 +23,13 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "afiliado.remover": "Afiliado removido",
   // RIFA-039 (D21): o token do webhook gerado pela tela (aba Webhook da Rifei de Acessos; alvo `webhook`).
   "webhook.gerar_token": "Token do webhook gerado",
+  // RIFA-064 (D29): cada entrada de uma célula com a senha padrão (tela Entrar; alvo `celula:<id>`).
+  "sessao.entrar_com_senha": "Célula entrou com a senha padrão",
+  // RIFA-073 (D33): o admin entrou com usuário e senha (tela Entrar) e a senha dele (tela Minha senha).
+  "sessao.entrar_como_admin": "Administrador entrou com usuário e senha",
+  "senha_admin.definir": "Senha do administrador criada",
+  "senha_admin.trocar": "Senha do administrador trocada",
+  "senha_admin.remover": "Senha do administrador removida",
   // RIFA-076 (D36): a planilha de compradores baixada pelo admin (tela Pedidos; alvo `compradores`, sem os dados).
   "compradores.exportar": "Planilha de compradores baixada",
 };

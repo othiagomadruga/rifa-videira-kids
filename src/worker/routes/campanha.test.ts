@@ -196,7 +196,7 @@ describe("CA1: PUT /api/admin/campanha grava campanha e períodos", () => {
       publico: { mostra_percentual_meta: false, limite_ranking: 3 },
       // D20: os padrões das regras do admin (a API ainda não grava os grupos; o parse completa).
       pedidos: { desconsiderar: false },
-      acesso: { discipuladores: true, redes: true },
+      acesso: { discipuladores: true, redes: true, celulas_senha: true },
       mensagens: MENSAGENS_PADRAO,
       criado_em: expect.stringMatching(
         /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
