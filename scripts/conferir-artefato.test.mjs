@@ -2,7 +2,7 @@
 // RIFA-021 (D18): scripts/conferir-artefato.mjs, a conferência do build antes de o token da Cloudflare entrar.
 // O wrangler.jsonc é o do projeto, lido pelo wrangler. O wrangler.json "do build" daqui está escrito à mão
 // com as diferenças que o @cloudflare/vite-plugin introduz (conferidas contra o build de verdade na
-// RIFA-021); o job ci roda o script no build de cada push, então uma mudança do plugin aparece lá.
+// RIFA-021); o job ci roda o script no build da main e o portão local da subida do plugin também (RIFA-072).
 import {
   copyFileSync,
   existsSync,

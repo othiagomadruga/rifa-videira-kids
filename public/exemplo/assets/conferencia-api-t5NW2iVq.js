@@ -1,4 +1,4 @@
-import{i as e,t}from"./api-CJpSStjn.js";import{i as n,n as r,x as i}from"./conferencia-DfOpfzjD.js";var a=`﻿`,o=`"`;function s(e){let t={",":0,";":0},n=!1,r=!1;for(let i of e)if(i===o)n=!n,r=!0;else if(!n){if(i===`
+import{i as e,t}from"./api-Bip1hPuI.js";import{i as n,n as r,x as i}from"./conferencia-DfOpfzjD.js";var a=`﻿`,o=`"`;function s(e){let t={",":0,";":0},n=!1,r=!1;for(let i of e)if(i===o)n=!n,r=!0;else if(!n){if(i===`
 `||i===`\r`){if(r)break}else(i===`,`||i===`;`)&&t[i]++,i.trim()!==``&&(r=!0)}return t[`;`]>t[`,`]?`;`:`,`}function c(e,t={}){let n=t.maximoRegistros??1/0,r=e.startsWith(a)?e.slice(1):e,i=s(r),c=[],l=[],u=``,d=1,f=!1,p=!1,m=0,h=()=>{l.push(u),u=``,f=!1},g=()=>{h(),l.some(e=>e.trim()!==``)&&c.push({linha:d,campos:l}),l=[],d++};for(let e=0;e<r.length;e++){let t=r[e],a=r[e+1];if(p)t===o&&a===o?(u+=o,e++):t===o?p=!1:t===`\r`?(u+=`
 `,a===`
 `&&e++):u+=t;else if(t===o&&!f&&u.trim()===``)p=!0,f=!0,u=``,m=d;else if(t===i)h();else if(t===`
