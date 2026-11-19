@@ -1961,3 +1961,31 @@ Conferência, que não sai do navegador com os números).
 **Consequências.** Pedido recuperado (sem números) não aparece na grade: a tela avisa com a contagem de pedidos e de
 bilhetes. Números fora da faixa (quantidade ou número inicial errados na Campanha) viram um aviso com o link para a
 Campanha. O % vendido é dos números conhecidos (os da grade).
+
+### Adendo da D34: o relatório "Pix recebidos" do Bradesco em PDF (RIFA-077, 2026-11-19)
+
+O PDF real que o PO mandou não é o extrato da conta nem o comprovante: é a **lista de Pix recebidos** (gerada por
+iText), com as colunas Data | Referência | Identificação | Horário | Entradas (R$) | Saídas (R$) | "Ver detalhes". Cada
+lançamento é um **bloco vertical**: o dia numa linha e "NOV" embaixo (só no primeiro do dia); o nome de quem pagou e o
+banco dele quebrados em várias linhas, acima e abaixo da linha do meio; na linha do meio, o E2E, o horário e o valor.
+O ano não aparece.
+
+- **Leitor** (`extrato/pix-recebidos.ts`, puro): `pdf-linhas.ts` tenta primeiro o cabeçalho deste relatório (Data,
+  Horário, Entradas e Saídas, e Referência ou Identificação, na mesma faixa). Achado, os pedaços viram blocos pela
+  linha do meio (horário, valor e E2E na mesma altura); as linhas da Referência vão para o bloco certo pelo **maior vão**
+  entre duas linhas do meio (a célula é centrada e o tamanho varia: o mais perto erraria), e a data pelo mais perto. O
+  valor é da coluna cujo fim do cabeçalho está mais perto do fim do valor (alinhado pela direita): **Entradas** é
+  crédito; **Saídas**, débito (fica de fora, como os débitos da D26). O resultado é um texto canônico (a marca "Pix
+  recebidos" e uma linha por lançamento, com tabulações), lido por `lerPixRecebidos` em `leitura.ts`, antes do
+  comprovante. Sem o cabeçalho, o PDF segue o leitor de antes.
+- **O que sai:** a data (dia e mês da coluna, ano do E2E `E` + ISPB + **aaaamm**ddhhmm, com a virada do ano; sem E2E,
+  o ano corrente, como o "16/11" do texto colado), o horário, o valor, o **pagador** (as linhas da Referência juntas,
+  sem o banco), o **banco** à parte (campo opcional novo do `Lancamento`; a linha que começa com o nome de um banco,
+  ou o parágrafo de baixo com a forma de empresa, "S.A.", "- IP", "LTDA") e o E2E como `idDaTransacao` (acha o mesmo
+  Pix num comprovante, D34). A hora do E2E é UTC e não é usada.
+- **São Pix pelo próprio relatório:** o `Lancamento` ganha `pix: true`, e o filtro das palavras do Pix ("PIX",
+  "TRANSF") não vale para eles, como o comprovante. O cruzamento e o formato do resultado não mudam (RIFA-070).
+- **Conferido com a amostra real só localmente** (não está no repositório nem nos testes): 3 lançamentos, R$ 25,00 em
+  19/11 às 11:12:04, R$ 2.863,28 em 18/11 às 14:41:43 (na coluna **Saídas**: débito, fica de fora) e R$ 813,26 em
+  18/11 às 11:03:38. O teste usa um PDF sintético com o mesmo layout e nomes e E2E fictícios
+  (`pdfDePixRecebidos`, `teste-apoio-pdf.ts`).

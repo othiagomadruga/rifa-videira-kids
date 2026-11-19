@@ -3,7 +3,7 @@
 // - foto ou print (imagem; RIFA-074): a falha que pede o comprovante em PDF (OCR fica fora);
 // - PDF (o começo "%PDF-", a extensão ou o tipo; RIFA-068): o texto de cada página, com as linhas montadas pela
 //   posição (pdf.ts, num pacote à parte com o pdf.js, carregado pelo import() só quando a pessoa escolhe um PDF),
-//   lido pelo leitor de texto colado; o comprovante de Pix (RIFA-074, D34), um Pix por arquivo, por comprovante.ts;
+//   lido pelo leitor de texto colado; o relatório "Pix recebidos" do Bradesco (RIFA-077), por pix-recebidos.ts; o comprovante de Pix (RIFA-074, D34), um Pix por arquivo, por comprovante.ts;
 // - OFX (a tag <OFX> ou o cabeçalho OFXHEADER): ofx.ts;
 // - CSV (a extensão .csv ou linhas com o mesmo separador), com o cabeçalho achado: csv.ts, com o mapeamento na tela;
 // - o resto (e o CSV sem cabeçalho reconhecível): o leitor de texto colado, linha por linha (texto-colado.ts).
@@ -20,6 +20,11 @@ import type {
   FalhaDoExtrato,
 } from "./lancamentos";
 import { ehOfx, lerOfx } from "./ofx";
+import {
+  lerPixRecebidos,
+  parecePixRecebidos,
+  SEM_PIX_RECEBIDOS,
+} from "./pix-recebidos";
 import { lerTextoColado, SEM_LANCAMENTOS_NO_TEXTO } from "./texto-colado";
 import { FALHAS_DO_COMPROVANTE, FALHAS_DO_PDF } from "./textos";
 
@@ -123,6 +128,13 @@ export function lerExtrato(
   const lido = (extrato: ExtratoLido | FalhaDoExtrato): LeituraDoExtrato =>
     extrato.ok ? { ok: true, tipo: "lido", extrato } : extrato;
   if (entrada.tipo === "pdf") {
+    // O relatório "Pix recebidos" do Bradesco (RIFA-077): um lançamento por bloco, já em linhas (pix-recebidos.ts).
+    if (parecePixRecebidos(texto)) {
+      const pix = lerPixRecebidos(texto, contexto);
+      return pix === SEM_PIX_RECEBIDOS
+        ? FALHAS_DO_PDF.semLancamentos
+        : lido(pix);
+    }
     // O comprovante de Pix (RIFA-074): um Pix só, com o identificador e o ID da transação.
     if (pareceComprovante(texto)) {
       const comprovante = lerComprovante(texto, contexto);
