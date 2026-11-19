@@ -10,7 +10,11 @@ export const CARACTERE_SUBSTITUICAO = "\uFFFD";
 
 /** Colunas da planilha, na ordem do contrato (COLUNAS_CSV_HIERARQUIA), com o que vai em cada uma. */
 export const COLUNAS_DA_PLANILHA = {
-  rede: { obrigatoria: true, conteudo: "nome da rede" },
+  // RIFA-065 (D30): com uma rede só, a coluna continua, com o mesmo nome em todas as linhas.
+  rede: {
+    obrigatoria: true,
+    conteudo: "nome da rede (pode ser uma só: o mesmo nome em todas as linhas)",
+  },
   divisao: { obrigatoria: true, conteudo: "jovens ou adultos" },
   rede_responsavel: {
     obrigatoria: false,

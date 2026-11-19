@@ -10,6 +10,7 @@ import type {
   ReferenciaCampanha,
   RespostaRanking,
 } from "../../../shared/contracts/calculos";
+import { ehListaDasRedes, respostaRedes } from "../../test/redes";
 import { respostaJson } from "../../test/renderizar";
 
 /** 04/12/2026 às 15:30 em Belém (o exemplo de docs/api.md: dia 12 de 24, 2º dia da Semana 2). */
@@ -140,14 +141,23 @@ export type Responder = (
 
 /**
  * Troca o fetch por uma API que só conhece GET /api/painel/ranking. `caminhos` guarda cada caminho pedido
- * (com a consulta); outra rota responde 404 e fica em `inesperadas`.
+ * (com a consulta); outra rota responde 404 e fica em `inesperadas`. A lista das redes (RIFA-065, D30: a tela
+ * pergunta quantas há) responde com `redes` redes (padrão: duas, a tela como sempre foi) e fica em `pedidosDasRedes`.
  */
-export function simularApiRanking(responder: Responder) {
+export function simularApiRanking(
+  responder: Responder,
+  { redes = 2 }: { redes?: number } = {},
+) {
   const caminhos: string[] = [];
   const inesperadas: string[] = [];
+  const pedidosDasRedes: string[] = [];
   const fetchMock = vi.fn(async (entrada: RequestInfo | URL) => {
     const caminho = String(entrada);
     const url = new URL(caminho, "http://localhost");
+    if (ehListaDasRedes(caminho)) {
+      pedidosDasRedes.push(caminho);
+      return respostaRedes(redes);
+    }
     if (url.pathname !== "/api/painel/ranking") {
       inesperadas.push(caminho);
       return respostaJson(
@@ -160,7 +170,7 @@ export function simularApiRanking(responder: Responder) {
     return resultado instanceof Response ? resultado : respostaJson(resultado);
   });
   vi.stubGlobal("fetch", fetchMock);
-  return { fetchMock, caminhos, inesperadas };
+  return { fetchMock, caminhos, inesperadas, pedidosDasRedes };
 }
 
 /** Resposta coerente com a consulta: nível, divisão e janela pedidos, com os itens dados. */

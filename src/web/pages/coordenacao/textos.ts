@@ -28,3 +28,14 @@ export const DICA_DO_MENU = {
   trilha:
     "O registro de quem mudou o quê no sistema, do mais novo para o mais antigo.",
 } as const;
+
+/**
+ * As dicas que citam a rede, sem ela (RIFA-065, D30): valem enquanto o site não sabe que há mais de uma rede (com
+ * uma rede só, a rede some das telas; sem saber, o texto que vale nos dois casos).
+ */
+export const DICA_DO_MENU_SEM_REDE = {
+  hierarquia:
+    "Os discipuladores e as células, com o número de pessoas de cada célula.",
+  rankings:
+    "A disputa entre células e discipuladores: posição, quanto da meta já fizeram e quem está em dia.",
+} as const satisfies Partial<Record<keyof typeof DICA_DO_MENU, string>>;

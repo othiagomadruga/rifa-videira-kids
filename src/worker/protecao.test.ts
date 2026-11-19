@@ -12,6 +12,8 @@
 //    caminho de /api/minha exige a sessão de um deles (sem sessão, 401; coordenação, 403);
 // h) com o acesso do papel desligado na campanha (RIFA-029, D20), o discipulador e a rede levam 403
 //    `acesso_desligado` em todo /api/minha e no login, o líder não muda, e tudo volta com a chave;
+// i) o login da célula com a senha padrão (RIFA-064, D29) abre só a sessão do líder da célula: 403 em toda a
+//    coordenação, a /minha só da própria célula, CSRF, e a chave desligada derruba a sessão aberta pela senha;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -1642,6 +1644,178 @@ describe("h) RIFA-029 (D20, CA4): acesso de discipuladores e redes pela chave da
         )
       ).status,
     ).toBe(404);
+  });
+});
+
+describe("i) RIFA-064 (D29): login da célula com a senha padrão, só na /minha da própria célula", () => {
+  /** A célula 1 do cenário ("Célula Ágape") e a 2 ("Célula Betel"), de painel-apoio. */
+  const CELULA = { id: 1, nome: "Célula Ágape", senha: "@celulaagape1234" };
+  const OUTRA = { id: 2, nome: "Célula Betel" };
+  let sessaoPorSenha: Record<string, string>;
+  let liderPeloLink: Record<string, string>;
+
+  const chaveDaSenha = (ligada: 0 | 1) =>
+    env.DB.prepare(
+      "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1",
+    )
+      .bind(ligada)
+      .run();
+  const entrarComSenha = (
+    corpo: object,
+    cabecalhos: Record<string, string> = { Origin: ORIGEM },
+  ) =>
+    exports.default.fetch(`${ORIGEM}${ROTAS_ACESSO.entrarComSenha.caminho}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...cabecalhos },
+      body: JSON.stringify(corpo),
+    });
+
+  beforeAll(async () => {
+    await semearCenario();
+    const res = await entrarComSenha({
+      celula: CELULA.nome,
+      senha: CELULA.senha,
+    });
+    expect(res.status).toBe(200);
+    const cookie = /^__Host-sessao=([^;]+)/.exec(
+      res.headers.get("Set-Cookie") ?? "",
+    )?.[1];
+    sessaoPorSenha = { Cookie: `__Host-sessao=${cookie}`, Origin: ORIGEM };
+    liderPeloLink = await cabecalhosDeSessaoDaHierarquia("lider", OUTRA.id);
+  });
+
+  // A trilha guarda o login (e segura o usuário do líder): limpa, para o próximo describe poder semear de novo.
+  afterAll(async () => {
+    await chaveDaSenha(1);
+    await env.DB.prepare(
+      "DELETE FROM auditoria WHERE acao = 'sessao.entrar_com_senha'",
+    ).run();
+  });
+
+  it("o contrato declara POST /api/sessao/senha aberto, e ele está montado no app (corpo vazio: 400, não 404)", async () => {
+    expect(GRUPO_NO_CONTRATO.get("POST /api/sessao/senha")).toBe("aberto");
+    expect(
+      rotasRegistradas().map((rota) => `${rota.metodo} ${rota.caminho}`),
+    ).toContain("POST /api/sessao/senha");
+    const vazio = await requisitar("POST", "/api/sessao/senha", {
+      Origin: ORIGEM,
+    });
+    expect(vazio.status).toBe(400);
+    esperarCabecalhosDeSeguranca(vazio);
+  });
+
+  it("a sessão aberta pela senha é a do papel líder da célula (o alvo dela, lido da sessão)", async () => {
+    const res = await requisitar("GET", "/api/sessao", sessaoPorSenha);
+    expect(res.status).toBe(200);
+    const { usuario } = respostaSessaoSchema.parse(await res.json());
+    expect(usuario).toMatchObject({
+      papel: "lider",
+      alvo: { tipo: "celula", id: CELULA.id, nome: CELULA.nome },
+    });
+  });
+
+  it("403 em TODA rota registrada sob /api/admin e /api/painel (inclusive fora do contrato) e nos caminhos sem rota", async () => {
+    const protegidas = rotasRegistradas().filter((rota) =>
+      eDaCoordenacao(rota.caminho),
+    );
+    expect(protegidas.length).toBeGreaterThanOrEqual(30);
+    for (const rota of [
+      ...protegidas,
+      ...ROTAS_DA_COORDENACAO.filter((daCoordenacao) =>
+        daCoordenacao.caminho.startsWith("/api/admin"),
+      ),
+      ...["/api/admin", "/api/admin/qualquer", "/api/painel/x/y"].flatMap(
+        (caminho) =>
+          (["GET", ...ESCRITAS] as const).map((metodo) => ({
+            metodo,
+            caminho,
+          })),
+      ),
+    ]) {
+      const res = await requisitar(
+        rota.metodo,
+        concreto(rota.caminho),
+        sessaoPorSenha,
+      );
+      expect({
+        rota: `${rota.metodo} ${rota.caminho}`,
+        status: res.status,
+      }).toEqual({ rota: `${rota.metodo} ${rota.caminho}`, status: 403 });
+      expect(erroApiSchema.parse(await res.json()).erro.codigo).toBe(
+        "proibido",
+      );
+    }
+  });
+
+  it("a /minha é só a da célula: a visão e os links de vendas (mesmo pedindo outra célula) trazem o alvo da sessão", async () => {
+    const visao = await requisitar("GET", "/api/minha/visao", sessaoPorSenha);
+    expect(visao.status).toBe(200);
+    expect(visao.headers.get("Cache-Control")).toBe("no-store");
+    respostaVisaoIndividualSchema.parse(await visao.json());
+    for (const caminho of [
+      ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+      `${ROTAS_LINK_VENDAS.meusLinksVendas.caminho}?celula_id=${OUTRA.id}`,
+    ]) {
+      const res = await requisitar("GET", caminho, sessaoPorSenha);
+      expect(res.status).toBe(200);
+      const corpo = respostaMeusLinksVendasSchema.parse(await res.json());
+      expect({ caminho, alvo: corpo.alvo.id }).toEqual({
+        caminho,
+        alvo: CELULA.id,
+      });
+      expect(JSON.stringify(corpo)).not.toContain(OUTRA.nome);
+    }
+  });
+
+  it("CSRF: o login de outra origem dá 403 sem sessão; com a sessão da senha, escrita de outra origem em /api/minha dá 403", async () => {
+    const antes = await env.DB.prepare(
+      "SELECT count(*) AS n FROM sessoes",
+    ).first();
+    const res = await entrarComSenha(
+      { celula: CELULA.nome, senha: CELULA.senha },
+      { Origin: ORIGEM_MALICIOSA },
+    );
+    await esperarErro(res, 403, "proibido");
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+    expect(
+      await env.DB.prepare("SELECT count(*) AS n FROM sessoes").first(),
+    ).toEqual(antes);
+    for (const metodo of ESCRITAS)
+      await esperarErro(
+        await requisitar(metodo, "/api/minha/visao", {
+          ...sessaoPorSenha,
+          Origin: ORIGEM_MALICIOSA,
+        }),
+        403,
+        "proibido",
+      );
+  });
+
+  it("chave desligada: o login por senha dá 401 e a sessão da senha cai (401) em todo /api/minha; o líder pelo link segue; religada, entra", async () => {
+    await chaveDaSenha(0);
+    await esperarErro(
+      await entrarComSenha({ celula: CELULA.nome, senha: CELULA.senha }),
+      401,
+      "nao_autenticado",
+    );
+    for (const caminho of [
+      "/api/sessao",
+      "/api/minha/visao",
+      ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+      "/api/minha/qualquer",
+    ])
+      await esperarErro(
+        await requisitar("GET", caminho, sessaoPorSenha),
+        401,
+        "nao_autenticado",
+      );
+    expect(
+      (await requisitar("GET", "/api/minha/visao", liderPeloLink)).status,
+    ).toBe(200);
+    await chaveDaSenha(1);
+    expect(
+      (await requisitar("GET", "/api/minha/visao", sessaoPorSenha)).status,
+    ).toBe(200);
   });
 });
 

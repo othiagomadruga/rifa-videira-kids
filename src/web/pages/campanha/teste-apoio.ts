@@ -13,6 +13,7 @@ import {
   type Campanha,
   type CampanhaEntrada,
 } from "../../../shared/contracts";
+import { ehListaDasRedes, respostaRedes } from "../../test/redes";
 import { respostaJson } from "../../test/renderizar";
 
 type Chamada = { metodo: string; caminho: string; corpo: unknown };
@@ -49,7 +50,8 @@ export function campanhaDaEntrada(
     },
     // Regras do admin (D20): a API devolve sempre (o grupo ausente no PUT fica com o padrão).
     pedidos: entrada.pedidos ?? { ...PEDIDOS_PADRAO },
-    acesso: entrada.acesso ?? { ...ACESSO_PADRAO },
+    // RIFA-064 (D29): a chave do login das células com senha ausente no PUT fica como estava (aqui, o padrão).
+    acesso: { ...ACESSO_PADRAO, ...entrada.acesso },
     mensagens: entrada.mensagens ?? { ...MENSAGENS_PADRAO },
     bilhetes: entrada.bilhetes ?? { ...BILHETES_PADRAO },
     criado_em: "2026-11-06T18:00:00.000Z",
@@ -92,7 +94,9 @@ export const NAO_ENCONTRADA = () =>
 
 /**
  * Troca o fetch: GET devolve a campanha (ou 404); PUT responde com `aoSalvar` (padrão: a API, em que o grupo
- * `pedidos`, `acesso` ou `mensagens` ausente mantém o gravado; o PUT da coordenação não os manda, RIFA-042).
+ * `pedidos`, `acesso` ou `mensagens` ausente mantém o gravado; o PUT da coordenação não os manda, RIFA-042). A lista
+ * das redes (RIFA-065, D30: a tela pergunta quantas há) responde com `redes` redes (padrão: duas, a tela como sempre
+ * foi) e fica em `pedidosDasRedes`, fora de `chamadas` (que são as da campanha).
  */
 export function simularApi({
   campanha = null,
@@ -106,14 +110,21 @@ export function simularApi({
       }),
     ),
   aoCarregar,
+  redes = 2,
 }: {
   campanha?: Campanha | null;
   aoSalvar?: (corpo: CampanhaEntrada) => Response | Promise<Response>;
   aoCarregar?: () => Response;
+  redes?: number;
 } = {}) {
   const chamadas: Chamada[] = [];
+  const pedidosDasRedes: string[] = [];
   const fetchMock = vi.fn(async (caminho: string, init?: RequestInit) => {
     const metodo = init?.method ?? "GET";
+    if (ehListaDasRedes(caminho, metodo)) {
+      pedidosDasRedes.push(caminho);
+      return respostaRedes(redes);
+    }
     const corpo = init?.body ? JSON.parse(String(init.body)) : undefined;
     chamadas.push({ metodo, caminho, corpo });
     if (metodo === "PUT") return aoSalvar(corpo as CampanhaEntrada);
@@ -123,6 +134,7 @@ export function simularApi({
   vi.stubGlobal("fetch", fetchMock);
   return {
     chamadas,
+    pedidosDasRedes,
     puts: () => chamadas.filter((chamada) => chamada.metodo === "PUT"),
   };
 }

@@ -7,6 +7,7 @@ import {
   PublicShell,
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
+import { useRedes } from "../../lib/redes";
 import { ROTULO_PAPEL, useGuardaDaArea, useSessao } from "../../lib/sessao";
 import { itensDaNavegacao } from "./telas";
 
@@ -20,6 +21,9 @@ export function CoordenacaoLayout() {
   const { estado, verificar, sair } = useSessao();
   const usuario = useGuardaDaArea("coordenacao");
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
+  // As dicas do menu citam a rede só quando o site sabe que há mais de uma (RIFA-065, D30). O menu não pergunta à
+  // API: quem sabe são as telas.
+  const redes = useRedes();
 
   async function sairDoSistema() {
     // Saindo, o "Sair" fica com aria-disabled (continua no Tab, com a dica dizendo por quê): o AppShell barra o
@@ -40,7 +44,7 @@ export function CoordenacaoLayout() {
     return (
       <AppShell
         area="Coordenação"
-        itens={itensDaNavegacao(usuario.papel)}
+        itens={itensDaNavegacao(usuario.papel, redes.citar)}
         conta={{
           nome: usuario.nome,
           detalhe: ROTULO_PAPEL[usuario.papel],

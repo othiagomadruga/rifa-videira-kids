@@ -11,10 +11,11 @@ import {
 } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
 import { formatarDataHora } from "../../lib/formatadores";
+import { useRedes } from "../../lib/redes";
 import type { AfiliadoResumo, CelulaAdesao } from "./adesao-api";
 import { EscolherCelula } from "./EscolherCelula";
 import { DialogoRemoverAfiliado } from "./RemoverAfiliado";
-import { DICAS } from "./textos";
+import { DICAS, DICAS_REDE_UNICA } from "./textos";
 import {
   celulaCombina,
   lerCodigoAfiliado,
@@ -62,12 +63,17 @@ export function TodasAsCelulas({
   const [busca, setBusca] = useState("");
   const filtradas = celulas.filter((celula) => celulaCombina(celula, busca));
   const idTitulo = useId();
+  const redeUnica = useRedes().unica;
 
   return (
     <section aria-labelledby={idTitulo}>
       <Card titulo={<span id={idTitulo}>Todas as células</span>}>
         <div className="pilha adesao-secao">
-          <ComDica texto={DICAS.buscarCelulas}>
+          <ComDica
+            texto={
+              redeUnica ? DICAS_REDE_UNICA.buscarCelulas : DICAS.buscarCelulas
+            }
+          >
             <Input
               rotulo="Buscar célula, líder ou código"
               type="search"
@@ -127,6 +133,8 @@ function CartaoCelula({
 }: PropsCartao) {
   const situacao = SITUACOES[situacaoDaCelula(celula)];
   const refTitulo = useRef<HTMLHeadingElement>(null);
+  // Uma rede só (RIFA-065, D30): sem o nome dela.
+  const redeUnica = useRedes().unica;
   const local: LocalDoAviso = { secao: "celula", celulaId: celula.celula_id };
   const textoAviso = avisoDaCelula(aviso, celula.celula_id);
   const acao = {
@@ -153,7 +161,8 @@ function CartaoCelula({
         <Aviso tom="sucesso" anuncio="nenhum" titulo={textoAviso} />
       )}
       <p className="adesao-item__detalhe">
-        Líder: {celula.lider_nome} · {celula.rede_nome}
+        Líder: {celula.lider_nome}
+        {redeUnica ? null : ` · ${celula.rede_nome}`}
       </p>
       {celula.primeira_venda_em && (
         <p className="adesao-item__detalhe">

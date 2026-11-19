@@ -9,6 +9,7 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
+import { contarRedes, useRedes } from "../../lib/redes";
 import { useUsuarioConectado } from "../../lib/sessao";
 import {
   removerAfiliado,
@@ -74,6 +75,12 @@ export function AdesaoPage() {
   const [vinculadosAgora, setVinculadosAgora] = useState<VinculadoAgora[]>([]);
   // Remover afiliado de teste (RIFA-031): só o admin.
   const admin = useUsuarioConectado().papel === "admin";
+  // A adesão traz todas as células: com uma rede só, as listas e as buscas não citam a rede (RIFA-065, D30).
+  useRedes(
+    estado.tipo === "ok"
+      ? contarRedes(estado.painel.adesao.itens.map((celula) => celula.rede_id))
+      : null,
+  );
 
   /** O afiliado saiu da fila nesta tela: some na hora, até a próxima consulta. */
   function tirarDaFila(affiliateId: number) {

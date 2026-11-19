@@ -59,6 +59,8 @@ export type Formulario = {
   pedidos_desconsiderar: boolean;
   acesso_discipuladores: boolean;
   acesso_redes: boolean;
+  /** RIFA-064 (D29): o login das células com a senha padrão. */
+  acesso_celulas_senha: boolean;
   /** Os modelos das mensagens do link pessoal (RIFA-032), como digitados. */
   mensagens: Record<TipoMensagem, string>;
   /** RIFA-075 (D35): quantos números a rifa tem, como digitado. */
@@ -129,6 +131,7 @@ export function formularioVazio(): Formulario {
     pedidos_desconsiderar: PEDIDOS_PADRAO.desconsiderar,
     acesso_discipuladores: ACESSO_PADRAO.discipuladores,
     acesso_redes: ACESSO_PADRAO.redes,
+    acesso_celulas_senha: ACESSO_PADRAO.celulas_senha,
     mensagens: { ...MENSAGENS_PADRAO },
     bilhetes_quantidade: String(BILHETES_PADRAO.quantidade),
     bilhetes_numero_inicial: "",
@@ -165,6 +168,7 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
     pedidos_desconsiderar: campanha.pedidos.desconsiderar,
     acesso_discipuladores: campanha.acesso.discipuladores,
     acesso_redes: campanha.acesso.redes,
+    acesso_celulas_senha: campanha.acesso.celulas_senha,
     mensagens: { ...campanha.mensagens },
     // RIFA-075: uma resposta sem o grupo (API de antes dele) vale o padrão.
     bilhetes_quantidade: String(
@@ -421,6 +425,7 @@ export function montarCorpo(
       acesso: {
         discipuladores: formulario.acesso_discipuladores,
         redes: formulario.acesso_redes,
+        celulas_senha: formulario.acesso_celulas_senha,
       },
       mensagens: { ...formulario.mensagens },
     }),
@@ -475,6 +480,7 @@ const MENSAGEM_DO_CAMPO: Record<string, string> = {
   "pedidos.desconsiderar": "Marque ou desmarque esta opção.",
   "acesso.discipuladores": "Marque ou desmarque esta opção.",
   "acesso.redes": "Marque ou desmarque esta opção.",
+  "acesso.celulas_senha": "Marque ou desmarque esta opção.",
   ...Object.fromEntries(
     TIPOS_MENSAGEM.map((tipo) => [
       `mensagens.${tipo}`,
@@ -545,6 +551,7 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
   "acesso.discipuladores": "Acesso dos discipuladores",
   "acesso.redes": "Acesso das redes",
+  "acesso.celulas_senha": "Login das células com senha padrão",
   ...Object.fromEntries(
     TIPOS_MENSAGEM.map((tipo) => [`mensagens.${tipo}`, ROTULO_MENSAGEM[tipo]]),
   ),
@@ -576,6 +583,7 @@ const ORDEM_DOS_CAMPOS = [
   "pedidos.desconsiderar",
   "acesso.discipuladores",
   "acesso.redes",
+  "acesso.celulas_senha",
   ...TIPOS_MENSAGEM.map((tipo) => `mensagens.${tipo}`),
 ];
 const ORDEM_NO_PERIODO = ["nome", "dias", "percentual_bp"];

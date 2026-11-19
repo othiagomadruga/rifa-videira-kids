@@ -120,7 +120,8 @@ describe("D20: as regras na campanha (corpo do PUT)", () => {
     expect(corpo.acesso).toBeUndefined();
     expect(corpo.mensagens).toBeUndefined();
     expectTypeOf<CampanhaEntrada["acesso"]>().toEqualTypeOf<
-      { discipuladores: boolean; redes: boolean } | undefined
+      | { discipuladores: boolean; redes: boolean; celulas_senha?: boolean }
+      | undefined
     >();
   });
 
@@ -267,7 +268,12 @@ describe("D20: as regras na resposta da campanha", () => {
   it("a resposta de hoje, sem os grupos, ganha os padrões (transição: a API ainda não grava)", () => {
     const campanha = campanhaSchema.parse(respostaDeHoje);
     expect(campanha.pedidos).toEqual({ desconsiderar: false });
-    expect(campanha.acesso).toEqual({ discipuladores: true, redes: true });
+    expect(campanha.acesso).toEqual({
+      discipuladores: true,
+      redes: true,
+      // RIFA-064 (D29): o login das células com senha também nasce ligado.
+      celulas_senha: true,
+    });
     expect(campanha.mensagens).toEqual(MENSAGENS_PADRAO);
     expectTypeOf<Campanha["pedidos"]>().toEqualTypeOf<{
       desconsiderar: boolean;
@@ -276,7 +282,11 @@ describe("D20: as regras na resposta da campanha", () => {
 
   it("padrões: desconsiderar desligado; acesso de discipuladores e redes ligado; as mensagens de hoje", () => {
     expect(PEDIDOS_PADRAO).toEqual({ desconsiderar: false });
-    expect(ACESSO_PADRAO).toEqual({ discipuladores: true, redes: true });
+    expect(ACESSO_PADRAO).toEqual({
+      discipuladores: true,
+      redes: true,
+      celulas_senha: true,
+    });
     expect(Object.keys(MENSAGENS_PADRAO)).toEqual([...TIPOS_MENSAGEM]);
     // Cada parse devolve um objeto novo: mexer num não muda o padrão.
     const uma = campanhaSchema.parse(respostaDeHoje);
@@ -291,7 +301,7 @@ describe("D20: as regras na resposta da campanha", () => {
       // RIFA-061: a API grava e devolve também a opção do ranking por divisão (D27).
       ranking: { criterio: "percentual_meta", por_divisao: true },
       pedidos: { desconsiderar: true },
-      acesso: { discipuladores: false, redes: false },
+      acesso: { discipuladores: false, redes: false, celulas_senha: false },
       mensagens: {
         ...MENSAGENS_PADRAO,
         link_lider: "{saudacao} Link da célula {alvo}: {link}",
