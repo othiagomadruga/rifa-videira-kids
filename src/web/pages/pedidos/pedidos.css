@@ -349,6 +349,63 @@
   font-weight: var(--peso-forte);
 }
 
+/* RIFA-076 (D36), só admin: o comprador na lista e a planilha de compradores. */
+.pedidos-comprador {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  overflow-wrap: anywhere;
+}
+
+.pedidos-comprador__nome {
+  font-weight: var(--peso-forte);
+}
+
+.pedidos-comprador__sem {
+  color: var(--cor-texto-suave);
+}
+
+.pedidos-exportar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+}
+
+.pedidos-exportar__titulo {
+  margin: 0;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+}
+
+.pedidos-exportar__intro,
+.pedidos-exportar__baixado {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  overflow-wrap: anywhere;
+}
+
+.pedidos-exportar__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-3);
+}
+
+.pedidos-exportar__opcao {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.pedidos-exportar button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .pedidos-slug {
   font-family: var(--fonte-mono);
   font-size: var(--texto-sm);

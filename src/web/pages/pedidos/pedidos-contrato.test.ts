@@ -27,7 +27,11 @@ import {
   STATUS_PEDIDO as STATUS_DO_CONTRATO,
   consultaEntregasWebhookSchema,
   consultaPedidosSchema,
+  consultaCompradoresSchema,
+  formatarTelefoneBr,
+  numeroWhatsApp,
 } from "../../../shared/contracts";
+import { numeroDoWhatsApp, telefoneLegivel } from "./comprador";
 import { TELAS_COORDENACAO } from "../coordenacao/telas";
 import {
   ABA_ENTREGAS,
@@ -46,6 +50,7 @@ import { CAMINHO_CHAVE_NA_CAMPANHA } from "./Desconsiderar";
 import {
   CAMINHO_CAMPANHA,
   CAMINHO_CELULAS,
+  CAMINHO_COMPRADORES,
   CAMINHO_DESCONSIDERAR,
   CAMINHO_ENTREGAS,
   CAMINHO_PEDIDOS,
@@ -89,6 +94,28 @@ const CODIGOS_ZOD = {
   invalid_value: true,
   custom: true,
 } satisfies Record<z.core.$ZodIssueCode, true>;
+
+describe("RIFA-076 (D36): cópias do contrato do comprador no site", () => {
+  it("o caminho da planilha (só admin) e a consulta que a tela manda", () => {
+    expect(CAMINHO_COMPRADORES).toBe(ROTAS.exportarCompradores.caminho);
+    expect(ROTAS.exportarCompradores.papeis).toEqual(["admin"]);
+    expect(consultaCompradoresSchema.parse({ so_pagou: "true" })).toEqual({
+      so_pagou: true,
+    });
+  });
+
+  it("telefone legível e número do WhatsApp: os mesmos do contrato", () => {
+    for (const telefone of [
+      "+5511987654321",
+      "+559133334444",
+      "+14155550100",
+      "+5591",
+    ]) {
+      expect(telefoneLegivel(telefone)).toBe(formatarTelefoneBr(telefone));
+      expect(numeroDoWhatsApp(telefone)).toBe(numeroWhatsApp(telefone));
+    }
+  });
+});
 
 describe("cópias do contrato dos pedidos, das entregas e do alerta no site", () => {
   it("caminhos e método das rotas (toda a coordenação, sem papel extra), e a tela para toda a coordenação", () => {

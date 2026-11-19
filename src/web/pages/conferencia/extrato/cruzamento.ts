@@ -21,7 +21,13 @@
 // 4. O que sobra: com 2 ou mais pedidos livres que servem, Ambíguo (se todos já estão pagos, não há o que marcar: vai
 //    para "já contados"); com nenhum, Pix sem pedido.
 // O desconsiderado pelo admin (D20) nunca serve: o número dele no Pix deixa o Pix sem pedido, com o motivo.
+//
+// RIFA-076 (D36), o nome: com o nome de quem fez o pedido (só o admin o recebe) e o "REM: <nome>" no Pix
+// (nome-do-pix.ts), o passo 3 desempata: quando nenhum Pix tem um pedido só, o Pix com 2 ou mais candidatos cujo REM
+// confere com o nome de exatamente um deles fica com ele (Provável), e as voltas recomeçam. Todo casamento leva
+// `nome` ("confere", "difere" ou null), para a tela mostrar e o admin conferir antes de marcar.
 import type { Pix } from "./lancamentos";
+import { comparacaoDoNome } from "./nome-do-pix";
 
 export type StatusDoPedido = "in_process" | "approved" | "expired";
 
@@ -36,6 +42,8 @@ export interface PedidoDoCruzamento {
   reserva: number;
   aprovado_em: number | null;
   desconsiderado: boolean;
+  /** RIFA-076 (D36): o nome de quem fez o pedido (só para o admin; ausente ou null para os outros). */
+  comprador_nome?: string | null;
 }
 
 export type Grau = "certo" | "provavel";
@@ -57,6 +65,11 @@ export interface Casamento {
   grau: Grau;
   /** Só no Certo: o valor do Pix é outro que o do pedido (pago a menos ou a mais). */
   valorDiferente: boolean;
+  /**
+   * RIFA-076 (D36): o "REM:" do Pix diante do nome do pedido: "confere", "difere" ou null (sem REM ou sem nome).
+   * Ponto para a tela (RIFA-070/074): mostrar `pedido.comprador_nome` e este selo ao lado do número do pedido.
+   */
+  nome: "confere" | "difere" | null;
 }
 
 export interface PixAmbiguo {
@@ -207,6 +220,20 @@ export function cruzar(
       mudou = true;
     }
     pendentes = pendentes.filter((pix) => !casamentos.has(pix.chave));
+    if (mudou) continue;
+    // RIFA-076 (D36): ninguém tem um pedido só; o nome desempata um Pix (o mais antigo) e as voltas recomeçam.
+    for (const pix of pendentes) {
+      const peloNome = livresQueServem(pix).filter(
+        (pedido) =>
+          comparacaoDoNome(pix.descricao, pedido.comprador_nome) === "confere",
+      );
+      if (peloNome.length !== 1) continue;
+      casados.set(peloNome[0].id, pix);
+      casamentos.set(pix.chave, { pedido: peloNome[0], grau: "provavel" });
+      pendentes = pendentes.filter((outro) => outro !== pix);
+      mudou = true;
+      break;
+    }
   }
 
   // 4. O que sobra.
@@ -228,6 +255,7 @@ export function cruzar(
           pedido,
           grau,
           valorDiferente: pedido.total_centavos !== pix.centavos,
+          nome: comparacaoDoNome(pix.descricao, pedido.comprador_nome),
         });
       continue;
     }

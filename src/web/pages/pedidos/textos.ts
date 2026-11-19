@@ -263,6 +263,10 @@ export function totaisDepoisDe(
 // ---------------------------------------------------------------------------------------------------
 
 export const DICAS = {
+  // RIFA-076 (D36): só admin.
+  exportarCompradores:
+    "Baixa uma planilha (abre no Excel) com cada comprador: nome, telefone, célula, pedidos, bilhetes, total pago e se pagou ou só reservou. O download fica registrado na Trilha.",
+  whatsapp: "Abre uma conversa no WhatsApp com quem fez o pedido.",
   abaPedidos:
     "Os pedidos que chegaram da Rifei, do mais novo para o mais antigo, com os totais por status.",
   abaEntregas:
