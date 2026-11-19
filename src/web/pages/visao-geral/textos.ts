@@ -435,3 +435,16 @@ export const DICAS = {
   tentarBaixarDeNovo:
     "Pede o mesmo relatório de novo. Se continuar falhando, confira a internet.",
 } as const;
+
+/**
+ * Com uma rede só (RIFA-065, D30), os textos que citavam a rede, sem ela. O relatório "Por rede" sai da lista; o
+ * arquivo das células continua com a coluna "Rede" (é o arquivo de trabalho da coordenação, montado pela API).
+ */
+export const TEXTOS_REDE_UNICA = {
+  filtro:
+    "Mostra o painel de uma divisão, de um discipulador ou de uma célula. A escolha fica no endereço da página.",
+  falhaDoFiltro:
+    "Não foi possível carregar as células. Toque em Atualizar para tentar de novo.",
+  relatorioCelulas:
+    "Cada célula com discipulador, líder, vendas, % da meta e posição no ranking.",
+} as const;

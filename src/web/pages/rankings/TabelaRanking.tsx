@@ -24,12 +24,16 @@ import { ajuda } from "../ajuda-sob-demanda";
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
 export const POSICOES_EM_DESTAQUE = 3;
 
-type Props = { resposta: RespostaRanking };
+type Props = {
+  resposta: RespostaRanking;
+  /** Uma rede só (RIFA-065, D30): o vínculo sem a rede. */
+  redeUnica?: boolean;
+};
 
 // O ranking da coordenação: tabela no computador (a partir de 48rem) e, no celular, um cartão compacto
 // por linha (posição, nome e situação no topo; a barra do % da meta e realizado/meta embaixo), com o
 // mesmo HTML. Os papéis ARIA explícitos mantêm a semântica de tabela quando o CSS muda o display.
-export function TabelaRanking({ resposta }: Props) {
+export function TabelaRanking({ resposta, redeUnica = false }: Props) {
   const { nivel, divisao, unidade, janela, itens } = resposta;
   const textos = TEXTO_NIVEL[nivel];
   // Sem ranking por divisão (D27), a legenda não fala de divisão.
@@ -70,7 +74,7 @@ export function TabelaRanking({ resposta }: Props) {
               key={item.id}
               item={item}
               unidade={unidade}
-              vinculo={vinculoDoItem(item, resposta)}
+              vinculo={vinculoDoItem(item, resposta, redeUnica)}
             />
           ))}
         </tbody>
@@ -148,9 +152,13 @@ function Linha({ item, unidade, vinculo }: PropsLinha) {
 /**
  * A quem o item pertence: célula → discipulador e rede; discipulador → rede; rede → a divisão. Com
  * "todas as divisões", a divisão vem na frente em todos os níveis. Sem ranking por divisão (D27), a divisão não
- * aparece (a rede fica sem vínculo).
+ * aparece (a rede fica sem vínculo). Com uma rede só (D30), a rede não aparece.
  */
-function vinculoDoItem(item: ItemRanking, resposta: RespostaRanking): string {
+function vinculoDoItem(
+  item: ItemRanking,
+  resposta: RespostaRanking,
+  redeUnica: boolean,
+): string {
   const partes: string[] = [];
   if (
     resposta.por_divisao !== false &&
@@ -159,7 +167,7 @@ function vinculoDoItem(item: ItemRanking, resposta: RespostaRanking): string {
     partes.push(NOMES_DIVISAO[item.divisao]);
   }
   if (item.discipulador) partes.push(item.discipulador.nome);
-  if (item.rede) partes.push(item.rede.nome);
+  if (item.rede && !redeUnica) partes.push(item.rede.nome);
   return partes.join(" · ");
 }
 

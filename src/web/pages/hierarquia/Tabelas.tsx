@@ -18,6 +18,7 @@ import {
 import { formatarNumero } from "../../lib/formatadores";
 import {
   DICAS,
+  DICAS_REDE_UNICA,
   DIVISOES,
   ROTULO_DIVISAO,
   compararNomes,
@@ -33,12 +34,15 @@ type AcoesDaLinha<T> = {
 };
 
 // ---------------------------------------------------------------------------------------------------
-// Células: filtro por divisão e por rede, busca por nome (célula, líder ou discipulador, sem acento)
+// Células: filtro por divisão e por rede, busca por nome (célula, líder ou discipulador, sem acento). Com uma rede
+// só (RIFA-065, D30), sem o filtro e a coluna da rede.
 // ---------------------------------------------------------------------------------------------------
 
 type PropsCelulas = AcoesDaLinha<Celula> & {
   celulas: readonly Celula[];
   redes: readonly Rede[];
+  /** Uma rede só (D30): sem o filtro e a coluna da rede. */
+  redeUnica: boolean;
   /** Botão do estado vazio: leva à importação da planilha. */
   aoIrParaImportar: () => void;
 };
@@ -46,6 +50,7 @@ type PropsCelulas = AcoesDaLinha<Celula> & {
 export function TabelaCelulas({
   celulas,
   redes,
+  redeUnica,
   aoEditar,
   aoExcluir,
   aoIrParaImportar,
@@ -71,10 +76,11 @@ export function TabelaCelulas({
   const redesDaDivisao = redes
     .filter((rede) => divisao === "" || rede.divisao === divisao)
     .sort((a, b) => compararNomes(a.nome, b.nome));
-  // A rede escolhida pode ter saído da lista (outra divisão ou excluída): vale como "todas".
-  const redeFiltro = redesDaDivisao.some((rede) => String(rede.id) === redeId)
-    ? redeId
-    : "";
+  // A rede escolhida pode ter saído da lista (outra divisão ou excluída) ou do filtro (uma rede só): vale como "todas".
+  const redeFiltro =
+    !redeUnica && redesDaDivisao.some((rede) => String(rede.id) === redeId)
+      ? redeId
+      : "";
   const termo = paraBusca(busca);
   const filtradas = celulas
     .filter(
@@ -116,7 +122,15 @@ export function TabelaCelulas({
       titulo: "Discipulador",
       celula: (celula) => celula.discipulador_nome,
     },
-    { chave: "rede", titulo: "Rede", celula: (celula) => celula.rede_nome },
+    ...(redeUnica
+      ? []
+      : [
+          {
+            chave: "rede",
+            titulo: "Rede",
+            celula: (celula: Celula) => celula.rede_nome,
+          },
+        ]),
     {
       chave: "divisao",
       titulo: "Divisão",
@@ -152,10 +166,15 @@ export function TabelaCelulas({
 
   return (
     <div className="hierarquia-painel">
-      <div className="hierarquia-filtros">
+      <div
+        className="hierarquia-filtros"
+        data-sem-rede={redeUnica ? "" : undefined}
+      >
         <Select
+          ajuda={
+            redeUnica ? DICAS_REDE_UNICA.filtroDivisao : ajuda("filtroDivisao")
+          }
           rotulo="Divisão"
-          ajuda={ajuda("filtroDivisao")}
           value={divisao}
           onChange={(evento) => {
             const nova = evento.currentTarget.value as Divisao | "";
@@ -172,23 +191,24 @@ export function TabelaCelulas({
           ))}
         </Select>
 
-        <Select
-          rotulo="Rede"
-          ajuda={ajuda("filtroRede")}
-          value={redeFiltro}
-          onChange={(evento) => setRedeId(evento.currentTarget.value)}
-        >
-          <option value="">Todas as redes</option>
-          {redesDaDivisao.map((rede) => (
-            <option key={rede.id} value={rede.id}>
-              {rede.nome}
-            </option>
-          ))}
-        </Select>
-
+        {!redeUnica && (
+          <Select
+            ajuda={ajuda("filtroRede")}
+            rotulo="Rede"
+            value={redeFiltro}
+            onChange={(evento) => setRedeId(evento.currentTarget.value)}
+          >
+            <option value="">Todas as redes</option>
+            {redesDaDivisao.map((rede) => (
+              <option key={rede.id} value={rede.id}>
+                {rede.nome}
+              </option>
+            ))}
+          </Select>
+        )}
         <Input
-          rotulo="Buscar por nome"
           ajuda={ajuda("busca")}
+          rotulo="Buscar por nome"
           dica="Célula, líder ou discipulador"
           type="search"
           value={busca}
@@ -211,7 +231,13 @@ export function TabelaCelulas({
             <EmptyState
               titulo="Nenhuma célula encontrada com esses filtros."
               acao={
-                <ComDica texto={DICAS.limparFiltros}>
+                <ComDica
+                  texto={
+                    redeUnica
+                      ? DICAS_REDE_UNICA.limparFiltros
+                      : DICAS.limparFiltros
+                  }
+                >
                   <Button variante="secundario" onClick={limparFiltros}>
                     Limpar filtros
                   </Button>
@@ -232,11 +258,14 @@ export function TabelaCelulas({
 type PropsDiscipuladores = AcoesDaLinha<Discipulador> & {
   discipuladores: readonly Discipulador[];
   celulas: readonly Celula[];
+  /** Uma rede só (D30): sem a coluna da rede. */
+  redeUnica: boolean;
 };
 
 export function TabelaDiscipuladores({
   discipuladores,
   celulas,
+  redeUnica,
   aoEditar,
   aoExcluir,
 }: PropsDiscipuladores) {
@@ -261,7 +290,15 @@ export function TabelaDiscipuladores({
       principal: true,
       celula: (item) => item.nome,
     },
-    { chave: "rede", titulo: "Rede", celula: (item) => item.rede_nome },
+    ...(redeUnica
+      ? []
+      : [
+          {
+            chave: "rede",
+            titulo: "Rede",
+            celula: (item: Discipulador) => item.rede_nome,
+          },
+        ]),
     {
       chave: "divisao",
       titulo: "Divisão",
@@ -286,6 +323,9 @@ export function TabelaDiscipuladores({
         <BotoesDaLinha
           entidade="discipulador"
           nome={item.nome}
+          dicaEditar={
+            redeUnica ? DICAS_REDE_UNICA.editarDiscipulador : undefined
+          }
           aoEditar={() => aoEditar(item)}
           aoExcluir={() => aoExcluir(item)}
         />
@@ -470,17 +510,20 @@ function enderecoTel(telefone: string): string | null {
 function BotoesDaLinha({
   entidade,
   nome,
+  dicaEditar = DICAS.editar[entidade],
   aoEditar,
   aoExcluir,
 }: {
   entidade: Entidade;
   nome: string;
+  /** A dica do "Editar" (padrão: a da entidade). */
+  dicaEditar?: string;
   aoEditar: () => void;
   aoExcluir: () => void;
 }) {
   return (
     <span className="hierarquia-acoes">
-      <ComDica texto={DICAS.editar[entidade]}>
+      <ComDica texto={dicaEditar}>
         <Button variante="secundario" onClick={aoEditar}>
           Editar <span className="visualmente-oculto">{nome}</span>
         </Button>

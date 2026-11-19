@@ -6,6 +6,7 @@ import type {
 } from "../../../shared/contracts/calculos";
 import { ComAjuda, Icone } from "../../components/ui";
 import { ajuda } from "../ajuda-sob-demanda";
+import { useRedes } from "../../lib/redes";
 import { textoDosTotais } from "./textos";
 
 type Props = { resumo: RespostaPainelResumo };
@@ -15,10 +16,11 @@ const contam = (totais: TotaisVendas) =>
   totais.pedidos_aprovados === 1 ? "conta" : "contam";
 
 // Avisos discretos do escopo campanha, só quando há o que avisar: vendas sem célula (contam na campanha,
-// em nenhuma divisão, rede ou célula) e vendas fora da janela (antes do 1º dia ou depois do último: não
-// contam em nada).
+// em nenhuma divisão, rede ou célula; com uma rede só, sem citar a rede: D30) e vendas fora da janela (antes do 1º
+// dia ou depois do último: não contam em nada).
 export function AvisosVendas({ resumo }: Props) {
   const idTitulo = useId();
+  const redeUnica = useRedes().unica;
   const {
     vendas_sem_celula: semCelula,
     vendas_fora_da_janela: fora,
@@ -31,9 +33,9 @@ export function AvisosVendas({ resumo }: Props) {
       texto: (
         <>
           <strong>{textoDosTotais(semCelula, unidade)} sem célula</strong>:{" "}
-          {contam(semCelula)} na campanha, mas em nenhuma divisão, rede ou
-          célula. Vincule os afiliados em{" "}
-          <Link to="/coordenacao/adesao">Adesão</Link>.
+          {contam(semCelula)} na campanha, mas em nenhuma{" "}
+          {redeUnica ? "divisão nem célula" : "divisão, rede ou célula"}.
+          Vincule os afiliados em <Link to="/coordenacao/adesao">Adesão</Link>.
         </>
       ),
     });

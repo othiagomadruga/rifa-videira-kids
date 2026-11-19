@@ -38,6 +38,7 @@ import {
 } from "./hierarquia-api";
 import {
   DICAS,
+  DICAS_REDE_UNICA,
   DIVISOES,
   ROTULO_DIVISAO,
   compararNomes,
@@ -138,10 +139,15 @@ const ERROS_API_CELULA: Record<CampoCelula, string> = {
 export function DialogoCelula({
   item: celula,
   discipuladores,
+  redeUnica,
   aoFechar,
   aoSalvar,
   aoDesatualizar,
-}: PropsEdicao<Celula> & { discipuladores: readonly Discipulador[] }) {
+}: PropsEdicao<Celula> & {
+  discipuladores: readonly Discipulador[];
+  /** Uma rede só (RIFA-065, D30): os discipuladores numa lista só, sem o nome da rede. */
+  redeUnica: boolean;
+}) {
   const formulario = useFormularioEdicao({
     entidade: "celula",
     ordem: CAMPOS_CELULA,
@@ -204,8 +210,8 @@ export function DialogoCelula({
       <div className="hierarquia-formulario">
         <ErroDoEnvio mensagem={formulario.mensagem} />
         <Input
-          rotulo={ROTULOS_CELULA.nome}
           ajuda={ajuda("nomeCelula")}
+          rotulo={ROTULOS_CELULA.nome}
           name="nome"
           value={valores.nome}
           onChange={mudar("nome")}
@@ -215,28 +221,44 @@ export function DialogoCelula({
         />
 
         <Select
+          ajuda={
+            redeUnica
+              ? DICAS_REDE_UNICA.discipuladorDaCelula
+              : ajuda("discipuladorDaCelula")
+          }
           rotulo={ROTULOS_CELULA.discipulador_id}
-          ajuda={ajuda("discipuladorDaCelula")}
           name="discipulador_id"
-          dica="A célula fica na rede do discipulador escolhido."
+          dica={
+            redeUnica
+              ? undefined
+              : "A célula fica na rede do discipulador escolhido."
+          }
           value={valores.discipulador_id}
           onChange={mudar("discipulador_id")}
           erro={erros.discipulador_id}
         >
-          {gruposPorRede(discipuladores).map((grupo) => (
-            <optgroup key={grupo.id} label={grupo.rotulo}>
-              {grupo.itens.map((discipulador) => (
-                <option key={discipulador.id} value={discipulador.id}>
-                  {discipulador.nome}
-                </option>
+          {redeUnica
+            ? [...discipuladores]
+                .sort((a, b) => compararNomes(a.nome, b.nome))
+                .map((discipulador) => (
+                  <option key={discipulador.id} value={discipulador.id}>
+                    {discipulador.nome}
+                  </option>
+                ))
+            : gruposPorRede(discipuladores).map((grupo) => (
+                <optgroup key={grupo.id} label={grupo.rotulo}>
+                  {grupo.itens.map((discipulador) => (
+                    <option key={discipulador.id} value={discipulador.id}>
+                      {discipulador.nome}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
-            </optgroup>
-          ))}
         </Select>
 
         <Input
-          rotulo={ROTULOS_CELULA.qtd_pessoas}
           ajuda={ajuda("qtdPessoas")}
+          rotulo={ROTULOS_CELULA.qtd_pessoas}
           name="qtd_pessoas"
           dica={`Número inteiro de ${LIMITES.pessoasMin} a ${LIMITES.pessoasMax}: é a base da meta da célula.`}
           inputMode="numeric"
@@ -260,8 +282,8 @@ export function DialogoCelula({
             </ComAjuda>
           </legend>
           <Input
-            rotulo={ROTULOS_CELULA.lider_nome}
             ajuda={ajuda("liderNome")}
+            rotulo={ROTULOS_CELULA.lider_nome}
             name="lider_nome"
             value={valores.lider_nome}
             onChange={mudar("lider_nome")}
@@ -271,8 +293,8 @@ export function DialogoCelula({
           />
 
           <Input
-            rotulo="E-mail (opcional)"
             ajuda={ajuda("liderEmail")}
+            rotulo="E-mail (opcional)"
             name="lider_email"
             type="email"
             value={valores.lider_email}
@@ -283,8 +305,8 @@ export function DialogoCelula({
           />
 
           <Input
-            rotulo="Telefone (opcional)"
             ajuda={ajuda("liderTelefone")}
+            rotulo="Telefone (opcional)"
             name="lider_telefone"
             type="tel"
             dica="Com DDD, ex.: (91) 90000-0001."
@@ -342,10 +364,15 @@ const ERROS_API_DISCIPULADOR: Record<CampoDiscipulador, string> = {
 export function DialogoDiscipulador({
   item: discipulador,
   redes,
+  redeUnica,
   aoFechar,
   aoSalvar,
   aoDesatualizar,
-}: PropsEdicao<Discipulador> & { redes: readonly Rede[] }) {
+}: PropsEdicao<Discipulador> & {
+  redes: readonly Rede[];
+  /** Uma rede só (RIFA-065, D30): sem o campo da rede (o discipulador fica nela; o PUT manda a mesma). */
+  redeUnica: boolean;
+}) {
   const formulario = useFormularioEdicao({
     entidade: "discipulador",
     ordem: CAMPOS_DISCIPULADOR,
@@ -388,8 +415,8 @@ export function DialogoDiscipulador({
       <div className="hierarquia-formulario">
         <ErroDoEnvio mensagem={formulario.mensagem} />
         <Input
-          rotulo={ROTULOS_DISCIPULADOR.nome}
           ajuda={ajuda("nomeDiscipulador")}
+          rotulo={ROTULOS_DISCIPULADOR.nome}
           name="nome"
           value={valores.nome}
           onChange={mudar("nome")}
@@ -398,23 +425,25 @@ export function DialogoDiscipulador({
           erro={erros.nome}
         />
 
-        <Select
-          rotulo={ROTULOS_DISCIPULADOR.rede_id}
-          ajuda={ajuda("redeDoDiscipulador")}
-          name="rede_id"
-          dica="As células do discipulador vão junto para a rede escolhida."
-          value={valores.rede_id}
-          onChange={mudar("rede_id")}
-          erro={erros.rede_id}
-        >
-          {[...redes]
-            .sort((a, b) => compararNomes(a.nome, b.nome))
-            .map((rede) => (
-              <option key={rede.id} value={rede.id}>
-                {rede.nome} ({ROTULO_DIVISAO[rede.divisao]})
-              </option>
-            ))}
-        </Select>
+        {!redeUnica && (
+          <Select
+            ajuda={ajuda("redeDoDiscipulador")}
+            rotulo={ROTULOS_DISCIPULADOR.rede_id}
+            name="rede_id"
+            dica="As células do discipulador vão junto para a rede escolhida."
+            value={valores.rede_id}
+            onChange={mudar("rede_id")}
+            erro={erros.rede_id}
+          >
+            {[...redes]
+              .sort((a, b) => compararNomes(a.nome, b.nome))
+              .map((rede) => (
+                <option key={rede.id} value={rede.id}>
+                  {rede.nome} ({ROTULO_DIVISAO[rede.divisao]})
+                </option>
+              ))}
+          </Select>
+        )}
       </div>
     </Dialogo>
   );
@@ -498,8 +527,8 @@ export function DialogoRede({
       <div className="hierarquia-formulario">
         <ErroDoEnvio mensagem={formulario.mensagem} />
         <Input
-          rotulo={ROTULOS_REDE.nome}
           ajuda={ajuda("nomeRede")}
+          rotulo={ROTULOS_REDE.nome}
           name="nome"
           value={valores.nome}
           onChange={mudar("nome")}
@@ -509,8 +538,8 @@ export function DialogoRede({
         />
 
         <Select
-          rotulo={ROTULOS_REDE.divisao}
           ajuda={ajuda("divisaoRede")}
+          rotulo={ROTULOS_REDE.divisao}
           name="divisao"
           dica="Mudar a divisão muda também a das células da rede."
           value={valores.divisao}
@@ -525,8 +554,8 @@ export function DialogoRede({
         </Select>
 
         <Input
-          rotulo="Responsável (opcional)"
           ajuda={ajuda("responsavel")}
+          rotulo="Responsável (opcional)"
           name="responsavel_nome"
           dica="Pastor ou obreiro da rede."
           value={valores.responsavel_nome}

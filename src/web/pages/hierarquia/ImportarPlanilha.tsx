@@ -34,6 +34,11 @@ import { DICAS, plural } from "./textos";
 export const LIMITE_ERROS_NA_TELA = 200;
 
 type Props = {
+  /**
+   * Uma rede só (RIFA-065, D30): os textos falam dos discipuladores e das células, e o relatório não tem a linha das
+   * redes quando nada muda nelas. A planilha continua com a coluna `rede` (o mesmo nome em todas as linhas).
+   */
+  redeUnica?: boolean;
   /** A importação gravou (aplicado): recarregue as tabelas. */
   aoImportar: (resultado: RespostaImportarHierarquia) => void;
   /** Botão "Ver células" do resultado. */
@@ -45,7 +50,11 @@ type Etapa = "conferir" | "importar";
 // Importação em dois passos: "Conferir" chama a API com simular=true e mostra o relatório (contagens e
 // erros por linha, sem gravar nada); "Importar" (simular=false) só fica disponível depois de uma
 // conferência sem erros do mesmo arquivo. Escolher outro arquivo recomeça.
-export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
+export function ImportarPlanilha({
+  redeUnica = false,
+  aoImportar,
+  aoVerCelulas,
+}: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [leitura, setLeitura] = useState<LeituraPlanilha | null>(null);
   const [conferencia, setConferencia] =
@@ -160,9 +169,11 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
     <Card titulo="Importar a planilha das células" ajuda={ajuda("importar")}>
       <div className="hierarquia-importar">
         <p>
-          Cadastra de uma vez as redes, os discipuladores e as células. Primeiro
-          o sistema confere a planilha e mostra o que vai mudar; só depois você
-          importa.
+          {redeUnica
+            ? "Cadastra de uma vez os discipuladores e as células."
+            : "Cadastra de uma vez as redes, os discipuladores e as células."}{" "}
+          Primeiro o sistema confere a planilha e mostra o que vai mudar; só
+          depois você importa.
         </p>
         <ol className="hierarquia-passos">
           <li className="hierarquia-passo">
@@ -240,9 +251,12 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
               Confira
             </TituloDoPasso>
             <p>
-              O sistema lê a planilha e mostra quantas redes, discipuladores e
-              células serão criados ou atualizados, e os erros de cada linha.
-              Nada é gravado.
+              O sistema lê a planilha e mostra quantos{" "}
+              {redeUnica
+                ? "discipuladores e células"
+                : "redes, discipuladores e células"}{" "}
+              serão criados ou atualizados, e os erros de cada linha. Nada é
+              gravado.
             </p>
             <div>
               <ComDica
@@ -271,6 +285,7 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
             {conferencia && (
               <Relatorio
                 resposta={conferencia}
+                redeUnica={redeUnica}
                 refSecao={refConferencia}
                 titulo="Resultado da conferência"
               />
@@ -305,6 +320,7 @@ export function ImportarPlanilha({ aoImportar, aoVerCelulas }: Props) {
             {importacao && (
               <Relatorio
                 resposta={importacao}
+                redeUnica={redeUnica}
                 refSecao={refImportacao}
                 titulo="Resultado da importação"
                 aoVerCelulas={aoVerCelulas}
@@ -411,11 +427,14 @@ const COLUNAS_ERROS: ColunaTabela<ErroLinha>[] = [
 
 function Relatorio({
   resposta,
+  redeUnica,
   refSecao,
   titulo,
   aoVerCelulas,
 }: {
   resposta: RespostaImportarHierarquia;
+  /** Uma rede só (D30): a linha das redes só aparece se a planilha cria ou muda uma rede. */
+  redeUnica: boolean;
   refSecao: RefObject<HTMLElement | null>;
   titulo: string;
   aoVerCelulas?: () => void;
@@ -423,9 +442,10 @@ function Relatorio({
   const idTitulo = useId();
   const idResumo = useId();
   const { erros } = resposta;
+  const mudaRede = resposta.criados.redes > 0 || resposta.atualizados.redes > 0;
   const contagens: LinhaContagem[] = (
     [
-      ["Redes", "redes"],
+      ...(redeUnica && !mudaRede ? [] : [["Redes", "redes"] as const]),
       ["Discipuladores", "discipuladores"],
       ["Células", "celulas"],
     ] as const

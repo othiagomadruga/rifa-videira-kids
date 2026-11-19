@@ -122,6 +122,35 @@ export function contarControles(raiz: ParentNode = document.body): number {
   ).filter(participa).length;
 }
 
+/**
+ * O texto da dica de cada botão e campo visível de `raiz` (RIFA-065: a varredura da rede única confere o que as dicas
+ * dizem). Como `controlesSemDica`: passa o mouse, espera o tempo da dica, lê e tira o mouse. Chame depois de a tela
+ * carregar.
+ */
+export function textosDasDicas(raiz: ParentNode = document.body): string[] {
+  const controles = Array.from(
+    raiz.querySelectorAll<HTMLElement>(SELETOR_COM_DICA),
+  ).filter(participa);
+  const textos: string[] = [];
+  const relogioJaFalso = vi.isFakeTimers();
+  if (!relogioJaFalso) {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  }
+  try {
+    for (const controle of controles) {
+      passarOMouse(controle);
+      act(() => vi.advanceTimersByTime(ATRASO_DA_DICA_MS));
+      const texto = dicaDe(controle)?.textContent?.trim();
+      if (texto) textos.push(texto);
+      tirarOMouse(controle);
+      act(() => vi.advanceTimersByTime(FOLGA_DA_DICA_MS));
+    }
+  } finally {
+    if (!relogioJaFalso) vi.useRealTimers();
+  }
+  return textos;
+}
+
 // ---------------------------------------------------------------------------------------------------
 // Ajuda dos títulos e rótulos (RIFA-066, D31): a varredura que prova que todo título de seção e todo rótulo de campo
 // da tela tem explicação ao passar o mouse nele e ao tocar no "?" ao lado (o foco do teclado no "?" é o mesmo da

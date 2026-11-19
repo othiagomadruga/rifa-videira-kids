@@ -1,7 +1,7 @@
 // O cruzamento do extrato com os pedidos (RIFA-059, D26), NO NAVEGADOR: cada Pix recebido com no máximo um pedido, e
 // cada pedido com no máximo um Pix. Os graus:
 // - "Certo": a descrição ou o FITID do Pix trazem o número de um pedido (no Pix manual da Rifei, o identificador da
-//   transação é o número do pedido). O pedaço só de algarismos precisa de 8 ou mais: o extrato tem números do banco
+//   transação é o número do pedido); ou o identificador do comprovante de Pix é, inteiro, o número (RIFA-074, D34). O pedaço só de algarismos precisa de 8 ou mais: o extrato tem números do banco
 //   (o documento, a agência e a conta, a data) que bateriam por acaso com um número de pedido curto;
 // - "Provável": sem o número, só um pedido serve: o mesmo valor, reservado antes do Pix e dentro da janela (padrão
 //   24 h); o pedido já pago só serve se foi pago depois do Pix (quem marca na Rifei marca depois de ver o Pix);
@@ -167,7 +167,12 @@ export function cruzar(
 
   // 2. Os Certos.
   for (const pix of ordem) {
-    const achados = pedacosDoPix(pix)
+    // O identificador do comprovante (RIFA-074), inteiro e igual ao número do pedido: exato mesmo curto.
+    const exato =
+      pix.txid !== undefined && pix.txid.length >= MINIMO_CARACTERES_DO_NUMERO
+        ? [pix.txid.toUpperCase()]
+        : [];
+    const achados = [...exato, ...pedacosDoPix(pix)]
       .map((pedaco) => porNumero.get(pedaco))
       .filter((pedido) => pedido !== undefined);
     if (achados.length === 0) continue;

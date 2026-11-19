@@ -23,7 +23,10 @@ import {
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
-import { sqlAcessoDoPapel } from "./regras-campanha";
+import {
+  SQL_LOGIN_CELULAS_SENHA_LIGADO,
+  sqlAcessoDoPapel,
+} from "./regras-campanha";
 
 /** O `ultimo_uso_em` da sessão é regravado no máximo uma vez por minuto (a leitura não vira escrita). */
 const INTERVALO_TOQUE_SESSAO_MS = 60_000;
@@ -611,7 +614,7 @@ export interface SessaoEncontrada {
   acessoLigado: boolean;
   /**
    * O link que abriu a sessão (`sessoes.link_id`): a lista dos acessos o marca como "este aparelho" (RIFA-043).
-   * null só numa sessão gravada sem link (a coluna aceita; a API sempre grava o link).
+   * null na sessão aberta pela senha da célula (RIFA-064, D29: db/login-celula.ts), que não tem link.
    */
   linkId: number | null;
 }
@@ -633,6 +636,9 @@ export async function buscarUsuarioDaSessao(
  * A sessão que vale (as regras de buscarUsuarioDaSessao) e a chave de acesso do papel (RIFA-029, D20), lida na
  * MESMA consulta, na hora (subconsulta da campanha ativa: +1 linha, só no discipulador e na rede). A sessão de um
  * papel desligado continua valendo (não é apagada): /api/minha/* responde 403 enquanto a chave estiver desligada.
+ * RIFA-064 (D29): a sessão aberta pela senha da célula (sem link, `link_id` NULL) só vale com a chave
+ * `acesso.celulas_senha` ligada, lida na mesma consulta (+1 linha, só nessa sessão: com link, o OR nem lê a campanha).
+ * Desligada, ela deixa de valer (401, e o cookie é expirado), como uma sessão vencida.
  */
 export async function buscarSessao(
   db: D1Database,
@@ -644,7 +650,8 @@ export async function buscarSessao(
       `SELECT u.id, u.nome, u.papel, s.ultimo_uso_em, s.link_id, ${COLUNAS_ALVO},
          ${sqlAcessoDoPapel("u.papel")} AS acesso_ligado
        FROM sessoes AS s JOIN usuarios AS u ON u.id = s.usuario_id ${JUNTAR_ALVO}
-       WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1`,
+       WHERE s.id_hash = ?1 AND s.expira_em > ?2 AND s.ultimo_uso_em >= ?3 AND u.ativo = 1
+         AND (s.link_id IS NOT NULL OR ${SQL_LOGIN_CELULAS_SENHA_LIGADO})`,
     )
     .bind(idHash, agora, limiteDeInatividade(agora))
     .first<

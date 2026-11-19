@@ -5,7 +5,8 @@ import {
 import { Select } from "../../components/ui";
 import { LOCALIDADE } from "../../lib/formatadores";
 import { ajuda } from "../ajuda-sob-demanda";
-import { ROTULO_DO_ESCOPO } from "./textos";
+import { useRedes } from "../../lib/redes";
+import { ROTULO_DO_ESCOPO, TEXTOS_REDE_UNICA } from "./textos";
 import type { EstadoCelulas } from "./useCelulasDoFiltro";
 import {
   chaveDoEscopo,
@@ -64,12 +65,15 @@ type Props = {
 };
 
 // Filtro do painel: um só campo, com a campanha toda, as divisões, as redes, os discipuladores e as
-// células em grupos. O valor de cada opção é a própria consulta (a mesma da URL da tela).
+// células em grupos. O valor de cada opção é a própria consulta (a mesma da URL da tela). Com uma rede só
+// (RIFA-065, D30), sem o grupo das redes.
 export function FiltroEscopo({ escopo, celulas, nomeAtual, aoMudar }: Props) {
-  const grupos =
+  const redeUnica = useRedes().unica;
+  const todos =
     celulas.tipo === "ok"
       ? gruposDoFiltro(celulas.celulas)
       : { redes: [], discipuladores: [], celulas: [] };
+  const grupos = redeUnica ? { ...todos, redes: [] } : todos;
   const valor = chaveDoEscopo(escopo);
   // O recorte da URL ainda não está na lista (ela não chegou, falhou ou não tem mais esse item):
   // uma opção só para ele, para o campo mostrar o que está na tela.
@@ -82,16 +86,18 @@ export function FiltroEscopo({ escopo, celulas, nomeAtual, aoMudar }: Props) {
   return (
     <div className="visao-filtro">
       <Select
+        ajuda={redeUnica ? TEXTOS_REDE_UNICA.filtro : ajuda("filtro")}
         rotulo="Filtrar por"
-        ajuda={ajuda("filtro")}
         value={valor}
         onChange={(evento) =>
           aoMudar(escopoDosParams(new URLSearchParams(evento.target.value)))
         }
         dica={
-          celulas.tipo === "erro"
-            ? "Não foi possível carregar as redes e as células. Toque em Atualizar para tentar de novo."
-            : undefined
+          celulas.tipo !== "erro"
+            ? undefined
+            : redeUnica
+              ? TEXTOS_REDE_UNICA.falhaDoFiltro
+              : "Não foi possível carregar as redes e as células. Toque em Atualizar para tentar de novo."
         }
       >
         <option value="">{ROTULO_DO_ESCOPO.campanha}</option>

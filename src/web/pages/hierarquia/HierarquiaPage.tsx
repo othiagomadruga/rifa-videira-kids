@@ -12,6 +12,7 @@ import {
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarNumero } from "../../lib/formatadores";
+import { useRedes } from "../../lib/redes";
 import {
   DialogoCelula,
   DialogoDiscipulador,
@@ -21,10 +22,11 @@ import {
 } from "./Dialogos";
 import { carregarHierarquia, type Hierarquia } from "./hierarquia-api";
 import { ImportarPlanilha } from "./ImportarPlanilha";
+import { LoginDasCelulas } from "./LoginDasCelulas";
 import { TabelaCelulas, TabelaDiscipuladores, TabelaRedes } from "./Tabelas";
-import { DICAS, type Entidade } from "./textos";
+import { DICAS, DICAS_REDE_UNICA, type Entidade } from "./textos";
 import "./hierarquia.css";
-import { DICA_DO_MENU } from "../coordenacao/textos";
+import { DICA_DO_MENU, DICA_DO_MENU_SEM_REDE } from "../coordenacao/textos";
 import { ajuda } from "../ajuda-sob-demanda";
 
 const ID_ABAS = "hierarquia";
@@ -47,7 +49,8 @@ const ROTULO_ENTIDADE: Record<
 
 // Hierarquia da igreja (rede → discipulador → célula): resumo, tabelas para conferir e corrigir
 // (editar e excluir) e a importação da planilha. As listas são pequenas (36 células): os filtros
-// rodam no navegador e, depois de cada mudança, as três listas são lidas de novo.
+// rodam no navegador e, depois de cada mudança, as três listas são lidas de novo. Com uma rede só (RIFA-065, D30),
+// a rede some da tela (o número, a aba, as colunas, o filtro e o campo do discipulador); a planilha continua com ela.
 export function HierarquiaPage() {
   const [carga, setCarga] = useState<Carga>({ dados: null, erro: null });
   const [versao, setVersao] = useState(0);
@@ -106,13 +109,26 @@ export function HierarquiaPage() {
   }
 
   const { dados, erro } = carga;
+  // A lista das redes diz se a rede é única; antes dela, o que o site já sabia (D30).
+  const redes = useRedes(dados ? dados.redes.length : null);
+  const redeUnica = redes.unica;
+  // Sem a aba Redes (uma rede só), quem estava nela volta para as células.
+  const abaAtiva = redeUnica && aba === "redes" ? "celulas" : aba;
 
   return (
     <>
       <PageHeader
         titulo="Hierarquia"
-        ajuda={DICA_DO_MENU.hierarquia}
-        descricao="Redes, discipuladores e células da campanha, com o número de pessoas de cada célula."
+        ajuda={
+          redes.citar
+            ? DICA_DO_MENU.hierarquia
+            : DICA_DO_MENU_SEM_REDE.hierarquia
+        }
+        descricao={
+          redes.citar
+            ? "Redes, discipuladores e células da campanha, com o número de pessoas de cada célula."
+            : "Discipuladores e células da campanha, com o número de pessoas de cada célula."
+        }
       />
       {/* Região viva fixa: anuncia o resultado de salvar e de excluir. */}
       <p className="visualmente-oculto" role="status">
@@ -153,21 +169,26 @@ export function HierarquiaPage() {
               <p>{aviso}</p>
             </Aviso>
           )}
-          <Resumo dados={dados} />
+          <Resumo dados={dados} redeUnica={redeUnica} />
+          {/* RIFA-064 (D29): o aviso das células que não entram pela senha e a senha de cada uma, para repassar. */}
+          <LoginDasCelulas celulas={dados.celulas} />
           <Abas<IdAba>
             id={ID_ABAS}
             rotulo="Partes da hierarquia"
-            abaAtiva={aba}
+            abaAtiva={abaAtiva}
             aoMudar={setAba}
             abas={[
               {
                 id: "celulas",
                 rotulo: "Células",
-                dica: DICAS.abaCelulas,
+                dica: redeUnica
+                  ? DICAS_REDE_UNICA.abaCelulas
+                  : DICAS.abaCelulas,
                 conteudo: (
                   <TabelaCelulas
                     celulas={dados.celulas}
                     redes={dados.redes}
+                    redeUnica={redeUnica}
                     aoEditar={(item) => setEdicao({ entidade: "celula", item })}
                     aoExcluir={(item) =>
                       pedirExclusao({ entidade: "celula", item })
@@ -179,11 +200,14 @@ export function HierarquiaPage() {
               {
                 id: "discipuladores",
                 rotulo: "Discipuladores",
-                dica: DICAS.abaDiscipuladores,
+                dica: redeUnica
+                  ? DICAS_REDE_UNICA.abaDiscipuladores
+                  : DICAS.abaDiscipuladores,
                 conteudo: (
                   <TabelaDiscipuladores
                     discipuladores={dados.discipuladores}
                     celulas={dados.celulas}
+                    redeUnica={redeUnica}
                     aoEditar={(item) =>
                       setEdicao({ entidade: "discipulador", item })
                     }
@@ -193,28 +217,38 @@ export function HierarquiaPage() {
                   />
                 ),
               },
-              {
-                id: "redes",
-                rotulo: "Redes",
-                dica: DICAS.abaRedes,
-                conteudo: (
-                  <TabelaRedes
-                    redes={dados.redes}
-                    discipuladores={dados.discipuladores}
-                    celulas={dados.celulas}
-                    aoEditar={(item) => setEdicao({ entidade: "rede", item })}
-                    aoExcluir={(item) =>
-                      pedirExclusao({ entidade: "rede", item })
-                    }
-                  />
-                ),
-              },
+              // Com uma rede só, sem a aba das redes (D30).
+              ...(redeUnica
+                ? []
+                : [
+                    {
+                      id: "redes" as const,
+                      rotulo: "Redes",
+                      dica: DICAS.abaRedes,
+                      conteudo: (
+                        <TabelaRedes
+                          redes={dados.redes}
+                          discipuladores={dados.discipuladores}
+                          celulas={dados.celulas}
+                          aoEditar={(item) =>
+                            setEdicao({ entidade: "rede", item })
+                          }
+                          aoExcluir={(item) =>
+                            pedirExclusao({ entidade: "rede", item })
+                          }
+                        />
+                      ),
+                    },
+                  ]),
               {
                 id: "importar",
                 rotulo: "Importar planilha",
-                dica: DICAS.abaImportar,
+                dica: redeUnica
+                  ? DICAS_REDE_UNICA.abaImportar
+                  : DICAS.abaImportar,
                 conteudo: (
                   <ImportarPlanilha
+                    redeUnica={redeUnica}
                     aoImportar={recarregar}
                     aoVerCelulas={() => irParaAba("celulas")}
                   />
@@ -226,6 +260,7 @@ export function HierarquiaPage() {
             <DialogoCelula
               item={edicao.item}
               discipuladores={dados.discipuladores}
+              redeUnica={redeUnica}
               aoFechar={() => setEdicao(null)}
               aoSalvar={(salva) => aoSalvar(edicao, salva.nome)}
               aoDesatualizar={recarregar}
@@ -235,6 +270,7 @@ export function HierarquiaPage() {
             <DialogoDiscipulador
               item={edicao.item}
               redes={dados.redes}
+              redeUnica={redeUnica}
               aoFechar={() => setEdicao(null)}
               aoSalvar={(salvo) => aoSalvar(edicao, salvo.nome)}
               aoDesatualizar={recarregar}
@@ -263,7 +299,14 @@ export function HierarquiaPage() {
   );
 }
 
-function Resumo({ dados }: { dados: Hierarquia }) {
+function Resumo({
+  dados,
+  redeUnica,
+}: {
+  dados: Hierarquia;
+  /** Uma rede só (D30): sem o número de redes. */
+  redeUnica: boolean;
+}) {
   const pessoas = dados.celulas.reduce(
     (total, celula) => total + celula.qtd_pessoas,
     0,
@@ -271,13 +314,15 @@ function Resumo({ dados }: { dados: Hierarquia }) {
   return (
     // Os números com a cara única do Stat (RIFA-051, P3.5): o chip do ícone diz o que é cada um, no roxo da marca.
     <section aria-label="Resumo" className="grade hierarquia-resumo">
-      <Stat
-        rotulo="Redes"
-        ajuda={ajuda("redes")}
-        valor={formatarNumero(dados.redes.length)}
-        icone="hierarquia"
-        tom="marca"
-      />
+      {!redeUnica && (
+        <Stat
+          rotulo="Redes"
+          ajuda={ajuda("redes")}
+          valor={formatarNumero(dados.redes.length)}
+          icone="hierarquia"
+          tom="marca"
+        />
+      )}
       <Stat
         rotulo="Discipuladores"
         ajuda={ajuda("discipuladores")}

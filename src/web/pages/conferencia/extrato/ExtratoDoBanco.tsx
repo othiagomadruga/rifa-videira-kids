@@ -20,6 +20,7 @@ import {
 } from "./csv";
 import { cruzar } from "./cruzamento";
 import { buscarPedidosDesde, type PedidosBuscados } from "./extrato-api";
+import { juntarArquivos, type ParteLida } from "./juntar";
 import {
   criarRelogio,
   filtrarPix,
@@ -36,6 +37,7 @@ import {
   type EntradaDoExtrato,
   type LeituraDoExtrato,
 } from "./leitura";
+import { ArquivosLidos, type ResumoDoArquivo } from "./ArquivosLidos";
 import { ResultadoDoExtrato } from "./ResultadoDoExtrato";
 import {
   AJUDA,
@@ -47,10 +49,11 @@ import {
   JANELAS_HORAS,
   LER_TEXTO,
   PASSOS,
-  plural,
   PRIVACIDADE,
-  rotuloDaJanela,
   TITULO,
+  VARIOS_ARQUIVOS,
+  plural,
+  rotuloDaJanela,
 } from "./textos";
 import "./extrato.css";
 
@@ -82,7 +85,9 @@ type Busca =
 // Rifei. Nada do extrato vai para o servidor, para o localStorage ou para o log; nada do sistema muda. Num pacote à
 // parte (lazy); o leitor de PDF, noutro, baixado só quando a pessoa escolhe um PDF.
 export function ExtratoDoBanco() {
-  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [arquivos, setArquivos] = useState<File[]>([]);
+  /** Com vários arquivos (RIFA-074): o resultado da leitura de cada um. */
+  const [porArquivo, setPorArquivo] = useState<ResumoDoArquivo[] | null>(null);
   const [colado, setColado] = useState("");
   const [janelaHoras, setJanelaHoras] = useState<number>(JANELA_PADRAO_HORAS);
   const [palavras, setPalavras] = useState(PALAVRAS_PADRAO);
@@ -165,7 +170,8 @@ export function ExtratoDoBanco() {
     }
   }
 
-  async function ler(entrada: EntradaDoExtrato) {
+  /** Começa uma leitura nova: esquece a anterior (a busca, o resultado, a falha). Devolve a versão dela. */
+  function comecar(): number {
     const minha = ++versao.current;
     controle.current?.abort();
     cobertura.current = null;
@@ -175,25 +181,42 @@ export function ExtratoDoBanco() {
     setMapeamento(null);
     setBusca(null);
     setAnuncio("");
-    const falhar = (motivo: Falha) => {
-      if (minha !== versao.current) return;
-      focarDepois.current = "falha";
-      setFalha(motivo);
-      setLendo(false);
-    };
+    return minha;
+  }
+
+  function falharNa(minha: number, motivo: Falha) {
+    if (minha !== versao.current) return;
+    focarDepois.current = "falha";
+    setFalha(motivo);
+    setLendo(false);
+  }
+
+  /** O fuso da campanha (buscado uma vez) e o agora; null se falhou (a falha já está na tela) ou ficou velha. */
+  async function contextoDaLeitura(
+    minha: number,
+  ): Promise<ContextoDeLeitura | null> {
     try {
       if (fuso.current === undefined)
         fuso.current = await carregarFusoDaCampanha();
     } catch (erro) {
-      falhar({ titulo: FALHAS.campanha, mensagem: mensagemDoErro(erro) });
-      return;
+      falharNa(minha, {
+        titulo: FALHAS.campanha,
+        mensagem: mensagemDoErro(erro),
+      });
+      return null;
     }
-    if (minha !== versao.current) return;
+    if (minha !== versao.current) return null;
     if (fuso.current === null) {
-      falhar(FALHAS.semCampanha);
-      return;
+      falharNa(minha, FALHAS.semCampanha);
+      return null;
     }
-    const contexto: ContextoDeLeitura = { fuso: fuso.current, agora: agora() };
+    return { fuso: fuso.current, agora: agora() };
+  }
+
+  async function ler(entrada: EntradaDoExtrato, minha = comecar()) {
+    const falhar = (motivo: Falha) => falharNa(minha, motivo);
+    const contexto = await contextoDaLeitura(minha);
+    if (contexto === null) return;
     const leitura = lerExtrato(entrada, contexto);
     if (!leitura.ok) {
       falhar(leitura);
@@ -212,27 +235,85 @@ export function ExtratoDoBanco() {
     await garantirPedidos(atual, comExtrato);
   }
 
-  async function escolher(novo: File) {
-    setArquivo(novo);
+  async function escolher(novos: File[]) {
+    setArquivos(novos);
+    setPorArquivo(null);
+    if (novos.length > 1) {
+      await escolherVarios(novos);
+      return;
+    }
     // O PDF leva um instante (o leitor é baixado na primeira vez): a tela já mostra "Lendo o extrato…".
-    const minha = ++versao.current;
-    controle.current?.abort();
-    cobertura.current = null;
-    setLendo(true);
-    setFalha(null);
-    setLido(null);
-    setMapeamento(null);
-    setBusca(null);
-    setAnuncio("");
-    const lidoDoArquivo = await lerArquivoDoExtrato(novo);
+    const minha = comecar();
+    const lidoDoArquivo = await lerArquivoDoExtrato(novos[0]);
     if (minha !== versao.current) return;
     if (!lidoDoArquivo.ok) {
-      focarDepois.current = "falha";
-      setFalha(lidoDoArquivo);
-      setLendo(false);
+      falharNa(minha, lidoDoArquivo);
       return;
     }
     await ler(lidoDoArquivo.entrada);
+  }
+
+  /**
+   * Vários arquivos de uma vez (RIFA-074, D34): extratos e comprovantes de Pix misturados. Cada um é lido e tem o
+   * seu resultado na tela; os que deram certo viram um extrato só (o mesmo Pix em dois arquivos conta uma vez) e vão
+   * para o mesmo cruzamento. O CSV sem as colunas reconhecidas precisa ser escolhido sozinho (para indicar as colunas).
+   */
+  async function escolherVarios(novos: File[]) {
+    const minha = comecar();
+    const lidosDosArquivos: Awaited<ReturnType<typeof lerArquivoDoExtrato>>[] =
+      [];
+    for (const novo of novos)
+      lidosDosArquivos.push(await lerArquivoDoExtrato(novo));
+    if (minha !== versao.current) return;
+    const contexto = await contextoDaLeitura(minha);
+    if (contexto === null) return;
+    const partes: ParteLida[] = [];
+    const resumos: ResumoDoArquivo[] = [];
+    novos.forEach((novo, indice) => {
+      const lidoDoArquivo = lidosDosArquivos[indice];
+      const leitura = lidoDoArquivo.ok
+        ? lerExtrato(lidoDoArquivo.entrada, contexto)
+        : lidoDoArquivo;
+      let extrato: ExtratoLido | FalhaDoExtrato;
+      if (!leitura.ok) extrato = leitura;
+      else if (leitura.tipo === "lido") extrato = leitura.extrato;
+      else
+        extrato = leitura.csv.mapeamentoDetectado
+          ? lancamentosDoCsv(
+              leitura.csv,
+              leitura.csv.mapeamentoDetectado,
+              contexto,
+            )
+          : VARIOS_ARQUIVOS.csvSozinho;
+      if (!extrato.ok) {
+        resumos.push({ nome: novo.name, tipo: "falha", falha: extrato });
+        return;
+      }
+      partes.push({ extrato });
+      resumos.push({
+        nome: novo.name,
+        tipo: "lido",
+        extrato,
+        repetidos: 0,
+      });
+    });
+    const juntado = juntarArquivos(partes);
+    let parte = 0;
+    for (const resumo of resumos)
+      if (resumo.tipo === "lido") resumo.repetidos = juntado.repetidos[parte++];
+    setPorArquivo(resumos);
+    if (partes.length === 0) {
+      falharNa(minha, VARIOS_ARQUIVOS.nenhum);
+      return;
+    }
+    const atual: Lido = {
+      leitura: { ok: true, tipo: "lido", extrato: juntado.extrato },
+      contexto,
+      versao: minha,
+    };
+    setLido(atual);
+    setLendo(false);
+    await garantirPedidos(atual, juntado.extrato);
   }
 
   function mudarColuna(campo: CampoCsv, valor: string) {
@@ -303,9 +384,15 @@ export function ExtratoDoBanco() {
             rotulo={CAMPOS.arquivo.rotulo}
             ajuda={AJUDA.arquivo}
             dica={CAMPOS.arquivo.dica}
-            aceitar=".pdf,.ofx,.qfx,.csv,.txt,application/pdf,application/x-ofx,text/csv,text/plain"
-            arquivo={arquivo}
-            aoEscolher={(novo) => void escolher(novo)}
+            aceitar=".pdf,.ofx,.qfx,.csv,.txt,application/pdf,application/x-ofx,text/csv,text/plain,image/*"
+            arquivo={arquivos[0] ?? null}
+            aoEscolher={(novo) => void escolher([novo])}
+            aoEscolherVarios={(novos) => void escolher(novos)}
+            textoArquivo={
+              arquivos.length > 1
+                ? VARIOS_ARQUIVOS.escolhidos(arquivos.length)
+                : undefined
+            }
             desabilitado={lendo}
             dicaEscolher={
               lendo ? DICAS.escolherArquivoOcupado : DICAS.escolherArquivo
@@ -330,8 +417,10 @@ export function ExtratoDoBanco() {
                   variante="secundario"
                   aria-disabled={lendo || vazio || undefined}
                   onClick={() => {
-                    if (!lendo && !vazio)
+                    if (!lendo && !vazio) {
+                      setPorArquivo(null);
                       void ler({ tipo: "texto", texto: colado });
+                    }
                   }}
                 >
                   {LER_TEXTO}
@@ -365,6 +454,7 @@ export function ExtratoDoBanco() {
               spellCheck={false}
             />
           </div>
+          {porArquivo && <ArquivosLidos arquivos={porArquivo} />}
           {lendo && <Loading texto="Lendo o extrato…" />}
           {falha && (
             <div ref={refFalha} tabIndex={-1} className="extrato-foco">

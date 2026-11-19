@@ -20,6 +20,7 @@ import {
 } from "../../components/ui";
 import { NOMES_DIVISAO } from "../../../shared/contracts/calculos";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
+import { useRedes } from "../../lib/redes";
 import { formatarDataHora, formatarNumero } from "../../lib/formatadores";
 import {
   LIMITE_ALVOS_POR_LOTE,
@@ -81,9 +82,17 @@ type Props = {
 // pessoa que deve receber o link, o telefone (líder), a situação do acesso e os aparelhos conectados. Gera os
 // links de quem ainda não tem num lote só, um link novo por linha e "Trocar acesso" (revoga os anteriores:
 // o aparelho antigo sai). Os links aparecem uma vez só, num diálogo, com "Copiar mensagem" e "Abrir no
-// WhatsApp", e são esquecidos ao fechar. Desativar, reativar e revogar usam as rotas que a tela já tem.
+// WhatsApp", e são esquecidos ao fechar. Desativar, reativar e revogar usam as rotas que a tela já tem. Com uma rede
+// só (RIFA-065, D30), o papel Rede sai do seletor: não se oferece criar acesso de rede.
 export function AcessosHierarquia({ regras, aoDesligar }: Props) {
-  const [papel, setPapel] = useState<PapelHierarquia>("lider");
+  const redeUnica = useRedes().unica;
+  const [escolhido, setPapel] = useState<PapelHierarquia>("lider");
+  // A rede ficou única com o papel Rede escolhido: volta para os líderes.
+  const papel: PapelHierarquia =
+    redeUnica && escolhido === "rede" ? "lider" : escolhido;
+  const papeis = redeUnica
+    ? PAPEIS_DO_SELETOR.filter((opcao) => opcao !== "rede")
+    : PAPEIS_DO_SELETOR;
   const [carga, setCarga] = useState<Carga>({
     papel,
     dados: null,
@@ -290,14 +299,21 @@ export function AcessosHierarquia({ regras, aoDesligar }: Props) {
   return (
     <div className="acessos-hierarquia">
       <p className="acessos-suave">
-        Cada célula, discipulador e rede tem um acesso preso a ela: quem entra
-        pelo link vê só a própria visão, sem valores em dinheiro. O link vai
-        para a pessoa da hierarquia e só aparece na hora em que é gerado.
+        {redeUnica
+          ? "Cada célula e cada discipulador tem um acesso preso a ele:"
+          : "Cada célula, discipulador e rede tem um acesso preso a ela:"}{" "}
+        quem entra pelo link vê só a própria visão, sem valores em dinheiro. O
+        link vai para a pessoa da hierarquia e só aparece na hora em que é
+        gerado.
       </p>
       <div className="acessos-hierarquia__controles">
         <div className="acessos-hierarquia__papel">
           <Select
-            ajuda={ajuda("papelDaHierarquia")}
+            ajuda={
+              redeUnica
+                ? DICAS.papelDaHierarquiaRedeUnica
+                : ajuda("papelDaHierarquia")
+            }
             rotulo="Papel"
             value={papel}
             onChange={(evento) => {
@@ -305,7 +321,7 @@ export function AcessosHierarquia({ regras, aoDesligar }: Props) {
               setResultado(null);
             }}
           >
-            {PAPEIS_DO_SELETOR.map((opcao) => (
+            {papeis.map((opcao) => (
               <option key={opcao} value={opcao}>
                 {PAPEL_NO_PLURAL[opcao]}
               </option>

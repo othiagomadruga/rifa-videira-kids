@@ -17,6 +17,8 @@ export const AJUDA = {
     "Mostra só as células de uma rede, com a contagem de células e de pessoas dela. Ex.: escolha uma rede para conferir se todas as células dela estão cadastradas.",
   busca:
     "Procura pelo nome da célula, do líder ou do discipulador enquanto você digita (acentos e maiúsculas não importam). Ex.: “betel” acha a Célula Betel.",
+  loginDasCelulas:
+    "Um jeito simples de o líder entrar: o nome da célula e uma senha padrão, sem precisar do link. Ex.: a senha da Célula Betel começa com @ e termina com 1234. Aqui você vê a senha de cada célula para repassar.",
   importar:
     "Uma forma de cadastrar de uma vez as redes, os discipuladores e as células, a partir de uma planilha. Serve para começar a campanha sem digitar célula por célula.",
   passoModelo:

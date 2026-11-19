@@ -127,7 +127,26 @@ export const corpoCriarSessaoSchema = z.object({
   token: z.string().max(512),
 });
 
-/** 200 de POST /api/sessao (junto com o Set-Cookie) e de GET /api/sessao. */
+/**
+ * Tamanho máximo de cada campo do login da célula (RIFA-064): o nome da célula tem até 120 caracteres e a senha
+ * padrão, "@" + o nome normalizado + "1234". Acima disso, 400 (nada a ver com a célula existir).
+ */
+export const LIMITE_CAMPO_LOGIN_CELULA = 200;
+
+/**
+ * POST /api/sessao/senha (RIFA-064, D29): o login da célula com a senha padrão (login-celula.ts). Os dois campos são
+ * texto livre: vazio, um nome que não é de célula ou uma senha errada dão o MESMO 401 (a resposta não diz se a
+ * célula existe). Só a falta de um campo (ou um não texto) e o texto acima do limite dão 400.
+ */
+export const corpoEntrarComSenhaSchema = z.object({
+  /** O nome da célula, como a pessoa digitou: comparado normalizado (sem maiúsculas, acentos, espaços e pontuação). */
+  celula: z.string().max(LIMITE_CAMPO_LOGIN_CELULA),
+  /** A senha padrão: "@" + o nome da célula normalizado + "1234" (comparada com formaDaSenhaDigitada). */
+  senha: z.string().max(LIMITE_CAMPO_LOGIN_CELULA),
+});
+export type CorpoEntrarComSenha = z.input<typeof corpoEntrarComSenhaSchema>;
+
+/** 200 de POST /api/sessao e de POST /api/sessao/senha (junto com o Set-Cookie) e de GET /api/sessao. */
 export const respostaSessaoSchema = z.object({ usuario: usuarioSessaoSchema });
 export type RespostaSessao = z.infer<typeof respostaSessaoSchema>;
 
@@ -251,6 +270,26 @@ export const ROTAS_ACESSO = {
     papeis: null,
     situacao: "detalhada",
     corpo: corpoCriarSessaoSchema,
+    sucesso: { status: 200, corpo: respostaSessaoSchema },
+  },
+  /**
+   * RIFA-064 (D29): o login da célula com o nome dela e a senha padrão ("@" + nome normalizado + "1234";
+   * login-celula.ts). Abre a sessão do papel `lider` preso à célula, igual à do link (cookie `__Host-sessao`, 45 dias,
+   * parada há 7 dias deixa de valer), com o mesmo usuário do link do líder; a célula que ainda não tem esse usuário
+   * ganha um, com o `lider_nome` da hierarquia (o líder da importação, mesmo provisório). Mesma origem (CSRF), o mesmo
+   * limite de tentativas por IP do POST /api/sessao (429) e o mesmo teto do corpo (413).
+   * 401 `nao_autenticado`, com a MESMA mensagem em todos os casos (a resposta não diz se a célula existe): senha
+   * errada, nome que não é de nenhuma célula, dois nomes de célula iguais depois da normalização (ambíguo: a
+   * coordenação vê o aviso na Hierarquia), o usuário da célula desativado e a chave `acesso.celulas_senha` desligada
+   * na Campanha. A senha nunca é gravada (nem na trilha, que registra cada login por senha, sem ela).
+   */
+  entrarComSenha: {
+    metodo: "POST",
+    caminho: "/api/sessao/senha",
+    grupo: "aberto",
+    papeis: null,
+    situacao: "detalhada",
+    corpo: corpoEntrarComSenhaSchema,
     sucesso: { status: 200, corpo: respostaSessaoSchema },
   },
   obterSessao: {

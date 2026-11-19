@@ -14,12 +14,14 @@ import {
   Select,
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
+import { useBuscarRedes, useRedes } from "../../lib/redes";
 import {
   formatarData,
   formatarHora,
   formatarNumero,
 } from "../../lib/formatadores";
 import {
+  FILTROS_PADRAO,
   JANELAS,
   NIVEIS,
   lerDivisao,
@@ -42,7 +44,7 @@ import {
   textoDaReferencia,
 } from "./textos";
 import "./rankings.css";
-import { DICA_DO_MENU } from "../coordenacao/textos";
+import { DICA_DO_MENU, DICA_DO_MENU_SEM_REDE } from "../coordenacao/textos";
 import { ajuda } from "../ajuda-sob-demanda";
 
 const ID_ABAS = "rankings";
@@ -58,10 +60,22 @@ type Carga = { caminho: string; resultado: Resultado };
 // Rankings da coordenação: a disputa entre células, discipuladores e redes, por divisão (ou de todos juntos, quando
 // a campanha não separa: D27) e por janela
 // (período atual ou campanha inteira), com posição (empates dividem a posição), % da meta, realizado e
-// meta na unidade da campanha e situação. Os filtros ficam na URL; cada mudança consulta a API de novo.
+// meta na unidade da campanha e situação. Os filtros ficam na URL; cada mudança consulta a API de novo. Com uma rede
+// só (RIFA-065, D30), sem o nível das redes nem a rede no vínculo: o ranking não diz quantas redes há (com o filtro de
+// divisão, ele traz só parte delas), então a tela pergunta à API, se o site ainda não souber.
 export function RankingsPage() {
   const [parametros, setParametros] = useSearchParams();
-  const filtros = lerFiltros(parametros);
+  useBuscarRedes();
+  const redes = useRedes();
+  const lidos = lerFiltros(parametros);
+  // Uma URL antiga com ?nivel=rede, com uma rede só, mostra as células.
+  const filtros: FiltrosRanking =
+    redes.unica && lidos.nivel === "rede"
+      ? { ...lidos, nivel: FILTROS_PADRAO.nivel }
+      : lidos;
+  const niveis = redes.unica
+    ? NIVEIS.filter((nivel) => nivel !== "rede")
+    : NIVEIS;
   const caminho = caminhoDoRanking(filtros);
   const [carga, setCarga] = useState<Carga | null>(null);
   const [tentativa, setTentativa] = useState(0);
@@ -145,7 +159,11 @@ export function RankingsPage() {
           ))}
         </Select>
       </div>
-      <ConteudoDoRanking resultado={resultado} aoTentarDeNovo={tentarDeNovo} />
+      <ConteudoDoRanking
+        resultado={resultado}
+        redeUnica={redes.unica}
+        aoTentarDeNovo={tentarDeNovo}
+      />
     </div>
   );
 
@@ -153,8 +171,14 @@ export function RankingsPage() {
     <>
       <PageHeader
         titulo="Rankings"
-        ajuda={DICA_DO_MENU.rankings}
-        descricao="A disputa entre células, discipuladores e redes: posição, % da meta e quem está em dia."
+        ajuda={
+          redes.citar ? DICA_DO_MENU.rankings : DICA_DO_MENU_SEM_REDE.rankings
+        }
+        descricao={
+          redes.citar
+            ? "A disputa entre células, discipuladores e redes: posição, % da meta e quem está em dia."
+            : "A disputa entre células e discipuladores: posição, % da meta e quem está em dia."
+        }
       />
       {/* Região viva fixa: anuncia o resultado de cada troca de filtro. */}
       <p className="visualmente-oculto" role="status">
@@ -165,7 +189,7 @@ export function RankingsPage() {
         rotulo="Nível do ranking"
         abaAtiva={filtros.nivel}
         aoMudar={(nivel) => mudarFiltros({ nivel })}
-        abas={NIVEIS.map((nivel) => ({
+        abas={niveis.map((nivel) => ({
           id: nivel,
           rotulo: TEXTO_NIVEL[nivel].aba,
           dica: DICAS.aba[nivel],
@@ -180,10 +204,16 @@ export function RankingsPage() {
 type PropsConteudo = {
   /** null = carregando. */
   resultado: Resultado | null;
+  /** Uma rede só (D30): o vínculo sem a rede. */
+  redeUnica: boolean;
   aoTentarDeNovo: () => void;
 };
 
-function ConteudoDoRanking({ resultado, aoTentarDeNovo }: PropsConteudo) {
+function ConteudoDoRanking({
+  resultado,
+  redeUnica,
+  aoTentarDeNovo,
+}: PropsConteudo) {
   if (resultado === null) return <Loading texto="Carregando o ranking…" />;
   if (resultado.tipo === "erro") {
     return (
@@ -216,7 +246,7 @@ function ConteudoDoRanking({ resultado, aoTentarDeNovo }: PropsConteudo) {
       {resposta.itens.length === 0 ? (
         <SemItens resposta={resposta} />
       ) : (
-        <TabelaRanking resposta={resposta} />
+        <TabelaRanking resposta={resposta} redeUnica={redeUnica} />
       )}
     </>
   );

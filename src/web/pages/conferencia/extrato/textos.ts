@@ -13,7 +13,7 @@ export const TITULO = "Extrato do banco (Pix manual)";
 
 export const PASSOS = [
   "No Bradesco Net Empresa, entre em Saldos e Extratos, abra o extrato do período e salve em PDF (ou em OFX, se aparecer). Sem essas opções, selecione a tabela do extrato na tela, copie e cole na caixa abaixo.",
-  "Escolha o arquivo ou cole o texto. A tela lê o extrato aqui e compara cada Pix recebido com os pedidos da Rifei.",
+  "Escolha o arquivo ou cole o texto. Pode escolher também os comprovantes de Pix em PDF, vários de uma vez, com o extrato ou sem ele. A tela lê tudo aqui e compara cada Pix recebido com os pedidos da Rifei.",
   "Marque como pago no painel da Rifei os pedidos da lista. Se a venda não contar até o fim do dia, faça a conferência pelo CSV, mais abaixo.",
 ];
 
@@ -25,8 +25,8 @@ export const PRIVACIDADE = {
 
 export const CAMPOS = {
   arquivo: {
-    rotulo: "Extrato do banco (PDF, OFX ou CSV)",
-    dica: "O arquivo salvo no banco: o PDF do extrato ou o OFX.",
+    rotulo: "Extrato do banco ou comprovantes de Pix (PDF, OFX ou CSV)",
+    dica: "O PDF do extrato ou o OFX salvo no banco e, se quiser, os comprovantes de Pix em PDF. Pode escolher vários arquivos de uma vez.",
   },
   texto: {
     rotulo: "Ou cole aqui a tabela do extrato",
@@ -69,11 +69,14 @@ export const COLUNAS_CSV = {
 
 export const RESULTADO = {
   titulo: "Resultado do extrato",
+  /** "Lido do arquivo PDF: 6 lançamentos." */
   formato: {
-    ofx: "arquivo OFX",
-    csv: "arquivo CSV",
-    texto: "texto colado",
-    pdf: "arquivo PDF",
+    ofx: "Lido do arquivo OFX",
+    csv: "Lido do arquivo CSV",
+    texto: "Lido do texto colado",
+    pdf: "Lido do arquivo PDF",
+    comprovante: "Lido do comprovante de Pix",
+    varios: "Lido dos arquivos",
   },
   semHora:
     "O extrato não traz a hora dos lançamentos: a comparação usa só o dia, e mais pedidos podem servir a cada Pix.",
@@ -199,6 +202,34 @@ export const MAIS_AMBIGUOS = (n: number) =>
 export const MAIS_CANDIDATOS = (n: number) =>
   `E mais ${plural(n, "pedido", "pedidos")}. Diminua o tempo entre a reserva e o Pix para ver menos.`;
 
+/** Vários arquivos de uma vez (RIFA-074, D34). */
+export const VARIOS_ARQUIVOS = {
+  escolhidos: (n: number) =>
+    `${plural(n, "arquivo escolhido", "arquivos escolhidos")}`,
+  titulo: "Arquivos lidos",
+  repetidos: (n: number) =>
+    n === 1
+      ? "o Pix já estava em outro arquivo e contou uma vez só"
+      : `${plural(n, "Pix", "Pix")} já estavam em outro arquivo e contaram uma vez só`,
+  csvSozinho: {
+    ok: false,
+    titulo: "Não reconhecemos as colunas deste CSV",
+    mensagem: "Escolha este arquivo sozinho para indicar as colunas na tela.",
+  },
+  nenhum: {
+    ok: false,
+    titulo: "Nenhum arquivo deu para ler",
+    mensagem: "Veja abaixo o que houve com cada arquivo e escolha de novo.",
+  },
+} as const;
+
+/** O Pix que veio só de um comprovante (RIFA-074): o comprovante pode ser adulterado. */
+export const DO_COMPROVANTE = {
+  marca: "Só no comprovante: confira no extrato antes de marcar.",
+  aviso:
+    "Há Pix lidos só de comprovantes. Um comprovante pode ser adulterado: antes de marcar como pago, confira se o Pix entrou no extrato do banco (ou escolha o extrato junto com os comprovantes).",
+};
+
 export const FALHAS = {
   semCampanha: {
     titulo: "Não dá para conferir ainda",
@@ -216,12 +247,43 @@ export const MAXIMO_PAGINAS_PDF = 200;
 const OUTRO_JEITO =
   "baixe o extrato em OFX ou copie a tabela da tela do banco e cole na caixa abaixo.";
 
+/** Como conseguir o comprovante em PDF (RIFA-074). */
+const COMPROVANTE_EM_PDF =
+  "abra o Pix no app do banco, toque em Compartilhar o comprovante e escolha PDF (ou peça o PDF a quem pagou).";
+
+/** As falhas do comprovante de Pix (RIFA-074, D34). */
+export const FALHAS_DO_COMPROVANTE = {
+  imagem: {
+    ok: false,
+    titulo: "Esta é uma foto ou um print",
+    mensagem: `A tela lê o comprovante só em PDF (a foto não dá para ler aqui): ${COMPROVANTE_EM_PDF}`,
+  },
+  agendado: {
+    ok: false,
+    titulo: "Este comprovante é de um Pix agendado",
+    mensagem:
+      "O Pix agendado ainda não foi pago. Espere o dia do pagamento e confira no extrato ou no comprovante do Pix feito.",
+  },
+  semValor: {
+    ok: false,
+    titulo: "Não achamos o valor no comprovante",
+    mensagem:
+      "Confira se o PDF é o comprovante do Pix. Se for, confira o Pix no extrato do banco.",
+  },
+  semData: {
+    ok: false,
+    titulo: "Não achamos a data no comprovante",
+    mensagem:
+      "Confira se o PDF é o comprovante do Pix. Se for, confira o Pix no extrato do banco.",
+  },
+} as const satisfies Record<string, FalhaDoExtrato>;
+
 /** As falhas do PDF (RIFA-068): o que aconteceu e o outro jeito de conferir. */
 export const FALHAS_DO_PDF = {
   imagem: {
     ok: false,
     titulo: "Este PDF é uma imagem",
-    mensagem: `Ele não tem texto para ler (foi escaneado ou fotografado): ${OUTRO_JEITO}`,
+    mensagem: `Ele não tem texto para ler (foi escaneado ou fotografado). Se for o extrato, ${OUTRO_JEITO} Se for o comprovante de Pix, ${COMPROVANTE_EM_PDF}`,
   },
   senha: {
     ok: false,
@@ -310,7 +372,7 @@ export const AJUDA = {
 
 export const DICAS = {
   escolherArquivo:
-    "Abre a escolha do arquivo no aparelho (PDF, OFX ou CSV). O extrato é lido aqui e comparado com os pedidos; nada é gravado nem enviado.",
+    "Abre a escolha dos arquivos no aparelho (PDF, OFX ou CSV; um ou vários). O extrato e os comprovantes são lidos aqui e comparados com os pedidos; nada é gravado nem enviado.",
   escolherArquivoOcupado: `Indisponível enquanto o extrato é lido. ${ESPERE}`,
   lerTexto:
     "Lê o texto da caixa aqui no navegador e compara cada Pix com os pedidos. Nada é gravado nem enviado.",

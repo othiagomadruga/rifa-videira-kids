@@ -42,6 +42,7 @@ import {
   COPIADO,
   COPIAR,
   DICAS,
+  DO_COMPROVANTE,
   EXPLICACAO_DO_GRAU,
   FALHAS,
   GRAU,
@@ -95,6 +96,9 @@ function DoPix({ pix, comValor = false }: { pix: Pix; comValor?: boolean }) {
         {comValor && ` · ${formatarMoeda(pix.centavos)}`}
       </span>
       <span className="extrato-suave">{pix.descricao}</span>
+      {pix.origem === "comprovante" && (
+        <span className="extrato-suave">{DO_COMPROVANTE.marca}</span>
+      )}
     </span>
   );
 }
@@ -377,13 +381,20 @@ export function ResultadoDoExtrato({
     <Card titulo={titulo} ajuda={AJUDA.resultado}>
       <div className="extrato-bloco">
         <p className="extrato-suave">
-          Lido do {RESULTADO.formato[origem]}:{" "}
+          {RESULTADO.formato[origem]}:{" "}
           {plural(extrato.lancamentos.length, "lançamento", "lançamentos")}.{" "}
           {ignoradosTexto}
         </p>
         {extrato.semHora && totalDePix > 0 && (
           <Aviso tom="info" anuncio="nenhum">
             <p>{RESULTADO.semHora}</p>
+          </Aviso>
+        )}
+        {extrato.lancamentos.some(
+          (lancamento) => lancamento.origem === "comprovante",
+        ) && (
+          <Aviso tom="alerta" anuncio="nenhum">
+            <p>{DO_COMPROVANTE.aviso}</p>
           </Aviso>
         )}
         {busca?.tipo === "carregando" && (

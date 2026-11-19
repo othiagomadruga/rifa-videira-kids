@@ -54,7 +54,8 @@ app.use(ROTAS.health.caminho, limitarRequisicoes(LIMITE_PUBLICO));
 app.route(ROTAS.health.caminho, health);
 
 // 3. Sessão da equipe (RIFA-007): POST abre a sessão com o link pessoal, GET diz quem está
-// conectado, POST /sair encerra. Os POSTs só aceitam a mesma origem (CSRF).
+// conectado, POST /sair encerra. POST /senha (RIFA-064, D29) abre a sessão do líder de uma célula com o nome
+// dela e a senha padrão, com o mesmo limite de tentativas do link. Os POSTs só aceitam a mesma origem (CSRF).
 app.route(ROTAS_ACESSO.entrar.caminho, sessao);
 
 // 4. Coordenação: todo /api/admin/* e /api/painel/* exige sessão (e a mesma origem nas escritas),

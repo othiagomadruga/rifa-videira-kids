@@ -29,6 +29,7 @@ import {
 import { esperarIndisponivel } from "../test/indisponivel";
 import { renderizarRota, respostaJson } from "../test/renderizar";
 import { DICAS as DICAS_ACESSO } from "./acesso/textos";
+import { DICAS as DICAS_ENTRAR } from "./entrar/textos";
 import {
   criarApiFalsa,
   respostaErro,
@@ -286,7 +287,7 @@ describe("/acesso (link pessoal)", () => {
 });
 
 describe("/entrar", () => {
-  it("sem sessão: só a explicação, sem botão nem campo", async () => {
+  it("sem sessão: o login da célula (RIFA-064) com dica nos dois campos e no botão; o cartão do link, sem controle", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -294,8 +295,21 @@ describe("/entrar", () => {
       ),
     );
     renderizarRota("/entrar", { usuario: null });
-    await screen.findByRole("heading", { level: 2, name: "Como entrar" });
-    await conferirSemControles();
+    await screen.findByRole("heading", {
+      level: 2,
+      name: "Como entrar pelo link",
+    });
+    // Célula, Senha e Entrar, e o "?" da ajuda do título da tela, dos títulos e dos campos (RIFA-066).
+    await conferirDicas(3);
+    expect(textoDaDica(screen.getByLabelText("Célula"))).toBe(
+      DICAS_ENTRAR.celula,
+    );
+    expect(textoDaDica(screen.getByLabelText("Senha"))).toBe(
+      DICAS_ENTRAR.senha,
+    );
+    expect(textoDaDica(screen.getByRole("button", { name: "Entrar" }))).toBe(
+      DICAS_ENTRAR.entrar,
+    );
   });
 });
 

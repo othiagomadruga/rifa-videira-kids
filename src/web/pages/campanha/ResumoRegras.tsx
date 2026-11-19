@@ -7,9 +7,9 @@ import {
   PEDIDOS_PADRAO,
   PUBLICO_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
-  TIPOS_MENSAGEM,
   problemasDoModelo,
   type Campanha,
+  type TipoMensagem,
 } from "../../../shared/contracts";
 import { Aviso, Badge, Card } from "../../components/ui";
 import {
@@ -18,6 +18,7 @@ import {
   formatarNumero,
 } from "../../lib/formatadores";
 import { textoPercentual } from "./formulario";
+import { mensagensVisiveis } from "./RegrasDoAdmin";
 import { AJUDA, TEXTO_CRITERIO } from "./textos";
 
 /** Uma linha do resumo: o nome da decisão, o valor (null = falta preencher) e o campo que a muda. */
@@ -77,28 +78,33 @@ function textoDoPublico(publico: Campanha["publico"]): string {
   return `${posicoes}, ${publico.mostra_percentual_meta ? "com" : "sem"} o percentual da meta. Nunca valores em R$.`;
 }
 
-function textoDasMensagens(mensagens: Campanha["mensagens"]): string {
-  const editadas = TIPOS_MENSAGEM.filter(
+/** As mensagens que a tela mostra (com uma rede só, sem a da rede: D30), editadas e com problema. */
+function textoDasMensagens(
+  mensagens: Campanha["mensagens"],
+  tipos: readonly TipoMensagem[],
+): string {
+  const editadas = tipos.filter(
     (tipo) => mensagens[tipo] !== MENSAGENS_PADRAO[tipo],
   ).length;
-  const comProblema = TIPOS_MENSAGEM.filter(
+  const comProblema = tipos.filter(
     (tipo) => problemasDoModelo(tipo, mensagens[tipo]).length > 0,
   ).length;
   const base =
     editadas === 0
-      ? "As 4 com o texto padrão."
+      ? `As ${tipos.length} com o texto padrão.`
       : editadas === 1
         ? "1 editada; as outras com o texto padrão."
-        : `${editadas} editadas${editadas < 4 ? "; as outras com o texto padrão" : ""}.`;
+        : `${editadas} editadas${editadas < tipos.length ? "; as outras com o texto padrão" : ""}.`;
   return comProblema === 0
     ? base
     : `${base} ${comProblema === 1 ? "1 tem problema" : `${comProblema} têm problema`}: até corrigir, a tela Acessos usa o texto padrão.`;
 }
 
-/** As linhas do resumo, na ordem das decisões do PO. */
+/** As linhas do resumo, na ordem das decisões do PO. Com uma rede só (RIFA-065, D30), sem o acesso das redes. */
 export function itensDoResumo(
   campanha: Campanha | null,
   { idDoCampo, idDosPercentuais }: Ids,
+  redeUnica = false,
 ): ItemResumo[] {
   const pedidos = campanha?.pedidos ?? PEDIDOS_PADRAO;
   const acesso = campanha?.acesso ?? ACESSO_PADRAO;
@@ -178,17 +184,32 @@ export function itensDoResumo(
       padrao,
       campo: idDoCampo("acesso.discipuladores"),
     },
+    ...(redeUnica
+      ? []
+      : [
+          {
+            nome: "Acesso de redes",
+            valor: acesso.redes
+              ? "Ligado: entram pelo link pessoal."
+              : "Desligado: não entram nem recebem link novo.",
+            padrao,
+            campo: idDoCampo("acesso.redes"),
+          },
+        ]),
     {
-      nome: "Acesso de redes",
-      valor: acesso.redes
-        ? "Ligado: entram pelo link pessoal."
-        : "Desligado: não entram nem recebem link novo.",
+      nome: "Login das células com senha",
+      valor: acesso.celulas_senha
+        ? "Ligado: cada célula entra com o nome e a senha padrão."
+        : "Desligado: só pelo link pessoal.",
       padrao,
-      campo: idDoCampo("acesso.redes"),
+      campo: idDoCampo("acesso.celulas_senha"),
     },
     {
       nome: "Mensagens do link pessoal",
-      valor: textoDasMensagens(campanha?.mensagens ?? MENSAGENS_PADRAO),
+      valor: textoDasMensagens(
+        campanha?.mensagens ?? MENSAGENS_PADRAO,
+        mensagensVisiveis(redeUnica),
+      ),
       padrao,
       campo: idDoCampo("mensagens.link_coordenacao"),
     },
@@ -203,10 +224,12 @@ function irAoCampo(evento: MouseEvent<HTMLAnchorElement>, id: string) {
 type Props = Ids & {
   /** A campanha salva (o que está valendo); null = ainda não configurada. */
   campanha: Campanha | null;
+  /** Uma rede só (D30): sem a linha do acesso das redes. */
+  redeUnica?: boolean;
 };
 
-export function ResumoRegras({ campanha, ...ids }: Props) {
-  const itens = itensDoResumo(campanha, ids);
+export function ResumoRegras({ campanha, redeUnica = false, ...ids }: Props) {
+  const itens = itensDoResumo(campanha, ids, redeUnica);
   const faltam = itens.filter((item) => item.valor === null);
   return (
     <Card titulo="Regras da campanha" ajuda={AJUDA.regras}>

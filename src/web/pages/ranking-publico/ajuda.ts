@@ -12,9 +12,11 @@ export const AJUDA = {
   todas:
     "Todas as células da campanha, numa disputa só, da que está na frente para a de trás.",
   entrar:
-    "Como entrar no sistema da campanha: cada pessoa entra pelo próprio link pessoal, sem senha. A coordenação, os líderes, os discipuladores e as redes usam o mesmo caminho.",
+    "Como entrar no sistema da campanha: o líder entra com o nome da célula e a senha; a coordenação e os discipuladores, pelo link pessoal que chegou no WhatsApp.",
+  entrarComCelula:
+    "O jeito de o líder entrar: o nome da célula, como aparece no ranking, e a senha que a coordenação passou. Ex.: a senha começa com @ e termina com 1234.",
   comoEntrar:
-    "O passo a passo para entrar pelo link pessoal que chegou no WhatsApp. Ex.: se perdeu o link, peça um novo à coordenação.",
+    "O passo a passo para entrar pelo link pessoal que chegou no WhatsApp, sem senha. Ex.: se perdeu o link, peça um novo à coordenação.",
   acesso:
     "A entrada pelo link pessoal: o sistema confere o link e abre a sua área. O link é só seu; não mande para ninguém.",
   status:

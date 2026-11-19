@@ -30,6 +30,7 @@ import {
 } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/formatadores";
+import { useRedes } from "../../lib/redes";
 import { useUsuarioConectado } from "../../lib/sessao";
 import { salvarCampanha } from "./campanha-api";
 import {
@@ -87,6 +88,8 @@ type Props = {
 export function FormularioCampanha({ campanhaInicial }: Props) {
   // Pedidos, acesso e mensagens são só do admin (RIFA-042): para a coordenação, só leitura e fora do PUT.
   const admin = useUsuarioConectado().papel === "admin";
+  // Uma rede só (RIFA-065, D30): sem o acesso e a mensagem das redes (o valor gravado fica como está).
+  const redeUnica = useRedes().unica;
   const [salva, setSalva] = useState(campanhaInicial);
   const [formulario, setFormulario] = useState<Formulario>(() =>
     campanhaInicial ? formularioDaCampanha(campanhaInicial) : formularioVazio(),
@@ -281,6 +284,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
       <SituacaoCampanha campanha={salva} />
       <ResumoRegras
         campanha={salva}
+        redeUnica={redeUnica}
         idDoCampo={idDoCampo}
         idDosPercentuais={
           formulario.periodos.length > 0
@@ -656,6 +660,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
           <ChavesDaCampanha
             formulario={formulario}
             somenteLeitura={!admin}
+            redeUnica={redeUnica}
             idDoCampo={idDoCampo}
             aoAlterar={alterarChave}
           />
@@ -663,6 +668,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
           <MensagensDoLink
             mensagens={formulario.mensagens}
             somenteLeitura={!admin}
+            redeUnica={redeUnica}
             erros={erros}
             idDoCampo={idDoCampo}
             aoAlterar={alterarMensagem}

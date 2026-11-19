@@ -99,7 +99,7 @@ describe("campanha (PUT /api/admin/campanha)", () => {
         acao: "campanha.salvar",
         alvo: `campanha:${id}`,
         // RIFA-043: também como as regras do admin nasceram (a coordenação não manda os grupos: os padrões).
-        resumo: `Campanha criada: slug_rifei "${DADOS_CAMPANHA.slug_rifei}", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado`,
+        resumo: `Campanha criada: slug_rifei "${DADOS_CAMPANHA.slug_rifei}", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado, acesso.celulas_senha: ligado`,
       },
     ]);
 
@@ -166,7 +166,7 @@ describe("campanha (PUT /api/admin/campanha)", () => {
         // Mesmo formato dos salvamentos seguintes ("acesso.redes: ligado → desligado"), sem o antes. As mensagens
         // iguais ao padrão não entram.
         resumo:
-          'Campanha criada: slug_rifei "slug-rifa-043", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: ligado, acesso.redes: desligado, mensagens.link_lider',
+          'Campanha criada: slug_rifei "slug-rifa-043", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: ligado, acesso.redes: desligado, acesso.celulas_senha: ligado, mensagens.link_lider',
       }),
     ]);
     // O texto do modelo (que pode ter um nome) não vai para a trilha.
