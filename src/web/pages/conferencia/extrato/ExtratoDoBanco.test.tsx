@@ -42,6 +42,11 @@ import {
   type Chamada,
 } from "./teste-apoio";
 import {
+  COMPROVANTE_BRADESCO,
+  COMPROVANTE_DIGITAL,
+  E2E_BRADESCO,
+  E2E_NUBANK,
+  pdfDeComprovante,
   criarPdfDeImagem,
   pdfComSenha,
   pdfDoBradesco,
@@ -51,6 +56,8 @@ import {
 import {
   CAMPOS,
   DICAS,
+  DO_COMPROVANTE,
+  FALHAS_DO_COMPROVANTE,
   FALHAS_DO_PDF,
   GRUPOS,
   LER_TEXTO,
@@ -95,6 +102,20 @@ async function subir(
 ) {
   fireEvent.change(screen.getByLabelText(CAMPOS.arquivo.rotulo), {
     target: { files: [new File([conteudo], nome)] },
+  });
+  await esperarFim();
+}
+
+/** Sobe vários arquivos de uma vez (RIFA-074) e espera o resultado (ou a falha). */
+async function subirVarios(
+  arquivos: readonly [conteudo: BlobPart, nome: string, tipo?: string][],
+) {
+  fireEvent.change(screen.getByLabelText(CAMPOS.arquivo.rotulo), {
+    target: {
+      files: arquivos.map(
+        ([conteudo, nome, tipo]) => new File([conteudo], nome, { type: tipo }),
+      ),
+    },
   });
   await esperarFim();
 }
@@ -468,6 +489,81 @@ describe("o PDF do banco (RIFA-068)", () => {
       screen.getByText(/Lido do texto colado: 6 lançamentos\./),
     ).toBeInTheDocument();
     expect(resultadoNaTela()).toEqual(doPdf);
+  });
+});
+
+describe("os comprovantes de Pix em PDF (RIFA-074)", () => {
+  it("o campo aceita vários arquivos (e a foto, para dizer que precisa do PDF)", async () => {
+    await abrir();
+    const campo = screen.getByLabelText(CAMPOS.arquivo.rotulo);
+    expect(campo).toHaveAttribute("multiple");
+    expect(campo).toHaveAttribute("accept", expect.stringMatching(/image\/\*/));
+  });
+
+  it("um comprovante sozinho: o identificador dá o Certo, com o aviso de conferir no extrato", async () => {
+    const api = await abrir();
+    await subir(pdfDeComprovante(COMPROVANTE_BRADESCO), "comprovante.pdf");
+    expect(
+      screen.getByText(/Lido do comprovante de Pix: 1 lançamento\./),
+    ).toBeInTheDocument();
+    expect(screen.getByText(DO_COMPROVANTE.aviso)).toBeInTheDocument();
+    const marcar = grupo(GRUPOS.paraMarcar.titulo);
+    expect(within(marcar).getByText("PEDTESTE0101")).toBeInTheDocument();
+    expect(within(marcar).getByText("Certo")).toBeInTheDocument();
+    expect(within(marcar).getByText(DO_COMPROVANTE.marca)).toBeInTheDocument();
+    conferirPrivacidade(api.chamadas);
+    for (const chamada of api.chamadas)
+      expect(chamada.url).not.toContain(E2E_BRADESCO);
+  });
+
+  it("extrato, comprovantes e uma foto de uma vez: cada arquivo com o seu resultado, e o mesmo Pix conta uma vez", async () => {
+    const api = await abrir();
+    await subirVarios([
+      [pdfDoBradesco(), "extrato.pdf"],
+      [pdfDeComprovante(COMPROVANTE_BRADESCO), "comprovante-1.pdf"],
+      [pdfDeComprovante(COMPROVANTE_DIGITAL), "comprovante-2.pdf"],
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), "foto.jpg", "image/jpeg"],
+    ]);
+    expect(screen.getByText("4 arquivos escolhidos")).toBeInTheDocument();
+    const lista = screen.getByRole("region", { name: "Arquivos lidos" });
+    const itens = within(lista).getAllByRole("listitem");
+    expect(itens.map((item) => item.textContent)).toEqual([
+      "extrato.pdfExtrato (arquivo PDF): 6 lançamentos.",
+      expect.stringMatching(
+        /^comprovante-1\.pdfComprovante de Pix: R\$\s20,00 em 16\/11\/2026.*10:05 \(o Pix já estava em outro arquivo e contou uma vez só\)\.$/,
+      ),
+      expect.stringMatching(
+        /^comprovante-2\.pdfComprovante de Pix: R\$\s40,00 em 16\/11\/2026.*14:30 \(o Pix já estava em outro arquivo/,
+      ),
+      `foto.jpg${FALHAS_DO_COMPROVANTE.imagem.titulo}. ${FALHAS_DO_COMPROVANTE.imagem.mensagem}`,
+    ]);
+    // Os 6 lançamentos do extrato (os dois comprovantes eram Pix dele); o da Pagadora Um, ambíguo só com o extrato,
+    // é Certo pelo identificador do comprovante. Todos confirmados no extrato: sem o aviso do comprovante.
+    expect(
+      screen.getByText(/Lido dos arquivos: 6 lançamentos\./),
+    ).toBeInTheDocument();
+    const marcar = grupo(GRUPOS.paraMarcar.titulo);
+    expect(within(marcar).getByText("PEDTESTE0101")).toBeInTheDocument();
+    expect(within(marcar).getByText("PEDTESTE0103")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: GRUPOS.ambiguos.titulo }),
+    ).toBeNull();
+    expect(screen.queryByText(DO_COMPROVANTE.aviso)).toBeNull();
+    conferirPrivacidade(api.chamadas);
+    for (const chamada of api.chamadas)
+      for (const id of [E2E_BRADESCO, E2E_NUBANK, "foto.jpg", "comprovante"])
+        expect(chamada.url).not.toContain(id);
+  });
+
+  it("só a foto: a falha diz que precisa do PDF", async () => {
+    await abrir();
+    await subir(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "print.png");
+    expect(
+      await screen.findByText(FALHAS_DO_COMPROVANTE.imagem.titulo),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(FALHAS_DO_COMPROVANTE.imagem.mensagem),
+    ).toBeInTheDocument();
   });
 });
 

@@ -587,6 +587,9 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - webhook.gerar_token (RIFA-039, D21): ROTAS_TOKEN_WEBHOOK.gerarTokenWebhook, alvo `webhook`
  *   (ALVO_AUDITORIA_TOKEN_WEBHOOK); resumo com o que deixou de valer (nada, o segredo do Worker ou o token da tela
  *   gerado em <instante>), NUNCA o token nem o hash. O 409 (sem `substituir`) não registra.
+ * - sessao.entrar_com_senha (RIFA-064, D29): ROTAS_ACESSO.entrarComSenha, cada login da célula com a senha padrão que
+ *   abriu sessão; quem fez é o usuário líder da célula, alvo `celula:<id>`; resumo sem a senha (que nunca é gravada).
+ *   A tentativa recusada não registra.
  * - rifei.marcar_pagos, rifei.sincronizar_afiliados e rifei.gerar_convites (RIFA-070, D32): ROTAS_RIFEI_API, alvo
  *   `campanha:<id>` na marcação e `rifei` (ALVO_AUDITORIA_AFILIADOS_RIFEI) nos afiliados; resumo só com contagens e,
  *   na marcação, os números dos pedidos marcados se couberem (nunca o token, o link do convite nem o e-mail do
@@ -615,6 +618,7 @@ export const ACOES_AUDITORIA = [
   "pedido.reconsiderar",
   "afiliado.remover",
   "webhook.gerar_token",
+  "sessao.entrar_com_senha",
   "rifei.marcar_pagos",
   "rifei.sincronizar_afiliados",
   "rifei.gerar_convites",

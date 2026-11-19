@@ -3,7 +3,7 @@
 Guia de 1 página para o líder de célula, que a coordenação manda no WhatsApp em PDF ou imagem. A versão para imprimir ou compartilhar é a [guia-lideres.html](guia-lideres.html) (abra no navegador e use "Imprimir" → "Salvar como PDF", em A4 retrato). O convite da reunião, a mensagem do link e o roteiro de 20 minutos estão em [convite-reuniao.md](convite-reuniao.md).
 
 - O guia vale como está, sem esperar nada da Rifei: das telas dela, que as fontes não documentam ([integracao-rifei.md](integracao-rifei.md#123-afiliados-programa-da-campanha-e-líderes), seção 12.3), ele fala só do convite de afiliado, da conta com o e-mail e da **Área de afiliados** (menu da página da campanha). Se a compra de teste mostrar algo que ajude o líder (ex.: onde fica o link de afiliado dentro da Área de afiliados), acrescente aqui e no HTML, sem passar de 1 página.
-- Os nomes de botão e os textos do sistema foram conferidos nas telas `/acesso`, `/entrar` e `/minha` (inclusive o cartão "Seu link de vendas"), com dados fictícios, no ensaio geral 2 (RIFA-036).
+- Os nomes de botão e os textos do sistema foram conferidos nas telas `/acesso`, `/entrar` e `/minha` (inclusive o cartão "Seu link de vendas"), com dados fictícios, no ensaio geral 2 (RIFA-036). O login da célula com a senha padrão (seção 2) foi conferido na `/entrar` na RIFA-064 (D29).
 - Se algo mudar no sistema (ex.: o texto de um botão), atualize este arquivo e o HTML juntos.
 
 ---
@@ -15,7 +15,7 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 **Em resumo:**
 
 - Você vende pela **Rifei** com o **seu link de afiliado**: assim a venda conta para a sua célula.
-- Você acompanha a sua célula pelo **seu link pessoal** do sistema, sem senha.
+- Você acompanha a sua célula no sistema: entre com o **nome da sua célula** e a senha **@nomedacelula1234**.
 - Todo dia de manhã, o **bumbo** no grupo dos líderes; no culto, o **telão**.
 
 ### 1. Vender pela Rifei (o seu link de afiliado)
@@ -28,19 +28,19 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 - **Só conta para a sua célula a venda paga feita pelo seu link.** Pelo link comum da campanha, a venda ajuda a campanha, mas não entra na sua célula.
 
-### 2. Entrar no sistema (o seu link pessoal)
+### 2. Entrar no sistema (o nome da célula e a senha)
 
-1. A coordenação manda no seu WhatsApp, no privado, uma mensagem com o link no fim: "Olá, (seu nome)! Este é o seu link pessoal…".
-2. Toque no link. Abre a página **Entrar no sistema da Rifa Videira Kids**.
-3. Toque no botão **Entrar**. Pronto: este celular fica conectado.
-4. Outro dia, para voltar: toque no mesmo link e em **Entrar** de novo. Não tem senha.
+1. Abra **rifa-videira-kids.madruga.workers.dev/entrar**.
+2. Em **Célula**, escreva o nome da sua célula, como aparece no ranking.
+3. Em **Senha**, escreva **@** + o nome da célula, tudo junto, sem acentos e sem espaços, + **1234**. Ex.: célula "Geração que Clama" → **@geracaoqueclama1234**.
+4. Toque em **Entrar**. Pronto: este celular fica conectado.
 
-- **O link é só seu: não repasse.** Quem tiver o link entra como você.
-- O link vale para a campanha inteira.
+- Recebeu da coordenação um **link pessoal** no WhatsApp? Ele também serve: toque no link e em **Entrar**.
+- A senha é igual para toda célula, pela mesma regra: quem entra vê só a página da célula, sem valores em reais.
 
 ### 3. O que você vê na sua tela
 
-- No alto, o nome da sua célula e "Você entrou como (seu nome)".
+- No alto, o nome da sua célula e "Você entrou como (nome do líder)".
 - **Antes de 23/11:** quantos dias faltam para as vendas começarem.
 - **Meta da campanha:** quanto a sua célula já fez da meta, em %, e os bilhetes vendidos.
 - **Em dia** ou **Abaixo do esperado:** o ritmo da célula até ontem. Logo abaixo: "No ritmo atual, chega a …% da meta".
@@ -60,9 +60,9 @@ Campanha em prol do espaço Videira Kids. As vendas começam em **23/11/2026**.
 
 ### Dúvidas frequentes
 
-**Perdi o link.** Do sistema: no WhatsApp, procure "link pessoal" na conversa com a coordenação. Não achou, ou a página diz "Este link não vale mais"? Peça um link novo à coordenação. De afiliado: na sua tela do sistema, em **Seu link de vendas**; ou na página da campanha na Rifei, abra o menu, toque em **Área de afiliados** e entre com o seu e-mail. Não conseguiu? Fale com a coordenação.
+**Esqueci a senha ou perdi o link.** Do sistema: a senha é **@** + o nome da célula sem acentos e sem espaços + **1234**. Apareceu "Célula ou senha não conferem."? Confira o nome da célula como está no ranking. Não entrou? Fale com a coordenação. De afiliado: na sua tela do sistema, em **Seu link de vendas**; ou na página da campanha na Rifei, abra o menu, toque em **Área de afiliados** e entre com o seu e-mail. Não conseguiu? Fale com a coordenação.
 
-**Mudei de celular.** No celular novo, toque no mesmo link e em **Entrar**. Se o celular antigo ficou com outra pessoa, peça à coordenação para trocar o seu acesso: você recebe um link novo e o celular antigo sai do sistema. A conversa não veio para o celular novo? Peça um link novo.
+**Mudei de celular.** No celular novo, entre com o nome da célula e a senha (ou pelo seu link). No antigo, toque em **Sair**.
 
 **A venda não apareceu.** Espere 2 minutos: a tela se atualiza sozinha. Só conta a venda **paga**, feita **pelo seu link de afiliado**, a partir de 23/11. No bumbo, a venda de hoje só aparece amanhã. Ainda não apareceu? Avise a coordenação, com o dia e a hora da compra.
 

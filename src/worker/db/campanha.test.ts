@@ -77,6 +77,8 @@ describe("buscarCampanhaAtiva", () => {
       mensagem_link_lider: null,
       mensagem_link_discipulador: null,
       mensagem_link_rede: null,
+      // 0013 (RIFA-064, D29): o login das células com a senha padrão nasce ligado.
+      acesso_celulas_senha: 1,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],
@@ -220,7 +222,8 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
       mensagens: gravada.mensagens,
     }).toEqual({
       pedidos: { desconsiderar: true },
-      acesso: { discipuladores: true, redes: false },
+      // RIFA-064 (D29): a chave do login das células com senha, ausente no corpo, fica com o padrão (ligada).
+      acesso: { discipuladores: true, redes: false, celulas_senha: true },
       mensagens,
     });
     // O modelo igual ao padrão fica NULL (= o padrão); o editado, com o texto.
@@ -281,7 +284,7 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
     const criacao = (corpo: CampanhaEntrada) =>
       resumirMudancaDaCampanha(null, corpoSalvarCampanhaSchema.parse(corpo));
     const PADROES =
-      "pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado";
+      "pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado, acesso.celulas_senha: ligado";
 
     // Sem os grupos (a coordenação, ou um admin que não mexeu): os padrões que o INSERT grava, sem mensagem.
     expect(criacao(BASE)).toBe(
@@ -312,7 +315,7 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
       },
     });
     expect(resumo).toBe(
-      'Campanha criada: slug_rifei "rifa \\"aspas\\"", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: desligado, acesso.redes: desligado, mensagens.link_coordenacao, mensagens.link_rede',
+      'Campanha criada: slug_rifei "rifa \\"aspas\\"", preco_bilhete_centavos 2000, pedidos.desconsiderar: ligado, acesso.discipuladores: desligado, acesso.redes: desligado, acesso.celulas_senha: ligado, mensagens.link_coordenacao, mensagens.link_rede',
     );
     expect(resumo).not.toContain("Obrigado");
     expect(resumo).not.toContain("Equipe");
@@ -396,7 +399,7 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
         ranking: { criterio: "percentual_meta", por_divisao: false },
       }),
     ).toBe(
-      'Campanha criada: slug_rifei "rifa-teste", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado, ranking.por_divisao: desligado',
+      'Campanha criada: slug_rifei "rifa-teste", preco_bilhete_centavos 2000, pedidos.desconsiderar: desligado, acesso.discipuladores: ligado, acesso.redes: ligado, acesso.celulas_senha: ligado, ranking.por_divisao: desligado',
     );
     // Ligada ao nascer (o padrão): o resumo de sempre.
     expect(

@@ -78,3 +78,11 @@ export const DICAS = {
   imprimirOsQrCodesSemLink:
     "Indisponível: nenhuma célula tem link ainda. A célula ganha o link quando um afiliado é ligado a ela.",
 } as const;
+
+/** Com uma rede só (RIFA-065, D30), as buscas sem citar a rede (a busca ainda acha pelo nome dela). */
+export const DICAS_REDE_UNICA = {
+  buscarNaEscolha:
+    "Filtra as células pelo nome, pelo líder, pelo discipulador ou pelo código de afiliado.",
+  buscarCelulas:
+    "Filtra a lista pelo nome da célula, do líder, do discipulador ou pelo código de afiliado.",
+} as const;

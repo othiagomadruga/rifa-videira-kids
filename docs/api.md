@@ -43,7 +43,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 | `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <token>`, comparado em tempo constante (D6) com o token gerado pela tela da coordenação (RIFA-039, D21; no banco, só o SHA-256) ou, **só sem ele**, com o segredo do Worker `RIFEI_WEBHOOK_TOKEN`. Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; nenhum dos dois configurado: `503 nao_configurado` |
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
 | `hierarquia` | `/api/minha/*` (RIFA-014, D12) | a mesma sessão, aberta pelo link pessoal de um `lider`, `discipulador` ou `rede`; o alvo (célula, discipulador ou rede) vem **só da sessão** | `401 nao_autenticado`: sem sessão; `403 proibido`: sessão da coordenação. **Nunca devolve dinheiro** |
-| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao` e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** |
+| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao`, `POST /api/sessao/senha` (RIFA-064) e `POST /api/sessao/sair` | nenhum (os dois POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** |
 
 Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada.
 
@@ -51,6 +51,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 
 - Cada pessoa recebe um link `<site>/acesso/<token>`. O site pede confirmação e faz `POST /api/sessao { "token" }`: **200** `{ "usuario": { "id", "nome", "papel" } }` com `Set-Cookie: __Host-sessao=...; HttpOnly; Secure; SameSite=Lax; Path=/`; nos papéis da hierarquia (RIFA-014), o usuário vem também com `"alvo": { "tipo", "id", "nome", "divisao" }`, lido da hierarquia na hora. Link inválido, expirado ou revogado: 401. Link válido de `discipulador` ou `rede` com o acesso do papel desligado na campanha (`acesso.discipuladores` ou `acesso.redes`, D20): 403 `acesso_desligado`, sem criar a sessão. A sessão vale até o menor entre 45 dias e o fim do link.
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
+- **Login da célula** (RIFA-064, D29; [acesso.md, seção 10](acesso.md#10-login-da-célula-com-a-senha-padrão-rifa-064-d29)): `POST /api/sessao/senha { "celula", "senha" }` com o nome da célula e a senha padrão (`@` + nome normalizado + `1234`): **200** com a sessão do papel `lider` da célula (o mesmo corpo e o mesmo cookie do link). Toda recusa (senha errada, célula que não existe, nome ambíguo, usuário desativado, `acesso.celulas_senha` desligada) é o **mesmo** 401 `nao_autenticado`. O mesmo limite de tentativas e o mesmo teto de corpo do `POST /api/sessao`.
 - Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`), as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, em `ROTAS_TOKEN_WEBHOOK`, D21) e o modelo do link de vendas (`PUT /api/admin/links-vendas/modelo`, em `ROTAS_LINK_VENDAS`, D24); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` (a visão e, na RIFA-046, os links de vendas das células deles) e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
@@ -98,7 +99,7 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 
 | Rota | Limite | Acima do limite |
 |---|---|---|
-| `POST /api/sessao` | 4 KiB | 413 `corpo_muito_grande` (depois da checagem de origem) |
+| `POST /api/sessao` e `POST /api/sessao/senha` | 4 KiB | 413 `corpo_muito_grande` (depois da checagem de origem) |
 | POST, PUT e PATCH em `/api/admin/*` e `/api/painel/*` | 1 MiB | 413 `corpo_muito_grande`, só **depois** do login (sem sessão: 401, e o corpo nem é lido) |
 | `POST /api/admin/hierarquia/importar` | 3 × `LIMITE_CARACTERES_CSV_HIERARQUIA` + 1 MB | 400 `csv_invalido` com `motivo: "arquivo_grande"`, como o `csv` acima do limite de caracteres |
 | `/api/admin/reconciliacao/*` (RIFA-012) | 1 MiB (`LIMITE_CORPO_CONFERENCIA_BYTES`), conferido na própria rota: o teto geral não lê o corpo dela, para ele ser lido uma vez só (e de uma vez, com o `Content-Length`) | 413 `corpo_muito_grande` |
@@ -108,7 +109,7 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 
 | Rota | Limite | O que conta |
 |---|---|---|
-| `POST /api/sessao` | 60 por minuto (desde a D12; eram 10) | toda tentativa que passa da checagem de origem |
+| `POST /api/sessao` e `POST /api/sessao/senha` (RIFA-064), no mesmo contador | 60 por minuto (desde a D12; eram 10) | toda tentativa que passa da checagem de origem |
 | `/api/publico/*` e `GET /api/health` | 60 por minuto, somados | só as que vão ao banco: no público, a resposta do cache de 30 s **não conta** (muita gente atrás do mesmo IP, como o Wi-Fi da igreja, não esbarra no limite); o health lê o banco toda vez |
 
 Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Control: no-store`, sem ler o banco. O contador é por data center da Cloudflare e aproximado ("permissivo"). Sem o binding, vale uma janela na memória de cada isolate.
@@ -198,6 +199,7 @@ Corpo do PUT:
   - **Só o `admin` muda os três** (RIFA-042). A coordenação pode mandá-los ausentes ou iguais ao gravado (passa, e a gravação vai sem eles: o PUT dela nunca escreve essas colunas nem desfaz o que um admin gravar no meio); diferente do gravado, 403 `proibido`. O resto da campanha a coordenação continua mudando.
   - `pedidos.desconsiderar` (padrão `false`): libera desconsiderar e reconsiderar pedido ([abaixo](#regras-da-campanha-sprint-6-docsdecisionsmd-d20)). Desligar não devolve às contas o que já foi desconsiderado.
   - `acesso.discipuladores` e `acesso.redes` (padrão `true`): desligado, quem tem o papel não entra nem usa `/api/minha/*` (403 `acesso_desligado`) e não se gera link do papel (409 `acao_desligada`); nada é revogado, e tudo volta a valer quando a chave volta. O líder não tem chave.
+  - `acesso.celulas_senha` (RIFA-064, D29; padrão `true`): o login de cada célula com a senha padrão (`POST /api/sessao/senha`). Desligado, o login por senha dá 401 e as sessões abertas pela senha deixam de valer (401); o link do líder não muda. No PUT, opcional dentro de `acesso`: ausente mantém o gravado (uma aba antiga não liga nem desliga). Só o admin muda, como o resto do grupo.
   - `mensagens`: o modelo da mensagem do WhatsApp de cada link pessoal (tela Acessos), até 1.000 caracteres, com os marcadores `{nome}` (primeiro nome), `{saudacao}` ("Olá, Maria!" ou, sem nome, "Olá!"), `{alvo}` (nome da célula, do discipulador ou da rede; não existe em `link_coordenacao`) e `{link}` (obrigatório). Marcador desconhecido ou a falta do `{link}`: 400 com a mensagem em português. Também 400 (RIFA-042): o `{link}` fora do começo e sem espaço, tabulação ou quebra de linha antes (ex.: `https://outro.site/?u={link}`, `x{link}`: o link pessoal viraria parte de outro endereço, e a prévia do WhatsApp levaria o token a esse site) e outro endereço no modelo (`://`, `www.` ou um domínio com barra, como `site.com/`). As regras e as mensagens estão em `problemasDoModelo` (`regras.ts`). O padrão (`MENSAGENS_PADRAO`) é o texto de hoje; o site preenche com `preencherMensagem` (`regras.ts`). O bumbo não entra (é montado pela API, sem texto livre no que é público).
 - `meta.regra`:
   - `por_pessoa`: `valor` × pessoas da célula;
@@ -439,6 +441,7 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `pedido.desconsiderar` | `POST /api/admin/pedidos/desconsiderar` (D20) | `pedido:<id>` (só `pedido` se não couber em 64 caracteres: `alvoDoPedidoNaAuditoria`) | o id do pedido em JSON, o status, os bilhetes, a célula (pelo id) e o motivo; da observação, só "observação informada" |
 | `pedido.reconsiderar` | `POST /api/admin/pedidos/reconsiderar` (D20) | idem | o id, o motivo que tinha e quando fora desconsiderado |
 | `afiliado.remover` | `DELETE /api/admin/afiliados/:affiliateId` (D20) | `afiliado:<affiliate_id>` | a célula que ele tinha (pelo id) e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se couberem) |
+| `sessao.entrar_com_senha` | `POST /api/sessao/senha` que abriu sessão (RIFA-064, D29) | `celula:<id>` | "Entrada com a senha padrão da célula: sessão de líder aberta (sem link)"; quem fez é o usuário líder da célula; nunca a senha. A recusa não registra |
 | `webhook.gerar_token` | `POST /api/admin/webhook/token` (D21) | `webhook` | o que deixou de valer: nada, o segredo do Worker ou o token anterior (com o `gerado_em` dele); **nunca o token nem o hash**. O 409 não registra |
 
 - **Consulta** (`consultaAuditoriaSchema`): `limite` (1 a 200, padrão 50) e `antes_de` (cursor: o `proximo` da página anterior).

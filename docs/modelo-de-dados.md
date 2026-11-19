@@ -71,6 +71,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `publico_limite_ranking` | INTEGER 1–100 ou NULL | padrão 3 (top 3); NULL mostra todas as posições |
 | `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |
 | `acesso_discipuladores`, `acesso_redes` | INTEGER 0/1 | padrão 1 (0008): as chaves `acesso.discipuladores` e `acesso.redes` |
+| `acesso_celulas_senha` | INTEGER 0/1 NOT NULL | padrão 1 (0013, RIFA-064, D29): a chave `acesso.celulas_senha`, o login das células com a senha padrão. A senha não é gravada em lugar nenhum (sai do nome da célula); a sessão aberta por ela fica em `sessoes` com `link_id` NULL |
 | `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 | o modelo de cada mensagem do WhatsApp (0008); NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar. Um modelo salvo igual ao padrão é gravado como NULL |
 | `link_vendas_modelo` | TEXT NULL, 1–300 | o modelo do link de vendas (0010, D24): `https://rifei.com.br/...` com `{slug}` e `{afiliado}`, conferido pelo contrato (`problemasDoModeloLinkVendas`); NULL = o PO ainda não confirmou o formato com a Rifei, e nenhuma célula tem link. Só o admin muda (`PUT /api/admin/links-vendas/modelo`); o PUT da campanha nunca escreve nele |
 | `criado_em`, `atualizado_em` | TEXT | instantes UTC |

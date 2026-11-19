@@ -401,6 +401,11 @@ export const DICAS = {
     "Indisponível enquanto o acesso é desativado. Espere um instante.",
   papelDaHierarquia:
     "Escolha de quem ver os acessos: dos líderes de célula, dos discipuladores ou das redes.",
+  /** Com uma rede só (RIFA-065, D30): a aba e o papel sem as redes. */
+  abaHierarquiaRedeUnica:
+    "Os links pessoais dos líderes e dos discipuladores. Quem entra por eles vê só a própria visão, sem valores em R$.",
+  papelDaHierarquiaRedeUnica:
+    "Escolha de quem ver os acessos: dos líderes de célula ou dos discipuladores.",
   gerarLote:
     "Cria de uma vez o link de quem está sem link válido. Os links aparecem uma vez, para mandar a cada um.",
   loteIndisponivel: {

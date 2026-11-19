@@ -15,4 +15,5 @@ export * from "./regras";
 export * from "./token-webhook";
 export * from "./relatorio";
 export * from "./link-vendas";
+export * from "./login-celula";
 export * from "./rifei-api";

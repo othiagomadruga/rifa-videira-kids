@@ -8,6 +8,11 @@
  *   continua valendo: entra quando a chave volta). A chave é lida na mesma consulta do link, na hora.
  * - GET /api/sessao: quem está conectado (401 sem sessão válida).
  * - POST /api/sessao/sair: encerra a sessão deste navegador e expira o cookie (204, mesmo sem sessão).
+ * - POST /api/sessao/senha { celula, senha } (RIFA-064, D29): o login da célula com a senha padrão ("@" + nome
+ *   normalizado + "1234"; src/shared/contracts/login-celula.ts) abre a sessão do líder da célula, como o link. A senha
+ *   é derivada do nome da célula na hora e comparada em tempo constante: nunca é gravada nem vai para log ou trilha.
+ *   Toda recusa (senha errada, célula que não existe, nome ambíguo, usuário desativado, chave desligada) é o MESMO
+ *   401, sem dizer se a célula existe.
  *
  * Os POSTs são abertos (não exigem sessão), mas só da mesma origem do site (CSRF). No login (RIFA-013b),
  * depois da origem: o limite de tentativas por IP (429, lib/limite-requisicoes.ts) e o de tamanho do corpo,
@@ -19,12 +24,23 @@ import {
   PAPEIS,
   VALIDADE_SESSAO_DIAS,
   corpoCriarSessaoSchema,
+  corpoEntrarComSenhaSchema,
+  formaDaSenhaDigitada,
+  normalizarNomeCelula,
+  senhaPadraoDaCelula,
   type RespostaSessao,
 } from "../../shared/contracts";
-import { apagarSessao, buscarLinkValido, criarSessao } from "../db/acessos";
+import {
+  apagarSessao,
+  buscarLinkValido,
+  buscarSessao,
+  criarSessao,
+} from "../db/acessos";
+import { abrirSessaoDaCelula, lerCelulasParaLogin } from "../db/login-celula";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import { LIMITE_LOGIN, limitarRequisicoes } from "../lib/limite-requisicoes";
 import { responderErro } from "../lib/respostas-erro";
+import { textosIguaisEmTempoConstante } from "../lib/tempo-constante";
 import {
   LIMITE_CORPO_SESSAO_BYTES,
   limitarCorpo,
@@ -95,6 +111,74 @@ sessao.post(
 
     gravarCookieSessao(c, idSessao, expiraEm, agora);
     return c.json({ usuario: link.usuario } satisfies RespostaSessao, 200);
+  },
+);
+
+/**
+ * A recusa do login por senha (RIFA-064): a MESMA resposta para todo caso, sem dizer se a célula existe nem por que
+ * não entrou (senha errada, célula que não existe, nome ambíguo, usuário desativado, chave desligada).
+ */
+function respostaSenhaRecusada(c: Context) {
+  return responderErro(
+    c,
+    "nao_autenticado",
+    "Não foi possível entrar com esta célula e esta senha",
+  );
+}
+
+/**
+ * Comparada com a senha digitada quando não há célula para comparar (nome que não é de célula, ambíguo ou sem senha
+ * padrão): a comparação acontece do mesmo jeito, para o tempo da resposta não dizer se a célula existe. Nunca confere:
+ * formaDaSenhaDigitada só devolve "@" seguido de [a-z0-9].
+ */
+const SENHA_QUE_NUNCA_CONFERE = "@ sem célula";
+
+sessao.post(
+  "/senha",
+  exigirMesmaOrigem,
+  limitarRequisicoes(LIMITE_LOGIN),
+  limitarCorpo(LIMITE_CORPO_SESSAO_BYTES),
+  validarJson(corpoEntrarComSenhaSchema),
+  async (c) => {
+    c.header("Cache-Control", "no-store");
+    const { celula, senha } = c.req.valid("json");
+    const { ligado, celulas } = await lerCelulasParaLogin(c.env.DB);
+    const nome = normalizarNomeCelula(celula);
+    const encontradas =
+      nome === ""
+        ? []
+        : celulas.filter((outra) => normalizarNomeCelula(outra.nome) === nome);
+    // Dois nomes de célula iguais depois da normalização: ambíguo, ninguém entra por eles (a coordenação vê o aviso).
+    const alvo = encontradas.length === 1 ? encontradas[0] : null;
+    const esperada = alvo === null ? null : senhaPadraoDaCelula(alvo.nome);
+    const confere = await textosIguaisEmTempoConstante(
+      formaDaSenhaDigitada(senha),
+      esperada ?? SENHA_QUE_NUNCA_CONFERE,
+    );
+    if (!ligado || alvo === null || esperada === null || !confere)
+      return respostaSenhaRecusada(c);
+
+    const agora = new Date();
+    const idSessao = gerarSegredo();
+    const idHash = await sha256Hex(idSessao);
+    const anterior = lerCookieSessao(c);
+    const expiraEm = await abrirSessaoDaCelula(c.env.DB, {
+      celulaId: alvo.id,
+      idHash,
+      criadoEm: agora.toISOString(),
+      expiraEm: new Date(
+        agora.getTime() + VALIDADE_SESSAO_DIAS * DIA_MS,
+      ).toISOString(),
+      idHashAnterior: anterior === null ? null : await sha256Hex(anterior),
+    });
+    // A chave desligada ou o usuário da célula desativado no meio (conferidos de novo dentro do lote).
+    if (expiraEm === null) return respostaSenhaRecusada(c);
+    // Quem entrou, como GET /api/sessao devolve (com o alvo lido da hierarquia na hora).
+    const aberta = await buscarSessao(c.env.DB, idHash, agora.toISOString());
+    if (aberta === null) return respostaSenhaRecusada(c);
+
+    gravarCookieSessao(c, idSessao, expiraEm, agora);
+    return c.json({ usuario: aberta.usuario } satisfies RespostaSessao, 200);
   },
 );
 

@@ -1,9 +1,10 @@
 import { useId, useState, type FormEvent } from "react";
 import { Button, ComDica, Input } from "../../components/ui";
 import { mensagemDoErro } from "../../lib/api";
+import { useRedes } from "../../lib/redes";
 import type { CelulaAdesao } from "./adesao-api";
 import { celulaCombina, ordenarParaEscolha } from "./formatos";
-import { DICAS } from "./textos";
+import { DICAS, DICAS_REDE_UNICA } from "./textos";
 
 /** Quantas células a lista mostra de uma vez (a busca encontra as outras). */
 export const LIMITE_OPCOES = 8;
@@ -36,6 +37,7 @@ export function EscolherCelula({
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const grupo = useId();
+  const redeUnica = useRedes().unica;
 
   const opcoes = ordenarParaEscolha(
     celulas.filter((celula) => celula.celula_id !== celulaAtualId),
@@ -66,7 +68,11 @@ export function EscolherCelula({
 
   return (
     <form className="adesao-escolha" onSubmit={confirmar} noValidate>
-      <ComDica texto={DICAS.buscarNaEscolha}>
+      <ComDica
+        texto={
+          redeUnica ? DICAS_REDE_UNICA.buscarNaEscolha : DICAS.buscarNaEscolha
+        }
+      >
         <Input
           rotulo="Buscar célula ou líder"
           type="search"

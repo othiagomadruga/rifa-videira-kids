@@ -83,6 +83,12 @@ export interface CampanhaAtiva {
   pedidos_desconsiderar: number;
   acesso_discipuladores: number;
   acesso_redes: number;
+  /**
+   * RIFA-064 (D29, migração 0013): o login das células com a senha padrão (1 = ligado). No PUT, ausente dentro de
+   * `acesso` mantém o gravado (no primeiro PUT, o padrão da coluna: ligado), gravada à parte do UPSERT
+   * (GRAVAR_LOGIN_CELULAS_SENHA).
+   */
+  acesso_celulas_senha: number;
   mensagem_link_coordenacao: string | null;
   mensagem_link_lider: string | null;
   mensagem_link_discipulador: string | null;
@@ -116,7 +122,7 @@ const SELECIONAR_CAMPANHA_ATIVA = `
     c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio, c.ranking_por_divisao,
     c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.pedidos_desconsiderar,
     c.acesso_discipuladores, c.acesso_redes, c.mensagem_link_coordenacao, c.mensagem_link_lider,
-    c.mensagem_link_discipulador, c.mensagem_link_rede, c.criado_em, c.atualizado_em,
+    c.mensagem_link_discipulador, c.mensagem_link_rede, c.acesso_celulas_senha, c.criado_em, c.atualizado_em,
     (SELECT json_group_array(json_object('ordem', p.ordem, 'nome', p.nome, 'dias', p.dias,
         'percentual_bp', p.percentual_bp))
       FROM campanha_periodos AS p WHERE p.campanha_id = c.id) AS periodos
@@ -158,6 +164,14 @@ const GRAVAR_CAMPANHA = `
     mensagem_link_discipulador = CASE WHEN ?15 = 1 THEN ?18 ELSE mensagem_link_discipulador END,
     mensagem_link_rede = CASE WHEN ?15 = 1 THEN ?19 ELSE mensagem_link_rede END,
     atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
+
+/**
+ * RIFA-064 (D29): a chave do login das células com senha, num comando à parte do UPSERT, no mesmo lote (depois dele):
+ * só quando o corpo traz `acesso.celulas_senha`. Ausente, a coluna fica como está (no primeiro PUT, o DEFAULT 1 da
+ * 0013).
+ */
+const GRAVAR_LOGIN_CELULAS_SENHA =
+  "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1";
 
 /** Chave (0/1) para o bind; null = grupo ausente. */
 const chave = (valor: boolean | undefined): number | null =>
@@ -213,6 +227,10 @@ export function gruposDoAdminAlterados(
         ? ACESSO_PADRAO.discipuladores
         : antes.acesso_discipuladores === 1,
     redes: antes === null ? ACESSO_PADRAO.redes : antes.acesso_redes === 1,
+    celulasSenha:
+      antes === null
+        ? ACESSO_PADRAO.celulas_senha
+        : antes.acesso_celulas_senha === 1,
     modelo: (tipo: TipoMensagem) =>
       antes === null ? MENSAGENS_PADRAO[tipo] : modeloGravado(antes, tipo),
   };
@@ -223,7 +241,10 @@ export function gruposDoAdminAlterados(
   if (
     acesso !== undefined &&
     (acesso.discipuladores !== gravado.discipuladores ||
-      acesso.redes !== gravado.redes)
+      acesso.redes !== gravado.redes ||
+      // RIFA-064 (D29): ausente mantém o gravado (não muda nada).
+      (acesso.celulas_senha !== undefined &&
+        acesso.celulas_senha !== gravado.celulasSenha))
   )
     alterados.push("acesso");
   if (
@@ -267,6 +288,10 @@ function resumirCriacaoDaCampanha(depois: DadosCampanha): string {
       depois.acesso?.discipuladores ?? ACESSO_PADRAO.discipuladores,
     ],
     ["acesso.redes", depois.acesso?.redes ?? ACESSO_PADRAO.redes],
+    [
+      "acesso.celulas_senha",
+      depois.acesso?.celulas_senha ?? ACESSO_PADRAO.celulas_senha,
+    ],
   ];
   const { mensagens } = depois;
   const editadas =
@@ -356,6 +381,11 @@ export function resumirMudancaDaCampanha(
       depois.acesso?.discipuladores,
     ],
     ["acesso.redes", antes.acesso_redes, depois.acesso?.redes],
+    [
+      "acesso.celulas_senha",
+      antes.acesso_celulas_senha,
+      depois.acesso?.celulas_senha,
+    ],
   ];
   for (const [nome, gravada, nova] of chaves)
     if (nova !== undefined && (gravada === 1) !== nova)
@@ -416,6 +446,13 @@ export async function salvarCampanhaAtiva(
         )
         .bind(indice + 1, periodo.nome, periodo.dias, periodo.percentual_bp),
     ),
+    ...(dados.acesso?.celulas_senha === undefined
+      ? []
+      : [
+          db
+            .prepare(GRAVAR_LOGIN_CELULAS_SENHA)
+            .bind(chave(dados.acesso.celulas_senha)),
+        ]),
   ];
 
   if (auditoria)
@@ -498,6 +535,8 @@ export function montarCampanha(campanha: CampanhaAtiva): Campanha {
     acesso: {
       discipuladores: campanha.acesso_discipuladores === 1,
       redes: campanha.acesso_redes === 1,
+      // RIFA-064 (D29): só 0 desliga (uma linha lida sem a coluna, antes da 0013, fica com o padrão: ligado).
+      celulas_senha: campanha.acesso_celulas_senha !== 0,
     },
     mensagens: Object.fromEntries(
       TIPOS_MENSAGEM.map((tipo) => [tipo, modeloGravado(campanha, tipo)]),

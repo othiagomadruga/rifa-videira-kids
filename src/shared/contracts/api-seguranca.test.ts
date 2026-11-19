@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 22 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 23 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -190,6 +190,8 @@ describe("GET /api/admin/auditoria", () => {
       "afiliado.remover",
       // RIFA-039 (D21): o token do webhook gerado pela tela.
       "webhook.gerar_token",
+      // RIFA-064 (D29): o login da célula com a senha padrão.
+      "sessao.entrar_com_senha",
       // RIFA-070 (D32): a API da Rifei (marcar pagos, sincronizar afiliados e gerar convites).
       "rifei.marcar_pagos",
       "rifei.sincronizar_afiliados",
