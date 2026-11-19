@@ -16,9 +16,10 @@ src/web/
                         (keyframes, esqueleto e toque), marca.ts (nomes e arquivos da marca), marca/ (logo da Videira e
                         selo do Kids) e fontes/ (a Outfit 800 dos títulos e a licença OFL, D25)
   lib/                  api.ts (cliente da API), sessao.tsx (sessão, áreas por papel e guarda), formatadores.ts
-                        (pt-BR), acesso-desligado.ts (o 403 `acesso_desligado`, D20) e o movimento: movimento.ts,
-                        contagem.ts (count-up), useListaAnimada.ts (stagger e FLIP), usePulsoDaMeta.ts (pulso da
-                        meta batida) e useComemoracao.tsx (o pulso e as partículas da meta batida, D25)
+                        (pt-BR), acesso-desligado.ts (o 403 `acesso_desligado`, D20), redes.ts (a rede única, D30) e
+                        o movimento: movimento.ts, contagem.ts (count-up), useListaAnimada.ts (stagger e FLIP),
+                        usePulsoDaMeta.ts (pulso da meta batida) e useComemoracao.tsx (o pulso e as partículas da meta
+                        batida, D25)
   components/ui/        componentes base; importe de "components/ui" (index.ts); os ícones: Icone.tsx e os desenhos,
                         só dados, em icones.ts
   components/movimento/ TextoContado (número que conta até o valor; importe de "components/movimento") e
@@ -27,7 +28,7 @@ src/web/
                         pedaço `lazy`, QrCodeLinkVendas e qr-matriz.ts (o único módulo que importa o `qr`)
   components/EmConstrucao.tsx   aviso das telas que ainda são só a casca
   pages/<tela>/         uma pasta por tela: componente, CSS, chamadas à API e testes da tela
-  test/                 setup.ts, renderizar.tsx, movimento.ts e download.ts (ajudantes de teste)
+  test/                 setup.ts, renderizar.tsx, movimento.ts, download.ts, dicas.ts e redes.ts (ajudantes de teste)
 ```
 
 ## Rotas
@@ -173,6 +174,15 @@ A decisão e o contrato estão na D27 de `docs/decisions.md`. O site só lê a m
 - **/minha**: com a marca, uma posição só ("Sua posição", `textoDosPares(nivel, null, false)` = "Entre todas as células"), "Os primeiros", a coluna e o rótulo "Posição" na equipe e o cabeçalho "Célula" sem a divisão (`descricaoDoAlvo(alvo, porDivisao)`; até a visão chegar, como sempre).
 - **Bumbo, Visão geral e Hierarquia**: o texto do bumbo vem pronto da API (um ranking só, sem `_Jovens_`/`_Adultos_`); o cartão do relatório diz "posição no ranking" (vale com e sem a divisão); a dica da divisão da rede não promete filtro de divisão nos rankings. O recorte por divisão da Visão geral e do Mapa continua.
 - Testes: as APIs falsas do ranking aberto, do telão, dos Rankings, da /minha (`visaoDe({ porDivisao: false })`, também na varredura de "R$") e do bumbo têm o cenário da opção desligada.
+
+## Rede única: o nível rede some com uma rede só (RIFA-065, D30)
+
+A decisão está na D30 de `docs/decisions.md`. Com uma rede só na hierarquia, nenhuma tela mostra a palavra "rede" nem o nome dela; com duas ou mais (ou nenhuma), tudo como antes. Só no site: o contrato, a API, a planilha e os arquivos do relatório continuam com a rede.
+
+- **`lib/redes.ts`**: quantas redes a hierarquia tem, guardado no módulo (vale entre as telas; `esquecerRedes` no `test/setup.ts`). `useRedes(daTela?)` devolve `{ unica, citar }`: `unica` (sabe-se que há uma rede só) esconde abas, colunas, filtros, campos e textos; `citar` (sabe-se que não é única) deixa os textos que só enumeram os níveis (descrição do cabeçalho, dicas do menu) citarem a rede. Sem saber, `unica` e `citar` são false: a estrutura fica como sempre e esses textos saem sem a rede. `daTela` é o que a tela contou na lista que recebeu (`contarRedes` das `rede_id`): vale antes do que o site guardou e o atualiza antes da pintura (`useLayoutEffect`), para os componentes de dentro, que leem só o do site, já aparecerem certos.
+- **Quem informa**: a Hierarquia (a lista das redes), a Visão geral e os Pedidos (`GET /api/admin/celulas`) e a Adesão (os itens da adesão). **Quem pergunta**: Rankings, Campanha e Acessos chamam `useBuscarRedes()`, que pede `GET /api/admin/redes` (`CAMINHO_REDES`, cópia de `ROTAS.listarRedes`) só se o site ainda não sabe, uma vez por página aberta (uma resposta fora do formato não é pedida de novo; uma falha deixa a próxima tela tentar). O ranking não serve para contar: com o filtro de divisão, traz só parte das redes. O menu (`CoordenacaoLayout`) só lê.
+- **Por tela**: Hierarquia (`redeUnica` nas tabelas, nos diálogos e na importação; `DICAS_REDE_UNICA`), Visão geral (`FiltroEscopo`, `AvisosVendas`, `RelatorioCampanha` sem o tipo `redes`; `TEXTOS_REDE_UNICA`), Rankings (sem o nível `rede` nas abas; `?nivel=rede` vale `celula`; `TabelaRanking` sem a rede no vínculo), Pedidos (as opções sem o `<optgroup>` da rede), Adesão (`TodasAsCelulas`, `EscolherCelula` e `LinksDeVendas`; `DICAS_REDE_UNICA`), Acessos (o rótulo da aba e o seletor de papel sem `rede`) e Campanha (`chavesVisiveis` e `mensagensVisiveis` em `RegrasDoAdmin.tsx`; `itensDoResumo(campanha, ids, redeUnica)`; o valor escondido fica no formulário e vai igual no PUT). A importação da planilha é a exceção: a coluna `rede` continua obrigatória, e a dica da aba e a explicação da coluna dizem que a rede pode ser uma só.
+- **Testes**: `pages/rede-unica.test.tsx` abre cada tela com uma rede só e confere o texto (inclusive o só do leitor de tela), os atributos (`label` de `<optgroup>`, `aria-label`, `title`), os valores dos campos e as dicas (`textosDasDicas` de `test/dicas.ts`), para admin, coordenação, líder e discipulador. As API falsas dos Rankings, da Campanha e dos Acessos respondem `GET /api/admin/redes` com duas redes (`test/redes.ts`; a tela como sempre foi) e guardam o pedido à parte das chamadas que os testes de antes conferem.
 
 ## Mapa de vendas por DDD (RIFA-015)
 

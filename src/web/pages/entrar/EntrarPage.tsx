@@ -187,7 +187,7 @@ export function EntrarPage() {
     <>
       <PageHeader
         titulo="Entrar"
-        descricao="Coordenação, líderes, discipuladores e redes da Rifa Videira Kids."
+        descricao="Coordenação, líderes e discipuladores da Rifa Videira Kids."
       />
       {conferindo ? (
         <Loading texto="Conferindo o seu acesso…" />

@@ -6,7 +6,8 @@ import {
 } from "../../../shared/contracts/relatorio";
 import { Aviso, Button, Card, ComDica, Icone } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
-import { DICAS, TEXTOS_TIPO_RELATORIO } from "./textos";
+import { useRedes } from "../../lib/redes";
+import { DICAS, TEXTOS_REDE_UNICA, TEXTOS_TIPO_RELATORIO } from "./textos";
 import { baixarRelatorio } from "./visao-geral-api";
 
 type Resultado =
@@ -38,10 +39,19 @@ function anuncioDaFalha(erro: unknown): string {
 // Relatório da campanha (RIFA-038, D23), no fim da Visão geral: a coordenação escolhe o tipo e baixa a planilha
 // (CSV para o Excel em português) com os números de agora; depois do fim, o resultado final. Um download por vez
 // (trava síncrona e o botão com aria-disabled, que continua focável e não perde o foco); o resultado e as falhas
-// vão numa região viva fixa. O 401 fica com a sessão, que leva para /entrar.
+// vão numa região viva fixa. O 401 fica com a sessão, que leva para /entrar. Com uma rede só (RIFA-065, D30), sem o
+// tipo "Por rede" (a API continua aceitando; o arquivo das células continua com a coluna "Rede").
 export function RelatorioCampanha() {
   const id = useId();
-  const [tipo, setTipo] = useState<TipoRelatorio>(TIPOS_RELATORIO[0]);
+  const redeUnica = useRedes().unica;
+  const tipos: readonly TipoRelatorio[] = redeUnica
+    ? TIPOS_RELATORIO.filter((opcao) => opcao !== "redes")
+    : TIPOS_RELATORIO;
+  const [escolhido, setTipo] = useState<TipoRelatorio>(TIPOS_RELATORIO[0]);
+  // O tipo escolhido saiu da lista (uma rede só): vale o primeiro.
+  const tipo = tipos.includes(escolhido)
+    ? escolhido
+    : (tipos[0] ?? TIPOS_RELATORIO[0]);
   const [baixando, setBaixando] = useState(false);
   const [resultado, setResultado] = useState<Resultado>(NADA);
   const [anuncio, setAnuncio] = useState("");
@@ -113,8 +123,12 @@ export function RelatorioCampanha() {
         <fieldset className="visao-relatorio__tipos">
           <legend className="visao-relatorio__legenda">O que baixar</legend>
           <div className="visao-relatorio__opcoes">
-            {TIPOS_RELATORIO.map((opcao) => {
-              const { rotulo, descricao } = TEXTOS_TIPO_RELATORIO[opcao];
+            {tipos.map((opcao) => {
+              const { rotulo } = TEXTOS_TIPO_RELATORIO[opcao];
+              const descricao =
+                redeUnica && opcao === "celulas"
+                  ? TEXTOS_REDE_UNICA.relatorioCelulas
+                  : TEXTOS_TIPO_RELATORIO[opcao].descricao;
               const idRotulo = `${id}-${opcao}`;
               const idDescricao = `${id}-${opcao}-descricao`;
               const idDica = `${id}-${opcao}-dica`;

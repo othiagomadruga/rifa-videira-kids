@@ -15,6 +15,7 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
+import { useBuscarRedes, useRedes } from "../../lib/redes";
 import { useSessao, useUsuarioConectado } from "../../lib/sessao";
 import {
   definirAtivo,
@@ -63,6 +64,10 @@ const WebhookRifei = lazy(() =>
 // o token. As abas da hierarquia e do webhook só carregam quando são abertas.
 export function AcessosPage() {
   const [aba, setAba] = useState<AbaAcessos>("coordenacao");
+  // Com uma rede só (RIFA-065, D30), a aba da hierarquia não oferece o acesso das redes. A tela não recebe a
+  // hierarquia: sem saber quantas redes há, pergunta à API ao abrir.
+  useBuscarRedes();
+  const redeUnica = useRedes().unica;
   // As regras da campanha (D20): o acesso de discipuladores e de redes e os modelos das mensagens.
   const { regras, desligar } = useRegrasDosAcessos();
   const [hierarquiaAberta, setHierarquiaAberta] = useState(false);
@@ -93,8 +98,12 @@ export function AcessosPage() {
           },
           {
             id: "hierarquia",
-            rotulo: "Líderes, discipuladores e redes",
-            dica: DICAS.abaHierarquia,
+            rotulo: redeUnica
+              ? "Líderes e discipuladores"
+              : "Líderes, discipuladores e redes",
+            dica: redeUnica
+              ? DICAS.abaHierarquiaRedeUnica
+              : DICAS.abaHierarquia,
             conteudo: hierarquiaAberta ? (
               <Suspense fallback={<Loading texto="Carregando os acessos…" />}>
                 <AcessosHierarquia regras={regras} aoDesligar={desligar} />

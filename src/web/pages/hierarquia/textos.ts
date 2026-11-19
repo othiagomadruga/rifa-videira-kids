@@ -246,3 +246,22 @@ export const DICAS = {
     "Grava a planilha conferida, e as tabelas da hierarquia mudam na hora. Só libera depois de uma conferência sem erros.",
   verCelulas: "Volta para a aba Células, que já mostra o que foi importado.",
 } as const;
+
+/**
+ * Com uma rede só (RIFA-065, D30), as dicas que citavam a rede, sem ela. A da importação explica que a planilha
+ * continua com a coluna `rede`, com o mesmo nome em todas as linhas.
+ */
+export const DICAS_REDE_UNICA = {
+  abaCelulas:
+    "Cada célula com o discipulador, a divisão, as pessoas e o líder. Dá para filtrar, editar e excluir.",
+  abaDiscipuladores:
+    "Cada discipulador com quantas células e pessoas tem. Dá para editar e excluir.",
+  abaImportar:
+    "Cadastra ou atualiza de uma vez os discipuladores e as células por uma planilha. A coluna rede continua obrigatória, mas a rede pode ser uma só: o mesmo nome em todas as linhas.",
+  filtroDivisao: "Mostra só as células de Jovens ou de Adultos.",
+  limparFiltros: "Tira a divisão e a busca e mostra todas as células de novo.",
+  editarDiscipulador:
+    "Abre o formulário para corrigir o nome deste discipulador.",
+  discipuladorDaCelula:
+    "Quem acompanha a célula. Nos rankings e no painel, ela passa a contar, com as vendas de antes, para este discipulador.",
+} as const;

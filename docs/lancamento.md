@@ -148,7 +148,7 @@ O PO decidiu que as regras da campanha ficam configuráveis pela coordenação, 
 - [ ] **O que o público vê** (cartão "Ranking e público", "O que o público vê"): "Mostrar também o percentual da meta atingido" e "Quantas posições o público vê" (padrão 3; em branco, todas).
 - [ ] **Pedidos e acessos** (cartão "Pedidos e acessos", uma caixa de marcar por regra):
   - "Permitir desconsiderar pedidos" (padrão desligada): ligada, o admin tira das contas um pedido de teste, fraude ou estorno, e desfaz, na tela **Pedidos** (4.4). Desligar depois não devolve às contas o que já foi desconsiderado;
-  - "Acesso dos discipuladores" e "Acesso das redes" (padrão ligados): links pessoais também para discipuladores e redes (5.1, item 1), que veem as células deles, sem reais. Desligado, eles não entram nem recebem link novo; os links já mandados voltam a valer quando religar. O líder de célula entra sempre;
+  - "Acesso dos discipuladores" e "Acesso das redes" (padrão ligados): links pessoais também para discipuladores e redes (5.1, item 1), que veem as células deles, sem reais. Desligado, eles não entram nem recebem link novo; os links já mandados voltam a valer quando religar. O líder de célula entra sempre. Com uma rede só na planilha (3.4), a caixa "Acesso das redes" e a mensagem do link da rede não aparecem (D30).
   - "Login das células com senha padrão" (padrão **ligado**; RIFA-064, D29; pedido do PO em 17/11, **deixe ligado nesta campanha**): cada célula entra em `/entrar` com o nome dela e a senha `@` + nome da célula sem acentos e sem espaços + `1234` (ex.: `@geracaoqueclama1234`) e vê só a página da célula (ranking, meta, link e QR de vendas, sem reais). A senha não é segredo: quem souber o nome da célula entra como ela. Desligado, ninguém entra pela senha e quem entrou assim sai na hora; o link pessoal continua.
 - [ ] **Mensagens do link pessoal** (cartão "Mensagens do link pessoal"; opcional): o texto do WhatsApp de cada tipo de link (coordenação, líder, discipulador e rede). O padrão é o texto de 5.1; a tela mostra como fica e não deixa salvar sem o `{link}`. O bumbo não muda aqui.
 
@@ -398,6 +398,7 @@ Siga [importar-hierarquia.md](importar-hierarquia.md). Em resumo: **Coordenaçã
 - Confira no resultado: 36 células criadas, sem erros. Leia os avisos (coluna ignorada não entra).
 - Preencha `lider_telefone`: é ele que abre o WhatsApp do líder na hora de mandar o link (5.1) e de cobrar quem falta (5.3).
 - A importação nunca apaga e pode ser repetida com a planilha corrigida.
+- **Uma rede só (decisão de 17/11; D30):** a planilha da igreja não tem rede, mas a coluna `rede` continua obrigatória: escreva o mesmo nome em todas as linhas (ex.: `Exploradores`). Com uma rede só, o sistema não mostra a rede em nenhuma tela: a Hierarquia fica com discipuladores e células, os rankings com células e discipuladores, e os acessos com líderes e discipuladores. Só a aba **Importar planilha** fala da coluna `rede`. O relatório em CSV continua com a coluna "Rede" (o mesmo nome em todas as linhas; dá para apagar no Excel). Com duas ou mais redes na planilha, tudo volta a aparecer.
 
 ### 3.5 Vinculação de afiliados (visão geral)
 
@@ -512,7 +513,7 @@ Se um teste for feito **depois de 23/11**, ele conta como venda (e é: o dinheir
      > Olá, Fulano! Este é o seu link pessoal para acompanhar a sua célula (Célula X) na campanha da rifa do Videira Kids: as vendas, a meta e a posição no ranking.
      > O link é só seu: não repasse para ninguém, porque quem tiver o link entra como você.
    - Logo depois, se quiser, mande no mesmo privado a mensagem complementar (sem link) da [seção 1 de convite-reuniao.md](convite-reuniao.md#1-mensagem-do-link-pessoal-no-privado-de-cada-líder).
-   - Com o acesso deles ligado na Campanha (1.5; padrão ligado), repita com o papel **Discipuladores** e **Redes**. Desligado, a tela avisa e não gera link desse papel.
+   - Com o acesso deles ligado na Campanha (1.5; padrão ligado), repita com o papel **Discipuladores** e **Redes**. Desligado, a tela avisa e não gera link desse papel. Com uma rede só (3.4), a aba se chama **Líderes e discipuladores** e não tem o papel **Redes**.
    - Cada link vale 45 dias: gerado na semana da reunião, cobre a campanha inteira.
 2. **Convite no grupo dos líderes [Coordenação]**, sem link nenhum, depois dos links pessoais: use o texto da [seção 2 de convite-reuniao.md](convite-reuniao.md#2-convite-para-a-reunião-grupo-dos-líderes), que também tem o lembrete da véspera.
 3. **Ensaiar a Adesão:** abra **Coordenação → Adesão** no aparelho que vai ser usado na reunião (celular ou notebook). Ela se atualiza sozinha a cada 15 s e tem **Atualizar agora**.
@@ -571,8 +572,8 @@ O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de co
 - **Adesão:** a fila **Sem célula** deve ficar vazia. Código novo ali = venda de afiliado sem vínculo: vincule. Na seção **Links de vendas** ficam o link e o QR code de cada célula, para mandar ao líder que perdeu o dele ou imprimir (3.6).
 - **Pedidos:** a lista dos pedidos (filtro por status, por célula e **Desconsiderados**, busca pelo id da Rifei) e as entregas do webhook. O admin desconsidera ali um pedido de teste, fraude ou estorno (4.4).
 - **Líderes, discipuladores e redes** acompanham pelo próprio link (`/minha`), sem valores em reais. O que o líder vê e faz no dia a dia está nas seções [3](guia-lideres.md#3-o-que-você-vê-na-sua-tela) e [4](guia-lideres.md#4-dia-a-dia) do guia do líder.
-- **Relatório da campanha** (no fim da **Visão geral**; admin e coordenação): em **O que baixar**, escolha **Totais da campanha**, **Por célula**, **Por discipulador**, **Por rede**, **Por período**, **Por dia** ou **Por DDD** e toque em **Baixar relatório** (`docs/decisions.md`, D23).
-  - É uma planilha (CSV) com os números de agora; depois do fim da campanha, o resultado final. No dia seguinte ao último dia, baixe os 7 tipos para guardar e prestar contas.
+- **Relatório da campanha** (no fim da **Visão geral**; admin e coordenação): em **O que baixar**, escolha **Totais da campanha**, **Por célula**, **Por discipulador**, **Por rede** (só com mais de uma rede), **Por período**, **Por dia** ou **Por DDD** e toque em **Baixar relatório** (`docs/decisions.md`, D23).
+  - É uma planilha (CSV) com os números de agora; depois do fim da campanha, o resultado final. No dia seguinte ao último dia, baixe todos os tipos para guardar e prestar contas.
   - Abre com dois cliques no Excel. No Google Planilhas: **Arquivo → Importar → Fazer upload**, com "Tipo de separador" em "Personalizado" e `;` (ponto e vírgula).
   - As contas fecham entre os arquivos (células + sem célula = totais; períodos, dias e DDD = totais). Os pedidos desconsiderados (4.4) ficam fora de todos; nos totais, só o número deles.
   - Tem valores em reais e o nome dos líderes: fica com a coordenação, nunca nos grupos.

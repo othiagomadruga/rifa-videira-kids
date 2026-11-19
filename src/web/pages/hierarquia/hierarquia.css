@@ -192,6 +192,11 @@
     align-items: start;
   }
 
+  /* Uma rede só (RIFA-065, D30): sem o filtro da rede, a busca fica com o resto da linha. */
+  .hierarquia-filtros[data-sem-rede] {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+  }
+
   .hierarquia-acoes {
     flex-wrap: nowrap;
     justify-content: flex-start;
