@@ -299,7 +299,9 @@ describe("/entrar", () => {
       level: 2,
       name: "Como entrar pelo link",
     });
-    expect(contarControles()).toBe(4);
+    // Célula, Senha, Entrar e "Sou administrador", e os 5 "?" da ajuda (RIFA-066): o título da tela, os dois
+    // títulos e os dois campos.
+    expect(contarControles()).toBe(9);
     await conferirDicas(4);
     expect(
       textoDaDica(screen.getByRole("button", { name: "Sou administrador" })),
