@@ -1704,7 +1704,9 @@ lê e cai no mesmo cruzamento da D26; marcar na Rifei é a RIFA-070 (D32).
   diferentes); senão, o mesmo valor, a hora a até 2 minutos (sem a hora num dos lados, o mesmo dia) e o mesmo nome
   (dois comprovantes: o mesmo nome; comprovante e extrato: o primeiro e o último nome do comprovante na descrição do
   extrato, o "REM: <nome>"; sem nome no extrato, só com a hora dos dois a até 2 minutos); dois extratos (períodos que se
-  cruzam): a mesma linha (valor, instante e descrição). Os lançamentos de um mesmo arquivo nunca se juntam. Juntos, fica
+  cruzam): a mesma linha (valor, instante e descrição). Identificadores (txid) diferentes nunca são o mesmo Pix (o mesmo
+  comprador pagando dois pedidos de mesmo valor no mesmo minuto), e, se mais de um lançamento serve, fica o mais perto
+  na hora (revisão). Os lançamentos de um mesmo arquivo nunca se juntam. Juntos, fica
   o lançamento do extrato (o banco confirma), com o identificador, o ID e o nome do comprovante: o Pix ambíguo do
   extrato vira Certo com o comprovante.
 - **Comprovante pode ser adulterado** (a própria Rifei avisa): o Pix que veio só de comprovante leva a marca "Só no
