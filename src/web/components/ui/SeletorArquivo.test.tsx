@@ -132,4 +132,26 @@ describe("SeletorArquivo", () => {
       vi.useRealTimers();
     }
   });
+
+  it("vários arquivos (RIFA-074): o campo é múltiplo, entrega todos e mostra o texto de quem usa", () => {
+    const aoEscolher = vi.fn();
+    const aoEscolherVarios = vi.fn();
+    render(
+      <SeletorArquivo
+        rotulo="Arquivos"
+        arquivo={null}
+        aoEscolher={aoEscolher}
+        aoEscolherVarios={aoEscolherVarios}
+        textoArquivo="2 arquivos escolhidos"
+      />,
+    );
+    const campo = screen.getByLabelText("Arquivos");
+    expect(campo).toHaveAttribute("multiple");
+    expect(screen.getByText("2 arquivos escolhidos")).toBeInTheDocument();
+    const um = new File(["a"], "a.pdf");
+    const dois = new File(["b"], "b.pdf");
+    fireEvent.change(campo, { target: { files: [um, dois] } });
+    expect(aoEscolherVarios).toHaveBeenCalledWith([um, dois]);
+    expect(aoEscolher).not.toHaveBeenCalled();
+  });
 });

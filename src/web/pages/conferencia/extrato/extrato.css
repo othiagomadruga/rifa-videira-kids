@@ -136,3 +136,28 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Os arquivos escolhidos de uma vez (RIFA-074): cada um com o seu resultado. */
+.extrato-arquivos {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.extrato-arquivos-lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding-left: var(--espaco-5);
+  overflow-wrap: anywhere;
+}
+
+.extrato-arquivos-lista li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--espaco-2);
+}
+
+.extrato-arquivos-lista li[data-tom="perigo"] {
+  color: var(--cor-perigo-forte);
+}
