@@ -23,6 +23,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "afiliado.remover": "Afiliado removido",
   // RIFA-039 (D21): o token do webhook gerado pela tela (aba Webhook da Rifei de Acessos; alvo `webhook`).
   "webhook.gerar_token": "Token do webhook gerado",
+  // RIFA-076 (D36): a planilha de compradores baixada pelo admin (tela Pedidos; alvo `compradores`, sem os dados).
+  "compradores.exportar": "Planilha de compradores baixada",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */
@@ -46,6 +48,8 @@ const TIPO_DO_ALVO: Record<string, string> = {
   pedido: "Pedido",
   // D21: webhook.gerar_token (ALVO_AUDITORIA_TOKEN_WEBHOOK, sem id: há um token só).
   webhook: "Webhook da Rifei",
+  // D36: compradores.exportar (sem id).
+  compradores: "Compradores",
 };
 
 /**
