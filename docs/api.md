@@ -861,7 +861,9 @@ Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta:
 `antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
 `sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
 afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes, `suspeito`,
-`desconsiderado` (D20) e `origem` (`webhook` ou `conferencia`: recuperado na conferência pelo CSV, D19). `totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a
+`desconsiderado` (D20), `origem` (`webhook` ou `conferencia`: recuperado na conferência pelo CSV, D19) e, **só na
+sessão de admin**, `comprador: { nome, telefone }` (RIFA-076, D36; telefone em E.164, null no que a Rifei não mandou;
+para a coordenação o campo não vem). `totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a
 paginação e os filtros de status e de desconsiderado, só na primeira página (null quando a consulta traz
 `antes_de`). Sem campanha ativa: lista vazia e totais zerados.
 
@@ -881,6 +883,21 @@ paginação e os filtros de status e de desconsiderado, só na primeira página 
 - **Custo no D1** (D10, D16; `src/worker/db/pedidos-webhook-desempenho.test.ts`, com 7 mil pedidos): a página
   lê ~135 linhas (~142 com o cursor); os totais sem filtro, ~1 por pedido (~7 mil), e por isso saem só na
   primeira página. Com célula, ~3 linhas por pedido da célula; sem célula, ~2,5 por pedido sem célula.
+
+### `GET /api/admin/pedidos/compradores` (**só admin**; RIFA-076, D36)
+
+"Exportar compradores (Excel)": CSV com BOM, `;` e CRLF (`montarCsvCompradores`, `src/shared/contracts/compradores.ts`),
+uma linha por comprador da campanha ativa (juntados pelo telefone; sem telefone, pelo nome; sem os dois, de fora),
+sem os desconsiderados. Colunas: Nome, Telefone (legível, `(11) 98765-4321`), Célula(s), Qtd. de pedidos, Qtd. de
+bilhetes, Total pago (R$, só os aprovados), Primeira compra, Última compra (no fuso da campanha) e Situação (Pagou /
+Só reservou). Consulta: `so_pagou=true` (só quem pagou) ou `false`/ausente (todos); outro valor dá 400.
+
+- **200** com `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment;
+  filename="rifa-videira-kids-compradores-<AAAA-MM-DD>.csv"` e `Cache-Control: no-store`. A trilha registra
+  `compradores.exportar` (alvo `compradores`, resumo só com o filtro), no mesmo lote da leitura.
+- **Erros:** 401; 403 `proibido` (coordenação e hierarquia, antes de ler a consulta); 400 `requisicao_invalida`; 404
+  `nao_encontrado` sem campanha ativa (nada na trilha).
+- **Custo no D1:** uma ida (a campanha, os pedidos da campanha com contato e o registro); lê os pedidos da campanha.
 
 ### `GET /api/admin/webhook/entregas` (`coordenacao`)
 

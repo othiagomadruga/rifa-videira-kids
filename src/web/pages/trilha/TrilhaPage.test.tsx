@@ -241,6 +241,7 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Convites de afiliado gerados na Rifei",
       "Conexão com a Rifei salva",
       "Conexão com a Rifei apagada",
+      "Planilha de compradores baixada",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

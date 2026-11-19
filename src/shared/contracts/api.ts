@@ -72,7 +72,12 @@ import {
   observacaoTemContato,
 } from "./regras";
 import { BOM_UTF8, TIPOS_RELATORIO, TIPO_CONTEUDO_CSV } from "./relatorio";
-import { dddSchema, payloadRifeiSchema } from "./rifei";
+import {
+  LIMITE_NOME_COMPRADOR,
+  TELEFONE_E164,
+  dddSchema,
+  payloadRifeiSchema,
+} from "./rifei";
 import {
   ACHADO_POR_BUSCA_RIFEI,
   CARACTERES_FINAL_TOKEN_RIFEI,
@@ -608,6 +613,8 @@ export type RespostaPedidosSuspeitos = z.infer<
  *   afiliado). Registram só quando a Rifei aceitou algo (a marcação, o convite) ou quando a sincronização mudou algo.
  * - rifei.conectar e rifei.desconectar (RIFA-070, D32): ROTAS_CONEXAO_RIFEI, alvo `rifei` (ALVO_AUDITORIA_CONEXAO_RIFEI);
  *   resumo com o final do token ("termina em …abcd"), NUNCA o token. Testar não registra.
+ * - compradores.exportar (RIFA-076, D36): ROTAS.exportarCompradores, alvo `compradores`; resumo só com o filtro e
+ *   quantas linhas saíram, NUNCA nomes ou telefones.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -640,6 +647,7 @@ export const ACOES_AUDITORIA = [
   "rifei.gerar_convites",
   "rifei.conectar",
   "rifei.desconectar",
+  "compradores.exportar",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -1562,6 +1570,14 @@ export const consultaPedidosSchema = z
   );
 export type ConsultaPedidos = z.output<typeof consultaPedidosSchema>;
 
+/** RIFA-076 (D36): o contato de quem reservou ou comprou (só admin). */
+export const compradorPedidoSchema = z.strictObject({
+  nome: z.string().min(1).max(LIMITE_NOME_COMPRADOR).nullable(),
+  /** E.164 (+5591988887777). */
+  telefone: z.string().regex(TELEFONE_E164).nullable(),
+});
+export type CompradorPedido = z.infer<typeof compradorPedidoSchema>;
+
 export const itemPedidoSchema = z.strictObject({
   /** id do pedido na Rifei. */
   id: z.string().min(1).max(128),
@@ -1592,6 +1608,12 @@ export const itemPedidoSchema = z.strictObject({
    * API de hoje não lê `p.origem` na lista (a tarefa -api acrescenta em COLUNAS_ITEM).
    */
   origem: z.enum(ORIGENS_PEDIDO).default("webhook"),
+  /**
+   * RIFA-076 (D36): o nome e o telefone (E.164) de quem reservou ou comprou, como a Rifei mandou no último evento
+   * que os trouxe. SÓ para o admin: para a coordenação (e qualquer outro papel) o campo NÃO vem (ausente, não null).
+   * Para o admin vem sempre, com null no que a Rifei não mandou (e nos pedidos gravados antes da migração 0017).
+   */
+  comprador: compradorPedidoSchema.optional(),
 });
 export type ItemPedido = z.infer<typeof itemPedidoSchema>;
 
@@ -1619,6 +1641,15 @@ export const respostaPedidosSchema = z.strictObject({
     .nullable(),
 });
 export type RespostaPedidos = z.infer<typeof respostaPedidosSchema>;
+
+/** GET /api/admin/pedidos/compradores (RIFA-076, D36): "true" = só quem pagou; ausente ou "false" = todos. */
+export const consultaCompradoresSchema = z.object({
+  so_pagou: z
+    .enum(["true", "false"])
+    .transform((valor) => valor === "true")
+    .optional(),
+});
+export type ConsultaCompradores = z.output<typeof consultaCompradoresSchema>;
 
 export const PAGINA_ENTREGAS_PADRAO = 50;
 export const PAGINA_ENTREGAS_MAXIMA = 200;
@@ -2602,6 +2633,26 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaPedidosSchema,
     sucesso: { status: 200, corpo: respostaPedidosSchema },
+  },
+  /**
+   * RIFA-076 (D36), SÓ ADMIN: "Exportar compradores (Excel)": CSV com BOM e ";" (./compradores), uma linha por
+   * comprador da campanha ativa (pelo telefone; sem telefone, pelo nome), sem os desconsiderados. `so_pagou=true`:
+   * só quem pagou ao menos um pedido. Registra na trilha quem exportou (`compradores.exportar`, sem os dados).
+   * 200 com `cabecalhosDosCompradores`; 400 consulta inválida; 401; 403 (coordenação e hierarquia); 404 sem campanha.
+   */
+  exportarCompradores: {
+    metodo: "GET",
+    caminho: "/api/admin/pedidos/compradores",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    consulta: consultaCompradoresSchema,
+    sucesso: {
+      status: 200,
+      // O texto do CSV (montarCsvCompradores), que sempre começa pelo BOM.
+      corpo: z.string().startsWith(BOM_UTF8),
+      tipoConteudo: TIPO_CONTEUDO_CSV,
+    },
   },
   entregasWebhook: {
     metodo: "GET",

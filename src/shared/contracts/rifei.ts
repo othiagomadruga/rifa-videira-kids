@@ -408,7 +408,11 @@ export function analisarPayloadRifei(corpo: unknown): AnalisePayloadRifei {
 // processamento lê. Montado por lista de permissão: tudo o que não está aqui é descartado.
 // ---------------------------------------------------------------------------------------------------
 
-/** Caminhos do payload bruto que NUNCA são gravados (D1). Do `buyer` sobram só ddd e pais, derivados do telefone. */
+/**
+ * Caminhos do payload bruto que NUNCA entram no payload redigido (D1), o que a trilha guarda. Do `buyer` sobram só
+ * ddd e pais, derivados do telefone. RIFA-076 (D36): `buyer.name` e `buyer.phone` vão SÓ para as colunas do pedido
+ * (extrairContatoComprador), nunca para a trilha.
+ */
 export const CAMPOS_DESCARTADOS_NA_REDACAO = [
   "buyer.name",
   "buyer.phone",
@@ -541,6 +545,67 @@ export function redigirPayloadRifei(
       content: payload.utm.content,
       term: payload.utm.term,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Contato de quem reservou ou comprou (RIFA-076, D36): o nome e o telefone (E.164), gravados SÓ nas colunas
+// pedidos.comprador_nome e pedidos.comprador_telefone e mostrados SÓ ao admin. Ficam fora do payload redigido
+// (a trilha, webhook_eventos.payload_redigido, continua sem nome e sem telefone). E-mail, documento, nascimento e
+// endereço continuam descartados (D1).
+// ---------------------------------------------------------------------------------------------------
+
+/** Tamanho máximo do nome do comprador gravado (CHECK da migração 0017); o resto é cortado. */
+export const LIMITE_NOME_COMPRADOR = 120;
+
+/** Telefone E.164: "+", o país e o número, de 8 a 15 algarismos no total (CHECK da migração 0017). */
+export const TELEFONE_E164 = /^\+[1-9]\d{6,14}$/;
+
+export interface ContatoComprador {
+  /** Sem espaços nas pontas nem repetidos; null se ausente ou vazio. */
+  nome: string | null;
+  /** E.164 (+5591988887777); null se ausente ou fora do formato. */
+  telefone: string | null;
+}
+
+/** O nome como fica gravado: espaços juntados, no máximo LIMITE_NOME_COMPRADOR caracteres; vazio vira null. */
+export function normalizarNomeComprador(
+  nome: string | null | undefined,
+): string | null {
+  if (typeof nome !== "string") return null;
+  // Tira os caracteres de controle (quebra de linha, tab) antes de juntar os espaços.
+  const limpo = [...nome]
+    .map((letra) => {
+      const codigo = letra.charCodeAt(0);
+      return codigo < 0x20 || codigo === 0x7f ? " " : letra;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (limpo === "") return null;
+  const cortado = [...limpo].slice(0, LIMITE_NOME_COMPRADOR).join("").trim();
+  return cortado === "" ? null : cortado;
+}
+
+/**
+ * O telefone em E.164, como a Rifei manda ("+55 (91) 98888-7777" vira "+5591988887777"). Espaços, parênteses,
+ * pontos e hífens são ignorados (a mesma regra de derivarTelefone); sem "+" ou fora do E.164: null.
+ */
+export function normalizarTelefoneE164(
+  telefone: string | null | undefined,
+): string | null {
+  if (typeof telefone !== "string") return null;
+  const compacto = telefone.replace(/[\s().-]/g, "");
+  return TELEFONE_E164.test(compacto) ? compacto : null;
+}
+
+/** RIFA-076 (D36): o nome e o telefone do `buyer`, para as colunas do pedido (nunca para a trilha). */
+export function extrairContatoComprador(
+  payload: Pick<PayloadRifei, "buyer">,
+): ContatoComprador {
+  return {
+    nome: normalizarNomeComprador(payload.buyer.name),
+    telefone: normalizarTelefoneE164(payload.buyer.phone),
   };
 }
 

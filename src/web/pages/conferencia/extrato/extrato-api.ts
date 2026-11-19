@@ -4,7 +4,8 @@
 // - GET /api/admin/pedidos?limite=200[&antes_de=<proximo>]: os pedidos da campanha ativa, de todos os status, do
 //   registrado mais novo para o mais antigo, página a página, até passar do primeiro instante que serve ao extrato
 //   (o primeiro crédito menos a maior janela). A lista traz o número, o status, a quantidade, o valor, a célula, a
-//   reserva (criado_em), a aprovação e a desconsideração: tudo o que o cruzamento usa. Nada falta no contrato.
+//   reserva (criado_em), a aprovação e a desconsideração: tudo o que o cruzamento usa. Ao admin, também o nome de quem
+//   fez o pedido (RIFA-076, D36), para comparar com o "REM:" do Pix.
 //
 // Do contrato vêm só os TIPOS (os valores poriam o zod no pacote; veja lib/api.ts). O caminho e o tamanho da página
 // são cópias, conferidas pelo tipo e por extrato-contrato.test.ts.
@@ -43,6 +44,8 @@ export function pedidoDoCruzamento(item: ItemPedido): PedidoDoCruzamento {
     aprovado_em: item.aprovado_em === null ? null : instante(item.aprovado_em),
     // `desconsiderado` pode faltar numa API antiga (o contrato completa com null).
     desconsiderado: item.desconsiderado != null,
+    // RIFA-076 (D36): o nome de quem fez o pedido (a API manda só ao admin); compara com o "REM:" do Pix.
+    comprador_nome: item.comprador?.nome ?? null,
   };
 }
 

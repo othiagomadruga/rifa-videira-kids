@@ -91,9 +91,12 @@ describe("D23: a rota", () => {
     expect(
       outras.map((outra) => `${outra.metodo} ${outra.caminho}`),
     ).not.toContain(`${rota.metodo} ${rota.caminho}`);
-    expect(outras.filter((outra) => "tipoConteudo" in outra.sucesso)).toEqual(
-      [],
-    );
+    // RIFA-076 (D36): a planilha de compradores (só admin) é o outro CSV.
+    expect(
+      outras
+        .filter((outra) => "tipoConteudo" in outra.sucesso)
+        .map((outra) => `${outra.metodo} ${outra.caminho}`),
+    ).toEqual(["GET /api/admin/pedidos/compradores"]);
   });
 
   it("consulta: `tipo` obrigatório, um dos 7; sem `data` (um `data` na URL é ignorado)", () => {

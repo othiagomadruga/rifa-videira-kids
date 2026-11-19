@@ -1195,6 +1195,85 @@ describe("f) RIFA-013b: pedidos suspeitos e auditoria atrás do login, teto do c
     ).toEqual([]);
   });
 
+  it("RIFA-076 (D36): nome e telefone do comprador só para o admin (lista de pedidos e planilha); nem a coordenação, nem a hierarquia, nem o público", async () => {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE campanhas SET ativa = 0 WHERE ativa = 1"),
+      env.DB.prepare(
+        `INSERT INTO campanhas (nome, slug_rifei, ativa, data_inicio, preco_bilhete_centavos,
+           meta_unidade, meta_regra, meta_valor, ranking_criterio)
+         VALUES ('Campanha do comprador', 'protecao-comprador', 1, '2026-11-23', 2000, 'bilhetes',
+           'por_pessoa', 10, 'percentual_meta')`,
+      ),
+    ]);
+    const entrega = await exports.default.fetch(
+      `${ORIGEM}/api/webhooks/rifei`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.RIFEI_WEBHOOK_TOKEN}`,
+        },
+        body: JSON.stringify({
+          ...paidOrderAfiliado,
+          id: "PROTECAO-COMPRADOR-1",
+          slug: "protecao-comprador",
+        }),
+      },
+    );
+    expect(await entrega.json()).toMatchObject({ resultado: "processado" });
+    const { buyer } = paidOrderAfiliado;
+    const contato = [buyer.name, "900000001"];
+
+    // A planilha: só admin (o filtro de cima confere a rota no contrato; aqui, o papel).
+    expect(ROTAS.exportarCompradores.papeis).toEqual(["admin"]);
+    await esperarErro(
+      await requisitar("GET", ROTAS.exportarCompradores.caminho),
+      401,
+      "nao_autenticado",
+    );
+    await esperarErro(
+      await requisitar("GET", ROTAS.exportarCompradores.caminho, coordenacao),
+      403,
+      "proibido",
+    );
+    const planilha = await requisitar(
+      "GET",
+      ROTAS.exportarCompradores.caminho,
+      admin,
+    );
+    expect(planilha.status).toBe(200);
+    expect(await planilha.text()).toContain(buyer.name);
+
+    // A lista de pedidos: o admin vê; a coordenação recebe a mesma lista sem o campo e sem os valores.
+    const doAdmin = await requisitar("GET", ROTAS.listarPedidos.caminho, admin);
+    const textoAdmin = await doAdmin.text();
+    expect(textoAdmin).toContain(buyer.name);
+    const daCoordenacao = await requisitar(
+      "GET",
+      ROTAS.listarPedidos.caminho,
+      coordenacao,
+    );
+    expect(daCoordenacao.status).toBe(200);
+    const textoCoordenacao = await daCoordenacao.text();
+    for (const valor of contato) expect(textoCoordenacao).not.toContain(valor);
+    expect([...camposDe(JSON.parse(textoCoordenacao))]).not.toContain(
+      "comprador",
+    );
+
+    // As rotas abertas (público) também não: nenhuma devolve nome ou telefone.
+    for (const rota of Object.values(ROTAS).filter(
+      (item) => item.grupo === "aberto" && item.metodo === "GET",
+    )) {
+      const res = await requisitar("GET", concreto(rota.caminho));
+      const texto = await res.text();
+      for (const valor of contato)
+        expect({ rota: rota.caminho, vazou: texto.includes(valor) }).toEqual({
+          rota: rota.caminho,
+          vazou: false,
+        });
+    }
+  });
+
   it("auditoria: 401 sem cookie, 403 para a coordenação; o admin vê quem fez a ação", async () => {
     const vinculo = await requisitar(
       "PUT",

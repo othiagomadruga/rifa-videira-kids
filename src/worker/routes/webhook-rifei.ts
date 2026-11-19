@@ -8,6 +8,7 @@ import {
   credencialVigenteDoWebhook,
   ehEventoDeTesteRifei,
   identificarPayloadInvalido,
+  extrairContatoComprador,
   redigirPayloadRifei,
   segredoDoWorkerConfigurado,
   type DetalheResumido,
@@ -210,6 +211,8 @@ async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
     campanhaId: campanha.id,
     precoBilheteCentavos: campanha.preco_bilhete_centavos,
     payload,
+    // RIFA-076 (D36): o nome e o telefone vão só para as colunas do pedido, nunca para a trilha.
+    contato: extrairContatoComprador(analise.payload),
     avisos: analise.avisos,
     recebidoEm,
   });

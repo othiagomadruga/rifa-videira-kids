@@ -243,14 +243,18 @@ describe("RIFA-040: com a coluna das ações do admin, a tabela cabe em 1366 px"
       );
   });
 
-  it("'Aprovado em ...' quebra a linha; só a data e hora do pedido e o valor ficam numa linha só", () => {
+  it("'Aprovado em ...' quebra a linha; só a data e hora do pedido, o valor e o telefone do comprador (RIFA-076) ficam numa linha só", () => {
     const naoQuebram = declaracoes(CSS["./pedidos.css"])
       .filter(
         ({ propriedade, valor }) =>
           propriedade === "white-space" && valor === "nowrap",
       )
       .flatMap(({ blocos }) => seletores(blocos[1]));
-    expect(naoQuebram).toEqual([".pedidos-quando", ".pedidos-valor"]);
+    expect(naoQuebram).toEqual([
+      ".pedidos-quando",
+      ".pedidos-valor",
+      ".pedidos-comprador__telefone",
+    ]);
     expect(regra(CSS["./pedidos.css"], "  .pedidos-quando__mudou")).toMatch(
       /white-space:\s*normal/,
     );

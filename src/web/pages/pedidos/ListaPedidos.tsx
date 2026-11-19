@@ -29,6 +29,8 @@ import { TextoContado } from "../../components/movimento";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { contarRedes, useRedes } from "../../lib/redes";
 import { useUsuarioConectado } from "../../lib/sessao";
+import { numeroDoWhatsApp, telefoneLegivel } from "./comprador";
+import { ExportarCompradores } from "./ExportarCompradores";
 import {
   LOCALIDADE,
   formatarDataHora,
@@ -111,7 +113,8 @@ type Props = {
 
 // Pedidos da campanha ativa (coordenação, com R$): os totais por status (da primeira página: a API manda só nela),
 // os filtros (status, célula ou "só sem célula" e a busca pelo id) e a lista, do registrado mais novo para o mais
-// antigo, com "Carregar mais" pelo cursor. Sem dado pessoal: do comprador, a API manda só o DDD.
+// antigo, com "Carregar mais" pelo cursor. Do comprador, a API manda o DDD e, SÓ ao admin (RIFA-076, D36), o nome e o
+// telefone: a coluna "Comprador" (com o link do WhatsApp) e a planilha de compradores aparecem só para ele.
 export function ListaPedidos({ filtros, aoMudar }: Props) {
   const consulta = new URLSearchParams(paramsDosPedidos(filtros)).toString();
   const { estado, mais, anuncio, carregarMais, tentarDeNovo, substituirItem } =
@@ -202,11 +205,14 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
           <p>{resultado}</p>
         </Aviso>
       )}
+      {/* RIFA-076 (D36): a planilha de compradores, só admin (a região viva dela vem depois das de cima). */}
+      {admin && <ExportarCompradores />}
       <Conteudo
         estado={estado}
         filtros={filtros}
         mais={mais}
         acoes={acoes}
+        comComprador={admin}
         aoCarregarMais={() => void carregarMais()}
         aoTentarDeNovo={tentarDeNovo}
         aoLimpar={limparFiltros}
@@ -549,6 +555,7 @@ function Conteudo({
   filtros,
   mais,
   acoes,
+  comComprador,
   aoCarregarMais,
   aoTentarDeNovo,
   aoLimpar,
@@ -557,6 +564,7 @@ function Conteudo({
   filtros: FiltrosPedidos;
   mais: { carregando: boolean; erro: unknown };
   acoes: AcoesDaTabela | null;
+  comComprador: boolean;
   aoCarregarMais: () => void;
   aoTentarDeNovo: () => void;
   aoLimpar: () => void;
@@ -616,6 +624,7 @@ function Conteudo({
             itens={itens}
             inicioDaUltima={inicioDaUltima}
             acoes={acoes}
+            comComprador={comComprador}
           />
           <div className="pedidos-rodape">
             <p
@@ -743,6 +752,42 @@ function Totais({
   );
 }
 
+/** RIFA-076 (D36): o nome e o telefone de quem fez o pedido (só admin), com o link do WhatsApp. */
+function Comprador({ pedido }: { pedido: ItemPedido }) {
+  const nome = pedido.comprador?.nome ?? null;
+  const telefone = pedido.comprador?.telefone ?? null;
+  const whatsapp = telefone === null ? null : numeroDoWhatsApp(telefone);
+  return (
+    <>
+      <span
+        className={
+          nome === null ? "pedidos-comprador__sem" : "pedidos-comprador__nome"
+        }
+      >
+        {nome ?? "Sem nome"}
+      </span>
+      {telefone !== null && whatsapp !== null ? (
+        <ComDica texto={DICAS.whatsapp}>
+          <a
+            className="pedidos-comprador__telefone"
+            href={`https://wa.me/${whatsapp}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {telefoneLegivel(telefone)}
+            <span className="visualmente-oculto">
+              {" "}
+              (abre o WhatsApp em outra aba)
+            </span>
+          </a>
+        </ComDica>
+      ) : (
+        <span className="pedidos-comprador__sem">Sem telefone</span>
+      )}
+    </>
+  );
+}
+
 /** Quando o pedido foi feito (na Rifei; sem a data da Rifei, quando chegou) e, se for o caso, quando mudou. */
 function Quando({ pedido }: { pedido: ItemPedido }) {
   const feito = pedido.criado_em ?? pedido.registrado_em;
@@ -769,10 +814,13 @@ function TabelaPedidos({
   itens,
   inicioDaUltima,
   acoes,
+  comComprador,
 }: {
   itens: ItemPedido[];
   inicioDaUltima: number | null;
   acoes: AcoesDaTabela | null;
+  /** RIFA-076 (D36): a coluna "Comprador", só para o admin. */
+  comComprador: boolean;
 }) {
   const novos = new Set(
     inicioDaUltima === null
@@ -830,6 +878,19 @@ function TabelaPedidos({
         </span>
       ),
     },
+    ...(comComprador
+      ? [
+          {
+            chave: "comprador",
+            titulo: "Comprador",
+            celula: (pedido: ItemPedido) => (
+              <span className={bloco(pedido, "pedidos-comprador")}>
+                <Comprador pedido={pedido} />
+              </span>
+            ),
+          },
+        ]
+      : []),
     {
       chave: "status",
       titulo: "Status",

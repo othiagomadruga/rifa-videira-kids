@@ -19,3 +19,4 @@ export * from "./bilhetes";
 export * from "./login-celula";
 export * from "./senha-admin";
 export * from "./rifei-api";
+export * from "./compradores";

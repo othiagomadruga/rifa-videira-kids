@@ -24,10 +24,13 @@ import type {
   ROTAS,
   ROTAS_REGRAS_CAMPANHA,
 } from "../../../shared/contracts/api";
-import { ErroApi, api } from "../../lib/api";
+import { ErroApi, api, baixarArquivo } from "../../lib/api";
 
 export const CAMINHO_PEDIDOS: (typeof ROTAS)["listarPedidos"]["caminho"] =
   "/api/admin/pedidos";
+/** RIFA-076 (D36): a planilha de compradores, só admin. */
+export const CAMINHO_COMPRADORES: (typeof ROTAS)["exportarCompradores"]["caminho"] =
+  "/api/admin/pedidos/compradores";
 export const CAMINHO_ENTREGAS: (typeof ROTAS)["entregasWebhook"]["caminho"] =
   "/api/admin/webhook/entregas";
 export const CAMINHO_CELULAS: (typeof ROTAS)["listarCelulas"]["caminho"] =
@@ -310,4 +313,18 @@ export function ehCursorInvalido(erro: unknown): boolean {
 /** 403: a sessão não tem permissão (ex.: o papel mudou com a tela aberta). */
 export function ehSemPermissao(erro: unknown): boolean {
   return erro instanceof ErroApi && erro.status === 403;
+}
+
+/**
+ * RIFA-076 (D36): baixa a planilha de compradores (CSV para o Excel em português), só admin. `soPagou`: só quem pagou
+ * ao menos um pedido. Devolve o nome do arquivo.
+ */
+export function baixarCompradores(
+  soPagou: boolean,
+  opcoes: { signal?: AbortSignal } = {},
+): Promise<string> {
+  return baixarArquivo(
+    soPagou ? `${CAMINHO_COMPRADORES}?so_pagou=true` : CAMINHO_COMPRADORES,
+    { ...opcoes, nomeReserva: "rifa-videira-kids-compradores.csv" },
+  );
 }

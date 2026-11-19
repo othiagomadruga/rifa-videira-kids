@@ -37,6 +37,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   // RIFA-070 (D32): a conexão com a Rifei pela tela (Acessos → Conexão com a Rifei; alvo `rifei`).
   "rifei.conectar": "Conexão com a Rifei salva",
   "rifei.desconectar": "Conexão com a Rifei apagada",
+  // RIFA-076 (D36): a planilha de compradores baixada pelo admin (tela Pedidos; alvo `compradores`, sem os dados).
+  "compradores.exportar": "Planilha de compradores baixada",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */
@@ -62,6 +64,8 @@ const TIPO_DO_ALVO: Record<string, string> = {
   webhook: "Webhook da Rifei",
   // D32: rifei.sincronizar_afiliados e rifei.gerar_convites (ALVO_AUDITORIA_AFILIADOS_RIFEI, sem id).
   rifei: "Conta da Rifei",
+  // D36: compradores.exportar (sem id).
+  compradores: "Compradores",
 };
 
 /**

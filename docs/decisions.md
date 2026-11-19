@@ -2018,3 +2018,41 @@ O ano não aparece.
   19/11 às 11:12:04, R$ 2.863,28 em 18/11 às 14:41:43 (na coluna **Saídas**: débito, fica de fora) e R$ 813,26 em
   18/11 às 11:03:38. O teste usa um PDF sintético com o mesmo layout e nomes e E2E fictícios
   (`pdfDePixRecebidos`, `teste-apoio-pdf.ts`).
+
+## D36. Nome e telefone de quem reserva ou compra, só para o admin (RIFA-076, 2026-11-19)
+
+**Substitui em parte** a regra de privacidade do início (D1 da integração, `docs/integracao-rifei.md`; comentário da
+`migrations/0001_init.sql`: "nenhuma coluna guarda nome, e-mail, documento, nascimento, endereço ou telefone completo do
+comprador. Do telefone ficam só ddd e pais"). Decisão do PO em 19/11: "não tem dado sensível, é só o nome da pessoa e no
+máximo o telefone; é só para, caso algo dê errado, saber quem reservou e entrar em contato". Acréscimo do PO no mesmo
+dia: uma planilha de compradores para agradecer a compra e para as campanhas futuras da igreja.
+
+- **O que passa a ser guardado:** `pedidos.comprador_nome` (texto de 1 a 120 caracteres, espaços juntados) e
+  `pedidos.comprador_telefone` (E.164, ex.: `+5591988887777`; fora do formato, NULL), migração
+  `0017_comprador_contato.sql`. Vêm de `buyer.name` e `buyer.phone` (`extrairContatoComprador`, `rifei.ts`).
+  **Continuam fora:** e-mail, documento, nascimento, endereço, `observation`, `fbp` e `fbc`.
+- **Quando é gravado:** em todo evento do webhook do pedido que traz o valor: no evento processado (o UPSERT, com
+  `COALESCE`) e também no evento que não muda o pedido (duplicado ou transição ignorada), que só completa ou corrige o
+  contato, sem mexer em status, afiliado ou `atualizado_em`. Um valor ausente nunca apaga o gravado. Os pedidos de
+  antes da 0017 ficam com NULL até o próximo evento deles.
+- **A trilha não muda:** o payload redigido (`webhook_eventos.payload_redigido`) continua sem nome e sem telefone, e
+  os logs continuam só com ids. `CAMPOS_DESCARTADOS_NA_REDACAO` segue valendo para a trilha.
+- **Só o admin vê:** `GET /api/admin/pedidos` traz `comprador: { nome, telefone }` só na sessão de admin; para a
+  coordenação o campo **não vem** (nem null). A hierarquia (`/api/minha/*`) e o público não têm acesso a nenhuma
+  rota que o traga. A resposta de desconsiderar/reconsiderar (só admin) também o traz. Provado em
+  `src/worker/protecao.test.ts` e `src/worker/routes/compradores.test.ts`.
+- **Planilha de compradores:** `GET /api/admin/pedidos/compradores[?so_pagou=true]`, **só admin** (403 para a
+  coordenação, antes de ler a consulta). CSV com BOM, `;` e CRLF (abre direto no Excel em pt-BR, sem dependência
+  nova), uma linha por comprador da campanha ativa, sem os desconsiderados: juntados pelo telefone; sem telefone,
+  pelo nome (sem acento, maiúsculas e espaços); sem os dois, o pedido fica de fora. Colunas: Nome (o do pedido mais
+  recente), Telefone legível (`(11) 98765-4321`), Célula(s), Qtd. de pedidos, Qtd. de bilhetes, Total pago (R$; só os
+  aprovados), Primeira e Última compra (no fuso da campanha), Situação (Pagou / Só reservou). Proteção contra fórmula
+  como o relatório (D23). A trilha registra `compradores.exportar` (quem e quando, com o filtro), **sem os dados**.
+  O relatório da coordenação (D23) continua sem nome e telefone.
+- **Na tela:** em Pedidos, a coluna **Comprador** (nome e telefone, com o link `https://wa.me/<numero>`) e o botão
+  **Exportar compradores (Excel)** com "Só quem pagou", ambos só para o admin. Na Conferência do extrato, o cruzamento
+  (`extrato/nome-do-pix.ts`) compara o `REM: <nome>` do Pix com o nome do pedido: desempata Pix que seria Ambíguo
+  (Provável) e marca cada casamento com `nome: "confere" | "difere" | null`.
+- **Sem limpeza automática** (pedido explícito do PO). Apagar, se um dia for preciso, é um UPDATE manual do SM.
+- **Por que só o admin:** é a menor abertura que atende ao pedido (quem confere o pagamento e entra em contato é o
+  admin); a coordenação continua sem dado do comprador, como antes.

@@ -13,7 +13,7 @@ Neste documento, **CONFIRMADO** quer dizer que está na documentação oficial e
 
 | | Decisão | Onde está no contrato |
 |---|---|---|
-| D1 | Redação na entrada: do `buyer` só se guardam DDD e código do país, derivados do telefone. Nunca se guardam nome, e-mail, documento, nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. O payload guardado é o redigido. | `redigirPayloadRifei`, `payloadRifeiRedigidoSchema` (estrito), `derivarTelefone`; nenhuma coluna pessoal na SQL |
+| D1 | Redação na entrada: do `buyer` só se guardam DDD e código do país, derivados do telefone. Nunca se guardam nome, e-mail, documento, nascimento, endereço, telefone completo, `observation`, `fbp` e `fbc`. O payload guardado é o redigido. **Em parte substituída pela D36 (RIFA-076, decisions.md):** o nome e o telefone (E.164) vão para `pedidos.comprador_nome` e `comprador_telefone`, só para o admin; a trilha continua redigida. | `redigirPayloadRifei`, `payloadRifeiRedigidoSchema` (estrito), `derivarTelefone`; nenhuma coluna pessoal na SQL |
 | D2 | Dinheiro em centavos inteiros, por aritmética decimal exata (não por float): fração de centavo é arredondada meio para cima, com aviso (RIFA-002b) | `reaisParaCentavos`, `textoDecimalParaCentavos`; colunas `*_centavos` |
 | D3 | O pedido é identificado pelo `id` da Rifei. Toda entrega é registrada com o payload redigido, e o processamento é idempotente. | `pedidos.id` (PK), `webhook_eventos`, resultado `duplicado` |
 | D4 | Estados: `in_process` → `approved` \| `expired`; `expired` → `approved`; `approved` é terminal. Fora de ordem cria o pedido direto no estado certo. Só `approved` é venda. | `decidirTransicaoPedido`, `TRANSICOES_PERMITIDAS`; CHECK de `status` |
@@ -108,6 +108,7 @@ O payload bruto **só existe na memória da requisição**. O que se grava, e ta
   - `pais` é o código de discagem do país (DDI) em dígitos, ex. `"55"`. É calculado pela tabela E.164 de códigos com 1 e 2 dígitos; os demais têm 3.
   - `ddd` só existe para `+55` com 10 ou 11 dígitos nacionais e DDD sem zero. Ex.: `+5591988887777` dá `{ ddd: "91", pais: "55" }`; `+351910000002` dá `{ ddd: null, pais: "351" }`; um telefone sem `+`, ou que não seja texto, dá tudo `null`.
 - Saem também `observation`, `fbp` e `fbc`.
+- **RIFA-076 (D36):** fora do payload redigido, `extrairContatoComprador` tira `buyer.name` (espaços juntados, até 120 caracteres) e `buyer.phone` (E.164 normalizado; fora do formato, null) só para as colunas `comprador_nome` e `comprador_telefone` do pedido, que só o admin vê. Eles nunca entram em `webhook_eventos`.
 - O schema redigido é **estrito**: qualquer campo a mais (ex.: `buyer`) faz a validação falhar. Os testes conferem o tipo (`expectTypeOf`) e o valor: nenhum texto pessoal de nenhuma fixture sobra no JSON redigido.
 
 ## 5. Processamento de cada entrega

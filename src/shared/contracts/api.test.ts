@@ -31,6 +31,7 @@ import {
   consultaMapaDddSchema,
   respostaMapaDddSchema,
   consultaEntregasWebhookSchema,
+  itemPedidoSchema,
   respostaPedidosSchema,
   respostaEntregasWebhookSchema,
   respostaEstadoWebhookSchema,
@@ -113,6 +114,8 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/minha/visao",
         // Sprint 5 (RIFA-025): pedidos, entregas do webhook e o estado do webhook.
         "GET /api/admin/pedidos",
+        // RIFA-076 (D36): a planilha de compradores, só admin.
+        "GET /api/admin/pedidos/compradores",
         "GET /api/admin/webhook/entregas",
         "GET /api/admin/webhook/estado",
         // Sprint 5 (RIFA-015): mapa de vendas por DDD.
@@ -1398,15 +1401,21 @@ describe("RIFA-025: pedidos, entregas do webhook e estado do webhook (coordenaç
     avisos: [],
   };
 
-  it("nenhuma resposta tem campo de dado pessoal do comprador", () => {
+  it("nenhuma resposta tem campo de dado pessoal do comprador (RIFA-076, D36: só o `comprador` opcional do pedido, que a API manda só ao admin)", () => {
     for (const schema of [
-      respostaPedidosSchema,
       respostaEntregasWebhookSchema,
       respostaEstadoWebhookSchema,
     ])
       expect(
         nomesDeCampos(schema).filter((campo) => PESSOAL.test(campo)),
       ).toEqual([]);
+    expect(
+      nomesDeCampos(respostaPedidosSchema).filter((campo) =>
+        PESSOAL.test(campo),
+      ),
+    ).toEqual(["comprador", "telefone"]);
+    // Opcional: a resposta da coordenação, sem o campo, é válida.
+    expect(itemPedidoSchema.shape.comprador.isOptional()).toBe(true);
   });
 
   it("consulta de pedidos: padrão, limites, sem_celula como texto e celula_id junto com sem_celula recusado", () => {

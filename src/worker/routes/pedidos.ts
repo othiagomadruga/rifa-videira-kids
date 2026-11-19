@@ -2,7 +2,10 @@
  * Pedidos da campanha ativa (docs/api.md):
  * - GET /api/admin/pedidos (grupo `coordenacao`, RIFA-025, D16): do registrado mais novo para o mais antigo, com
  *   filtros (inclusive `desconsiderado`, D20), totais por status (só na primeira página) e cursor opaco. Só
- *   leitura; do comprador, só o DDD (D1). A leitura e os planos estão em db/lista-pedidos.ts.
+ *   leitura; do comprador, o DDD (D1) e, SÓ para o admin, o `comprador` (nome e telefone; RIFA-076, D36). A leitura e
+ *   os planos estão em db/lista-pedidos.ts.
+ * - GET /api/admin/pedidos/compradores (RIFA-076, D36), SÓ ADMIN: a planilha de compradores em CSV (routes/compradores.ts
+ *   db/compradores.ts lê; a trilha registra quem exportou, sem os dados).
  * - POST /api/admin/pedidos/desconsiderar e /reconsiderar (RIFA-028, D20; ROTAS_REGRAS_CAMPANHA), SÓ ADMIN: tira o
  *   pedido de todas as contas, ou o devolve, num lote só com a trilha (db/regras-campanha.ts). Erros, depois do
  *   login (401) e do papel (403, antes de ler o corpo): 400 (corpo), 404 sem campanha ativa, 409 `acao_desligada`
@@ -13,7 +16,13 @@
  * 4): `app.route(PREFIXO_PEDIDOS, pedidos)`. O "só admin" das duas escritas fica nelas (exigirSessao).
  */
 import { Hono, type Context } from "hono";
-import { ROTAS, ROTAS_REGRAS_CAMPANHA } from "../../shared/contracts";
+import {
+  ROTAS,
+  ROTAS_REGRAS_CAMPANHA,
+  cabecalhosDosCompradores,
+  hojeNoFuso,
+} from "../../shared/contracts";
+import { exportarCompradores } from "../db/compradores";
 import { decodificarCursorPedidos, listarPedidos } from "../db/lista-pedidos";
 import {
   aplicarDesconsideracao,
@@ -56,7 +65,41 @@ pedidos.get(
           },
         ]);
     }
-    return c.json(await listarPedidos(c.env.DB, consulta, cursor), 200);
+    // RIFA-076 (D36): o nome e o telefone do comprador só para o admin; a coordenação nem recebe o campo.
+    const admin = c.get("usuario")?.papel === "admin";
+    return c.json(
+      await listarPedidos(c.env.DB, consulta, cursor, { comComprador: admin }),
+      200,
+    );
+  },
+);
+
+// RIFA-076 (D36): a planilha de compradores, SÓ ADMIN (403 antes de ler a consulta). 404 sem campanha ativa; 200 com o
+// CSV, os cabeçalhos do contrato (no-store) e o registro na trilha (no mesmo lote da leitura).
+const EXPORTAR = ROTAS.exportarCompradores;
+pedidos.get(
+  EXPORTAR.caminho.slice(PREFIXO_PEDIDOS.length),
+  exigirSessao(EXPORTAR.papeis),
+  validarConsulta(EXPORTAR.consulta),
+  async (c) => {
+    const { so_pagou: soPagou = false } = c.req.valid("query");
+    const quem = autoriaDaSessao(c);
+    if (!quem) throw new Error("exportar sem sessão (falta exigirSessao)");
+    const resultado = await exportarCompradores(c.env.DB, {
+      soPagou,
+      autoria: quem,
+    });
+    if (resultado === null)
+      return responderErro(
+        c,
+        "nao_encontrado",
+        "A campanha ainda não foi configurada",
+      );
+    return c.body(
+      resultado.csv,
+      200,
+      cabecalhosDosCompradores(hojeNoFuso(resultado.fuso)),
+    );
   },
 );
 
