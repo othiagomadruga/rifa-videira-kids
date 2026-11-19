@@ -3,6 +3,7 @@
 import { vi } from "vitest";
 import {
   ACESSO_PADRAO,
+  BILHETES_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
@@ -50,6 +51,7 @@ export function campanhaDaEntrada(
     pedidos: entrada.pedidos ?? { ...PEDIDOS_PADRAO },
     acesso: entrada.acesso ?? { ...ACESSO_PADRAO },
     mensagens: entrada.mensagens ?? { ...MENSAGENS_PADRAO },
+    bilhetes: entrada.bilhetes ?? { ...BILHETES_PADRAO },
     criado_em: "2026-11-06T18:00:00.000Z",
     atualizado_em: "2026-11-06T18:00:00.000Z",
     ...extra,

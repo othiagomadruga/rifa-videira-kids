@@ -943,9 +943,20 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
       ROTAS.painelRanking,
       ROTAS.rankingPublico,
       ROTAS.bumbo,
+      // RIFA-075 (D35): os bilhetes pagos, reservados e livres (admin e coordenação, no grupo do painel).
+      ROTAS.painelBilhetes,
+      ROTAS.painelBilhete,
     ])
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
   });
+
+  it.each(["/api/painel/bilhetes", "/api/painel/bilhetes/1"])(
+    "bilhetes (RIFA-075) sem cookie: GET %s → 401, sem nenhum número",
+    async (caminho) => {
+      const res = await requisitar("GET", caminho);
+      await esperarErro(res, 401, "nao_autenticado");
+    },
+  );
 
   it.each([
     "/api/painel/resumo",

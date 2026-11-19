@@ -198,6 +198,7 @@ describe("CA1: PUT /api/admin/campanha grava campanha e períodos", () => {
       pedidos: { desconsiderar: false },
       acesso: { discipuladores: true, redes: true },
       mensagens: MENSAGENS_PADRAO,
+      bilhetes: { quantidade: 7005, numero_inicial: null },
       criado_em: expect.stringMatching(
         /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
       ),

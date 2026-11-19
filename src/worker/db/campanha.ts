@@ -25,6 +25,7 @@
 import type { z } from "zod";
 import {
   ACESSO_PADRAO,
+  BILHETES_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
@@ -87,6 +88,9 @@ export interface CampanhaAtiva {
   mensagem_link_lider: string | null;
   mensagem_link_discipulador: string | null;
   mensagem_link_rede: string | null;
+  /** RIFA-075 (D35, migração 0016): quantos números a rifa tem e o número inicial (NULL = automático). */
+  bilhetes_quantidade: number;
+  bilhetes_numero_inicial: number | null;
   criado_em: string;
   atualizado_em: string;
   periodos: PeriodoGravado[];
@@ -116,7 +120,8 @@ const SELECIONAR_CAMPANHA_ATIVA = `
     c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio, c.ranking_por_divisao,
     c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.pedidos_desconsiderar,
     c.acesso_discipuladores, c.acesso_redes, c.mensagem_link_coordenacao, c.mensagem_link_lider,
-    c.mensagem_link_discipulador, c.mensagem_link_rede, c.criado_em, c.atualizado_em,
+    c.mensagem_link_discipulador, c.mensagem_link_rede, c.bilhetes_quantidade, c.bilhetes_numero_inicial,
+    c.criado_em, c.atualizado_em,
     (SELECT json_group_array(json_object('ordem', p.ordem, 'nome', p.nome, 'dias', p.dias,
         'percentual_bp', p.percentual_bp))
       FROM campanha_periodos AS p WHERE p.campanha_id = c.id) AS periodos
@@ -129,14 +134,16 @@ const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 // Regras do admin (D20): ?12 a ?14 são as chaves (null = grupo ausente: o padrão no INSERT, o gravado no UPDATE);
 // ?15 = 1 quando o grupo `mensagens` veio, e ?16 a ?19 são os modelos (null = o padrão do contrato).
 // RIFA-061 (D27): ?20 é `ranking.por_divisao` (null = ausente: o padrão no INSERT, o gravado no UPDATE).
+// RIFA-075 (D35): ?21 = 1 quando o grupo `bilhetes` veio; ?22 a quantidade e ?23 o número inicial (null = automático).
 const GRAVAR_CAMPANHA = `
   INSERT INTO campanhas (nome, slug_rifei, ativa, fuso_horario, data_inicio, preco_bilhete_centavos,
     meta_unidade, meta_regra, meta_valor, ranking_criterio, publico_mostra_percentual_meta,
     publico_limite_ranking, pedidos_desconsiderar, acesso_discipuladores, acesso_redes,
     mensagem_link_coordenacao, mensagem_link_lider, mensagem_link_discipulador, mensagem_link_rede,
-    ranking_por_divisao)
+    ranking_por_divisao, bilhetes_quantidade, bilhetes_numero_inicial)
   VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, coalesce(?12, 0), coalesce(?13, 1),
-    coalesce(?14, 1), ?16, ?17, ?18, ?19, coalesce(?20, 1))
+    coalesce(?14, 1), ?16, ?17, ?18, ?19, coalesce(?20, 1), CASE WHEN ?21 = 1 THEN ?22 ELSE ${BILHETES_PADRAO.quantidade} END,
+    CASE WHEN ?21 = 1 THEN ?23 ELSE NULL END)
   ON CONFLICT (ativa) WHERE ativa = 1 DO UPDATE SET
     nome = excluded.nome,
     slug_rifei = excluded.slug_rifei,
@@ -157,6 +164,8 @@ const GRAVAR_CAMPANHA = `
     mensagem_link_lider = CASE WHEN ?15 = 1 THEN ?17 ELSE mensagem_link_lider END,
     mensagem_link_discipulador = CASE WHEN ?15 = 1 THEN ?18 ELSE mensagem_link_discipulador END,
     mensagem_link_rede = CASE WHEN ?15 = 1 THEN ?19 ELSE mensagem_link_rede END,
+    bilhetes_quantidade = CASE WHEN ?21 = 1 THEN ?22 ELSE bilhetes_quantidade END,
+    bilhetes_numero_inicial = CASE WHEN ?21 = 1 THEN ?23 ELSE bilhetes_numero_inicial END,
     atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
 
 /** Chave (0/1) para o bind; null = grupo ausente. */
@@ -336,6 +345,16 @@ export function resumirMudancaDaCampanha(
     alterados.push(
       `ranking.por_divisao: ${ligado(antes.ranking_por_divisao === 1)} → ${ligado(por_divisao)}`,
     );
+  // RIFA-075 (D35): os números da rifa, com o antes e o depois (ausente no corpo mantém o gravado).
+  const { bilhetes } = depois;
+  if (
+    bilhetes !== undefined &&
+    (antes.bilhetes_quantidade !== bilhetes.quantidade ||
+      antes.bilhetes_numero_inicial !== bilhetes.numero_inicial)
+  )
+    alterados.push(
+      `bilhetes (${antes.bilhetes_quantidade}/${antes.bilhetes_numero_inicial ?? "auto"} → ${bilhetes.quantidade}/${bilhetes.numero_inicial ?? "auto"})`,
+    );
   if (
     (antes.publico_mostra_percentual_meta === 1) !==
       depois.publico.mostra_percentual_meta ||
@@ -404,6 +423,9 @@ export async function salvarCampanhaAtiva(
             : modeloParaGravar(tipo, dados.mensagens[tipo]),
         ),
         chave(dados.ranking.por_divisao),
+        dados.bilhetes === undefined ? 0 : 1,
+        dados.bilhetes?.quantidade ?? null,
+        dados.bilhetes?.numero_inicial ?? null,
       ),
     db.prepare(
       `DELETE FROM campanha_periodos WHERE campanha_id = ${ID_DA_ATIVA}`,
@@ -502,6 +524,11 @@ export function montarCampanha(campanha: CampanhaAtiva): Campanha {
     mensagens: Object.fromEntries(
       TIPOS_MENSAGEM.map((tipo) => [tipo, modeloGravado(campanha, tipo)]),
     ),
+    // RIFA-075 (D35): uma linha lida sem as colunas (antes da 0016) fica com o padrão.
+    bilhetes: {
+      quantidade: campanha.bilhetes_quantidade ?? BILHETES_PADRAO.quantidade,
+      numero_inicial: campanha.bilhetes_numero_inicial ?? null,
+    },
     criado_em: campanha.criado_em,
     atualizado_em: campanha.atualizado_em,
   });

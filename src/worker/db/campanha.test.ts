@@ -77,6 +77,8 @@ describe("buscarCampanhaAtiva", () => {
       mensagem_link_lider: null,
       mensagem_link_discipulador: null,
       mensagem_link_rede: null,
+      bilhetes_quantidade: 7005,
+      bilhetes_numero_inicial: null,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],
