@@ -41,13 +41,19 @@ type LinkMostrado = { nome: string; link: LinkAcessoCriado };
 type Ocupada = { usuarioId: number; acao: "gerando" | "reativando" };
 type Resultado = { tom: "sucesso" | "perigo"; texto: string };
 
-type AbaAcessos = "coordenacao" | "hierarquia" | "webhook";
+type AbaAcessos = "coordenacao" | "hierarquia" | "webhook" | "rifei";
 
 // As abas da hierarquia e do webhook vêm cada uma num pacote à parte, carregado quando o admin a abre pela primeira
 // vez.
 const AcessosHierarquia = lazy(() =>
   import("./AcessosHierarquia").then((modulo) => ({
     default: modulo.AcessosHierarquia,
+  })),
+);
+// RIFA-070 (D32): a conexão com a Rifei (o token do login na Rifei, para marcar pagos).
+const ConexaoRifei = lazy(() =>
+  import("./ConexaoRifei").then((modulo) => ({
+    default: modulo.ConexaoRifei,
   })),
 );
 const WebhookRifei = lazy(() =>
@@ -67,11 +73,13 @@ export function AcessosPage() {
   const { regras, desligar } = useRegrasDosAcessos();
   const [hierarquiaAberta, setHierarquiaAberta] = useState(false);
   const [webhookAberta, setWebhookAberta] = useState(false);
+  const [rifeiAberta, setRifeiAberta] = useState(false);
 
   function mudarAba(nova: AbaAcessos) {
     setAba(nova);
     if (nova === "hierarquia") setHierarquiaAberta(true);
     if (nova === "webhook") setWebhookAberta(true);
+    if (nova === "rifei") setRifeiAberta(true);
   }
 
   return (
@@ -110,6 +118,18 @@ export function AcessosPage() {
                 fallback={<Loading texto="Carregando o token do webhook…" />}
               >
                 <WebhookRifei />
+              </Suspense>
+            ) : null,
+          },
+          {
+            id: "rifei",
+            rotulo: "Conexão com a Rifei",
+            dica: DICAS.abaConexaoRifei,
+            conteudo: rifeiAberta ? (
+              <Suspense
+                fallback={<Loading texto="Carregando a conexão com a Rifei…" />}
+              >
+                <ConexaoRifei />
               </Suspense>
             ) : null,
           },

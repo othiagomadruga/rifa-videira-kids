@@ -11,6 +11,7 @@ import {
   Textarea,
 } from "../../../components/ui";
 import { mensagemDoErro } from "../../../lib/api";
+import { useUsuarioConectado } from "../../../lib/sessao";
 import { carregarFusoDaCampanha } from "../conferencia-api";
 import {
   CAMPOS_CSV,
@@ -36,6 +37,8 @@ import {
   type EntradaDoExtrato,
   type LeituraDoExtrato,
 } from "./leitura";
+import { ConexaoNoExtrato } from "./ConexaoNoExtrato";
+import { MarcarAMao } from "./MarcarAMao";
 import { ResultadoDoExtrato } from "./ResultadoDoExtrato";
 import {
   CAMPOS,
@@ -87,6 +90,8 @@ export function ExtratoDoBanco() {
   const [palavras, setPalavras] = useState(PALAVRAS_PADRAO);
   const [lendo, setLendo] = useState(false);
   const [falha, setFalha] = useState<Falha | null>(null);
+  const admin = useUsuarioConectado().papel === "admin";
+  const [versaoConexao, setVersaoConexao] = useState(0);
   const [lido, setLido] = useState<Lido | null>(null);
   const [mapeamento, setMapeamento] = useState<MapeamentoCsv | null>(null);
   const [busca, setBusca] = useState<Busca | null>(null);
@@ -162,6 +167,17 @@ export function ExtratoDoBanco() {
       cobertura.current = { versao: atual.versao, desde, falhou: true };
       setBusca({ tipo: "erro", erro });
     }
+  }
+
+  /**
+   * Depois de marcar na Rifei (RIFA-070, D32): a situação da conexão de novo e, com extrato, os pedidos de novo (a
+   * busca de antes já cobria o extrato, mas os pedidos mudaram).
+   */
+  function buscarDeNovo() {
+    setVersaoConexao((atual) => atual + 1);
+    if (!lido || !extrato?.ok) return;
+    cobertura.current = null;
+    void garantirPedidos(lido, extrato);
   }
 
   async function ler(entrada: EntradaDoExtrato) {
@@ -288,6 +304,8 @@ export function ExtratoDoBanco() {
       <p className="visualmente-oculto" role="status">
         {anuncio}
       </p>
+      {/* RIFA-070 (D32): a conexão com a Rifei, para o admin saber antes de marcar. */}
+      {admin && <ConexaoNoExtrato versao={versaoConexao} />}
       <Card titulo={TITULO}>
         <div className="extrato-bloco">
           <ol className="extrato-passos">
@@ -426,14 +444,13 @@ export function ExtratoDoBanco() {
           resultado={resultado}
           refTitulo={refTitulo}
           aoTentarDeNovo={() => void garantirPedidos(lido, extrato)}
-          aoBuscarDeNovo={() => {
-            // Depois de marcar na Rifei (RIFA-070): a busca de antes já cobria o extrato, mas os pedidos mudaram.
-            cobertura.current = null;
-            void garantirPedidos(lido, extrato);
-          }}
+          aoBuscarDeNovo={buscarDeNovo}
           aoAnunciar={setAnuncio}
         />
       )}
+
+      {/* RIFA-070 (D32): achar um pedido pelo número do pedido ou do bilhete e marcar como pago na Rifei. */}
+      {admin && <MarcarAMao aoAnunciar={setAnuncio} aoMarcar={buscarDeNovo} />}
     </div>
   );
 }

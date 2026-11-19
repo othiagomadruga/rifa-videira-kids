@@ -301,6 +301,10 @@ export function criarApiDoExtrato(
     falharPedidos?: () => Response | null;
     /** RIFA-070: a resposta do POST /api/admin/rifei/marcar-pagos (recebe os números do corpo). */
     marcarNaRifei?: (pedidos: string[]) => Response;
+    /** RIFA-070 (D32): o GET /api/admin/rifei/conexao (sem: 404, e o aviso some). */
+    conexao?: object;
+    /** RIFA-070 (D32): a resposta do GET /api/admin/rifei/pedido (recebe o número digitado). */
+    buscarPedido?: (numero: string) => Response;
   } = {},
 ) {
   const chamadas: Chamada[] = [];
@@ -350,6 +354,13 @@ export function criarApiDoExtrato(
       }
       if (endereco.pathname === "/api/admin/reconciliacao/recuperacoes")
         return respostaJson({ itens: [], proximo: null });
+      if (endereco.pathname === "/api/admin/rifei/conexao" && opcoes.conexao)
+        return respostaJson(opcoes.conexao);
+      if (
+        endereco.pathname === "/api/admin/rifei/pedido" &&
+        opcoes.buscarPedido
+      )
+        return opcoes.buscarPedido(endereco.searchParams.get("numero") ?? "");
       if (
         endereco.pathname === "/api/admin/rifei/marcar-pagos" &&
         metodo === "POST" &&

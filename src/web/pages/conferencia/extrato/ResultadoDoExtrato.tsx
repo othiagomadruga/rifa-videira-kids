@@ -453,9 +453,10 @@ export function ResultadoDoExtrato({
                   </Aviso>
                   {admin && (
                     <MarcarNaRifei
-                      pedidos={resultado.paraMarcar.map(
-                        (casamento) => casamento.pedido.id,
-                      )}
+                      pedidos={resultado.paraMarcar.map(({ pedido }) => ({
+                        id: pedido.id,
+                        descricao: `${pedido.celula_nome ?? "Sem célula"} · ${plural(pedido.qtd_bilhetes, "bilhete", "bilhetes")} · ${formatarMoeda(pedido.total_centavos)}${pedido.status === "expired" ? ` · ${STATUS.expired}` : ""}`,
+                      }))}
                       aoAnunciar={aoAnunciar}
                       aoBuscarDeNovo={aoBuscarDeNovo}
                     />

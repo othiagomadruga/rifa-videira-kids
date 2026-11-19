@@ -6,7 +6,9 @@
 // é uma cópia, conferida pelo tipo e por marcar-na-rifei.test.tsx.
 import type {
   ItemMarcarPagosRifei,
+  ROTAS_CONEXAO_RIFEI,
   ROTAS_RIFEI_API,
+  RespostaBuscarPedidoRifei,
   RespostaMarcarPagosRifei,
 } from "../../../../shared/contracts/api";
 import { LIMITE_PEDIDOS_MARCAR_NA_RIFEI } from "../../../../shared/contracts/rifei-api";
@@ -45,4 +47,20 @@ export async function marcarPagosNaRifei(
     resposta.marcados += lote.marcados;
   }
   return resposta;
+}
+
+/** ROTAS_CONEXAO_RIFEI.buscarPedidoRifei (RIFA-070, D32): achar o pedido pelo número do pedido ou de um bilhete. */
+export const CAMINHO_BUSCAR_PEDIDO: (typeof ROTAS_CONEXAO_RIFEI)["buscarPedidoRifei"]["caminho"] =
+  "/api/admin/rifei/pedido";
+
+export type { RespostaBuscarPedidoRifei };
+
+export function buscarPedidoParaMarcar(
+  numero: string,
+  opcoes: { signal?: AbortSignal } = {},
+): Promise<RespostaBuscarPedidoRifei> {
+  return api.get<RespostaBuscarPedidoRifei>(
+    `${CAMINHO_BUSCAR_PEDIDO}?${new URLSearchParams({ numero: numero.trim() })}`,
+    opcoes,
+  );
 }

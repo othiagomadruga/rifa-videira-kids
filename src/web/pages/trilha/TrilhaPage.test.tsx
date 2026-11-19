@@ -233,6 +233,8 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Pedidos marcados como pagos na Rifei",
       "Afiliados sincronizados com a Rifei",
       "Convites de afiliado gerados na Rifei",
+      "Conexão com a Rifei salva",
+      "Conexão com a Rifei apagada",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

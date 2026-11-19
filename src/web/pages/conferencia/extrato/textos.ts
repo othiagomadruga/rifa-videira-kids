@@ -294,9 +294,15 @@ export const DICAS = {
 
 /** "Marcar como pago na Rifei" (RIFA-070, D32; só o admin): o sistema marca na Rifei pela API do painel. */
 export const MARCAR_NA_RIFEI = {
+  legenda: "Escolha os pedidos para marcar como pago na Rifei",
+  selecionarTodos: "Selecionar todos",
+  desmarcarTodos: "Desmarcar todos",
+  dicaSelecionarTodos: "Marca ou desmarca todos os pedidos desta lista.",
+  dicaCaixa: "Marque para incluir este pedido ao marcar como pago na Rifei.",
   botao: (n: number) =>
-    `Marcar ${plural(n, "pedido", "pedidos")} como pago na Rifei`,
+    `Marcar ${plural(n, "selecionado", "selecionados")} como pago na Rifei`,
   dica: "O sistema marca estes pedidos como pagos no painel da Rifei por você. Confira a lista antes: na Rifei, o pedido pago libera os bilhetes do comprador.",
+  dicaNenhum: "Marque ao menos um pedido na lista acima.",
   titulo: (n: number) =>
     `Marcar ${plural(n, "pedido", "pedidos")} como pago na Rifei?`,
   descricao:
@@ -311,21 +317,45 @@ export const MARCAR_NA_RIFEI = {
       ? `${plural(marcados, "pedido marcado", "pedidos marcados")} como pago na Rifei`
       : `${plural(marcados, "pedido marcado", "pedidos marcados")} de ${total}`,
   resultadoTexto:
-    "A venda passa a contar quando a Rifei avisar o sistema. Clique em Buscar de novo daqui a pouco para conferir.",
-  naoMarcados: "Estes não foram marcados: faça no painel da Rifei",
-  buscarDeNovo: "Buscar os pedidos de novo",
+    "A venda passa a contar quando a Rifei avisar o sistema, em segundos. Toque em Atualizar para conferir.",
+  legendaResultado: "O que aconteceu com cada pedido",
+  buscarDeNovo: "Atualizar",
   dicaBuscarDeNovo:
     "Busca de novo os pedidos do sistema e refaz a comparação com o extrato.",
   semConfiguracao:
-    "A marcação automática ainda não está ligada no servidor. Use Copiar os números dos pedidos e marque no painel da Rifei.",
+    "A marcação automática ainda não está ligada: cole o token em Acessos → Conexão com a Rifei, ou use Copiar os números dos pedidos e marque no painel da Rifei.",
   falhou: "Não foi possível marcar na Rifei",
   resultados: {
     marcado: "Marcado como pago",
     restaurado_e_marcado: "Estava expirado: restaurado e marcado",
-    ja_pago: "Já estava pago no sistema",
+    ja_pago: "Já estava pago",
     desconsiderado: "Desconsiderado no sistema: não foi marcado",
     fora_do_sistema: "Não é um pedido da campanha",
     recusado_pela_rifei: "A Rifei não marcou",
-    falhou: "A Rifei não respondeu",
+    falhou: "Falhou: a Rifei não respondeu",
   },
+} as const;
+
+/** "Marcar à mão" (RIFA-070, D32; só o admin): achar o pedido pelo número do pedido ou de um bilhete. */
+export const MARCAR_A_MAO = {
+  titulo: "Marcar um pedido à mão",
+  explicacao:
+    "Para o Pix que o extrato não achou (ou um comprovante): digite o número do pedido ou de um bilhete dele, confira o pedido e marque como pago na Rifei.",
+  rotulo: "Número do pedido ou do bilhete",
+  dicaCampo:
+    "O número do pedido na Rifei, ou o número de um bilhete (só os algarismos).",
+  buscar: "Procurar",
+  buscando: "Procurando…",
+  dicaBuscar: "Procura o pedido na campanha. Nada muda na Rifei.",
+  naoAchou: (numero: string) =>
+    `Nenhum pedido da campanha com o número "${numero}".`,
+  oQueConferir:
+    "Confira: o número do pedido aparece na Rifei, em Pedidos (e no comprovante que o comprador recebe); o bilhete é o número da rifa, só com algarismos. Um pedido feito agora pode levar alguns segundos para chegar ao sistema.",
+  achadoPeloBilhete: "Achado pelo bilhete",
+  jaPago: "Este pedido já está pago: não precisa marcar.",
+  desconsiderado:
+    "Este pedido foi desconsiderado no sistema: não é marcado daqui.",
+  marcar: "Marcar como pago na Rifei",
+  dicaMarcar:
+    "Pede confirmação antes de marcar este pedido como pago na Rifei.",
 } as const;
