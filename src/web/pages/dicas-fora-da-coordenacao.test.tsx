@@ -284,7 +284,7 @@ describe("/entrar", () => {
     expect(contarControles()).toBe(3);
     conferirDicas(3);
     expect(textoDaDica(screen.getByLabelText("Célula"))).toBe(
-      DICAS_ENTRAR.celula,
+      DICAS_ENTRAR.nome,
     );
     expect(textoDaDica(screen.getByLabelText("Senha"))).toBe(
       DICAS_ENTRAR.senha,

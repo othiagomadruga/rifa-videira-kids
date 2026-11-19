@@ -328,6 +328,57 @@ describe("RIFA-073 (critério 2): login do admin em /entrar", () => {
     expect(res.headers.get("Set-Cookie")).toBeNull();
   });
 
+  it("limite por conta: 5 erros seguidos bloqueiam o login dela por 15 minutos com o MESMO 401 (até com a senha certa); o acerto zera; o link segue", async () => {
+    const { usuarioId, sessao: doLink } = await adminComLink();
+    const usuario = usuarioNovo();
+    await definirSenha(doLink, usuario);
+    const errar = async (vezes: number) => {
+      for (let i = 0; i < vezes; i++)
+        await esperarRecusa(
+          await entrarComoAdmin({ usuario, senha: `errada numero ${i}` }),
+        );
+    };
+
+    // 4 erros e o acerto: entra e zera a contagem.
+    await errar(4);
+    await sessaoPelaSenha(usuario);
+    await errar(4);
+    await sessaoPelaSenha(usuario);
+
+    // 5 erros seguidos: bloqueada, a senha certa recebe a mesma recusa da errada.
+    await errar(5);
+    const recusaCerta = await esperarRecusa(
+      await entrarComoAdmin({ usuario, senha: SENHA }),
+    );
+    const recusaErrada = await esperarRecusa(
+      await entrarComoAdmin({ usuario: "ninguem.aqui", senha: SENHA }),
+    );
+    expect(recusaCerta).toBe(recusaErrada);
+    const linha = await env.DB.prepare(
+      "SELECT falhas, bloqueada_ate FROM senhas_admin WHERE usuario_id = ?1",
+    )
+      .bind(usuarioId)
+      .first<{ falhas: number; bloqueada_ate: string }>();
+    const minutos = (Date.parse(linha!.bloqueada_ate) - Date.now()) / 60_000;
+    expect(minutos).toBeGreaterThan(14);
+    expect(minutos).toBeLessThanOrEqual(15);
+    // O link pessoal continua entrando.
+    expect((await pedir("GET", "/api/sessao", doLink)).status).toBe(200);
+
+    // Passados os 15 minutos, a senha certa entra de novo.
+    await env.DB.prepare(
+      "UPDATE senhas_admin SET bloqueada_ate = ?2 WHERE usuario_id = ?1",
+    )
+      .bind(usuarioId, new Date(Date.now() - 1000).toISOString())
+      .run();
+    await sessaoPelaSenha(usuario);
+
+    // Trocar a senha (pelo link) também tira o bloqueio.
+    await errar(5);
+    expect((await definirSenha(doLink, usuario, OUTRA_SENHA)).status).toBe(200);
+    await sessaoPelaSenha(usuario, OUTRA_SENHA);
+  });
+
   it("corpo sem campo ou com texto enorme: 400", async () => {
     expect((await entrarComoAdmin({ usuario: "x" })).status).toBe(400);
     expect(
@@ -352,7 +403,8 @@ describe("RIFA-073 (critério 2): login do admin em /entrar", () => {
       status.push(
         (
           await entrarComoAdmin(
-            { usuario, senha: `tentativa errada ${i}` },
+            // Usuários que não existem: o limite por IP vale antes de qualquer conta (o por conta tem teste próprio).
+            { usuario: `tentativa.${i}`, senha: `tentativa errada ${i}` },
             cabecalhos,
           )
         ).status,

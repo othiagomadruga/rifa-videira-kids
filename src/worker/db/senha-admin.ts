@@ -35,9 +35,16 @@ export async function lerSenhaDoAdmin(
     : { usuario: linha.usuario, atualizadaEm: linha.atualizada_em };
 }
 
+/** Erros seguidos de senha que bloqueiam o login da conta (o limite por conta, além do por IP). */
+export const MAXIMO_FALHAS_SENHA_ADMIN = 5;
+/** Quanto tempo a conta fica bloqueada depois do último erro que a bloqueou. */
+export const BLOQUEIO_SENHA_ADMIN_MS = 15 * 60 * 1000;
+
 /** A credencial de um usuário de login (já normalizado): só de admin ativo. */
 export interface CredencialAdmin extends SenhaGravada {
   usuarioId: number;
+  /** Até quando o login da conta está bloqueado (5 erros seguidos), ou null. */
+  bloqueadaAte: string | null;
 }
 
 export async function buscarCredencialAdmin(
@@ -46,7 +53,7 @@ export async function buscarCredencialAdmin(
 ): Promise<CredencialAdmin | null> {
   const linha = await db
     .prepare(
-      `SELECT sa.usuario_id, sa.sal, sa.hash, sa.iteracoes
+      `SELECT sa.usuario_id, sa.sal, sa.hash, sa.iteracoes, sa.bloqueada_ate
        FROM senhas_admin AS sa JOIN usuarios AS u ON u.id = sa.usuario_id
        WHERE sa.usuario = ?1 AND u.papel = 'admin' AND u.ativo = 1`,
     )
@@ -56,6 +63,7 @@ export async function buscarCredencialAdmin(
       sal: string;
       hash: string;
       iteracoes: number;
+      bloqueada_ate: string | null;
     }>();
   return linha === null
     ? null
@@ -64,7 +72,30 @@ export async function buscarCredencialAdmin(
         sal: linha.sal,
         hash: linha.hash,
         iteracoes: linha.iteracoes,
+        bloqueadaAte: linha.bloqueada_ate,
       };
+}
+
+/**
+ * Um erro de senha na conta: soma 1 em `falhas` e, ao chegar a MAXIMO_FALHAS_SENHA_ADMIN, bloqueia o login dela até
+ * `agora` + 15 minutos e zera a contagem (o próximo bloqueio precisa de outros 5 erros). Uma só instrução: duas
+ * tentativas ao mesmo tempo não se perdem.
+ */
+export async function registrarFalhaDaSenhaAdmin(
+  db: D1Database,
+  usuarioId: number,
+  agora: Date,
+): Promise<void> {
+  const ate = new Date(agora.getTime() + BLOQUEIO_SENHA_ADMIN_MS).toISOString();
+  await db
+    .prepare(
+      `UPDATE senhas_admin SET
+         bloqueada_ate = CASE WHEN falhas + 1 >= ?2 THEN ?3 ELSE bloqueada_ate END,
+         falhas = CASE WHEN falhas + 1 >= ?2 THEN 0 ELSE falhas + 1 END
+       WHERE usuario_id = ?1`,
+    )
+    .bind(usuarioId, MAXIMO_FALHAS_SENHA_ADMIN, ate)
+    .run();
 }
 
 export type ResultadoGravarSenha =
@@ -96,7 +127,8 @@ export async function gravarSenhaDoAdmin(
       // Só para admin ativo (a rota já exige; o lote confere de novo). O UNIQUE de `usuario` barra o de outro admin.
       db
         .prepare(
-          `UPDATE senhas_admin SET usuario = ?2, sal = ?3, hash = ?4, iteracoes = ?5, atualizada_em = ?6
+          `UPDATE senhas_admin SET usuario = ?2, sal = ?3, hash = ?4, iteracoes = ?5, atualizada_em = ?6,
+             falhas = 0, bloqueada_ate = NULL
            WHERE usuario_id = ?1
              AND EXISTS (SELECT 1 FROM usuarios WHERE id = ?1 AND papel = 'admin' AND ativo = 1)`,
         )
@@ -232,10 +264,18 @@ export async function abrirSessaoDoAdmin(
         `INSERT INTO sessoes (id_hash, usuario_id, link_id, criado_em, expira_em, ultimo_uso_em)
          SELECT ?2, u.id, NULL, ?3, ?4, ?3 FROM usuarios AS u
          WHERE u.id = ?1 AND u.papel = 'admin' AND u.ativo = 1
-           AND EXISTS (SELECT 1 FROM senhas_admin WHERE usuario_id = u.id)
+           AND EXISTS (SELECT 1 FROM senhas_admin WHERE usuario_id = u.id
+                       AND (bloqueada_ate IS NULL OR bloqueada_ate <= ?3))
          RETURNING expira_em`,
       )
       .bind(sessao.usuarioId, sessao.idHash, sessao.criadoEm, sessao.expiraEm),
+    // O login certo zera os erros seguidos da conta (só se a sessão nasceu).
+    db
+      .prepare(
+        `UPDATE senhas_admin SET falhas = 0, bloqueada_ate = NULL
+         WHERE usuario_id = ?1 AND EXISTS (SELECT 1 FROM sessoes WHERE id_hash = ?2)`,
+      )
+      .bind(sessao.usuarioId, sessao.idHash),
     db
       .prepare(
         `INSERT INTO auditoria (usuario_id, em, acao, alvo, resumo)

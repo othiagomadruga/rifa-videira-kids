@@ -59,3 +59,10 @@
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
 }
+
+/* O cartão do login com senha (RIFA-073): o formulário e, embaixo, a troca entre a célula e o administrador. */
+.entrar-cartao-senha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}

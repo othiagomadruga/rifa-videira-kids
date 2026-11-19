@@ -8,6 +8,8 @@
 -- * A senha nunca é gravada: só o PBKDF2-SHA256 dela (32 bytes em hex), com sal aleatório de 16 bytes por senha (hex)
 --   e o número de iterações (100.000 hoje, o máximo do Workers; guardado para poder subir sem invalidar as senhas).
 -- * `usuario` é o nome de login, já normalizado pela API (minúsculas, FORMATO_USUARIO_ADMIN) e único entre os admins.
+-- * Força bruta: o limite por IP do login (LIMITE_LOGIN, 60 por minuto) e, por conta, 5 erros seguidos bloqueiam o login
+--   dela por 15 minutos (`falhas`, `bloqueada_ate`); o link pessoal do admin continua entrando.
 -- * A sessão aberta pela senha não tem link (`sessoes.link_id` NULL, como a da célula na 0013): a consulta da sessão
 --   (src/worker/db/acessos.ts) só a aceita no admin que ainda tem a linha aqui. Remover a senha encerra essas sessões.
 CREATE TABLE senhas_admin (
@@ -18,6 +20,10 @@ CREATE TABLE senhas_admin (
   sal            TEXT    NOT NULL CHECK (length(sal) = 32 AND sal NOT GLOB '*[^0-9a-f]*'),
   hash           TEXT    NOT NULL CHECK (length(hash) = 64 AND hash NOT GLOB '*[^0-9a-f]*'),
   iteracoes      INTEGER NOT NULL CHECK (iteracoes >= 100000),
+  -- Limite por conta (além do por IP): erros seguidos de senha; no 5º, a conta fica bloqueada até `bloqueada_ate`
+  -- (15 minutos) e o login recusa com o MESMO 401, mesmo com a senha certa. O login certo zera; trocar a senha também.
+  falhas         INTEGER NOT NULL DEFAULT 0 CHECK (falhas >= 0),
+  bloqueada_ate  TEXT    CHECK (bloqueada_ate IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', bloqueada_ate) IS bloqueada_ate),
   criada_em      TEXT    NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', criada_em) IS criada_em),
   atualizada_em  TEXT    NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', atualizada_em) IS atualizada_em)
 );

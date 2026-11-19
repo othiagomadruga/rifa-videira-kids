@@ -16,6 +16,7 @@
  * - POST /api/sessao/admin { usuario, senha } (RIFA-073, D33): o login do admin com o usuário e a senha que ele definiu
  *   em /api/admin/minha-senha abre a MESMA sessão do link do admin (sem link). A senha é conferida pelo PBKDF2
  *   (lib/senha.ts) mesmo quando o usuário não existe (o tempo não diz se ele existe), e toda recusa é o MESMO 401.
+ *   Além do limite por IP, o limite por conta: 5 erros seguidos bloqueiam o login dela por 15 minutos (MESMO 401).
  *
  * Os POSTs são abertos (não exigem sessão), mas só da mesma origem do site (CSRF). No login (RIFA-013b),
  * depois da origem: o limite de tentativas por IP (429, lib/limite-requisicoes.ts) e o de tamanho do corpo,
@@ -42,7 +43,11 @@ import {
   criarSessao,
 } from "../db/acessos";
 import { abrirSessaoDaCelula, lerCelulasParaLogin } from "../db/login-celula";
-import { abrirSessaoDoAdmin, buscarCredencialAdmin } from "../db/senha-admin";
+import {
+  abrirSessaoDoAdmin,
+  buscarCredencialAdmin,
+  registrarFalhaDaSenhaAdmin,
+} from "../db/senha-admin";
 import { gerarSegredo, sha256Hex } from "../lib/cripto";
 import { LIMITE_LOGIN, limitarRequisicoes } from "../lib/limite-requisicoes";
 import { responderErro } from "../lib/respostas-erro";
@@ -218,9 +223,19 @@ sessao.post(
       senha,
       credencial ?? SENHA_ADMIN_QUE_NUNCA_CONFERE,
     );
-    if (credencial === null || !confere) return respostaAdminRecusado(c);
-
     const agora = new Date();
+    if (credencial === null) return respostaAdminRecusado(c);
+    // Limite por conta (D33): com 5 erros seguidos, 15 minutos de bloqueio, com a MESMA recusa (até com a senha certa:
+    // a resposta não diz que a conta existe nem que está bloqueada). O link pessoal do admin continua entrando.
+    const bloqueada =
+      credencial.bloqueadaAte !== null &&
+      credencial.bloqueadaAte > agora.toISOString();
+    if (bloqueada) return respostaAdminRecusado(c);
+    if (!confere) {
+      await registrarFalhaDaSenhaAdmin(c.env.DB, credencial.usuarioId, agora);
+      return respostaAdminRecusado(c);
+    }
+
     const idSessao = gerarSegredo();
     const idHash = await sha256Hex(idSessao);
     const anterior = lerCookieSessao(c);
