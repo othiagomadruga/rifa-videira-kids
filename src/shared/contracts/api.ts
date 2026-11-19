@@ -49,6 +49,12 @@ import {
   type CorpoConferencia,
   type CorpoRecuperacao,
 } from "./conferencia";
+import {
+  LIMITE_PEDIDOS_POR_NUMERO,
+  LIMITE_QUANTIDADE_NUMEROS,
+  SITUACOES_BILHETE,
+  SITUACOES_PEDIDO_BILHETE,
+} from "./bilhetes";
 import { detalheResumidoSchema } from "./erros";
 import { UF_DO_DDD, UFS } from "./ddd";
 import {
@@ -67,6 +73,21 @@ import {
 } from "./regras";
 import { BOM_UTF8, TIPOS_RELATORIO, TIPO_CONTEUDO_CSV } from "./relatorio";
 import { dddSchema, payloadRifeiSchema } from "./rifei";
+import {
+  ACHADO_POR_BUSCA_RIFEI,
+  CARACTERES_FINAL_TOKEN_RIFEI,
+  LIMITE_CARACTERES_BUSCA_PEDIDO_RIFEI,
+  LIMITE_CARACTERES_TOKEN_RIFEI,
+  LIMITE_PEDIDOS_BUSCA_RIFEI,
+  ORIGENS_TOKEN_RIFEI,
+  LIMITE_CONVITES_RIFEI,
+  LIMITE_MENSAGEM_RIFEI,
+  LIMITE_PEDIDOS_MARCAR_NA_RIFEI,
+  MOTIVOS_FALHA_RIFEI,
+  RESULTADOS_MARCADOS_NA_RIFEI,
+  RESULTADOS_MARCAR_NA_RIFEI,
+  eLinkDeConviteRifei,
+} from "./rifei-api";
 import {
   CREDENCIAIS_WEBHOOK,
   FORMATO_TOKEN_WEBHOOK,
@@ -581,6 +602,12 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - senha_admin.definir, senha_admin.trocar e senha_admin.remover (RIFA-073, D33): ROTAS_ACESSO.definirMinhaSenhaAdmin e
  *   removerMinhaSenhaAdmin, alvo `usuario:<id>` (o próprio admin); resumo sem a senha, sem o hash e sem o usuário de
  *   login (só se ele mudou e, na troca e na remoção, quantas sessões abertas pela senha foram encerradas).
+ * - rifei.marcar_pagos, rifei.sincronizar_afiliados e rifei.gerar_convites (RIFA-070, D32): ROTAS_RIFEI_API, alvo
+ *   `campanha:<id>` na marcação e `rifei` (ALVO_AUDITORIA_AFILIADOS_RIFEI) nos afiliados; resumo só com contagens e,
+ *   na marcação, os números dos pedidos marcados se couberem (nunca o token, o link do convite nem o e-mail do
+ *   afiliado). Registram só quando a Rifei aceitou algo (a marcação, o convite) ou quando a sincronização mudou algo.
+ * - rifei.conectar e rifei.desconectar (RIFA-070, D32): ROTAS_CONEXAO_RIFEI, alvo `rifei` (ALVO_AUDITORIA_CONEXAO_RIFEI);
+ *   resumo com o final do token ("termina em …abcd"), NUNCA o token. Testar não registra.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -608,6 +635,11 @@ export const ACOES_AUDITORIA = [
   "senha_admin.definir",
   "senha_admin.trocar",
   "senha_admin.remover",
+  "rifei.marcar_pagos",
+  "rifei.sincronizar_afiliados",
+  "rifei.gerar_convites",
+  "rifei.conectar",
+  "rifei.desconectar",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -2191,6 +2223,69 @@ export type RespostaListaRecuperacoes = z.infer<
 >;
 
 // ---------------------------------------------------------------------------------------------------
+// Bilhetes pagos, reservados e livres (RIFA-075, D35): GET /api/painel/bilhetes e /api/painel/bilhetes/:numero
+// ---------------------------------------------------------------------------------------------------
+
+const contagemSchema = z.number().int().nonnegative();
+const mapaBase64Schema = z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/);
+
+/**
+ * A grade da rifa. `pagos` e `reservados` são mapas de bits em base64 (bilhetes.ts: bit i = número
+ * `numero_inicial + i`), cada um com ceil(quantidade / 8) bytes; um número nunca está nos dois (pago vence).
+ */
+export const respostaBilhetesSchema = z.strictObject({
+  quantidade: z.number().int().min(1).max(LIMITE_QUANTIDADE_NUMEROS),
+  /** O número inicial que vale (o configurado, ou o deduzido: 0 se algum pedido trouxe o 0). */
+  numero_inicial: z.union([z.literal(0), z.literal(1)]),
+  /** true quando o número inicial foi deduzido (a Campanha está em branco). */
+  numero_inicial_automatico: z.boolean(),
+  pagos: mapaBase64Schema,
+  reservados: mapaBase64Schema,
+  contagem: z.strictObject({
+    pagos: contagemSchema,
+    reservados: contagemSchema,
+    livres: contagemSchema,
+  }),
+  /** Pagos ÷ quantidade, em pontos-base truncados. */
+  vendido_bp: z.number().int().min(0).max(10_000),
+  /** Pedidos pagos ou reservados sem a lista de números (recuperados pela conferência): ficam fora da grade. */
+  sem_numeros: z.strictObject({
+    pedidos: contagemSchema,
+    bilhetes: contagemSchema,
+  }),
+  /** Números de pedidos pagos ou reservados fora da faixa (quantidade ou número inicial errados na Campanha). */
+  fora_da_faixa: contagemSchema,
+  atualizado_em: instanteSchema,
+});
+export type RespostaBilhetes = z.infer<typeof respostaBilhetesSchema>;
+
+export const parametroNumeroBilheteSchema = z.object({
+  numero: z.coerce.number().int().min(0).max(LIMITE_QUANTIDADE_NUMEROS),
+});
+
+/** Um pedido que tem o número (sem dado do comprador). */
+export const pedidoDoBilheteSchema = z.strictObject({
+  id: z.string().min(1).max(128),
+  situacao: z.enum(SITUACOES_PEDIDO_BILHETE),
+  /** A célula do afiliado; null = sem afiliado ou afiliado não vinculado. */
+  celula: z.string().min(1).max(120).nullable(),
+  /** Pago: quando foi pago; senão, quando foi criado (ou registrado aqui). */
+  data: instanteSchema,
+  qtd_bilhetes: contagemSchema,
+  /** Desconsiderado pelo admin (D20): não conta na grade. */
+  desconsiderado: z.boolean(),
+});
+
+/** Busca por número: a situação dele na grade e os pedidos que o têm (os mais recentes primeiro, até o limite). */
+export const respostaBilheteSchema = z.strictObject({
+  numero: z.number().int().nonnegative(),
+  situacao: z.enum(SITUACOES_BILHETE),
+  pedidos: z.array(pedidoDoBilheteSchema).max(LIMITE_PEDIDOS_POR_NUMERO),
+});
+export type RespostaBilhete = z.infer<typeof respostaBilheteSchema>;
+export type PedidoDoBilhete = z.infer<typeof pedidoDoBilheteSchema>;
+
+// ---------------------------------------------------------------------------------------------------
 // Catálogo de rotas
 // ---------------------------------------------------------------------------------------------------
 
@@ -2444,6 +2539,23 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaMapaDddSchema,
     sucesso: { status: 200, corpo: respostaMapaDddSchema },
+  },
+  /** RIFA-075 (D35). Sem campanha ativa: 404 `nao_encontrado`. */
+  painelBilhetes: {
+    metodo: "GET",
+    caminho: "/api/painel/bilhetes",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaBilhetesSchema },
+  },
+  /** RIFA-075 (D35). Número fora da faixa ou sem pedido: 200 com `livre` e lista vazia (ou só os expirados). */
+  painelBilhete: {
+    metodo: "GET",
+    caminho: "/api/painel/bilhetes/:numero",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    parametros: parametroNumeroBilheteSchema,
+    sucesso: { status: 200, corpo: respostaBilheteSchema },
   },
   painelRanking: {
     metodo: "GET",
@@ -3017,3 +3129,348 @@ export const ROTAS_LINK_VENDAS = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRotaLinkVendas = keyof typeof ROTAS_LINK_VENDAS;
+
+// ---------------------------------------------------------------------------------------------------
+// API interna da Rifei (RIFA-070, D32; só admin): marcar como pagos os pedidos da Conferência do extrato, ler e
+// sincronizar os afiliados da conta e gerar os convites das células. Regras puras, limites e textos em ./rifei-api.
+// ---------------------------------------------------------------------------------------------------
+
+/** O número do pedido, o mesmo que chega no webhook (`id`, até 128 caracteres). */
+const idPedidoRifeiApiSchema = z.string().trim().min(1).max(128);
+
+/** Uma lista sem repetidos. */
+function semRepetidos<T>(lista: readonly T[]): boolean {
+  return new Set(lista).size === lista.length;
+}
+
+/**
+ * POST /api/admin/rifei/marcar-pagos: os números dos pedidos que a Conferência do extrato pôs em "Para marcar como
+ * pago na Rifei" (de 1 a LIMITE_PEDIDOS_MARCAR_NA_RIFEI, sem repetidos). O Worker confere de novo no banco: só os
+ * pendentes ou expirados da campanha ativa, sem desconsideração, vão para a Rifei.
+ */
+export const corpoMarcarPagosRifeiSchema = z.strictObject({
+  pedidos: z
+    .array(idPedidoRifeiApiSchema)
+    .min(1)
+    .max(LIMITE_PEDIDOS_MARCAR_NA_RIFEI)
+    .refine(semRepetidos, { message: "Há números de pedido repetidos" }),
+});
+export type CorpoMarcarPagosRifei = z.input<typeof corpoMarcarPagosRifeiSchema>;
+
+/** O resultado de um pedido (RESULTADOS_MARCAR_NA_RIFEI); `mensagem` é a da Rifei quando ela recusou ou falhou. */
+export const itemMarcarPagosRifeiSchema = z.strictObject({
+  pedido_id: idPedidoRifeiApiSchema,
+  resultado: z.enum(RESULTADOS_MARCAR_NA_RIFEI),
+  mensagem: z.string().max(LIMITE_MENSAGEM_RIFEI).nullable(),
+});
+export type ItemMarcarPagosRifei = z.infer<typeof itemMarcarPagosRifeiSchema>;
+
+/**
+ * 200: um item por pedido do corpo, na mesma ordem. `marcados` = os itens marcado ou restaurado_e_marcado. O sistema
+ * não grava nada no pedido: ele passa a contar quando o "Pedido pago" chegar pelo webhook (se não chegar, a
+ * conferência pelo CSV mostra o pedido em "Pagamento não registrado", RIFA-056).
+ */
+export const respostaMarcarPagosRifeiSchema = z
+  .strictObject({
+    itens: z.array(itemMarcarPagosRifeiSchema),
+    marcados: z.number().int().nonnegative(),
+  })
+  .superRefine((resposta, ctx) => {
+    const marcados = resposta.itens.filter((item) =>
+      RESULTADOS_MARCADOS_NA_RIFEI.includes(item.resultado),
+    ).length;
+    if (marcados !== resposta.marcados)
+      ctx.addIssue({
+        code: "custom",
+        path: ["marcados"],
+        message: "marcados é a contagem dos itens marcados na Rifei",
+      });
+  });
+export type RespostaMarcarPagosRifei = z.infer<
+  typeof respostaMarcarPagosRifeiSchema
+>;
+
+/** `detalhes` do 502 `rifei_falhou`: por que a chamada inteira falhou (MOTIVOS_FALHA_RIFEI). */
+export const detalhesRifeiFalhouSchema = z.strictObject({
+  motivo: z.enum(MOTIVOS_FALHA_RIFEI),
+});
+
+/** Uma célula como a tela de afiliados da Rifei mostra (sem o telefone nem o e-mail do líder). */
+const celulaDoAfiliadoRifeiSchema = z.strictObject({
+  celula_id: idSchema,
+  celula_nome: z.string().min(1),
+  lider_nome: z.string().min(1),
+});
+
+/**
+ * Um afiliado da conta na Rifei (`GET my-affiliates`) com o que o sistema sabe dele:
+ * - `affiliate_id`: o número que chega no webhook; `codigo`: o `ref` do link de vendas (`?ref=<codigo>`);
+ * - `nome` e `email`: os da conta de afiliado na Rifei (o líder), só para o admin conferir o vínculo;
+ * - `celula`: a célula a que ele está vinculado no sistema (null = não vinculado ou desconhecido);
+ * - `sugestao`: a célula cujo líder tem o mesmo e-mail, quando há exatamente uma e ele ainda não está vinculado.
+ */
+export const afiliadoRifeiSchema = z.strictObject({
+  affiliate_id: affiliateIdSchema,
+  codigo: z.string().min(1).max(120).nullable(),
+  nome: z.string().max(200).nullable(),
+  email: z.string().max(320).nullable(),
+  celula: celulaDoAfiliadoRifeiSchema.nullable(),
+  sugestao: celulaDoAfiliadoRifeiSchema.nullable(),
+});
+export type AfiliadoRifei = z.infer<typeof afiliadoRifeiSchema>;
+
+/** Uma célula sem afiliado vinculado (para gerar o convite). `tem_email`: o líder tem e-mail no cadastro. */
+export const celulaSemAfiliadoRifeiSchema = celulaDoAfiliadoRifeiSchema.extend({
+  tem_email: z.boolean(),
+});
+export type CelulaSemAfiliadoRifei = z.infer<
+  typeof celulaSemAfiliadoRifeiSchema
+>;
+
+/**
+ * GET /api/admin/rifei/afiliados (e a resposta da sincronização): os afiliados da conta na Rifei e as células sem
+ * afiliado vinculado. `sincronizacao` só vem no POST: quantos afiliados foram vinculados pelo e-mail e quantos códigos
+ * foram gravados.
+ */
+export const respostaAfiliadosRifeiSchema = z.strictObject({
+  afiliados: z.array(afiliadoRifeiSchema),
+  celulas_sem_afiliado: z.array(celulaSemAfiliadoRifeiSchema),
+  sincronizacao: z
+    .strictObject({
+      vinculados: z.number().int().nonnegative(),
+      codigos_gravados: z.number().int().nonnegative(),
+    })
+    .nullable(),
+});
+export type RespostaAfiliadosRifei = z.infer<
+  typeof respostaAfiliadosRifeiSchema
+>;
+
+/** POST /api/admin/rifei/afiliados/sincronizar: sem dados ({}). */
+export const corpoSincronizarAfiliadosRifeiSchema = z.strictObject({});
+
+/** POST /api/admin/rifei/convites: as células (de 1 a LIMITE_CONVITES_RIFEI, sem repetidas). */
+export const corpoConvitesRifeiSchema = z.strictObject({
+  celulas: z
+    .array(idSchema)
+    .min(1)
+    .max(LIMITE_CONVITES_RIFEI)
+    .refine(semRepetidos, { message: "Há células repetidas" }),
+});
+export type CorpoConvitesRifei = z.input<typeof corpoConvitesRifeiSchema>;
+
+/** O link do convite: da Rifei (eLinkDeConviteRifei), de uso único, vale 1 dia. */
+const linkConviteRifeiSchema = z
+  .url()
+  .max(2048)
+  .refine(eLinkDeConviteRifei, { message: "O convite é um link da Rifei" });
+
+/**
+ * 201: um convite por célula gerado (`lider_telefone` para a tela abrir o WhatsApp do líder; é dado da equipe, do
+ * cadastro da hierarquia) e as células que falharam, com a mensagem. O link nunca é gravado nem vai para a trilha.
+ */
+export const respostaConvitesRifeiSchema = z.strictObject({
+  convites: z.array(
+    celulaDoAfiliadoRifeiSchema.extend({
+      lider_telefone: z.string().max(40).nullable(),
+      link: linkConviteRifeiSchema,
+    }),
+  ),
+  falhas: z.array(
+    z.strictObject({
+      celula_id: idSchema,
+      mensagem: z.string().min(1).max(LIMITE_MENSAGEM_RIFEI),
+    }),
+  ),
+});
+export type RespostaConvitesRifei = z.infer<typeof respostaConvitesRifeiSchema>;
+
+/**
+ * Rotas da API da Rifei (RIFA-070, D32), só admin (no handler de cada rota). Todas chamam a Rifei com o segredo
+ * `RIFEI_API_TOKEN`; sem ele: 503 `nao_configurado`. Sem campanha ativa: 404. Falha inteira da Rifei: 502
+ * `rifei_falhou` com detalhesRifeiFalhouSchema. Saem com `Cache-Control: no-store` (do exigirSessao).
+ */
+export const ROTAS_RIFEI_API = {
+  /**
+   * 200: o resultado de cada pedido. Erros, depois do login (401; 403 da coordenação, da hierarquia e de outra
+   * origem): 400; 404; 502; 503. Trilha: `rifei.marcar_pagos`, quando algum pedido foi à Rifei.
+   */
+  marcarPagosRifei: {
+    metodo: "POST",
+    caminho: "/api/admin/rifei/marcar-pagos",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoMarcarPagosRifeiSchema,
+    sucesso: { status: 200, corpo: respostaMarcarPagosRifeiSchema },
+  },
+  /** 200: os afiliados da conta na Rifei e as células sem afiliado. Só lê (o banco e a Rifei). */
+  afiliadosRifei: {
+    metodo: "GET",
+    caminho: "/api/admin/rifei/afiliados",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaAfiliadosRifeiSchema },
+  },
+  /**
+   * 200: grava o código de cada afiliado da Rifei e vincula à célula os não vinculados com sugestão (o e-mail do
+   * líder). Nunca troca um vínculo que já existe. Trilha: `rifei.sincronizar_afiliados` quando algo mudou.
+   */
+  sincronizarAfiliadosRifei: {
+    metodo: "POST",
+    caminho: "/api/admin/rifei/afiliados/sincronizar",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoSincronizarAfiliadosRifeiSchema,
+    sucesso: { status: 200, corpo: respostaAfiliadosRifeiSchema },
+  },
+  /** 201: um convite por célula. 404 `nao_encontrado` se uma célula não existe. Trilha: `rifei.gerar_convites`. */
+  convitesRifei: {
+    metodo: "POST",
+    caminho: "/api/admin/rifei/convites",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoConvitesRifeiSchema,
+    sucesso: { status: 201, corpo: respostaConvitesRifeiSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaRifeiApi = keyof typeof ROTAS_RIFEI_API;
+
+// ---------------------------------------------------------------------------------------------------
+// Conexão com a Rifei pela tela e marcar à mão (RIFA-070, D32; só admin). Regras e limites em ./rifei-api.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * A conexão com a Rifei como a tela vê (NUNCA o token):
+ * - origem: de onde vem o token que vale (`tela`, `segredo`) ou null (nenhum: marcar na Rifei responde 503);
+ * - conectado_em e final: quando o token da tela foi colado e os 4 últimos caracteres dele (null sem token da tela);
+ * - testado_em: a última chamada à Rifei que deu certo com o token da tela (teste, marcar, afiliados; null = nunca);
+ * - recusado_em: a primeira recusa (401/403) da Rifei a esse token depois do último sucesso (null = não recusado):
+ *   a tela diz "A Rifei recusou o token: cole um novo";
+ * - expira_em: a validade que o próprio token traz (o `exp` de um JWT), ou null se ele não traz;
+ * - chave_configurada: o segredo do Worker RIFEI_CHAVE_CIFRA existe (sem ele não dá para colar o token pela tela);
+ * - token_legivel: false quando há token da tela mas a chave não o abre (a chave sumiu ou mudou: cole de novo);
+ * - segredo_configurado: o segredo do Worker RIFEI_API_TOKEN existe (vale só sem o token da tela).
+ */
+export const estadoConexaoRifeiSchema = z.strictObject({
+  origem: z.enum(ORIGENS_TOKEN_RIFEI).nullable(),
+  conectado_em: instanteSchema.nullable(),
+  final: z.string().length(CARACTERES_FINAL_TOKEN_RIFEI).nullable(),
+  testado_em: instanteSchema.nullable(),
+  recusado_em: instanteSchema.nullable(),
+  expira_em: instanteSchema.nullable(),
+  chave_configurada: z.boolean(),
+  token_legivel: z.boolean(),
+  segredo_configurado: z.boolean(),
+});
+export type EstadoConexaoRifei = z.infer<typeof estadoConexaoRifeiSchema>;
+
+/** PUT /api/admin/rifei/conexao: o token colado (o Worker limpa com limparTokenRifei). */
+export const corpoSalvarConexaoRifeiSchema = z.strictObject({
+  token: z
+    .string()
+    .min(1)
+    .max(LIMITE_CARACTERES_TOKEN_RIFEI + 64),
+});
+export type CorpoSalvarConexaoRifei = z.input<
+  typeof corpoSalvarConexaoRifeiSchema
+>;
+
+/** POST /api/admin/rifei/conexao/testar: sem dados ({}). */
+export const corpoTestarConexaoRifeiSchema = z.strictObject({});
+
+/** 200 do PUT e do teste: o estado e o id da campanha que a Rifei achou pelo slug (prova de que o token vale). */
+export const respostaTesteConexaoRifeiSchema = z.strictObject({
+  estado: estadoConexaoRifeiSchema,
+  campanha_rifei_id: z.string().min(1).max(64),
+});
+export type RespostaTesteConexaoRifei = z.infer<
+  typeof respostaTesteConexaoRifeiSchema
+>;
+
+/** GET /api/admin/rifei/pedido?numero=: o número do pedido ou de um bilhete. */
+export const consultaBuscarPedidoRifeiSchema = z.strictObject({
+  numero: z.string().trim().min(1).max(LIMITE_CARACTERES_BUSCA_PEDIDO_RIFEI),
+});
+
+/**
+ * 200: os pedidos da campanha ativa achados (no máximo LIMITE_PEDIDOS_BUSCA_RIFEI; lista vazia = não achou), cada um
+ * como na tela de Pedidos (itemPedidoSchema: célula, quantidade, valor, situação; nada do comprador além do DDD) e
+ * como foi achado. O pedido pelo número vem primeiro; pelo bilhete, os pendentes antes.
+ */
+export const respostaBuscarPedidoRifeiSchema = z.strictObject({
+  pedidos: z
+    .array(
+      z.strictObject({
+        achado_por: z.enum(ACHADO_POR_BUSCA_RIFEI),
+        pedido: itemPedidoSchema,
+      }),
+    )
+    .max(LIMITE_PEDIDOS_BUSCA_RIFEI),
+});
+export type RespostaBuscarPedidoRifei = z.infer<
+  typeof respostaBuscarPedidoRifeiSchema
+>;
+
+/**
+ * Rotas da conexão e da busca (RIFA-070, D32), só admin (no handler). Saem com `Cache-Control: no-store`.
+ * PUT e teste chamam a Rifei (`GET raffles/<slug>` da campanha ativa): 404 sem campanha ativa; 502 `rifei_falhou`
+ * (token_invalido, campanha_nao_encontrada, indisponivel, resposta_inesperada); o PUT só grava se o teste passou.
+ * 503 `nao_configurado`: o PUT sem a chave RIFEI_CHAVE_CIFRA; o teste sem token nenhum.
+ */
+export const ROTAS_CONEXAO_RIFEI = {
+  /** 200: o estado da conexão. Só lê. */
+  obterConexaoRifei: {
+    metodo: "GET",
+    caminho: "/api/admin/rifei/conexao",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: estadoConexaoRifeiSchema },
+  },
+  /** 200: testa o token colado na Rifei e, se valeu, grava cifrado (troca o anterior). Trilha: `rifei.conectar`. */
+  salvarConexaoRifei: {
+    metodo: "PUT",
+    caminho: "/api/admin/rifei/conexao",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoSalvarConexaoRifeiSchema,
+    sucesso: { status: 200, corpo: respostaTesteConexaoRifeiSchema },
+  },
+  /** 200: testa o token que vale agora (o da tela ou o segredo); grava `testado_em` do token da tela. */
+  testarConexaoRifei: {
+    metodo: "POST",
+    caminho: "/api/admin/rifei/conexao/testar",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    corpo: corpoTestarConexaoRifeiSchema,
+    sucesso: { status: 200, corpo: respostaTesteConexaoRifeiSchema },
+  },
+  /** 200: apaga o token da tela (vale o segredo, se houver). Trilha: `rifei.desconectar` (só se havia token). */
+  apagarConexaoRifei: {
+    metodo: "DELETE",
+    caminho: "/api/admin/rifei/conexao",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: estadoConexaoRifeiSchema },
+  },
+  /** 200: acha o pedido pelo número do pedido ou de um bilhete. 400 com o número vazio; 404 sem campanha ativa. */
+  buscarPedidoRifei: {
+    metodo: "GET",
+    caminho: "/api/admin/rifei/pedido",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    consulta: consultaBuscarPedidoRifeiSchema,
+    sucesso: { status: 200, corpo: respostaBuscarPedidoRifeiSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaConexaoRifei = keyof typeof ROTAS_CONEXAO_RIFEI;

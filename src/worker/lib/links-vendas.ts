@@ -69,6 +69,7 @@ export function montarItensLinksVendas({
       const url = montarLinkDeVendas(modelo, {
         slug: campanha.slug_rifei,
         affiliateId: afiliado.affiliate_id,
+        codigo: afiliado.codigo_rifei,
       });
       // Sem link (o slug não forma um endereço, o id fora do formato): o afiliado fica de fora, sem erro.
       if (url === null) continue;

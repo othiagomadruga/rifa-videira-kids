@@ -3,6 +3,7 @@ import type { Papel } from "../../../shared/contracts";
 import type { ItemNavegacao, NomeIcone } from "../../components/ui";
 import { AcessosPage } from "../acessos/AcessosPage";
 import { AdesaoPage } from "../adesao/AdesaoPage";
+import { BilhetesPage } from "../bilhetes/BilhetesPage";
 import { BumboPage } from "../bumbo/BumboPage";
 import { CampanhaPage } from "../campanha/CampanhaPage";
 import { ConferenciaPage } from "../conferencia/ConferenciaPage";
@@ -77,6 +78,14 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
     dica: DICA_DO_MENU["pedidos-suspeitos"],
     icone: "suspeito",
     Component: PedidosSuspeitosPage,
+  },
+  // Bilhetes pagos, reservados e livres (RIFA-075, D35): GET /api/painel/bilhetes é de toda a coordenação.
+  {
+    segmento: "bilhetes",
+    rotulo: "Bilhetes",
+    dica: DICA_DO_MENU.bilhetes,
+    icone: "bilhetes",
+    Component: BilhetesPage,
   },
   {
     segmento: "rankings",

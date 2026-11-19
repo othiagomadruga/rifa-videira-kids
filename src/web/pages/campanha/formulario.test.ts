@@ -115,6 +115,7 @@ describe("montarCorpo", () => {
         fuso_horario: "America/Belem",
         data_inicio: "2026-11-23",
         preco_bilhete_centavos: 1234,
+        bilhetes: { quantidade: 7005, numero_inicial: null },
         meta: { unidade: "centavos", regra: "fixa_por_celula", valor: 150000 },
         periodos: [
           { nome: "Período 1", dias: 10, percentual_bp: 3500 },
@@ -154,7 +155,32 @@ describe("montarCorpo", () => {
       "periodos",
       "ranking",
       "publico",
+      "bilhetes",
     ]);
+  });
+
+  it("RIFA-075: a quantidade de números e o número inicial (automático = null); quantidade inválida tem erro no campo", () => {
+    const resultado = montarCorpo(
+      {
+        ...preenchido(),
+        bilhetes_quantidade: "100.000",
+        bilhetes_numero_inicial: "0",
+      },
+      DO_ADMIN,
+    );
+    expect(resultado.ok && resultado.corpo.bilhetes).toEqual({
+      quantidade: 100_000,
+      numero_inicial: 0,
+    });
+    for (const quantidade of ["", "abc", "0", "1000001"]) {
+      const invalido = montarCorpo(
+        { ...preenchido(), bilhetes_quantidade: quantidade },
+        DO_ADMIN,
+      );
+      expect(invalido.ok).toBe(false);
+      if (!invalido.ok)
+        expect(invalido.erros["bilhetes.quantidade"]).toBeTruthy();
+    }
   });
 
   it("fuso vazio usa o padrão do contrato", () => {

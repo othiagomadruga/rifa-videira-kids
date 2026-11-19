@@ -38,6 +38,8 @@ import {
   ROTAS_ACESSO_HIERARQUIA,
   ROTAS_LINK_VENDAS,
   ROTAS_REGRAS_CAMPANHA,
+  ROTAS_CONEXAO_RIFEI,
+  ROTAS_RIFEI_API,
   ROTAS_RELATORIO,
   ROTAS_TOKEN_WEBHOOK,
   afiliadoResumoSchema,
@@ -116,7 +118,8 @@ interface RotaDaCoordenacao {
  * restrita, como a auditoria e as regras da campanha), ROTAS_ACESSO e ROTAS_ACESSO_HIERARQUIA (papéis da própria
  * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin),
  * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação) e ROTAS_LINK_VENDAS (RIFA-046, D24: a lista de admin e coordenação
- * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora). O relatório entrou aqui
+ * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora) e ROTAS_RIFEI_API
+ * (RIFA-070, D32: só admin) e ROTAS_CONEXAO_RIFEI (RIFA-070, D32: a conexão com a Rifei e a busca do pedido, só admin). O relatório entrou aqui
  * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
  * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
@@ -127,6 +130,8 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
     ...Object.values(ROTAS_RELATORIO),
     ...Object.values(ROTAS_LINK_VENDAS),
+    ...Object.values(ROTAS_RIFEI_API),
+    ...Object.values(ROTAS_CONEXAO_RIFEI),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -222,6 +227,8 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_TOKEN_WEBHOOK),
     ...Object.values(ROTAS_RELATORIO),
     ...Object.values(ROTAS_LINK_VENDAS),
+    ...Object.values(ROTAS_RIFEI_API),
+    ...Object.values(ROTAS_CONEXAO_RIFEI),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -947,9 +954,20 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
       ROTAS.painelRanking,
       ROTAS.rankingPublico,
       ROTAS.bumbo,
+      // RIFA-075 (D35): os bilhetes pagos, reservados e livres (admin e coordenação, no grupo do painel).
+      ROTAS.painelBilhetes,
+      ROTAS.painelBilhete,
     ])
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
   });
+
+  it.each(["/api/painel/bilhetes", "/api/painel/bilhetes/1"])(
+    "bilhetes (RIFA-075) sem cookie: GET %s → 401, sem nenhum número",
+    async (caminho) => {
+      const res = await requisitar("GET", caminho);
+      await esperarErro(res, 401, "nao_autenticado");
+    },
+  );
 
   it.each([
     "/api/painel/resumo",

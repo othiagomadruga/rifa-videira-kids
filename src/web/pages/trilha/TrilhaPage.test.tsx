@@ -235,6 +235,12 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Senha do administrador criada",
       "Senha do administrador trocada",
       "Senha do administrador removida",
+      // RIFA-070 (D32): a API da Rifei.
+      "Pedidos marcados como pagos na Rifei",
+      "Afiliados sincronizados com a Rifei",
+      "Convites de afiliado gerados na Rifei",
+      "Conexão com a Rifei salva",
+      "Conexão com a Rifei apagada",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

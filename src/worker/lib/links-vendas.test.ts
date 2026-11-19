@@ -64,7 +64,12 @@ const vinculado = (
   affiliate_id: number,
   celula_id: number,
   vinculado_em: string,
-): AfiliadoDoEscopo => ({ affiliate_id, celula_id, vinculado_em });
+): AfiliadoDoEscopo => ({
+  affiliate_id,
+  celula_id,
+  vinculado_em,
+  codigo_rifei: null,
+});
 
 const AFILIADOS: AfiliadoDoEscopo[] = [
   vinculado(101, 2, "2026-11-20T12:00:00.000Z"),

@@ -3,6 +3,7 @@
 import { vi } from "vitest";
 import {
   ACESSO_PADRAO,
+  BILHETES_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
@@ -52,6 +53,7 @@ export function campanhaDaEntrada(
     // RIFA-064 (D29): a chave do login das células com senha ausente no PUT fica como estava (aqui, o padrão).
     acesso: { ...ACESSO_PADRAO, ...entrada.acesso },
     mensagens: entrada.mensagens ?? { ...MENSAGENS_PADRAO },
+    bilhetes: entrada.bilhetes ?? { ...BILHETES_PADRAO },
     criado_em: "2026-11-06T18:00:00.000Z",
     atualizado_em: "2026-11-06T18:00:00.000Z",
     ...extra,

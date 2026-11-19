@@ -71,7 +71,11 @@ describe("CSS da aba do webhook em Acessos (RIFA-039)", () => {
     const quemImporta = Object.entries(FONTES)
       .filter(([, fonte]) => fonte.includes('import "./acessos-webhook.css";'))
       .map(([arquivo]) => arquivo);
-    expect(quemImporta).toEqual(["./WebhookRifei.tsx"]);
+    // RIFA-070 (D32): a aba Conexão com a Rifei, também carregada à parte, usa o mesmo CSS.
+    expect(quemImporta).toEqual(["./ConexaoRifei.tsx", "./WebhookRifei.tsx"]);
+    expect(FONTES["./AcessosPage.tsx"]).toMatch(
+      /lazy\(\(\) =>\s*import\("\.\/ConexaoRifei"\)/,
+    );
     expect(FONTES["./AcessosPage.tsx"]).toMatch(
       /lazy\(\(\) =>\s*import\("\.\/WebhookRifei"\)/,
     );

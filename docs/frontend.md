@@ -194,6 +194,23 @@ A rota está em `docs/api.md` ("Mapa de vendas por DDD") e as regras na D17 de `
 - **Lista por DDD** (`TabelaDdd.tsx`, `DataTable`: cartões abaixo de 48rem): DDD, UF, pedidos aprovados, bilhetes, valor e parte, na ordem da API (por UF e, dentro dela, pelo DDD que mais vendeu), mais "Exterior", "Sem DDD" e o total. Os 3 DDDs que mais venderam bilhetes ganham a posição numa pílula discreta ao lado do número (`posicoesDoTop3`; empates dividem a posição).
 - Caminho e períodos são cópias, conferidas por `mapa-contrato.test.ts` (com a grade e as faixas); a escala de cor (um tom, contraste do texto de cada faixa), os 390 px e quem importa o CSS, por `mapa-css.test.ts`. Os valores de `src/shared/contracts/ddd.ts` (`UFS`, `NOME_DA_UF`) e de `calculos.ts` entram direto (módulos sem zod); de `api.ts`, só os tipos. Testes com a API falsa de `pages/mapa/teste-apoio.ts` (`mapaDe`, que monta a resposta dos DDDs e passa pelo `respostaMapaDddSchema`; `mapaDeBelem`, `mapaDasFaixas`, `mapaSemVendas` e `simularApi`).
 
+## Bilhetes pagos, reservados e livres (RIFA-075, D35)
+
+- **`/coordenacao/bilhetes`** (`pages/bilhetes`, toda a coordenação): `GET /api/painel/bilhetes` e
+  `GET /api/painel/bilhetes/:numero` (`bilhetes-api.ts`; do contrato com zod, só tipos; a leitura dos mapas vem de
+  `contracts/bilhetes.ts`, sem zod). Contadores (`Stat`: pagos, reservados, livres e % vendido), avisos (pedidos sem
+  números, números fora da faixa, número inicial deduzido), busca por número (também tocando num quadrado) e a grade.
+- **Grade em canvas** (`GradeBilhetes.tsx`, medidas em `grade.ts`): um quadrado por número, três passadas (uma por
+  cor), largura do contêiner (`ResizeObserver`), 8 px no celular e 10 px a partir de 600 px; as cores vêm das
+  variáveis `--bilhete-*` de `bilhetes.css` (o canvas lê pelo `getComputedStyle`). O filtro apaga os quadrados das
+  outras situações. O canvas tem `role="img"` com o resumo; a legenda traz as contagens em texto (a cor nunca é a única
+  forma de ler) e a busca dá o número exato. No jsdom o canvas não desenha (`getContext` nulo): os testes conferem a
+  leitura dos mapas, as medidas e o ponto tocado.
+- **Atualização:** busca de novo a cada `INTERVALO_ATUALIZACAO_BILHETES_MS` (30 s) só com `document.visibilityState`
+  visível, logo que a aba volta a ficar visível e no **Atualizar agora**; uma falha mantém a grade com o aviso.
+- **Campanha:** "Quantidade de números da rifa (como na Rifei)" e "Número inicial" (automático, 0 ou 1), no cartão
+  "Bilhete e meta"; o corpo do PUT leva sempre o grupo `bilhetes`.
+
 ## Relatório da campanha para baixar (RIFA-038)
 
 A rota está em `docs/api.md` ("Relatório da campanha para baixar") e as regras na D23 de `docs/decisions.md`.

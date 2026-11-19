@@ -18,6 +18,7 @@ import {
   type PainelAdesao,
 } from "./adesao-api";
 import { formatarHoraComSegundos } from "./formatos";
+import { AfiliadosDaRifei } from "./AfiliadosDaRifei";
 import { DICAS } from "./textos";
 import { QuemFalta } from "./QuemFalta";
 import { ResumoAdesao } from "./ResumoAdesao";
@@ -174,6 +175,8 @@ export function AdesaoPage() {
           >
             <LinksDeVendas celulas={estado.painel.adesao.itens} />
           </Suspense>
+          {/* RIFA-070 (D32): afiliados e convites pela API da Rifei, só o admin. */}
+          {admin && <AfiliadosDaRifei aoMudar={atualizarAgora} />}
         </>
       )}
     </>

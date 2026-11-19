@@ -379,7 +379,7 @@ No site: **Coordenação → Campanha**. Preencha com o que o PO decidiu (1.5):
 
 - **Identificação:** "Nome da campanha" e **Slug da campanha na Rifei** (o fim do link da campanha, 1.3).
 - **Datas e períodos:** "Data de início" `23/11/2026`, "Fuso horário" `America/Belem` e os períodos (o botão **Usar o modelo de Santo André** preenche 10/7/7 dias com 35/25/45%).
-- **Bilhete e meta:** preço do bilhete (R$), unidade, regra e valor da meta.
+- **Bilhete e meta:** preço do bilhete (R$), unidade, regra e valor da meta, e os números da rifa: **"Quantidade de números da rifa (como na Rifei)"** (já vem `7005`, o da rifa "projeto-kids-1") e **"Número inicial"** (deixe **Automático** até a compra de teste: 4.2).
 - **Ranking e público:** critério do ranking, **"Separar o ranking por divisão (jovens e adultos)"** (desmarque nesta campanha: um ranking só, 1.5; o resumo "Regras da campanha", no topo, mostra "Ranking por divisão: Um ranking só, com todas as células juntas.") e o que o público vê (o % da meta e quantas posições).
 - **Pedidos e acessos:** "Permitir desconsiderar pedidos" (ligue antes da compra de teste, se o PO quiser tirá-la das contas: 4.4), "Acesso dos discipuladores", "Acesso das redes" e "Login das células com senha padrão" (deixe ligado: 1.5 e 5.1, item 1). Só o admin muda estas regras e as mensagens (a coordenação as vê só leitura).
 - **Mensagens do link pessoal** (opcional): um modelo por tipo de link, com os marcadores `{saudacao}`, `{nome}`, `{alvo}` e `{link}` (obrigatório, no começo ou depois de um espaço ou de uma quebra de linha; nenhum outro endereço na mensagem). A pré-visualização mostra a mensagem pronta; **Voltar ao texto padrão** desfaz a edição. Se editar, mantenha as palavras "link pessoal" no texto: o guia do líder ("Perdi o link") manda procurar por elas na conversa.
@@ -429,6 +429,16 @@ O link de vendas de uma célula é o link de afiliado do líder na Rifei, montad
 
 ---
 
+### 3.7 Conexão com a Rifei para marcar pagos pelo sistema [SM, depois Thiago] (RIFA-070, D32)
+
+1. **[SM, uma vez]** crie a chave que cifra o token no banco: `openssl rand -base64 32 | npx wrangler secret put RIFEI_CHAVE_CIFRA`
+   (o valor não aparece em lugar nenhum; não anote). Sem ela, a tela avisa "Falta a chave RIFEI_CHAVE_CIFRA".
+2. **[Thiago, no computador]** **Acessos → Conexão com a Rifei**: siga o passo a passo da tela (janela anônima,
+   entrar na Rifei, F12 → Console, colar a linha, voltar e **Salvar e testar**). A tela mostra **Conectado: testado …**
+   e "termina em …abcd". **Feche a janela anônima sem clicar em "Sair"** (o "Sair" derruba o token).
+3. Se um dia aparecer **"A Rifei recusou o token: cole um novo"** (na tela de Conexão ou no topo do Extrato do banco),
+   repita o passo 2. Enquanto isso, o caminho manual (Copiar os números e marcar no painel da Rifei) continua valendo.
+
 ## 4. Compra de teste de ponta a ponta
 
 **Quando:** depois de 3.1 a 3.4, com o Pix manual ligado na Rifei (1.6; ou a Efí, 1.4, se ela entrar), e **antes de 23/11** (veja 4.4). **Quem:** Thiago com uma segunda conta da Rifei como afiliada, cadastrada pelo convite gerado no painel (1.3), e um admin olhando o sistema. É esta compra que responde ao que as fontes da Rifei não dizem e que antes ia para o suporte: a lista está na [seção 9 de integracao-rifei.md](integracao-rifei.md#9-o-que-confirmar-com-uma-campanha-de-teste).
@@ -464,6 +474,7 @@ Uma conta só de teste dá para tirar depois **[Admin]**: desconsidere **todos**
   - Algo na coluna **Erro e avisos:** a Rifei mandou um campo diferente da documentação. A tela mostra só o campo e o código, nunca dado pessoal: mande um print ao SM.
 - **Alerta do webhook** (topo da Visão geral e de Pedidos): depois do teste, mostra só a linha "Última entrega da Rifei há …" (7.1). Ele consulta o sistema a cada 5 minutos: com a tela aberta desde antes do teste, pode continuar mostrando "Ainda não chegou nenhuma venda" por até 5 minutos. Recarregue a página para ver na hora.
 - **Trilha de auditoria** (o que a equipe fez) [Admin]: tela **Trilha** no menu da coordenação (`/coordenacao/trilha`), do mais novo para o mais antigo, com "Carregar mais". Confira que aparecem o salvamento da campanha, a importação da hierarquia e os vínculos de afiliado.
+- **Bilhetes** (`/coordenacao/bilhetes`): o número do pedido pago aparece verde na grade (o não pago, amarelo, enquanto aguarda o Pix). Busque o número do bilhete: aparece o pedido, com a célula. Se a Rifei deu o número **0**, a numeração começa no 0; se não, confira na Rifei se ela numera do 1 e, se quiser, fixe o **Número inicial** na Campanha. Um aviso "Números fora da rifa" quer dizer quantidade ou número inicial errados na Campanha.
 - **Pedidos suspeitos:** tela **Pedidos suspeitos** no menu da coordenação (`/coordenacao/pedidos-suspeitos`). Esperado: lista vazia. Se o pedido de teste aparecer, confira o preço do bilhete na Campanha: ele precisa ser igual ao da Rifei.
 
 ### 4.3 O que anotar
@@ -494,6 +505,26 @@ O bilhete comprado é de verdade e entra no sorteio. Decisão do PO (1.5): mante
 3. **Sistema [Admin]:** a Rifei não avisa estorno nem remoção (só pedido novo, pago e expirado), então o pedido continua no sistema como aprovado. Desconsidere-o em **Pedidos**, com o motivo **Estorno** (como acima).
 
 Se um teste for feito **depois de 23/11**, ele conta como venda (e é: o dinheiro entrou). Tirar das contas é decisão do PO: **Desconsiderar** em **Pedidos**, com o motivo **Teste** (fica na trilha e dá para desfazer).
+
+### 4.5 Compra de teste com a marcação pelo sistema (Pix e comprovante; RIFA-070, D32) [Thiago, como admin]
+
+Depois de 3.7 (conexão **Conectado**). Faça com 2 compras de 1 bilhete, pelo link de vendas de uma célula:
+
+1. **Compra A, paga com Pix:** pague na chave. Baixe o extrato do dia (6.6) e suba em **Conferência → Extrato do
+   banco**. O pedido aparece em **Para marcar como pago na Rifei**, com a caixa marcada. Toque em **Marcar 1
+   selecionado como pago na Rifei**, confira o número na confirmação e confirme.
+2. **O resultado:** a tabela "O que aconteceu com cada pedido" mostra **Marcado como pago** (ou **Estava expirado:
+   restaurado e marcado**). Toque em **Atualizar**: em segundos o pedido vai para **Já contados**. Confira também em
+   **Pedidos → Entregas do webhook** a entrega **Pedido pago** e, na **Trilha**, "Pedidos marcados como pagos na Rifei"
+   com o seu nome e o número do pedido.
+3. **Compra B, pelo comprovante:** inicie a compra e pague; com o comprovante na mão (sem subir extrato), use
+   **Marcar um pedido à mão**: digite o **número do pedido** (ou o número de um bilhete dele) e toque em **Procurar**.
+   Confira célula, bilhetes, valor e situação, toque em **Marcar como pago na Rifei** e confirme. Procure de novo o
+   mesmo número: a tela diz **Este pedido já está pago**.
+4. **Anote para o SM** (integracao-rifei.md, 13.4): se o **Pedido pago** chegou pelo webhook depois da marcação pelo
+   sistema; se o número do pedido digitado é o mesmo que a Rifei mostra; quanto tempo levou.
+5. **Se der errado:** "A Rifei recusou o token" → cole um novo (3.7). "A Rifei não marcou" ou "Falhou" → marque no
+   painel da Rifei como antes (6.6, passo 4) e mande ao SM só a mensagem da tela (sem dados do comprador).
 
 ---
 
@@ -571,6 +602,7 @@ O roteiro de 20 minutos (o que mostrar e em que ordem) está na [seção 3 de co
 - **Visão geral:** meta do dia, situação (em dia ou abaixo), curva e projeção, por campanha, divisão, rede, discipulador ou célula. Os avisos de "sem célula" pedem uma olhada na Adesão. No topo, o alerta do webhook (7.1).
 - **Rankings:** com valores, para a coordenação.
 - **Mapa:** de onde vêm as vendas aprovadas, por estado e por DDD do telefone do comprador (só o DDD é guardado).
+- **Bilhetes:** quantos números estão pagos, reservados (aguardando o Pix) e livres, o % vendido e a grade de todos os números (filtro por situação). A busca (ou um toque na grade) mostra o pedido do número: célula, situação e data, sem dado do comprador. Atualiza sozinha a cada 30 s com a tela aberta; depois de marcar pagos na Rifei, toque em **Atualizar agora**. Pedidos recuperados pela Conferência não trazem os números: aparecem num aviso, com a contagem (D35).
 - **Adesão:** a fila **Sem célula** deve ficar vazia. Código novo ali = venda de afiliado sem vínculo: vincule. Na seção **Links de vendas** ficam o link e o QR code de cada célula, para mandar ao líder que perdeu o dele ou imprimir (3.6).
 - **Pedidos:** a lista dos pedidos (filtro por status, por célula e **Desconsiderados**, busca pelo id da Rifei) e as entregas do webhook. O admin desconsidera ali um pedido de teste, fraude ou estorno (4.4).
 - **Líderes, discipuladores e redes** acompanham pelo próprio link (`/minha`), sem valores em reais. O que o líder vê e faz no dia a dia está nas seções [3](guia-lideres.md#3-o-que-você-vê-na-sua-tela) e [4](guia-lideres.md#4-dia-a-dia) do guia do líder.
@@ -628,7 +660,12 @@ No Pix manual (1.6), a venda só conta depois de marcada como paga no painel da 
    - **Pix sem pedido**: nenhum pedido serve. Pode ser um Pix de fora da campanha, um valor errado ou um Pix em dobro (a tela diz). Não marque nada: veja na Rifei ou fale com quem pagou.
    - **Já contados**: o pedido já está pago no sistema. Nada a fazer.
    - **Tempo entre a reserva e o Pix** (padrão 24 horas): se um Pix que você sabe que é da campanha aparece sem pedido, aumente; se aparecem ambíguos demais, diminua. O resultado muda na hora.
-4. **Na Rifei**, procure cada número copiado nos pedidos da campanha e marque como pago. A venda passa a contar quando a Rifei avisar o sistema (em segundos, se o aviso funcionar: 1.6).
+4. **[Admin] Marque pelo sistema** (com a conexão de 3.7): escolha os pedidos (todos vêm marcados; **Selecionar
+   todos** / **Desmarcar todos**), toque em **Marcar N selecionados como pago na Rifei** e confirme. A tela mostra o
+   resultado de cada pedido; **Atualizar** confere se a Rifei avisou o sistema. O Pix que o extrato não achou (ou um
+   comprovante): **Marcar um pedido à mão**, pelo número do pedido ou do bilhete. **Sem a conexão (ou a coordenação):**
+   na Rifei, procure cada número copiado nos pedidos da campanha e marque como pago. A venda passa a contar quando a
+   Rifei avisar o sistema (em segundos, se o aviso funcionar: 1.6).
 5. **Confira depois:** suba o mesmo extrato de novo (ou abra **Pedidos**): os marcados passam para **Já contados**. Se continuarem em **Para marcar**, a Rifei não avisou o sistema: faça a **conferência pelo CSV** (6.4) e, como **[Admin]**, **Registrar pagamento**.
 
 Quando: pelo menos uma vez por dia (no fim do dia) e, nos dias de muita venda, de manhã e à tarde, para o ranking ficar em dia. Um extrato de vários dias também serve (a tela busca os pedidos do período, até 12 mil).

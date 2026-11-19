@@ -23,6 +23,7 @@ import {
   montarRankingPainel,
   montarResumoPainel,
 } from "../../shared/contracts";
+import { lerBilhete, lerBilhetes } from "../db/bilhetes";
 import { lerMapaDdd } from "../db/mapa-ddd";
 import {
   lerEntradaDoCalculo,
@@ -33,7 +34,7 @@ import { comandosDoRelatorio, extrasDoRelatorio } from "../db/relatorio";
 import { montarMapaDdd } from "../lib/mapa-ddd";
 import { arquivoDoDdd, arquivoDoPainel } from "../lib/relatorio";
 import { responderErro } from "../lib/respostas-erro";
-import { validarConsulta } from "../middleware/validacao";
+import { validarConsulta, validarParametros } from "../middleware/validacao";
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
@@ -124,6 +125,24 @@ export function criarPainel(
           agora: lido.agora,
         }),
       );
+    },
+  );
+
+  // Bilhetes pagos, reservados e livres (RIFA-075, D35): a grade em mapas de bits e a busca por número.
+  painel.get(local(ROTAS.painelBilhetes.caminho), async (c) => {
+    const lido = await lerBilhetes(c.env.DB, relogio);
+    if (!lido.ok) return responderErro(c, lido.codigo, lido.mensagem);
+    return c.json(lido.resposta);
+  });
+
+  painel.get(
+    local(ROTAS.painelBilhete.caminho),
+    validarParametros(ROTAS.painelBilhete.parametros),
+    async (c) => {
+      const { numero } = c.req.valid("param");
+      const lido = await lerBilhete(c.env.DB, relogio, numero);
+      if (!lido.ok) return responderErro(c, lido.codigo, lido.mensagem);
+      return c.json(lido.resposta);
     },
   );
 

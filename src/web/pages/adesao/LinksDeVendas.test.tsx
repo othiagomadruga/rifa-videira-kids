@@ -257,11 +257,11 @@ describe("CA3: o admin edita o modelo do link", () => {
     });
     expect(campo).toHaveAccessibleDescription(
       expect.stringContaining(
-        "Marcador {celula} não existe no link de vendas. Use: {slug} e {afiliado}.",
+        "Marcador {celula} não existe no link de vendas. Use: {slug}, {afiliado} e {codigo}.",
       ),
     );
     expect(campo).toHaveAccessibleDescription(
-      expect.stringContaining("O modelo precisa ter {afiliado}"),
+      expect.stringContaining("O modelo precisa ter {afiliado} ou {codigo}"),
     );
 
     // Salvar com problema: não manda nada e o foco volta ao campo.

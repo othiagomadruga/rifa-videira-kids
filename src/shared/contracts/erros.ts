@@ -27,6 +27,7 @@ export const CODIGOS_ERRO = [
   "erro_interno",
   "nao_configurado",
   "banco_indisponivel",
+  "rifei_falhou",
 ] as const;
 
 export type CodigoErro = (typeof CODIGOS_ERRO)[number];
@@ -54,6 +55,8 @@ export const STATUS_HTTP_DO_ERRO = {
   erro_interno: 500,
   nao_configurado: 503,
   banco_indisponivel: 503,
+  /** RIFA-070 (D32): a chamada à API da Rifei falhou inteira (`detalhesRifeiFalhouSchema`: o motivo). */
+  rifei_falhou: 502,
 } as const satisfies Record<CodigoErro, number>;
 
 /**

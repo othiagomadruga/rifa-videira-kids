@@ -423,9 +423,9 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
           <Card titulo="Bilhete e meta" ajuda={AJUDA.bilheteEMeta}>
             <div className="campanha-campos">
               <Input
+                ajuda={AJUDA.preco}
                 id={idDoCampo("preco_bilhete_centavos")}
                 rotulo="Preço do bilhete (R$)"
-                ajuda={AJUDA.preco}
                 dica={
                   precoCentavos !== null && precoCentavos > 0
                     ? `Cada bilhete custa ${formatarMoeda(precoCentavos)}.`
@@ -443,11 +443,52 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                 }
               />
 
+              {/* RIFA-075 (D35): os números da rifa, para a tela Bilhetes. */}
+              <div className="grade">
+                <Input
+                  ajuda={AJUDA.quantidadeNumeros}
+                  id={idDoCampo("bilhetes.quantidade")}
+                  rotulo="Quantidade de números da rifa (como na Rifei)"
+                  dica="Quantos números a rifa tem na Rifei. A tela Bilhetes desenha a grade com eles. Ex.: 7005."
+                  value={formulario.bilhetes_quantidade}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  erro={erros["bilhetes.quantidade"]}
+                  onChange={(evento) =>
+                    alterar(
+                      { bilhetes_quantidade: evento.target.value },
+                      "bilhetes.quantidade",
+                    )
+                  }
+                />
+
+                <Select
+                  ajuda={AJUDA.numeroInicial}
+                  id={idDoCampo("bilhetes.numero_inicial")}
+                  rotulo="Número inicial"
+                  dica="Como a Rifei numera: do 0 ou do 1. Na dúvida, deixe automático e confira na compra de teste."
+                  value={formulario.bilhetes_numero_inicial}
+                  erro={erros["bilhetes.numero_inicial"]}
+                  onChange={(evento) =>
+                    alterar(
+                      {
+                        bilhetes_numero_inicial: evento.target.value as
+                          "" | "0" | "1",
+                      },
+                      "bilhetes.numero_inicial",
+                    )
+                  }
+                >
+                  <option value="">Automático (pelos pedidos)</option>
+                  <option value="0">Começa no 0</option>
+                  <option value="1">Começa no 1</option>
+                </Select>
+              </div>
               <div className="grade">
                 <Select
+                  ajuda={AJUDA.unidadeMeta}
                   id={idDoCampo("meta.unidade")}
                   rotulo="Unidade da meta"
-                  ajuda={AJUDA.unidadeMeta}
                   dica="Em que a meta é medida."
                   value={formulario.meta_unidade}
                   erro={erros["meta.unidade"]}
@@ -469,9 +510,9 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                 </Select>
 
                 <Select
+                  ajuda={AJUDA.regraMeta}
                   id={idDoCampo("meta.regra")}
                   rotulo="Regra da meta"
-                  ajuda={AJUDA.regraMeta}
                   dica={regra?.explicacao ?? "Como sai a meta de cada célula."}
                   value={formulario.meta_regra}
                   erro={erros["meta.regra"]}
@@ -491,8 +532,8 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                 </Select>
               </div>
               <Input
-                id={idDoCampo("meta.valor")}
                 ajuda={ajudaDaMeta}
+                id={idDoCampo("meta.valor")}
                 rotulo={`${regra?.campo ?? "Valor da meta"}${
                   formulario.meta_unidade === "bilhetes"
                     ? " (bilhetes)"

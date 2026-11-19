@@ -72,6 +72,8 @@ const CORPO_DO_FORMULARIO_VALIDO = {
   // RIFA-061 (D27): a opção do ranking por divisão vai sempre, com o padrão (separa).
   ranking: { criterio: "percentual_meta", por_divisao: true },
   publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+  // RIFA-075 (D35): os números da rifa vão sempre, com o padrão (7005, número inicial automático).
+  bilhetes: { quantidade: 7005, numero_inicial: null },
   // Pedidos, acesso e mensagens são só do admin (RIFA-042): a coordenação (a sessão destes testes) não os manda, e
   // a API grava os padrões no primeiro PUT. O PUT do admin está em RegrasDaCampanha.test.tsx.
 };

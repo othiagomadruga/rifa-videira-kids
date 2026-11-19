@@ -121,6 +121,10 @@ export const AJUDA = {
     "Quanto da meta total se espera vender nesta etapa. Ex.: meta de 40 bilhetes e 25% → 10 bilhetes nesta etapa. O ideal é que a soma dê 100% (se não der, o sistema ajusta a proporção).",
   preco:
     "Quanto custa cada bilhete na Rifei. Serve para conferir se o valor de cada pedido bate com a quantidade de bilhetes. Ex.: 20,00.",
+  quantidadeNumeros:
+    "Quantos números a rifa tem na Rifei, contados como lá. Serve para a tela Bilhetes desenhar a grade de pagos, reservados e livres. Ex.: 7005.",
+  numeroInicial:
+    "Se a Rifei numera os bilhetes a partir do 0 ou do 1. Em automático, o sistema descobre pelos números dos pedidos. Ex.: se aparecer o bilhete 0, começa no 0.",
   unidadeMeta:
     "Em que a meta é contada: bilhetes vendidos ou reais arrecadados. Ex.: com bilhetes, a meta de uma célula pode ser 40 bilhetes.",
   regraMeta:

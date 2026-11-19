@@ -79,6 +79,8 @@ describe("buscarCampanhaAtiva", () => {
       mensagem_link_rede: null,
       // 0013 (RIFA-064, D29): o login das células com a senha padrão nasce ligado.
       acesso_celulas_senha: 1,
+      bilhetes_quantidade: 7005,
+      bilhetes_numero_inicial: null,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],

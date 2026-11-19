@@ -14,6 +14,8 @@ export const DICA_DO_MENU = {
     "Todos os pedidos que chegaram da Rifei, com filtros, e os avisos de venda que a Rifei mandou.",
   "pedidos-suspeitos":
     "Pedidos aprovados com bilhetes demais ou com o total fora do esperado, para conferir na Rifei.",
+  bilhetes:
+    "Quais números da rifa estão pagos, reservados ou livres, com a busca do pedido de cada número.",
   rankings:
     "A disputa entre células, discipuladores e redes: posição, quanto da meta já fizeram e quem está em dia.",
   mapa: "De onde vêm as vendas, pelo DDD do telefone de quem comprou.",

@@ -1810,6 +1810,54 @@ propósito. Decidido pelo SM e pelo developer de front em 17/11; o PO pode troca
   inicial 0,1 KiB; nenhuma dependência nova. Até o pedaço chegar, a ajuda diz "Carregando a explicação…".
 - **Fora**: ajuda em cada célula de tabela, em mensagens (avisos, estados vazios) e no nome de itens de lista; um
   "?" no telão.
+## D32. API interna da Rifei: marcar pagos, afiliados e convites (RIFA-070, 2026-11-17; renumerada de D29 em 19/11)
+
+Decisão do PO (17/11): no Pix manual (D26), o último passo, marcar como pago no painel da Rifei, deixa de ser à mão; e
+os afiliados das células (dezenas) não são mais criados um a um. A D26 deixava isso de fora porque "a Rifei não tem API
+para marcar como pago". Ela não tem API **pública**, mas o painel (`app.rifei.com.br`) é um site que fala com
+`https://api.rifei.com.br/` com o token do login (`Authorization: Bearer`). As chamadas foram mapeadas no código do
+painel em 17/11/2026 (docs/integracao-rifei.md, seção 13) e o sistema faz as mesmas, pelo admin.
+
+- **Onde roda:** no Worker (Cloudflare), nunca no navegador: o token da Rifei fica no segredo `RIFEI_API_TOKEN`
+  (`wrangler secret put`), nunca no banco, no site, na trilha ou no log. Nada depende de um computador ligado.
+- **Nada roda sozinho:** cada chamada parte de um clique do admin (Conferência do extrato e Adesão). Sem cron, sem
+  robô, sem login automático (o login da Rifei tem captcha: o token vem de um login feito à mão; seção 13.2).
+- **Marcar como pago** (`POST /api/admin/rifei/marcar-pagos`): o banco decide o que vai à Rifei (só o pendente ou
+  expirado da campanha ativa, sem desconsideração; o resto volta como `ja_pago`, `desconsiderado` ou
+  `fora_do_sistema`). Na Rifei, um pedido por chamada (até 4 ao mesmo tempo): o PUT em lote do painel
+  (`raffles/orders/many`, que só aprova; o PUT de um pedido **alterna** aprovar/desaprovar e não é usado), a conferência
+  do status e, se o pedido sumiu dos reservados (expirou: a campanha expira a reserva em 24 h), a restauração
+  (`raffles/expired-orders/<id>/restore`) e a aprovação de novo. **O sistema não grava nada no pedido:** ele passa a
+  contar quando o "Pedido pago" chega pelo webhook, como antes; se não chegar, a conferência pelo CSV o mostra em
+  "Pagamento não registrado" (RIFA-056).
+- **Afiliados** (`GET /api/admin/rifei/afiliados` e `POST .../afiliados/sincronizar`): a Rifei não deixa o
+  organizador criar a conta do afiliado. A sincronização grava o **código** de cada afiliado (o `ref` do link de vendas:
+  `https://rifei.com.br/<slug>?ref=<código>`, migração 0014) e liga à célula o afiliado não vinculado cujo e-mail na
+  Rifei é o do líder de **exatamente uma** célula. Nunca troca um vínculo que já existe. O modelo do link de vendas (D24)
+  ganha o marcador `{codigo}`.
+- **Convites** (`POST /api/admin/rifei/convites`): um convite por célula (comissão 0%, todas as campanhas), de uso único
+  e válido por 1 dia (regra da Rifei). O link volta para a tela (Copiar e WhatsApp do líder) e nunca é gravado.
+- **Erros:** sem o segredo, 503 `nao_configurado` (a tela manda usar o caminho manual); a Rifei recusou o token, não
+  achou a campanha, não respondeu ou respondeu num formato desconhecido: 502 `rifei_falhou` com o `motivo`. Uma falha de
+  um pedido só (429/5xx/tempo) fica naquele pedido (`falhou`).
+- **Riscos aceitos pelo PO:** a API é interna e pode mudar sem aviso (tudo que vem dela é conferido; formato
+  desconhecido vira `resposta_inesperada`, nunca 500); os Termos de uso da Rifei (item 4.4) proíbem engenharia
+  reversa: o risco é a conta ser limitada. Por isso o volume é o de um admin clicando, e o caminho manual (Copiar os
+  números, painel da Rifei) continua na tela.
+- **SUPOSIÇÕES** a confirmar na compra de teste (seção 13.4): o `id` do webhook é o mesmo que a API usa; a aprovação
+  pela API dispara o `paid_order`; o pedido expirado mantém o `id` em "Pedidos expirados"; o `ref` aceita o código.
+- **Adendo (19/11, revisão da RIFA-070; pedido do PO):**
+  - **Token pela tela, não pelo terminal.** Acessos → Conexão com a Rifei: colar, testar, trocar e apagar. O token
+    fica no D1 **cifrado** (tabela `rifei_conexao`, migração 0014; AES-GCM com a chave do segredo do Worker
+    `RIFEI_CHAVE_CIFRA`, `lib/cifra-rifei.ts`) e nunca volta ao navegador, ao log ou à trilha. O token da tela tem
+    prioridade; o segredo `RIFEI_API_TOKEN` vale só sem ele. Sem a chave, nada é guardado (503). Chave trocada ou
+    perdida: a tela pede um token novo. Por quê cifrar e não só fazer hash: o sistema precisa do token em claro para
+    chamar a Rifei.
+  - **Estado da conexão gravado a cada chamada real:** sucesso → `testado_em`; 401/403 → `recusado_em` (a primeira);
+    mostrado na tela da Conexão e no topo do Extrato do banco. A validade vem do `exp` do próprio token, se for JWT.
+  - **Seleção e marcar à mão:** caixa por pedido em "Para marcar" e busca pelo número do pedido ou de um bilhete
+    (`GET /api/admin/rifei/pedido`), que reaproveita o `POST marcar-pagos` (o banco continua decidindo o que vai à
+    Rifei). Só admin (`protecao.test.ts`).
 ## D33. Login do admin com usuário e senha (RIFA-073; contrato, 2026-11-19)
 
 Pedido do PO (19/11): o pastor (admin) entra no painel com usuário e senha, para marcar pagamentos sem depender do link
@@ -1902,3 +1950,43 @@ lê e cai no mesmo cruzamento da D26; marcar na Rifei é a RIFA-070 (D32).
   continua sob demanda.
 - **Peso:** o JS inicial fica em 397,17 KiB (119,06 KiB em gzip; +0,02 KiB pelo `SeletorArquivo`, que é do pacote
   inicial); a seção do extrato vai de 13,6 para 17,7 KiB em gzip (o leitor do comprovante, a junção e a lista dos arquivos); o pacote do pdf.js não muda.
+
+## D35. Bilhetes pagos, reservados e livres (RIFA-075, 2026-11-19)
+
+**Contexto.** O PO quer ver, durante a campanha (início em 23/11), quais números da rifa já estão pagos, quais estão
+reservados (pedido aguardando o Pix) e quais estão livres, e achar o pedido de um número (para a marcação de pagos da
+RIFA-070). A rifa "projeto-kids-1" da Rifei tem **7005 números** (campo `numbers` da página pública, informado pelo SM).
+Cada pedido do webhook já traz os números em `pedidos.numeros` (array JSON; nulo no pedido recuperado pela
+Conferência, que não sai do navegador com os números).
+
+**Decisão.**
+
+- **Campanha, grupo `bilhetes`** (migração 0016): `quantidade` (1 a 1.000.000; padrão 7005) e `numero_inicial` (0, 1
+  ou null = **automático**). Automático vale 0 se algum pedido pago ou reservado trouxe o número 0, e 1 se não: a
+  Rifei não documenta se numera do 0 ou do 1, e a compra de teste confirma (lançamento 4.2). No PUT, o grupo ausente
+  mantém o gravado (como `ranking.por_divisao`); admin e coordenação mudam (é configuração, não regra do admin).
+  A trilha registra `bilhetes (antes → depois)`.
+- **Situação de um número:** **pago** se está num pedido `approved`; **reservado** se está num `in_process` com
+  `expira_em` nulo ou ainda no futuro; **livre** no resto. Pago vence reservado (o número que expirou e foi comprado
+  de novo). O pedido **desconsiderado** pelo admin (D20) não conta, como em todo lugar que soma pedidos; a busca o
+  mostra com o selo.
+- **API compacta:** `GET /api/painel/bilhetes` (admin e coordenação, no prefixo do painel, atrás do login, no-store)
+  devolve um **mapa de bits em base64 por situação** (bit i = número `numero_inicial + i`; byte i >> 3, bit i & 7):
+  7005 números = 876 bytes por mapa; 100.000 = 12,5 KB (~17 KB em base64). Faixas (intervalos) seriam piores com
+  números sorteados. Mais os contadores, o % vendido (pagos ÷ quantidade, pontos-base), os pedidos sem números e a
+  contagem de números fora da faixa (configuração errada). Duas idas ao D1 (a campanha e os pedidos pagos ou
+  reservados com `numeros` em texto); o Worker faz o `JSON.parse` e liga os bits. Medido em
+  `src/worker/routes/bilhetes.test.ts` com 100.000 números em 20.000 pedidos (teto folgado de 5 s, só contra desastre).
+- **Busca por número:** `GET /api/painel/bilhetes/:numero` percorre os números no D1 (`json_each`, sem índice: uma
+  consulta por toque, não por atualização) e devolve até 20 pedidos (os mais recentes) com id, situação
+  (pago, reservado ou expirado, inclusive o pendente vencido sem aviso da Rifei), célula, data e bilhetes. Nenhum dado
+  do comprador (schema estrito).
+- **Tela Bilhetes** (`/coordenacao/bilhetes`, toda a coordenação): contadores, legenda com as contagens, filtro (só
+  pagos, só reservados, só livres: os outros ficam apagados na grade), busca, e a grade num **canvas** (três passadas,
+  uma por cor; nenhum nó do DOM por número). Quadrados de 8 px no celular (44 colunas em 390 px, sem rolagem lateral)
+  e 10 px no computador. Tocar num quadrado busca o número. Atualiza **a cada 30 s com a aba visível** (e logo que ela
+  volta a ficar visível) e no **Atualizar agora**; uma falha mantém a grade com o aviso.
+
+**Consequências.** Pedido recuperado (sem números) não aparece na grade: a tela avisa com a contagem de pedidos e de
+bilhetes. Números fora da faixa (quantidade ou número inicial errados na Campanha) viram um aviso com o link para a
+Campanha. O % vendido é dos números conhecidos (os da grade).

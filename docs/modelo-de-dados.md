@@ -564,3 +564,18 @@ CREATE INDEX pedidos_por_pagamento_recuperado ON pedidos (pagamento_recuperacao_
   cada pedido ganha só a coluna, NULL; o CHECK recusa o pendente, o expirado e a venda perdida (`origem =
   'conferencia'`) e aceita o pago no mesmo UPDATE; a FK recusa uma recuperação que não existe e segura a que tem um
   pagamento registrado; os planos das contagens e da lista usam o índice novo.
+
+## 14. Migração `0014_codigo_afiliado_rifei.sql` (RIFA-070; D32)
+
+Aditiva: `afiliados.codigo_rifei TEXT NULL` (1 a 120 caracteres), o código do afiliado na Rifei, que é o `ref` do link
+de vendas (`https://rifei.com.br/<slug>?ref=<código>`), diferente do `affiliate_id` do webhook. Nasce NULL e é gravado
+pela sincronização com a API da Rifei (`POST /api/admin/rifei/afiliados/sincronizar`), que também cria, com origem
+`manual` e sem célula, o afiliado da Rifei que o sistema ainda não conhecia. O link de vendas (D24) usa o código pelo
+marcador `{codigo}`; afiliado sem código fica sem link nesse modelo. Testes: `src/worker/test/migrations.test.ts`
+("0014 sobre dados que já existiam").
+
+A mesma migração cria `rifei_conexao` (D32, revisão de 19/11): no máximo uma linha (`id = 1`) com o token do login na
+Rifei colado em Acessos → Conexão com a Rifei, **só cifrado** (`token_cifrado` = `v1:<iv>:<cifra>`, AES-GCM com a
+chave do segredo `RIFEI_CHAVE_CIFRA`; o CHECK recusa texto sem o prefixo), `final_token` (4 caracteres, o que a tela
+mostra), `expira_em` (o `exp` do token, se houver), `conectado_em`, `testado_em` (última chamada ok) e `recusado_em`
+(primeira recusa 401/403 depois dela). Quem colou ou apagou fica na trilha. Nasce vazia.

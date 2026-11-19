@@ -137,6 +137,81 @@
   overflow-wrap: anywhere;
 }
 
+/* RIFA-070 (D32): a escolha dos pedidos para marcar na Rifei (uma caixa por pedido, a linha inteira tocável). */
+.extrato-selecao {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.extrato-selecao__legenda {
+  padding: 0;
+  font-weight: var(--peso-medio);
+}
+
+.extrato-selecao__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.extrato-escolha {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+  cursor: pointer;
+}
+
+.extrato-escolha:has(:checked) {
+  border-color: var(--cor-primaria);
+  background: var(--cor-primaria-suave);
+}
+
+.extrato-escolha__caixa {
+  margin: var(--espaco-1) 0 0;
+  accent-color: var(--cor-primaria);
+}
+
+.extrato-escolha__textos {
+  display: grid;
+  gap: var(--espaco-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* "Marcar à mão": o campo e o botão lado a lado no computador, um embaixo do outro no celular. */
+.extrato-busca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--espaco-3);
+}
+
+.extrato-busca > :first-child {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.extrato-achado {
+  display: grid;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  overflow-wrap: anywhere;
+}
+
 /* Os arquivos escolhidos de uma vez (RIFA-074): cada um com o seu resultado. */
 .extrato-arquivos {
   display: grid;

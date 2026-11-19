@@ -27,9 +27,9 @@ export const AJUDA = {
   linkDeCadaCelula:
     "A lista dos links, um por célula, com o QR code para mandar ou imprimir. Serve para entregar a cada líder o link certo.",
   modelo:
-    "O endereço que vira o link de cada célula: o sistema troca {slug} pelo da campanha e {afiliado} pelo código de cada líder. Ex.: https://rifei.com.br/{slug}?afiliado={afiliado}.",
+    "O endereço que vira o link de cada célula: o sistema troca {slug} pelo da campanha e {codigo} (ou {afiliado}) pelo código de cada líder. Ex.: https://rifei.com.br/{slug}?afiliado={codigo}.",
   modeloSoLeitura:
-    "O endereço que vira o link de cada célula, com {slug} e {afiliado}. Só o admin muda o modelo; aqui você vê o que está valendo.",
+    "O endereço que vira o link de cada célula, com {slug} e {codigo} (ou {afiliado}). Só o admin muda o modelo; aqui você vê o que está valendo.",
   buscarLinks:
     "Procura nos links pelo nome da célula, do líder ou pelo código de afiliado. Ex.: o nome da célula de quem pediu o link.",
 } as const;

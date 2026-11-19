@@ -157,6 +157,7 @@ Configuração da campanha ativa: tudo que é regra de campanha vive aqui, e nã
 - **PUT**: o corpo é `campanhaEntradaSchema`, em JSON.
   - **O primeiro PUT cria a campanha já ativa**: o contrato não tem rascunho nem passo separado de ativação. A partir dele, o webhook passa a contar as vendas da Rifei com esse `slug_rifei` (D5). Preço e meta podem entrar provisórios e ser corrigidos depois.
   - Os PUTs seguintes substituem a configuração da mesma campanha (mesmo `id`: os pedidos já gravados continuam ligados a ela), e os períodos são substituídos inteiros. Campanha e períodos vão numa transação: se algo falha, nada muda. Nunca há duas campanhas ativas.
+  - Grupo `bilhetes` (RIFA-075, D35): `quantidade` (1 a 1.000.000; padrão 7005) e `numero_inicial` (0, 1 ou null = automático). Ausente mantém o gravado (no primeiro PUT, o padrão). A tela Bilhetes desenha a grade com ele.
   - **200** `Campanha`, como ficou gravada.
   - **400** `json_invalido`: o corpo não é JSON, ou veio sem `Content-Type: application/json` (ou `application/<tipo>+json`), mesmo que o texto seja JSON.
   - **400** `requisicao_invalida`: fora do schema (`detalhes` = problemas).
@@ -772,6 +773,33 @@ fora, como no painel). Só a coordenação; a versão aberta depende do PO.
 - **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 403 `proibido` (papéis da hierarquia), 404
   `nao_encontrado` (sem campanha ativa).
 
+## Bilhetes pagos, reservados e livres (RIFA-075; docs/decisions.md D35)
+
+### `GET /api/painel/bilhetes` (`coordenacao`)
+
+A grade da rifa da campanha ativa. Admin e coordenação; a hierarquia leva 403 e sem sessão 401 (prefixo do painel;
+`src/worker/protecao.test.ts`). `Cache-Control: no-store`. **404** `nao_encontrado` sem campanha ativa.
+
+- **200** `respostaBilhetesSchema` (estrito): `quantidade` e `numero_inicial` (o configurado no grupo `bilhetes` da
+  campanha ou, em branco, o deduzido: 0 se algum pedido trouxe o 0), `numero_inicial_automatico`, `pagos` e
+  `reservados` (mapas de bits em base64: bit i = número `numero_inicial + i`, byte `i >> 3`, bit `i & 7` do menos
+  significativo; leitura em `src/shared/contracts/bilhetes.ts`), `contagem` (`pagos`, `reservados`, `livres`),
+  `vendido_bp`, `sem_numeros` (`pedidos` e `bilhetes` pagos ou reservados sem a lista de números, como os recuperados
+  pela Conferência), `fora_da_faixa` (números distintos fora de `numero_inicial` a `numero_inicial + quantidade − 1`) e
+  `atualizado_em`.
+- Pago = pedido `approved`; reservado = `in_process` com `expira_em` nulo ou no futuro; pago vence reservado; o
+  desconsiderado (D20) não conta.
+
+### `GET /api/painel/bilhetes/:numero` (`coordenacao`)
+
+Os pedidos que têm o número, para achar o pedido de um bilhete. `:numero` inteiro de 0 a 1.000.000 (senão **400**
+`requisicao_invalida`). **404** sem campanha ativa.
+
+- **200** `respostaBilheteSchema`: `numero`, `situacao` (`pago`, `reservado` ou `livre`, pelos pedidos que contam) e
+  `pedidos` (até 20, o mais recente primeiro): `id` (o da Rifei), `situacao` (`pago`, `reservado` ou `expirado`),
+  `celula` (nome, ou null), `data` (do pagamento, se pago; senão da criação), `qtd_bilhetes` e `desconsiderado`.
+  Nenhum dado do comprador.
+
 ## Relatório da campanha para baixar (RIFA-038; docs/decisions.md D23)
 
 ### `GET /api/painel/relatorio?tipo=totais|celulas|discipuladores|redes|periodos|dias|ddd` (`coordenacao`)
@@ -1091,6 +1119,74 @@ de 4 módulos (`MARGEM_QR_LINK_VENDAS_MODULOS`), preto no branco; a imagem para 
 `nomeDoArquivoQrLinkVendas(celula_nome)` (ex.: `link-de-vendas-celula-agape.png`).
 
 ---
+
+## API interna da Rifei (RIFA-070; docs/decisions.md D32)
+
+Rotas **só de admin** (o "só admin" vai no handler, antes do corpo: a coordenação leva 403). Todas chamam a Rifei pela
+API interna do painel (`https://api.rifei.com.br/`) com o token colado em Acessos → Conexão com a Rifei (ou, sem ele, o
+segredo do Worker `RIFEI_API_TOKEN`). Catálogo:
+`ROTAS_RIFEI_API` (`src/shared/contracts/api.ts`); regras, limites e textos em `src/shared/contracts/rifei-api.ts`.
+
+Erros comuns: 401 sem sessão; 403 da coordenação, da hierarquia ou de outra origem; 503 `nao_configurado` sem o segredo
+(nada é chamado na Rifei); 502 `rifei_falhou` com `detalhes: { motivo }` (`token_invalido`, `campanha_nao_encontrada`,
+`indisponivel`, `resposta_inesperada`). O token nunca aparece em resposta, trilha ou log.
+
+### `POST /api/admin/rifei/marcar-pagos` (**só admin**)
+
+Corpo: `{ "pedidos": ["<id>", ...] }` (1 a 100, sem repetidos). 404 sem campanha ativa. 200:
+
+```json
+{
+  "itens": [
+    { "pedido_id": "PEDIDO1", "resultado": "marcado", "mensagem": null },
+    { "pedido_id": "PEDIDO2", "resultado": "restaurado_e_marcado", "mensagem": null },
+    { "pedido_id": "PEDIDO3", "resultado": "ja_pago", "mensagem": null },
+    { "pedido_id": "PEDIDO4", "resultado": "recusado_pela_rifei", "mensagem": "Mensagem da Rifei" }
+  ],
+  "marcados": 2
+}
+```
+
+Resultados: `marcado`, `restaurado_e_marcado`, `ja_pago`, `desconsiderado`, `fora_do_sistema` (decididos pelo banco,
+sem chamar a Rifei nos três últimos), `recusado_pela_rifei` e `falhou`. Nada é gravado no pedido: ele conta quando o
+"Pedido pago" chegar pelo webhook. Trilha `rifei.marcar_pagos` (alvo `campanha:<id>`) quando algum pedido foi à Rifei.
+
+### `GET /api/admin/rifei/afiliados` (**só admin**)
+
+200: `{ afiliados, celulas_sem_afiliado, sincronizacao: null }`. Cada afiliado: `affiliate_id`, `codigo` (o `ref` do
+link de vendas), `nome` e `email` da conta de afiliado na Rifei, `celula` (o vínculo no sistema) e `sugestao` (a célula
+cujo líder tem o mesmo e-mail, só para o não vinculado e só com exatamente uma). Só lê.
+
+### `POST /api/admin/rifei/afiliados/sincronizar` (**só admin**)
+
+Corpo `{}`. Grava o código de cada afiliado (e cria, sem célula, o que o sistema não conhecia) e vincula as sugestões.
+Nunca troca um vínculo existente. 200: a mesma resposta do GET, com `sincronizacao: { vinculados, codigos_gravados }`.
+Trilha `rifei.sincronizar_afiliados` (alvo `rifei`) quando algo mudou.
+
+### `POST /api/admin/rifei/convites` (**só admin**)
+
+Corpo: `{ "celulas": [3, 4] }` (1 a 50, sem repetidas). 404 `nao_encontrado` se uma célula não existe (nada é chamado
+na Rifei). 201: `{ convites: [{ celula_id, celula_nome, lider_nome, lider_telefone, link }], falhas: [{ celula_id,
+mensagem }] }`. O link é da Rifei (`https://*.rifei.com.br`), de uso único e válido por 1 dia; nunca é gravado. Trilha
+`rifei.gerar_convites` (alvo `rifei`, sem os links) quando algum convite saiu.
+
+### Conexão com a Rifei e busca do pedido (RIFA-070, D32; **só admin**)
+
+Catálogo `ROTAS_CONEXAO_RIFEI`. Nenhuma resposta traz o token.
+
+- `GET /api/admin/rifei/conexao` → 200 `{ origem: "tela"|"segredo"|null, conectado_em, final, testado_em, recusado_em,
+  expira_em, chave_configurada, token_legivel, segredo_configurado }`.
+- `PUT /api/admin/rifei/conexao` `{ token }` → testa na Rifei (`GET raffles/<slug>`) e só então grava cifrado; 200
+  `{ estado, campanha_rifei_id }`. 400 texto que não é token; 404 sem campanha ativa; 502 `rifei_falhou` (ex.:
+  `token_invalido`: "A Rifei recusou o token: cole um novo em Conexão com a Rifei…"); 503 sem `RIFEI_CHAVE_CIFRA`.
+  Trilha `rifei.conectar` (alvo `rifei`, só o final).
+- `POST /api/admin/rifei/conexao/testar` `{}` → 200 `{ estado, campanha_rifei_id }`; 502/503 como acima.
+- `DELETE /api/admin/rifei/conexao` → 200 estado. Trilha `rifei.desconectar` (só se havia token).
+- `GET /api/admin/rifei/pedido?numero=<pedido ou bilhete>` → 200 `{ pedidos: [{ achado_por: "pedido"|"bilhete",
+  pedido: <item da lista de Pedidos> }] }` (até 10; vazio = não achou). Só lê.
+
+As rotas de marcar, afiliados e convites (acima) usam o token da tela; sem ele, o segredo `RIFEI_API_TOKEN`; sem
+nenhum, 503 `nao_configurado`.
 
 ## Conferência pelo CSV da Rifei (Sprint 4, RIFA-012)
 
