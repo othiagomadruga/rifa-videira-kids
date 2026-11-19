@@ -182,7 +182,14 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
   );
 
   const valor = useMemo(
-    () => ({ estado, verificar, entrar, entrarComSenha, entrarComoAdmin, sair }),
+    () => ({
+      estado,
+      verificar,
+      entrar,
+      entrarComSenha,
+      entrarComoAdmin,
+      sair,
+    }),
     [estado, verificar, entrar, entrarComSenha, entrarComoAdmin, sair],
   );
   return <ContextoSessao value={valor}>{children}</ContextoSessao>;

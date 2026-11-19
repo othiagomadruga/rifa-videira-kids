@@ -85,8 +85,8 @@ export function MinhaSenhaPage() {
   const refConfirmacao = useRef<HTMLInputElement>(null);
   const enviando = useRef(false);
 
+  // O estado inicial já é "carregando"; o "Tentar de novo" o põe de volta antes de chamar.
   const carregar = useCallback((signal?: AbortSignal) => {
-    setCarga({ tipo: "carregando" });
     lerMinhaSenha(signal).then(
       (senhaAtual) => {
         setCarga({ tipo: "pronta", senha: senhaAtual });
@@ -175,7 +175,10 @@ export function MinhaSenhaPage() {
           titulo="Não foi possível abrir a sua senha."
           mensagem={mensagemDoErro(carga.erro)}
           conexao={ehFalhaDeConexao(carga.erro)}
-          aoTentarDeNovo={() => carregar()}
+          aoTentarDeNovo={() => {
+            setCarga({ tipo: "carregando" });
+            carregar();
+          }}
         />
       )}
       {carga.tipo === "pronta" && (
