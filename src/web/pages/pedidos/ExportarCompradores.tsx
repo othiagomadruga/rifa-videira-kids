@@ -63,14 +63,17 @@ export function ExportarCompradores() {
         linha, para agradecer e para as próximas campanhas. Só o admin vê.
       </p>
       <div className="pedidos-exportar__acoes">
-        <label className="pedidos-exportar__opcao">
-          <input
-            type="checkbox"
-            checked={soPagou}
-            onChange={(evento) => setSoPagou(evento.target.checked)}
-          />
-          Só quem pagou
-        </label>
+        <span className="pedidos-exportar__opcao">
+          <ComDica texto={DICAS.soQuemPagou}>
+            <input
+              id={`${id}-so-pagou`}
+              type="checkbox"
+              checked={soPagou}
+              onChange={(evento) => setSoPagou(evento.target.checked)}
+            />
+          </ComDica>
+          <label htmlFor={`${id}-so-pagou`}>Só quem pagou</label>
+        </span>
         <ComDica texto={DICAS.exportarCompradores}>
           <Button
             variante="secundario"

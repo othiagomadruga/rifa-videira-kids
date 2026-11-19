@@ -401,11 +401,6 @@
   gap: var(--espaco-2);
 }
 
-.pedidos-exportar button[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: progress;
-}
-
 .pedidos-slug {
   font-family: var(--fonte-mono);
   font-size: var(--texto-sm);

@@ -139,6 +139,9 @@ describe("0004 aplicada depois da 0005 à 0007 (RIFA-012)", () => {
         desconsiderado_observacao: null,
         // 0011 (RIFA-056): nenhum pagamento registrado pela conferência.
         pagamento_recuperacao_id: null,
+        // 0017 (RIFA-076, D36): sem o contato do comprador até o próximo evento.
+        comprador_nome: null,
+        comprador_telefone: null,
       })),
     );
   });

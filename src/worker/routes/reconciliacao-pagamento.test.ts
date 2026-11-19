@@ -614,7 +614,12 @@ describe('RIFA-056: a corrida com o webhook (o "Pedido pago" antes ou depois dá
       await pedidoPagoPeloWebhook("R-0005", "2026-11-26T10:05:00.000-03:00"),
     ).toBe("duplicado");
 
-    expect(await linhaDoPedido("R-0005")).toEqual(corrigido);
+    // RIFA-076 (D36): o evento que não muda o pedido só completa o contato do comprador.
+    expect(await linhaDoPedido("R-0005")).toEqual({
+      ...corrigido,
+      comprador_nome: "Comprador Ficticio Um",
+      comprador_telefone: "+5591900000001",
+    });
     expect(await resumoDoPainel()).toEqual({
       pedidos_aprovados: 7,
       bilhetes: 16,
@@ -631,7 +636,12 @@ describe('RIFA-056: a corrida com o webhook (o "Pedido pago" antes ou depois dá
       "ignorado_transicao",
     );
 
-    expect(await linhaDoPedido("R-0005")).toEqual(corrigido);
+    // RIFA-076 (D36): o evento que não muda o pedido só completa o contato do comprador.
+    expect(await linhaDoPedido("R-0005")).toEqual({
+      ...corrigido,
+      comprador_nome: "Compradora Ficticia Dois",
+      comprador_telefone: "+351910000002",
+    });
     expect(await resumoDoPainel()).toEqual({
       pedidos_aprovados: 7,
       bilhetes: 16,
