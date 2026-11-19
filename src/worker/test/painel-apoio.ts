@@ -78,7 +78,7 @@ export const AFILIADOS = [
 ] as const;
 
 export const DADOS_CAMPANHA: DadosCampanha = campanhaEntradaSchema.parse({
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   slug_rifei: "rifa-videira-kids-teste",
   data_inicio: "2026-11-23",
   preco_bilhete_centavos: 2000,
@@ -374,7 +374,7 @@ export const CELULAS_DE_CARGA = 36;
 
 /** A campanha do volume sintético: 24 dias (10 + 7 + 7) a partir de 23/11/2026, meta proporcional de 20 mil bilhetes. */
 export const CAMPANHA_DE_CARGA = campanhaEntradaSchema.parse({
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   slug_rifei: "rifa-videira-kids-carga",
   data_inicio: "2026-11-23",
   preco_bilhete_centavos: 2000,

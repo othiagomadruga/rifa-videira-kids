@@ -26,7 +26,7 @@ import { DICAS } from "./textos";
 /** Token fictício no formato do contrato (43 caracteres base64url). */
 const TOKEN = "TokenFicticioDeTeste_0123456789-abcdefghijk";
 const USUARIO = { id: 7, nome: "Coordenadora Fictícia", papel: "coordenacao" };
-const TITULO = "Entrar no sistema da Rifa Videira Kids";
+const TITULO = "Entrar no sistema da Projeto Videira Kids";
 
 type Chamada = { metodo: string; caminho: string; corpo: unknown };
 
@@ -141,7 +141,7 @@ describe("CA1: o link no navegador (barra de endereço e histórico)", () => {
       JSON.stringify([...replaceState.mock.calls, ...pushState.mock.calls]),
     ).not.toContain(TOKEN);
     expect(pushState).not.toHaveBeenCalled();
-    expect(document.title).toBe(`${TITULO} · Rifa Videira Kids`);
+    expect(document.title).toBe(`${TITULO} · Projeto Videira Kids`);
 
     // O preview do WhatsApp abre a URL e não toca no botão: nada de POST (nem de outra chamada).
     await act(() => new Promise((resolver) => setTimeout(resolver, 50)));

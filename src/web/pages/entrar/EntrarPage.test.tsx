@@ -80,7 +80,7 @@ describe("CA3: /entrar", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Entrar · Rifa Videira Kids");
+    expect(document.title).toBe("Entrar · Projeto Videira Kids");
     // RIFA-064: o único formulário é o da célula (nome e senha); nada de e-mail.
     expect(
       [...document.querySelectorAll("input")].map((campo) => campo.name),

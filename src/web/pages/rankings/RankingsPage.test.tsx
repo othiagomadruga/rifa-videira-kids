@@ -139,7 +139,7 @@ describe("CA1: ranking da coordenação (/coordenacao/rankings)", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Rankings" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Rankings · Rifa Videira Kids");
+    expect(document.title).toBe("Rankings · Projeto Videira Kids");
     await tabela();
 
     expect(api.caminhos).toEqual([

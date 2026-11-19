@@ -27,7 +27,7 @@ import {
 import { respostaJson } from "../../test/renderizar";
 
 export const CAMPANHA: CampanhaCalculo = {
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   fuso_horario: "America/Belem",
   data_inicio: "2026-11-23",
   meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },

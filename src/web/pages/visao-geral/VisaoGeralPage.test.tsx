@@ -89,7 +89,7 @@ describe("CA1: cabeçalho com a fase e o recorte", () => {
     const cabecalho = cabecalhoDaFase(
       "Dia 12 de 24 · Semana 2 (faltam 6 dias)",
     );
-    expect(cabecalho).toHaveTextContent("Campanha toda: Rifa Videira Kids");
+    expect(cabecalho).toHaveTextContent("Campanha toda: Projeto Videira Kids");
     expect(
       within(cabecalho).getByText(
         "Faltam 13 dias, contando hoje (até 16/12/2026).",
@@ -100,7 +100,7 @@ describe("CA1: cabeçalho com a fase e o recorte", () => {
     expect(
       screen.getByText("Atualizado às 15:30. Atualiza sozinho a cada 60 s."),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Visão geral · Rifa Videira Kids");
+    expect(document.title).toBe("Visão geral · Projeto Videira Kids");
   });
 
   it("último dia: o período e a campanha no último dia", async () => {
@@ -603,7 +603,7 @@ describe("CA4: filtro do recorte e atualização", () => {
     fireEvent.change(filtro(), { target: { value: "" } });
     await waitFor(() =>
       expect(cabecalhoDaFase(/^Dia 12 de 24/)).toHaveTextContent(
-        "Campanha toda: Rifa Videira Kids",
+        "Campanha toda: Projeto Videira Kids",
       ),
     );
     expect(roteador.state.location.search).toBe("");

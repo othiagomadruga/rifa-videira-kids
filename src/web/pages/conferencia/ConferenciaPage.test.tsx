@@ -148,7 +148,7 @@ describe("CA4: a tela da conferência", () => {
     expect(within(historico).getByText("R-0101, R-0105")).toBeInTheDocument();
     expect(within(historico).getByText("R$ 80,00")).toBeInTheDocument();
     expect(api.de("/analisar")).toEqual([]);
-    expect(document.title).toBe("Conferência · Rifa Videira Kids");
+    expect(document.title).toBe("Conferência · Projeto Videira Kids");
   });
 
   it("sem recuperações ainda: o histórico diz que vai registrar quem e quando", async () => {

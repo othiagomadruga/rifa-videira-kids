@@ -192,7 +192,12 @@ describe("CA2: escopo do resumo e data de referência", () => {
   it.each([
     [
       { escopo: "campanha" },
-      { tipo: "campanha", id: null, divisao: null, nome: "Rifa Videira Kids" },
+      {
+        tipo: "campanha",
+        id: null,
+        divisao: null,
+        nome: "Projeto Videira Kids",
+      },
     ],
     [
       { escopo: "divisao", divisao: "adultos" },

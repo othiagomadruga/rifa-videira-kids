@@ -98,7 +98,7 @@ describe("CA1: a mensagem do dia", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Bumbo" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Bumbo · Rifa Videira Kids");
+    expect(document.title).toBe("Bumbo · Projeto Videira Kids");
     expect(screen.getByText("Carregando a mensagem…")).toBeInTheDocument();
 
     const texto = await textoNaTela();
@@ -106,7 +106,7 @@ describe("CA1: a mensagem do dia", () => {
     // Igual, caractere por caractere, com as quebras de linha (e as linhas em branco) da API.
     expect(texto.textContent).toBe(esperado);
     expect(esperado).toContain(
-      "*Rifa Videira Kids · Dia 9 de 21*\n\n*Ontem (dia 8):*",
+      "*Projeto Videira Kids · Dia 9 de 21*\n\n*Ontem (dia 8):*",
     );
     expect(texto.tagName).toBe("PRE");
     expect(screen.getByText("Terça, 01/12/2026 (hoje)")).toBeInTheDocument();
@@ -401,7 +401,7 @@ describe("RIFA-051 (P3.9): a prévia como no WhatsApp", () => {
       [...texto.querySelectorAll("strong")].map((negrito) =>
         negrito.textContent?.replace(/^\*|\*$/g, ""),
       ),
-    ).toContain("Rifa Videira Kids · Dia 9 de 21");
+    ).toContain("Projeto Videira Kids · Dia 9 de 21");
     expect(texto.querySelectorAll(".bumbo__marca").length).toBeGreaterThan(0);
 
     expect(

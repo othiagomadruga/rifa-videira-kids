@@ -290,7 +290,7 @@ describe("GET /api/publico/bumbo", () => {
 
     expect(data).toBe("2026-12-01");
     expect(referencia).toMatchObject({ dia_campanha: 9, fase: "durante" });
-    expect(texto).toContain("*Rifa Videira Kids · Dia 9 de 21*");
+    expect(texto).toContain("*Projeto Videira Kids · Dia 9 de 21*");
     expect(texto).toContain("*Ontem (dia 8):*");
     expect(texto).toContain("_Jovens_");
     expect(texto).toContain("_Adultos_");

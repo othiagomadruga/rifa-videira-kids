@@ -459,7 +459,7 @@ const LARGURA_MEDIDA: Record<string, number> = {
   "Dia 24 de 24": 5.73,
   "Começa em 120 dias": 9.37,
   "Campanha encerrada": 10.17,
-  "Rifa Videira Kids": 7.7,
+  "Projeto Videira Kids": 7.7,
   "Atualizado às 15:30": 9.17,
 };
 
@@ -590,7 +590,7 @@ describe("RIFA-057: o topo do telão, em todas as fases", () => {
       antes: "Começa em 120 dias",
       encerrada: "Campanha encerrada",
     });
-    expect(MARCA.produto).toBe("Rifa Videira Kids");
+    expect(MARCA.produto).toBe("Projeto Videira Kids");
   });
 
   it.each([

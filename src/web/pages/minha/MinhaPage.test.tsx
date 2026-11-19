@@ -91,7 +91,7 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
       screen.getByRole("heading", { level: 1, name: "Célula Ágape" }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(document.title).toBe("Célula Ágape · Rifa Videira Kids");
+    expect(document.title).toBe("Célula Ágape · Projeto Videira Kids");
     const cabecalho = screen
       .getByRole("heading", { level: 1 })
       .closest(".ui-page-header__textos");

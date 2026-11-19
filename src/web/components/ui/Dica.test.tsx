@@ -371,7 +371,7 @@ describe("CA2: role tooltip e aria-describedby juntando com a descrição que j�
           <Input
             ref={ref}
             rotulo="Nome da campanha"
-            dica="Ex.: Rifa Videira Kids."
+            dica="Ex.: Projeto Videira Kids."
             erro="Informe o nome."
             aria-describedby="de-fora"
           />
@@ -381,12 +381,12 @@ describe("CA2: role tooltip e aria-describedby juntando com a descrição que j�
     const campo = screen.getByRole("textbox", { name: "Nome da campanha" });
     expect(ref.current).toBe(campo);
     expect(campo).toHaveAccessibleDescription(
-      "Só o admin muda. Ex.: Rifa Videira Kids. Informe o nome.",
+      "Só o admin muda. Ex.: Projeto Videira Kids. Informe o nome.",
     );
 
     focarPeloTeclado(campo);
     expect(campo).toHaveAccessibleDescription(
-      "Só o admin muda. O nome que aparece no ranking. Ex.: Rifa Videira Kids. Informe o nome.",
+      "Só o admin muda. O nome que aparece no ranking. Ex.: Projeto Videira Kids. Informe o nome.",
     );
     expect(campo).toHaveAttribute("aria-invalid", "true");
   });

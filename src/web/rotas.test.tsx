@@ -110,7 +110,10 @@ describe("CA1: cada rota mostra a tela certa", () => {
     for (const [caminho, titulo] of [
       ["/", "Ranking da campanha"],
       ["/entrar", "Entrar"],
-      [`/acesso/${"a".repeat(43)}`, "Entrar no sistema da Rifa Videira Kids"],
+      [
+        `/acesso/${"a".repeat(43)}`,
+        "Entrar no sistema da Projeto Videira Kids",
+      ],
     ] as const) {
       const { unmount } = renderizarRota(caminho, { usuario: null });
       expect(

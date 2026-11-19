@@ -238,7 +238,7 @@ describe("CA2: o telão (/telao)", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Telão" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Telão · Rifa Videira Kids");
+    expect(document.title).toBe("Telão · Projeto Videira Kids");
     expect(screen.getByText("Carregando o ranking…")).toBeInTheDocument();
     await esperarRanking();
     // Os dados da demonstração (3 por divisão, o limite público): a lista escala para ocupar a tela.
@@ -247,7 +247,7 @@ describe("CA2: o telão (/telao)", () => {
       "3",
     );
 
-    expect(screen.getByText("Rifa Videira Kids")).toBeInTheDocument();
+    expect(screen.getByText("Projeto Videira Kids")).toBeInTheDocument();
     expect(screen.getByText("Dia 12 de 24")).toBeInTheDocument();
     expect(screen.getByText("Faltam 13 dias")).toBeInTheDocument();
     expect(

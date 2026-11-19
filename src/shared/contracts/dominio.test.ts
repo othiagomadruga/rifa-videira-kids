@@ -25,7 +25,7 @@ import { payloadRifeiSchema, redigirPayloadRifei } from "./rifei";
 const AGORA = "2026-11-06T18:00:00.000Z";
 
 const campanhaDaAta = {
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   slug_rifei: "videira-kids-teste",
   data_inicio: "2026-11-23",
   preco_bilhete_centavos: 2000,

@@ -304,7 +304,7 @@ describe("CA1: /minha sem sessão segue o fluxo da coordenação", () => {
     // texto de mentira na marca (nem um espaço) para o leitor de tela encontrar.
     expect(topo.querySelector(".ui-marca__complemento")).toBeNull();
     expect(topo.querySelector(".ui-marca__textos")?.textContent).toBe(
-      "Rifa Videira Kids",
+      "Projeto Videira Kids",
     );
     expect(within(topo).queryByRole("button")).toBeNull();
     await waitFor(() => expect(responder).not.toBeNull());

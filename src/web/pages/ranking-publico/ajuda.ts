@@ -4,7 +4,7 @@
 
 export const AJUDA = {
   ranking:
-    "A disputa entre as células na campanha da Rifa Videira Kids, atualizada a cada minuto. Mostra a posição de cada célula, sem valores em dinheiro.",
+    "A disputa entre as células na campanha da Projeto Videira Kids, atualizada a cada minuto. Mostra a posição de cada célula, sem valores em dinheiro.",
   disputa:
     "O tempo desta disputa: a etapa de agora (normalmente uma semana) ou a campanha inteira. A cada etapa, o ranking começa de novo.",
   divisao:

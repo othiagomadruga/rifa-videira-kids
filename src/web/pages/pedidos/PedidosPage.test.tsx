@@ -135,7 +135,7 @@ describe("CA1: a lista de pedidos", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Pedidos" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Pedidos · Rifa Videira Kids");
+    expect(document.title).toBe("Pedidos · Projeto Videira Kids");
     const tabelaDosPedidos = await tabela();
     expect(
       within(tabelaDosPedidos)

@@ -6,7 +6,7 @@ import logoVideiraWebp from "./marca/videira-logo.webp";
 
 export const MARCA = {
   nome: "Videira Kids",
-  produto: "Rifa Videira Kids",
+  produto: "Projeto Videira Kids",
   /** Logo da Videira (a igreja): no cabeçalho de todas as telas. Em fundo escuro, vai sobre um selo claro. */
   logo: {
     webp: logoVideiraWebp,
@@ -27,7 +27,7 @@ export const MARCA = {
   credito: "Sistema desenvolvido por GODy Tech",
 } as const;
 
-/** Título da aba do navegador para uma tela: "Pedidos · Rifa Videira Kids". */
+/** Título da aba do navegador para uma tela: "Pedidos · Projeto Videira Kids". */
 export function tituloDaAba(tela: string): string {
   return `${tela} · ${MARCA.produto}`;
 }

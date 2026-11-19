@@ -80,7 +80,7 @@ describe("CA1: visão da hierarquia", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Hierarquia" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Hierarquia · Rifa Videira Kids");
+    expect(document.title).toBe("Hierarquia · Projeto Videira Kids");
     expect(api.chamadasA("GET", "/api/admin/redes")).toHaveLength(1);
     expect(api.chamadasA("GET", "/api/admin/discipuladores")).toHaveLength(1);
     expect(api.chamadasA("GET", "/api/admin/celulas")).toHaveLength(1);

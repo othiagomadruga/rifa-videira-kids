@@ -132,7 +132,7 @@ describe("Card e PageHeader", () => {
     expect(
       screen.getByRole("button", { name: "Exportar" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Pedidos · Rifa Videira Kids");
+    expect(document.title).toBe("Pedidos · Projeto Videira Kids");
   });
 });
 
@@ -385,7 +385,7 @@ describe("layouts", () => {
       within(menu).getByRole("link", { name: "Início" }),
     ).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("banner")).toHaveTextContent(
-      "Rifa Videira KidsCoordenação",
+      "Projeto Videira KidsCoordenação",
     );
     expect(screen.getByRole("main")).toHaveTextContent("Conteúdo da tela");
     expect(
@@ -460,7 +460,9 @@ describe("layouts", () => {
         <p>Ranking</p>
       </PublicShell>,
     );
-    expect(screen.getByRole("banner")).toHaveTextContent("Rifa Videira Kids");
+    expect(screen.getByRole("banner")).toHaveTextContent(
+      "Projeto Videira Kids",
+    );
     expect(screen.getByRole("main")).toHaveTextContent("Ranking");
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });

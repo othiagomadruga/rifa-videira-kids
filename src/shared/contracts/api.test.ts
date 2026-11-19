@@ -310,7 +310,7 @@ describe("CA3: rotas abertas nunca devolvem valores financeiros", () => {
     const bumbo = {
       data: "2026-12-02",
       referencia,
-      texto: "*Rifa Videira Kids · Dia 2 de 24*",
+      texto: "*Projeto Videira Kids · Dia 2 de 24*",
       gerado_em: "2026-12-02T12:00:00.000Z",
     };
     expect(respostaBumboSchema.safeParse(bumbo).success).toBe(true);

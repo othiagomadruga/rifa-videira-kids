@@ -688,7 +688,7 @@ describe("CA5: só a coordenação e o admin veem a tela", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Mapa" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Mapa · Rifa Videira Kids");
+    expect(document.title).toBe("Mapa · Projeto Videira Kids");
     const menu = screen.getByRole("navigation", { name: "Coordenação" });
     const link = within(menu).getByRole("link", { name: "Mapa" });
     expect(link).toHaveAttribute("href", CAMINHO);

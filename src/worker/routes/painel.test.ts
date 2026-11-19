@@ -98,7 +98,7 @@ const ESCOPO_CAMPANHA: EscopoResolvido = {
   tipo: "campanha",
   id: null,
   divisao: null,
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
 };
 
 afterEach(() => {

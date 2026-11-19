@@ -79,7 +79,7 @@ import { RANKING_POR_DIVISAO_PADRAO } from "./regras";
 // ---------------------------------------------------------------------------------------------------
 
 const CAMPANHA: CampanhaCalculo = {
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   fuso_horario: "America/Belem",
   data_inicio: "2026-11-23",
   meta: { unidade: "bilhetes", regra: "por_pessoa", valor: 10 },
@@ -174,7 +174,7 @@ const ESCOPO_CAMPANHA: EscopoResolvido = {
   tipo: "campanha",
   id: null,
   divisao: null,
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
 };
 const ESCOPO_AGAPE: EscopoResolvido = {
   tipo: "celula",
@@ -671,7 +671,12 @@ describe("R1: metas", () => {
     ],
     [{ tipo: "divisao", id: null, divisao: "adultos", nome: "Adultos" }, 300],
     [
-      { tipo: "campanha", id: null, divisao: null, nome: "Rifa Videira Kids" },
+      {
+        tipo: "campanha",
+        id: null,
+        divisao: null,
+        nome: "Projeto Videira Kids",
+      },
       600,
     ],
   ] as const)(
@@ -1732,7 +1737,7 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
   it("dia 9: venda de ontem e acumulado em %, ranking da semana por divisão, quem mais subiu e chamada", () => {
     expect(bumbo(dia(9))).toBe(
       [
-        "*Rifa Videira Kids · Dia 9 de 21*",
+        "*Projeto Videira Kids · Dia 9 de 21*",
         "",
         // Meta do dia 8 = 221 − 159 = 62; vendidos 21 → 33%.
         "*Ontem (dia 8):* vendemos 33% da meta do dia.",
@@ -1789,7 +1794,7 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
     [
       "2026-11-20",
       [
-        "*Rifa Videira Kids*",
+        "*Projeto Videira Kids*",
         "Faltam 3 dias para começar: as vendas vão de 23/11 a 13/12.",
       ],
     ],
@@ -1797,16 +1802,19 @@ describe("R10: bumbo do dia (texto para o grupo dos líderes)", () => {
     [
       dia(1),
       [
-        "*Rifa Videira Kids · Dia 1 de 21*",
+        "*Projeto Videira Kids · Dia 1 de 21*",
         "Começou! As vendas vão até 13/12.",
       ],
     ],
     [dia(15), ["*Ranking · Semana 2 (resultado final)*"]],
-    [dia(21), ["*Rifa Videira Kids · Dia 21 de 21*", "*Hoje é o último dia!*"]],
+    [
+      dia(21),
+      ["*Projeto Videira Kids · Dia 21 de 21*", "*Hoje é o último dia!*"],
+    ],
     [
       "2026-12-14",
       [
-        "*Rifa Videira Kids · Campanha encerrada*",
+        "*Projeto Videira Kids · Campanha encerrada*",
         "*Último dia (dia 21):*",
         "*Resultado final:* 30% da meta.",
         "*Ranking final da campanha*",

@@ -74,7 +74,7 @@ describe("PageHeader com o ícone da tela (RIFA-053)", () => {
     // No mesmo bloco do traço e do título, antes deles.
     expect(icone?.parentElement).toBe(titulo.parentElement);
     expect(titulo.parentElement?.firstElementChild).toBe(icone);
-    expect(document.title).toBe("Página não encontrada · Rifa Videira Kids");
+    expect(document.title).toBe("Página não encontrada · Projeto Videira Kids");
   });
 
   it("sem o ícone, nada muda (as telas de trabalho)", () => {

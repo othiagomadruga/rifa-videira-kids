@@ -448,7 +448,7 @@ async function conferirSite(ctx) {
   const html = raiz.texto;
   const ehApp =
     html.includes('<div id="root"></div>') &&
-    html.includes("<title>Rifa Videira Kids</title>") &&
+    html.includes("<title>Projeto Videira Kids</title>") &&
     /<script type="module"[^>]+src="\/assets\/index-[\w-]+\.js"/.test(html);
   if (
     rel.conferir(

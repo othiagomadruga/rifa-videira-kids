@@ -304,7 +304,7 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                 id={idDoCampo("nome")}
                 rotulo="Nome da campanha"
                 ajuda={AJUDA.nome}
-                dica="Como a coordenação chama a campanha. Ex.: Rifa Videira Kids."
+                dica="Como a coordenação chama a campanha. Ex.: Projeto Videira Kids."
                 value={formulario.nome}
                 autoComplete="off"
                 erro={erros.nome}

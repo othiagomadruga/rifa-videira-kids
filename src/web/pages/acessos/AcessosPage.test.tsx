@@ -112,7 +112,7 @@ describe("CA5: lista de pessoas", () => {
         .getAllByRole("heading", { level: 2 })
         .map((titulo) => titulo.textContent),
     ).toEqual(["Admin de Teste", "Felipe Coordenador", "Pastor Fictício"]);
-    expect(document.title).toBe("Acessos · Rifa Videira Kids");
+    expect(document.title).toBe("Acessos · Projeto Videira Kids");
 
     const admin = cartao("Admin de Teste");
     expect(within(admin).getByText("Admin")).toBeInTheDocument();
@@ -258,7 +258,7 @@ describe("CA5: nova pessoa e o link mostrado uma vez", () => {
       `https://wa.me/?text=${encodeURIComponent(mensagemWhatsApp("Fábio Fictício", url))}`,
     );
     expect(mensagemWhatsApp("Fábio Fictício", url)).toBe(
-      `Olá, Fábio! Este é o seu link pessoal para entrar no sistema da Rifa Videira Kids. Ele é só seu, não repasse:\n${url}`,
+      `Olá, Fábio! Este é o seu link pessoal para entrar no sistema da Projeto Videira Kids. Ele é só seu, não repasse:\n${url}`,
     );
     expect(whatsapp).toHaveAttribute("target", "_blank");
     expect(whatsapp).toHaveAttribute("rel", "noopener noreferrer");

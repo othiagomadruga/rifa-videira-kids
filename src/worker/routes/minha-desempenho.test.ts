@@ -84,7 +84,7 @@ const FOLGA_DO_TRABALHO = 2;
 const RODADAS = 15;
 
 const CAMPANHA = campanhaEntradaSchema.parse({
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   slug_rifei: "rifa-videira-kids-carga-visao",
   data_inicio: "2026-11-23",
   preco_bilhete_centavos: 2000,

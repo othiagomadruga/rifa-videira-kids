@@ -154,7 +154,7 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Trilha" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Trilha · Rifa Videira Kids");
+    expect(document.title).toBe("Trilha · Projeto Videira Kids");
     const tabelaDaTrilha = await tabela();
     expect(
       within(tabelaDaTrilha)

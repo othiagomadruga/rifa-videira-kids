@@ -104,7 +104,7 @@ describe("CA2/CA4: carregar a campanha", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Campanha" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Campanha · Rifa Videira Kids");
+    expect(document.title).toBe("Campanha · Projeto Videira Kids");
     expect(screen.getByText("Não ativada")).toBeInTheDocument();
     expect(
       screen.getByText(/o sistema ignora as vendas que chegam da Rifei/),

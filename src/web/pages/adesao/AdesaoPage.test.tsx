@@ -385,7 +385,7 @@ describe("CA3: painel de adesão (/coordenacao/adesao)", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Adesão" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Adesão · Rifa Videira Kids");
+    expect(document.title).toBe("Adesão · Projeto Videira Kids");
     expect(api.fetchMock).toHaveBeenCalledWith(
       "/api/admin/adesao",
       expect.objectContaining({ method: "GET" }),

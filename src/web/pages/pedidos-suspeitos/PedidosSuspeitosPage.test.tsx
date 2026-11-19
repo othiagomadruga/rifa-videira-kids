@@ -162,7 +162,7 @@ describe("RIFA-024: a lista dos pedidos suspeitos", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Pedidos suspeitos" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Pedidos suspeitos · Rifa Videira Kids");
+    expect(document.title).toBe("Pedidos suspeitos · Projeto Videira Kids");
     expect(screen.getByText("Estes pedidos contam nas vendas")).toBeVisible();
     expect(
       screen.getByText(

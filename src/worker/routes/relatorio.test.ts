@@ -226,7 +226,7 @@ describe("CA1: os 7 tipos com as colunas do contrato, nas duas unidades da meta,
         "Arrecadação (R$);% da meta;Pedidos sem célula;Bilhetes sem célula;Arrecadação sem célula (R$);" +
         "Pedidos fora das datas da campanha;Bilhetes fora das datas da campanha;" +
         "Arrecadação fora das datas da campanha (R$);Pedidos desconsiderados;Critério do ranking\r\n" +
-        "Rifa Videira Kids;2026-12-01;Em andamento;2026-11-23;2026-12-13;600;25;149;2964,00;24,83;3;7;140,00;2;3;" +
+        "Projeto Videira Kids;2026-12-01;Em andamento;2026-11-23;2026-12-13;600;25;149;2964,00;24,83;3;7;140,00;2;3;" +
         "60,00;0;% da meta\r\n",
     );
     expect(await baixar("celulas")).toBe(

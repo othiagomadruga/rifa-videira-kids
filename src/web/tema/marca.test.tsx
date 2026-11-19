@@ -71,25 +71,25 @@ function conferirLogo(cabecalho: HTMLElement) {
   expect(fonte).toHaveAttribute("type", "image/webp");
   expect(fonte).toHaveAttribute("srcset", MARCA.logo.webp);
   // O nome do produto continua em texto.
-  expect(cabecalho).toHaveTextContent("Rifa Videira Kids");
+  expect(cabecalho).toHaveTextContent("Projeto Videira Kids");
 }
 
 describe("CA2: o logo da Videira", () => {
   it.each([
     ["/", "Ranking da campanha"],
     ["/entrar", "Entrar"],
-    [`/acesso/${TOKEN}`, "Entrar no sistema da Rifa Videira Kids"],
+    [`/acesso/${TOKEN}`, "Entrar no sistema da Projeto Videira Kids"],
   ])("tela aberta %s: no cabeçalho, com o alt certo", async (rota, titulo) => {
     renderizarRota(rota, { usuario: null });
     await screen.findByRole("heading", { level: 1, name: titulo });
     conferirLogo(cabecalhoDaMoldura());
   });
 
-  it("shell da coordenação: no topo da barra, ao lado de 'Rifa Videira Kids · Coordenação'", () => {
+  it("shell da coordenação: no topo da barra, ao lado de 'Projeto Videira Kids · Coordenação'", () => {
     renderizarRota("/coordenacao");
     const topo = cabecalhoDaMoldura();
     conferirLogo(topo);
-    expect(topo).toHaveTextContent("Rifa Videira KidsCoordenação");
+    expect(topo).toHaveTextContent("Projeto Videira KidsCoordenação");
   });
 
   it("telão: no canto do topo", () => {
@@ -210,7 +210,7 @@ describe("CA3: o logo do Kids, discreto", () => {
   it.each([
     ["/", "Ranking da campanha"],
     ["/entrar", "Entrar"],
-    [`/acesso/${TOKEN}`, "Entrar no sistema da Rifa Videira Kids"],
+    [`/acesso/${TOKEN}`, "Entrar no sistema da Projeto Videira Kids"],
   ])(
     "tela aberta %s: só no rodapé, com a frase da campanha",
     async (rota, titulo) => {

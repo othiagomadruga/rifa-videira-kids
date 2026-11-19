@@ -38,7 +38,7 @@ const ESCOPO: EscopoResolvido = {
   tipo: "campanha",
   id: null,
   divisao: null,
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
 };
 
 const LIDERES = new Map(
@@ -122,7 +122,7 @@ describe("os números de cada tipo, byte a byte (cenário do painel, dia 9: 01/1
         "Arrecadação (R$);% da meta;Pedidos sem célula;Bilhetes sem célula;Arrecadação sem célula (R$);" +
         "Pedidos fora das datas da campanha;Bilhetes fora das datas da campanha;" +
         "Arrecadação fora das datas da campanha (R$);Pedidos desconsiderados;Critério do ranking\r\n" +
-        "Rifa Videira Kids;2026-12-01;Em andamento;2026-11-23;2026-12-13;600;25;149;2964,00;24,83;3;7;140,00;2;3;" +
+        "Projeto Videira Kids;2026-12-01;Em andamento;2026-11-23;2026-12-13;600;25;149;2964,00;24,83;3;7;140,00;2;3;" +
         "60,00;7;% da meta\r\n",
     );
   });
@@ -134,7 +134,7 @@ describe("os números de cada tipo, byte a byte (cenário do painel, dia 9: 01/1
     );
     expect(cabecalho.split(";")[5]).toBe("Meta (R$)");
     expect(linha).toBe(
-      "Rifa Videira Kids;2026-12-01;Em andamento;2026-11-23;2026-12-13;12000,00;25;149;2964,00;24,70;3;7;140,00;2;3;" +
+      "Projeto Videira Kids;2026-12-01;Em andamento;2026-11-23;2026-12-13;12000,00;25;149;2964,00;24,70;3;7;140,00;2;3;" +
         "60,00;7;Bilhetes",
     );
   });
@@ -208,7 +208,7 @@ describe("os números de cada tipo, byte a byte (cenário do painel, dia 9: 01/1
     ).toHaveLength(1);
     expect(
       linhasDoArquivo(arquivoDoPainel("totais", antes, EXTRAS).csv)[1],
-    ).toMatch(/^Rifa Videira Kids;2026-11-22;Antes do início;/);
+    ).toMatch(/^Projeto Videira Kids;2026-11-22;Antes do início;/);
 
     const depois = dadosEm(new Date("2026-12-20T15:00:00.000Z"));
     const periodos = linhasDoArquivo(
@@ -228,7 +228,7 @@ describe("os números de cada tipo, byte a byte (cenário do painel, dia 9: 01/1
     expect(
       linhasDoArquivo(arquivoDoPainel("totais", depois, EXTRAS).csv)[1],
     ).toBe(
-      "Rifa Videira Kids;2026-12-20;Encerrada;2026-11-23;2026-12-13;600;28;171;3404,00;28,50;3;7;140,00;3;7;140,00;7;" +
+      "Projeto Videira Kids;2026-12-20;Encerrada;2026-11-23;2026-12-13;600;28;171;3404,00;28,50;3;7;140,00;3;7;140,00;7;" +
         "% da meta",
     );
   });

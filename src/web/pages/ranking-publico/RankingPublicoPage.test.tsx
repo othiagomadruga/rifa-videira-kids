@@ -278,7 +278,7 @@ describe("CA2: ranking público (/)", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Ranking da campanha" }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Ranking da campanha · Rifa Videira Kids");
+    expect(document.title).toBe("Ranking da campanha · Projeto Videira Kids");
     await esperarRanking();
 
     expect(api.caminhos).toEqual([

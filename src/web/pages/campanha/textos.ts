@@ -108,7 +108,7 @@ export const AJUDA = {
     "Regras que só o admin muda: se dá para tirar um pedido das contas e quem, além dos líderes de célula, entra no sistema pelo link pessoal.",
   mensagens:
     'O texto que vai pelo WhatsApp junto com o link de entrada de cada pessoa. Ex.: "{saudacao} Este é o seu link: {link}" chega como "Olá, Ana! Este é o seu link: …".',
-  nome: "O nome da campanha neste sistema, que a coordenação vê nas telas. Ex.: Rifa Videira Kids 2026. Mudar o nome não muda nada na Rifei.",
+  nome: "O nome da campanha neste sistema, que a coordenação vê nas telas. Ex.: Projeto Videira Kids 2026. Mudar o nome não muda nada na Rifei.",
   slug: "O código da campanha na Rifei: a parte final do link dela. Ex.: no link rifei.com.br/videira-kids, o slug é videira-kids. Só as vendas com este slug contam.",
   dataInicio:
     "O primeiro dia de vendas que conta para a campanha. O primeiro período começa nesta data. Ex.: 23/11/2026.",

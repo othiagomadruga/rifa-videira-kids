@@ -61,7 +61,7 @@ const URL_FICTICIA =
 
 /** O corpo do PUT de hoje (sem os grupos novos). */
 const corpoDeHoje = {
-  nome: "Rifa Videira Kids",
+  nome: "Projeto Videira Kids",
   slug_rifei: "videira-kids-teste",
   data_inicio: "2026-11-23",
   preco_bilhete_centavos: 2000,
@@ -387,7 +387,7 @@ describe("RIFA-032: as mensagens preenchidas", () => {
         url: URL_FICTICIA,
       }),
     ).toBe(
-      `Olá, Maria! Este é o seu link pessoal para entrar no sistema da Rifa Videira Kids. Ele é só seu, não repasse:\n${URL_FICTICIA}`,
+      `Olá, Maria! Este é o seu link pessoal para entrar no sistema da Projeto Videira Kids. Ele é só seu, não repasse:\n${URL_FICTICIA}`,
     );
     const cuidado = ` na campanha da rifa do Videira Kids: as vendas, a meta e a posição no ranking.\nO link é só seu: não repasse para ninguém, porque quem tiver o link entra como você.\n${URL_FICTICIA}`;
     expect(
