@@ -1,0 +1,33 @@
+/* Tela Minha senha (RIFA-073): o estado da senha, o formulário e a remoção, cada um num cartão. */
+.minha-senha {
+  display: grid;
+  gap: var(--espaco-4);
+  max-width: 36rem;
+}
+
+.minha-senha-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.minha-senha-formulario > * {
+  min-width: 0;
+}
+
+.minha-senha-titulo {
+  font-size: var(--texto-lg);
+}
+
+.minha-senha-resultado:empty {
+  display: none;
+}
+
+.minha-senha-resultado:focus {
+  outline: none;
+}
+
+.minha-senha-nota {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
