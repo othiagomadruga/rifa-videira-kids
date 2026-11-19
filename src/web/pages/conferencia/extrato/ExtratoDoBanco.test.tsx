@@ -1,7 +1,8 @@
 // RIFA-059: a seção "Extrato do banco (Pix manual)" da Conferência, renderizada pela rota de verdade, com a API falsa
 // (teste-apoio.ts): subir o OFX, colar o texto, o CSV com as colunas, o resultado (para marcar na Rifei, ambíguos,
 // sem pedido e já contados), copiar os números, a janela e as palavras sem buscar de novo, as falhas e a PROVA de que
-// nenhuma chamada leva o conteúdo do extrato (nem o storage, nem o log). Todos os dados são fictícios.
+// nenhuma chamada leva o conteúdo do extrato (nem o storage, nem o log). RIFA-068: o PDF (lido pelo pdf.js de verdade,
+// com o worker na mesma linha de execução), com o mesmo resultado da tabela colada. Todos os dados são fictícios.
 import {
   cleanup,
   fireEvent,
@@ -9,7 +10,15 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { conferirIndisponivel, lerCss } from "../../../test/indisponivel";
 import {
   ADMIN_DE_TESTE,
@@ -33,8 +42,16 @@ import {
   type Chamada,
 } from "./teste-apoio";
 import {
+  criarPdfDeImagem,
+  pdfComSenha,
+  pdfDoBradesco,
+  prepararPdfjsNosTestes,
+  TEXTO_DO_BRADESCO,
+} from "./teste-apoio-pdf";
+import {
   CAMPOS,
   DICAS,
+  FALHAS_DO_PDF,
   GRUPOS,
   LER_TEXTO,
   MAIS_AMBIGUOS,
@@ -45,6 +62,8 @@ import {
 
 const CAMINHO = "/coordenacao/conferencia";
 type Api = ReturnType<typeof criarApiDoExtrato>;
+
+beforeAll(prepararPdfjsNosTestes);
 
 beforeEach(() => {
   // O "agora" fixo (18/11/2026): o ano que falta em "17 nov" sai sempre o mesmo. Só o Date: os temporizadores andam.
@@ -70,7 +89,10 @@ async function abrir(
 }
 
 /** Sobe o arquivo e espera o resultado (ou a falha). */
-async function subir(conteudo: string, nome = "extrato.ofx") {
+async function subir(
+  conteudo: string | Uint8Array<ArrayBuffer>,
+  nome = "extrato.ofx",
+) {
   fireEvent.change(screen.getByLabelText(CAMPOS.arquivo.rotulo), {
     target: { files: [new File([conteudo], nome)] },
   });
@@ -398,6 +420,55 @@ describe("colar o texto", () => {
   });
 });
 
+describe("o PDF do banco (RIFA-068)", () => {
+  /** O que o cartão do resultado mostra (os números e as listas), sem a linha de onde veio o extrato. */
+  const resultadoNaTela = () =>
+    (
+      screen
+        .getByRole("heading", { name: "Resultado do extrato" })
+        .closest(".ui-card")?.textContent ?? ""
+    ).replace(/Lido do [^:]+:/, "Lido:");
+
+  it("o campo aceita PDF e a dica diz como baixar o PDF no Net Empresa", async () => {
+    await abrir();
+    expect(screen.getByLabelText(CAMPOS.arquivo.rotulo)).toHaveAttribute(
+      "accept",
+      expect.stringMatching(/\.pdf,.*application\/pdf/),
+    );
+    expect(screen.getByText(/salve em PDF/)).toBeInTheDocument();
+  });
+
+  it("subir o PDF do Bradesco dá o mesmo resultado que colar a tabela", async () => {
+    const api = await abrir();
+    await subir(pdfDoBradesco(), "extrato.pdf");
+    expect(
+      screen.getByText(/Lido do arquivo PDF: 6 lançamentos\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ficaram de fora: 3 débitos\./),
+    ).toBeInTheDocument();
+    const marcar = grupo(GRUPOS.paraMarcar.titulo);
+    expect(within(marcar).getByText("PEDTESTE0103")).toBeInTheDocument();
+    expect(within(marcar).getByText("Provável")).toBeInTheDocument();
+    expect(
+      within(grupo(GRUPOS.ambiguos.titulo)).getByText(
+        new RegExp(`REM: ${PAGADORA_UM}`),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(grupo(GRUPOS.jaContados.titulo)).getByText("PEDTESTE0102"),
+    ).toBeInTheDocument();
+    const doPdf = resultadoNaTela();
+    conferirPrivacidade(api.chamadas);
+
+    await colar(TEXTO_DO_BRADESCO);
+    expect(
+      screen.getByText(/Lido do texto colado: 6 lançamentos\./),
+    ).toBeInTheDocument();
+    expect(resultadoNaTela()).toEqual(doPdf);
+  });
+});
+
 describe("o CSV do banco", () => {
   it("mostra as colunas detectadas; trocar a coluna muda o resultado na hora", async () => {
     await abrir();
@@ -441,11 +512,21 @@ describe("falhas", () => {
     );
   });
 
-  it("o PDF ainda não é lido: explica como colar o texto", async () => {
+  it("o PDF-imagem (escaneado) e o PDF com senha: dizem o que houve e o outro jeito, com o foco na mensagem", async () => {
     await abrir();
+    await subir(criarPdfDeImagem(), "extrato.pdf");
+    const imagem = await screen.findByText(FALHAS_DO_PDF.imagem.titulo);
+    expect(screen.getByText(FALHAS_DO_PDF.imagem.mensagem)).toBeInTheDocument();
+    await waitFor(() => expect(imagem.closest("[tabindex]")).toHaveFocus());
+    await subir(pdfComSenha(), "extrato.pdf");
+    expect(
+      await screen.findByText(FALHAS_DO_PDF.senha.titulo),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(FALHAS_DO_PDF.imagem.titulo)).toBeNull();
+    // O arquivo quebrado que diz ser PDF.
     await subir("%PDF-1.4", "extrato.pdf");
     expect(
-      await screen.findByText("O PDF ainda não é lido aqui"),
+      await screen.findByText(FALHAS_DO_PDF.invalido.titulo),
     ).toBeInTheDocument();
   });
 
@@ -491,6 +572,8 @@ describe("privacidade: o extrato fica só na tela", () => {
       await subir(OFX_SGML);
       await colar(TEXTO_LINHAS);
       await subir(CSV_EXTRATO, "extrato.csv");
+      await subir(pdfDoBradesco(), "extrato.pdf");
+      expect(screen.getByText(/Lido do arquivo PDF/)).toBeInTheDocument();
       conferirPrivacidade(api.chamadas);
       cleanup();
     }

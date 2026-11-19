@@ -2,7 +2,7 @@
 // português simples, sem jargão. As dicas (RIFA-045) dizem para que serve cada botão e campo e o que acontece.
 import type { TomBadge } from "../../../components/ui";
 import type { Grau, MotivoSemPedido, StatusDoPedido } from "./cruzamento";
-import type { Ignorados } from "./lancamentos";
+import type { FalhaDoExtrato, Ignorados } from "./lancamentos";
 
 /** "1 pedido", "3 pedidos". */
 export function plural(n: number, singular: string, varios: string): string {
@@ -12,7 +12,7 @@ export function plural(n: number, singular: string, varios: string): string {
 export const TITULO = "Extrato do banco (Pix manual)";
 
 export const PASSOS = [
-  "No banco (no Bradesco Net Empresa: Saldos e Extratos), abra o extrato do período e salve como arquivo OFX. Sem essa opção, selecione a tabela do extrato na tela, copie e cole na caixa abaixo.",
+  "No Bradesco Net Empresa, entre em Saldos e Extratos, abra o extrato do período e salve em PDF (ou em OFX, se aparecer). Sem essas opções, selecione a tabela do extrato na tela, copie e cole na caixa abaixo.",
   "Escolha o arquivo ou cole o texto. A tela lê o extrato aqui e compara cada Pix recebido com os pedidos da Rifei.",
   "Marque como pago no painel da Rifei os pedidos da lista. Se a venda não contar até o fim do dia, faça a conferência pelo CSV, mais abaixo.",
 ];
@@ -25,8 +25,8 @@ export const PRIVACIDADE = {
 
 export const CAMPOS = {
   arquivo: {
-    rotulo: "Extrato do banco (OFX ou CSV)",
-    dica: "O arquivo salvo no banco: OFX, de preferência.",
+    rotulo: "Extrato do banco (PDF, OFX ou CSV)",
+    dica: "O arquivo salvo no banco: o PDF do extrato ou o OFX.",
   },
   texto: {
     rotulo: "Ou cole aqui a tabela do extrato",
@@ -69,7 +69,12 @@ export const COLUNAS_CSV = {
 
 export const RESULTADO = {
   titulo: "Resultado do extrato",
-  formato: { ofx: "arquivo OFX", csv: "arquivo CSV", texto: "texto colado" },
+  formato: {
+    ofx: "arquivo OFX",
+    csv: "arquivo CSV",
+    texto: "texto colado",
+    pdf: "arquivo PDF",
+  },
   semHora:
     "O extrato não traz a hora dos lançamentos: a comparação usa só o dia, e mais pedidos podem servir a cada Pix.",
   cortada:
@@ -201,6 +206,59 @@ export const FALHAS = {
   pedidos: "Não foi possível buscar os pedidos",
 };
 
+/** O maior PDF aceito, em páginas (um mês de extrato movimentado tem bem menos). */
+export const MAXIMO_PAGINAS_PDF = 200;
+
+/** O outro jeito de conferir, quando o PDF não serve. */
+const OUTRO_JEITO =
+  "baixe o extrato em OFX ou copie a tabela da tela do banco e cole na caixa abaixo.";
+
+/** As falhas do PDF (RIFA-068): o que aconteceu e o outro jeito de conferir. */
+export const FALHAS_DO_PDF = {
+  imagem: {
+    ok: false,
+    titulo: "Este PDF é uma imagem",
+    mensagem: `Ele não tem texto para ler (foi escaneado ou fotografado): ${OUTRO_JEITO}`,
+  },
+  senha: {
+    ok: false,
+    titulo: "Este PDF tem senha",
+    mensagem:
+      "A tela não lê PDF protegido por senha. Baixe o extrato de novo sem a senha, ou em OFX, ou copie a tabela da tela do banco e cole na caixa abaixo.",
+  },
+  invalido: {
+    ok: false,
+    titulo: "Este arquivo não é um PDF que dê para ler",
+    mensagem: "Baixe o extrato do banco de novo e escolha o arquivo.",
+  },
+  ilegivel: {
+    ok: false,
+    titulo: "Não foi possível ler o PDF",
+    mensagem: `Escolha o arquivo de novo. Se não der, ${OUTRO_JEITO}`,
+  },
+  leitor: {
+    ok: false,
+    titulo: "Não foi possível abrir o leitor de PDF",
+    mensagem:
+      "Confira a internet e escolha o arquivo de novo. Se não der, recarregue a página.",
+  },
+  paginas: {
+    ok: false,
+    titulo: "O PDF tem páginas demais",
+    mensagem: `O limite é de ${MAXIMO_PAGINAS_PDF} páginas. Baixe do banco um período menor (por exemplo, a última semana).`,
+  },
+  grande: {
+    ok: false,
+    titulo: "O PDF tem texto demais",
+    mensagem: "Baixe do banco um período menor (por exemplo, a última semana).",
+  },
+  semLancamentos: {
+    ok: false,
+    titulo: "Não achamos lançamentos no PDF",
+    mensagem: `O PDF não tem a tabela do extrato, com a data e o valor de cada lançamento. Confira se é o extrato do período; se for, ${OUTRO_JEITO}`,
+  },
+} as const satisfies Record<string, FalhaDoExtrato>;
+
 export const COPIADO = (n: number) =>
   `${plural(n, "número copiado", "números copiados")}: cole na busca de pedidos da Rifei.`;
 export const SEM_AREA_DE_TRANSFERENCIA =
@@ -215,7 +273,7 @@ const ESPERE = "Espere um instante.";
 
 export const DICAS = {
   escolherArquivo:
-    "Abre a escolha do arquivo no aparelho. O extrato é lido aqui e comparado com os pedidos; nada é gravado nem enviado.",
+    "Abre a escolha do arquivo no aparelho (PDF, OFX ou CSV). O extrato é lido aqui e comparado com os pedidos; nada é gravado nem enviado.",
   escolherArquivoOcupado: `Indisponível enquanto o extrato é lido. ${ESPERE}`,
   texto:
     "Cole aqui as linhas do extrato copiadas da tela do banco. O texto fica só nesta tela e some ao sair dela.",

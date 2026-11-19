@@ -27,6 +27,13 @@ import {
 } from "./valores";
 
 export const MAXIMO_CARACTERES_TEXTO = 2_000_000;
+/** O texto sem nenhum lançamento (o leitor do PDF troca pela falha dele). */
+export const SEM_LANCAMENTOS_NO_TEXTO: FalhaDoExtrato = {
+  ok: false,
+  titulo: "Não achamos lançamentos no texto",
+  mensagem:
+    "Cada linha precisa ter a data (ou estar abaixo de uma linha com a data) e o valor, como 16/11/2026 PIX RECEBIDO R$ 20,00. Copie a tabela do extrato inteira e cole de novo.",
+};
 export const MAXIMO_LINHAS_TEXTO = 20_000;
 /** Uma linha sem valor abaixo de um lançamento só entra na descrição dele se for curta (não um rodapé). */
 const MAXIMO_CONTINUACAO = 80;
@@ -65,7 +72,9 @@ function acharValores(texto: string): ValorNoTexto[] {
 }
 
 /** As colunas de valor de uma tabela colada, achadas no cabeçalho (células separadas por tabulação). */
-interface ColunasDaTabela {
+export interface ColunasDaTabela {
+  /** A coluna da data (RIFA-068): a data dela vale para as linhas de baixo, mesmo numa linha sem valor. */
+  data: number;
   credito?: number;
   debito?: number;
   valor?: number;
@@ -77,7 +86,11 @@ const ehColunaDeValor = (colunas: ColunasDaTabela, indice: number) =>
     indice,
   );
 
-function colunasDoCabecalho(celulas: string[]): ColunasDaTabela | null {
+/**
+ * As colunas de valor, se as células são o cabeçalho de uma tabela de extrato: a Data e o Crédito e o Débito (ou o
+ * Valor), sem nenhum valor escrito. O leitor do PDF (pdf-linhas.ts) usa a mesma regra para achar o cabeçalho.
+ */
+export function colunasDoCabecalho(celulas: string[]): ColunasDaTabela | null {
   if (celulas.length < 3) return null;
   const nomes = celulas.map((celula) => normalizar(celula));
   const indice = (palavra: string) => {
@@ -86,17 +99,19 @@ function colunasDoCabecalho(celulas: string[]): ColunasDaTabela | null {
     );
     return achado < 0 ? undefined : achado;
   };
+  const data = indice("DATA");
+  if (data === undefined) return null;
   const colunas: ColunasDaTabela = {
+    data,
     credito: indice("CREDITO") ?? indice("ENTRADA"),
     debito: indice("DEBITO") ?? indice("SAIDA"),
     valor: indice("VALOR"),
     saldo: indice("SALDO"),
   };
-  const temData = indice("DATA") !== undefined;
   const temValor =
     (colunas.credito !== undefined && colunas.debito !== undefined) ||
     colunas.valor !== undefined;
-  return temData && temValor && acharValores(celulas.join("\t")).length === 0
+  return temValor && acharValores(celulas.join("\t")).length === 0
     ? colunas
     : null;
 }
@@ -228,8 +243,17 @@ export function lerTextoColado(
       : (valores[0] ?? null);
 
     if (valor === null) {
-      // Sem valor: a data sozinha (o cabeçalho do dia) ou o complemento da linha de cima ("REM: <nome>").
-      if (data && SO_DATA.test(normalizar(semTrechos(linha, [data])))) {
+      // Sem valor: a linha da tabela com a data na coluna Data (o "SALDO ANTERIOR" da primeira linha do dia, no
+      // Bradesco), a data sozinha (o cabeçalho do dia) ou o complemento da linha de cima ("REM: <nome>").
+      const celulaDaData = tabela ? (celulas[tabela.data] ?? "") : "";
+      const dataDaColuna = acharData(celulaDaData, relogio.hoje);
+      if (
+        dataDaColuna &&
+        SO_DATA.test(normalizar(semTrechos(celulaDaData, [dataDaColuna])))
+      ) {
+        dataAtual = dataLocal(dataDaColuna);
+        pendente = null;
+      } else if (data && SO_DATA.test(normalizar(semTrechos(linha, [data])))) {
         dataAtual = dataLocal(data);
         pendente = null;
       } else if (
@@ -312,12 +336,7 @@ export function lerTextoColado(
     });
   }
   if (lancamentos.length === 0 && ilegiveis === 0)
-    return {
-      ok: false,
-      titulo: "Não achamos lançamentos no texto",
-      mensagem:
-        "Cada linha precisa ter a data (ou estar abaixo de uma linha com a data) e o valor, como 16/11/2026 PIX RECEBIDO R$ 20,00. Copie a tabela do extrato inteira e cole de novo.",
-    };
+    return SEM_LANCAMENTOS_NO_TEXTO;
   return {
     ok: true,
     formato: "texto",
