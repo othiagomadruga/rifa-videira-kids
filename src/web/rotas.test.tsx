@@ -39,6 +39,7 @@ const MENU_ADMIN = [
   ...MENU_COORDENACAO,
   ["Acessos", "/coordenacao/acessos"],
   ["Trilha", "/coordenacao/trilha"],
+  ["Minha senha", "/coordenacao/minha-senha"],
 ] as const;
 
 function tituloDaPagina(nome: string) {
