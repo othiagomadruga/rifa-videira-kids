@@ -282,9 +282,9 @@ export const AJUDA = {
   extrato:
     "Confere o Pix que caiu na conta da igreja com os pedidos da Rifei, para quem pagou por fora. Mostra quais pedidos marcar como pagos na Rifei.",
   arquivo:
-    "O extrato da conta, salvo no site ou no aplicativo do banco, em OFX (de preferência) ou CSV. Ex.: “extrato.ofx” do mês da campanha.",
+    "O extrato da conta, salvo no site ou no aplicativo do banco: o PDF do extrato, o OFX ou o CSV. Ex.: o PDF do extrato do mês da campanha, baixado no aplicativo do banco.",
   texto:
-    "Se o banco não salva arquivo, copie as linhas do extrato na tela (ou no PDF) e cole aqui. Cada linha precisa da data e do valor.",
+    "Se o banco não salva arquivo, copie as linhas do extrato na tela e cole aqui. Cada linha precisa da data e do valor.",
   janela:
     "Até quanto tempo depois da reserva na Rifei o Pix pode ter chegado para contar como do mesmo pedido. Ex.: 24 horas.",
   palavras:

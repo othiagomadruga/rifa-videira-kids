@@ -92,7 +92,9 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
     ).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(document.title).toBe("Célula Ágape · Rifa Videira Kids");
-    const cabecalho = screen.getByRole("heading", { level: 1 }).parentElement;
+    const cabecalho = screen
+      .getByRole("heading", { level: 1 })
+      .closest(".ui-page-header__textos");
     expect(cabecalho).toHaveTextContent(
       "Célula · Jovens Você entrou como Maria Fictícia.",
     );
@@ -454,7 +456,9 @@ describe("RIFA-061 (D27): sem ranking por divisão, a posição entre todos e na
   it("líder: uma posição só ('Sua posição', entre todas as células), os primeiros de todos e o cabeçalho sem a divisão", async () => {
     await abrirCenario({ porDivisao: false });
 
-    const cabecalho = screen.getByRole("heading", { level: 1 }).parentElement;
+    const cabecalho = screen
+      .getByRole("heading", { level: 1 })
+      .closest(".ui-page-header__textos");
     await waitFor(() =>
       expect(cabecalho).toHaveTextContent(
         /^Célula Ágape\s*Célula Você entrou como Maria Fictícia\.$/,

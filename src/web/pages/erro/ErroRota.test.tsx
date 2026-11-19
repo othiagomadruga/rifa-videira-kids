@@ -41,9 +41,11 @@ describe("ErroRota", () => {
     const icone = document.querySelector(".ui-icone-da-tela");
     expect(icone).toHaveAttribute("aria-hidden", "true");
     expect(icone?.querySelector("svg")).toHaveAttribute("data-icone", "alerta");
+    // O título fica no grupo da ajuda (RIFA-066), no mesmo bloco do ícone.
     expect(icone?.parentElement).toBe(
-      screen.getByRole("heading", { level: 1, name: "Algo deu errado" })
-        .parentElement,
+      screen
+        .getByRole("heading", { level: 1, name: "Algo deu errado" })
+        .closest(".ui-page-header__textos"),
     );
     expect(icone?.closest("header")).toHaveClass("ui-page-header--com-icone");
   });

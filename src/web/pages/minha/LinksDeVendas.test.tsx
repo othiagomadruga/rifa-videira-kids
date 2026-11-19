@@ -672,8 +672,8 @@ describe("dicas nos botões e campos do link de vendas", () => {
       ESPERA_DO_PACOTE,
     );
     // O link em destaque (campo, Copiar, WhatsApp, Baixar imagem, Imprimir) e o outro (campo, Copiar, WhatsApp, Ver QR),
-    // e o "?" da ajuda de cada campo (RIFA-066).
-    expect(contarControles(cartao)).toBe(11);
+    // e o "?" da ajuda do título e de cada campo (RIFA-066).
+    expect(contarControles(cartao)).toBe(12);
     expect(controlesSemDica(cartao)).toEqual([]);
 
     const texto = (papel: "button" | "link" | "textbox", nome: string) =>
@@ -738,7 +738,8 @@ describe("dicas nos botões e campos do link de vendas", () => {
     );
     const { cartao } = await abrir("lider", null, api);
     await within(cartao).findByRole("button", { name: "Tentar de novo" });
-    expect(contarControles(cartao)).toBe(1);
+    // "Tentar de novo" e o "?" da ajuda do título (RIFA-066).
+    expect(contarControles(cartao)).toBe(2);
     expect(controlesSemDica(cartao)).toEqual([]);
   });
 });

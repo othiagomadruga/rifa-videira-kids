@@ -34,7 +34,17 @@ function frases(texto: string): string[] {
     .filter(Boolean);
 }
 
-const TODOS = [...textos(AJUDA), ...textos(AJUDA_CAMPANHA, "campanha.")];
+const TODOS = [
+  ...textos(AJUDA),
+  ...textos(AJUDA_CAMPANHA, "campanha."),
+  ...textos(AJUDA_PEDIDOS, "pedidos."),
+  ...textos(AJUDA_MAPA, "mapa."),
+  ...textos(AJUDA_CONFERENCIA, "conferencia."),
+  ...textos(AJUDA_EXTRATO, "extrato."),
+  ...textos(AJUDA_MINHA, "minha."),
+  ...textos(AJUDA_DO_QR, "qr."),
+  ...textos(AJUDA_ABERTA, "aberta."),
+];
 
 describe("os textos de ajuda", () => {
   it("as chaves das telas que carregam com o site não se repetem entre elas", () => {

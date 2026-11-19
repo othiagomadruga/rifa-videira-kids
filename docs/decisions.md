@@ -1690,7 +1690,7 @@ propósito. Decidido pelo SM e pelo developer de front em 17/11; o PO pode troca
   Adesão, Rankings, Bumbo e Acessos) pedem os textos sob demanda, num pedaço só (`pages/ajuda-das-telas.ts`, um
   `import()` em vez de um por tela), que chega logo depois da tela; as telas abertas, num pedaço delas; o título das
   telas da coordenação usa o texto do link do menu, que já estava no pacote inicial. Com as dicas dos campos
-  movidas para a ajuda, o JS inicial sobe pouco (medido no fechamento: veja o relatório da RIFA-066) e nenhuma
-  dependência nova. Até o pedaço chegar, a ajuda diz "Carregando a explicação…".
+  movidas para a ajuda, o JS inicial sobe 0,7 KiB (163,4 → 164,1 KiB em gzip, contra a `main` de 19/11) e o CSS
+  inicial 0,1 KiB; nenhuma dependência nova. Até o pedaço chegar, a ajuda diz "Carregando a explicação…".
 - **Fora**: ajuda em cada célula de tabela, em mensagens (avisos, estados vazios) e no nome de itens de lista; um
   "?" no telão.
