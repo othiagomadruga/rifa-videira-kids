@@ -305,3 +305,102 @@ export const pedaco = (
   y: number,
   altura = 8,
 ): TextoDoPdf => ({ texto, x, y, largura: largura(texto, altura), altura });
+
+// ---------------------------------------------------------------------------------------------------
+// Os comprovantes de Pix (RIFA-074; formato pesquisado em fontes públicas; dados fictícios)
+// ---------------------------------------------------------------------------------------------------
+
+/** Uma linha do comprovante: o rótulo e, se houver, o valor (na coluna da direita, ou na linha de baixo). */
+export type LinhaDoComprovante = readonly [rotulo: string, valor?: string];
+
+/** O ID da transação (E2E) fictício de cada comprovante: "E", 20 algarismos e 11 letras ou algarismos. */
+export const E2E_BRADESCO = "E00000000202611161305FICTICIO001";
+export const E2E_NUBANK = "E11111111202611161730FICTICIO002";
+export const E2E_ITAU = "E22222222202611161945FICTICIO003";
+
+/** O comprovante do Bradesco (app e Net Empresa): os blocos de quem recebeu, de quem pagou e da transação. */
+export const COMPROVANTE_BRADESCO: readonly LinhaDoComprovante[] = [
+  ["Bradesco"],
+  ["Comprovante de Transação Pix"],
+  ["Dados de quem recebeu"],
+  ["Nome", "Associacao Ficticia de Teste"],
+  ["CPF/CNPJ", "00.000.000/0001-00"],
+  ["Instituição", "BCO BRADESCO S.A."],
+  ["Chave", "pix@exemplo.invalid"],
+  ["Dados de quem pagou"],
+  ["Nome", PAGADORA_UM],
+  ["CPF/CNPJ", "***.000.000-**"],
+  ["Instituição", "BANCO FICTICIO S.A."],
+  ["Dados da transação"],
+  ["Valor", "R$ 20,00"],
+  ["Data e hora", "16/11/2026 - 10:05:33"],
+  ["Identificador", "PEDTESTE0101"],
+  ["ID da transação", E2E_BRADESCO],
+  ["Número de controle", "0000000001"],
+];
+
+/** O de um banco digital (o jeito do Nubank): a data no topo, sem rótulo; "Destino" e "Origem"; sem identificador. */
+export const COMPROVANTE_DIGITAL: readonly LinhaDoComprovante[] = [
+  ["Comprovante de transferência"],
+  ["16 NOV 2026 - 14:30:12"],
+  ["Valor", "R$ 40,00"],
+  ["Tipo de transferência", "Pix"],
+  ["Destino"],
+  ["Nome", "Associacao Ficticia de Teste"],
+  ["CNPJ", "00.000.000/0001-00"],
+  ["Instituição", "BCO BRADESCO S.A."],
+  ["Origem"],
+  ["Nome", PAGADOR_DOIS],
+  ["Instituição", "INSTITUICAO FICTICIA"],
+  ["CPF", "***.000.000-**"],
+  ["ID da transação:", E2E_NUBANK],
+];
+
+/** O de outro banco (o jeito do Itaú): o rótulo com dois-pontos e o valor na linha de baixo; "de" e "para". */
+export const COMPROVANTE_LINHA_DE_BAIXO: readonly LinhaDoComprovante[] = [
+  ["Comprovante de pagamento Pix"],
+  ["valor:"],
+  ["R$ 20,00"],
+  ["data e hora do pagamento:"],
+  ["16/11/2026 às 16:45"],
+  ["de:"],
+  [PAGADORA_TRES],
+  ["CPF ***.000.000-**"],
+  ["para:"],
+  ["Associacao Ficticia de Teste"],
+  ["identificador:"],
+  ["PEDTESTE0105"],
+  ["ID da transação:"],
+  [E2E_ITAU],
+];
+
+/** Um Pix agendado (ainda não pago). */
+export const COMPROVANTE_AGENDADO: readonly LinhaDoComprovante[] = [
+  ["Comprovante de agendamento Pix"],
+  ["Pix agendado"],
+  ["Dados de quem pagou"],
+  ["Nome", PAGADORA_UM],
+  ["Valor", "R$ 20,00"],
+  ["Data", "20/11/2026"],
+];
+
+/** O comprovante em PDF: o rótulo à esquerda e o valor à direita, uma linha a cada 14 pontos, como os apps. */
+export const pdfDeComprovante = (
+  linhas: readonly LinhaDoComprovante[],
+): Uint8Array<ArrayBuffer> =>
+  criarPdf([
+    linhas.flatMap(([rotulo, valor], indice): TextoNaPagina[] => {
+      const y = 780 - indice * 14;
+      return [
+        { x: 40, y, texto: rotulo, tamanho: 9, negrito: valor !== undefined },
+        ...(valor === undefined
+          ? []
+          : [{ x: 220, y, texto: valor, tamanho: 9 }]),
+      ];
+    }),
+  ]);
+
+/** O texto do comprovante, como o pdf-linhas monta (o rótulo e o valor na mesma linha, com espaço). */
+export const textoDoComprovante = (
+  linhas: readonly LinhaDoComprovante[],
+): string => linhas.map((linha) => linha.join(" ")).join("\n");

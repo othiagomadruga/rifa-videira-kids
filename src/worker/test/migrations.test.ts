@@ -2274,13 +2274,17 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
     const HASH = "b".repeat(64);
 
     beforeAll(async () => {
-      // Idempotente: os describes anteriores já aplicaram até a 0013.
+      // Idempotente: os describes anteriores já aplicaram até a 0013 (e a 0014, quando a RIFA-070 entrar, vem aqui).
       await applyD1Migrations(
         db,
         TEST_MIGRATIONS.filter((migracao) => migracao.name < "0015"),
       );
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Só até a 0015: o describe não depende da 0014 (RIFA-070, que só soma) nem das que vierem depois.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0016"),
+      );
     });
 
     it("a 0015 foi aplicada sobre os dados e nada muda: só nasce a tabela senhas_admin, vazia", async () => {

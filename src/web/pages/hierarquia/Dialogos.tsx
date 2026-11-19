@@ -37,6 +37,7 @@ import {
 } from "./hierarquia-api";
 import {
   DICAS,
+  DICAS_REDE_UNICA,
   DIVISOES,
   ROTULO_DIVISAO,
   compararNomes,
@@ -136,10 +137,15 @@ const ERROS_API_CELULA: Record<CampoCelula, string> = {
 export function DialogoCelula({
   item: celula,
   discipuladores,
+  redeUnica,
   aoFechar,
   aoSalvar,
   aoDesatualizar,
-}: PropsEdicao<Celula> & { discipuladores: readonly Discipulador[] }) {
+}: PropsEdicao<Celula> & {
+  discipuladores: readonly Discipulador[];
+  /** Uma rede só (RIFA-065, D30): os discipuladores numa lista só, sem o nome da rede. */
+  redeUnica: boolean;
+}) {
   const formulario = useFormularioEdicao({
     entidade: "celula",
     ordem: CAMPOS_CELULA,
@@ -212,24 +218,42 @@ export function DialogoCelula({
             erro={erros.nome}
           />
         </ComDica>
-        <ComDica texto={DICAS.discipuladorDaCelula}>
+        <ComDica
+          texto={
+            redeUnica
+              ? DICAS_REDE_UNICA.discipuladorDaCelula
+              : DICAS.discipuladorDaCelula
+          }
+        >
           <Select
             rotulo={ROTULOS_CELULA.discipulador_id}
             name="discipulador_id"
-            dica="A célula fica na rede do discipulador escolhido."
+            dica={
+              redeUnica
+                ? undefined
+                : "A célula fica na rede do discipulador escolhido."
+            }
             value={valores.discipulador_id}
             onChange={mudar("discipulador_id")}
             erro={erros.discipulador_id}
           >
-            {gruposPorRede(discipuladores).map((grupo) => (
-              <optgroup key={grupo.id} label={grupo.rotulo}>
-                {grupo.itens.map((discipulador) => (
-                  <option key={discipulador.id} value={discipulador.id}>
-                    {discipulador.nome}
-                  </option>
+            {redeUnica
+              ? [...discipuladores]
+                  .sort((a, b) => compararNomes(a.nome, b.nome))
+                  .map((discipulador) => (
+                    <option key={discipulador.id} value={discipulador.id}>
+                      {discipulador.nome}
+                    </option>
+                  ))
+              : gruposPorRede(discipuladores).map((grupo) => (
+                  <optgroup key={grupo.id} label={grupo.rotulo}>
+                    {grupo.itens.map((discipulador) => (
+                      <option key={discipulador.id} value={discipulador.id}>
+                        {discipulador.nome}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-              </optgroup>
-            ))}
           </Select>
         </ComDica>
         <ComDica texto={DICAS.pessoas}>
@@ -330,10 +354,15 @@ const ERROS_API_DISCIPULADOR: Record<CampoDiscipulador, string> = {
 export function DialogoDiscipulador({
   item: discipulador,
   redes,
+  redeUnica,
   aoFechar,
   aoSalvar,
   aoDesatualizar,
-}: PropsEdicao<Discipulador> & { redes: readonly Rede[] }) {
+}: PropsEdicao<Discipulador> & {
+  redes: readonly Rede[];
+  /** Uma rede só (RIFA-065, D30): sem o campo da rede (o discipulador fica nela; o PUT manda a mesma). */
+  redeUnica: boolean;
+}) {
   const formulario = useFormularioEdicao({
     entidade: "discipulador",
     ordem: CAMPOS_DISCIPULADOR,
@@ -386,24 +415,26 @@ export function DialogoDiscipulador({
             erro={erros.nome}
           />
         </ComDica>
-        <ComDica texto={DICAS.redeDoDiscipulador}>
-          <Select
-            rotulo={ROTULOS_DISCIPULADOR.rede_id}
-            name="rede_id"
-            dica="As células do discipulador vão junto para a rede escolhida."
-            value={valores.rede_id}
-            onChange={mudar("rede_id")}
-            erro={erros.rede_id}
-          >
-            {[...redes]
-              .sort((a, b) => compararNomes(a.nome, b.nome))
-              .map((rede) => (
-                <option key={rede.id} value={rede.id}>
-                  {rede.nome} ({ROTULO_DIVISAO[rede.divisao]})
-                </option>
-              ))}
-          </Select>
-        </ComDica>
+        {!redeUnica && (
+          <ComDica texto={DICAS.redeDoDiscipulador}>
+            <Select
+              rotulo={ROTULOS_DISCIPULADOR.rede_id}
+              name="rede_id"
+              dica="As células do discipulador vão junto para a rede escolhida."
+              value={valores.rede_id}
+              onChange={mudar("rede_id")}
+              erro={erros.rede_id}
+            >
+              {[...redes]
+                .sort((a, b) => compararNomes(a.nome, b.nome))
+                .map((rede) => (
+                  <option key={rede.id} value={rede.id}>
+                    {rede.nome} ({ROTULO_DIVISAO[rede.divisao]})
+                  </option>
+                ))}
+            </Select>
+          </ComDica>
+        )}
       </div>
     </Dialogo>
   );

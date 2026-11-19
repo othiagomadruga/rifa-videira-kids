@@ -69,7 +69,7 @@ describe("CA3: /entrar", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(explicacao).toHaveTextContent(
-      "Coordenação, discipuladores e redes (e o líder que recebeu um) entram pelo link pessoal, sem senha. O link chega pelo WhatsApp, mandado pela coordenação.",
+      "Coordenação e discipuladores (e o líder que recebeu um) entram pelo link pessoal, sem senha. O link chega pelo WhatsApp, mandado pela coordenação.",
     );
     expect(explicacao).toHaveTextContent(
       "Abra a conversa do WhatsApp em que você recebeu o link.",

@@ -20,6 +20,7 @@ import {
   Loading,
 } from "../../components/ui";
 import { ehFalhaDeConexao, ErroApi, mensagemDoErro } from "../../lib/api";
+import { useRedes } from "../../lib/redes";
 import { useUsuarioConectado } from "../../lib/sessao";
 import { telefoneParaWhatsApp } from "../acessos/textos";
 import type { CelulaAdesao } from "./adesao-api";
@@ -293,11 +294,14 @@ function LinkDaCelula({
   telefone: string | null;
 }) {
   const [principal, ...outros] = linksValidos(celula);
+  // Uma rede só (RIFA-065, D30): sem o nome dela.
+  const redeUnica = useRedes().unica;
   return (
     <article className="adesao-links__celula">
       <h4 className="adesao-links__nome">{celula.celula_nome}</h4>
       <p className="adesao-item__detalhe">
-        Líder: {celula.lider_nome} · {celula.rede_nome}
+        Líder: {celula.lider_nome}
+        {redeUnica ? null : ` · ${celula.rede_nome}`}
       </p>
       {principal ? (
         [principal, ...outros].map((link, indice) => (

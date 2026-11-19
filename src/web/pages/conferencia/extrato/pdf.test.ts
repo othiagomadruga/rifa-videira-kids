@@ -173,7 +173,7 @@ describe("as falhas do PDF", () => {
     );
     expect(await lerPdf(criarPdfDeImagem())).toEqual(FALHAS_DO_PDF.imagem);
     expect(FALHAS_DO_PDF.imagem.mensagem).toMatch(
-      /baixe o extrato em OFX ou copie a tabela/,
+      /baixe o extrato em OFX ou copie a tabela.*comprovante de Pix.*PDF/,
     );
   });
 

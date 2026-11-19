@@ -268,7 +268,7 @@ export function EntrarPage() {
     <>
       <PageHeader
         titulo="Entrar"
-        descricao="Coordenação, líderes, discipuladores e redes da Rifa Videira Kids."
+        descricao="Coordenação, líderes e discipuladores da Rifa Videira Kids."
       />
       {conferindo ? (
         <Loading texto="Conferindo o seu acesso…" />
@@ -297,9 +297,9 @@ export function EntrarPage() {
               <IconeDaTela nome="link" />
               <h2 className="entrar-titulo">Como entrar pelo link</h2>
               <p>
-                Coordenação, discipuladores e redes (e o líder que recebeu um)
-                entram pelo <strong>link pessoal</strong>, sem senha. O link
-                chega pelo <strong>WhatsApp</strong>, mandado pela coordenação.
+                Coordenação e discipuladores (e o líder que recebeu um) entram
+                pelo <strong>link pessoal</strong>, sem senha. O link chega pelo{" "}
+                <strong>WhatsApp</strong>, mandado pela coordenação.
               </p>
               <ol className="entrar-passos">
                 <li>Abra a conversa do WhatsApp em que você recebeu o link.</li>

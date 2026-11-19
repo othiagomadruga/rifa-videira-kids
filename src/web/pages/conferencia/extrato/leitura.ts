@@ -1,12 +1,18 @@
 // A leitura do extrato escolhido ou colado (RIFA-059, D26), toda NO NAVEGADOR: o arquivo nunca vai para o servidor e
 // nada é gravado (nem banco, nem localStorage, nem log). O formato é descoberto pelo conteúdo:
+// - foto ou print (imagem; RIFA-074): a falha que pede o comprovante em PDF (OCR fica fora);
 // - PDF (o começo "%PDF-", a extensão ou o tipo; RIFA-068): o texto de cada página, com as linhas montadas pela
 //   posição (pdf.ts, num pacote à parte com o pdf.js, carregado pelo import() só quando a pessoa escolhe um PDF),
-//   lido pelo leitor de texto colado;
+//   lido pelo leitor de texto colado; o comprovante de Pix (RIFA-074, D34), um Pix por arquivo, por comprovante.ts;
 // - OFX (a tag <OFX> ou o cabeçalho OFXHEADER): ofx.ts;
 // - CSV (a extensão .csv ou linhas com o mesmo separador), com o cabeçalho achado: csv.ts, com o mapeamento na tela;
 // - o resto (e o CSV sem cabeçalho reconhecível): o leitor de texto colado, linha por linha (texto-colado.ts).
 import { decodificar } from "../decodificar";
+import {
+  extratoDoComprovante,
+  lerComprovante,
+  pareceComprovante,
+} from "./comprovante";
 import { lerCsvDoExtrato, pareceCsv, type CsvDoExtrato } from "./csv";
 import type {
   ContextoDeLeitura,
@@ -15,7 +21,7 @@ import type {
 } from "./lancamentos";
 import { ehOfx, lerOfx } from "./ofx";
 import { lerTextoColado, SEM_LANCAMENTOS_NO_TEXTO } from "./texto-colado";
-import { FALHAS_DO_PDF } from "./textos";
+import { FALHAS_DO_COMPROVANTE, FALHAS_DO_PDF } from "./textos";
 
 /** O maior arquivo aceito (um ano de OFX movimentado tem bem menos). */
 export const MAXIMO_BYTES_EXTRATO = 5_000_000;
@@ -45,6 +51,22 @@ function ehPdf(arquivo: File, bytes: ArrayBuffer): boolean {
   return String.fromCharCode(...inicio).includes("%PDF-");
 }
 
+/** A foto ou o print (o comprovante fotografado): pelo tipo, pela extensão ou pela assinatura do arquivo. */
+function ehImagem(arquivo: File, bytes: ArrayBuffer): boolean {
+  if (arquivo.type.startsWith("image/")) return true;
+  if (/\.(?:jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i.test(arquivo.name))
+    return true;
+  const b = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 12));
+  const jpeg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const png = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+  const heic =
+    String.fromCharCode(...b.slice(4, 8)) === "ftyp" &&
+    /^(?:heic|heix|mif1|msf1|avif)$/.test(
+      String.fromCharCode(...b.slice(8, 12)),
+    );
+  return jpeg || png || heic;
+}
+
 /** O texto do PDF pelo pdf.js, num pacote à parte (só agora o navegador o baixa). */
 async function lerPdf(
   nome: string,
@@ -72,6 +94,7 @@ export async function lerArquivoDoExtrato(
     };
   try {
     const bytes = await arquivo.arrayBuffer();
+    if (ehImagem(arquivo, bytes)) return FALHAS_DO_COMPROVANTE.imagem;
     if (ehPdf(arquivo, bytes)) return await lerPdf(arquivo.name, bytes);
     return {
       ok: true,
@@ -100,6 +123,13 @@ export function lerExtrato(
   const lido = (extrato: ExtratoLido | FalhaDoExtrato): LeituraDoExtrato =>
     extrato.ok ? { ok: true, tipo: "lido", extrato } : extrato;
   if (entrada.tipo === "pdf") {
+    // O comprovante de Pix (RIFA-074): um Pix só, com o identificador e o ID da transação.
+    if (pareceComprovante(texto)) {
+      const comprovante = lerComprovante(texto, contexto);
+      return "ok" in comprovante
+        ? comprovante
+        : lido(extratoDoComprovante(comprovante));
+    }
     // As linhas do PDF são o texto que a pessoa colaria: o mesmo leitor, com as falhas ditas para o PDF.
     const extrato = lerTextoColado(texto, contexto);
     if (extrato.ok) return lido({ ...extrato, formato: "pdf" });

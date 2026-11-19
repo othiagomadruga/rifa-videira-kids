@@ -14,7 +14,7 @@ import { PedidosSuspeitosPage } from "../pedidos-suspeitos/PedidosSuspeitosPage"
 import { RankingsPage } from "../rankings/RankingsPage";
 import { TrilhaPage } from "../trilha/TrilhaPage";
 import { VisaoGeralPage } from "../visao-geral/VisaoGeralPage";
-import { DICA_DO_MENU } from "./textos";
+import { DICA_DO_MENU, DICA_DO_MENU_SEM_REDE } from "./textos";
 
 export type TelaCoordenacao = {
   /** Segmento depois de /coordenacao; "" é a tela inicial (Visão geral). */
@@ -140,14 +140,25 @@ export function telaVisivelPara(tela: TelaCoordenacao, papel: Papel): boolean {
   return tela.papeis === undefined || tela.papeis.includes(papel);
 }
 
-/** Links do menu da coordenação para quem tem este papel. */
-export function itensDaNavegacao(papel: Papel): ItemNavegacao[] {
+/**
+ * Links do menu da coordenação para quem tem este papel. `citarRedes` (RIFA-065, D30): o site sabe que a rede não é
+ * única; sem isso, as dicas da Hierarquia e dos Rankings não citam a rede.
+ */
+export function itensDaNavegacao(
+  papel: Papel,
+  citarRedes = true,
+): ItemNavegacao[] {
   return TELAS_COORDENACAO.filter((tela) => telaVisivelPara(tela, papel)).map(
     ({ segmento, rotulo, dica, icone }) => ({
       para: segmento ? `/coordenacao/${segmento}` : "/coordenacao",
       rotulo,
       exato: segmento === "",
-      dica,
+      dica:
+        !citarRedes && Object.hasOwn(DICA_DO_MENU_SEM_REDE, segmento)
+          ? DICA_DO_MENU_SEM_REDE[
+              segmento as keyof typeof DICA_DO_MENU_SEM_REDE
+            ]
+          : dica,
       icone,
     }),
   );
