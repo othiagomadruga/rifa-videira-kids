@@ -1,9 +1,11 @@
 // A leitura do extrato escolhido ou colado (RIFA-059, D26), toda NO NAVEGADOR: o arquivo nunca vai para o servidor e
 // nada é gravado (nem banco, nem localStorage, nem log). O formato é descoberto pelo conteúdo:
+// - PDF (o começo "%PDF-", a extensão ou o tipo; RIFA-068): o texto de cada página, com as linhas montadas pela
+//   posição (pdf.ts, num pacote à parte com o pdf.js, carregado pelo import() só quando a pessoa escolhe um PDF),
+//   lido pelo leitor de texto colado;
 // - OFX (a tag <OFX> ou o cabeçalho OFXHEADER): ofx.ts;
 // - CSV (a extensão .csv ou linhas com o mesmo separador), com o cabeçalho achado: csv.ts, com o mapeamento na tela;
 // - o resto (e o CSV sem cabeçalho reconhecível): o leitor de texto colado, linha por linha (texto-colado.ts).
-// O PDF fica fora desta versão (exigiria uma dependência nova): copie o texto do PDF e cole na caixa.
 import { decodificar } from "../decodificar";
 import { lerCsvDoExtrato, pareceCsv, type CsvDoExtrato } from "./csv";
 import type {
@@ -12,13 +14,16 @@ import type {
   FalhaDoExtrato,
 } from "./lancamentos";
 import { ehOfx, lerOfx } from "./ofx";
-import { lerTextoColado } from "./texto-colado";
+import { lerTextoColado, SEM_LANCAMENTOS_NO_TEXTO } from "./texto-colado";
+import { FALHAS_DO_PDF } from "./textos";
 
 /** O maior arquivo aceito (um ano de OFX movimentado tem bem menos). */
 export const MAXIMO_BYTES_EXTRATO = 5_000_000;
 
 export type EntradaDoExtrato =
   | { tipo: "arquivo"; nome: string; texto: string }
+  /** O texto de um PDF, já em linhas (pdf.ts). */
+  | { tipo: "pdf"; nome: string; texto: string }
   | { tipo: "texto"; texto: string };
 
 export type LeituraDoExtrato =
@@ -32,10 +37,32 @@ const VAZIO: FalhaDoExtrato = {
   mensagem: "Escolha o arquivo baixado do banco ou cole a tabela do extrato.",
 };
 
-/** Os bytes do arquivo como texto (UTF-8 ou Windows-1252), ou a falha. */
+/** O PDF pela extensão, pelo tipo ou pelo começo do arquivo ("%PDF-" no primeiro KB, como os leitores de PDF). */
+function ehPdf(arquivo: File, bytes: ArrayBuffer): boolean {
+  if (/\.pdf$/i.test(arquivo.name) || arquivo.type === "application/pdf")
+    return true;
+  const inicio = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 1024));
+  return String.fromCharCode(...inicio).includes("%PDF-");
+}
+
+/** O texto do PDF pelo pdf.js, num pacote à parte (só agora o navegador o baixa). */
+async function lerPdf(
+  nome: string,
+  bytes: ArrayBuffer,
+): Promise<{ ok: true; entrada: EntradaDoExtrato } | FalhaDoExtrato> {
+  // Sem internet (ou com o site publicado de novo, e o pacote antigo fora do ar), o import() falha.
+  const leitor = await import("./pdf").catch(() => null);
+  if (leitor === null) return FALHAS_DO_PDF.leitor;
+  const lido = await leitor.lerTextoDoPdf(bytes);
+  return lido.ok
+    ? { ok: true, entrada: { tipo: "pdf", nome, texto: lido.texto } }
+    : lido;
+}
+
+/** O arquivo pronto para ler: o texto (UTF-8 ou Windows-1252) ou, no PDF, o texto das páginas; ou a falha. */
 export async function lerArquivoDoExtrato(
   arquivo: File,
-): Promise<{ ok: true; texto: string } | FalhaDoExtrato> {
+): Promise<{ ok: true; entrada: EntradaDoExtrato } | FalhaDoExtrato> {
   if (arquivo.size > MAXIMO_BYTES_EXTRATO)
     return {
       ok: false,
@@ -43,15 +70,17 @@ export async function lerArquivoDoExtrato(
       mensagem:
         "O limite é de 5 MB. Baixe do banco um período menor (por exemplo, a última semana).",
     };
-  if (/\.pdf$/i.test(arquivo.name) || arquivo.type === "application/pdf")
-    return {
-      ok: false,
-      titulo: "O PDF ainda não é lido aqui",
-      mensagem:
-        "Baixe o extrato em OFX ou abra o PDF, selecione a tabela, copie e cole na caixa de texto abaixo.",
-    };
   try {
-    return { ok: true, texto: decodificar(await arquivo.arrayBuffer()).texto };
+    const bytes = await arquivo.arrayBuffer();
+    if (ehPdf(arquivo, bytes)) return await lerPdf(arquivo.name, bytes);
+    return {
+      ok: true,
+      entrada: {
+        tipo: "arquivo",
+        nome: arquivo.name,
+        texto: decodificar(bytes).texto,
+      },
+    };
   } catch {
     return {
       ok: false,
@@ -70,6 +99,14 @@ export function lerExtrato(
   if (texto.trim() === "") return VAZIO;
   const lido = (extrato: ExtratoLido | FalhaDoExtrato): LeituraDoExtrato =>
     extrato.ok ? { ok: true, tipo: "lido", extrato } : extrato;
+  if (entrada.tipo === "pdf") {
+    // As linhas do PDF são o texto que a pessoa colaria: o mesmo leitor, com as falhas ditas para o PDF.
+    const extrato = lerTextoColado(texto, contexto);
+    if (extrato.ok) return lido({ ...extrato, formato: "pdf" });
+    return extrato === SEM_LANCAMENTOS_NO_TEXTO
+      ? FALHAS_DO_PDF.semLancamentos
+      : FALHAS_DO_PDF.grande;
+  }
   if (ehOfx(texto)) return lido(lerOfx(texto, contexto));
   if (
     entrada.tipo === "arquivo" &&

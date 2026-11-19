@@ -76,10 +76,11 @@ type Busca =
   | { tipo: "ok"; buscados: PedidosBuscados }
   | { tipo: "erro"; erro: unknown };
 
-// Seção "Extrato do banco (Pix manual)" da Conferência (RIFA-059, D26). Quem cuida do dinheiro escolhe o OFX baixado
-// do banco (ou cola a tabela do extrato), a tela lê o extrato AQUI, busca a lista de pedidos da campanha ativa (só
-// leitura) e mostra quais pedidos o extrato confirma e ainda precisam ser marcados como pagos na Rifei. Nada do
-// extrato vai para o servidor, para o localStorage ou para o log; nada do sistema muda. Num pacote à parte (lazy).
+// Seção "Extrato do banco (Pix manual)" da Conferência (RIFA-059, D26). Quem cuida do dinheiro escolhe o PDF (RIFA-068)
+// ou o OFX baixado do banco (ou cola a tabela do extrato), a tela lê o extrato AQUI, busca a lista de pedidos da
+// campanha ativa (só leitura) e mostra quais pedidos o extrato confirma e ainda precisam ser marcados como pagos na
+// Rifei. Nada do extrato vai para o servidor, para o localStorage ou para o log; nada do sistema muda. Num pacote à
+// parte (lazy); o leitor de PDF, noutro, baixado só quando a pessoa escolhe um PDF.
 export function ExtratoDoBanco() {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [colado, setColado] = useState("");
@@ -213,17 +214,25 @@ export function ExtratoDoBanco() {
 
   async function escolher(novo: File) {
     setArquivo(novo);
+    // O PDF leva um instante (o leitor é baixado na primeira vez): a tela já mostra "Lendo o extrato…".
+    const minha = ++versao.current;
+    controle.current?.abort();
+    cobertura.current = null;
+    setLendo(true);
+    setFalha(null);
+    setLido(null);
+    setMapeamento(null);
+    setBusca(null);
+    setAnuncio("");
     const lidoDoArquivo = await lerArquivoDoExtrato(novo);
+    if (minha !== versao.current) return;
     if (!lidoDoArquivo.ok) {
-      versao.current++;
-      controle.current?.abort();
-      setLido(null);
-      setBusca(null);
       focarDepois.current = "falha";
       setFalha(lidoDoArquivo);
+      setLendo(false);
       return;
     }
-    await ler({ tipo: "arquivo", nome: novo.name, texto: lidoDoArquivo.texto });
+    await ler(lidoDoArquivo.entrada);
   }
 
   function mudarColuna(campo: CampoCsv, valor: string) {
@@ -294,7 +303,7 @@ export function ExtratoDoBanco() {
             rotulo={CAMPOS.arquivo.rotulo}
             ajuda={AJUDA.arquivo}
             dica={CAMPOS.arquivo.dica}
-            aceitar=".ofx,.qfx,.csv,.txt,application/x-ofx,text/csv,text/plain"
+            aceitar=".pdf,.ofx,.qfx,.csv,.txt,application/pdf,application/x-ofx,text/csv,text/plain"
             arquivo={arquivo}
             aoEscolher={(novo) => void escolher(novo)}
             desabilitado={lendo}

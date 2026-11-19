@@ -5,7 +5,9 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist/", ".wrangler/", "coverage/"]),
+  // public/exemplo/: a apresentação de /exemplo, gerada (o build do site com o roteador de hash e a API
+  // simulada; D28). Não se edita à mão: refaz-se pelo roteiro do docs/lancamento.md.
+  globalIgnores(["dist/", ".wrangler/", "coverage/", "public/exemplo/"]),
   {
     files: ["**/*.{js,ts,tsx}"],
     extends: [js.configs.recommended, tseslint.configs.recommended],

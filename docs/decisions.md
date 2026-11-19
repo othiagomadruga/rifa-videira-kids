@@ -418,6 +418,15 @@ do passo com o token, e o que deixassem no disco rodava com ele.
   `$GITHUB_ENV`/`$GITHUB_PATH`, sem `defaults`, `shell`, `working-directory` ou `continue-on-error`, o artefato do
   mesmo run em `dist/`, actions por SHA, sem `environment:`) e em `scripts/conferir-artefato.test.mjs` (as
   adulterações recusadas).
+- **Adendo de 17/11 (RIFA-072): o CI roda só na `main`.** Em 17/11 o GitHub Actions parou de rodar jobs por cobrança:
+  o repositório é privado, a cota do plano é em minutos, e cada push de branch de agente rodava a suíte inteira. Agora
+  `on.push` vale só para a `main` (que publica); numa branch, o CI roda pelo Run workflow ou por um pull request. As
+  branches passam pelo portão local do SM (testes, lint, typecheck e build) antes do merge, como sempre. Para voltar
+  ao CI em toda branch, tire o `branches: [main]` e a linha correspondente do teste. Sem o CI na branch, a
+  conferência do artefato também não roda lá (o "ainda na branch" acima): na subida do wrangler e do plugin (D4), o
+  portão local roda `node scripts/conferir-artefato.mjs` depois do build. Se a cota acabar de novo, nem o push na
+  `main` publica nem a volta pelo celular (D22) roda: o PO ajusta nas Settings da conta no GitHub (não nas do
+  repositório) → Billing (pagamento ou limite de gastos do Actions).
 
 ## D19. Conferência pelo CSV: o arquivo é lido no navegador (RIFA-012, ciclo 2, 2026-11-07)
 
@@ -1480,12 +1489,79 @@ entra no banco sozinho (o Net Empresa pede a chave de segurança do app a cada l
   Dois Pix iguais com os mesmos dois pedidos iguais ficam os dois Ambíguos: o algoritmo não chuta o par (pergunta ao
   PO). O resultado não depende da ordem de entrada (`cruzamento.test.ts`).
 - **Fora desta versão:** o PDF (pediria o pdf.js, dependência nova de centenas de KB; hoje, abrir o PDF, selecionar a
-  tabela e colar o texto), o Open Finance (pago), o robô no internet banking (a chave de segurança a cada login) e
+  tabela e colar o texto; **entrou na RIFA-068**, adendo abaixo), o Open Finance (pago), o robô no internet banking (a chave de segurança a cada login) e
   automatizar o painel da Rifei (sem API para marcar como pago; automatizar a tela de outro sistema é frágil e foge dos
   termos dela).
 - **Peso:** o JS inicial sobe 0,1 KiB (o `lazy` e o `Suspense` na `ConferenciaPage`), nenhuma dependência nova; a seção
   vem num pacote à parte de ~13 KiB em gzip, mais o leitor de valores e datas, que agora é dividido com a conferência
   pelo CSV (~5 KiB).
+
+### D26, adendo: o extrato em PDF (RIFA-068, 2026-11-17)
+
+Pedido do PO (17/11): "o pastor sobe o PDF do extrato bancário e o sistema reconhece os bilhetes que foram pagos". O
+banco continua o Bradesco Net Empresa (acesso só de consulta) e a marcação na Rifei continua à mão (sem API). A tarefa
+só lê o PDF e cai no mesmo cruzamento.
+
+- **Biblioteca: `pdfjs-dist` 6.5.438 (o pdf.js da Mozilla, Apache-2.0), versão fixa no `package.json`, build
+  `legacy`.** É o leitor de PDF mantido e testado em escala (o do Firefox): lida com compressão, fontes, objetos em
+  fluxo e PDF cifrado, o que um leitor caseiro não cobriria. O build `legacy` roda nos navegadores de alguns anos
+  atrás (o build moderno usa `Map.prototype.getOrInsertComputed`, que nem o Node 22 nem os celulares mais velhos
+  têm), por ~20 KB a mais em gzip. Alternativas descartadas: o `unpdf` (embrulha o mesmo pdf.js para servidor) e o
+  `pdf-parse` (Node). A dependência opcional `@napi-rs/canvas` do pacote só serve ao Node (os testes); no site, nada.
+- **Só sob demanda.** `extrato/pdf.ts` (o único que importa o `pdfjs-dist`) chega pelo `import("./pdf")` de
+  `leitura.ts`, só quando a pessoa escolhe um PDF (pela extensão, pelo tipo ou pelo `%PDF-` no começo). O JS inicial
+  não muda (`pdf-lazy.test.ts` segue os imports estáticos, como o `qr-lazy.test.ts`; o seguidor ficou em
+  `src/web/test/pacotes.ts`, dividido pelos dois). Sem internet (ou com o pacote antigo fora do ar depois de uma
+  publicação), o `import()` falha e a tela diz "Não foi possível abrir o leitor de PDF".
+- **CSP de produção sem mudança** (`default-src 'self'`, sem eval e sem inline). O worker do pdf.js é um arquivo do
+  próprio site: `import enderecoDoWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"` (o Vite copia o
+  arquivo para `assets/` com o hash e devolve a URL) e `GlobalWorkerOptions.workerSrc = enderecoDoWorker`; o
+  `new Worker(url, { type: "module" })` da mesma origem passa pelo `default-src 'self'` (sem `worker-src`, vale o
+  `script-src`, que cai no `default-src`). A versão 6 não tem mais eval (a opção `isEvalSupported` saiu); o
+  equivalente é `useWasm: false` (a CSP não tem `'wasm-unsafe-eval'`). Também `disableWorkerRendering: true` (sem o
+  segundo worker, de desenho), `useSystemFonts` e `disableFontFace` (nenhuma fonte baixada nem criada) e nenhuma URL de
+  fontes, cMaps ou WebAssembly: o pdf.js não busca nada pela rede. `verbosity: ERRORS` (nada de aviso no console).
+  Conferido no Chromium com o build servido pelo `npm run preview` e a CSP do `public/_headers`: nenhuma violação, o
+  console limpo e o worker criado de verdade (`assets/pdf.worker.min-<hash>.mjs`, `text/javascript`).
+- **As linhas pela posição** (`extrato/pdf-linhas.ts`, puro): de cada página, o texto e a posição de cada pedaço
+  (`getTextContent`); o y agrupa a linha (tolerância de 0,4 da altura da letra), o x ordena; pedaços colados viram a
+  mesma palavra, um vão até a altura da letra vira espaço, um vão maior separa as colunas. Achado o cabeçalho da
+  tabela (a mesma regra do texto colado: Data e Crédito e Débito, ou Valor; agora exportada de `texto-colado.ts`),
+  cada linha vira as células dele, separadas por tabulação e com as vazias no lugar (a coluna pela maior sobreposição
+  com o título dela; sem nenhuma, a mais próxima): é o que o navegador copia de uma tabela. Assim o débito sem sinal
+  da coluna Débito é débito (uma "TRANSF CC PARA CC PJ" de saída não vira Pix) e o saldo nunca é lido como o valor.
+  Sem cabeçalho, a linha é o texto com espaços. A página sem cabeçalho usa as colunas da anterior; um vão vertical
+  maior que 2,5 alturas da letra (o rodapé) e a troca de página viram uma linha em branco (encerram o lançamento de
+  cima). O texto vai para o **mesmo leitor do texto colado**; o resultado diz "Lido do arquivo PDF".
+- **A data na coluna Data vale para as linhas de baixo** (mudança no leitor do texto colado, que vale também para a
+  tabela colada): no extrato do Bradesco a data pode vir só na primeira linha do dia, que costuma ser o "SALDO
+  ANTERIOR", sem crédito nem débito. Antes, essa linha era ignorada e os lançamentos de baixo ficavam sem data. A
+  célula precisa ser só a data (um rodapé com "Emitido em 18/11/2026" na mesma coluna não muda o dia).
+- **O formato do Bradesco** (fontes públicas: só cópias de extratos de terceiros e importadores de código aberto; o
+  Bradesco não publica o modelo): a tabela "Data | Histórico (ou Lançamento) | Docto. (ou Dcto.) | Crédito (R$) |
+  Débito (R$) | Saldo (R$)", o "SALDO ANTERIOR" no começo e o Pix em duas linhas: "TRANSFERENCIA PIX", o documento,
+  o valor e o saldo; embaixo, "REM: <nome> <dd/mm>" (recebido) ou "DES: <nome> <dd/mm>" (enviado). Os testes usam
+  PDFs sintéticos nesse formato, gerados em `extrato/teste-apoio-pdf.ts` (Helvetica, posições de relatório, duas
+  páginas com o cabeçalho repetido, título e rodapé), com dados fictícios. NÃO DOCUMENTADO e a conferir no primeiro
+  PDF de verdade (sem guardar o arquivo): se o débito vem com sinal, se a data vem em toda linha e se há uma linha de
+  total (ela entraria como "crédito sem as palavras do Pix").
+- **Falhas claras:** o PDF sem nenhum texto ("Este PDF é uma imagem": escaneado ou fotografado; o outro jeito é o OFX
+  ou copiar a tabela da tela do banco), o PDF com senha de abrir ("Este PDF tem senha": a tela não pede a senha), o
+  arquivo que não é PDF de verdade, o PDF com texto mas sem lançamentos, mais de 200 páginas e o leitor que não
+  carregou. O limite de 5 MB do arquivo vale também para o PDF.
+- **Privacidade (D26 inteira):** os bytes vão do arquivo escolhido direto para o worker do próprio site; nada sai do
+  navegador, nada é gravado e o documento (com o worker) é destruído no fim da leitura. `ExtratoDoBanco.test.tsx`
+  sobe o PDF na varredura de privacidade (chamadas, storage e console) e o `pdf.test.ts` lê os PDFs sintéticos pelo
+  pdf.js de verdade (nos testes, o worker roda na mesma linha de execução, pelo `globalThis.pdfjsWorker`).
+- **Fora:** o PDF escaneado (pediria OCR), a senha digitada na tela, texto em PDF girado e o extrato com a descrição
+  numa linha e o valor na de baixo (um importador de terceiros descreve esse jeito no PDF do Bradesco: "PIX RECEBIDO"
+  numa linha e "complemento, documento, valor, saldo" na seguinte); se o PDF de verdade vier assim, os Pix ficariam
+  sem a palavra do Pix e cairiam em "créditos sem as palavras do Pix" (tarefa nova).
+- **Peso:** o JS inicial não muda (534,78 KiB, 162,95 KiB em gzip, igual ao da `main`); a seção do extrato sobe
+  ~0,6 KiB em gzip (13,2 KiB); o leitor de PDF vem num pacote à parte de 490 KiB (148 KiB em gzip) e o worker do
+  pdf.js num arquivo de 1,3 MB (386 KiB em gzip), os dois baixados só quando a pessoa escolhe um PDF (e guardados pelo
+  cache do navegador). O aviso de pedaço grande do Vite passou de 500 para 600 kB (`vite.config.ts`) por causa do
+  pacote do pdf.js.
 
 ## D27. Ranking único: separar ou não o ranking por divisão (RIFA-061; contrato, 2026-11-17)
 
@@ -1534,6 +1610,59 @@ as decisões configuráveis: virou uma opção da Campanha.
 - **Peso** (a ferramenta de capturas, em gzip): o JS inicial sobe 0,4 KiB (379 B: a lista única no ranking aberto e no
   telão, o cabeçalho da /minha) e o CSS inicial 0,1 KiB; nenhuma dependência nova. Com a opção ligada, as capturas das
   telas de ranking ficam iguais às da `main` (só a Campanha muda, com a caixa e a linha do resumo).
+
+## D28. Apresentação simulada em /exemplo do próprio site (RIFA-063, 2026-11-17)
+
+Decisão do PO (17/11): a apresentação da RIFA-062 (o site com a campanha simulada: as células e os discipuladores
+reais, vendas fictícias, nada é gravado) fica em https://rifa-videira-kids.madruga.workers.dev/exemplo, aberta a quem
+tiver o link, para mostrar ao pastor e à igreja. Os nomes das células e dos discipuladores podem ficar públicos; o da
+rede, não: a gravação usa a planilha com a rede chamada "Igreja Videira" e a barra não tem o papel Rede (ficam Público,
+Coordenação, Líder e Discipulador). Os líderes aparecem como "Líder da célula X" e não vai nenhum link de acesso, token
+ou hash. Quando o site esconder o nível rede com uma rede só (RIFA-065), a apresentação pode ser refeita.
+
+- **Roteador de hash, só no build da apresentação.** O site tira a tela do caminho (`createBrowserRouter`) e o Worker
+  serve os assets em modo SPA: `/exemplo/telao` sem arquivo cairia no `index.html` da raiz (o site oficial), e
+  recarregar sairia da apresentação. Com `VITE_ROTEADOR=hash` no `vite build`, o `main.tsx` usa o `createHashRouter`
+  (`src/web/roteador.ts`): a tela fica no hash (`/exemplo/#/telao`), o servidor só vê `/exemplo/` e serve o
+  `/exemplo/index.html`. O build do site não define a variável: o mesmo roteador, as mesmas rotas e os mesmos testes
+  (`roteador.test.ts` confere o padrão e que nem a configuração do build, nem o CI, nem os `.env` a definem). Nada muda
+  no Worker, no `wrangler.jsonc` nem no contrato. Descartados: o roteador do navegador com `basename` e uma regra para
+  `/exemplo/*` no Worker ou no `wrangler.jsonc` (mexe no Worker e na proteção das rotas por causa de uma página de
+  apresentação) e o roteador em memória (sem link direto para o telão; recarregar volta ao início).
+- **Em `public/exemplo/`, gerado.** O Vite copia `public/` para `dist/client` e a publicação já leva: nada muda no CI
+  nem no deploy. Lá ficam o `index.html` (documento completo, com o `noindex` e o título "Apresentação Rifa Videira
+  Kids"), `assets/` (o pacote do site construído com `VITE_ROTEADOR=hash` e `--base /exemplo/`) e `demo/` (`dados.js`,
+  as respostas gravadas; `demo.js`, a API simulada e a barra "Ver como"; `demo.css`). Nada inline: a CSP do
+  `public/_headers` vale também em `/exemplo` (por isso a apresentação não usa `<base>`: a CSP tem `base-uri 'none'`).
+  O ESLint e o Prettier ignoram a pasta. Peso: 42 arquivos, ~4,2 MiB no repositório e nos assets (RIFA-070); o maior
+  é o `demo/dados.js` (~3 MiB; o limite da Cloudflare é 25 MiB por arquivo). O pacote do site não muda: sem a variável,
+  o Vite troca a comparação por `false` e o roteador de hash nem entra nele.
+- **Nada vai para a API de verdade.** O `demo.js` roda antes do pacote do site e troca o `window.fetch` de `/api/*`: GET
+  devolve a resposta gravada do papel escolhido na barra; escrita não grava nada. A página está na mesma origem do site,
+  mas nenhum pedido chega ao Worker (nem com o cookie de quem tem sessão no site); o destino "voltar para" que o site
+  guarda no `localStorage` volta, ao sair da apresentação, ao que era antes dela; o papel da barra fica no
+  `sessionStorage` da aba (recarregar em `#/coordenacao` ou `#/minha` volta ao papel daquela área); e os links `#<id>`
+  de dentro da página ("Pular para o conteúdo") levam ao elemento, sem virar tela no roteador de hash.
+- **noindex.** `<meta name="robots" content="noindex">`: a página é pública pelo link, mas tem vendas fictícias e não
+  deve aparecer nos buscadores no lugar do site da campanha.
+- **Uma fotografia.** A apresentação é o site de quando foi montada (esta: a `main` com a RIFA-061, a RIFA-063 e a
+  RIFA-067, e a configuração real da RIFA-070): mudança no
+  site não chega a `/exemplo` até ela ser refeita. Refazer: gravar de novo a partir da versão do site que se quer
+  mostrar, `VITE_ROTEADOR=hash npx vite build --base /exemplo/` e trocar a pasta `public/exemplo/` inteira (os nomes dos
+  arquivos de `assets/` mudam a cada build). Apagar `public/exemplo/` tira a página do ar no próximo push na `main`.
+  Pendência (revisão): as ferramentas da gravação (o servidor local com o relógio simulado, o cenário das vendas
+  fictícias, a gravação por papel e a montagem do `index.html`) ainda não estão no repositório; até entrarem (por
+  exemplo em `scripts/apresentacao/`), refazer não sai só daqui.
+- **A configuração real da campanha (RIFA-070, 17/11).** Pedido do PO ("na simulação quero preço de 25 do
+  bilhete"): a gravação usa a configuração que está no D1 de produção (lida pelo SM, só leitura): bilhete a R$ 25, meta
+  fixa de 185 bilhetes por célula (7.030 nas 38), 3 períodos de 7 dias com 30%, 40% e 30%, início em 23/11, ranking por
+  bilhetes e único (sem divisão), o público vê o % da meta e as 10 primeiras, sem desconsiderar pedido, o acesso dos
+  discipuladores ligado e o das redes desligado (nenhum link de rede, nem na Trilha). O dia simulado é quinta, 03/12,
+  15:00 (Dia 11 de 21, no meio do Período 2, cuja meta é 74 bilhetes por célula): 3.208 bilhetes pagos nas células
+  (46% da meta da campanha; R$ 80.200), as 3 primeiras acima de 100% do período e algumas lá embaixo; no telão, mais
+  54 bilhetes entram em 9 minutos. Os valores em R$ são sempre a quantidade × R$ 25.
+- **Só com o `#`.** O link é `/exemplo` (redireciona para `/exemplo/`) ou `/exemplo/#/<tela>` (ex.: `/exemplo/#/telao`).
+  `/exemplo/telao`, sem o `#`, não tem arquivo e cai no fallback de SPA: abre o site oficial, na página "não encontrada".
 
 ## D31. Ajuda nos títulos e rótulos: o "?" e o texto de quem nunca viu o sistema (RIFA-066, 2026-11-17)
 
