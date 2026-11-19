@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Aviso, Button, ComDica, Icone } from "../../components/ui";
+import { Aviso, Button, ComAjuda, ComDica, Icone } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { baixarCompradores } from "./pedidos-api";
-import { DICAS } from "./textos";
+import { AJUDA, DICAS } from "./textos";
 
 type Resultado =
   | { tipo: "nada" }
@@ -55,9 +55,11 @@ export function ExportarCompradores() {
 
   return (
     <section className="pedidos-exportar" aria-labelledby={`${id}-titulo`}>
-      <h2 id={`${id}-titulo`} className="pedidos-exportar__titulo">
-        Compradores
-      </h2>
+      <ComAjuda texto={AJUDA.compradores} idDoTitulo={`${id}-titulo`}>
+        <h2 id={`${id}-titulo`} className="pedidos-exportar__titulo">
+          Compradores
+        </h2>
+      </ComAjuda>
       <p className="pedidos-exportar__intro">
         Planilha com o nome e o telefone de quem reservou ou comprou, um por
         linha, para agradecer e para as próximas campanhas. Só o admin vê.
@@ -72,7 +74,14 @@ export function ExportarCompradores() {
               onChange={(evento) => setSoPagou(evento.target.checked)}
             />
           </ComDica>
-          <label htmlFor={`${id}-so-pagou`}>Só quem pagou</label>
+          <ComAjuda
+            texto={AJUDA.soQuemPagou}
+            idDoTitulo={`${id}-so-pagou-rotulo`}
+          >
+            <label id={`${id}-so-pagou-rotulo`} htmlFor={`${id}-so-pagou`}>
+              Só quem pagou
+            </label>
+          </ComAjuda>
         </span>
         <ComDica texto={DICAS.exportarCompradores}>
           <Button

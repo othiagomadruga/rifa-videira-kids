@@ -267,6 +267,11 @@ export function totaisDepoisDe(
  * dele: o que é, para que serve e um exemplo. Nos campos, é também a dica do campo.
  */
 export const AJUDA = {
+  // RIFA-076 (D36): o bloco Compradores, só admin.
+  compradores:
+    "A lista de quem reservou ou comprou, com nome e telefone. Serve para agradecer e para chamar essas pessoas nas próximas campanhas. Ex.: baixe a planilha e mande um obrigado pelo WhatsApp.",
+  soQuemPagou:
+    "Marque para a planilha trazer só quem já pagou. Desmarcado, vêm também os que só reservaram e ainda não pagaram. Ex.: para agradecer, marque.",
   totais:
     "Quantos pedidos há em cada situação, com os bilhetes e o valor. Serve para conferir a campanha de relance: só os aprovados contam nas vendas.",
   status: {
