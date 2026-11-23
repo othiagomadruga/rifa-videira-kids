@@ -102,6 +102,9 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   - Primeiro admin em produção: `npm run acesso:criar -- --nome "<nome>" --papel admin --remote --origem https://rifa-videira-kids.madruga.workers.dev`.
   - Usuário e senha de um admin (RIFA-073, D33): `npm run acesso:senha -- --admin <id|nome> --usuario <login> [--remote]`;
     a senha vem do stdin (nunca de argumento). O próprio admin também cria em Minha senha. docs/acesso.md §11.
+  - Senha padrão (sem cadastro, derivada do nome): a célula (RIFA-064, D29) e o discipulador (RIFA-082, D37, "Sou
+    discipulador" no `/entrar`) entram com `"@" + nome normalizado + "1234"`; a coordenação vê cada senha na Hierarquia.
+    docs/acesso.md §10 e §12.
   - **Lançamento:** roteiro em `docs/lancamento.md` (contas do PO, 1ª publicação, configuração em produção, compra de teste, reunião dos líderes, dia a dia e contingência).
 - **Segredos locais:** copie `.dev.vars.example` para `.dev.vars` (ignorado pelo git) e troque os valores.
 - **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test, build e a conferência do artefato (Node 22) nos pushes da `main`, nos pull requests e no Run workflow (push de outra branch não roda o CI: vale o portão local; D18, adendo da RIFA-072), e publica na Cloudflare nos pushes da `main` (job `publicar`, D18).

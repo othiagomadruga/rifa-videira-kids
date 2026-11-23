@@ -2056,3 +2056,54 @@ dia: uma planilha de compradores para agradecer a compra e para as campanhas fut
 - **Sem limpeza automática** (pedido explícito do PO). Apagar, se um dia for preciso, é um UPDATE manual do SM.
 - **Por que só o admin:** é a menor abertura que atende ao pedido (quem confere o pagamento e entra em contato é o
   admin); a coordenação continua sem dado do comprador, como antes.
+
+## D37. Login do discipulador com o nome e a senha padrão (RIFA-082; contrato, 2026-11-23)
+
+Pedido do PO (23/11, no dia em que a campanha começou): "Mas eles [os discipuladores] não têm o login e senha deles?"
+→ "Pode fazer". Até aqui, só a célula (D29: nome + senha padrão) e o admin (D33: usuário + senha) entravam com senha;
+o discipulador, só pelo link pessoal (D12). Contrato em `src/shared/contracts/` (`login-discipulador.ts`, sem zod;
+`acesso.ts`; `api.ts`), API em `src/worker/routes/acesso.ts` e `src/worker/db/login-discipulador.ts`, sem migração.
+
+- **A mesma regra da célula, de propósito.** Senha = `"@" + nome normalizado + "1234"` (a normalização da D29:
+  minúsculas, sem acentos, só `a-z` e `0-9`), digitada na mesma forma (`formaDaSenhaDigitada`). Os nomes de hoje:
+  Alisson, Edgard, Elvis, Euriano, Fábio, Notte, Pr. Fábio e William → `@alisson1234` ... `@prfabio1234`,
+  `@william1234`. `senhaPadraoDoDiscipulador` chama a da célula, e `normalizarNomeLogin` é a mesma função de
+  `normalizarNomeCelula`, com um nome que serve aos dois. Uma regra só para a coordenação explicar e o site calcular.
+- **Senha previsível, como a D29, e pelo mesmo motivo:** o que o discipulador vê é a /minha dele (D12): só números das
+  células dele (ranking, metas, bilhetes, links e QR de vendas), nunca R$, nenhuma rota da coordenação, nenhuma escrita
+  além da própria sessão. Quem conhece a regra e o nome de um discipulador (que aparece na Hierarquia, não no ranking
+  aberto) entra como ele: o risco aceito é ver o desempenho das células dele. A senha não é gravada (nem hash) e é
+  comparada em tempo constante, também sem discipulador (contra uma senha que nunca confere).
+- **Reaproveita as chaves, sem coluna nem migração.** O login só abre com as DUAS ligadas: `acesso.discipuladores`
+  (o papel tem acesso, D20) **e** `acesso.celulas_senha` (o login com senha padrão, D29), lidas numa subconsulta só da
+  campanha ativa (`SQL_LOGIN_DISCIPULADORES_SENHA_LIGADO`; sem campanha, o padrão das duas, ligadas). Desligar qualquer
+  uma recusa o login (o mesmo 401) e **derruba na hora** as sessões do discipulador abertas pela senha, do jeito da
+  D29: a consulta da sessão sem link do papel `discipulador` passa a valer só com as duas chaves (+1 linha só nessa
+  sessão; com link, o `CASE` nem lê a campanha). As sessões do link seguem a D20 (com o acesso desligado, 403
+  `acesso_desligado` na /minha, sem apagar). Na Campanha, a chave `acesso.celulas_senha` passa a se chamar "Login com
+  senha padrão (células e discipuladores)". Uma chave nova seria mais um interruptor para o admin lembrar no meio da
+  campanha, e o acesso dos discipuladores já é o interruptor do papel.
+- **A sessão é a do papel `discipulador`, a mesma do link (D12),** com o mesmo usuário (um por discipulador, 0006). Se o
+  discipulador ainda não tem usuário (nenhum link gerado), ele nasce no login com o nome do discipulador, como no lote
+  de links (o `pessoa_nome` do discipulador é o nome dele), e o nome acompanha a Hierarquia a cada login. Sem link
+  (`sessoes.link_id` NULL), `__Host-sessao`, 45 dias, parada há 7 dias deixa de valer; revogar um link não a derruba,
+  desativar o usuário derruba e barra o link e a senha. Tudo num `db.batch`, com as chaves e o usuário ativo conferidos
+  de novo dentro do lote.
+- **Rota à parte:** `POST /api/sessao/discipulador { discipulador, senha }` (corpo estrito), não um campo a mais no
+  `POST /api/sessao/senha`: o contrato e os testes da célula ficam como estão, e o nome de uma célula igual ao de um
+  discipulador não é ambíguo (cada um tem a sua rota). A mesma pilha das outras: mesma origem (CSRF), `LIMITE_LOGIN`
+  no **mesmo contador** do link, da célula e do admin (429), teto de 4 KiB (413). Toda recusa é o **mesmo** 401
+  `nao_autenticado` ("Não foi possível entrar com este discipulador e esta senha"): senha errada, nome desconhecido,
+  colisão, nome sem letra nem dígito, usuário desativado, qualquer chave desligada.
+- **Colisão:** dois discipuladores com o mesmo nome depois da normalização ("Fábio" e "Fabio") ficam de fora, como as
+  células da D29; a Hierarquia avisa (`problemasDoLoginDosDiscipuladores`). "Fábio" e "Pr. Fábio" não colidem.
+- **Trilha:** `sessao.entrar_com_senha_discipulador`, do usuário do discipulador, alvo `discipulador:<id>`, no mesmo lote
+  da sessão, sem a senha. A recusa não registra. Consequência aceita, como na D29: depois de um login por senha, o
+  discipulador não pode ser excluído (a trilha segura o usuário); discipulador com células já não se exclui.
+- **Site:** em `/entrar`, ao lado de "Sou administrador", **"Sou discipulador"** troca o formulário para "Discipulador" e
+  "Senha" (mesma acessibilidade do formulário do admin) e, em 200, vai para a /minha. Na Hierarquia (admin e
+  coordenação, nunca a hierarquia), o cartão vira "Login com senha padrão" e ganha **Ver a senha de cada discipulador**,
+  com Copiar e o aviso de colisão.
+- **Descartado:** senha própria por discipulador (hash, troca, "esqueci"): mais tela e suporte no dia em que a campanha
+  começou, sem ganho para o que ele vê; chave nova `acesso.discipuladores_senha`: o PO não pediu e as duas que existem
+  bastam.
