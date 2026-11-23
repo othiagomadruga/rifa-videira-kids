@@ -8,6 +8,7 @@
 import { vi } from "vitest";
 import {
   respostaMeusLinksVendasSchema,
+  respostaMeusMaioresCompradoresSchema,
   respostaVisaoIndividualSchema,
   type Alvo,
   type CriterioRanking,
@@ -15,7 +16,9 @@ import {
   type ItemEquipe,
   type PapelHierarquia,
   type ReferenciaCampanha,
+  type ItemMeuMaiorComprador,
   type RespostaMeusLinksVendas,
+  type RespostaMeusMaioresCompradores,
   type RespostaVisaoIndividual,
   type UnidadeMeta,
   type UsuarioSessao,
@@ -876,6 +879,51 @@ export function meusLinksDe(
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Maiores compradores (RIFA-083, D38): GET /api/minha/maiores-compradores (só o discipulador)
+// ---------------------------------------------------------------------------------------------------
+
+/** A janela de cada pedido: a Semana 2 da campanha dos exemplos ou a campanha inteira. */
+export const JANELAS_DOS_COMPRADORES = {
+  atual: {
+    tipo: "atual",
+    ordem: 2,
+    nome: "Semana 2",
+    data_inicio: "2026-12-03",
+    data_fim: "2026-12-09",
+  },
+  campanha: {
+    tipo: "campanha",
+    ordem: null,
+    nome: "Campanha inteira",
+    data_inicio: "2026-11-23",
+    data_fim: "2026-12-16",
+  },
+} as const;
+
+/** Compradores fictícios das células do Davi (as posições, os bilhetes e a célula de cada um). */
+export const COMPRADORES_DA_SEMANA: ItemMeuMaiorComprador[] = [
+  { posicao: 1, nome: "Rita Fictícia", bilhetes: 12, celula: "Célula Ágape" },
+  { posicao: 2, nome: "Caio Fictício", bilhetes: 5, celula: "Célula Betel" },
+  { posicao: 2, nome: "Lia Fictícia", bilhetes: 5, celula: "Célula Canaã" },
+  { posicao: 4, nome: null, bilhetes: 1, celula: "Célula Ágape" },
+];
+
+/** A resposta de GET /api/minha/maiores-compradores na janela pedida, passada pelo schema (estrito). */
+export function meusCompradoresDe(
+  janela: string,
+  itens: ItemMeuMaiorComprador[] = [],
+): RespostaMeusMaioresCompradores {
+  return respostaMeusMaioresCompradoresSchema.parse({
+    janela:
+      janela === "campanha"
+        ? JANELAS_DOS_COMPRADORES.campanha
+        : JANELAS_DOS_COMPRADORES.atual,
+    itens,
+    atualizado_em: "2026-12-04T15:00:00.000Z",
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------
 // API falsa
 // ---------------------------------------------------------------------------------------------------
 
@@ -894,7 +942,8 @@ type Responder = (chamada: Chamada) => Response | Promise<Response>;
 /**
  * fetch simulado: GET /api/minha/visao responde com `visao` (ou com o que `visao(periodo)` devolver),
  * passando pelo schema; GET /api/minha/links-vendas, os `links` (padrão: os do alvo da visão, pelo schema; o
- * líder sem afiliado na visão, sem link); POST /api/sessao/sair, 204; GET /api/sessao, a `sessao` (sem ela,
+ * líder sem afiliado na visão, sem link); GET /api/minha/maiores-compradores (RIFA-083), o que `compradores(janela)`
+ * devolver (padrão: nenhuma compra na janela); POST /api/sessao/sair, 204; GET /api/sessao, a `sessao` (sem ela,
  * 401). Outra rota: 404 no formato da API.
  */
 export function criarApiFalsa(
@@ -903,6 +952,8 @@ export function criarApiFalsa(
     | ((periodo: string) => RespostaVisaoIndividual) = visaoDe(),
   sessao: UsuarioSessao | null = null,
   links: RespostaMeusLinksVendas | null = null,
+  compradores: (janela: string) => RespostaMeusMaioresCompradores = (janela) =>
+    meusCompradoresDe(janela),
 ) {
   const chamadas: Chamada[] = [];
   const marcadas: { metodo: string; caminho: string; responder: Responder }[] =
@@ -926,6 +977,16 @@ export function criarApiFalsa(
               afiliadosDoLider:
                 daVisao.afiliados_vinculados === 0 ? [] : undefined,
             }),
+        ),
+      );
+    }
+    if (
+      chamada.metodo === "GET" &&
+      url.pathname === "/api/minha/maiores-compradores"
+    ) {
+      return respostaJson(
+        respostaMeusMaioresCompradoresSchema.parse(
+          compradores(url.searchParams.get("janela") ?? "atual"),
         ),
       );
     }

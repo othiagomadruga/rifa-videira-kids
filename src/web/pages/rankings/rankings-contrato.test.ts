@@ -6,7 +6,9 @@ import {
   JANELAS_RANKING,
   NIVEIS_RANKING,
   ROTAS,
+  ROTAS_MAIORES_COMPRADORES,
   SITUACOES_RITMO,
+  consultaMaioresCompradoresSchema,
   consultaRankingPublicoSchema,
   consultaRankingSchema,
 } from "../../../shared/contracts/api";
@@ -19,6 +21,10 @@ import {
   caminhoDoRankingPublico,
 } from "../ranking-publico/ranking-publico-api";
 import { JANELAS, NIVEIS } from "./filtros";
+import {
+  CAMINHO_MAIORES_COMPRADORES,
+  caminhoDosMaioresCompradores,
+} from "./maiores-compradores-api";
 import { CAMINHO_RANKING, caminhoDoRanking } from "./rankings-api";
 import {
   TEXTO_COLUNA_VALORES,
@@ -34,6 +40,19 @@ function consultaDe(caminho: string): Record<string, string> {
 }
 
 describe("cópias do contrato dos rankings no site", () => {
+  it("os maiores compradores (RIFA-083): o caminho, só admin, e a consulta de cada janela passa no schema", () => {
+    const rota = ROTAS_MAIORES_COMPRADORES.maioresCompradores;
+    expect(CAMINHO_MAIORES_COMPRADORES).toBe(rota.caminho);
+    expect(rota.grupo).toBe("coordenacao");
+    expect(rota.papeis).toEqual(["admin"]);
+    for (const janela of JANELAS)
+      expect(
+        consultaMaioresCompradoresSchema.parse(
+          consultaDe(caminhoDosMaioresCompradores(janela)),
+        ),
+      ).toEqual({ janela, limite: 10 });
+  });
+
   it("caminhos das rotas", () => {
     expect(CAMINHO_RANKING).toBe(ROTAS.painelRanking.caminho);
     expect(ROTAS.painelRanking.grupo).toBe("coordenacao");

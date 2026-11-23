@@ -370,3 +370,73 @@
   color: var(--cor-alerta);
   font-weight: var(--peso-forte);
 }
+
+/* Maiores compradores (RIFA-083, D38; só o discipulador): a troca de janela e a lista, como a dos primeiros. */
+.minha-compradores__corpo {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.minha-compradores__janelas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.minha-compradores__janela {
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+.minha-compradores__vazio {
+  color: var(--cor-texto-suave);
+}
+
+.minha-compradores__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */
+.minha-compradores__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+}
+
+.minha-compradores__posicao {
+  min-width: 2.5ch;
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrito);
+}
+
+.minha-compradores__quem {
+  display: grid;
+  min-width: 0;
+}
+
+.minha-compradores__nome {
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.minha-compradores__celula {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.minha-compradores__bilhetes {
+  font-weight: var(--peso-forte);
+  white-space: nowrap;
+}

@@ -15,6 +15,7 @@ import {
 } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { useBuscarRedes, useRedes } from "../../lib/redes";
+import { useUsuarioConectado } from "../../lib/sessao";
 import {
   formatarData,
   formatarHora,
@@ -35,6 +36,7 @@ import {
   ehSemCampanha,
   type FiltrosRanking,
 } from "./rankings-api";
+import { MaioresCompradores } from "./MaioresCompradores";
 import { TabelaRanking } from "./TabelaRanking";
 import {
   DICAS,
@@ -65,6 +67,8 @@ type Carga = { caminho: string; resultado: Resultado };
 // divisão, ele traz só parte delas), então a tela pergunta à API, se o site ainda não souber.
 export function RankingsPage() {
   const [parametros, setParametros] = useSearchParams();
+  // RIFA-083 (D38): os maiores compradores, com telefone e R$, só para o admin (D36).
+  const admin = useUsuarioConectado().papel === "admin";
   useBuscarRedes();
   const redes = useRedes();
   const lidos = lerFiltros(parametros);
@@ -197,6 +201,7 @@ export function RankingsPage() {
           conteudo: nivel === filtros.nivel ? painel : null,
         }))}
       />
+      {admin && <MaioresCompradores />}
     </>
   );
 }

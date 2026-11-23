@@ -71,6 +71,8 @@ describe("CA2: o código da visão individual não mostra dinheiro", () => {
         "./LinksDeVendas.tsx",
         "./links-vendas-api.ts",
         "./useMeusLinksVendas.ts",
+        "./MaioresCompradores.tsx",
+        "./maiores-compradores-api.ts",
       ]),
     );
   });
@@ -108,6 +110,7 @@ describe("CA2: o código da visão individual não mostra dinheiro", () => {
     }
     expect(rotas).toContain("/api/minha/visao");
     expect(rotas).toContain("/api/minha/links-vendas");
+    expect(rotas).toContain("/api/minha/maiores-compradores");
   });
 });
 

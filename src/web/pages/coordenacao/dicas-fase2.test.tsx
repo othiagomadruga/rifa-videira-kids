@@ -534,6 +534,32 @@ describe("Rankings", () => {
     );
     await conferirDicas(17);
   });
+
+  it("admin (RIFA-083): o cartão dos maiores compradores, com 'Esta semana', 'Campanha toda' e o '?' do título", async () => {
+    const { pedidosDosCompradores } = simularApiRanking((consulta) =>
+      respostaDaConsulta(consulta, [
+        item({
+          posicao: 1,
+          id: 1,
+          nome: "Célula Ficticia 01",
+          realizado: 7,
+          meta: 29,
+          esperado: 5,
+        }),
+      ]),
+    );
+    renderizarRota("/coordenacao/rankings", { usuario: ADMIN_DE_TESTE });
+    await screen.findByRole("table", undefined, { timeout: 5000 });
+    await screen.findByText("Ainda não há compras nesta semana.");
+    expect(pedidosDosCompradores).toHaveLength(1);
+    expect(
+      textoDaDica(screen.getByRole("button", { name: "Esta semana" })),
+    ).toBe(DICAS_RANKINGS.janelaCompradores.atual);
+    expect(
+      textoDaDica(screen.getByRole("button", { name: "Campanha toda" })),
+    ).toBe(DICAS_RANKINGS.janelaCompradores.campanha);
+    await conferirDicas(17 + 3);
+  });
 });
 
 describe("Mapa", () => {

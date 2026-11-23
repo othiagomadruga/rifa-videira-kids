@@ -2,7 +2,10 @@
 // pelo schema do contrato, que é estrito: um campo a mais ou errado quebra o teste já na montagem) e uma
 // API falsa que responde conforme a consulta e guarda os caminhos pedidos.
 import { vi } from "vitest";
-import { respostaRankingSchema } from "../../../shared/contracts/api";
+import {
+  respostaMaioresCompradoresSchema,
+  respostaRankingSchema,
+} from "../../../shared/contracts/api";
 import type {
   Divisao,
   ItemRanking,
@@ -143,6 +146,8 @@ export type Responder = (
  * Troca o fetch por uma API que só conhece GET /api/painel/ranking. `caminhos` guarda cada caminho pedido
  * (com a consulta); outra rota responde 404 e fica em `inesperadas`. A lista das redes (RIFA-065, D30: a tela
  * pergunta quantas há) responde com `redes` redes (padrão: duas, a tela como sempre foi) e fica em `pedidosDasRedes`.
+ * Os maiores compradores (RIFA-083, só o admin pede) respondem sem nenhuma compra na janela pedida e ficam em
+ * `pedidosDosCompradores`.
  */
 export function simularApiRanking(
   responder: Responder,
@@ -151,12 +156,26 @@ export function simularApiRanking(
   const caminhos: string[] = [];
   const inesperadas: string[] = [];
   const pedidosDasRedes: string[] = [];
+  const pedidosDosCompradores: string[] = [];
   const fetchMock = vi.fn(async (entrada: RequestInfo | URL) => {
     const caminho = String(entrada);
     const url = new URL(caminho, "http://localhost");
     if (ehListaDasRedes(caminho)) {
       pedidosDasRedes.push(caminho);
       return respostaRedes(redes);
+    }
+    if (url.pathname === "/api/admin/maiores-compradores") {
+      pedidosDosCompradores.push(caminho);
+      return respostaJson(
+        respostaMaioresCompradoresSchema.parse({
+          janela:
+            url.searchParams.get("janela") === "campanha"
+              ? JANELA_CAMPANHA
+              : JANELA_SEMANA_2,
+          itens: [],
+          atualizado_em: AGORA,
+        }),
+      );
     }
     if (url.pathname !== "/api/painel/ranking") {
       inesperadas.push(caminho);
@@ -170,7 +189,13 @@ export function simularApiRanking(
     return resultado instanceof Response ? resultado : respostaJson(resultado);
   });
   vi.stubGlobal("fetch", fetchMock);
-  return { fetchMock, caminhos, inesperadas, pedidosDasRedes };
+  return {
+    fetchMock,
+    caminhos,
+    inesperadas,
+    pedidosDasRedes,
+    pedidosDosCompradores,
+  };
 }
 
 /** Resposta coerente com a consulta: nível, divisão e janela pedidos, com os itens dados. */

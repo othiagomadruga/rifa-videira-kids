@@ -299,3 +299,91 @@
     margin-top: var(--espaco-1);
   }
 }
+
+/* Maiores compradores (RIFA-083, D38; só o admin): a troca de janela e a lista, cada comprador num cartão. */
+.rankings-compradores {
+  margin-top: var(--espaco-6);
+}
+
+.rankings-compradores__corpo {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.rankings-compradores__descricao,
+.rankings-compradores__vazio {
+  color: var(--cor-texto-suave);
+}
+
+.rankings-compradores__janelas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.rankings-compradores__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */
+.rankings-comprador {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+}
+
+.rankings-comprador__posicao {
+  min-width: 2.5ch;
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrito);
+}
+
+.rankings-comprador__quem,
+.rankings-comprador__numeros {
+  display: grid;
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+.rankings-comprador__numeros {
+  justify-items: end;
+  text-align: right;
+}
+
+.rankings-comprador__nome {
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.rankings-comprador__celulas,
+.rankings-comprador__sem {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.rankings-comprador__telefone {
+  justify-self: start;
+  font-size: var(--texto-sm);
+}
+
+.rankings-comprador__bilhetes {
+  font-weight: var(--peso-forte);
+  white-space: nowrap;
+}
+
+.rankings-comprador__total {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+  white-space: nowrap;
+}

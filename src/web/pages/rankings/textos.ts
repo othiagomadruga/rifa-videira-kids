@@ -140,4 +140,42 @@ export const DICAS = {
   } satisfies Record<NivelRanking, string>,
   divisaoUnica:
     "Indisponível: a campanha usa um ranking só, com todas as células juntas. Para separar Jovens e Adultos, ligue a opção na tela Campanha.",
+  /** RIFA-083: a troca de janela dos maiores compradores (só o admin vê). */
+  janelaCompradores: {
+    atual:
+      "Mostra quem mais comprou no período de agora (normalmente a semana).",
+    campanha: "Mostra quem mais comprou desde o primeiro dia da campanha.",
+  } satisfies Record<JanelaRanking, string>,
+  whatsapp: "Abre uma conversa no WhatsApp com quem comprou.",
 } as const;
+
+// ---------------------------------------------------------------------------------------------------
+// Maiores compradores (RIFA-083, D38; só o admin): nome, telefone, bilhetes, total pago e células.
+// ---------------------------------------------------------------------------------------------------
+
+/** Os botões da troca de janela, na ordem. */
+export const TEXTO_JANELA_COMPRADORES: Record<JanelaRanking, string> = {
+  atual: "Esta semana",
+  campanha: "Campanha toda",
+};
+
+/** Quando ainda ninguém comprou na janela. */
+export function semCompras(janela: JanelaRanking): string {
+  return janela === "atual"
+    ? "Ainda não há compras nesta semana."
+    : "Ainda não há compras na campanha.";
+}
+
+/** "1 bilhete", "12 bilhetes". */
+export function textoDosBilhetes(bilhetes: number): string {
+  return `${formatarNumero(bilhetes)} ${bilhetes === 1 ? "bilhete" : "bilhetes"}`;
+}
+
+/** As células do comprador: "Célula Ágape, Célula Betel"; com pedido sem célula, "…, sem célula" ou "Sem célula". */
+export function textoDasCelulas(
+  celulas: readonly string[],
+  semCelula: boolean,
+): string {
+  if (celulas.length === 0) return "Sem célula";
+  return semCelula ? `${celulas.join(", ")}, sem célula` : celulas.join(", ");
+}

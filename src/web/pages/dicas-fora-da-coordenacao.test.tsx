@@ -129,12 +129,20 @@ describe("/minha (visão individual, com a moldura)", () => {
     );
   });
 
-  it("discipulador: a equipe e os links das células, com 'Ver QR'", async () => {
+  it("discipulador: a equipe, os maiores compradores (com a troca de janela) e os links das células, com 'Ver QR'", async () => {
     await abrir("discipulador");
     expect(
       screen.getAllByRole("button", { name: /^Ver QR code/ }).length,
     ).toBeGreaterThan(0);
-    await conferirDicas(10);
+    // RIFA-083: o cartão dos maiores compradores, com "Esta semana", "Campanha toda" e o "?" do título.
+    await screen.findByText("Ainda não há compras nesta semana.");
+    expect(textoDaDica(botao("Esta semana"))).toBe(
+      DICAS_MINHA.janelaCompradores.atual,
+    );
+    expect(textoDaDica(botao("Campanha toda"))).toBe(
+      DICAS_MINHA.janelaCompradores.campanha,
+    );
+    await conferirDicas(13);
   });
 
   it("rede: a equipe agrupada e os links de todas as células", async () => {

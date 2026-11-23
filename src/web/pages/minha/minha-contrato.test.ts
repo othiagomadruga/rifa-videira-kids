@@ -9,7 +9,9 @@ import {
   PAPEIS_HIERARQUIA,
   ROTAS,
   ROTAS_LINK_VENDAS,
+  ROTAS_MAIORES_COMPRADORES,
   TIPO_ALVO_DO_PAPEL,
+  consultaMaioresCompradoresSchema,
   consultaVisaoIndividualSchema,
   respostaVisaoIndividualSchema,
   usuarioSessaoSchema,
@@ -22,6 +24,10 @@ import {
   inicioDoPapel,
 } from "../../lib/sessao";
 import { CAMINHO_MEUS_LINKS_VENDAS } from "./links-vendas-api";
+import {
+  CAMINHO_MEUS_MAIORES_COMPRADORES,
+  caminhoDosMeusMaioresCompradores,
+} from "./maiores-compradores-api";
 import { CAMINHO_VISAO, caminhoDaVisao, periodoDaFase } from "./minha-api";
 import {
   SESSOES,
@@ -50,6 +56,26 @@ describe("cópias do contrato na visão individual", () => {
     expect([...ROTAS_LINK_VENDAS.meusLinksVendas.papeis].sort()).toEqual(
       [...PAPEIS_DA_HIERARQUIA].sort(),
     );
+  });
+
+  it("os maiores compradores (RIFA-083): caminho, grupo, só o discipulador, e a consulta passa no schema", () => {
+    const rota = ROTAS_MAIORES_COMPRADORES.meusMaioresCompradores;
+    expect(CAMINHO_MEUS_MAIORES_COMPRADORES).toBe(rota.caminho);
+    expect(rota.metodo).toBe("GET");
+    expect(rota.grupo).toBe("hierarquia");
+    expect(rota.papeis).toEqual(["discipulador"]);
+    for (const janela of ["atual", "campanha"] as const) {
+      const url = new URL(
+        caminhoDosMeusMaioresCompradores(janela),
+        "https://site.example",
+      );
+      expect(url.pathname).toBe(CAMINHO_MEUS_MAIORES_COMPRADORES);
+      expect(
+        consultaMaioresCompradoresSchema.parse(
+          Object.fromEntries(url.searchParams),
+        ),
+      ).toEqual({ janela, limite: 10 });
+    }
   });
 
   it("papéis da hierarquia (cópia) e a área de cada papel", () => {

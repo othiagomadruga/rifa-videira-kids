@@ -8,6 +8,8 @@ export const AJUDA = {
     "O tempo da disputa: só o período de agora (normalmente a semana) ou a campanha inteira. Ex.: “Período atual” mostra quem vendeu mais nesta semana.",
   colunaPercentual:
     "Quanto da própria meta cada um já vendeu nesta janela. Ex.: 80% = vendeu 8 de cada 10 bilhetes da meta. É o que deixa comparar células de tamanhos diferentes.",
+  maioresCompradores:
+    "Quem mais comprou bilhetes, com o telefone para agradecer ou tirar uma dúvida. Só o administrador vê esta lista. Ex.: em “Esta semana”, só as compras da semana.",
   colunaSituacao:
     "Se está em dia com o que se esperava vender até ontem ou se ficou para trás. Ex.: “Em dia” quer dizer que vendeu pelo menos o esperado até ontem.",
 } as const;

@@ -113,6 +113,9 @@ describe("CA5: o CSS da visão individual", () => {
       ".minha-links__nome",
       ".minha-links__detalhe",
       ".minha-links__explicacao",
+      // RIFA-083: os maiores compradores (o nome do comprador e a célula).
+      ".minha-compradores__nome",
+      ".minha-compradores__celula",
     ]) {
       const inicio = minhaCss.indexOf(`${seletor} {`);
       expect(inicio, seletor).toBeGreaterThanOrEqual(0);

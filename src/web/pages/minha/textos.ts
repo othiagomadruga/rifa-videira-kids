@@ -12,6 +12,7 @@ import type {
 import {
   NOMES_DIVISAO,
   type Divisao,
+  type JanelaRanking,
   type JanelaRankingResposta,
   type NivelRanking,
   type PeriodoDaReferencia,
@@ -547,6 +548,8 @@ export const AJUDA = {
     "As células que você acompanha, com a posição e quanto da meta cada uma já fez. Serve para ver quem precisa de uma força.",
   links:
     "O link da Rifei da célula: toda compra feita por ele conta para a meta dela. Mande para quem vai comprar, pelo WhatsApp ou pelo QR code.",
+  compradores:
+    "Quem mais comprou bilhetes pelas suas células, com a célula de cada um. Serve para agradecer e para lembrar quem pode ajudar de novo. Ex.: em “Esta semana”, só as compras da semana.",
 } as const;
 
 // ---------------------------------------------------------------------------------------------------
@@ -558,4 +561,35 @@ export const AJUDA = {
 export const DICAS = {
   dadosDaCurva:
     "Abre uma tabela, dia a dia, com o esperado e o realizado acumulados, em % da meta.",
+  /** RIFA-083: a troca de janela dos maiores compradores. */
+  janelaCompradores: {
+    atual:
+      "Mostra quem mais comprou no período de agora (normalmente a semana).",
+    campanha: "Mostra quem mais comprou desde o primeiro dia da campanha.",
+  } satisfies Record<JanelaRanking, string>,
 } as const;
+
+// ---------------------------------------------------------------------------------------------------
+// Maiores compradores (RIFA-083, D38): só o nome, os bilhetes e a célula (sem telefone e sem dinheiro).
+// ---------------------------------------------------------------------------------------------------
+
+/** Os botões da troca de janela, na ordem. */
+export const TEXTO_JANELA_COMPRADORES: Record<JanelaRanking, string> = {
+  atual: "Esta semana",
+  campanha: "Campanha toda",
+};
+
+/** Quando ainda ninguém comprou na janela. */
+export function semCompras(janela: JanelaRanking): string {
+  return janela === "atual"
+    ? "Ainda não há compras nesta semana."
+    : "Ainda não há compras na campanha.";
+}
+
+/** "Semana 2 · 30/11 a 06/12" ou "Campanha inteira · 23/11 a 13/12". */
+export function textoDaJanelaDosCompradores(
+  janela: JanelaRankingResposta,
+): string {
+  const nome = janela.tipo === "campanha" ? "Campanha inteira" : janela.nome;
+  return `${nome} · ${dataCurta(janela.data_inicio)} a ${dataCurta(janela.data_fim)}`;
+}

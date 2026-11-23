@@ -8,6 +8,7 @@ import { CurvaIndividual } from "./CurvaIndividual";
 import { CartaoPeriodo, Destaque } from "./Destaque";
 import { Equipe } from "./Equipe";
 import { LinksDeVendas } from "./LinksDeVendas";
+import { MaioresCompradores } from "./MaioresCompradores";
 import { RankingIndividual } from "./RankingIndividual";
 import { useVisaoIndividual } from "./useVisaoIndividual";
 import "./minha.css";
@@ -101,6 +102,10 @@ function Visao({
       <CurvaIndividual visao={visao} />
       <RankingIndividual visao={visao} />
       {alvo.tipo !== "celula" && <Equipe visao={visao} />}
+      {/* Os maiores compradores das células dele (RIFA-083, D38): só o discipulador, depois do ranking das células. */}
+      {alvo.tipo === "discipulador" && (
+        <MaioresCompradores atualizadoEm={visao.atualizado_em} />
+      )}
       {alvo.tipo !== "celula" && <LinksDeVendas alvo={alvo} />}
       <div className="minha-rodape">
         <p>
