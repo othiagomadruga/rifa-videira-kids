@@ -42,6 +42,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "rifei.desconectar": "Conexão com a Rifei apagada",
   // RIFA-076 (D36): a planilha de compradores baixada pelo admin (tela Pedidos; alvo `compradores`, sem os dados).
   "compradores.exportar": "Planilha de compradores baixada",
+  // RIFA-086 (D40): o relatório diário enviado agora pelo admin (alvo `relatorio_diario`, sem os e-mails).
+  "relatorio_diario.enviar": "Relatório diário enviado por e-mail",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */
@@ -69,6 +71,8 @@ const TIPO_DO_ALVO: Record<string, string> = {
   rifei: "Conta da Rifei",
   // D36: compradores.exportar (sem id).
   compradores: "Compradores",
+  // D40: relatorio_diario.enviar (sem id).
+  relatorio_diario: "Relatório diário",
 };
 
 /**

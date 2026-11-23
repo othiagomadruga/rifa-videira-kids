@@ -26,8 +26,23 @@ export const CABECALHOS_SEGURANCA = {
     "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 } as const;
 
+/**
+ * A CSP da prévia do e-mail diário (RIFA-086, D40; GET /api/admin/relatorio-diario/previa, só admin): o HTML do e-mail
+ * só tem estilos inline (`style="..."`), que a CSP de sempre barra. Esta é MAIS fechada em todo o resto (nada de
+ * script, fetch, fonte nem formulário; imagem só `data:`) e libera só o estilo inline. É a única CSP que uma rota
+ * pode pôr: qualquer outra é trocada pela de CABECALHOS_SEGURANCA.
+ */
+export const CSP_PREVIA_EMAIL =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
 export const cabecalhosSeguranca = createMiddleware(async (c, next) => {
   await next();
+  const cspDaRota = c.res.headers.get("Content-Security-Policy");
   for (const [nome, valor] of Object.entries(CABECALHOS_SEGURANCA))
-    c.header(nome, valor);
+    c.header(
+      nome,
+      nome === "Content-Security-Policy" && cspDaRota === CSP_PREVIA_EMAIL
+        ? CSP_PREVIA_EMAIL
+        : valor,
+    );
 });

@@ -28,6 +28,8 @@ export const AJUDA = {
     "O vendido comparado com o esperado até ontem. Ex.: 120% quer dizer 20% a mais que o esperado; 80%, que a campanha está atrás.",
   projecao:
     "Onde a campanha deve chegar no último dia se continuar vendendo no ritmo de agora. Ex.: “chega a 110% da meta”. Depois do fim, vira o resultado final.",
+  saldoEfi:
+    "O dinheiro que está agora na conta da Efí, onde caem os Pix da rifa. Só o administrador vê este cartão; o mesmo saldo vai no e-mail diário das 7h.",
   vendasAprovadas:
     "Os pedidos pagos, que são os que contam para a meta. Os que aguardam pagamento, os expirados e os desconsiderados ficam de fora.",
 } as const;

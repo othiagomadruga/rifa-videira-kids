@@ -10,6 +10,7 @@ import {
 } from "../../components/ui";
 import { ErroApi, ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
+import { useUsuarioConectado } from "../../lib/sessao";
 import { DICA_DO_MENU } from "../coordenacao/textos";
 import { contarRedes, useRedes } from "../../lib/redes";
 import { AlertaWebhook } from "../pedidos/AlertaWebhook";
@@ -20,6 +21,7 @@ import { EsqueletoDoPainel } from "./EsqueletoDoPainel";
 import { FiltroEscopo } from "./FiltroEscopo";
 import { Referencia } from "./Referencia";
 import { RelatorioCampanha } from "./RelatorioCampanha";
+import { SaldoEfi } from "./SaldoEfi";
 import { DICAS, ROTULO_DO_ESCOPO, textoSemVendas } from "./textos";
 import { useCelulasDoFiltro } from "./useCelulasDoFiltro";
 import {
@@ -48,14 +50,15 @@ const ehNaoEncontrado = (erro: unknown) =>
 
 // Visão geral da coordenação (RIFA-009), pensada para o celular: em que dia e período a campanha está,
 // quanto vender hoje, se está em dia ou abaixo (e quanto), para onde vai no ritmo atual e a curva
-// esperado × realizado. O recorte (campanha, divisão, rede, discipulador ou célula) fica na URL. No fim, o
-// relatório da campanha para baixar (RIFA-038).
+// esperado × realizado. O recorte (campanha, divisão, rede, discipulador ou célula) fica na URL. No fim, só para o
+// admin, o saldo da conta Efí (RIFA-086, D40) e, para todos, o relatório da campanha para baixar (RIFA-038).
 export function VisaoGeralPage() {
   const [params, setParams] = useSearchParams();
   const escopo = escopoDosParams(params);
   const { estado, atualizando, atualizarAgora, tentarDeNovo } =
     usePainelResumo(escopo);
   const celulas = useCelulasDoFiltro();
+  const admin = useUsuarioConectado().papel === "admin";
   // As células trazem a hierarquia toda: com uma rede só, o filtro, os avisos e o relatório não citam a rede
   // (RIFA-065, D30). Contadas aqui, avisam o resto da tela (e do site) antes da pintura.
   useRedes(
@@ -124,6 +127,8 @@ export function VisaoGeralPage() {
         tentarDeNovo={tentarDeNovo}
         verCampanhaToda={() => mudarEscopo(ESCOPO_CAMPANHA)}
       />
+      {/* Saldo da Efí (RIFA-086, D40): só o admin (a coordenação nem pede a rota, que lhe dá 403). */}
+      {admin && <SaldoEfi />}
       {/* Relatório da campanha para baixar (RIFA-038): não depende do recorte nem do painel carregado. */}
       <RelatorioCampanha />
     </>

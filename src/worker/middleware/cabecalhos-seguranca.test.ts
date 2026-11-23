@@ -11,6 +11,7 @@ import {
 } from "../test/acesso-teste";
 import {
   CABECALHOS_SEGURANCA,
+  CSP_PREVIA_EMAIL,
   cabecalhosSeguranca,
 } from "./cabecalhos-seguranca";
 
@@ -146,6 +147,50 @@ describe("Content-Security-Policy (RIFA-013)", () => {
     expect(csp["base-uri"]).toEqual(["'none'"]);
     expect(csp["form-action"]).toEqual(["'self'"]);
     expect(csp["frame-ancestors"]).toEqual(["'none'"]);
+  });
+});
+
+describe("a CSP da prévia do e-mail diário (RIFA-086, D40)", () => {
+  function appComCsp(csp: string) {
+    const app = new Hono();
+    app.use("*", cabecalhosSeguranca);
+    app.get("/api/html", (c) =>
+      c.html('<!doctype html><p style="color:red">oi</p>', 200, {
+        "Content-Security-Policy": csp,
+      }),
+    );
+    return app;
+  }
+
+  it("a rota que põe a CSP da prévia a mantém (e os outros 3 cabeçalhos continuam)", async () => {
+    const res = await appComCsp(CSP_PREVIA_EMAIL).request("/api/html");
+
+    expect(res.headers.get("Content-Security-Policy")).toBe(CSP_PREVIA_EMAIL);
+    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+  });
+
+  it("qualquer outra CSP posta por uma rota é trocada pela de sempre", async () => {
+    for (const csp of [
+      "default-src *",
+      `${CSP_PREVIA_EMAIL}; script-src 'unsafe-inline'`,
+      "",
+    ]) {
+      const res = await appComCsp(csp).request("/api/html");
+      esperarCabecalhos(res);
+    }
+  });
+
+  it("é mais fechada que a de sempre: nada de script, fetch, fonte, formulário nem moldura; só o estilo inline", () => {
+    expect(diretivasCsp(CSP_PREVIA_EMAIL)).toEqual({
+      "default-src": ["'none'"],
+      "style-src": ["'unsafe-inline'"],
+      "img-src": ["data:"],
+      "base-uri": ["'none'"],
+      "form-action": ["'none'"],
+      "frame-ancestors": ["'none'"],
+    });
   });
 });
 

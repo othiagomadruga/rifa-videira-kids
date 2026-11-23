@@ -21,6 +21,8 @@
 //    (`acesso.celulas_senha` ou `acesso.discipuladores`) derruba a sessão aberta pela senha, e não a do link;
 // l) os maiores compradores (RIFA-083, D38): a rota do admin dá 403 para a coordenação e a hierarquia; a da /minha é só
 //    do discipulador (líder, rede e coordenação: 403; sem sessão, 401) e responde sem telefone e sem valor;
+// n) o relatório diário por e-mail e o saldo da Efí (RIFA-086, D40): só do admin (coordenação e hierarquia: 403; sem
+//    sessão, 401), o envio com CSRF, e a prévia em HTML é a única resposta com a CSP própria (sem script);
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -47,6 +49,8 @@ import {
   ROTAS_CONEXAO_RIFEI,
   ROTAS_RIFEI_API,
   ROTAS_RELATORIO,
+  ROTAS_RELATORIO_DIARIO,
+  ROTAS_SALDO_EFI,
   ROTAS_TOKEN_WEBHOOK,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
@@ -77,7 +81,10 @@ import {
 } from "../shared/contracts";
 import app from "./index";
 import { TTL_CACHE_PUBLICO_MS } from "./lib/cache-publico";
-import { CABECALHOS_SEGURANCA } from "./middleware/cabecalhos-seguranca";
+import {
+  CABECALHOS_SEGURANCA,
+  CSP_PREVIA_EMAIL,
+} from "./middleware/cabecalhos-seguranca";
 import { CACHE_PUBLICO } from "./routes/publico";
 import {
   ORIGEM,
@@ -131,7 +138,7 @@ interface RotaDaCoordenacao {
  * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora) e ROTAS_RIFEI_API
  * (RIFA-070, D32: só admin) e ROTAS_CONEXAO_RIFEI (RIFA-070, D32: a conexão com a Rifei e a busca do pedido, só admin) e
  * ROTAS_MAIORES_COMPRADORES (RIFA-083, D38: a do admin, só admin; a do discipulador, em /api/minha, fica no filtro de
- * fora). O relatório entrou aqui
+ * fora) e ROTAS_RELATORIO_DIARIO e ROTAS_SALDO_EFI (RIFA-086, D40: só admin). O relatório entrou aqui
  * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
  * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
@@ -145,6 +152,8 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_RIFEI_API),
     ...Object.values(ROTAS_CONEXAO_RIFEI),
     ...Object.values(ROTAS_MAIORES_COMPRADORES),
+    ...Object.values(ROTAS_RELATORIO_DIARIO),
+    ...Object.values(ROTAS_SALDO_EFI),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -243,6 +252,8 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_RIFEI_API),
     ...Object.values(ROTAS_CONEXAO_RIFEI),
     ...Object.values(ROTAS_MAIORES_COMPRADORES),
+    ...Object.values(ROTAS_RELATORIO_DIARIO),
+    ...Object.values(ROTAS_SALDO_EFI),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -324,6 +335,14 @@ describe("a) toda rota da coordenação exige sessão", () => {
     ).toBeUndefined();
     for (const rota of Object.values(ROTAS_MAIORES_COMPRADORES))
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    // O relatório diário e o saldo da Efí (RIFA-086, D40): os três no filtro, só de admin, e montados.
+    for (const rota of [
+      ...Object.values(ROTAS_RELATORIO_DIARIO),
+      ...Object.values(ROTAS_SALDO_EFI),
+    ]) {
+      expect(doFiltro(rota)).toEqual(["admin"]);
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    }
   });
 
   it.each(casos(ROTAS_DA_COORDENACAO))(
@@ -2551,6 +2570,91 @@ describe("m) RIFA-085 (D39, adendo): o grupo próprio da célula só pela coorde
       });
     }
     expect(await grupoGravado()).toEqual({ grupo_id: 4 });
+  });
+});
+
+describe("n) RIFA-086 (D40): o relatório diário por e-mail e o saldo da Efí, só do admin", () => {
+  const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
+  const ROTAS_SO_ADMIN = [
+    ...Object.values(ROTAS_RELATORIO_DIARIO),
+    ...Object.values(ROTAS_SALDO_EFI),
+  ];
+
+  // O app real usa o relógio do sistema: a campanha começa hoje (no fuso dela), e a prévia é a de hoje.
+  const hoje = hojeNoFuso(DADOS_CAMPANHA.fuso_horario, new Date());
+
+  beforeAll(async () => {
+    await semearCenario({
+      campanha: { ...DADOS_CAMPANHA, data_inicio: hoje },
+      pedidos: [],
+    });
+    sessoes.lider = await cabecalhosDeSessaoDaHierarquia("lider", 1);
+    sessoes.discipulador = await cabecalhosDeSessaoDaHierarquia(
+      "discipulador",
+      10,
+    );
+    sessoes.rede = await cabecalhosDeSessaoDaHierarquia("rede", 1);
+  });
+
+  it("líder, discipulador e rede: 403 nas três; a coordenação também; sem cookie, 401", async () => {
+    for (const rota of ROTAS_SO_ADMIN) {
+      for (const cabecalhos of [
+        sessoes.lider,
+        sessoes.discipulador,
+        sessoes.rede,
+        coordenacao,
+      ])
+        await esperarErro(
+          await requisitar(rota.metodo, rota.caminho, cabecalhos),
+          403,
+          "proibido",
+        );
+      await esperarErro(
+        await requisitar(rota.metodo, rota.caminho, { Origin: ORIGEM }),
+        401,
+        "nao_autenticado",
+      );
+    }
+  });
+
+  it("o envio de outra origem é recusado (CSRF), mesmo com a sessão de admin", async () => {
+    await esperarErro(
+      await requisitar(
+        "POST",
+        ROTAS_RELATORIO_DIARIO.enviarRelatorioDiario.caminho,
+        {
+          ...admin,
+          Origin: ORIGEM_MALICIOSA,
+        },
+      ),
+      403,
+      "proibido",
+    );
+  });
+
+  it("admin: a prévia sai em HTML com a CSP própria (sem script) e no-store; o saldo, em JSON com a CSP de sempre", async () => {
+    const previa = await requisitar(
+      "GET",
+      `${ROTAS_RELATORIO_DIARIO.previaRelatorioDiario.caminho}?data=${hoje}`,
+      admin,
+    );
+    expect(previa.status).toBe(200);
+    expect(previa.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(previa.headers.get("Content-Security-Policy")).toBe(
+      CSP_PREVIA_EMAIL,
+    );
+    expect(CSP_PREVIA_EMAIL).not.toMatch(/script|'self'|\*/);
+    expect(previa.headers.get("Cache-Control")).toBe("no-store");
+    expect(await previa.text()).not.toMatch(/<script/i);
+
+    const saldo = await requisitar(
+      "GET",
+      ROTAS_SALDO_EFI.saldoEfi.caminho,
+      admin,
+    );
+    expect(saldo.status).toBe(200);
+    esperarCabecalhosDeSeguranca(saldo);
+    expect(saldo.headers.get("Cache-Control")).toBe("no-store");
   });
 });
 

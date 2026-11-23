@@ -40,7 +40,7 @@ src/web/
 | `/acesso/<token>` | Entrar no sistema da Rifa Videira Kids | `acesso` | RIFA-007/014 | coordenação, líderes, discipuladores e redes (link pessoal do WhatsApp) |
 | `/entrar` | Entrar | `entrar` | RIFA-007 | todos com link (sem sessão) |
 | `/minha` | o nome do alvo (ex.: Célula Ágape) | `minha` | RIFA-014 | líder, discipulador e rede, **sem R$**, sem menu |
-| `/coordenacao` | Visão geral | `visao-geral` | RIFA-009/038 | coordenação (com o relatório da campanha para baixar, em R$) |
+| `/coordenacao` | Visão geral | `visao-geral` | RIFA-009/038/086 | coordenação (com o relatório da campanha para baixar, em R$; o saldo da Efí só para o admin) |
 | `/coordenacao/campanha` | Campanha | `campanha` | RIFA-004/028–032 | coordenação (as regras do admin e o resumo "Regras da campanha", D20) |
 | `/coordenacao/hierarquia` | Hierarquia | `hierarquia` | RIFA-005 | coordenação |
 | `/coordenacao/adesao` | Adesão | `adesao` | RIFA-006 | coordenação |
@@ -279,6 +279,19 @@ A rota está em `docs/api.md` ("Relatório da campanha para baixar") e as regras
 - **Região viva fixa** do cartão (`role="status"`, vazia desde o começo): "Baixando o relatório: <tipo>…", "Relatório baixado: <nome>." e o texto de cada falha.
 - **Nada fica guardado**: o arquivo existe só no `Blob` do download; o object URL é liberado depois de `LIBERAR_ARQUIVO_DEPOIS_MS` (60 s: o navegador lê o arquivo depois do clique, e no iPhone só quando a pessoa confirma); nada vai para `localStorage`, `sessionStorage`, URL ou histórico.
 - Do contrato, `src/shared/contracts/relatorio` (sem zod: `TIPOS_RELATORIO`, `PREFIXO_ARQUIVO_RELATORIO` e o tipo); de `api.ts`, só o tipo de `ROTAS_RELATORIO`. O caminho é cópia, conferida por `visao-geral-contrato.test.ts` (com a consulta pelo `consultaRelatorioSchema` e as respostas da API falsa pelo `respostaRelatorioCsvSchema`); o CSS em 390 px, por `visao-geral-css.test.ts`. Testes em `RelatorioCampanha.test.tsx`, com a API falsa de `teste-apoio.ts` (`csvDoRelatorio` e `respostaRelatorio`, por `montarCsvRelatorio` e `cabecalhosDoRelatorio`; `api.relatorio` troca a resposta; `api.pedidos` guarda cada `Request`) e o download espiado por `test/download.ts`.
+
+## Saldo da Efí na Visão geral (RIFA-086, D40)
+
+- **Cartão "Saldo na Efí"** (`pages/visao-geral/SaldoEfi.tsx`, `Card` com ajuda), **só para o admin**: a
+  `VisaoGeralPage` só o monta com `papel === "admin"` (a coordenação não vê o cartão nem pede a rota, que lhe dá 403).
+  Fica antes do "Relatório da campanha". Pede `GET /api/admin/efi/saldo` (`carregarSaldoEfi` em `visao-geral-api.ts`)
+  uma vez ao abrir a tela (a API guarda a resposta por um minuto; não acompanha a atualização automática do painel).
+- **Estados:** carregando ("Consultando o saldo…"); o valor em R$ e "Consultado às HH:MM." (em Belém); a Efí não
+  ligada ("A consulta do saldo ainda não foi ligada…", sem botão); a Efí fora do ar ("Saldo indisponível agora…" e
+  **"Consultar de novo"**, com dica); a API falhou (`ErrorState` com "Tentar de novo").
+- O caminho é cópia, conferida por `visao-geral-contrato.test.ts`. Testes em `SaldoEfi.test.tsx` (inclui a varredura
+  de dicas e de ajudas do cartão e a coordenação sem o cartão e sem o pedido).
+- O e-mail diário (prévia e envio, rotas só do admin) não tem tela: `docs/api.md` e `docs/lancamento.md` 3.8.
 
 ## Extrato do banco na Conferência (RIFA-059)
 

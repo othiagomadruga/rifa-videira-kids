@@ -2223,3 +2223,86 @@ existiam no sistema).
   "Grupo" mostra o efetivo, com a marca discreta "(da célula)" quando é o próprio.
 - **Segurança:** nenhuma rota nova; o PUT e o POST da célula continuam só da coordenação (`src/worker/protecao.test.ts`,
   parte m: 401 sem sessão, 403 para líder, discipulador e rede, e nada muda).
+
+## D40. Relatório diário por e-mail e saldo da Efí, só do admin (RIFA-086, 2026-11-23)
+
+Pedido do PO (23/11): "um relatório diário por e-mail para o pastor (e para mim), simples e limpo, com os dados da
+campanha", no modelo que ele aprovou (uma coluna, 560 px); e "o saldo da conta Efí no relatório e no painel do admin".
+Contrato em `src/shared/contracts/relatorio-diario.ts` (constantes, sem zod) e `api.ts` (`ROTAS_RELATORIO_DIARIO`,
+`ROTAS_SALDO_EFI` e os schemas); Worker em `src/worker/lib/relatorio-diario.ts` (os números e o e-mail, puro),
+`lib/email.ts` (MIME), `lib/relatorio-diario-envio.ts` (leitura e envio), `lib/efi.ts` (saldo), `agendado.ts` (o cron)
+e `routes/relatorio-diario.ts` e `routes/efi.ts`; site no cartão `pages/visao-geral/SaldoEfi.tsx`. Sem migração.
+
+- **E-mail pela própria Cloudflare** (binding `send_email`, nome `EMAIL`, pelo Email Routing do domínio
+  `projetokidsbelem.com.br`): o mesmo Worker manda, sem conta nova, sem chave de API de terceiros e sem dependência
+  nova. O MIME é montado à mão em `lib/email.ts` (multipart/alternative com texto puro e HTML, UTF-8 em base64, assunto
+  em encoded-words do RFC 2047, linhas de até 78 caracteres, `Date`, `Message-ID` e `Auto-Submitted`) e vai em
+  `new EmailMessage(de, para, mime)` de `cloudflare:email`. Remetente `relatorio@projetokidsbelem.com.br` ("Projeto
+  Videira Kids"). Descartados: Resend, SendGrid e afins (conta, chave e DPA novos para dois e-mails por dia); o
+  `mimetext` (dependência para o que cabe em ~100 linhas testadas); o envio "estruturado" do binding (`send({ from,
+  to, subject, html, text })`, do Email Service novo da Cloudflare): fica como alternativa se o MIME der problema.
+- **Destinatários só em segredo** (`RELATORIO_EMAILS`, separados por vírgula; até 10): o repositório é público, então
+  nenhum e-mail entra no código, no `wrangler.jsonc` (nem como `allowed_destination_addresses` do binding: o Email
+  Routing já só entrega para os destinos verificados da conta), nos testes (só `example.com` e `exemplo.com.br`) ou nos
+  logs (que levam só contagens). Um e-mail por destinatário: ninguém vê o endereço do outro, e a falha de um não para
+  os outros. Endereço fora do formato simples (com nome, espaço, quebra de linha) é ignorado: não injeta cabeçalho.
+- **Ontem como dia de referência.** Cron `0 10 * * *` (10:00 UTC = 07:00 em Belém, `triggers.crons` no
+  `wrangler.jsonc`, travado em `config-publicacao.test.ts`): o e-mail sai de manhã com o dia anterior FECHADO (até
+  23:59:59.999 de Belém), e não com um dia pela metade. Antes do início da campanha (no 1º dia, ontem é a véspera) e
+  depois do fim, não sai; na manhã seguinte ao último dia, sai o último (o resultado final). O "agora" do cron é o
+  horário agendado (um disparo atrasado manda o mesmo dia).
+- **Os números são os do painel**, dos mesmos montadores (`montarResumoPainel` e `montarRankingPainel` com `data` =
+  ontem; `montarRankingGruposPainel` com o último milissegundo de ontem como "agora"), numa leitura só
+  (`lerEntradaDoCalculo` com os grupos no mesmo lote: duas idas ao D1 por e-mail, uma vez por dia). Na ordem do modelo:
+  arrecadado e bilhetes da campanha (com os sem célula); a barra e o % do alvo; o dia (vendido e a meta do dia, a mesma
+  "meta de hoje" do painel naquele dia); o período (vendido de meta e %); as 5 primeiras células do ranking da campanha
+  inteira, pelo critério configurado, **só as que já venderam**; o 1º de cada grupo no nível célula, na janela da
+  campanha (empate: todos, até 3 e "e mais N"; sem venda: "ainda sem vendas"; sem grupo nenhum, a seção some); os
+  discipuladores com venda, na ordem do ranking, e "Sem venda ainda: ..." em ordem alfabética; e a caixa "Atenção"
+  (células sem venda, bilhetes sem célula quando há, e o saldo da Efí ou "indisponível"). Percentuais com uma casa,
+  **truncados** como no site (R11: nunca "100%" antes da meta; o modelo mostrava 3,1% e 8,1% arredondados). R$ e
+  milhar por texto, sem ponto flutuante (D2). O rótulo do dia é "No dia" (o modelo dizia "Hoje", mas o e-mail é de
+  ontem).
+- **Nada pessoal.** Só números agregados e os nomes de células, discipuladores e grupos (que a coordenação já vê): nem
+  o nome e o telefone do comprador (D36), nem o contato do líder. Todo nome é escapado no HTML. Testado com contatos
+  gravados no banco.
+- **Prévia e envio pelo admin** (`GET /api/admin/relatorio-diario/previa?data=` e `POST .../enviar { data? }`, só o
+  papel admin): para ver o e-mail no navegador e mandar de novo sem esperar o cron. A prévia devolve o HTML com uma CSP
+  própria (`CSP_PREVIA_EMAIL` em `middleware/cabecalhos-seguranca.ts`): `default-src 'none'; style-src
+  'unsafe-inline'; ...`, mais fechada que a de sempre em tudo (nenhum script, fetch, fonte ou formulário) e que só
+  libera o estilo inline do e-mail; é a única CSP que uma rota pode pôr (qualquer outra é trocada pela de sempre,
+  testado). O envio responde 503 `nao_configurado` sem o binding ou sem destinatário (antes de ler o banco) e registra
+  `relatorio_diario.enviar` na trilha (o dia e as contagens, nunca os e-mails). O envio do cron não tem usuário (a
+  trilha exige um): fica no log do Worker.
+- **Saldo da Efí, só do admin.** `GET /v2/gn/saldo` da API Pix (escopo `gn.balance.read`), com o token OAuth
+  (`POST /oauth/token`, Basic do client_id e client_secret). A Efí exige o certificado do cliente (mTLS) em toda
+  chamada: as duas vão pelo binding `mtls_certificates` `EFI_CERT` (`env.EFI_CERT.fetch`), com os segredos
+  `EFI_CLIENT_ID` e `EFI_CLIENT_SECRET`. O token fica na memória do isolate até `expires_in` menos 60 s; a resposta do
+  saldo (o valor ou a falha) vale 60 s, então a tela e o e-mail vão à Efí no máximo uma vez por minuto por servidor.
+  Tempo curto (5 s) por chamada; a falha vira `erro` (`autenticacao`, `consulta`, `tempo_esgotado`,
+  `resposta_invalida`) e "indisponível" no e-mail, nunca 5xx; o log leva só o passo, o código e o status (nem segredo,
+  nem token, nem o corpo da Efí). `GET /api/admin/efi/saldo` responde `{ configurado, saldo_centavos, consultado_em,
+  erro? }`. Por que só o admin: o saldo é o dinheiro da conta, e quem cuida dele é o admin (como o comprador na D36); a
+  coordenação não vê o cartão nem a rota (403), a hierarquia muito menos. O pastor vê o saldo pelo e-mail.
+- **Bindings opcionais, ligados depois pelo SM** (`docs/lancamento.md` 3.8): o código trata a falta de cada um. Sem
+  `EMAIL`, o cron só avisa no log; sem `EFI_CERT` ou sem os segredos, o saldo fica "não configurado" no painel e
+  "indisponível" no e-mail. Por isso o `wrangler.jsonc` desta tarefa tem só o cron (`config-publicacao.test.ts` trava
+  que `send_email` e `mtls_certificates` ainda não estão lá e que o arquivo não tem nenhum endereço de e-mail).
+- **O Worker exporta o app com o `scheduled`** (`Object.assign(app, { scheduled })` no `index.ts`): o Hono continua
+  sendo o objeto exportado, e os testes que usam `app.request` e `app.routes` não mudam.
+
+**Suposições** (simples e reversíveis):
+
+1. Ontem como referência, envio às 07:00 de Belém, e nada antes do início nem depois da manhã seguinte ao último dia.
+2. "Células que mais avançaram" e "Por grupo · quem lidera" na janela da campanha inteira (até ontem), não na semana.
+3. Percentuais truncados, como o site (o modelo arredondava).
+4. Sem idempotência do cron: um disparo repetido da Cloudflare (raro) manda o e-mail de novo.
+5. O e-mail sai em nome de `relatorio@projetokidsbelem.com.br`; o domínio precisa do Email Routing ligado.
+
+**Perguntas ao PO:**
+
+1. A janela de "Células que mais avançaram" e de "quem lidera" por grupo: a campanha inteira (assumido) ou a semana?
+2. O domínio `projetokidsbelem.com.br` já recebe e-mail em outro provedor? Ligar o Email Routing da Cloudflare troca os
+   registros MX do domínio (o e-mail que chega passaria a ser roteado pela Cloudflare).
+3. A conta Efí está aberta e aprovada? Em 16/11 o lançamento saiu sem ela (Pix manual): o saldo só aparece com uma
+   aplicação da Efí com o escopo de consulta de saldo e um certificado para o Worker.

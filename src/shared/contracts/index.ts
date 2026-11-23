@@ -22,3 +22,4 @@ export * from "./senha-admin";
 export * from "./rifei-api";
 export * from "./compradores";
 export * from "./maiores-compradores";
+export * from "./relatorio-diario";

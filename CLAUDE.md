@@ -105,6 +105,7 @@ O DevMission (https://devmission.pages.dev) é a fonte da verdade do andamento. 
   - Senha padrão (sem cadastro, derivada do nome): a célula (RIFA-064, D29) e o discipulador (RIFA-082, D37, "Sou
     discipulador" no `/entrar`) entram com `"@" + nome normalizado + "1234"`; a coordenação vê cada senha na Hierarquia.
     docs/acesso.md §10 e §12.
+  - Relatório diário por e-mail e saldo da Efí (RIFA-086, D40): cron das 7h (`src/worker/agendado.ts`), prévia em `GET /api/admin/relatorio-diario/previa` (só admin); para ligar (Email Routing, binding `EMAIL`, segredos `RELATORIO_EMAILS`, `EFI_CLIENT_ID` e `EFI_CLIENT_SECRET`, certificado mTLS `EFI_CERT`): docs/lancamento.md 3.8.
   - **Lançamento:** roteiro em `docs/lancamento.md` (contas do PO, 1ª publicação, configuração em produção, compra de teste, reunião dos líderes, dia a dia e contingência).
 - **Segredos locais:** copie `.dev.vars.example` para `.dev.vars` (ignorado pelo git) e troque os valores.
 - **CI:** `.github/workflows/ci.yml` roda `npm ci`, lint, typecheck, test, build e a conferência do artefato (Node 22) nos pushes da `main`, nos pull requests e no Run workflow (push de outra branch não roda o CI: vale o portão local; D18, adendo da RIFA-072), e publica na Cloudflare nos pushes da `main` (job `publicar`, D18).
