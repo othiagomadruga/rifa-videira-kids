@@ -1175,6 +1175,11 @@ export type ConsultaRankingGrupos = z.output<
  * vizinhos DENTRO do grupo; todas as instâncias do nível no grupo, inclusive as que ainda não venderam. Só os grupos
  * que têm células (as células herdam o grupo do discipulador), na ordem de `ordem` (empate, pelo nome); nenhum
  * discipulador com grupo e com células = `grupos: []` (a tela não mostra a seção). Ignora a divisão (outro recorte).
+ *
+ * RIFA-085 (adendo da D39): no nível `celula`, vale o grupo EFETIVO de cada célula (o próprio, `celulas.grupo_id`, se
+ * houver; senão, o do discipulador), e um grupo só com células de grupo próprio também aparece. No nível
+ * `discipulador`, nada muda: cada discipulador fica no grupo dele, com todas as células dele (o total é o do ranking
+ * de todas), mesmo as de grupo próprio.
  */
 export const respostaRankingGruposSchema = z.strictObject({
   nivel: z.enum(NIVEIS_RANKING_GRUPOS),

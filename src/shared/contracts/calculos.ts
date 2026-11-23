@@ -1437,30 +1437,50 @@ function itemDoRankingPublico(
 // ---------------------------------------------------------------------------------------------------
 
 /**
- * Um grupo do discipulador e os discipuladores dele (o Worker lê de `discipuladores.grupo_id`). As células herdam o
- * grupo do discipulador; um discipulador sem grupo fica fora de todos (e continua no ranking de todas).
+ * Um grupo, os discipuladores dele (o Worker lê de `discipuladores.grupo_id`) e as células com o grupo próprio nele
+ * (`celulas.grupo_id`, RIFA-085). As células herdam o grupo do discipulador, menos as que têm grupo próprio: essas
+ * entram no grupo delas (ex.: uma célula de Adolescentes de um discipulador de Jovens). Sem grupo nenhum (nem próprio
+ * nem do discipulador), a célula fica fora de todos (e continua no ranking de todas). `celulas` ausente = nenhuma
+ * célula com grupo próprio neste grupo.
  */
 export type GrupoCalculo = {
   id: number;
   nome: string;
   ordem: number;
   discipuladores: readonly number[];
+  celulas?: readonly number[];
 };
 
-/** Os grupos que têm células, na ordem da tela (`ordem`; empate, o nome em português e o id), com as células. */
+/**
+ * Os grupos que têm células, na ordem da tela (`ordem`; empate, o nome em português e o id), com as células de cada um:
+ * - nível célula: o grupo EFETIVO de cada célula (o próprio, se houver; senão, o do discipulador). Cada célula entra
+ *   num grupo só;
+ * - nível discipulador: o grupo do discipulador, com todas as células dele (as de grupo próprio também, para o total
+ *   dele ser o mesmo do ranking de todas). Cada discipulador entra num grupo só; o grupo próprio de uma célula não
+ *   leva o discipulador para outro grupo.
+ */
 function gruposComCelulas(
   celulas: readonly CelulaCalculo[],
   grupos: readonly GrupoCalculo[],
+  nivel: NivelRanking,
 ): { grupo: GrupoCalculo; celulas: CelulaCalculo[] }[] {
   const ordenados = [...grupos].sort(
     (a, b) =>
       a.ordem - b.ordem || ordemDosNomes.compare(a.nome, b.nome) || a.id - b.id,
   );
+  const grupoProprio = new Map<number, number>();
+  if (nivel === "celula")
+    for (const grupo of grupos)
+      for (const celula of grupo.celulas ?? [])
+        grupoProprio.set(celula, grupo.id);
   return ordenados.flatMap((grupo) => {
     const doGrupo = new Set(grupo.discipuladores);
-    const suas = celulas.filter((celula) =>
-      doGrupo.has(celula.discipulador_id),
-    );
+    const suas = celulas.filter((celula) => {
+      const proprio = grupoProprio.get(celula.id);
+      return proprio === undefined
+        ? doGrupo.has(celula.discipulador_id)
+        : proprio === grupo.id;
+    });
     return suas.length === 0 ? [] : [{ grupo, celulas: suas }];
   });
 }
@@ -1485,7 +1505,7 @@ function rankingsDosGrupos(
   return {
     data,
     janela: resposta,
-    grupos: gruposComCelulas(entrada.celulas, grupos).map(
+    grupos: gruposComCelulas(entrada.celulas, grupos, nivel).map(
       ({ grupo, celulas }) => ({
         grupo: { id: grupo.id, nome: grupo.nome, ordem: grupo.ordem },
         linhas: linhasDoRanking(base, celulas, nivel, undefined, janela, corte),

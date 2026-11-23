@@ -73,6 +73,11 @@ function celulaDaApi(celula: CelulaFicticia): Celula {
     lider_email: null,
     lider_telefone: null,
     divisao: celula.rede_id === 1 ? "jovens" : "adultos",
+    // RIFA-085: sem grupo (nem próprio nem do discipulador).
+    grupo_id: null,
+    grupo_nome: null,
+    grupo_efetivo_id: null,
+    grupo_efetivo_nome: null,
     criado_em: "2026-11-06T18:00:00.000Z",
     atualizado_em: "2026-11-06T18:00:00.000Z",
   };

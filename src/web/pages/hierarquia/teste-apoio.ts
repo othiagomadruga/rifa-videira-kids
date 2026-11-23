@@ -57,11 +57,16 @@ export function criarCelula(
   dados: Partial<
     Pick<
       Celula,
-      "qtd_pessoas" | "lider_nome" | "lider_email" | "lider_telefone"
+      | "qtd_pessoas"
+      | "lider_nome"
+      | "lider_email"
+      | "lider_telefone"
+      | "grupo_id"
+      | "grupo_nome"
     >
   > = {},
 ): Celula {
-  return {
+  const celula = {
     id,
     discipulador_id: discipulador.id,
     nome,
@@ -69,11 +74,20 @@ export function criarCelula(
     lider_nome: `Líder da ${nome}`,
     lider_email: null,
     lider_telefone: null,
+    // RIFA-085: sem grupo próprio, a célula herda o do discipulador.
+    grupo_id: null,
+    grupo_nome: null,
     ...dados,
+  };
+  return {
+    ...celula,
     discipulador_nome: discipulador.nome,
     rede_id: discipulador.rede_id,
     rede_nome: discipulador.rede_nome,
     divisao: discipulador.divisao,
+    grupo_efetivo_id: celula.grupo_id ?? discipulador.grupo_id,
+    grupo_efetivo_nome:
+      celula.grupo_id === null ? discipulador.grupo_nome : celula.grupo_nome,
     criado_em: INSTANTE,
     atualizado_em: INSTANTE,
   };

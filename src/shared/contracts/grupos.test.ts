@@ -1,10 +1,13 @@
 // Contrato do grupo do discipulador e do ranking por grupo (RIFA-084, D39): a entrada e a saída do discipulador com o
-// grupo, a lista dos grupos e o ranking por grupo da coordenação (só atrás do login: o ranking aberto não muda).
+// grupo, a lista dos grupos e o ranking por grupo da coordenação (só atrás do login: o ranking aberto não muda). E o
+// grupo próprio da célula (RIFA-085, adendo da D39), que vale no lugar do grupo do discipulador.
 import { describe, expect, it } from "vitest";
 import {
   LIMITE_NOME_GRUPO,
   NIVEIS_RANKING_GRUPOS,
   ROTAS,
+  celulaEntradaSchema,
+  celulaSchema,
   consultaRankingGruposSchema,
   discipuladorEntradaSchema,
   discipuladorSchema,
@@ -199,5 +202,101 @@ describe("RIFA-084 (D39): o ranking por grupo, só da coordenação", () => {
       expect(respostaRankingGruposSchema.safeParse(quebrada).success).toBe(
         false,
       );
+  });
+});
+
+describe("RIFA-085 (adendo da D39): o grupo próprio da célula", () => {
+  const entrada = {
+    discipulador_id: 7,
+    nome: "Célula Ficticia",
+    qtd_pessoas: 10,
+    lider_nome: "Líder Ficticio",
+  };
+  const celula = {
+    id: 3,
+    discipulador_id: 7,
+    nome: "Célula Ficticia",
+    qtd_pessoas: 10,
+    lider_nome: "Líder Ficticio",
+    lider_email: null,
+    lider_telefone: null,
+    discipulador_nome: "Discipulador Ficticio",
+    rede_id: 1,
+    rede_nome: "Rede Ficticia",
+    divisao: "jovens",
+    grupo_id: 4,
+    grupo_nome: "Adolescentes",
+    grupo_efetivo_id: 4,
+    grupo_efetivo_nome: "Adolescentes",
+    criado_em: INSTANTE,
+    atualizado_em: INSTANTE,
+  } as const;
+
+  it("a entrada aceita o grupo (id), null (herda o do discipulador) e a ausência (POST: herda; PUT: mantém)", () => {
+    const comuns = { lider_email: null, lider_telefone: null };
+    expect(celulaEntradaSchema.parse({ ...entrada, grupo_id: 4 })).toEqual({
+      ...entrada,
+      ...comuns,
+      grupo_id: 4,
+    });
+    expect(celulaEntradaSchema.parse({ ...entrada, grupo_id: null })).toEqual({
+      ...entrada,
+      ...comuns,
+      grupo_id: null,
+    });
+    expect(celulaEntradaSchema.parse(entrada)).not.toHaveProperty("grupo_id");
+    for (const grupo_id of [0, -1, 1.5, "4", true])
+      expect({
+        grupo_id,
+        ok: celulaEntradaSchema.safeParse({ ...entrada, grupo_id }).success,
+      }).toEqual({ grupo_id, ok: false });
+  });
+
+  it("a saída traz o grupo próprio e o efetivo (o próprio, o do discipulador ou null), com os nomes", () => {
+    expect(celulaSchema.parse(celula)).toEqual(celula);
+    // Herda o do discipulador.
+    expect(
+      celulaSchema.safeParse({
+        ...celula,
+        grupo_id: null,
+        grupo_nome: null,
+        grupo_efetivo_id: 3,
+        grupo_efetivo_nome: "Jovens",
+      }).success,
+    ).toBe(true);
+    // Sem grupo nenhum.
+    expect(
+      celulaSchema.safeParse({
+        ...celula,
+        grupo_id: null,
+        grupo_nome: null,
+        grupo_efetivo_id: null,
+        grupo_efetivo_nome: null,
+      }).success,
+    ).toBe(true);
+    for (const campo of [
+      "grupo_id",
+      "grupo_nome",
+      "grupo_efetivo_id",
+      "grupo_efetivo_nome",
+    ]) {
+      const sem: Record<string, unknown> = { ...celula };
+      delete sem[campo];
+      expect({ campo, ok: celulaSchema.safeParse(sem).success }).toEqual({
+        campo,
+        ok: false,
+      });
+    }
+    expect(
+      celulaSchema.safeParse({ ...celula, grupo_nome: "x".repeat(61) }).success,
+    ).toBe(false);
+  });
+
+  it("o PUT e o POST da célula usam a mesma entrada, e as rotas continuam só da coordenação", () => {
+    expect(ROTAS.criarCelula.corpo).toBe(celulaEntradaSchema);
+    expect(ROTAS.atualizarCelula.corpo).toBe(celulaEntradaSchema);
+    expect(ROTAS.atualizarCelula.sucesso.corpo).toBe(celulaSchema);
+    for (const rota of [ROTAS.criarCelula, ROTAS.atualizarCelula])
+      expect(rota.grupo).toBe("coordenacao");
   });
 });

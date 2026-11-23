@@ -369,7 +369,8 @@ export type Rede = z.infer<typeof redeSchema>;
 /**
  * Grupo do discipulador (RIFA-084, D39): "Adultos da manhã", "Adultos da noite", "Jovens" e "Adolescentes", semeados
  * pela migração 0018 (sem CRUD por enquanto). Não é a `divisao` da rede (jovens|adultos, D27): é outro recorte, só do
- * ranking por grupo. `ordem` é a ordem dos blocos na tela (menor primeiro; empate, pelo nome).
+ * ranking por grupo. `ordem` é a ordem dos blocos na tela (menor primeiro; empate, pelo nome). Desde a RIFA-085, a
+ * célula também pode ter um grupo próprio, que vence o do discipulador (`celulaSchema.grupo_efetivo_id`).
  */
 export const LIMITE_NOME_GRUPO = 60;
 
@@ -385,7 +386,7 @@ export const discipuladorEntradaSchema = z.object({
   nome: nomeSchema,
   /**
    * RIFA-084 (D39): o grupo do discipulador (adultos da manhã, adultos da noite, jovens, adolescentes), que separa o
-   * ranking por grupo; as células dele herdam o grupo. null = sem grupo (fica fora do ranking por grupo e continua no
+   * ranking por grupo; as células dele herdam o grupo (menos as que têm grupo próprio, RIFA-085). null = sem grupo (fica fora do ranking por grupo e continua no
    * ranking de todas). No POST, ausente = sem grupo; no PUT, ausente MANTÉM o gravado (uma aba antiga do site, que não
    * conhece o campo, não apaga o grupo ao renomear o discipulador). Um id que não existe: 400 `referencia_invalida`.
    */
@@ -415,6 +416,14 @@ export const celulaEntradaSchema = z.object({
   lider_nome: nomeSchema,
   lider_email: emailSchema.nullable().default(null),
   lider_telefone: telefoneContatoSchema.nullable().default(null),
+  /**
+   * RIFA-085 (adendo da D39): o grupo PRÓPRIO da célula, que vale no lugar do grupo do discipulador no ranking por
+   * grupo (nível célula). Ex.: uma célula de Adolescentes de um discipulador do grupo Jovens. null = herda o grupo do
+   * discipulador. No POST, ausente = herda; no PUT, ausente MANTÉM o gravado (como o do discipulador: uma aba antiga
+   * do site, que não conhece o campo, não apaga o grupo ao editar a célula). Um id que não existe: 400
+   * `referencia_invalida`. A importação da planilha não mexe nele.
+   */
+  grupo_id: idSchema.nullable().optional(),
 });
 export type CelulaEntrada = z.input<typeof celulaEntradaSchema>;
 
@@ -430,6 +439,15 @@ export const celulaSchema = z.object({
   rede_id: idSchema,
   rede_nome: z.string().min(1).max(120),
   divisao: divisaoSchema,
+  /** RIFA-085 (adendo da D39): o grupo próprio da célula (null = herda o do discipulador) e o nome dele. */
+  grupo_id: idSchema.nullable(),
+  grupo_nome: z.string().min(1).max(LIMITE_NOME_GRUPO).nullable(),
+  /**
+   * O grupo que vale para a célula no ranking por grupo: o próprio, se houver; senão, o do discipulador; senão, null
+   * (sem grupo: fora do ranking por grupo, continua no ranking de todas). Lido na hora (muda junto com o discipulador).
+   */
+  grupo_efetivo_id: idSchema.nullable(),
+  grupo_efetivo_nome: z.string().min(1).max(LIMITE_NOME_GRUPO).nullable(),
   criado_em: instanteSchema,
   atualizado_em: instanteSchema,
 });
