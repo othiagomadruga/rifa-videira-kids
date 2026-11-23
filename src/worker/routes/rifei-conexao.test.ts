@@ -401,6 +401,38 @@ describe("RIFA-070 (D32): achar o pedido pelo número do pedido ou do bilhete", 
     expect((await buscar("8")).map((a) => a.pedido.id)).toEqual(["PED-PAGO"]);
   });
 
+  it("RIFA-088 (D41): a venda atribuída à mão vem com o nome da célula atribuída (como na tela de Pedidos)", async () => {
+    const ativa = (await db
+      .prepare("SELECT id FROM campanhas WHERE ativa = 1")
+      .first<number>("id"))!;
+    await semearPedidos(
+      db,
+      [{ ...pedido("PED-ATRIBUIDO", "approved"), affiliate_id: null }],
+      { ativa },
+    );
+    await db
+      .prepare(
+        `UPDATE pedidos SET celula_atribuida_id = 2, celula_atribuida_em = '2026-11-24T18:00:00.000Z',
+           celula_atribuida_por = 1 WHERE id = 'PED-ATRIBUIDO'`,
+      )
+      .run();
+    const [achado] = await buscar("PED-ATRIBUIDO");
+    expect(achado.pedido).toMatchObject({
+      id: "PED-ATRIBUIDO",
+      affiliate_id: null,
+      celula_id: 2,
+      celula_nome: "Célula Betel",
+      celula_origem: "manual",
+    });
+    // A do afiliado continua com o nome dela.
+    const [doAfiliado] = await buscar("PED-PAGO");
+    expect(doAfiliado.pedido).toMatchObject({
+      celula_id: 1,
+      celula_nome: "Célula Ágape",
+      celula_origem: "afiliado",
+    });
+  });
+
   it("não achou: lista vazia; número vazio: 400; sem chamar a Rifei", async () => {
     expect(await buscar("123456")).toEqual([]);
     await esperarErro(

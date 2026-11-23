@@ -14,6 +14,7 @@ import {
   type StatusPedido,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
+import { juntarAfiliado, juntarCelulaEfetiva } from "./celula-efetiva";
 import { COLUNAS_ITEM, type LinhaPedido } from "./lista-pedidos";
 
 /** Um pedido da campanha ativa como a marcação precisa. */
@@ -251,7 +252,8 @@ export async function registrarUsoDaConexaoRifei(
 // ---------------------------------------------------------------------------------------------------
 
 /**
- * Os pedidos da campanha ativa com este id ou com este bilhete em `numeros` (como na tela de Pedidos: COLUNAS_ITEM).
+ * Os pedidos da campanha ativa com este id ou com este bilhete em `numeros` (como na tela de Pedidos: COLUNAS_ITEM, com
+ * a célula EFETIVA, RIFA-088/D41: o nome vem da célula do afiliado ou, sem ela, da atribuída à mão).
  * O do id vem primeiro; pelo bilhete, os pendentes, depois os pagos, depois os expirados, do mais novo ao mais antigo.
  * A busca pelo bilhete lê os pedidos da campanha (é um clique do admin, não uma tela que se atualiza sozinha).
  */
@@ -266,8 +268,8 @@ export async function buscarPedidosParaMarcar(
     .prepare(
       `SELECT ${COLUNAS_ITEM}, CASE WHEN p.id = ?2 THEN 'pedido' ELSE 'bilhete' END AS achado_por
        FROM pedidos AS p
-         LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-         LEFT JOIN celulas AS c ON c.id = a.celula_id
+         ${juntarAfiliado()}
+         ${juntarCelulaEfetiva()}
        WHERE p.campanha_id = ?1
          AND (p.id = ?2 OR (?3 IS NOT NULL AND p.numeros IS NOT NULL
            AND EXISTS (SELECT 1 FROM json_each(p.numeros) AS n WHERE n.value = ?3)))
