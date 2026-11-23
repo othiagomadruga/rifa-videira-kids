@@ -29,9 +29,6 @@ import {
 } from "./api";
 import { CRITERIOS_RANKING, instanteSchema, type Alvo } from "./dominio";
 
-/** Quantas linhas de cada lista a tela mostra antes do "Ver todas" (a API manda todas). */
-export const LINHAS_VISIVEIS_TODAS_AS_REDES = 10;
-
 /**
  * `janela`: `atual` (padrão; o período que contém hoje, "esta semana") ou `campanha` (do 1º dia até hoje), a mesma
  * janela do ranking (`periodo` no painel). Outros parâmetros são ignorados (o alvo vem só da sessão).
