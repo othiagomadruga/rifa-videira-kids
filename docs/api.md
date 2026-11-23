@@ -248,7 +248,7 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
 |---|---|---|---|
 | redes | `{ nome, divisao: "jovens"\|"adultos", responsavel_nome? }` | + `id`, `criado_em`, `atualizado_em` | — |
 | discipuladores | `{ rede_id, nome, grupo_id? }` | + `rede_nome`, `divisao`, `grupo_id`, `grupo_nome` | `?rede_id=` |
-| celulas | `{ discipulador_id, nome, qtd_pessoas (1–1000), lider_nome, lider_email?, lider_telefone? }` | + `discipulador_nome`, `rede_id`, `rede_nome`, `divisao` | `?discipulador_id=&rede_id=&divisao=` |
+| celulas | `{ discipulador_id, nome, qtd_pessoas (1–1000), lider_nome, lider_email?, lider_telefone?, grupo_id? }` | + `discipulador_nome`, `rede_id`, `rede_nome`, `divisao`, `grupo_id`, `grupo_nome`, `grupo_efetivo_id`, `grupo_efetivo_nome` | `?discipulador_id=&rede_id=&divisao=` |
 
 - Os nomes são únicos dentro de cada recurso, sem diferenciar maiúsculas (inclusive acentuadas) e com os espaços normalizados (`normalizarEspacos`): os das pontas não contam e os em sequência, inclusive tab e espaço não separável, valem um só (`Rede  Jovem` = `Rede Jovem`). Os textos são gravados assim, com um espaço só: `nome`, `responsavel_nome`, `lider_nome` e `lider_telefone`.
 - No `400 requisicao_invalida`, a `mensagem` de cada item de `detalhes` é em português ("Campo obrigatório", "Use no máximo 120 caracteres", "Use um número inteiro", "E-mail inválido"...); `caminho` e `codigo` continuam os do zod.
@@ -256,8 +256,16 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
   (sem grupo). No POST, ausente = sem grupo; no **PUT, ausente mantém o gravado** (a exceção ao "substitui tudo": uma aba
   antiga do site, que não conhece o campo, não apaga o grupo ao renomear). Grupo que não existe: `400 referencia_invalida`
   com o detalhe em `grupo_id` ("O grupo 9 não existe"). A saída traz `grupo_id` e `grupo_nome` (os dois `null` sem
-  grupo). As células herdam o grupo do discipulador. Na trilha, `grupo_id` entra como os outros ids:
-  `grupo_id (null → 2)` no PUT; na criação e na remoção, só quando há grupo (`criado (rede_id 1, grupo_id 2)`).
+  grupo). As células herdam o grupo do discipulador (menos as de grupo próprio, abaixo). Na trilha, `grupo_id` entra
+  como os outros ids: `grupo_id (null → 2)` no PUT; na criação e na remoção, só quando há grupo
+  (`criado (rede_id 1, grupo_id 2)`).
+- **Grupo próprio da célula** (RIFA-085, adendo da D39): `grupo_id` na célula = o id de um dos grupos ou `null` (herda o
+  do discipulador), com as mesmas regras do discipulador: no POST, ausente = herda; no **PUT, ausente mantém o
+  gravado**; grupo que não existe = `400 referencia_invalida` em `grupo_id`. A saída traz o próprio (`grupo_id`,
+  `grupo_nome`; os dois `null` quando herda) e o **efetivo** (`grupo_efetivo_id`, `grupo_efetivo_nome`: o próprio;
+  senão, o do discipulador; senão, os dois `null`), lido na hora. É o efetivo que vale no ranking por grupo, nível
+  célula. Na trilha, como o do discipulador (`grupo_id (4 → null)`; na criação e na remoção, só com grupo próprio). A
+  importação da planilha não mexe nele.
 - `GET /api/admin/grupos` (`coordenacao`; RIFA-084, D39): 200 `{ "itens": [{ "id", "nome", "ordem" }] }`, na ordem de
   `ordem` (empate, pelo nome): os 4 da migração 0018 ("Adultos da manhã", "Adultos da noite", "Jovens",
   "Adolescentes"). Sem CRUD dos grupos por enquanto.
@@ -628,7 +636,10 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 ### `GET /api/painel/ranking-grupos?janela=atual|campanha&nivel=celula|discipulador` (`coordenacao`; RIFA-084, D39)
 
 O mesmo ranking, separado pelo **grupo do discipulador** (adultos da manhã, adultos da noite, jovens, adolescentes): as
-células herdam o grupo do discipulador; quem não tem grupo fica fora daqui e continua no ranking de todas. **Só a
+células herdam o grupo do discipulador; quem não tem grupo fica fora daqui e continua no ranking de todas. No nível
+`celula`, vale o **grupo efetivo** de cada célula (RIFA-085: o próprio, se houver; senão, o do discipulador), e um grupo
+só com células de grupo próprio também aparece; no nível `discipulador`, cada discipulador fica no grupo dele, com
+todas as células dele (o total é o do ranking de todas), mesmo as de grupo próprio. **Só a
 coordenação** (admin e coordenação; a hierarquia leva 403 e sem sessão é 401): o ranking aberto não muda (decisão do
 PO, 23/11).
 

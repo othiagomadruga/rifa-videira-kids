@@ -20,6 +20,7 @@ erDiagram
   redes ||--o{ discipuladores : "tem"
   discipuladores ||--o{ celulas : "acompanha"
   grupos |o--o{ discipuladores : "grupo do ranking (0018; nulo = sem grupo)"
+  grupos |o--o{ celulas : "grupo próprio (0019; nulo = herda o do discipulador)"
   celulas |o--o{ afiliados : "vinculados (celula_id nulo = órfão)"
   afiliados |o--o{ pedidos : "vendeu (affiliate_id nulo = sem afiliado)"
   webhook_eventos }o..o| pedidos : "pedido_id (sem FK)"
@@ -98,7 +99,7 @@ Períodos **consecutivos** a partir de `campanhas.data_inicio`, na `ordem` (ex.:
 | `redes` | `nome`, `divisao`, `responsavel_nome` (pastor ou obreiro da rede, opcional) | `divisao` ∈ {`jovens`, `adultos`}; `nome` único |
 | `discipuladores` | `rede_id` → redes, `nome`, `grupo_id` → grupos (0018, NULL = sem grupo) | `nome` único; índices por `rede_id` e por `grupo_id`; apagar o grupo deixa o discipulador sem grupo (`ON DELETE SET NULL`) |
 | `grupos` (0018, RIFA-084, D39) | `nome`, `ordem` | `nome` único (1 a 60 caracteres); semeada com "Adultos da manhã" (1), "Adultos da noite" (2), "Jovens" (3) e "Adolescentes" (4); sem CRUD |
-| `celulas` | `discipulador_id` → discipuladores, `nome`, `qtd_pessoas`, `lider_nome`, `lider_email`, `lider_telefone` | `nome` único; `qtd_pessoas` 1–1000 (é a base da meta); e-mail e telefone opcionais; índice por `discipulador_id` |
+| `celulas` | `discipulador_id` → discipuladores, `nome`, `qtd_pessoas`, `lider_nome`, `lider_email`, `lider_telefone`, `grupo_id` → grupos (0019, NULL = herda o do discipulador) | `nome` único; `qtd_pessoas` 1–1000 (é a base da meta); e-mail e telefone opcionais; índices por `discipulador_id` e por `grupo_id`; apagar o grupo faz a célula voltar a herdar (`ON DELETE SET NULL`) |
 
 Os nomes são únicos com `COLLATE NOCASE`, que só ignora maiúsculas ASCII. A API compara nomes ignorando também maiúsculas acentuadas e os espaços nas pontas. Os nomes servem de chave na importação por CSV.
 
@@ -232,6 +233,7 @@ Migrations `0002_acessos.sql` (RIFA-007) e `0006_acesso_hierarquia.sql` (RIFA-01
 | `pedidos_desconsiderados_por_registro (campanha_id, registrado_em, id) WHERE desconsiderado_em IS NOT NULL` (migração 0008, parcial) | a lista de pedidos com `desconsiderado=true` sem filtro de célula: lê só os desconsiderados, na ordem da lista (~2 linhas por desconsiderado). Com `desconsiderado=false`, o índice da 0007, com `+desconsiderado_em IS NULL` (o `+` tira o índice parcial da 0003 do planejador). Também a contagem dos desconsiderados nos totais do relatório (`CONTAR_DESCONSIDERADOS` em `db/relatorio.ts`, D23): `USING INDEX (campanha_id=?)`, sem a palavra COVERING (a coluna do filtro não está no índice), e ~1 linha lida no D1 por desconsiderado da campanha (`routes/relatorio-desempenho.test.ts`) |
 | `afiliados_por_celula`, `celulas_por_discipulador`, `discipuladores_por_rede` | subir e descer a hierarquia, e as FKs |
 | `discipuladores_por_grupo (grupo_id)` (migração 0018, RIFA-084) | os discipuladores de cada grupo no ranking por grupo (`src/worker/db/grupos.ts`, no mesmo lote do cálculo) e o `SET NULL` ao apagar um grupo |
+| `celulas_por_grupo (grupo_id)` (migração 0019, RIFA-085) | as células com grupo próprio no ranking por grupo (a outra metade do `UNION ALL` de `src/worker/db/grupos.ts`) e o `SET NULL` ao apagar um grupo |
 | `pedidos_por_campanha_registro (campanha_id, registrado_em, id)` (migração 0007, RIFA-025) | lista de pedidos da coordenação (`GET /api/admin/pedidos`, `src/worker/db/lista-pedidos.ts`): os pedidos da campanha do registrado mais novo para o mais antigo, com o cursor `(registrado_em, id)`, saem na ordem do índice e a leitura para no limite (~133 linhas lidas na 1ª página com 7 mil pedidos; sem ele, ~26 mil). **Ele desvia o planejador** em consultas que pioram com ele, e elas fogem dele de propósito: totais com `+campanha_id` (senão ~2 linhas por pedido), lista e totais por célula com `afiliados CROSS JOIN pedidos` (senão percorre a campanha inteira), sem célula com `affiliate_id IS NULL OR affiliate_id IN (afiliados sem célula)` |
 | `webhook_eventos_por_pedido`, `webhook_eventos_por_resultado (resultado, recebido_em)` | auditoria de um pedido; listar erros e ignorados recentes; no estado do webhook (`src/worker/db/estado-webhook.ts`), a contagem das últimas 24 h por resultado (com `resultado IN (...)`: sem ele, a contagem percorre o índice inteiro), os erros recentes e a última entrega de qualquer resultado por `MAX(recebido_em)` (com `ORDER BY ... LIMIT 1` o planejador ia para o índice da 0007 e lia ~34 mil linhas) |
 | `webhook_eventos_por_resultado_id (resultado, id)` (migração 0007, RIFA-025) | entregas de um resultado da mais nova para a mais antiga, pelo id, com o cursor (`GET /api/admin/webhook/entregas`, `src/worker/db/entregas-webhook.ts`): ~51 linhas lidas por página, sem B-tree temporária (sem ele, ~800 a ~21 mil) |
@@ -595,3 +597,15 @@ do ranking por grupo e no ranking de todas, como antes. O grupo é do discipulad
 da rede (D27). Quem escolhe é a coordenação, na Hierarquia (`PUT /api/admin/discipuladores/:id` com `grupo_id`). A
 importação da planilha não mexe no grupo. Testes: `src/worker/test/migrations.test.ts` ("0018 sobre dados que já
 existiam": nada muda, os 4 grupos na ordem, o CHECK e o UNIQUE do nome, a FK e o `SET NULL`).
+
+## 16. Migração `0019_grupo_da_celula.sql` (RIFA-085; adendo da D39)
+
+Aditiva: `celulas.grupo_id INTEGER NULL REFERENCES grupos(id) ON DELETE SET NULL`, com o índice `celulas_por_grupo`.
+Toda célula que já existia fica com NULL, que quer dizer **herda o grupo do discipulador** (como era até a 0018): nada
+muda no ranking por grupo até a coordenação escolher. Grupo efetivo da célula = o próprio, se houver; senão, o do
+discipulador; senão, sem grupo. É o efetivo que vale no ranking por grupo, nível célula; o nível discipulador continua
+pelo grupo do discipulador. Apagar um grupo (só pelo banco) faz as células dele voltarem a herdar, sem apagar nenhuma.
+Quem escolhe é a coordenação, no Editar célula da Hierarquia (`PUT /api/admin/celulas/:id` com `grupo_id`). A
+importação da planilha não mexe na coluna. Testes: `src/worker/test/migrations.test.ts` ("0019 sobre dados que já
+existiam": nada muda além da coluna nova em NULL, o discipulador com grupo continua com ele, a FK e o `SET NULL` sem
+apagar a célula).

@@ -162,6 +162,13 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   com "Sem grupo" e os grupos na ordem da API, com a ajuda do rótulo (`grupoDoDiscipulador`) e a dica embaixo. O PUT
   manda sempre `grupo_id` (o escolhido, ou `null`). Na API falsa (`teste-apoio.ts`), `GRUPOS` e o `grupo_nome`
   recalculado no PUT.
+- **Grupo próprio da célula** (RIFA-085, adendo da D39): o **Editar célula** tem o `Select` **"Grupo"** logo abaixo do
+  Discipulador, com "Igual ao do discipulador (<grupo dele>)" (valor "", que vai como `null`; o rótulo segue o
+  discipulador escolhido no formulário, e sem grupo diz "sem grupo") e os grupos na ordem da API, com a ajuda do rótulo
+  (`grupoDaCelula`) e a dica embaixo. O PUT manda sempre `grupo_id`. A tabela das células ganha a coluna **"Grupo"**
+  depois da Divisão: o grupo efetivo (`grupo_efetivo_nome`), ou "Sem grupo"; quando é o próprio, o nome com a marca
+  discreta "(da célula)" (`.hierarquia-suave`, menor). A API falsa calcula o próprio e o efetivo como os `LEFT JOIN`s da
+  API.
 - **Rankings** (`pages/rankings/RankingPorGrupo.tsx`): embaixo do ranking de todas, dentro do painel da aba, a seção
   **"Ranking por grupo"** (`h2` com a ajuda `rankingPorGrupo`), montada só quando o ranking de cima chegou. Pede
   `GET /api/painel/ranking-grupos` (`caminhoDoRankingGrupos`, cópia conferida em `rankings-contrato.test.ts`) no nível

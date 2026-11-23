@@ -2196,3 +2196,30 @@ existiam no sistema).
 - **Segurança:** a rota nova fica atrás do login da coordenação (401 sem sessão, 403 para líder, discipulador e rede;
   `src/worker/protecao.test.ts`, parte l), como `GET /api/admin/grupos`; nenhuma rota aberta nova.
 
+**Adendo (RIFA-085, 2026-11-23): o grupo próprio da célula.** O PO informou que algumas células do discipulador William
+(grupo Jovens) são de Adolescentes (Teens, Amados Para Amar, Maranata, Escolhidos e Betel). Era o caso previsto em
+"Descartado" acima: a célula ganha uma coluna própria que vence a do discipulador.
+
+- **Dado:** `celulas.grupo_id` (migração 0019, `REFERENCES grupos(id) ON DELETE SET NULL`, índice `celulas_por_grupo`).
+  NULL = herda o grupo do discipulador (todas as células que existiam ficam assim: nada muda até a coordenação escolher).
+  **Grupo efetivo** da célula = o próprio, se houver; senão, o do discipulador; senão, sem grupo.
+- **API:** `POST` e `PUT /api/admin/celulas` aceitam `grupo_id` com as mesmas regras do discipulador: id ou `null`
+  (herda); no POST, ausente = herda; no **PUT, ausente mantém o gravado** (uma aba antiga do site, aberta antes da
+  publicação, não apaga o grupo ao editar a célula); grupo que não existe = 400 `referencia_invalida` no campo
+  `grupo_id`. A resposta da célula (lista, GET, POST e PUT) traz `grupo_id` e `grupo_nome` (o próprio) e
+  `grupo_efetivo_id` e `grupo_efetivo_nome` (lidos na hora, por `LEFT JOIN`: mudar o grupo do discipulador muda o
+  efetivo das células que herdam, e não o das que têm grupo próprio). A trilha registra `grupo_id` como os outros ids
+  (só ids; na criação e na remoção, só quando há grupo próprio). A importação da planilha não mexe no grupo (nem no
+  INSERT nem no UPDATE).
+- **Ranking por grupo:** no nível **célula**, vale o grupo efetivo de cada célula (cada célula num grupo só; um grupo
+  sem discipulador, só com células de grupo próprio, também aparece). No nível **discipulador**, nada muda: cada
+  discipulador fica só no grupo dele, com **todas** as células dele (inclusive as de grupo próprio), e o total dele é o
+  mesmo do ranking de todas. Descartado: pôr o discipulador em mais de um grupo (um por grupo das células dele) ou
+  tirar dele as células de grupo próprio, porque o total e a posição dele deixariam de bater com o ranking de todas, e
+  a coordenação lê o ranking dos discipuladores como "o resultado do discipulador". O comando dos grupos continua no
+  mesmo lote do cálculo (`UNION ALL` das duas leituras): nenhuma ida a mais ao D1.
+- **Hierarquia (site):** no Editar célula, o seletor "Grupo" com "Igual ao do discipulador (<grupo dele>)" (o rótulo
+  segue o discipulador escolhido no formulário; sem grupo, "sem grupo") e os 4 grupos; na tabela das células, a coluna
+  "Grupo" mostra o efetivo, com a marca discreta "(da célula)" quando é o próprio.
+- **Segurança:** nenhuma rota nova; o PUT e o POST da célula continuam só da coordenação (`src/worker/protecao.test.ts`,
+  parte m: 401 sem sessão, 403 para líder, discipulador e rede, e nada muda).
