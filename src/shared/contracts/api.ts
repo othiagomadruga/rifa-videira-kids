@@ -3863,6 +3863,71 @@ export const ROTAS_MAIORES_COMPRADORES = {
 export type NomeRotaMaioresCompradores = keyof typeof ROTAS_MAIORES_COMPRADORES;
 
 // ---------------------------------------------------------------------------------------------------
+// Quem comprou, para o líder da célula (RIFA-089, adendo da D38): as vendas pagas da célula, da mais recente para a
+// mais antiga, com o nome do comprador, a data e a hora e os bilhetes. Sem telefone, sem número dos bilhetes e sem R$.
+// ---------------------------------------------------------------------------------------------------
+
+/** Vendas por página: padrão e máximo. */
+export const PAGINA_QUEM_COMPROU_PADRAO = 20;
+export const PAGINA_QUEM_COMPROU_MAXIMA = 50;
+
+/**
+ * Consulta: `limite` (1 a 50, padrão 20) e `antes_de` (cursor opaco: o `proximo` da página anterior; inválido, 400
+ * `requisicao_invalida` com o detalhe `cursor_invalido`). Nenhum id: a célula vem só da sessão (D12).
+ */
+export const consultaQuemComprouSchema = z.object({
+  limite: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PAGINA_QUEM_COMPROU_MAXIMA)
+    .default(PAGINA_QUEM_COMPROU_PADRAO),
+  antes_de: z.string().min(1).max(2048).optional(),
+});
+export type ConsultaQuemComprou = z.output<typeof consultaQuemComprouSchema>;
+
+/** Uma venda paga da célula: o nome (null = a Rifei não mandou; o site mostra "Comprador sem nome"), quando e bilhetes. */
+export const itemQuemComprouSchema = z.strictObject({
+  nome: nomeMaiorCompradorSchema,
+  /** `aprovado_em` (UTC); o site mostra no fuso da campanha ("23/11 às 14:03"). */
+  aprovado_em: instanteSchema,
+  bilhetes: z.number().int().nonnegative(),
+});
+export type ItemQuemComprou = z.infer<typeof itemQuemComprouSchema>;
+
+export const respostaQuemComprouSchema = z.strictObject({
+  /** O fuso da campanha, para o site mostrar a data e a hora locais. */
+  fuso_horario: z.string().min(1),
+  itens: z.array(itemQuemComprouSchema).max(PAGINA_QUEM_COMPROU_MAXIMA),
+  /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
+  proximo: z.string().min(1).max(2048).nullable(),
+  atualizado_em: instanteSchema,
+});
+export type RespostaQuemComprou = z.infer<typeof respostaQuemComprouSchema>;
+
+/**
+ * Quem comprou (RIFA-089, adendo da D38), SÓ o líder da célula: as vendas PAGAS (aprovadas) da campanha ativa que
+ * contam (sem os desconsiderados, D20) da célula da sessão, pela célula EFETIVA (D41: as do afiliado da célula e as
+ * atribuídas à mão a ela), de `aprovado_em` mais recente para o mais antigo (empate pelo id). Catálogo à parte de
+ * ROTAS, como ROTAS_MAIORES_COMPRADORES; o src/worker/protecao.test.ts o percorre (401 sem sessão; 403 `proibido` do
+ * discipulador, da rede e da coordenação; o líder de outra célula não vê as vendas desta). Sem campanha ativa, 404.
+ * `Cache-Control: no-store` (por pessoa, com nomes), lida do D1 a cada requisição e passada pelo schema estrito.
+ */
+export const ROTAS_QUEM_COMPROU = {
+  quemComprou: {
+    metodo: "GET",
+    caminho: "/api/minha/compradores",
+    grupo: "hierarquia",
+    papeis: ["lider"],
+    situacao: "detalhada",
+    consulta: consultaQuemComprouSchema,
+    sucesso: { status: 200, corpo: respostaQuemComprouSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaQuemComprou = keyof typeof ROTAS_QUEM_COMPROU;
+
+// ---------------------------------------------------------------------------------------------------
 // Relatório diário por e-mail (RIFA-086 e RIFA-087, D40) e o "Arrecadado" do admin (RIFA-087): só admin. Constantes
 // sem zod em ./relatorio-diario.
 // ---------------------------------------------------------------------------------------------------
