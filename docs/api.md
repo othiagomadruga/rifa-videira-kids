@@ -939,6 +939,56 @@ resultado.
   24 h (a contagem por resultado é quase tudo), também com o slug da campanha trocado depois de entregas
   processadas (a última entrega da campanha sai do índice parcial da migração 0007).
 
+## Maiores compradores (RIFA-083; docs/decisions.md D38)
+
+Contrato: a regra e os itens em `src/shared/contracts/maiores-compradores.ts` (`classificarMaioresCompradores`,
+`itemMaiorCompradorAdmin`, `itemMeuMaiorComprador`, sem zod); os schemas estritos e o catálogo à parte
+`ROTAS_MAIORES_COMPRADORES` em `api.ts`. As duas rotas usam a mesma regra e a mesma consulta:
+
+- `janela`: `atual` (padrão; o período que contém hoje, "esta semana", como o ranking) ou `campanha` (do primeiro dia até
+  hoje). `limite`: de 1 a 50 (padrão 10). Fora disso, 400 `requisicao_invalida`. Outros parâmetros são ignorados.
+- **O que conta:** pedido `approved` da campanha ativa, sem desconsideração (D20), com o dia local de `aprovado_em` dentro
+  da janela (R6; a janela é a dos rankings, cortada em hoje: a compra de teste de antes do início, a venda de outro
+  período e a de depois de hoje ficam fora). Reservado e expirado não contam.
+- **Quem é o comprador:** a junção da D36: pelo telefone; sem telefone, pelo nome (sem acento, maiúsculas e espaços);
+  sem os dois, o pedido fica de fora. O nome é o do pedido aprovado mais recente que tem nome (null se nenhum tem).
+- **Ordem:** bilhetes (desc), total pago (desc), a primeira compra na janela (a mais antiga primeiro). Empate nos três
+  divide a posição (1, 1, 3); entre eles, a ordem do nome em português. No máximo `limite` itens (a posição não muda
+  com o corte).
+- **200** `{ janela, itens, atualizado_em }`, com `Cache-Control: no-store`; `janela` como nos rankings (`tipo`,
+  `ordem`, `nome`, `data_inicio`, `data_fim`). O schema confere as posições (1, 1, 3) e os bilhetes do maior para o
+  menor. Sem campanha ativa: 404 `nao_encontrado`. Sem cache: o D1 é lido a cada requisição (a campanha e os pedidos
+  aprovados da janela, pelo índice `(status, aprovado_em)`, ~3 linhas lidas por pedido da janela).
+
+### `GET /api/admin/maiores-compradores?janela=atual|campanha&limite=10` (**só admin**)
+
+Cada item: `posicao`, `nome`, `telefone` (legível, como na planilha: `(91) 98888-7777`; fora do Brasil, o E.164; null
+quando juntado pelo nome), `whatsapp` (só algarismos, com o país, para `https://wa.me/<numero>`; null sem telefone),
+`bilhetes`, `total_centavos` (o total pago), `pedidos`, `celulas` (as células dos pedidos dele, sem repetir, em ordem de
+português) e `sem_celula` (algum pedido sem afiliado ou com afiliado não vinculado).
+
+```json
+{
+  "janela": { "tipo": "atual", "ordem": 1, "nome": "Semana 1", "data_inicio": "2026-11-23", "data_fim": "2026-11-29" },
+  "itens": [
+    { "posicao": 1, "nome": "Comprador Ficticio", "telefone": "(91) 98888-7777", "whatsapp": "5591988887777",
+      "bilhetes": 12, "total_centavos": 24000, "pedidos": 3, "celulas": ["Célula Ágape"], "sem_celula": false }
+  ],
+  "atualizado_em": "2026-11-25T15:00:00.000Z"
+}
+```
+
+- **Erros:** 401; 403 `proibido` (coordenação e hierarquia, antes de ler a consulta); 400; 404 sem campanha ativa.
+
+### `GET /api/minha/maiores-compradores?janela=atual|campanha&limite=10` (`hierarquia`, **só discipulador**)
+
+Só os pedidos dos afiliados das células do discipulador da sessão (o alvo vem só da sessão, D12: um id na consulta é
+ignorado). Cada item: `posicao`, `nome`, `bilhetes` e `celula` (a célula dele com mais bilhetes do comprador; empate, a
+primeira em português). **Sem telefone e sem R$** (D12): o schema estrito não tem esses campos.
+
+- **Erros:** 401; 403 `proibido` (líder, rede e coordenação); 403 `acesso_desligado` com `acesso.discipuladores`
+  desligado (D20, como todo `/api/minha/*`); 400; 404 sem campanha ativa.
+
 ## Regras da campanha (Sprint 6; docs/decisions.md D20)
 
 Rotas **só de admin**, no catálogo `ROTAS_REGRAS_CAMPANHA` de `api.ts` (à parte de `ROTAS` até a API montá-las:

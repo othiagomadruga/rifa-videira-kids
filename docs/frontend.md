@@ -129,6 +129,28 @@ As regras estão na D24 de `docs/decisions.md` e as rotas em `docs/api.md` ("Lin
 - **Dicas** (RIFA-045, adiantadas da fase 2 nestes controles): os do link e do QR code (campo, Copiar, WhatsApp, Ver QR, Baixar imagem, Imprimir, Pronto e o × do diálogo) têm os textos em `components/qr/textos.ts` (a /minha e a Adesão usam os mesmos componentes; o WhatsApp diz "para o telefone do líder" só quando o link leva o telefone), e os da seção da Adesão (o modelo, só leitura ou não, "Salvar modelo" com o motivo de estar indisponível, a prévia, a busca e "Imprimir os QR codes", também indisponível) em `pages/adesao/textos.ts`. Os testes do link conferem os textos e a varredura `controlesSemDica` no cartão do link, na seção "Links de vendas" e no diálogo do "Ver QR" (casos em `pages/minha/LinksDeVendas.test.tsx` e `pages/adesao/LinksDeVendas.test.tsx`; o link da prévia, que a varredura não pega, é conferido à parte com `textoDaDica` de `components/qr/teste-apoio.ts`); as telas inteiras, desde a fase 2b, em `pages/coordenacao/dicas-fase2.test.tsx` (Adesão) e `pages/dicas-fora-da-coordenacao.test.tsx` (`/minha`).
 - Caminhos são cópias, conferidas por `minha-contrato.test.ts` e `adesao-contrato.test.ts`; as respostas das APIs falsas passam pelos schemas (`meusLinksDe` em `pages/minha/teste-apoio.ts`; `respostaLinksDe` em `pages/adesao/teste-apoio-links.ts`). O CSS (só tokens, sem largura fixa, a impressão), por `components/qr/qr-css.test.ts` e `minha-css.test.ts`. Nos testes, `components/qr/teste-apoio.ts` lê o `<svg>` de volta em pixels (`pixelsDoSvg`, para o `decodeQR` de `qr/decode.js`) e troca o `<canvas>` do jsdom (`simularCanvas`); o `window.print` vai com `vi.stubGlobal("print", ...)`.
 
+## Maiores compradores (RIFA-083, D38)
+
+Um cartão **"Maiores compradores"** (`Card` com ajuda) em dois lugares, cada um com o seu código (o da `/minha` não
+importa nada dos Rankings, que formatam dinheiro):
+
+- **Rankings da coordenação, só admin** (`pages/rankings/MaioresCompradores.tsx`, montado pela `RankingsPage` só com
+  `papel === "admin"`; a coordenação nem pede a rota): `GET /api/admin/maiores-compradores`
+  (`maiores-compradores-api.ts`). Cada comprador num cartão da lista: posição, nome (ou "Sem nome"), células
+  (`textoDasCelulas`: "…, sem célula" ou "Sem célula"), o telefone legível com o link `https://wa.me/<numero>` (nova
+  aba, com dica, como a coluna Comprador de Pedidos; sem telefone, "Sem telefone"), bilhetes e total em R$.
+- **`/minha`, só discipulador** (`pages/minha/MaioresCompradores.tsx`, no pacote da `VisaoIndividual`, depois de "Suas
+  células"): `GET /api/minha/maiores-compradores` (`maiores-compradores-api.ts`). Posição, nome, célula e bilhetes;
+  nunca telefone nem dinheiro (`guarda-minha.test.ts` confere o código). Pede de novo a cada atualização da visão (a
+  cada minuto, pelo `atualizado_em`), sem voltar ao "carregando"; se essa atualização falha, a lista de antes fica.
+- **Comum aos dois:** a troca **"Esta semana"** / **"Campanha toda"** (dois botões com `aria-pressed` e dica, num
+  `role="group"`; padrão: a semana), a janela com as datas, o carregando, o erro com "Tentar de novo" e o vazio ("Ainda
+  não há compras nesta semana." / "Ainda não há compras na campanha."). Trocar a janela nunca mostra a lista da outra.
+- **Testes:** `pages/rankings/MaioresCompradores.test.tsx` e `pages/minha/MaioresCompradores.test.tsx`; as APIs falsas
+  dos Rankings (`simularApiRanking`, que guarda `pedidosDosCompradores`) e da `/minha` (`criarApiFalsa`, com
+  `meusCompradoresDe`) respondem a rota sem nenhuma compra por padrão; as varreduras de dicas contam os dois botões e
+  o "?" do título (admin nos Rankings em `dicas-fase2.test.tsx`; discipulador em `dicas-fora-da-coordenacao.test.tsx`).
+
 ## Trilha e pedidos suspeitos (RIFA-024)
 
 As duas telas leem rotas da RIFA-013b (`docs/api.md`) e carregam à parte (`lazy`, como a Campanha), cada uma com o próprio CSS; tabela no computador e cartões abaixo de 48rem (`DataTable`).

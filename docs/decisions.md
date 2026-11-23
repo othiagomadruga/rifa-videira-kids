@@ -2056,6 +2056,8 @@ dia: uma planilha de compradores para agradecer a compra e para as campanhas fut
 - **Sem limpeza automática** (pedido explícito do PO). Apagar, se um dia for preciso, é um UPDATE manual do SM.
 - **Por que só o admin:** é a menor abertura que atende ao pedido (quem confere o pagamento e entra em contato é o
   admin); a coordenação continua sem dado do comprador, como antes.
+- **Ver D38** (RIFA-083, 23/11): o **nome** do comprador passa a aparecer também para o discipulador, só dos compradores
+  das células dele, no ranking dos maiores compradores; o telefone e o R$ continuam só do admin.
 
 ## D37. Login do discipulador com o nome e a senha padrão (RIFA-082; contrato, 2026-11-23)
 
@@ -2107,3 +2109,49 @@ o discipulador, só pelo link pessoal (D12). Contrato em `src/shared/contracts/`
 - **Descartado:** senha própria por discipulador (hash, troca, "esqueci"): mais tela e suporte no dia em que a campanha
   começou, sem ganho para o que ele vê; chave nova `acesso.discipuladores_senha`: o PO não pediu e as duas que existem
   bastam.
+
+## D38. Ranking dos maiores compradores; o nome do comprador para o discipulador (RIFA-083; contrato, 2026-11-23)
+
+Pedido do PO (23/11, no dia em que a campanha começou): "No Painel dos discipuladores e do adm coloca o ranking dos
+maiores compradores." Contrato em `src/shared/contracts/` (`maiores-compradores.ts`, sem zod: a regra e os itens;
+`api.ts`: schemas estritos e o catálogo à parte `ROTAS_MAIORES_COMPRADORES`), API em
+`src/worker/db/maiores-compradores.ts`, `src/worker/routes/maiores-compradores.ts` (admin) e `src/worker/routes/minha.ts`
+(discipulador), sem migração.
+
+- **Uma regra só para as duas rotas** (`classificarMaioresCompradores`): conta só pedido **aprovado**, da campanha ativa,
+  sem desconsideração (D20), com o dia local de `aprovado_em` dentro da janela pedida (R6, como o ranking; a janela sai
+  do próprio montador dos rankings, `janelaDosRankings`, como no mapa por DDD, cortada em hoje). Janela `atual` (o
+  período de hoje, "esta semana"; padrão) ou `campanha`. Junta por comprador como a D36: pelo telefone; sem telefone,
+  pelo nome normalizado; sem os dois, fica de fora. O nome mostrado é o do pedido aprovado mais recente que tem nome.
+  Ordem: bilhetes (desc), total pago (desc) e a primeira compra da janela (quem chegou primeiro); empate nos três
+  divide a posição (1, 1, 3), e entre eles a ordem do nome em português. No máximo `limite` (1 a 50, padrão 10).
+  Reservado (`in_process`) e expirado não contam: o ranking é de quem comprou, não de quem reservou.
+- **Admin** (`GET /api/admin/maiores-compradores?janela=&limite=`, só o papel `admin`, como a D36; a coordenação leva 403
+  antes de a consulta ser lida): posição, nome, telefone legível (como no CSV) e o número do WhatsApp, bilhetes, total
+  pago (centavos), quantidade de pedidos, as células dos pedidos dele e se algum pedido é sem célula. Na tela
+  **Rankings** da coordenação, abaixo do ranking, o cartão **"Maiores compradores"**, só para o admin, com a troca
+  "Esta semana" / "Campanha toda", e o telefone com o link `https://wa.me/<numero>` (como a coluna Comprador de
+  Pedidos). Ficou nos Rankings, e não na Visão geral, porque é um ranking e a Visão geral é da coordenação inteira.
+- **Discipulador** (`GET /api/minha/maiores-compradores?janela=&limite=`, só o papel `discipulador`; líder e rede levam
+  403, a coordenação também; com `acesso.discipuladores` desligado, o 403 `acesso_desligado` da D20, como todo
+  `/api/minha/*`): só os pedidos dos afiliados das **células do discipulador da sessão** (o alvo vem só da sessão, D12;
+  nenhum id na consulta). Cada item: posição, **nome**, bilhetes e a célula (a dele com mais bilhetes do comprador;
+  empate, a primeira em português). **Sem telefone e sem R$** (D12): o schema da resposta é estrito e não tem esses
+  campos (um campo a mais vira 500). Na /minha, o cartão **"Maiores compradores"** depois de "Suas células", com a
+  mesma troca de janela, acompanhando a atualização de cada minuto da visão. Sem compra: "Ainda não há compras nesta
+  semana."
+- **Privacidade: o nome do comprador para o discipulador** (muda em parte a D36, que deixava nome e telefone só para o
+  admin). Por quê: a página pública da Rifei já mostra o nome de quem comprou cada número
+  (`show_numbers_buyer_name`), então o nome não é segredo; e o discipulador vê só os compradores das células dele. O
+  **telefone continua só do admin**, e o R$ continua fora de toda a /minha (D12). A coordenação continua sem dado do
+  comprador (o cartão nem aparece para ela). A trilha não muda: o payload redigido do webhook continua sem nome e sem
+  telefone, e a leitura do ranking não vai para a trilha (não exporta nada; a planilha da D36 continua registrando).
+- **Sem cache e sem trilha da leitura:** as duas rotas leem o D1 a cada requisição (a campanha e os pedidos aprovados
+  da janela, pelo índice `(status, aprovado_em)`: ~3 linhas lidas por pedido da janela) e respondem com
+  `Cache-Control: no-store` (trazem nomes; são por pessoa). Os discipuladores são poucos (8) e o admin, um.
+- **Catálogo à parte** (`ROTAS_MAIORES_COMPRADORES`), como `ROTAS_LINK_VENDAS`: `ROTAS` continua com só a visão em
+  `/api/minha`, e o `src/worker/protecao.test.ts` põe o catálogo nas listas dele (o 403 da coordenação na rota do
+  admin; a do discipulador fora do filtro da coordenação, com o 403 de líder e rede e o 401 sem sessão).
+- **Descartado:** abrir para o líder e a rede (fora do pedido: o PO falou do discipulador e do admin); o telefone para
+  o discipulador (o PO não pediu e o contato continua com quem confere o pagamento, D36); contar o reservado (inflaria
+  quem reservou e não pagou).
