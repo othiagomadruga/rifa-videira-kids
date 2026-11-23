@@ -221,6 +221,19 @@ abaixo dele. Em SA o login era só pelo e-mail, sem senha.
 - **Limite de login por IP sobe de 10 para 60 por minuto**: na reunião dos líderes, dezenas de pessoas abrem o link
   ao mesmo tempo atrás do mesmo IP. O token tem 256 bits, então o limite nunca foi o que impede adivinhar link:
   ele só protege CPU e banco.
+- **Adendo (RIFA-090, 2026-11-23): o discipulador vê o quadro geral.** Pedido do PO: "embaixo da visualização deles
+  da rede dele, coloque para eles poderem visualizar todas as redes". A /minha do discipulador ganha, embaixo de tudo, o
+  **Ranking geral**: todos os discipuladores (com células) e todas as células da campanha, com posição, nome (e o
+  discipulador da célula), **% da meta e bilhetes** da janela ("Esta semana" ou "Campanha toda"), as linhas dele em
+  destaque. Muda a regra "dos pares, só nome e posição" **só nesta rota** (`GET /api/minha/todas-as-redes`): a visão
+  (`/api/minha/visao`) continua igual, com a distância até o vizinho null. O que continua valendo: **nunca dinheiro**
+  (nem com meta em centavos nem no critério arrecadação: só o % e os bilhetes, que são quantidade), **nunca comprador**,
+  telefone, senha ou id; o alvo vem só da sessão. A conta é a do ranking da coordenação (`montarRankingPainel` sem
+  divisão, a mesma posição e ordem), sem SQL novo, então herda qualquer mudança na atribuição das vendas (ex.: a célula
+  efetiva da RIFA-088). Quem vê: o discipulador e a rede (a /minha da rede é a mesma montagem); o líder da célula não
+  (403). Os dois rankings ficam 30 s na memória do isolate, por janela (como a base, D14); a resposta, que é por pessoa
+  (o `eu`), nunca. Na tela, o título é "Ranking geral" (sem a palavra "rede", D30). O ranking por grupo (D39) continua
+  só na coordenação.
 
 ## D14. Visão individual: base em cache e montador enxuto (RIFA-014-api, 2026-11-09)
 
