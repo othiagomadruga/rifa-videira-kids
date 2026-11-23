@@ -22,6 +22,7 @@ export const CODIGOS_ERRO = [
   "acao_desligada",
   "acesso_desligado",
   "afiliado_com_pedidos",
+  "pedido_ja_tem_celula",
   "corpo_muito_grande",
   "muitas_requisicoes",
   "erro_interno",
@@ -50,6 +51,8 @@ export const STATUS_HTTP_DO_ERRO = {
   acesso_desligado: 403,
   /** Sprint 6 (D20): remover afiliado com pedido que conta (`detalhesAfiliadoComPedidosSchema`). */
   afiliado_com_pedidos: 409,
+  /** RIFA-088 (D41): atribuir à mão a célula de um pedido que já tem célula pelo afiliado (a do afiliado vence). */
+  pedido_ja_tem_celula: 409,
   corpo_muito_grande: 413,
   muitas_requisicoes: 429,
   erro_interno: 500,

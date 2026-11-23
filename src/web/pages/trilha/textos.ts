@@ -44,6 +44,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "compradores.exportar": "Planilha de compradores baixada",
   // RIFA-086 (D40): o relatório diário enviado agora pelo admin (alvo `relatorio_diario`, sem os e-mails).
   "relatorio_diario.enviar": "Relatório diário enviado por e-mail",
+  // RIFA-088 (D41): a venda sem célula atribuída à mão a uma célula pelo admin (tela Pedidos; alvo `pedido:<id>`).
+  "pedido.atribuir_celula": "Célula do pedido atribuída à mão",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */

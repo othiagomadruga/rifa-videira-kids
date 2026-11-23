@@ -208,6 +208,7 @@ export function itemPedido(
     affiliate_id: 101,
     celula_id: 1,
     celula_nome: "Célula Ágape",
+    celula_origem: "afiliado",
     ddd: "91",
     criado_em: criado,
     aprovado_em: null,

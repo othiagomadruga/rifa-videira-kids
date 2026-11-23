@@ -640,6 +640,9 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - relatorio_diario.enviar (RIFA-086, D40): ROTAS_RELATORIO_DIARIO.enviarRelatorioDiario, o envio pedido pelo admin
  *   (o do cron não tem usuário e fica só no log), alvo `relatorio_diario`; resumo com o dia de referência e quantos
  *   destinatários, enviados e falhas, NUNCA os e-mails.
+ * - pedido.atribuir_celula (RIFA-088, D41): ROTAS_REGRAS_CAMPANHA.atribuirCelulaPedido, alvo `pedido:<id>` (como a
+ *   desconsideração); resumo com o id do pedido entre aspas e as células de antes e de depois (só ids; "nenhuma"),
+ *   NUNCA dado do comprador. Atribuir de novo a mesma célula (ou desfazer o que não existe) não registra.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -675,6 +678,7 @@ export const ACOES_AUDITORIA = [
   "rifei.desconectar",
   "compradores.exportar",
   "relatorio_diario.enviar",
+  "pedido.atribuir_celula",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -1620,9 +1624,15 @@ export const consultaPedidosSchema = z
     /** Cursor opaco: o `proximo` da página anterior. Cursor inválido: 400. */
     antes_de: z.string().min(1).max(2048).optional(),
     status: statusPedidoSchema.optional(),
-    /** Só os pedidos desta célula (resolvida pelo afiliado na leitura, D7). */
+    /**
+     * Só os pedidos desta célula: a célula EFETIVA (RIFA-088, D41), a do afiliado resolvida na leitura (D7) ou, sem
+     * ela, a atribuída à mão pelo admin.
+     */
     celula_id: z.coerce.number().int().positive().optional(),
-    /** "true" = só os pedidos sem célula (sem afiliado ou com afiliado ainda não vinculado). */
+    /**
+     * "true" = só os pedidos sem célula (sem afiliado ou com afiliado ainda não vinculado) e SEM atribuição à mão
+     * (RIFA-088, D41): o pedido atribuído sai deste filtro.
+     */
     sem_celula: z
       .enum(["true", "false"])
       .transform((valor) => valor === "true")
@@ -1656,6 +1666,15 @@ export const compradorPedidoSchema = z.strictObject({
 });
 export type CompradorPedido = z.infer<typeof compradorPedidoSchema>;
 
+/**
+ * RIFA-088 (D41): de onde vem a célula EFETIVA de um pedido. `afiliado` = a célula do afiliado do pedido (D7, resolvida
+ * na leitura); `manual` = o pedido não tem célula pelo afiliado (sem afiliado ou afiliado não vinculado) e o admin o
+ * atribuiu a uma célula (PUT /api/admin/pedidos/:id/celula). A do afiliado sempre vence: se o afiliado ganhar célula
+ * depois, a atribuída continua gravada, mas não conta.
+ */
+export const ORIGENS_CELULA_PEDIDO = ["afiliado", "manual"] as const;
+export type OrigemCelulaPedido = (typeof ORIGENS_CELULA_PEDIDO)[number];
+
 export const itemPedidoSchema = z.strictObject({
   /** id do pedido na Rifei. */
   id: z.string().min(1).max(128),
@@ -1663,9 +1682,18 @@ export const itemPedidoSchema = z.strictObject({
   qtd_bilhetes: z.number().int().nonnegative(),
   total_centavos: centavosSchema,
   affiliate_id: affiliateIdSchema.nullable(),
-  /** A célula do afiliado, resolvida na leitura (D7); null = sem afiliado ou afiliado não vinculado. */
+  /**
+   * A célula EFETIVA do pedido (RIFA-088, D41): a do afiliado, resolvida na leitura (D7); sem ela, a atribuída à mão
+   * pelo admin; null = sem célula (sem afiliado ou afiliado não vinculado, e sem atribuição). É a célula em que a venda
+   * conta em todo lugar (rankings, metas, /minha, telão, relatórios).
+   */
   celula_id: idSchema.nullable(),
   celula_nome: z.string().min(1).max(120).nullable(),
+  /**
+   * RIFA-088 (D41): de onde vem `celula_id` (`afiliado` ou `manual`); null quando o pedido está sem célula.
+   * `.default(null)` só na transição: a API de antes não manda o campo.
+   */
+  celula_origem: z.enum(ORIGENS_CELULA_PEDIDO).nullable().default(null),
   ddd: dddSchema.nullable(),
   criado_em: instanteSchema.nullable(),
   aprovado_em: instanteSchema.nullable(),
@@ -1898,6 +1926,22 @@ export const corpoReconsiderarPedidoSchema = z.strictObject({
 });
 export type CorpoReconsiderarPedido = z.input<
   typeof corpoReconsiderarPedidoSchema
+>;
+
+/** RIFA-088 (D41): o id do pedido na URL de PUT /api/admin/pedidos/:id/celula (o site o codifica com encodeURIComponent). */
+export const parametroPedidoIdSchema = z.object({
+  id: z.string().min(1).max(128),
+});
+
+/**
+ * PUT /api/admin/pedidos/:id/celula (RIFA-088, D41): a célula atribuída à mão ao pedido sem célula pelo afiliado.
+ * `celula_id` = o id da célula; `null` = desfaz a atribuição. Campo a mais ou ausente: 400.
+ */
+export const corpoAtribuirCelulaPedidoSchema = z.strictObject({
+  celula_id: idSchema.nullable(),
+});
+export type CorpoAtribuirCelulaPedido = z.input<
+  typeof corpoAtribuirCelulaPedidoSchema
 >;
 
 /**
@@ -2850,6 +2894,26 @@ export const ROTAS_REGRAS_CAMPANHA = {
     situacao: "detalhada",
     parametros: parametroAffiliateIdSchema,
     sucesso: { status: 204, corpo: null },
+  },
+  /**
+   * RIFA-088 (D41): atribui à mão a célula de um pedido da campanha ativa que NÃO tem célula pelo afiliado (sem
+   * afiliado, ou afiliado não vinculado), para a venda contar nela; `celula_id: null` desfaz. Só admin (401; 403 da
+   * coordenação e da hierarquia, antes de ler o corpo). Ordem dos erros: 400 (corpo); 404 `nao_encontrado` (sem
+   * campanha ativa ou pedido fora dela); 409 `pedido_ja_tem_celula` (atribuir a um pedido que já tem célula pelo
+   * afiliado; desfazer sempre vale); 400 `referencia_invalida` (célula que não existe, no campo `celula_id`). Repetir
+   * não muda nada (200 com o pedido como está, sem trilha). Pedido de qualquer status (só o aprovado conta nas vendas).
+   * 200: o pedido como a lista mostra, com a célula efetiva e `celula_origem`. Trilha: `pedido.atribuir_celula` (o id
+   * do pedido e as células de antes e de depois, só ids). O webhook nunca mexe na atribuição.
+   */
+  atribuirCelulaPedido: {
+    metodo: "PUT",
+    caminho: "/api/admin/pedidos/:id/celula",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    parametros: parametroPedidoIdSchema,
+    corpo: corpoAtribuirCelulaPedidoSchema,
+    sucesso: { status: 200, corpo: itemPedidoSchema },
   },
 } as const satisfies Record<string, DefinicaoRota>;
 

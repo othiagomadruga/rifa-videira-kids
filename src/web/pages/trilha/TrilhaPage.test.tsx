@@ -246,6 +246,8 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Planilha de compradores baixada",
       // RIFA-086 (D40): o relatório diário enviado agora pelo admin.
       "Relatório diário enviado por e-mail",
+      // RIFA-088 (D41): a venda sem célula atribuída à mão pelo admin.
+      "Célula do pedido atribuída à mão",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

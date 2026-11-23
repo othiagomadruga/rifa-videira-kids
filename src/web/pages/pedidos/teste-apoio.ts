@@ -107,6 +107,8 @@ export function pedido(
     affiliate_id: 1001,
     celula_id: 1,
     celula_nome: "Célula Ficticia 02",
+    // Sem célula (celula_id null na parcial): sem origem também, como a API devolve.
+    celula_origem: parcial.celula_id === null ? null : "afiliado",
     ddd: "91",
     criado_em: registrado,
     aprovado_em: status === "approved" ? instante(n + 0.5) : null,
