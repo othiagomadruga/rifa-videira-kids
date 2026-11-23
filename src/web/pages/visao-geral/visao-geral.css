@@ -272,6 +272,25 @@
   color: var(--cor-texto-suave);
 }
 
+/* Saldo da Efí (RIFA-086, D40), só do admin: discreto, o valor e a hora da consulta. */
+.visao-saldo__corpo {
+  display: grid;
+  justify-items: start;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.visao-saldo__valor {
+  font-size: var(--texto-2xl);
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+}
+
+.visao-saldo__nota {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
 /* Relatório da campanha para baixar (RIFA-038): o tipo em cartões de escolha, o botão e como abrir. */
 .visao-relatorio__corpo {
   display: grid;
