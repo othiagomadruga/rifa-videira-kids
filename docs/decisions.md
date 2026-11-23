@@ -2411,7 +2411,8 @@ e `src/worker/routes/pedidos.ts`, a regra em `src/worker/db/celula-efetiva.ts`, 
   (`coalesce(a.celula_id, p.celula_atribuida_id)`, a origem e o "sem célula pelo afiliado") e a view `vendas_aprovadas`,
   recriada na 0020. Passaram a usá-la: a leitura do painel (`db/painel.ts`: resumo e "sem célula", metas e percentuais,
   ranking unificado e por divisão, por grupo, por discipulador e rede, ranking público, bumbo e telão, /minha do líder,
-  do discipulador e da rede, relatório por e-mail, CSV da coordenação e "Arrecadado", que saem dela), a lista de
+  do discipulador e da rede, o ranking geral da /minha (RIFA-090), relatório por e-mail, CSV da coordenação e
+  "Arrecadado", que saem dela), a lista de
   pedidos (item, filtros `celula_id` e `sem_celula`, totais), a leitura do item na desconsideração (e o resumo da trilha
   dela), os pedidos suspeitos, os bilhetes por número, a planilha de compradores, os maiores compradores (admin e
   discipulador), o mapa por DDD com divisão e a adesão (pela view). **Ficou como estava** a conferência pelo CSV (D19 e
