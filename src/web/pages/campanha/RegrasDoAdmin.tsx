@@ -62,9 +62,9 @@ export const TEXTO_DA_CHAVE: Record<
   acesso_discipuladores: {
     rotulo: "Acesso dos discipuladores",
     ligada:
-      "Ligado: os discipuladores entram pelo link pessoal e veem as células deles.",
+      "Ligado: os discipuladores entram pelo link pessoal (ou com o nome e a senha padrão) e veem as células deles.",
     desligada:
-      "Desligado: eles não entram nem recebem link novo; os links guardados voltam a valer quando religar.",
+      "Desligado: eles não entram (nem pela senha) nem recebem link novo; os links guardados voltam a valer quando religar.",
   },
   acesso_redes: {
     rotulo: "Acesso das redes",
@@ -73,13 +73,14 @@ export const TEXTO_DA_CHAVE: Record<
     desligada:
       "Desligado: elas não entram nem recebem link novo; os links guardados voltam a valer quando religar.",
   },
-  // RIFA-064 (D29): a senha é a mesma regra para todas (não é segredo): o máximo que se vê é a página da célula.
+  // RIFA-064 (D29): a senha é a mesma regra para todas (não é segredo): o máximo que se vê é a página da célula. RIFA-082
+  // (D37): a mesma chave vale para os discipuladores (junto com a do acesso deles), que veem só as células deles.
   acesso_celulas_senha: {
-    rotulo: "Login das células com senha padrão",
+    rotulo: "Login com senha padrão (células e discipuladores)",
     ligada:
-      "Ligado: cada célula entra com o nome dela e a senha @ + nome da célula + 1234 e vê só a página dela (ranking, meta e link de vendas).",
+      "Ligado: cada célula entra com o nome dela e a senha @ + nome da célula + 1234 e vê só a página dela (ranking, meta e link de vendas); cada discipulador entra do mesmo jeito, com o nome dele, e vê só as células dele.",
     desligada:
-      "Desligado: ninguém entra pela senha, e quem entrou assim sai na hora; o link pessoal do líder continua.",
+      "Desligado: ninguém entra pela senha, e quem entrou assim sai na hora; os links pessoais continuam.",
   },
 };
 

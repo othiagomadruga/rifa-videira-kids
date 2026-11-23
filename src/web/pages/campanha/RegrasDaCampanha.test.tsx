@@ -370,15 +370,15 @@ describe("CA1: as mensagens do link pessoal", () => {
   });
 });
 
-describe("RIFA-064 (D29): o login das células com a senha padrão, na Campanha", () => {
+describe("RIFA-064 (D29) e RIFA-082 (D37): o login com a senha padrão (células e discipuladores), na Campanha", () => {
   it("ligado por padrão, com o que acontece ligado e desligado; o admin desliga, o PUT manda e o resumo diz", async () => {
     const { puts } = simularApi({ campanha: CONFIGURADA });
     await abrirTela();
 
-    const chave = caixa("Login das células com senha padrão");
+    const chave = caixa("Login com senha padrão (células e discipuladores)");
     expect(chave).toBeChecked();
     expect(chave).toHaveAccessibleDescription(
-      /^Ligado: cada célula entra com o nome dela e a senha @ \+ nome da célula \+ 1234 e vê só a página dela \(ranking, meta e link de vendas\)\. Desligado: ninguém entra pela senha, e quem entrou assim sai na hora; o link pessoal do líder continua\./,
+      /^Ligado: cada célula entra com o nome dela e a senha @ \+ nome da célula \+ 1234 e vê só a página dela \(ranking, meta e link de vendas\); cada discipulador entra do mesmo jeito, com o nome dele, e vê só as células dele\. Desligado: ninguém entra pela senha, e quem entrou assim sai na hora; os links pessoais continuam\./,
     );
     fireEvent.click(chave);
     fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
@@ -387,10 +387,12 @@ describe("RIFA-064 (D29): o login das células com a senha padrão, na Campanha"
     expect(puts()[0].corpo).toMatchObject({
       acesso: { discipuladores: true, redes: true, celulas_senha: false },
     });
-    expect(caixa("Login das células com senha padrão")).not.toBeChecked();
+    expect(
+      caixa("Login com senha padrão (células e discipuladores)"),
+    ).not.toBeChecked();
     expect(linhasDoResumo()).toEqual(
       expect.arrayContaining([
-        ["Login das células com senha", "Desligado: só pelo link pessoal."],
+        ["Login com senha padrão", "Desligado: só pelo link pessoal."],
       ]),
     );
   });
@@ -404,7 +406,7 @@ describe("RIFA-064 (D29): o login das células com a senha padrão, na Campanha"
     });
     await abrirTela(USUARIO_DE_TESTE);
 
-    const chave = caixa("Login das células com senha padrão");
+    const chave = caixa("Login com senha padrão (células e discipuladores)");
     expect(chave).not.toBeChecked();
     expect(chave).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(chave);
@@ -453,8 +455,8 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       ["Acesso de redes", "Ligado: entram pelo link pessoal."],
       // RIFA-064 (D29).
       [
-        "Login das células com senha",
-        "Ligado: cada célula entra com o nome e a senha padrão.",
+        "Login com senha padrão",
+        "Ligado: células e discipuladores entram com o nome e a senha padrão.",
       ],
       ["Mensagens do link pessoal", "As 4 com o texto padrão."],
     ]);
@@ -492,8 +494,8 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       ],
       ["Acesso de redes", "Ligado: entram pelo link pessoal. (padrão)"],
       [
-        "Login das células com senha",
-        "Ligado: cada célula entra com o nome e a senha padrão. (padrão)",
+        "Login com senha padrão",
+        "Ligado: células e discipuladores entram com o nome e a senha padrão. (padrão)",
       ],
       ["Mensagens do link pessoal", "As 4 com o texto padrão. (padrão)"],
     ]);
@@ -517,8 +519,8 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       screen.getByLabelText("Critério do ranking"),
     );
     expect(irPara("Acesso de redes")).toBe(caixa("Acesso das redes"));
-    expect(irPara("Login das células com senha")).toBe(
-      caixa("Login das células com senha padrão"),
+    expect(irPara("Login com senha padrão")).toBe(
+      caixa("Login com senha padrão (células e discipuladores)"),
     );
     expect(irPara("Mensagens do link pessoal")).toBe(
       campoMensagem("Mensagem do link da coordenação"),

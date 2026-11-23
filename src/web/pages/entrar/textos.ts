@@ -1,6 +1,6 @@
-// Textos da tela Entrar (/entrar): o login da célula com a senha padrão (RIFA-064, D29), o do admin com usuário e senha
-// (RIFA-073, D33) e as dicas (RIFA-045) dos campos e dos botões, em português simples: para que serve e o que acontece,
-// sem repetir o rótulo.
+// Textos da tela Entrar (/entrar): o login da célula com a senha padrão (RIFA-064, D29), o do discipulador com a senha
+// padrão (RIFA-082, D37), o do admin com usuário e senha (RIFA-073, D33) e as dicas (RIFA-045) dos campos e dos botões,
+// em português simples: para que serve e o que acontece, sem repetir o rótulo.
 
 /** Os textos de um formulário de entrada com nome e senha (a célula ou o admin). */
 export type TextosFormulario = {
@@ -79,4 +79,34 @@ export const TEXTOS_ADMIN = {
   muitasTentativasDetalhe: "Espere um minuto e tente de novo.",
   falha: "Não foi possível entrar agora.",
   souCelula: "Sou líder de célula",
+} as const satisfies TextosFormulario & Record<string, string>;
+
+// RIFA-082 (D37): o discipulador entra com o nome dele e a mesma senha padrão das células (@ + nome + 1234).
+export const DICAS_DISCIPULADOR = {
+  nome: "Escreva o seu nome, como a coordenação cadastrou. Maiúsculas, acentos e espaços não fazem diferença.",
+  senha:
+    "A senha que a coordenação passou para você. Começa com @ e termina com 1234.",
+  entrar:
+    "Confere o nome e a senha e conecta este aparelho. Depois, abre a página com as suas células.",
+  entrando:
+    "Indisponível enquanto o nome e a senha são conferidos. Espere um instante.",
+  souDiscipulador:
+    "Para o discipulador entrar com o nome dele e a senha que a coordenação passou, sem o link.",
+} as const satisfies DicasFormulario & Record<string, string>;
+
+export const TEXTOS_DISCIPULADOR = {
+  tituloSenha: "Entrar como discipulador",
+  explicacaoSenha:
+    "Para discipuladores: o seu nome, como a coordenação cadastrou, e a senha que a coordenação passou.",
+  rotuloNome: "Discipulador",
+  rotuloSenha: "Senha",
+  faltaNome: "Escreva o seu nome.",
+  faltaSenha: "Escreva a senha.",
+  recusada: "Nome ou senha não conferem.",
+  recusadaDetalhe:
+    "Confira o seu nome e a senha e tente de novo. Se não der certo, fale com a coordenação.",
+  muitasTentativas: "Muitas tentativas seguidas.",
+  muitasTentativasDetalhe: "Espere um minuto e tente de novo.",
+  falha: "Não foi possível entrar agora.",
+  souDiscipulador: "Sou discipulador",
 } as const satisfies TextosFormulario & Record<string, string>;

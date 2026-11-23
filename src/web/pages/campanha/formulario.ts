@@ -551,7 +551,7 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
   "acesso.discipuladores": "Acesso dos discipuladores",
   "acesso.redes": "Acesso das redes",
-  "acesso.celulas_senha": "Login das células com senha padrão",
+  "acesso.celulas_senha": "Login com senha padrão (células e discipuladores)",
   ...Object.fromEntries(
     TIPOS_MENSAGEM.map((tipo) => [`mensagens.${tipo}`, ROTULO_MENSAGEM[tipo]]),
   ),

@@ -26,13 +26,15 @@ import type {
 import { ErroApi, aoReceber401, api } from "./api";
 
 /**
- * ROTAS_ACESSO.entrar e obterSessao (POST e GET /api/sessao), sair e entrarComSenha (RIFA-064: o login da célula com
- * a senha padrão) e entrarComoAdmin (RIFA-073: o login do admin com usuário e senha) (.caminho).
+ * ROTAS_ACESSO.entrar e obterSessao (POST e GET /api/sessao), sair, entrarComSenha (RIFA-064: o login da célula com
+ * a senha padrão), entrarComoDiscipulador (RIFA-082: o login do discipulador com a senha padrão) e entrarComoAdmin
+ * (RIFA-073: o login do admin com usuário e senha) (.caminho).
  */
 export const CAMINHOS_SESSAO = {
   sessao: "/api/sessao",
   sair: "/api/sessao/sair",
   senha: "/api/sessao/senha",
+  discipulador: "/api/sessao/discipulador",
   admin: "/api/sessao/admin",
 } as const;
 
@@ -71,6 +73,14 @@ export type ValorSessao = {
    * célula. 401: célula ou senha que não conferem (a API não diz qual).
    */
   entrarComSenha: (celula: string, senha: string) => Promise<UsuarioSessao>;
+  /**
+   * RIFA-082 (D37): entra com o nome do discipulador e a senha padrão (POST /api/sessao/discipulador): a sessão do
+   * discipulador. 401: nome ou senha que não conferem (a API não diz qual).
+   */
+  entrarComoDiscipulador: (
+    discipulador: string,
+    senha: string,
+  ) => Promise<UsuarioSessao>;
   /**
    * RIFA-073 (D33): entra com o usuário e a senha do admin (POST /api/sessao/admin): a mesma sessão do link do admin.
    * 401: usuário ou senha que não conferem (a API não diz qual).
@@ -145,6 +155,19 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
     return usuario;
   }, []);
 
+  const entrarComoDiscipulador = useCallback(
+    async (discipulador: string, senha: string) => {
+      const { usuario } = await api.post<RespostaSessao>(
+        CAMINHOS_SESSAO.discipulador,
+        { discipulador, senha },
+      );
+      versao.current += 1;
+      setEstado({ situacao: "conectada", usuario });
+      return usuario;
+    },
+    [],
+  );
+
   const entrarComoAdmin = useCallback(
     async (usuario: string, senha: string) => {
       const { usuario: conectado } = await api.post<RespostaSessao>(
@@ -187,10 +210,19 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
       verificar,
       entrar,
       entrarComSenha,
+      entrarComoDiscipulador,
       entrarComoAdmin,
       sair,
     }),
-    [estado, verificar, entrar, entrarComSenha, entrarComoAdmin, sair],
+    [
+      estado,
+      verificar,
+      entrar,
+      entrarComSenha,
+      entrarComoDiscipulador,
+      entrarComoAdmin,
+      sair,
+    ],
   );
   return <ContextoSessao value={valor}>{children}</ContextoSessao>;
 }

@@ -12,9 +12,11 @@ export const AJUDA = {
   todas:
     "Todas as células da campanha, numa disputa só, da que está na frente para a de trás.",
   entrar:
-    "Como entrar no sistema da campanha: o líder entra com o nome da célula e a senha; a coordenação e os discipuladores, pelo link pessoal que chegou no WhatsApp.",
+    "Como entrar no sistema da campanha: o líder entra com o nome da célula e a senha, e o discipulador com o nome dele e a senha; a coordenação (e quem recebeu um link), pelo link pessoal que chegou no WhatsApp.",
   entrarComCelula:
     "O jeito de o líder entrar: o nome da célula, como aparece no ranking, e a senha que a coordenação passou. Ex.: a senha começa com @ e termina com 1234.",
+  entrarComoDiscipulador:
+    "O jeito de o discipulador entrar sem o link: o nome dele, como a coordenação cadastrou, e a senha que a coordenação passou. Ex.: a senha começa com @ e termina com 1234.",
   entrarComoAdmin:
     "O jeito de o administrador entrar sem o link: o usuário e a senha que ele criou em Minha senha. Ex.: depois de trocar de celular, entre por aqui.",
   comoEntrar:

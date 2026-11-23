@@ -152,11 +152,11 @@ export const AJUDA = {
     pedidos_desconsiderar:
       "Deixa o admin tirar das contas um pedido de teste, fraude ou estorno, na tela Pedidos. Ex.: um pedido de teste de R$ 1,00 deixa de contar na meta. Dá para desfazer.",
     acesso_discipuladores:
-      "Deixa os discipuladores entrarem pelo link pessoal para acompanhar as células deles. Desligar não apaga os links: eles voltam a valer ao ligar de novo.",
+      "Deixa os discipuladores entrarem pelo link pessoal (ou com o nome e a senha padrão) para acompanhar as células deles. Desligar não apaga os links: eles voltam a valer ao ligar de novo.",
     acesso_redes:
       "Deixa as redes entrarem pelo link pessoal para acompanhar os discipuladores e as células delas. Desligar não apaga os links: eles voltam a valer ao ligar de novo.",
     acesso_celulas_senha:
-      "Deixa cada célula entrar na tela Entrar com o nome dela e a senha padrão, sem link. Ex.: Célula Betel entra com @ + o nome da célula + 1234. Desligar tira na hora quem entrou assim.",
+      "Deixa cada célula e cada discipulador entrarem na tela Entrar com o nome e a senha padrão, sem link. Ex.: Célula Betel entra com @ + o nome da célula + 1234. Desligar tira na hora quem entrou assim.",
   } satisfies Record<ChaveDica, string>,
   mensagem: (tipo: TipoMensagem) =>
     `O texto que vai pelo WhatsApp com o link pessoal ${QUEM_RECEBE[tipo]}. Os marcadores entre chaves viram os dados de quem recebe. Ex.: {nome} vira Ana.`,

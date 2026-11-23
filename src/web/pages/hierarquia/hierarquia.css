@@ -216,8 +216,9 @@
 }
 
 /*
- * Login das células com senha (RIFA-064, D29): o texto, o aviso das que não entram e, fechada, a lista com a senha de
- * cada célula e o "Copiar". No celular, a senha desce para a linha de baixo do nome; nada passa da largura.
+ * Login com senha padrão (RIFA-064, D29; os discipuladores na RIFA-082, D37): o texto, o aviso de quem não entra e,
+ * fechadas, as listas com a senha de cada célula e de cada discipulador e o "Copiar". No celular, a senha desce para a
+ * linha de baixo do nome; nada passa da largura.
  */
 .hierarquia-login {
   display: flex;

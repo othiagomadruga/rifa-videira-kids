@@ -55,6 +55,8 @@ describe("cópias do contrato do acesso no site", () => {
       sair: ROTAS_ACESSO.sair.caminho,
       // RIFA-064 (D29): o login da célula com a senha padrão.
       senha: ROTAS_ACESSO.entrarComSenha.caminho,
+      // RIFA-082 (D37): o login do discipulador com a senha padrão.
+      discipulador: ROTAS_ACESSO.entrarComoDiscipulador.caminho,
       // RIFA-073 (D33): o login do admin com usuário e senha.
       admin: ROTAS_ACESSO.entrarComoAdmin.caminho,
     });

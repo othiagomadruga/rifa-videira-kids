@@ -197,9 +197,9 @@ export function itensDoResumo(
           },
         ]),
     {
-      nome: "Login das células com senha",
+      nome: "Login com senha padrão",
       valor: acesso.celulas_senha
-        ? "Ligado: cada célula entra com o nome e a senha padrão."
+        ? "Ligado: células e discipuladores entram com o nome e a senha padrão."
         : "Desligado: só pelo link pessoal.",
       padrao,
       campo: idDoCampo("acesso.celulas_senha"),

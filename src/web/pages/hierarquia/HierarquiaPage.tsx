@@ -170,8 +170,12 @@ export function HierarquiaPage() {
             </Aviso>
           )}
           <Resumo dados={dados} redeUnica={redeUnica} />
-          {/* RIFA-064 (D29): o aviso das células que não entram pela senha e a senha de cada uma, para repassar. */}
-          <LoginDasCelulas celulas={dados.celulas} />
+          {/* RIFA-064 (D29) e RIFA-082 (D37): o aviso das células e dos discipuladores que não entram pela senha e a
+              senha de cada um, para repassar. */}
+          <LoginDasCelulas
+            celulas={dados.celulas}
+            discipuladores={dados.discipuladores}
+          />
           <Abas<IdAba>
             id={ID_ABAS}
             rotulo="Partes da hierarquia"

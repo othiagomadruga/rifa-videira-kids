@@ -415,7 +415,7 @@ describe("RIFA-064: entrar com a célula", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Para entrar de novo, use o nome da célula e a senha ou abra o seu link pessoal.",
+        "Para entrar de novo, use o nome e a senha ou abra o seu link pessoal.",
       ),
     ).toBeInTheDocument();
     expect(campos.roteador.state.location.pathname).toBe("/entrar");

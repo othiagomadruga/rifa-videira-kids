@@ -18,7 +18,7 @@ export const AJUDA = {
   busca:
     "Procura pelo nome da célula, do líder ou do discipulador enquanto você digita (acentos e maiúsculas não importam). Ex.: “betel” acha a Célula Betel.",
   loginDasCelulas:
-    "Um jeito simples de o líder entrar: o nome da célula e uma senha padrão, sem precisar do link. Ex.: a senha da Célula Betel começa com @ e termina com 1234. Aqui você vê a senha de cada célula para repassar.",
+    "Um jeito simples de o líder e o discipulador entrarem: o nome (da célula ou do discipulador) e uma senha padrão, sem precisar do link. Ex.: a senha da Célula Betel começa com @ e termina com 1234. Aqui você vê a senha de cada um para repassar.",
   importar:
     "Uma forma de cadastrar de uma vez as redes, os discipuladores e as células, a partir de uma planilha. Serve para começar a campanha sem digitar célula por célula.",
   passoModelo:

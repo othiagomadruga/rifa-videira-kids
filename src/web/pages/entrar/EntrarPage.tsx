@@ -22,8 +22,10 @@ import {
 import {
   DICAS,
   DICAS_ADMIN,
+  DICAS_DISCIPULADOR,
   TEXTOS,
   TEXTOS_ADMIN,
+  TEXTOS_DISCIPULADOR,
   type DicasFormulario,
   type TextosFormulario,
 } from "./textos";
@@ -33,7 +35,7 @@ import { ajudaAberta } from "../ranking-publico/ajuda-sob-demanda";
 type Envio =
   | { tipo: "pronto" }
   | { tipo: "entrando" }
-  /** 401: os dados não conferem (a API não diz qual, nem se a célula ou o usuário existe). */
+  /** 401: os dados não conferem (a API não diz qual, nem se a célula, o discipulador ou o usuário existe). */
   | { tipo: "recusada" }
   /** 429: o limite de tentativas por minuto. */
   | { tipo: "muitas" }
@@ -42,14 +44,18 @@ type Envio =
 
 type Faltas = { nome: boolean; senha: boolean };
 
-/** O que muda entre o login da célula (RIFA-064) e o do admin (RIFA-073): os textos, o ícone e a chamada à API. */
+/**
+ * O que muda entre o login da célula (RIFA-064), o do discipulador (RIFA-082) e o do admin (RIFA-073): os textos, o
+ * ícone e a chamada à API.
+ */
 type ConfigFormulario = {
   icone: NomeIcone;
   textos: TextosFormulario;
   dicas: DicasFormulario;
   /** A ajuda do título do formulário (RIFA-066). */
-  ajudaDoTitulo: "entrarComCelula" | "entrarComoAdmin";
-  /** O campo do nome (a célula ou o usuário). */
+  ajudaDoTitulo:
+    "entrarComCelula" | "entrarComoDiscipulador" | "entrarComoAdmin";
+  /** O campo do nome (a célula, o discipulador ou o usuário). */
   campoNome: {
     name: string;
     autoCapitalize: "words" | "none";
@@ -57,8 +63,8 @@ type ConfigFormulario = {
   entrarCom: (nome: string, senha: string) => Promise<unknown>;
 };
 
-// Login com nome e senha: a célula (RIFA-064, D29) abre a sessão do líder dela; o admin (RIFA-073, D33), a sessão do
-// admin. A tela vai para a área do papel pelo efeito de EntrarPage, quando a sessão chega. O nome e a senha só vão no
+// Login com nome e senha: a célula (RIFA-064, D29) abre a sessão do líder dela; o discipulador (RIFA-082, D37), a dele;
+// o admin (RIFA-073, D33), a sessão do admin. A tela vai para a área do papel pelo efeito de EntrarPage, quando a sessão chega. O nome e a senha só vão no
 // corpo do POST, nunca na URL, no título ou num log. Campos vazios nem vão à API.
 function FormularioDeEntrada({
   icone,
@@ -194,67 +200,89 @@ function FormularioDeEntrada({
   );
 }
 
-type Modo = "celula" | "admin";
+type Modo = "celula" | "discipulador" | "admin";
 
-// O cartão do login com senha: a célula (o padrão) ou, com "Sou administrador", o admin (RIFA-073). Trocar de modo
-// começa o formulário do zero (nada do que foi digitado num vai para o outro).
+/** Os modos na ordem dos botões de troca. */
+const MODOS: readonly Modo[] = ["celula", "discipulador", "admin"];
+
+/** O botão que leva a cada modo: o texto e a dica (RIFA-045). */
+const TROCA: Record<Modo, { rotulo: string; dica: string }> = {
+  celula: { rotulo: TEXTOS_ADMIN.souCelula, dica: DICAS_ADMIN.souCelula },
+  discipulador: {
+    rotulo: TEXTOS_DISCIPULADOR.souDiscipulador,
+    dica: DICAS_DISCIPULADOR.souDiscipulador,
+  },
+  admin: { rotulo: TEXTOS.souAdmin, dica: DICAS.souAdmin },
+};
+
+// O cartão do login com senha: a célula (o padrão) ou, com "Sou discipulador", o discipulador (RIFA-082) ou, com "Sou
+// administrador", o admin (RIFA-073). Embaixo do formulário, um botão para cada um dos outros dois modos. Trocar de
+// modo começa o formulário do zero (nada do que foi digitado num vai para o outro).
 function EntrarComSenha() {
-  const { entrarComSenha, entrarComoAdmin } = useSessao();
+  const { entrarComSenha, entrarComoDiscipulador, entrarComoAdmin } =
+    useSessao();
   const [modo, setModo] = useState<Modo>("celula");
-  const refTroca = useRef<HTMLButtonElement>(null);
-  const trocou = useRef(false);
+  const [anterior, setAnterior] = useState<Modo | null>(null);
+  const refVolta = useRef<HTMLButtonElement>(null);
 
-  // Depois de trocar, o foco volta ao botão de troca (o formulário de antes sumiu com o foco).
+  // Depois de trocar, o foco vai para o botão que volta ao modo de antes (o formulário de antes sumiu com o foco).
   useEffect(() => {
-    if (trocou.current) refTroca.current?.focus();
-  }, [modo]);
+    if (anterior !== null) refVolta.current?.focus();
+  }, [modo, anterior]);
 
-  const config: ConfigFormulario =
-    modo === "celula"
-      ? {
-          icone: "celula",
-          textos: TEXTOS,
-          dicas: DICAS,
-          ajudaDoTitulo: "entrarComCelula",
-          campoNome: { name: "celula", autoCapitalize: "words" },
-          entrarCom: entrarComSenha,
-        }
-      : {
-          icone: "chave",
-          textos: TEXTOS_ADMIN,
-          dicas: DICAS_ADMIN,
-          ajudaDoTitulo: "entrarComoAdmin",
-          campoNome: { name: "usuario", autoCapitalize: "none" },
-          entrarCom: entrarComoAdmin,
-        };
+  const configs: Record<Modo, ConfigFormulario> = {
+    celula: {
+      icone: "celula",
+      textos: TEXTOS,
+      dicas: DICAS,
+      ajudaDoTitulo: "entrarComCelula",
+      campoNome: { name: "celula", autoCapitalize: "words" },
+      entrarCom: entrarComSenha,
+    },
+    discipulador: {
+      icone: "pessoas",
+      textos: TEXTOS_DISCIPULADOR,
+      dicas: DICAS_DISCIPULADOR,
+      ajudaDoTitulo: "entrarComoDiscipulador",
+      campoNome: { name: "discipulador", autoCapitalize: "words" },
+      entrarCom: entrarComoDiscipulador,
+    },
+    admin: {
+      icone: "chave",
+      textos: TEXTOS_ADMIN,
+      dicas: DICAS_ADMIN,
+      ajudaDoTitulo: "entrarComoAdmin",
+      campoNome: { name: "usuario", autoCapitalize: "none" },
+      entrarCom: entrarComoAdmin,
+    },
+  };
 
   return (
     <Card>
       <div className="entrar-cartao-senha">
-        <FormularioDeEntrada key={modo} {...config} />
-        <ComDica
-          texto={modo === "celula" ? DICAS.souAdmin : DICAS_ADMIN.souCelula}
-        >
-          <Button
-            ref={refTroca}
-            variante="discreto"
-            larguraTotal
-            onClick={() => {
-              trocou.current = true;
-              setModo(modo === "celula" ? "admin" : "celula");
-            }}
-          >
-            {modo === "celula" ? TEXTOS.souAdmin : TEXTOS_ADMIN.souCelula}
-          </Button>
-        </ComDica>
+        <FormularioDeEntrada key={modo} {...configs[modo]} />
+        {MODOS.filter((outro) => outro !== modo).map((outro) => (
+          <ComDica key={outro} texto={TROCA[outro].dica}>
+            <Button
+              ref={outro === anterior ? refVolta : undefined}
+              variante="discreto"
+              larguraTotal
+              onClick={() => {
+                setAnterior(modo);
+                setModo(outro);
+              }}
+            >
+              {TROCA[outro].rotulo}
+            </Button>
+          </ComDica>
+        ))}
       </div>
     </Card>
   );
 }
 
-// Como entrar (sem sessão): a célula com o nome e a senha padrão (RIFA-064), o admin com usuário e senha (RIFA-073) ou
-// o link pessoal que chega no WhatsApp,
-// sem senha. Quem já tem sessão vai direto para a área do papel (/coordenacao ou /minha), ou para a tela que tinha
+// Como entrar (sem sessão): a célula com o nome e a senha padrão (RIFA-064), o discipulador com o nome e a senha padrão
+// (RIFA-082), o admin com usuário e senha (RIFA-073) ou o link pessoal que chega no WhatsApp, sem senha. Quem já tem sessão vai direto para a área do papel (/coordenacao ou /minha), ou para a tela que tinha
 // pedido, quando veio da guarda e a tela é da área dele.
 export function EntrarPage() {
   const { estado, verificar } = useSessao();
@@ -292,16 +320,16 @@ export function EntrarPage() {
           {motivo === "saiu" && (
             <Aviso tom="sucesso" titulo="Você saiu do sistema neste aparelho.">
               <p>
-                Para entrar de novo, use o nome da célula e a senha ou abra o
-                seu link pessoal.
+                Para entrar de novo, use o nome e a senha ou abra o seu link
+                pessoal.
               </p>
             </Aviso>
           )}
           {motivo === "expirou" && (
             <Aviso tom="info" titulo="Sua sessão terminou.">
               <p>
-                Para continuar, entre de novo com a sua célula ou pelo seu link
-                pessoal.
+                Para continuar, entre de novo com o nome e a senha ou pelo seu
+                link pessoal.
               </p>
             </Aviso>
           )}

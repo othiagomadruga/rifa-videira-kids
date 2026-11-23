@@ -171,6 +171,11 @@ export const DICAS = {
     "Mostra a senha padrão de cada célula, para repassar ao líder pelo WhatsApp. A senha sai do nome da célula.",
   copiarSenha:
     "Copia a senha desta célula, para colar na conversa com o líder.",
+  // Login dos discipuladores com senha (RIFA-082, D37)
+  verSenhasDiscipuladores:
+    "Mostra a senha padrão de cada discipulador, para repassar pelo WhatsApp. A senha sai do nome do discipulador.",
+  copiarSenhaDiscipulador:
+    "Copia a senha deste discipulador, para colar na conversa com ele.",
   limparFiltros:
     "Tira a divisão, a rede e a busca e mostra todas as células de novo.",
   irParaImportar:
