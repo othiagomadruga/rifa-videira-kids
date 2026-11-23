@@ -21,8 +21,9 @@
 //    (`acesso.celulas_senha` ou `acesso.discipuladores`) derruba a sessão aberta pela senha, e não a do link;
 // l) os maiores compradores (RIFA-083, D38): a rota do admin dá 403 para a coordenação e a hierarquia; a da /minha é só
 //    do discipulador (líder, rede e coordenação: 403; sem sessão, 401) e responde sem telefone e sem valor;
-// n) o relatório diário por e-mail e o saldo da Efí (RIFA-086, D40): só do admin (coordenação e hierarquia: 403; sem
-//    sessão, 401), o envio com CSRF, e a prévia em HTML é a única resposta com a CSP própria (sem script);
+// n) o relatório diário por e-mail (RIFA-086 e RIFA-087, D40) e o "Arrecadado" (RIFA-087): só do admin (coordenação e
+//    hierarquia: 403; sem sessão, 401), o envio com CSRF, e a prévia em HTML é a única resposta com a CSP própria (sem
+//    script);
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -50,7 +51,7 @@ import {
   ROTAS_RIFEI_API,
   ROTAS_RELATORIO,
   ROTAS_RELATORIO_DIARIO,
-  ROTAS_SALDO_EFI,
+  ROTAS_ARRECADADO,
   ROTAS_TOKEN_WEBHOOK,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
@@ -138,7 +139,7 @@ interface RotaDaCoordenacao {
  * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora) e ROTAS_RIFEI_API
  * (RIFA-070, D32: só admin) e ROTAS_CONEXAO_RIFEI (RIFA-070, D32: a conexão com a Rifei e a busca do pedido, só admin) e
  * ROTAS_MAIORES_COMPRADORES (RIFA-083, D38: a do admin, só admin; a do discipulador, em /api/minha, fica no filtro de
- * fora) e ROTAS_RELATORIO_DIARIO e ROTAS_SALDO_EFI (RIFA-086, D40: só admin). O relatório entrou aqui
+ * fora) e ROTAS_RELATORIO_DIARIO e ROTAS_ARRECADADO (RIFA-086 e RIFA-087, D40: só admin). O relatório entrou aqui
  * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
  * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
@@ -153,7 +154,7 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_CONEXAO_RIFEI),
     ...Object.values(ROTAS_MAIORES_COMPRADORES),
     ...Object.values(ROTAS_RELATORIO_DIARIO),
-    ...Object.values(ROTAS_SALDO_EFI),
+    ...Object.values(ROTAS_ARRECADADO),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -253,7 +254,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_CONEXAO_RIFEI),
     ...Object.values(ROTAS_MAIORES_COMPRADORES),
     ...Object.values(ROTAS_RELATORIO_DIARIO),
-    ...Object.values(ROTAS_SALDO_EFI),
+    ...Object.values(ROTAS_ARRECADADO),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -335,10 +336,10 @@ describe("a) toda rota da coordenação exige sessão", () => {
     ).toBeUndefined();
     for (const rota of Object.values(ROTAS_MAIORES_COMPRADORES))
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
-    // O relatório diário e o saldo da Efí (RIFA-086, D40): os três no filtro, só de admin, e montados.
+    // O relatório diário e o Arrecadado (RIFA-086 e RIFA-087, D40): os três no filtro, só de admin, e montados.
     for (const rota of [
       ...Object.values(ROTAS_RELATORIO_DIARIO),
-      ...Object.values(ROTAS_SALDO_EFI),
+      ...Object.values(ROTAS_ARRECADADO),
     ]) {
       expect(doFiltro(rota)).toEqual(["admin"]);
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
@@ -2573,11 +2574,11 @@ describe("m) RIFA-085 (D39, adendo): o grupo próprio da célula só pela coorde
   });
 });
 
-describe("n) RIFA-086 (D40): o relatório diário por e-mail e o saldo da Efí, só do admin", () => {
+describe("n) RIFA-086 e RIFA-087 (D40): o relatório diário por e-mail e o Arrecadado, só do admin", () => {
   const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
   const ROTAS_SO_ADMIN = [
     ...Object.values(ROTAS_RELATORIO_DIARIO),
-    ...Object.values(ROTAS_SALDO_EFI),
+    ...Object.values(ROTAS_ARRECADADO),
   ];
 
   // O app real usa o relógio do sistema: a campanha começa hoje (no fuso dela), e a prévia é a de hoje.
@@ -2632,7 +2633,16 @@ describe("n) RIFA-086 (D40): o relatório diário por e-mail e o saldo da Efí, 
     );
   });
 
-  it("admin: a prévia sai em HTML com a CSP própria (sem script) e no-store; o saldo, em JSON com a CSP de sempre", async () => {
+  it("admin: a prévia (manhã e tarde) sai em HTML com a CSP própria (sem script) e no-store; o Arrecadado, em JSON com a CSP de sempre", async () => {
+    const tarde = await requisitar(
+      "GET",
+      `${ROTAS_RELATORIO_DIARIO.previaRelatorioDiario.caminho}?tipo=tarde`,
+      admin,
+    );
+    expect(tarde.status).toBe(200);
+    expect(tarde.headers.get("Content-Security-Policy")).toBe(CSP_PREVIA_EMAIL);
+    expect(await tarde.text()).toMatch(/Parcial de [^<]+, até \d{1,2}h/);
+
     const previa = await requisitar(
       "GET",
       `${ROTAS_RELATORIO_DIARIO.previaRelatorioDiario.caminho}?data=${hoje}`,
@@ -2647,14 +2657,17 @@ describe("n) RIFA-086 (D40): o relatório diário por e-mail e o saldo da Efí, 
     expect(previa.headers.get("Cache-Control")).toBe("no-store");
     expect(await previa.text()).not.toMatch(/<script/i);
 
-    const saldo = await requisitar(
+    const arrecadado = await requisitar(
       "GET",
-      ROTAS_SALDO_EFI.saldoEfi.caminho,
+      ROTAS_ARRECADADO.arrecadado.caminho,
       admin,
     );
-    expect(saldo.status).toBe(200);
-    esperarCabecalhosDeSeguranca(saldo);
-    expect(saldo.headers.get("Cache-Control")).toBe("no-store");
+    expect(arrecadado.status).toBe(200);
+    esperarCabecalhosDeSeguranca(arrecadado);
+    expect(arrecadado.headers.get("Cache-Control")).toBe("no-store");
+    expect(
+      ROTAS_ARRECADADO.arrecadado.sucesso.corpo.parse(await arrecadado.json()),
+    ).toMatchObject({ data: hoje, hoje: { total_centavos: 0 } });
   });
 });
 

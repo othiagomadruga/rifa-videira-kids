@@ -1,14 +1,18 @@
 /**
- * Relatório diário por e-mail (RIFA-086, D40): os números do dia de referência e o e-mail montado (assunto, HTML e
- * texto). Tudo aqui é PURO (sem banco, sem relógio, sem rede): db/painel.ts lê, a Efí vem de lib/efi.ts e o envio é de
+ * Relatório diário por e-mail (RIFA-086 e RIFA-087, D40): os números do dia de referência e o e-mail montado (assunto,
+ * HTML e texto). Tudo aqui é PURO (sem banco, sem relógio, sem rede): db/painel.ts lê e o envio é de
  * lib/relatorio-diario-envio.ts.
  *
  * - `dadosDoRelatorioDiario`: os números, dos MESMOS montadores do painel (`montarResumoPainel`, `montarRankingPainel`
  *   e `montarRankingGruposPainel`, de calculos.ts) no dia de referência, com a janela da campanha inteira até o fim
- *   desse dia. Fora da campanha (antes do início ou depois do fim), null: o e-mail não sai.
+ *   desse dia. Fora da campanha (antes do início ou depois do fim), null: o e-mail não sai. O valor do dia
+ *   (`totaisDoDia`, de lib/arrecadado.ts) é a mesma fonte do total da campanha, filtrada pelo dia.
+ * - Dois tipos (TIPOS_RELATORIO_DIARIO): `manha` (o dia anterior fechado, "Resumo de ...") e `tarde` (hoje até a hora
+ *   do envio, "Parcial de ..., até 17h"; "Hoje até 17h" no lugar de "No dia"). O resto é igual.
  * - `montarRelatorioDiario`: o e-mail no visual que o PO aprovou em 23/11 (uma coluna, até 560 px, estilos inline) e a
  *   versão em texto puro. Números em pt-BR montados por texto (sem ponto
  *   flutuante, D2); percentuais dos pontos-base TRUNCADOS em uma casa, como o site (R11: nunca "100%" antes da meta).
+ *   Nada da Efí: o saldo saiu na RIFA-087 (adendo da D40).
  *
  * Nada de comprador (nome, telefone) nem de contato de líder: os dados só têm números agregados e os nomes de células,
  * discipuladores e grupos. Todo texto que vem do banco é escapado no HTML.
@@ -24,9 +28,10 @@ import {
   type GrupoCalculo,
   type ItemRanking,
   type RegraMeta,
-  type RespostaSaldoEfi,
+  type TipoRelatorioDiario,
   type UnidadeMeta,
 } from "../../shared/contracts";
+import { totaisDoDia } from "./arrecadado";
 
 // ---------------------------------------------------------------------------------------------------
 // Os números do dia
@@ -42,10 +47,12 @@ export interface CelulaDoRelatorio {
 
 /** Tudo o que o e-mail mostra, já calculado. */
 export interface DadosRelatorioDiario {
+  /** `manha`: o dia anterior fechado; `tarde`: hoje até a hora do envio (parcial). */
+  tipo: TipoRelatorioDiario;
   /** Dia de referência (AAAA-MM-DD, no fuso da campanha). */
   data: string;
-  /** Fuso da campanha (a hora do saldo sai nele). */
-  fuso: string;
+  /** Só na tarde: até que hora vão os números, no fuso da campanha ("17h", "15h42"); null na manhã. */
+  parcial_ate: string | null;
   dia_campanha: number;
   duracao_dias: number;
   unidade: UnidadeMeta;
@@ -54,8 +61,11 @@ export interface DadosRelatorioDiario {
   /** Da campanha inteira até o fim do dia de referência (com as vendas sem célula). */
   vendas: { bilhetes: number; total_centavos: number };
   campanha: { meta: number; percentual_meta_bp: number | null };
-  /** O dia de referência: vendido e a meta do dia (na unidade da meta). */
-  dia: { realizado: number; meta: number };
+  /**
+   * O dia de referência: os pedidos pagos do dia (bilhetes e R$, a mesma fonte de `vendas`, filtrada pelo dia) e a
+   * meta do dia (na unidade da meta).
+   */
+  dia: { bilhetes: number; total_centavos: number; meta: number };
   /** O período (semana) do dia de referência. */
   periodo: {
     nome: string;
@@ -77,9 +87,10 @@ export interface DadosRelatorioDiario {
   total_celulas: number;
   celulas_sem_venda: number;
   bilhetes_sem_celula: number;
-  /** null: indisponível (a consulta falhou ou a Efí não está configurada). */
-  saldo_efi: { centavos: number; consultado_em: string } | null;
 }
+
+/** Qual envio: a manhã ou a tarde, com o instante do corte (o envio). */
+export type EnvioDoRelatorio = { tipo: "manha" } | { tipo: "tarde"; ate: Date };
 
 const ordemDosNomes = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
@@ -98,7 +109,7 @@ export function dadosDoRelatorioDiario(
   entrada: EntradaCalculo,
   grupos: readonly GrupoCalculo[],
   data: string,
-  saldo: RespostaSaldoEfi,
+  envio: EnvioDoRelatorio,
 ): DadosRelatorioDiario | null {
   const { campanha } = entrada;
   // O "agora" dos montadores: o último milissegundo do dia de referência. Os montadores com `data` a usam; o dos
@@ -137,9 +148,15 @@ export function dadosDoRelatorioDiario(
     fimDoDia,
   );
 
+  const doDia = totaisDoDia(entrada, data);
+
   return {
+    tipo: envio.tipo,
     data,
-    fuso: campanha.fuso_horario,
+    parcial_ate:
+      envio.tipo === "tarde"
+        ? horaCurta(envio.ate.toISOString(), campanha.fuso_horario)
+        : null,
     dia_campanha: exigir(referencia.dia_campanha, "Dia da campanha"),
     duracao_dias: referencia.duracao_dias,
     unidade: resumo.unidade,
@@ -152,7 +169,11 @@ export function dadosDoRelatorioDiario(
       meta: resumo.campanha.meta,
       percentual_meta_bp: resumo.campanha.percentual_meta_bp,
     },
-    dia: { realizado: hoje.realizado, meta: hoje.meta },
+    dia: {
+      bilhetes: doDia.bilhetes,
+      total_centavos: doDia.total_centavos,
+      meta: hoje.meta,
+    },
     periodo: {
       nome: infoPeriodo.nome,
       data_inicio: infoPeriodo.data_inicio,
@@ -189,13 +210,6 @@ export function dadosDoRelatorioDiario(
     total_celulas: celulas.length,
     celulas_sem_venda: celulas.filter((item) => !vendeu(item)).length,
     bilhetes_sem_celula: resumo.vendas_sem_celula?.bilhetes ?? 0,
-    saldo_efi:
-      saldo.saldo_centavos === null
-        ? null
-        : {
-            centavos: saldo.saldo_centavos,
-            consultado_em: saldo.consultado_em,
-          },
   };
 }
 
@@ -269,6 +283,12 @@ export function horaNoFuso(instante: string, fuso: string): string {
   return `${parte("hour").padStart(2, "0")}:${parte("minute")}`;
 }
 
+/** "17h" na hora cheia, "15h42" fora dela: a hora do instante no fuso, como se diz no e-mail. */
+export function horaCurta(instante: string, fuso: string): string {
+  const [hora, minuto] = horaNoFuso(instante, fuso).split(":");
+  return minuto === "00" ? `${Number(hora)}h` : `${Number(hora)}h${minuto}`;
+}
+
 /** ["A", "B", "C"] → "A, B e C". */
 export function juntarNomes(nomes: readonly string[]): string {
   return nomes.length <= 1
@@ -276,9 +296,17 @@ export function juntarNomes(nomes: readonly string[]): string {
     : `${nomes.slice(0, -1).join(", ")} e ${nomes.at(-1)}`;
 }
 
+/** "bilhete" / "bilhetes". */
+const palavraBilhete = (quantidade: number) =>
+  quantidade === 1 ? "bilhete" : "bilhetes";
+
 /** "1 bilhete" / "49 bilhetes". */
 const bilhetes = (quantidade: number) =>
-  `${formatarInteiro(quantidade)} ${quantidade === 1 ? "bilhete" : "bilhetes"}`;
+  `${formatarInteiro(quantidade)} ${palavraBilhete(quantidade)}`;
+
+/** "1 bilhete pago" / "135 bilhetes pagos". */
+const bilhetesPagos = (quantidade: number) =>
+  `${bilhetes(quantidade)} ${quantidade === 1 ? "pago" : "pagos"}`;
 
 /** Um valor na unidade da meta: "49 bilhetes" ou "R$ 1.140,00". */
 const naUnidade = (valor: number, unidade: UnidadeMeta) =>
@@ -303,10 +331,32 @@ function textoDosPrimeiros(primeiros: readonly string[]): string {
 // Os textos do e-mail (iguais no HTML e no texto puro)
 // ---------------------------------------------------------------------------------------------------
 
-/** "Projeto Videira Kids · resumo de segunda, 23/11". */
-export function assuntoDoRelatorioDiario(data: string): string {
-  return `Projeto Videira Kids · resumo de ${diaDaSemana(data)}, ${diaMes(data)}`;
+/**
+ * Manhã: "Projeto Videira Kids · resumo de segunda, 23/11". Tarde (com `parcialAte`):
+ * "Projeto Videira Kids · parcial de segunda, 23/11 (até 17h)".
+ */
+export function assuntoDoRelatorioDiario(
+  data: string,
+  parcialAte: string | null = null,
+): string {
+  const dia = `${diaDaSemana(data)}, ${diaMes(data)}`;
+  return parcialAte === null
+    ? `Projeto Videira Kids · resumo de ${dia}`
+    : `Projeto Videira Kids · parcial de ${dia} (até ${parcialAte})`;
 }
+
+/** "Resumo de segunda, 23/11 · dia 1 de 21" ou "Parcial de segunda, 23/11, até 17h · dia 1 de 21". */
+function subtitulo(dados: DadosRelatorioDiario): string {
+  const dia = `${diaDaSemana(dados.data)}, ${diaMes(dados.data)}`;
+  const contagem = `dia ${dados.dia_campanha} de ${dados.duracao_dias}`;
+  return dados.parcial_ate === null
+    ? `Resumo de ${dia} · ${contagem}`
+    : `Parcial de ${dia}, até ${dados.parcial_ate} · ${contagem}`;
+}
+
+/** O rótulo da linha do dia: "No dia" (manhã) ou "Hoje até 17h" (tarde). */
+const rotuloDoDia = (dados: DadosRelatorioDiario) =>
+  dados.parcial_ate === null ? "No dia" : `Hoje até ${dados.parcial_ate}`;
 
 function notaDasCelulas(dados: DadosRelatorioDiario): string {
   const { regra, valor } = dados.regra_meta;
@@ -342,13 +392,7 @@ function textoSemCelula(quantidade: number): string | null {
     : `${formatarInteiro(quantidade)} bilhetes foram vendidos sem link de célula (não contam para nenhuma)`;
 }
 
-function textoDoSaldo(dados: DadosRelatorioDiario): string {
-  return dados.saldo_efi === null
-    ? "indisponível"
-    : `${formatarReais(dados.saldo_efi.centavos)} (às ${horaNoFuso(dados.saldo_efi.consultado_em, dados.fuso)})`;
-}
-
-const RODAPE = "Enviado todo dia às 7h · Projeto Videira Kids";
+const RODAPE = "Enviado todo dia às 7h e às 17h · Projeto Videira Kids";
 
 // ---------------------------------------------------------------------------------------------------
 // HTML do e-mail (estilos inline, uma coluna, até 560 px)
@@ -413,13 +457,13 @@ function htmlDoRelatorio(dados: DadosRelatorioDiario, assunto: string): string {
     `<div style="max-width:560px;margin:0 auto;padding:20px 14px">`,
     `<div style="background:${COR.cartao};border-radius:14px;padding:26px 22px">`,
     `<div style="font-size:13px;letter-spacing:.12em;color:${COR.roxo};font-weight:700">PROJETO VIDEIRA KIDS</div>`,
-    `<div style="font-size:15px;color:${COR.suave};margin-top:4px">Resumo de ${e(diaDaSemana(dados.data))}, ${e(diaMes(dados.data))} · dia ${dados.dia_campanha} de ${dados.duracao_dias}</div>`,
+    `<div style="font-size:15px;color:${COR.suave};margin-top:4px">${e(subtitulo(dados))}</div>`,
   );
 
   // Arrecadado e o alvo da campanha.
   partes.push(
     `<div style="margin:22px 0 6px;font-size:40px;font-weight:800;color:${COR.texto}">${e(formatarReais(dados.vendas.total_centavos))}</div>`,
-    `<div style="font-size:15px;color:${COR.corpo}">arrecadados · <b>${e(bilhetes(dados.vendas.bilhetes))}</b> vendidos</div>`,
+    `<div style="font-size:15px;color:${COR.corpo}">arrecadados · <b>${e(bilhetesPagos(dados.vendas.bilhetes))}</b></div>`,
   );
   if (dados.campanha.percentual_meta_bp !== null)
     partes.push(
@@ -429,12 +473,9 @@ function htmlDoRelatorio(dados: DadosRelatorioDiario, assunto: string): string {
     `<div style="font-size:13px;color:${COR.suave};margin-top:6px">${e(textoDoAlvo(dados))}</div>`,
   );
 
-  // O dia e o período.
+  // O dia (bilhetes e R$ dos pedidos pagos do dia) e o período.
   const metaDoDia = `<span style="color:${COR.suave}">(meta ${e(numeroNaUnidade(dados.dia.meta, unidade))})</span>`;
-  const realizadoDoDia =
-    unidade === "bilhetes"
-      ? `<b>${e(formatarInteiro(dados.dia.realizado))}</b> ${dados.dia.realizado === 1 ? "bilhete" : "bilhetes"}`
-      : `<b>${e(formatarReais(dados.dia.realizado))}</b>`;
+  const realizadoDoDia = `<b>${e(formatarInteiro(dados.dia.bilhetes))}</b> ${palavraBilhete(dados.dia.bilhetes)} · <b>${e(formatarReais(dados.dia.total_centavos))}</b>`;
   const { periodo } = dados;
   const percentualDoPeriodo =
     periodo.percentual_meta_bp === null
@@ -444,7 +485,7 @@ function htmlDoRelatorio(dados: DadosRelatorioDiario, assunto: string): string {
     `<table style="width:100%;margin-top:22px;border-collapse:collapse;font-size:15px">`,
     linhaDeTabela(
       0,
-      { html: "No dia", estilo: `color:${COR.suave}` },
+      { html: e(rotuloDoDia(dados)), estilo: `color:${COR.suave}` },
       { html: `${realizadoDoDia} ${metaDoDia}` },
       "8px",
     ),
@@ -527,9 +568,6 @@ function htmlDoRelatorio(dados: DadosRelatorioDiario, assunto: string): string {
     ...[textoSemCelula(dados.bilhetes_sem_celula)].flatMap((texto) =>
       texto === null ? [] : [e(texto)],
     ),
-    dados.saldo_efi === null
-      ? `Saldo na Efí: <span style="color:${COR.apagado}">indisponível</span>`
-      : `Saldo na Efí: <b>${e(formatarReais(dados.saldo_efi.centavos))}</b> <span style="color:${COR.apagado}">(às ${e(horaNoFuso(dados.saldo_efi.consultado_em, dados.fuso))})</span>`,
   ];
   partes.push(
     `<div style="margin-top:26px;background:${COR.atencao};border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.6">`,
@@ -556,12 +594,12 @@ function textoDoRelatorio(dados: DadosRelatorioDiario): string {
   const { unidade, periodo } = dados;
   const linhas: string[] = [
     "PROJETO VIDEIRA KIDS",
-    `Resumo de ${diaDaSemana(dados.data)}, ${diaMes(dados.data)} · dia ${dados.dia_campanha} de ${dados.duracao_dias}`,
+    subtitulo(dados),
     "",
-    `${formatarReais(dados.vendas.total_centavos)} arrecadados · ${bilhetes(dados.vendas.bilhetes)} vendidos`,
+    `${formatarReais(dados.vendas.total_centavos)} arrecadados · ${bilhetesPagos(dados.vendas.bilhetes)}`,
     textoDoAlvo(dados),
     "",
-    `No dia: ${naUnidade(dados.dia.realizado, unidade)} (meta ${numeroNaUnidade(dados.dia.meta, unidade)})`,
+    `${rotuloDoDia(dados)}: ${bilhetes(dados.dia.bilhetes)} · ${formatarReais(dados.dia.total_centavos)} (meta ${numeroNaUnidade(dados.dia.meta, unidade)})`,
     `${periodo.nome} · ${intervaloDeDias(periodo.data_inicio, periodo.data_fim)}: ${numeroNaUnidade(periodo.realizado, unidade)} de ${numeroNaUnidade(periodo.meta, unidade)}${periodo.percentual_meta_bp === null ? "" : ` · ${formatarPercentualBp(periodo.percentual_meta_bp)}`}`,
     "",
     "CÉLULAS QUE MAIS AVANÇARAM",
@@ -607,7 +645,6 @@ function textoDoRelatorio(dados: DadosRelatorioDiario): string {
     "ATENÇÃO",
     `• ${textoCelulasSemVenda(dados)}`,
     ...(semCelula === null ? [] : [`• ${semCelula}`]),
-    `• Saldo na Efí: ${textoDoSaldo(dados)}`,
     "",
     `Abrir o painel completo: ${LINK_PAINEL_RELATORIO_DIARIO}`,
     "",
@@ -616,13 +653,13 @@ function textoDoRelatorio(dados: DadosRelatorioDiario): string {
   return `${linhas.join("\n")}\n`;
 }
 
-/** O e-mail do dia: assunto, HTML (o mesmo da prévia) e texto puro. */
+/** O e-mail do dia (manhã ou tarde): assunto, HTML (o mesmo da prévia) e texto puro. */
 export function montarRelatorioDiario(dados: DadosRelatorioDiario): {
   assunto: string;
   html: string;
   texto: string;
 } {
-  const assunto = assuntoDoRelatorioDiario(dados.data);
+  const assunto = assuntoDoRelatorioDiario(dados.data, dados.parcial_ate);
   return {
     assunto,
     html: htmlDoRelatorio(dados, assunto),

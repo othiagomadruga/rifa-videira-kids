@@ -1,6 +1,7 @@
-// RIFA-086 (D40): o handler `scheduled` (o cron das 7h) com o binding de e-mail SIMULADO: um e-mail por destinatário,
-// com o dia de ontem; sem o binding ou sem destinatário, só um aviso; fora da campanha, nada. Nenhum envio real e só
-// endereços de exemplo. Cenário do painel (test/painel-apoio.ts): campanha de 23/11 a 13/12/2026 em Belém.
+// RIFA-086 e RIFA-087 (D40): o handler `scheduled` (os crons das 7h e das 17h) com o binding de e-mail SIMULADO: um
+// e-mail por destinatário, com o dia de ontem (manhã) ou a parcial de hoje (tarde); sem o binding ou sem destinatário,
+// só um aviso; fora da campanha, nada; outro cron, só um aviso. Nenhum envio real e só endereços de exemplo. Cenário do
+// painel (test/painel-apoio.ts): campanha de 23/11 a 13/12/2026 em Belém.
 import { env } from "cloudflare:workers";
 import {
   afterAll,
@@ -11,7 +12,10 @@ import {
   it,
   vi,
 } from "vitest";
-import { CRON_RELATORIO_DIARIO } from "../shared/contracts";
+import {
+  CRON_RELATORIO_MANHA,
+  CRON_RELATORIO_TARDE,
+} from "../shared/contracts";
 import { scheduled, tratarAgendado } from "./agendado";
 import worker from "./index";
 import type { CriarMensagem } from "./lib/relatorio-diario-envio";
@@ -42,11 +46,29 @@ function emailFalso(falhar: (para: string) => boolean = () => false) {
   };
 }
 
-/** O disparo do cron às 10:00 UTC (07:00 em Belém) de `dia`. */
-const disparo = (dia: string, cron = CRON_RELATORIO_DIARIO) => ({
+/** O disparo do cron da manhã às 10:00 UTC (07:00 em Belém) de `dia`. */
+const disparo = (dia: string, cron = CRON_RELATORIO_MANHA) => ({
   cron,
   scheduledTime: Date.parse(`${dia}T10:00:00.000Z`),
 });
+
+/** O disparo do cron da tarde às 20:00 UTC (17:00 em Belém) de `dia`. */
+const disparoDaTarde = (dia: string) => ({
+  cron: CRON_RELATORIO_TARDE,
+  scheduledTime: Date.parse(`${dia}T20:00:00.000Z`),
+});
+
+/** O texto puro de um MIME (a parte text/plain, em base64). */
+function textoDo(mime: string): string {
+  const parte = mime.split("Content-Type: text/plain; charset=UTF-8")[1];
+  const base64 = parte
+    .split("\r\n\r\n")[1]
+    .split("\r\n--")[0]
+    .replace(/\r\n/g, "");
+  return new TextDecoder().decode(
+    Uint8Array.from(atob(base64), (caractere) => caractere.charCodeAt(0)),
+  );
+}
 
 /** O assunto decodificado de um MIME (as encoded-words do montador). */
 function assuntoDo(mime: string): string {
@@ -79,7 +101,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("scheduled: o relatório diário das 7h", () => {
+describe("scheduled: o relatório da manhã (7h) e a parcial da tarde (17h)", () => {
   it("o Worker exporta o handler `scheduled` junto com o app", () => {
     expect(worker.scheduled).toBe(scheduled);
     expect(typeof worker.fetch).toBe("function");
@@ -199,6 +221,7 @@ describe("scheduled: o relatório diário das 7h", () => {
     });
     expect(log).toHaveBeenCalledWith("Relatório diário enviado", {
       situacao: "enviado",
+      tipo: "manha",
       data: "2026-11-23",
       destinatarios: 2,
       enviados: 1,
@@ -208,16 +231,69 @@ describe("scheduled: o relatório diário das 7h", () => {
     expect(registrado).not.toMatch(/@exemplo\.com\.br|@example\.com/);
   });
 
-  it("outro cron: nada é feito", async () => {
+  it("tarde (17h): a parcial de HOJE, com o assunto, o subtítulo e 'Hoje até 17h'", async () => {
     const email = emailFalso();
-    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
+    // 30/11, dia 8: Canaã 6 (03:00Z), Ágape 5 e Betel 6 (meio-dia) = 17 bilhetes, R$ 340,00.
     await tratarAgendado(
-      disparo("2026-11-24", "0 11 * * *"),
-      { ...env, EMAIL: email.binding, RELATORIO_EMAILS: DESTINATARIOS },
+      disparoDaTarde("2026-11-30"),
+      { ...env, EMAIL: email.binding, RELATORIO_EMAILS: "po@example.com" },
       { criarMensagem: email.criarMensagem },
     );
 
+    expect(email.send).toHaveBeenCalledTimes(1);
+    const { mime } = email.enviados[0];
+    expect(assuntoDo(mime)).toBe(
+      "Projeto Videira Kids · parcial de segunda, 30/11 (até 17h)",
+    );
+    const texto = textoDo(mime);
+    expect(texto).toContain("Parcial de segunda, 30/11, até 17h · dia 8 de 21");
+    expect(texto).toContain("Hoje até 17h: 17 bilhetes · R$ 340,00 (meta 103)");
+    expect(texto).not.toContain("No dia");
+    expect(log).toHaveBeenCalledWith(
+      "Relatório diário enviado",
+      expect.objectContaining({ tipo: "tarde", data: "2026-11-30" }),
+    );
+  });
+
+  it("tarde fora da campanha não envia (hoje é a véspera ou já passou do fim); no último dia, envia", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    for (const [dia, envios] of [
+      ["2026-11-22", 0],
+      ["2026-12-14", 0],
+      ["2026-12-13", 1],
+      ["2026-11-23", 1],
+    ] as const) {
+      const email = emailFalso();
+      await tratarAgendado(
+        disparoDaTarde(dia),
+        { ...env, EMAIL: email.binding, RELATORIO_EMAILS: "po@example.com" },
+        { criarMensagem: email.criarMensagem },
+      );
+      expect({ dia, envios: email.send.mock.calls.length }).toEqual({
+        dia,
+        envios,
+      });
+    }
+  });
+
+  it("outro cron: nada é enviado, só um aviso no log com o cron", async () => {
+    const email = emailFalso();
+    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const prepare = vi.spyOn(env.DB, "prepare");
+
+    for (const cron of ["0 11 * * *", "0 22 * * *", ""])
+      await tratarAgendado(
+        disparo("2026-11-24", cron),
+        { ...env, EMAIL: email.binding, RELATORIO_EMAILS: DESTINATARIOS },
+        { criarMensagem: email.criarMensagem },
+      );
+
     expect(email.send).not.toHaveBeenCalled();
+    expect(prepare).not.toHaveBeenCalled();
+    expect(aviso).toHaveBeenCalledWith("Agendamento desconhecido; nada feito", {
+      cron: "0 22 * * *",
+    });
   });
 });

@@ -19,7 +19,11 @@ import ci from "../../.github/workflows/ci.yml?raw";
 import voltarVersao from "../../.github/workflows/voltar-versao.yml?raw";
 import packageJson from "../../package.json?raw";
 import wranglerJsonc from "../../wrangler.jsonc?raw";
-import { CRON_RELATORIO_DIARIO } from "../shared/contracts";
+import {
+  CRONS_RELATORIO_DIARIO,
+  CRON_RELATORIO_MANHA,
+  CRON_RELATORIO_TARDE,
+} from "../shared/contracts";
 import { LIMITE_LOGIN, LIMITE_PUBLICO } from "./lib/limite-requisicoes";
 
 /** JSONC → JSON: tira comentários (fora de strings) e vírgulas antes de } ou ]. */
@@ -88,22 +92,22 @@ describe("wrangler.jsonc", () => {
   });
 });
 
-describe("wrangler.jsonc: o relatório diário por e-mail (RIFA-086, D40)", () => {
-  it("um cron só, o do relatório: 10:00 UTC (07:00 em Belém), o mesmo do código", () => {
-    expect(config.triggers).toEqual({ crons: [CRON_RELATORIO_DIARIO] });
-    expect(CRON_RELATORIO_DIARIO).toBe("0 10 * * *");
+describe("wrangler.jsonc: o relatório diário por e-mail (RIFA-086 e RIFA-087, D40)", () => {
+  it("dois crons, os do relatório e iguais aos do código: 10:00 UTC (07:00 em Belém) e 20:00 UTC (17:00 em Belém)", () => {
+    expect(config.triggers).toEqual({
+      crons: [CRON_RELATORIO_MANHA, CRON_RELATORIO_TARDE],
+    });
+    expect(Object.values(CRONS_RELATORIO_DIARIO)).toEqual(
+      config.triggers?.crons,
+    );
+    expect(CRON_RELATORIO_MANHA).toBe("0 10 * * *");
+    expect(CRON_RELATORIO_TARDE).toBe("0 20 * * *");
   });
 
-  it("os bindings de e-mail (sem lista de destinos) e do certificado da Efí, e nenhum endereço de e-mail no arquivo", () => {
+  it("o binding de e-mail (sem lista de destinos), nenhum certificado mTLS (o saldo da Efí saiu na RIFA-087) e nenhum endereço de e-mail no arquivo", () => {
     expect(config.send_email).toEqual([{ name: "EMAIL" }]);
-    expect(config.mtls_certificates).toEqual([
-      {
-        binding: "EFI_CERT",
-        certificate_id: expect.stringMatching(
-          /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
-        ),
-      },
-    ]);
+    expect(config.mtls_certificates).toBeUndefined();
+    expect(wranglerJsonc).not.toMatch(/mtls|EFI_/i);
     expect(wranglerJsonc).not.toContain("allowed_destination_addresses");
     expect(wranglerJsonc).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
   });

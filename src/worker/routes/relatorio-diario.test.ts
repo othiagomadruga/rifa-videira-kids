@@ -1,7 +1,6 @@
-// RIFA-086 (D40): as rotas do relatório diário (prévia e envio agora) e do saldo da Efí, SÓ DO ADMIN, no D1 local com
-// o cenário do painel (test/painel-apoio.ts) e o relógio fixo no dia 9 da campanha (01/12/2026 12:00 em Belém): ontem é
-// o dia 8, segunda, 30/11. O e-mail e a Efí são SIMULADOS (nenhum envio real, nenhuma chamada real) e os endereços são
-// de exemplo. Os sub-apps são montados como no index.ts (sob /api/admin, depois dos cabeçalhos de segurança); o app
+// RIFA-086 e RIFA-087 (D40): as rotas do relatório diário (prévia e envio agora, manhã e tarde), SÓ DO ADMIN, no D1
+// local com o cenário do painel (test/painel-apoio.ts) e o relógio fixo no dia 9 da campanha (01/12/2026 12:00 em
+// Belém): ontem é o dia 8, segunda, 30/11. O e-mail é SIMULADO (nenhum envio real) e os endereços são de exemplo. Os sub-apps são montados como no index.ts (sob /api/admin, depois dos cabeçalhos de segurança); o app
 // real (a ordem de montagem e o 401/403 de cada papel) é provado também em src/worker/protecao.test.ts.
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
@@ -17,9 +16,7 @@ import {
 import {
   erroApiSchema,
   respostaEnviarRelatorioDiarioSchema,
-  respostaSaldoEfiSchema,
 } from "../../shared/contracts";
-import { esquecerEfi, URL_SALDO_EFI } from "../lib/efi";
 import type { CriarMensagem } from "../lib/relatorio-diario-envio";
 import { erroNaoTratado, rotaInexistente } from "../lib/respostas-erro";
 import {
@@ -31,7 +28,6 @@ import {
   cabecalhosDeSessaoDaHierarquia,
 } from "../test/acesso-teste";
 import { AGORA, limparBanco, semearCenario } from "../test/painel-apoio";
-import { PREFIXO_EFI, criarEfi } from "./efi";
 import {
   PREFIXO_RELATORIO_DIARIO,
   criarRelatorioDiario,
@@ -54,17 +50,14 @@ app.route(
   PREFIXO_RELATORIO_DIARIO,
   criarRelatorioDiario({
     relogio: () => AGORA,
-    efi: { agora: () => AGORA.getTime(), avisar: () => {} },
     envio: { criarMensagem },
   }),
 );
-app.route(PREFIXO_EFI, criarEfi({ agora: () => AGORA.getTime() }));
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);
 
 const PREVIA = "/api/admin/relatorio-diario/previa";
 const ENVIAR = "/api/admin/relatorio-diario/enviar";
-const SALDO = "/api/admin/efi/saldo";
 
 let admin: Record<string, string>;
 let coordenacao: Record<string, string>;
@@ -111,7 +104,6 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  esquecerEfi();
   enviados.length = 0;
   send.mockClear();
 });
@@ -119,8 +111,8 @@ beforeEach(() => {
 describe("só o admin: a coordenação e a hierarquia levam 403; sem sessão, 401; e nada é enviado", () => {
   it.each([
     ["GET", PREVIA],
+    ["GET", `${PREVIA}?tipo=tarde`],
     ["POST", ENVIAR],
-    ["GET", SALDO],
   ] as const)("%s %s", async (metodo, caminho) => {
     const ambiente = { EMAIL, RELATORIO_EMAILS: DESTINATARIOS };
     await esperarErro(
@@ -151,11 +143,58 @@ describe("GET /api/admin/relatorio-diario/previa", () => {
     const html = await res.text();
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain("Resumo de segunda, 30/11 · dia 8 de 21");
-    expect(html).toContain("<b>135 bilhetes</b> vendidos");
-    // A Efí não está configurada nos testes.
+    expect(html).toContain("arrecadados · <b>135 bilhetes pagos</b>");
+    // O valor do dia: os pedidos pagos de 30/11 (17 bilhetes a R$ 20,00).
+    expect(html).toContain("<b>17</b> bilhetes · <b>R$ 340,00</b>");
+    expect(html).not.toMatch(/ef[ií]|saldo/i);
+    expect(
+      await (await chamar("GET", `${PREVIA}?tipo=manha`, admin)).text(),
+    ).toBe(html);
+  });
+
+  it("tipo=tarde: a parcial de HOJE (01/12) até a hora do relógio (12h), com 'Hoje até 12h'; outro dia, 400 parcial_so_de_hoje", async () => {
+    const res = await chamar("GET", `${PREVIA}?tipo=tarde`, admin);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Security-Policy")).toBe(CSP_PREVIA_EMAIL);
+    const html = await res.text();
     expect(html).toContain(
-      'Saldo na Efí: <span style="color:#8a8499">indisponível</span>',
+      "<title>Projeto Videira Kids · parcial de terça, 01/12 (até 12h)</title>",
     );
+    expect(html).toContain("Parcial de terça, 01/12, até 12h · dia 9 de 21");
+    // 01/12 até agora: Ágape 1, Dorcas 5 e 7 e 1 sem célula = 14 bilhetes, R$ 280,00.
+    expect(html).toMatch(
+      /Hoje até 12h<\/td><td[^>]*><b>14<\/b> bilhetes · <b>R\$ 280,00<\/b>/,
+    );
+    expect(
+      await (
+        await chamar("GET", `${PREVIA}?tipo=tarde&data=2026-12-01`, admin)
+      ).text(),
+    ).toBe(html);
+
+    const ontem = await esperarErro(
+      await chamar("GET", `${PREVIA}?tipo=tarde&data=2026-11-30`, admin),
+      400,
+      "requisicao_invalida",
+    );
+    expect(ontem.detalhes).toMatchObject([
+      { caminho: ["data"], codigo: "parcial_so_de_hoje" },
+    ]);
+    await esperarErro(
+      await chamar("GET", `${PREVIA}?tipo=noite`, admin),
+      400,
+      "requisicao_invalida",
+    );
+  });
+
+  it("data absurda (0001-01-01, 1900-01-01, 2026-11-22): 400 fora_da_campanha, nunca 500", async () => {
+    for (const data of ["0001-01-01", "1900-01-01", "2026-11-22"]) {
+      const res = await chamar("GET", `${PREVIA}?data=${data}`, admin);
+      expect({ data, status: res.status }).toEqual({ data, status: 400 });
+      const corpo = erroApiSchema.parse(await res.json());
+      expect(corpo.erro.detalhes).toMatchObject([
+        { caminho: ["data"], codigo: "fora_da_campanha" },
+      ]);
+    }
   });
 
   it("`data` escolhe o dia (hoje também vale); depois de hoje, 400 data_futura; fora da campanha, 400 fora_da_campanha", async () => {
@@ -243,6 +282,7 @@ describe("POST /api/admin/relatorio-diario/enviar", () => {
     expect(res.status).toBe(200);
     const corpo = respostaEnviarRelatorioDiarioSchema.parse(await res.json());
     expect(corpo).toEqual({
+      tipo: "manha",
       data: "2026-11-30",
       destinatarios: 2,
       enviados: 2,
@@ -258,7 +298,8 @@ describe("POST /api/admin/relatorio-diario/enviar", () => {
     expect(trilha).toEqual({
       acao: "relatorio_diario.enviar",
       alvo: "relatorio_diario",
-      resumo: "Relatório de 2026-11-30 enviado: 2 de 2 destinatário(s)",
+      resumo:
+        "Relatório da manhã de 2026-11-30 enviado: 2 de 2 destinatário(s)",
     });
     expect(JSON.stringify(trilha)).not.toContain("@");
   });
@@ -286,6 +327,44 @@ describe("POST /api/admin/relatorio-diario/enviar", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("tipo=tarde no corpo: envia a parcial de hoje e a trilha diz que é a da tarde; com outro dia, 400 e nada enviado", async () => {
+    const ambiente = { EMAIL, RELATORIO_EMAILS: "po@example.com" };
+    const res = await chamar("POST", ENVIAR, admin, ambiente, {
+      tipo: "tarde",
+    });
+    expect(respostaEnviarRelatorioDiarioSchema.parse(await res.json())).toEqual(
+      {
+        tipo: "tarde",
+        data: "2026-12-01",
+        destinatarios: 1,
+        enviados: 1,
+        falhas: 0,
+      },
+    );
+    const trilha = await env.DB.prepare(
+      "SELECT resumo FROM auditoria WHERE acao = 'relatorio_diario.enviar' ORDER BY id DESC LIMIT 1",
+    ).first<{ resumo: string }>();
+    expect(trilha?.resumo).toBe(
+      "Relatório da tarde de 2026-12-01 enviado: 1 de 1 destinatário(s)",
+    );
+
+    send.mockClear();
+    await esperarErro(
+      await chamar("POST", ENVIAR, admin, ambiente, {
+        tipo: "tarde",
+        data: "2026-11-30",
+      }),
+      400,
+      "requisicao_invalida",
+    );
+    await esperarErro(
+      await chamar("POST", ENVIAR, admin, ambiente, { data: "0001-01-01" }),
+      400,
+      "requisicao_invalida",
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("de outra origem (CSRF): 403, nada enviado", async () => {
     await esperarErro(
       await chamar(
@@ -298,49 +377,5 @@ describe("POST /api/admin/relatorio-diario/enviar", () => {
       "proibido",
     );
     expect(send).not.toHaveBeenCalled();
-  });
-});
-
-describe("GET /api/admin/efi/saldo", () => {
-  it("sem a Efí configurada: 200, configurado false, no-store", async () => {
-    const res = await chamar("GET", SALDO, admin);
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(respostaSaldoEfiSchema.parse(await res.json())).toEqual({
-      configurado: false,
-      saldo_centavos: null,
-      consultado_em: AGORA.toISOString(),
-    });
-  });
-
-  it("configurada (binding mTLS simulado): o saldo em centavos; a Efí falhou: 200 com o erro, sem 5xx", async () => {
-    const fetch = vi.fn(async (url: RequestInfo | URL) =>
-      String(url) === URL_SALDO_EFI
-        ? Response.json({ saldo: "4321.09" })
-        : Response.json({ access_token: "t", expires_in: 3600 }),
-    );
-    const ambiente = {
-      EFI_CERT: { fetch } as unknown as Fetcher,
-      EFI_CLIENT_ID: "id-ficticio",
-      EFI_CLIENT_SECRET: "segredo-ficticio",
-    };
-    expect(await (await chamar("GET", SALDO, admin, ambiente)).json()).toEqual({
-      configurado: true,
-      saldo_centavos: 432_109,
-      consultado_em: AGORA.toISOString(),
-    });
-
-    esquecerEfi();
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    fetch.mockImplementation(async () => new Response("", { status: 502 }));
-    const falhou = await chamar("GET", SALDO, admin, ambiente);
-    expect(falhou.status).toBe(200);
-    expect(await falhou.json()).toEqual({
-      configurado: true,
-      saldo_centavos: null,
-      consultado_em: AGORA.toISOString(),
-      erro: "autenticacao",
-    });
   });
 });

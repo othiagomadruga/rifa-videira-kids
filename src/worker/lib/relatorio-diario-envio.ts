@@ -1,10 +1,12 @@
 /**
- * Leitura e envio do relatório diário por e-mail (RIFA-086, D40). Junta a leitura do painel (db/painel.ts, com os
- * grupos de db/grupos.ts no MESMO lote: duas idas ao D1), o saldo da Efí (lib/efi.ts), os números e o e-mail
- * (lib/relatorio-diario.ts) e o MIME (lib/email.ts), e envia pelo binding `EMAIL` (send_email da Cloudflare).
+ * Leitura e envio do relatório diário por e-mail (RIFA-086 e RIFA-087, D40). Junta a leitura do painel (db/painel.ts,
+ * com os grupos de db/grupos.ts no MESMO lote: duas idas ao D1), os números e o e-mail (lib/relatorio-diario.ts) e o
+ * MIME (lib/email.ts), e envia pelo binding `EMAIL` (send_email da Cloudflare). Nada é perguntado à Efí nem à Rifei.
  *
- * - Dia de referência: o pedido (prévia e envio do admin) ou, sem ele, ONTEM no fuso da campanha (o e-mail das 7h leva
- *   o dia anterior fechado). Fora da campanha, nada sai (400 `fora_da_campanha` nas rotas; só um log no cron).
+ * - Dois tipos: `manha` (o e-mail das 7h) e `tarde` (a parcial das 17h). Dia de referência: o pedido (prévia e envio do
+ *   admin) ou, sem ele, ONTEM no fuso da campanha na manhã (o dia anterior fechado) e HOJE na tarde (até a hora do
+ *   envio, o "agora"). A tarde só vale para hoje (400 `parcial_so_de_hoje`). Fora da campanha, nada sai (400
+ *   `fora_da_campanha` nas rotas, conferido ANTES do cálculo, para qualquer data que exista; só um log no cron).
  * - Um e-mail por destinatário (o segredo `RELATORIO_EMAILS`): ninguém vê o endereço do outro, e uma falha não derruba
  *   os demais. Os logs levam só contagens, nunca um endereço.
  * - Sem o binding `EMAIL` ou sem destinatário válido, o cron só avisa no log (não falha) e a rota do admin responde 503
@@ -14,16 +16,18 @@ import { EmailMessage } from "cloudflare:email";
 import {
   REMETENTE_RELATORIO_DIARIO,
   hojeNoFuso,
+  referenciaDaCampanha,
   somarDias,
   type DetalheValidacao,
+  type TipoRelatorioDiario,
 } from "../../shared/contracts";
 import { comandosDosGrupos, gruposDoRanking } from "../db/grupos";
 import { lerEntradaDoCalculo, type Relogio } from "../db/painel";
-import { consultarSaldoEfi, type OpcoesEfi } from "./efi";
 import { lerDestinatarios, montarMime } from "./email";
 import {
   dadosDoRelatorioDiario,
   montarRelatorioDiario,
+  type EnvioDoRelatorio,
 } from "./relatorio-diario";
 
 /** O e-mail do dia, pronto para enviar ou mostrar. */
@@ -34,7 +38,7 @@ export interface EmailDoDia {
 }
 
 export type LeituraRelatorioDiario =
-  | { ok: true; data: string; email: EmailDoDia }
+  | { ok: true; tipo: TipoRelatorioDiario; data: string; email: EmailDoDia }
   | {
       ok: false;
       codigo: "nao_encontrado" | "requisicao_invalida";
@@ -49,15 +53,35 @@ const FORA_DA_CAMPANHA: DetalheValidacao = {
     "O dia de referência fica fora das datas da campanha (o e-mail desse dia não sai)",
 };
 
+const PARCIAL_SO_DE_HOJE: DetalheValidacao = {
+  caminho: ["data"],
+  codigo: "parcial_so_de_hoje",
+  mensagem: "A parcial da tarde é só do dia de hoje (até agora)",
+};
+
+const consultaInvalida = (
+  detalhe: DetalheValidacao,
+): LeituraRelatorioDiario => ({
+  ok: false,
+  codigo: "requisicao_invalida",
+  mensagem: "Consulta inválida",
+  detalhes: [detalhe],
+});
+
+/** O que pedir: o tipo (manha ou tarde) e, opcional, o dia de referência. */
+export interface PedidoRelatorioDiario {
+  tipo: TipoRelatorioDiario;
+  data?: string;
+}
+
 /**
- * O e-mail de `data` (ausente = ontem no fuso da campanha). Sem campanha ativa, 404; `data` depois de hoje (a
- * leitura do painel confere) ou fora da campanha, 400.
+ * O e-mail do `tipo` de `data` (ausente = ontem na manhã; hoje na tarde, no fuso da campanha). Sem campanha ativa,
+ * 404; `data` depois de hoje (a leitura do painel confere), fora da campanha ou, na tarde, outro dia que não hoje, 400.
  */
 export async function lerRelatorioDiario(
   env: Cloudflare.Env,
   relogio: Relogio,
-  data?: string,
-  opcoesEfi: OpcoesEfi = {},
+  { tipo, data }: PedidoRelatorioDiario,
 ): Promise<LeituraRelatorioDiario> {
   const lido = await lerEntradaDoCalculo(
     env.DB,
@@ -66,24 +90,30 @@ export async function lerRelatorioDiario(
     comandosDosGrupos,
   );
   if (!lido.ok) return lido;
-  const referencia =
-    data ??
-    somarDias(hojeNoFuso(lido.entrada.campanha.fuso_horario, lido.agora), -1);
-  const saldo = await consultarSaldoEfi(env, opcoesEfi);
+  const { campanha } = lido.entrada;
+  const hoje = hojeNoFuso(campanha.fuso_horario, lido.agora);
+  const referencia = data ?? (tipo === "tarde" ? hoje : somarDias(hoje, -1));
+  if (tipo === "tarde" && referencia !== hoje)
+    return consultaInvalida(PARCIAL_SO_DE_HOJE);
+  // Fora da campanha, antes do cálculo: só aritmética de calendário, que vale para qualquer data que exista (uma data
+  // absurda, como 0001-01-01, quebraria o fuso dos montadores e viraria 500).
+  if (referenciaDaCampanha(campanha, referencia).fase !== "durante")
+    return consultaInvalida(FORA_DA_CAMPANHA);
+  const envio: EnvioDoRelatorio =
+    tipo === "tarde" ? { tipo, ate: lido.agora } : { tipo };
   const dados = dadosDoRelatorioDiario(
     lido.entrada,
     gruposDoRanking(lido.extras[0]),
     referencia,
-    saldo,
+    envio,
   );
-  if (dados === null)
-    return {
-      ok: false,
-      codigo: "requisicao_invalida",
-      mensagem: "Consulta inválida",
-      detalhes: [FORA_DA_CAMPANHA],
-    };
-  return { ok: true, data: referencia, email: montarRelatorioDiario(dados) };
+  if (dados === null) return consultaInvalida(FORA_DA_CAMPANHA);
+  return {
+    ok: true,
+    tipo,
+    data: referencia,
+    email: montarRelatorioDiario(dados),
+  };
 }
 
 /** Cria a mensagem do binding (injetável nos testes, que leem o MIME). */
@@ -100,7 +130,6 @@ export interface OpcoesEnvio {
   criarMensagem?: CriarMensagem;
   /** Identificador de cada mensagem (Message-ID e fronteira do MIME). Padrão: um UUID. */
   gerarId?: () => string;
-  efi?: OpcoesEfi;
 }
 
 /** Envia o e-mail a cada destinatário, um por vez; a falha de um não para os outros. */
@@ -153,6 +182,7 @@ export type ResultadoDoCron =
     }
   | {
       situacao: "enviado";
+      tipo: TipoRelatorioDiario;
       data: string;
       destinatarios: number;
       enviados: number;
@@ -160,12 +190,14 @@ export type ResultadoDoCron =
     };
 
 /**
- * O envio do cron das 7h (`scheduled` do index.ts): o dia de ontem, para os destinatários do segredo. Nunca falha por
- * falta de configuração (só avisa no log); um erro do banco sobe, e a Cloudflare o mostra no evento do cron.
+ * O envio de um cron (`scheduled` do index.ts): na manhã, o dia de ontem; na tarde, hoje até `agora`; para os
+ * destinatários do segredo. Nunca falha por falta de configuração (só avisa no log); um erro do banco sobe, e a
+ * Cloudflare o mostra no evento do cron.
  */
 export async function executarRelatorioDiario(
   env: Cloudflare.Env,
   agora: Date,
+  tipo: TipoRelatorioDiario,
   opcoes: OpcoesEnvio = {},
 ): Promise<ResultadoDoCron> {
   if (!env.EMAIL) {
@@ -183,16 +215,11 @@ export async function executarRelatorioDiario(
     );
     return { situacao: "sem_destinatarios" };
   }
-  const leitura = await lerRelatorioDiario(
-    env,
-    () => agora,
-    undefined,
-    opcoes.efi,
-  );
+  const leitura = await lerRelatorioDiario(env, () => agora, { tipo });
   if (!leitura.ok) {
     const situacao =
       leitura.codigo === "nao_encontrado" ? "sem_campanha" : "fora_da_campanha";
-    console.log(`Relatório diário: ${situacao}; nada enviado`);
+    console.log(`Relatório diário (${tipo}): ${situacao}; nada enviado`);
     return { situacao };
   }
   const { enviados, falhas } = await enviarAosDestinatarios(
@@ -204,6 +231,7 @@ export async function executarRelatorioDiario(
   );
   const resultado = {
     situacao: "enviado",
+    tipo,
     data: leitura.data,
     destinatarios: validos.length,
     enviados,

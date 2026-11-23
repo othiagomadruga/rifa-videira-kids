@@ -1,12 +1,17 @@
 /**
  * Tarefas agendadas do Worker (`triggers.crons` no wrangler.jsonc): o handler `scheduled` do index.ts.
  *
- * - CRON_RELATORIO_DIARIO ("0 10 * * *" = 07:00 em Belém): o relatório diário por e-mail (RIFA-086, D40), com o dia de
- *   ontem, para os destinatários do segredo `RELATORIO_EMAILS` (lib/relatorio-diario-envio.ts). O "agora" é o horário
- *   agendado do disparo (um disparo atrasado manda o mesmo dia).
+ * O relatório diário por e-mail (RIFA-086 e RIFA-087, D40), para os destinatários do segredo `RELATORIO_EMAILS`
+ * (lib/relatorio-diario-envio.ts), escolhido pelo cron (CRONS_RELATORIO_DIARIO do contrato):
+ * - CRON_RELATORIO_MANHA ("0 10 * * *" = 07:00 em Belém): o dia de ontem, fechado;
+ * - CRON_RELATORIO_TARDE ("0 20 * * *" = 17:00 em Belém): o dia de hoje até a hora do envio (parcial).
+ * O "agora" é o horário agendado do disparo (um disparo atrasado manda o mesmo dia e diz a mesma hora).
  * Outro cron (que só existiria por engano no wrangler.jsonc) só avisa no log.
  */
-import { CRON_RELATORIO_DIARIO } from "../shared/contracts";
+import {
+  CRONS_RELATORIO_DIARIO,
+  TIPOS_RELATORIO_DIARIO,
+} from "../shared/contracts";
 import {
   executarRelatorioDiario,
   type OpcoesEnvio,
@@ -17,13 +22,21 @@ export async function tratarAgendado(
   env: Cloudflare.Env,
   opcoes: OpcoesEnvio = {},
 ): Promise<void> {
-  if (controle.cron !== CRON_RELATORIO_DIARIO) {
+  const tipo = TIPOS_RELATORIO_DIARIO.find(
+    (candidato) => CRONS_RELATORIO_DIARIO[candidato] === controle.cron,
+  );
+  if (tipo === undefined) {
     console.warn("Agendamento desconhecido; nada feito", {
       cron: controle.cron,
     });
     return;
   }
-  await executarRelatorioDiario(env, new Date(controle.scheduledTime), opcoes);
+  await executarRelatorioDiario(
+    env,
+    new Date(controle.scheduledTime),
+    tipo,
+    opcoes,
+  );
 }
 
 /** O handler do Worker (a assinatura do runtime). */

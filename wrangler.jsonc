@@ -30,24 +30,17 @@
       "migrations_dir": "migrations",
     },
   ],
-  // Relatório diário por e-mail (RIFA-086, D40): 10:00 UTC = 07:00 em Belém (UTC−3), com o dia anterior. O handler é o
-  // `scheduled` de src/worker/agendado.ts (CRON_RELATORIO_DIARIO do contrato). O e-mail só sai com o binding
+  // Relatório diário por e-mail (RIFA-086 e RIFA-087, D40), dois por dia: 10:00 UTC = 07:00 em Belém (UTC−3), com o
+  // dia anterior (CRON_RELATORIO_MANHA), e 20:00 UTC = 17:00 em Belém, com a parcial de hoje (CRON_RELATORIO_TARDE).
+  // O handler é o `scheduled` de src/worker/agendado.ts, que escolhe o envio pelo cron. O e-mail só sai com o binding
   // `send_email` EMAIL e o segredo RELATORIO_EMAILS (docs/lancamento.md); sem eles, o cron só avisa no log.
   // Os destinatários NUNCA entram aqui (nem na lista de destinos do binding): o repositório é público.
   "triggers": {
-    "crons": ["0 10 * * *"],
+    "crons": ["0 10 * * *", "0 20 * * *"],
   },
   // O e-mail sai pelo Email Routing da Cloudflare só para destinos verificados; os endereços ficam no segredo
   // RELATORIO_EMAILS, nunca aqui (o binding fica sem lista de destinos). D40.
   "send_email": [{ "name": "EMAIL" }],
-  // Certificado de cliente da Efí (mTLS) para o saldo, enviado com `wrangler mtls-certificate upload` (só o id fica
-  // aqui; a chave privada fica na Cloudflare). Vence em 23/11/2029. Segredos EFI_CLIENT_ID e EFI_CLIENT_SECRET. D40.
-  "mtls_certificates": [
-    {
-      "binding": "EFI_CERT",
-      "certificate_id": "2bc05428-0e12-4e60-9e7f-89c087ee0dd2",
-    },
-  ],
   // Limite de requisições por IP (RIFA-013b; src/worker/lib/limite-requisicoes.ts, que tem as mesmas
   // regras). Conta por data center da Cloudflare; o período só pode ser 10 ou 60 s. Os namespace_id são
   // números escolhidos por nós, únicos na conta. Declarados também em src/worker/worker-env.d.ts.
