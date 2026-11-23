@@ -5,6 +5,7 @@
 import {
   act,
   fireEvent,
+  render,
   screen,
   waitFor,
   within,
@@ -15,7 +16,8 @@ import type {
   PapelHierarquia,
 } from "../../../shared/contracts";
 import { controlesSemDica, titulosSemAjuda } from "../../test/dicas";
-import { renderizarRota } from "../../test/renderizar";
+import { renderizarRota, respostaJson } from "../../test/renderizar";
+import { QuemComprou } from "./QuemComprou";
 import {
   QUEM_COMPROU,
   criarApiFalsa,
@@ -133,6 +135,55 @@ describe("RIFA-089: quem comprou na /minha do líder", () => {
       expect(api.chamadasA("GET", CAMINHO)).toEqual([]);
       vi.unstubAllGlobals();
     }
+  });
+
+  it("a primeira página atualizada enquanto o 'Ver mais' carregava: a página de antes não entra (não pula compras)", async () => {
+    const [a, b, c] = QUEM_COMPROU;
+    const nova: ItemQuemComprou = {
+      nome: "Compra Nova Ficticia",
+      aprovado_em: "2026-12-04T20:00:00.000Z",
+      bilhetes: 3,
+    };
+    const resposta = (
+      itensDaPagina: ItemQuemComprou[],
+      proximo: string | null,
+    ) =>
+      respostaJson({
+        fuso_horario: "America/Belem",
+        itens: itensDaPagina,
+        proximo,
+        atualizado_em: "2026-12-04T20:01:00.000Z",
+      });
+    let soltarVerMais: (r: Response) => void = () => {};
+    const primeiras = [
+      resposta([a, b], "CURSOR_A"),
+      resposta([nova, a], "CURSOR_B"),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((entrada: RequestInfo | URL) =>
+        String(entrada).includes("antes_de=CURSOR_A")
+          ? new Promise<Response>((soltar) => (soltarVerMais = soltar))
+          : Promise.resolve(primeiras.shift()!),
+      ),
+    );
+    const { container, rerender } = render(
+      <QuemComprou atualizadoEm="2026-12-04T20:00:00.000Z" />,
+    );
+    await waitFor(() => expect(itens(container)).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "Ver mais" }));
+    // A visão atualizou (novo atualizado_em) antes de o "Ver mais" responder: a primeira página é lida de novo.
+    rerender(<QuemComprou atualizadoEm="2026-12-04T20:01:00.000Z" />);
+    await waitFor(() =>
+      expect(itens(container)[0]).toContain("Compra Nova Ficticia"),
+    );
+    // A página do cursor de antes chega depois: não se junta à primeira página nova (pularia a compra B).
+    await act(async () => soltarVerMais(resposta([c], null)));
+    expect(itens(container)).toHaveLength(2);
+    expect(itens(container)[1]).toContain(a.nome ?? "Comprador sem nome");
+    expect(
+      screen.getByRole("button", { name: "Ver mais" }),
+    ).toBeInTheDocument();
   });
 
   it("dicas e ajuda: o 'Ver mais' tem dica e o título tem a explicação", async () => {

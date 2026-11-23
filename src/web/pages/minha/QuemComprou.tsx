@@ -49,6 +49,8 @@ export function QuemComprou({ atualizadoEm }: { atualizadoEm: string }) {
   const refPrimeiroNovo = useRef<HTMLLIElement>(null);
   // Depois do "Ver mais", o foco vai para a primeira compra nova (o botão pode sumir na última página).
   const focarNovo = useRef(false);
+  // Sobe a cada primeira página trocada: um "Ver mais" pedido antes dela não se junta à lista nova (pularia compras).
+  const geracao = useRef(0);
 
   useEffect(() => {
     if (paginas > 1) return;
@@ -56,6 +58,7 @@ export function QuemComprou({ atualizadoEm }: { atualizadoEm: string }) {
     carregarQuemComprou(null, { signal: controle.signal }).then(
       (resposta) => {
         if (controle.signal.aborted) return;
+        geracao.current += 1;
         setEstado(primeiraPagina(resposta));
       },
       (erro: unknown) => {
@@ -82,8 +85,11 @@ export function QuemComprou({ atualizadoEm }: { atualizadoEm: string }) {
     emAndamento.current = true;
     setCarregandoMais(true);
     setFalhaNoMais(null);
+    const daGeracao = geracao.current;
     try {
       const resposta = await carregarQuemComprou(estado.proximo);
+      // A primeira página foi atualizada enquanto isso: esta página é do cursor de antes e fica de fora.
+      if (geracao.current !== daGeracao) return;
       setEstado((anterior) =>
         anterior.tipo !== "ok"
           ? anterior
@@ -100,7 +106,7 @@ export function QuemComprou({ atualizadoEm }: { atualizadoEm: string }) {
       );
       if (resposta.itens.length > 0) focarNovo.current = true;
     } catch (erro) {
-      setFalhaNoMais(mensagemDoErro(erro));
+      if (geracao.current === daGeracao) setFalhaNoMais(mensagemDoErro(erro));
     } finally {
       emAndamento.current = false;
       setCarregandoMais(false);
