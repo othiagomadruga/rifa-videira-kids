@@ -37,6 +37,17 @@
   "triggers": {
     "crons": ["0 10 * * *"],
   },
+  // O e-mail sai pelo Email Routing da Cloudflare só para destinos verificados; os endereços ficam no segredo
+  // RELATORIO_EMAILS, nunca aqui (o binding fica sem lista de destinos). D40.
+  "send_email": [{ "name": "EMAIL" }],
+  // Certificado de cliente da Efí (mTLS) para o saldo, enviado com `wrangler mtls-certificate upload` (só o id fica
+  // aqui; a chave privada fica na Cloudflare). Vence em 23/11/2029. Segredos EFI_CLIENT_ID e EFI_CLIENT_SECRET. D40.
+  "mtls_certificates": [
+    {
+      "binding": "EFI_CERT",
+      "certificate_id": "2bc05428-0e12-4e60-9e7f-89c087ee0dd2",
+    },
+  ],
   // Limite de requisições por IP (RIFA-013b; src/worker/lib/limite-requisicoes.ts, que tem as mesmas
   // regras). Conta por data center da Cloudflare; o período só pode ser 10 ou 60 s. Os namespace_id são
   // números escolhidos por nós, únicos na conta. Declarados também em src/worker/worker-env.d.ts.

@@ -94,9 +94,16 @@ describe("wrangler.jsonc: o relatório diário por e-mail (RIFA-086, D40)", () =
     expect(CRON_RELATORIO_DIARIO).toBe("0 10 * * *");
   });
 
-  it("sem os bindings de e-mail e de mTLS por enquanto (o SM liga depois) e nenhum endereço de e-mail no arquivo", () => {
-    expect(config.send_email).toBeUndefined();
-    expect(config.mtls_certificates).toBeUndefined();
+  it("os bindings de e-mail (sem lista de destinos) e do certificado da Efí, e nenhum endereço de e-mail no arquivo", () => {
+    expect(config.send_email).toEqual([{ name: "EMAIL" }]);
+    expect(config.mtls_certificates).toEqual([
+      {
+        binding: "EFI_CERT",
+        certificate_id: expect.stringMatching(
+          /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
+        ),
+      },
+    ]);
     expect(wranglerJsonc).not.toContain("allowed_destination_addresses");
     expect(wranglerJsonc).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
   });

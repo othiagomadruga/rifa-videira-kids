@@ -442,7 +442,9 @@ O link de vendas de uma célula é o link de afiliado do líder na Rifei, montad
 ### 3.8 Relatório diário por e-mail e saldo da Efí [Thiago e SM] (RIFA-086, D40)
 
 O código já está publicado e espera a configuração: sem ela, o cron das 7h só avisa no log e o saldo fica "não
-configurado". Nada daqui vai para o repositório (é público), o chat ou o DevMission: só os nomes dos segredos.
+configurado". **Situação em 23/11:** Email Routing ligado, segredos RELATORIO_EMAILS, EFI_CLIENT_ID e EFI_CLIENT_SECRET
+gravados, certificado da Efí enviado (vence em 23/11/2029) e os bindings `EMAIL` e `EFI_CERT` no `wrangler.jsonc`.
+O e-mail só chega a um destinatário depois que ele clica no link de verificação da Cloudflare. Nada daqui vai para o repositório (é público), o chat ou o DevMission: só os nomes dos segredos.
 
 **A. O e-mail (Email Routing da Cloudflare e o binding `EMAIL`)**
 
