@@ -65,6 +65,10 @@ import {
   problemasDoModeloLinkVendas,
 } from "./link-vendas";
 import {
+  LIMITE_MAIORES_COMPRADORES_MAXIMO,
+  LIMITE_MAIORES_COMPRADORES_PADRAO,
+} from "./maiores-compradores";
+import {
   CHAVES_REGRAS,
   LIMITE_OBSERVACAO_DESCONSIDERACAO,
   LIMITE_PEDIDOS_NO_DETALHE,
@@ -3529,3 +3533,172 @@ export const ROTAS_CONEXAO_RIFEI = {
 } as const satisfies Record<string, DefinicaoRota>;
 
 export type NomeRotaConexaoRifei = keyof typeof ROTAS_CONEXAO_RIFEI;
+
+// ---------------------------------------------------------------------------------------------------
+// Maiores compradores (RIFA-083, D38): o ranking de quem mais comprou. O admin vê telefone e R$ (D36); o discipulador,
+// só o nome, os bilhetes e a célula dos compradores das células dele (D12: sem telefone e sem R$). A regra (uma só para
+// as duas rotas) e os itens ficam em ./maiores-compradores.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * `janela`: `atual` (padrão) = o período que contém hoje, como no ranking ("esta semana"); `campanha` = do primeiro dia
+ * até hoje. A compra conta pela regra do ranking (R6): aprovada, da campanha ativa, sem desconsideração, com o dia local
+ * de `aprovado_em` dentro da janela. `limite`: quantos compradores (1 a 50, padrão 10).
+ */
+export const consultaMaioresCompradoresSchema = z.object({
+  janela: z.enum(JANELAS_RANKING).default("atual"),
+  limite: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITE_MAIORES_COMPRADORES_MAXIMO)
+    .default(LIMITE_MAIORES_COMPRADORES_PADRAO),
+});
+export type ConsultaMaioresCompradores = z.output<
+  typeof consultaMaioresCompradoresSchema
+>;
+
+const nomeMaiorCompradorSchema = z
+  .string()
+  .min(1)
+  .max(LIMITE_NOME_COMPRADOR)
+  .nullable();
+
+/** Posições do ranking (empate perfeito divide a posição: 1, 1, 3) e bilhetes do maior para o menor. */
+function conferirPosicoes(
+  itens: readonly { posicao: number; bilhetes: number }[],
+  ctx: z.RefinementCtx,
+): void {
+  itens.forEach((item, indice) => {
+    const anterior = itens[indice - 1];
+    const certa =
+      anterior === undefined
+        ? item.posicao === 1
+        : item.posicao === anterior.posicao || item.posicao === indice + 1;
+    if (!certa)
+      ctx.addIssue({
+        code: "custom",
+        path: ["itens", indice, "posicao"],
+        message: "Posição fora da ordem (empates dividem a posição: 1, 1, 3)",
+      });
+    if (anterior !== undefined && item.bilhetes > anterior.bilhetes)
+      ctx.addIssue({
+        code: "custom",
+        path: ["itens", indice, "bilhetes"],
+        message:
+          "Os compradores vêm do que mais comprou bilhetes para o que menos",
+      });
+  });
+}
+
+/** Um comprador para o admin (D36): nome, telefone legível e o número do WhatsApp, bilhetes, total pago e células. */
+export const itemMaiorCompradorSchema = z.strictObject({
+  posicao: z.number().int().min(1),
+  /** O nome do pedido mais recente que tem nome; null quando nenhum tem. */
+  nome: nomeMaiorCompradorSchema,
+  /** Legível, como na planilha: "(11) 98765-4321" (fora do Brasil, o E.164); null quando juntado pelo nome. */
+  telefone: z.string().min(1).max(20).nullable(),
+  /** Só algarismos, com o país, para `https://wa.me/<numero>`; null sem telefone. */
+  whatsapp: z
+    .string()
+    .regex(/^\d{8,15}$/)
+    .nullable(),
+  bilhetes: z.number().int().min(1),
+  total_centavos: centavosSchema,
+  pedidos: z.number().int().min(1),
+  /** As células dos pedidos dele, sem repetir, em ordem de português. */
+  celulas: z.array(z.string().min(1)),
+  /** Algum pedido dele sem célula (sem afiliado ou afiliado não vinculado). */
+  sem_celula: z.boolean(),
+});
+export type ItemMaiorComprador = z.infer<typeof itemMaiorCompradorSchema>;
+
+export const respostaMaioresCompradoresSchema = z
+  .strictObject({
+    janela: janelaRankingSchema,
+    itens: z
+      .array(itemMaiorCompradorSchema)
+      .max(LIMITE_MAIORES_COMPRADORES_MAXIMO),
+    atualizado_em: instanteSchema,
+  })
+  .superRefine((resposta, ctx) => {
+    conferirPosicoes(resposta.itens, ctx);
+    resposta.itens.forEach((item, indice) => {
+      if ((item.telefone === null) !== (item.whatsapp === null))
+        ctx.addIssue({
+          code: "custom",
+          path: ["itens", indice, "whatsapp"],
+          message: "O número do WhatsApp vem junto com o telefone",
+        });
+      if (item.celulas.length === 0 && !item.sem_celula)
+        ctx.addIssue({
+          code: "custom",
+          path: ["itens", indice, "celulas"],
+          message: "Sem nenhuma célula, o comprador é sem célula",
+        });
+    });
+  });
+export type RespostaMaioresCompradores = z.infer<
+  typeof respostaMaioresCompradoresSchema
+>;
+
+/** Um comprador para o discipulador (D12 e D38): só o nome, os bilhetes e a célula; nunca telefone nem R$. */
+export const itemMeuMaiorCompradorSchema = z.strictObject({
+  posicao: z.number().int().min(1),
+  nome: nomeMaiorCompradorSchema,
+  bilhetes: z.number().int().min(1),
+  /** A célula (dele) com mais bilhetes do comprador; empate, a primeira em português. */
+  celula: z.string().min(1).nullable(),
+});
+export type ItemMeuMaiorComprador = z.infer<typeof itemMeuMaiorCompradorSchema>;
+
+export const respostaMeusMaioresCompradoresSchema = z
+  .strictObject({
+    janela: janelaRankingSchema,
+    itens: z
+      .array(itemMeuMaiorCompradorSchema)
+      .max(LIMITE_MAIORES_COMPRADORES_MAXIMO),
+    atualizado_em: instanteSchema,
+  })
+  .superRefine((resposta, ctx) => conferirPosicoes(resposta.itens, ctx));
+export type RespostaMeusMaioresCompradores = z.infer<
+  typeof respostaMeusMaioresCompradoresSchema
+>;
+
+/**
+ * Rotas dos maiores compradores (RIFA-083, D38). Catálogo à parte de ROTAS, como ROTAS_LINK_VENDAS: ROTAS continua com
+ * só a visão em /api/minha, e o src/worker/protecao.test.ts põe este catálogo nas listas dele (o 403 da coordenação na
+ * rota do admin; a do discipulador fora do filtro da coordenação).
+ *
+ * As duas: sem campanha ativa, 404 `nao_encontrado`; consulta fora do schema, 400 `requisicao_invalida`; respostas
+ * com `Cache-Control: no-store` (são por pessoa e trazem nomes), lidas do D1 a cada requisição, sem cache, e passadas
+ * pelo schema estrito antes de sair (um campo a mais vira 500).
+ */
+export const ROTAS_MAIORES_COMPRADORES = {
+  /** Só admin (D36): 401; 403 `proibido` (coordenação e hierarquia, antes de ler a consulta); 400; 404. */
+  maioresCompradores: {
+    metodo: "GET",
+    caminho: "/api/admin/maiores-compradores",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    consulta: consultaMaioresCompradoresSchema,
+    sucesso: { status: 200, corpo: respostaMaioresCompradoresSchema },
+  },
+  /**
+   * Só o discipulador, com os pedidos das células dele (o alvo vem só da sessão: nenhum id na consulta, D12). Erros:
+   * 401; 403 `proibido` (líder, rede e coordenação); 403 `acesso_desligado` com `acesso.discipuladores` desligado (D20,
+   * como todo /api/minha/*); 400; 404.
+   */
+  meusMaioresCompradores: {
+    metodo: "GET",
+    caminho: "/api/minha/maiores-compradores",
+    grupo: "hierarquia",
+    papeis: ["discipulador"],
+    situacao: "detalhada",
+    consulta: consultaMaioresCompradoresSchema,
+    sucesso: { status: 200, corpo: respostaMeusMaioresCompradoresSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaMaioresCompradores = keyof typeof ROTAS_MAIORES_COMPRADORES;
