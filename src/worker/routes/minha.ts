@@ -25,17 +25,28 @@
  * consulta só tem `janela` e `limite`, o resto é descartado pelo schema). Cada item sai com `itemMeuMaiorComprador`:
  * posição, nome, bilhetes e a célula, sem telefone e sem R$ (D12), conferido no schema estrito. Lido do D1 a cada
  * requisição, sem cache (db/maiores-compradores.ts); sem campanha ativa, 404.
+ *
+ * Quem comprou (RIFA-089, adendo da D38): GET /api/minha/compradores?limite=&antes_de=, SÓ do líder da célula (o
+ * discipulador e a rede levam 403 `proibido`), com as vendas pagas da célula da sessão (a célula efetiva, D41), da mais
+ * recente para a mais antiga: nome do comprador, quando e bilhetes, sem telefone, sem números e sem R$ (D12), no
+ * schema estrito. Lido do D1 a cada requisição, sem cache (db/quem-comprou.ts); cursor inválido, 400 com o detalhe
+ * `cursor_invalido`; sem campanha ativa, 404.
  */
 import { Hono } from "hono";
 import {
   ROTAS,
   ROTAS_LINK_VENDAS,
   ROTAS_MAIORES_COMPRADORES,
+  ROTAS_QUEM_COMPROU,
   itemMeuMaiorComprador,
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { lerLinksVendas } from "../db/links-vendas";
 import { lerMaioresCompradores } from "../db/maiores-compradores";
+import {
+  decodificarCursorQuemComprou,
+  lerQuemComprou,
+} from "../db/quem-comprou";
 import {
   criarCacheDaBase,
   lerBaseDaVisao,
@@ -58,6 +69,7 @@ export const PREFIXO_MINHA = "/api/minha";
 const ROTA = ROTAS.visaoIndividual;
 const LINKS = ROTAS_LINK_VENDAS.meusLinksVendas;
 const COMPRADORES = ROTAS_MAIORES_COMPRADORES.meusMaioresCompradores;
+const QUEM_COMPROU = ROTAS_QUEM_COMPROU.quemComprou;
 
 export interface OpcoesMinha {
   /** "Agora" (os testes fixam o instante); padrão: o relógio do sistema. */
@@ -163,6 +175,51 @@ export function criarMinha({
           janela: lido.janela,
           itens: lido.compradores.map(itemMeuMaiorComprador),
           atualizado_em: lido.agora.toISOString(),
+        }),
+        200,
+      );
+    },
+  );
+
+  // Só o líder (o discipulador e a rede: 403), antes de ler a consulta; a célula vem só da sessão.
+  minha.get(
+    QUEM_COMPROU.caminho.slice(PREFIXO_MINHA.length),
+    exigirSessao(QUEM_COMPROU.papeis, { acessoDaCampanha: true }),
+    validarConsulta(QUEM_COMPROU.consulta),
+    async (c) => {
+      const { alvo } = c.var.usuario;
+      // O papel líder sempre tem a célula dele (o banco garante); a conferência é a defesa a mais.
+      if (alvo?.tipo !== "celula")
+        return responderErro(
+          c,
+          "proibido",
+          "Seu acesso não tem uma célula para ver quem comprou",
+        );
+      const consulta = c.req.valid("query");
+      let cursor = null;
+      if (consulta.antes_de !== undefined) {
+        cursor = decodificarCursorQuemComprou(consulta.antes_de);
+        if (cursor === null)
+          return responderErro(c, "requisicao_invalida", "Consulta inválida", [
+            {
+              caminho: ["antes_de"],
+              codigo: "cursor_invalido",
+              mensagem:
+                "Cursor inválido: use o valor de `proximo` da página anterior",
+            },
+          ]);
+      }
+      const lido = await lerQuemComprou(c.env.DB, alvo.id, consulta, cursor);
+      if (lido === null)
+        return responderErro(
+          c,
+          "nao_encontrado",
+          "A campanha ainda não foi configurada",
+        );
+      return c.json(
+        QUEM_COMPROU.sucesso.corpo.parse({
+          ...lido,
+          atualizado_em: relogio().toISOString(),
         }),
         200,
       );

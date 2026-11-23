@@ -46,6 +46,7 @@ import {
   ROTAS_ACESSO_HIERARQUIA,
   ROTAS_LINK_VENDAS,
   ROTAS_MAIORES_COMPRADORES,
+  ROTAS_QUEM_COMPROU,
   ROTAS_REGRAS_CAMPANHA,
   ROTAS_CONEXAO_RIFEI,
   ROTAS_RIFEI_API,
@@ -67,6 +68,7 @@ import {
   respostaMaioresCompradoresSchema,
   respostaMeusLinksVendasSchema,
   respostaMeusMaioresCompradoresSchema,
+  respostaQuemComprouSchema,
   respostaPainelResumoSchema,
   respostaPedidosSuspeitosSchema,
   respostaRankingGruposSchema,
@@ -255,6 +257,8 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_MAIORES_COMPRADORES),
     ...Object.values(ROTAS_RELATORIO_DIARIO),
     ...Object.values(ROTAS_ARRECADADO),
+    // RIFA-089 (adendo da D38): quem comprou, só do líder, em /api/minha.
+    ...Object.values(ROTAS_QUEM_COMPROU),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -1394,6 +1398,9 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
     // RIFA-083 (D38): os maiores compradores das células do discipulador.
     "/api/minha/maiores-compradores",
     "/api/minha/maiores-compradores?janela=campanha&discipulador_id=20",
+    // RIFA-089 (adendo da D38): quem comprou, só do líder da célula.
+    "/api/minha/compradores",
+    "/api/minha/compradores?celula_id=2&limite=50",
   ];
   const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
 
@@ -1430,12 +1437,74 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
         .filter((rota) => rota.grupo === "hierarquia")
         .map((rota) => [`${rota.metodo} ${rota.caminho}`, rota.papeis]),
     ).toEqual([["GET /api/minha/maiores-compradores", ["discipulador"]]]);
+    // O catálogo à parte de quem comprou (RIFA-089): só do líder da célula.
+    expect(
+      Object.values(ROTAS_QUEM_COMPROU).map((rota) => [
+        `${rota.metodo} ${rota.caminho}`,
+        rota.grupo,
+        rota.papeis,
+      ]),
+    ).toEqual([["GET /api/minha/compradores", "hierarquia", ["lider"]]]);
     const registradas = rotasRegistradas().map(
       (rota) => `${rota.metodo} ${rota.caminho}`,
     );
     expect(registradas).toContain("GET /api/minha/visao");
     expect(registradas).toContain("GET /api/minha/links-vendas");
     expect(registradas).toContain("GET /api/minha/maiores-compradores");
+    expect(registradas).toContain("GET /api/minha/compradores");
+  });
+
+  it("RIFA-089 (adendo da D38): quem comprou é só do líder (200, no-store, sem telefone nem valor, só a célula dele); discipulador, rede e coordenação, 403", async () => {
+    const caminho = ROTAS_QUEM_COMPROU.quemComprou.caminho;
+    // O líder da célula 1 vê só as vendas da célula 1, mesmo pedindo outra na consulta.
+    const res = await requisitar(
+      "GET",
+      `${caminho}?celula_id=2&limite=50`,
+      sessoes.lider,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const corpo: unknown = await res.json();
+    const resposta = respostaQuemComprouSchema.parse(corpo);
+    expect(resposta.itens.length).toBeGreaterThan(0);
+    expect(JSON.stringify(corpo)).not.toMatch(
+      /telefone|whatsapp|centavos|total|numeros/,
+    );
+    const daCelula1 = (
+      await env.DB.prepare(
+        `SELECT count(*) AS n FROM pedidos AS p JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
+         WHERE a.celula_id = 1 AND p.status = 'approved' AND p.desconsiderado_em IS NULL
+           AND p.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1)`,
+      ).first<{ n: number }>()
+    )?.n;
+    expect(resposta.itens).toHaveLength(Math.min(50, daCelula1 ?? 0));
+    // O líder de outra célula (a 2) vê outra lista.
+    const outro = await cabecalhosDeSessaoDaHierarquia("lider", 2);
+    const daOutra = respostaQuemComprouSchema.parse(
+      await (await requisitar("GET", `${caminho}?limite=50`, outro)).json(),
+    );
+    expect(daOutra.itens).not.toEqual(resposta.itens);
+    for (const papel of ["discipulador", "rede"] as const) {
+      const recusada = await requisitar("GET", caminho, sessoes[papel]);
+      expect({ papel, status: recusada.status }).toEqual({
+        papel,
+        status: 403,
+      });
+      expect(erroApiSchema.parse(await recusada.json()).erro.codigo).toBe(
+        "proibido",
+      );
+      esperarCabecalhosDeSeguranca(recusada);
+    }
+    await esperarErro(
+      await requisitar("GET", caminho, coordenacao),
+      403,
+      "proibido",
+    );
+    await esperarErro(
+      await requisitar("GET", caminho, { Origin: ORIGEM }),
+      401,
+      "nao_autenticado",
+    );
   });
 
   it("RIFA-083 (D38): os maiores compradores da /minha são só do discipulador (200, sem telefone nem valor); líder e rede, 403", async () => {
