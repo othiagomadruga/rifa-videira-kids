@@ -136,11 +136,12 @@ describe("CA2: a visão do líder mostra os números da própria célula", () =>
       "Meta de hoje: 9 bilhetes; vendidos hoje: 2.",
     );
 
-    // A visão e, uma vez, o link de vendas (RIFA-046).
+    // A visão e, uma vez, o link de vendas (RIFA-046) e quem comprou (RIFA-089, só o líder).
     await waitFor(() =>
       expect(api.chamadas).toEqual([
         { metodo: "GET", caminho: `${CAMINHO_VISAO}?periodo=atual` },
         { metodo: "GET", caminho: "/api/minha/links-vendas" },
+        { metodo: "GET", caminho: "/api/minha/compradores?limite=20" },
       ]),
     );
   });
