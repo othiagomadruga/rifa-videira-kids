@@ -29,7 +29,7 @@ import {
 import { esperarIndisponivel } from "../test/indisponivel";
 import { renderizarRota, respostaJson } from "../test/renderizar";
 import { DICAS as DICAS_ACESSO } from "./acesso/textos";
-import { DICAS as DICAS_ENTRAR } from "./entrar/textos";
+import { DICAS as DICAS_ENTRAR, DICAS_DISCIPULADOR } from "./entrar/textos";
 import {
   criarApiFalsa,
   respostaErro,
@@ -287,7 +287,7 @@ describe("/acesso (link pessoal)", () => {
 });
 
 describe("/entrar", () => {
-  it("sem sessão: o login da célula (RIFA-064) com dica nos dois campos e no botão, e o 'Sou administrador' (RIFA-073); o cartão do link, sem controle", async () => {
+  it("sem sessão: o login da célula (RIFA-064) com dica nos dois campos e no botão, o 'Sou discipulador' (RIFA-082) e o 'Sou administrador' (RIFA-073); o cartão do link, sem controle", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -299,10 +299,13 @@ describe("/entrar", () => {
       level: 2,
       name: "Como entrar pelo link",
     });
-    // Célula, Senha, Entrar e "Sou administrador", e os 5 "?" da ajuda (RIFA-066): o título da tela, os dois
-    // títulos e os dois campos.
-    expect(contarControles()).toBe(9);
-    await conferirDicas(4);
+    // Célula, Senha, Entrar, "Sou discipulador" (RIFA-082) e "Sou administrador", e os 5 "?" da ajuda (RIFA-066):
+    // o título da tela, os dois títulos e os dois campos.
+    expect(contarControles()).toBe(10);
+    await conferirDicas(5);
+    expect(
+      textoDaDica(screen.getByRole("button", { name: "Sou discipulador" })),
+    ).toBe(DICAS_DISCIPULADOR.souDiscipulador);
     expect(
       textoDaDica(screen.getByRole("button", { name: "Sou administrador" })),
     ).toBe(DICAS_ENTRAR.souAdmin);
