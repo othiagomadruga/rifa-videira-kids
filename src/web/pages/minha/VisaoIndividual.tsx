@@ -9,6 +9,7 @@ import { CartaoPeriodo, Destaque } from "./Destaque";
 import { Equipe } from "./Equipe";
 import { LinksDeVendas } from "./LinksDeVendas";
 import { MaioresCompradores } from "./MaioresCompradores";
+import { QuemComprou } from "./QuemComprou";
 import { RankingIndividual } from "./RankingIndividual";
 import { TodasAsRedes } from "./TodasAsRedes";
 import { useVisaoIndividual } from "./useVisaoIndividual";
@@ -106,6 +107,10 @@ function Visao({
       {/* Os maiores compradores das células dele (RIFA-083, D38): só o discipulador, depois do ranking das células. */}
       {alvo.tipo === "discipulador" && (
         <MaioresCompradores atualizadoEm={visao.atualizado_em} />
+      )}
+      {/* Quem comprou (RIFA-089, adendo da D38): só o líder da célula, as compras pagas dela, depois do ranking. */}
+      {alvo.tipo === "celula" && (
+        <QuemComprou atualizadoEm={visao.atualizado_em} />
       )}
       {alvo.tipo !== "celula" && <LinksDeVendas alvo={alvo} />}
       {/* O ranking geral (RIFA-090): todos os discipuladores e todas as células, embaixo de tudo; o líder não vê. */}

@@ -25,6 +25,7 @@ import {
 } from "../../shared/contracts";
 import { buscarCampanhaAtiva } from "./campanha";
 import type { Relogio } from "./painel";
+import { juntarAfiliado, juntarCelulaEfetiva } from "./celula-efetiva";
 
 type SemCampanha = { ok: false; codigo: "nao_encontrado"; mensagem: string };
 const SEM_CAMPANHA: SemCampanha = {
@@ -139,8 +140,8 @@ const PEDIDOS_DO_NUMERO = `
   SELECT p.id, p.status, p.expira_em, p.aprovado_em, p.criado_em, p.registrado_em, p.qtd_bilhetes,
     p.desconsiderado_em, c.nome AS celula
   FROM pedidos AS p
-  LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-  LEFT JOIN celulas AS c ON c.id = a.celula_id
+  ${juntarAfiliado()}
+  ${juntarCelulaEfetiva()}
   WHERE p.campanha_id = ?1 AND p.numeros IS NOT NULL
     AND EXISTS (SELECT 1 FROM json_each(p.numeros) AS j WHERE j.value = ?2)
   ORDER BY p.registrado_em DESC, p.id DESC

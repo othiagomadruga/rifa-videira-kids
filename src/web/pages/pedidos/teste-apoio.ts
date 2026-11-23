@@ -7,6 +7,7 @@ import {
   ACESSO_PADRAO,
   MENSAGENS_PADRAO,
   PUBLICO_PADRAO,
+  corpoAtribuirCelulaPedidoSchema,
   corpoDesconsiderarPedidoSchema,
   corpoReconsiderarPedidoSchema,
   detalhesDeValidacao,
@@ -34,6 +35,8 @@ export const ROTA_CELULAS = "/api/admin/celulas";
 export const ROTA_CAMPANHA = "/api/admin/campanha";
 export const ROTA_DESCONSIDERAR = "/api/admin/pedidos/desconsiderar";
 export const ROTA_RECONSIDERAR = "/api/admin/pedidos/reconsiderar";
+/** RIFA-088 (D41): a chave de `proxima` para a resposta da próxima atribuição (o caminho real leva o id). */
+export const ROTA_ATRIBUIR_CELULA = "/api/admin/pedidos/:id/celula";
 
 /** O instante que a API falsa grava ao desconsiderar (25/11/2026 às 13:00 em Belém). */
 export const DESCONSIDERADO_EM = "2026-11-25T16:00:00.000Z";
@@ -107,6 +110,8 @@ export function pedido(
     affiliate_id: 1001,
     celula_id: 1,
     celula_nome: "Célula Ficticia 02",
+    // Sem célula (celula_id null na parcial): sem origem também, como a API devolve.
+    celula_origem: parcial.celula_id === null ? null : "afiliado",
     ddd: "91",
     criado_em: registrado,
     aprovado_em: status === "approved" ? instante(n + 0.5) : null,
@@ -290,6 +295,21 @@ export function simularApi(dados: DadosApi = {}) {
             ROTA_DESCONSIDERAR,
             ROTA_RECONSIDERAR,
           ];
+      // RIFA-088 (D41): PUT /api/admin/pedidos/:id/celula.
+      const atribuicao = /^\/api\/admin\/pedidos\/([^/]+)\/celula$/.exec(rota);
+      if (atribuicao && !dados.repassar) {
+        api.chamadas.push(rota);
+        const corpo: unknown =
+          typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+        api.envios.push([rota, corpo]);
+        const especial = especiais.get(ROTA_ATRIBUIR_CELULA)?.shift();
+        if (especial) return especial(url);
+        return responderAtribuicao(
+          api.dados,
+          decodeURIComponent(atribuicao[1]),
+          corpo,
+        );
+      }
       if (!conhecida.includes(rota)) {
         if (dados.repassar) return anterior(entrada, init);
         api.chamadas.push(`${rota}${url.search}`);
@@ -431,6 +451,53 @@ function campanhaCom(desconsiderar: boolean) {
  * POST desconsiderar e reconsiderar como a API (D20): 400 do corpo, 409 `acao_desligada` com a chave desligada,
  * 404 do pedido que não está na lista; repetir devolve o pedido como está. Muda `dados.pedidos` no lugar.
  */
+/** RIFA-088 (D41): a atribuição como a API faz (400, 404, 409 e o item com a célula efetiva). */
+function responderAtribuicao(
+  dados: { pedidos: ItemPedido[]; celulas: CelulaFicticia[] },
+  id: string,
+  corpo: unknown,
+): Response {
+  const lido = corpoAtribuirCelulaPedidoSchema.safeParse(corpo);
+  if (!lido.success)
+    return respostaErro(400, "requisicao_invalida", "Corpo inválido");
+  const indice = dados.pedidos.findIndex((item) => item.id === id);
+  if (indice < 0)
+    return respostaErro(
+      404,
+      "nao_encontrado",
+      "Pedido não encontrado na campanha ativa",
+    );
+  const atual = dados.pedidos[indice];
+  const { celula_id: celulaId } = lido.data;
+  if (celulaId !== null && atual.celula_origem === "afiliado")
+    return respostaErro(
+      409,
+      "pedido_ja_tem_celula",
+      "Este pedido já tem célula pelo afiliado",
+    );
+  const celula =
+    celulaId === null
+      ? null
+      : dados.celulas.find((item) => item.id === celulaId);
+  if (celula === undefined)
+    return respostaErro(
+      400,
+      "referencia_invalida",
+      `A célula ${celulaId} não existe`,
+    );
+  const depois: ItemPedido =
+    atual.celula_origem === "afiliado"
+      ? atual
+      : {
+          ...atual,
+          celula_id: celula?.id ?? null,
+          celula_nome: celula?.nome ?? null,
+          celula_origem: celula ? "manual" : null,
+        };
+  dados.pedidos[indice] = depois;
+  return respostaJson(itemPedidoSchema.parse(depois));
+}
+
 function responderAcao(
   dados: { pedidos: ItemPedido[]; desconsiderar?: boolean },
   rota: string,

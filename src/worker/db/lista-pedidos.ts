@@ -1,7 +1,7 @@
 /**
  * Lista de pedidos da coordenação (RIFA-025, D16; docs/api.md, GET /api/admin/pedidos): os pedidos da campanha
- * ativa, do registrado mais novo para o mais antigo (empate pelo id), com a célula resolvida pelo afiliado na
- * leitura (D7), `suspeito` (pedidos_suspeitos, D11), `desconsiderado` (D20), `origem` (D16, RIFA-012), totais por
+ * ativa, do registrado mais novo para o mais antigo (empate pelo id), com a célula EFETIVA (RIFA-088, D41: a do
+ * afiliado, resolvida na leitura, D7; sem ela, a atribuída à mão pelo admin) e a origem dela (`celula_origem`), `suspeito` (pedidos_suspeitos, D11), `desconsiderado` (D20), `origem` (D16, RIFA-012), totais por
  * status e cursor opaco. Só lê. Do comprador, o DDD (D1) e, só para o admin, o nome e o telefone (RIFA-076, D36).
  *
  * Desconsiderados (RIFA-028, D20): ficam na lista, com o selo, e fora dos totais (que contam só o que conta). O
@@ -17,10 +17,13 @@
  * planejador também onde ele piora a leitura; os desvios abaixo são de propósito e os planos ficam travados
  * por teste (db/pedidos-webhook-desempenho.test.ts):
  * - sem filtro de célula: a página desce pelo índice da 0007 a partir do cursor e para no limite;
- * - por célula: `afiliados CROSS JOIN pedidos` (os afiliados da célula, depois os pedidos de cada um pelo índice
- *   por afiliado) e `+p.campanha_id`; pela campanha, o planejador percorria todos os pedidos dela;
+ * - por célula (a efetiva, RIFA-088): `affiliate_id IN (afiliados da célula) OR (celula_atribuida_id = célula AND sem
+ *   célula pelo afiliado)`, um MULTI-INDEX OR (os afiliados da célula, os pedidos de cada um pelo índice por afiliado,
+ *   e os atribuídos pelo índice parcial da 0020) e `+p.campanha_id`; pela campanha, o planejador percorria todos os
+ *   pedidos dela (antes da 0020 era `afiliados CROSS JOIN pedidos`, com o mesmo custo);
  * - sem célula: `affiliate_id IS NULL OR affiliate_id IN (afiliados sem célula)`, que vira um MULTI-INDEX OR
- *   sobre o índice por afiliado; o LEFT JOIN com `a.celula_id IS NULL` percorria a campanha;
+ *   sobre o índice por afiliado, e `celula_atribuida_id IS NULL` conferido na linha; o LEFT JOIN com
+ *   `a.celula_id IS NULL` percorria a campanha;
  * - pelo id: a chave primária, com os demais filtros conferidos na linha;
  * - totais: `+p.campanha_id`, para o planejador NÃO usar o índice da 0007 (lido por ele, cada pedido custa duas
  *   linhas: o índice e a tabela).
@@ -33,6 +36,13 @@ import type {
   StatusPedido,
 } from "../../shared/contracts";
 import { STATUS_PEDIDO, instanteSchema } from "../../shared/contracts";
+import {
+  celulaEfetiva,
+  juntarAfiliado,
+  juntarCelulaEfetiva,
+  origemDaCelula,
+  semCelulaDoAfiliado,
+} from "./celula-efetiva";
 
 /** Posição na lista: o último item da página anterior. */
 export interface CursorPedidos {
@@ -112,8 +122,8 @@ export function decodificarCursorPedidos(texto: string): CursorPedidos | null {
 
 const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 
-export const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p.affiliate_id, a.celula_id,
-    c.nome AS celula_nome, p.ddd, p.criado_em, p.aprovado_em, p.expirado_em, p.registrado_em, p.atualizado_em,
+export const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p.affiliate_id,
+    ${celulaEfetiva()} AS celula_id, c.nome AS celula_nome, ${origemDaCelula()} AS celula_origem, p.ddd, p.criado_em, p.aprovado_em, p.expirado_em, p.registrado_em, p.atualizado_em,
     EXISTS (SELECT 1 FROM pedidos_suspeitos AS s WHERE s.pedido_id = p.id) AS suspeito, p.origem,
     p.desconsiderado_em, p.desconsiderado_motivo, p.desconsiderado_observacao,
     p.comprador_nome, p.comprador_telefone`;
@@ -122,11 +132,25 @@ export const COLUNAS_ITEM = `p.id, p.status, p.qtd_bilhetes, p.total_centavos, p
 const CONTA = "p.desconsiderado_em IS NULL";
 
 const PEDIDOS_COM_AFILIADO = `pedidos AS p
-    LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id`;
+    ${juntarAfiliado()}`;
 
-/** Afiliados sem célula: o pedido deles (ou sem afiliado) é "sem célula" (D7). */
-const SEM_CELULA = `(p.affiliate_id IS NULL OR p.affiliate_id IN (
-      SELECT affiliate_id FROM afiliados WHERE celula_id IS NULL))`;
+/**
+ * Sem célula EFETIVA (RIFA-088, D41): sem célula pelo afiliado (sem afiliado ou afiliado não vinculado, D7) e sem
+ * atribuição à mão. A atribuição é conferida na linha do pedido, que o MULTI-INDEX OR já lê (nenhuma linha a mais).
+ */
+const SEM_CELULA = `${semCelulaDoAfiliado()}
+    AND p.celula_atribuida_id IS NULL`;
+
+/**
+ * Da célula ?n, pela célula EFETIVA (RIFA-088, D41): os pedidos dos afiliados dela OU os atribuídos à mão a ela que não
+ * têm célula pelo afiliado. Vira um MULTI-INDEX OR: os afiliados da célula pelo índice `afiliados_por_celula` e os
+ * pedidos de cada um pelo índice por afiliado (o caminho de antes), mais os atribuídos pelo índice parcial da 0020
+ * (`pedidos_por_celula_atribuida`, poucos).
+ */
+const daCelula = (
+  n: string,
+) => `(p.affiliate_id IN (SELECT affiliate_id FROM afiliados WHERE celula_id = ${n})
+      OR (p.celula_atribuida_id = ${n} AND ${semCelulaDoAfiliado()}))`;
 
 /** FROM e condições da forma de filtro (célula, sem célula, id), compartilhados pela lista e pelos totais. */
 function origem(
@@ -135,9 +159,7 @@ function origem(
 ): ComandoSql & {
   condicoes: string[];
 } {
-  const celulas = comCelulas
-    ? "\n    LEFT JOIN celulas AS c ON c.id = a.celula_id"
-    : "";
+  const celulas = comCelulas ? `\n    ${juntarCelulaEfetiva()}` : "";
   const valores: unknown[] = [];
   const valor = (dado: unknown) => {
     valores.push(dado);
@@ -149,8 +171,9 @@ function origem(
       `+p.campanha_id = ${ID_DA_ATIVA}`,
     ];
     if (filtros.celula_id !== undefined)
-      condicoes.push(`a.celula_id = ${valor(filtros.celula_id)}`);
-    else if (filtros.sem_celula === true) condicoes.push("a.celula_id IS NULL");
+      condicoes.push(`${celulaEfetiva()} = ${valor(filtros.celula_id)}`);
+    else if (filtros.sem_celula === true)
+      condicoes.push(`${celulaEfetiva()} IS NULL`);
     return {
       sql: `${PEDIDOS_COM_AFILIADO}${celulas}`,
       valores,
@@ -159,12 +182,11 @@ function origem(
   }
   if (filtros.celula_id !== undefined)
     return {
-      sql: `afiliados AS a
-    CROSS JOIN pedidos AS p ON p.affiliate_id = a.affiliate_id${celulas}`,
+      sql: `${PEDIDOS_COM_AFILIADO}${celulas}`,
       valores,
       condicoes: [
-        `a.celula_id = ${valor(filtros.celula_id)}`,
         `+p.campanha_id = ${ID_DA_ATIVA}`,
+        daCelula(valor(filtros.celula_id)),
       ],
     };
   if (filtros.sem_celula === true)
@@ -223,9 +245,9 @@ export function comandoListaPedidos(
 export function comandoTotaisPedidos(filtros: FiltrosPedidos): ComandoSql {
   const comAfiliado = filtros.id !== undefined;
   const base = origem(filtros, false);
-  // Sem o id, a forma "sem célula" e a "sem filtro" não precisam do afiliado: só a tabela de pedidos.
-  const de =
-    comAfiliado || filtros.celula_id !== undefined ? base.sql : "pedidos AS p";
+  // Sem o id, as formas por célula, sem célula e sem filtro não precisam do JOIN do afiliado: as condições delas são
+  // na linha do pedido (o afiliado, por subconsulta).
+  const de = comAfiliado ? base.sql : "pedidos AS p";
   const sql = `SELECT p.status, count(*) AS pedidos, sum(p.qtd_bilhetes) AS bilhetes,
     sum(p.total_centavos) AS total_centavos
   FROM ${de}

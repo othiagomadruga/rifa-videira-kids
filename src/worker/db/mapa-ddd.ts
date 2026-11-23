@@ -11,8 +11,8 @@
  *   `aprovado_em` está em `[início do primeiro dia, fim do último dia)` em UTC, pelo `intervaloUtcDoDia` do contrato
  *   (R6; texto UTC no mesmo formato: a ordem alfabética é a cronológica). Vale para qualquer fuso, com ou sem
  *   horário de verão, e é o mesmo conjunto que o painel separa por dia.
- * Com `divisao`, só as vendas cujo afiliado está numa célula da divisão (D7, a célula resolvida na leitura): as sem
- * afiliado e as de afiliado não vinculado ficam de fora, como no painel. O pedido desconsiderado pelo admin (D20) não
+ * Com `divisao`, só as vendas cuja célula EFETIVA é da divisão (RIFA-088, D41: a do afiliado, resolvida na leitura, D7,
+ * ou, sem ela, a atribuída à mão): as sem célula ficam de fora, como no painel. O pedido desconsiderado pelo admin (D20) não
  * conta, como no painel: a coluna está na linha que a consulta já lê (nenhuma linha a mais). O `+` de
  * `+desconsiderado_em IS NULL` tira do planejador o índice parcial da 0003 recriado na 0008 (`status = 'approved' AND
  * desconsiderado_em IS NULL`), que a consulta satisfaria e que não cobre país e DDD: como os outros `+` abaixo.
@@ -57,6 +57,26 @@ const AFILIADOS_DA_DIVISAO = `
     JOIN redes AS r ON r.id = d.rede_id
     WHERE r.divisao = ?4`;
 
+/** As células da divisão (para a célula atribuída à mão, RIFA-088). */
+const CELULAS_DA_DIVISAO = `
+    SELECT c.id
+    FROM celulas AS c
+    JOIN discipuladores AS d ON d.id = c.discipulador_id
+    JOIN redes AS r ON r.id = d.rede_id
+    WHERE r.divisao = ?4`;
+
+/**
+ * A venda é da divisão pela célula EFETIVA (RIFA-088, D41): o afiliado numa célula da divisão, ou o pedido sem célula
+ * pelo afiliado atribuído à mão a uma célula da divisão. Todos os termos com `+`: o pedido já foi lido pela janela
+ * (`status, aprovado_em`), e o OR não pode levar o planejador a outro índice (o parcial da 0020 ou o por afiliado).
+ */
+const DA_DIVISAO = `
+    AND (+affiliate_id IN (${AFILIADOS_DA_DIVISAO}
+    )
+      OR (+celula_atribuida_id IN (${CELULAS_DA_DIVISAO}
+    )
+        AND (+affiliate_id IS NULL OR +affiliate_id IN (SELECT affiliate_id FROM afiliados WHERE celula_id IS NULL))))`;
+
 /**
  * A consulta agregada do mapa: pedidos aprovados da campanha (?1) com `aprovado_em` em [?2, ?3), por país e DDD;
  * com `divisao` (?4), só os dos afiliados da divisão.
@@ -70,7 +90,7 @@ export function comandoMapaDdd(
   let daDivisao = "";
   if (divisao !== undefined) {
     valores.push(divisao);
-    daDivisao = `\n    AND +affiliate_id IN (${AFILIADOS_DA_DIVISAO}\n    )`;
+    daDivisao = DA_DIVISAO;
   }
   const sql = `
   SELECT pais, ddd, count(*) AS pedidos, sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos

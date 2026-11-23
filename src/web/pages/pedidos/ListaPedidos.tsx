@@ -42,6 +42,7 @@ import {
   DialogoDesconsiderar,
   DialogoDesfazer,
 } from "./Desconsiderar";
+import { DialogoAtribuirCelula } from "./AtribuirCelula";
 import {
   SEM_FILTROS,
   STATUS_PEDIDO,
@@ -62,12 +63,14 @@ import {
 import {
   AJUDA,
   DICAS,
+  MARCA_ATRIBUIDA,
   MARCA_RECUPERADO,
   ROTULO_STATUS,
   ROTULO_STATUS_PLURAL,
   TOM_STATUS,
   filtrosAtivos,
   pedidos,
+  podeAtribuirCelula,
   seloDesconsiderado,
   textoDaCelula,
   totaisDepoisDe,
@@ -129,6 +132,8 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     pedido: ItemPedido;
   } | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
+  // RIFA-088 (D41): a venda sem célula pelo afiliado em que o admin escolhe a célula à mão.
+  const [atribuindo, setAtribuindo] = useState<ItemPedido | null>(null);
   // Depois da ação, o botão troca de nome ("Desconsiderar" ↔ "Desfazer"): o foco vai para o id do pedido.
   const refFocoAposAcao = useRef<HTMLElement | null>(null);
 
@@ -136,6 +141,24 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     refFocoAposAcao.current = null;
     setResultado(null);
     setAcao({ tipo, pedido });
+  }
+
+  function abrirAtribuicao(pedido: ItemPedido) {
+    refFocoAposAcao.current = null;
+    setResultado(null);
+    setAtribuindo(pedido);
+  }
+
+  /** A célula mudou: o item troca na lista (os totais seguem os filtros e só mudam ao recarregar). */
+  function aoConcluirAtribuicao(depois: ItemPedido) {
+    substituirItem(depois);
+    refFocoAposAcao.current = document.getElementById(idDoPedido(depois.id));
+    setAtribuindo(null);
+    setResultado(
+      depois.celula_nome === null
+        ? `Pedido ${depois.id} sem célula de novo: não conta para nenhuma.`
+        : `Pedido ${depois.id} atribuído à ${depois.celula_nome}: a venda conta para ela em todo o sistema.`,
+    );
   }
 
   function aoConcluirAcao(antes: ItemPedido, depois: ItemPedido) {
@@ -212,6 +235,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
         filtros={filtros}
         mais={mais}
         acoes={acoes}
+        aoAtribuir={admin ? abrirAtribuicao : null}
         comComprador={admin}
         aoCarregarMais={() => void carregarMais()}
         aoTentarDeNovo={tentarDeNovo}
@@ -223,6 +247,17 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
           aoFechar={() => setAcao(null)}
           aoConcluir={(depois) => aoConcluirAcao(acao.pedido, depois)}
           aoDesligada={() => aoDesligarNaAcao(acao.pedido)}
+          focoAoFechar={refFocoAposAcao}
+        />
+      )}
+      {atribuindo && (
+        <DialogoAtribuirCelula
+          pedido={atribuindo}
+          grupos={
+            celulas.tipo === "ok" ? celulasPorRede(celulas.celulas) : null
+          }
+          aoFechar={() => setAtribuindo(null)}
+          aoConcluir={aoConcluirAtribuicao}
           focoAoFechar={refFocoAposAcao}
         />
       )}
@@ -555,6 +590,7 @@ function Conteudo({
   filtros,
   mais,
   acoes,
+  aoAtribuir,
   comComprador,
   aoCarregarMais,
   aoTentarDeNovo,
@@ -564,6 +600,8 @@ function Conteudo({
   filtros: FiltrosPedidos;
   mais: { carregando: boolean; erro: unknown };
   acoes: AcoesDaTabela | null;
+  /** RIFA-088 (D41): só admin; null = sem o botão "Atribuir a uma célula". */
+  aoAtribuir: ((pedido: ItemPedido) => void) | null;
   comComprador: boolean;
   aoCarregarMais: () => void;
   aoTentarDeNovo: () => void;
@@ -624,6 +662,7 @@ function Conteudo({
             itens={itens}
             inicioDaUltima={inicioDaUltima}
             acoes={acoes}
+            aoAtribuir={aoAtribuir}
             comComprador={comComprador}
           />
           <div className="pedidos-rodape">
@@ -814,11 +853,14 @@ function TabelaPedidos({
   itens,
   inicioDaUltima,
   acoes,
+  aoAtribuir,
   comComprador,
 }: {
   itens: ItemPedido[];
   inicioDaUltima: number | null;
   acoes: AcoesDaTabela | null;
+  /** RIFA-088 (D41): só admin, nas vendas sem célula pelo afiliado. */
+  aoAtribuir: ((pedido: ItemPedido) => void) | null;
   /** RIFA-076 (D36): a coluna "Comprador", só para o admin. */
   comComprador: boolean;
 }) {
@@ -915,13 +957,38 @@ function TabelaPedidos({
       chave: "celula",
       titulo: "Célula",
       celula: (pedido) => (
-        <span
-          className={bloco(
-            pedido,
-            pedido.celula_nome === null ? "pedidos-sem-celula" : "",
+        <span className={bloco(pedido, "pedidos-celula-da-venda")}>
+          <span
+            className={pedido.celula_nome === null ? "pedidos-sem-celula" : ""}
+          >
+            {textoDaCelula(pedido)}
+          </span>
+          {/* RIFA-088 (D41): a célula escolhida à mão pelo admin (a coordenação vê o sinal, sem o botão). */}
+          {pedido.celula_origem === "manual" && (
+            <span className="pedidos-atribuida">{MARCA_ATRIBUIDA}</span>
           )}
-        >
-          {textoDaCelula(pedido)}
+          {aoAtribuir && podeAtribuirCelula(pedido) && (
+            <ComDica
+              texto={
+                pedido.celula_origem === "manual"
+                  ? DICAS.trocarCelula
+                  : DICAS.atribuirCelula
+              }
+            >
+              <Button
+                variante="secundario"
+                tamanho="pequeno"
+                onClick={() => aoAtribuir(pedido)}
+              >
+                {pedido.celula_origem === "manual"
+                  ? "Trocar a célula"
+                  : "Atribuir a uma célula"}{" "}
+                <span className="visualmente-oculto">
+                  do pedido {pedido.id}
+                </span>
+              </Button>
+            </ComDica>
+          )}
         </span>
       ),
     },

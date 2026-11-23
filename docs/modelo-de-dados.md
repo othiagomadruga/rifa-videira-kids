@@ -153,6 +153,11 @@ Os campos informativos (`status_rifei`, `status_detail_rifei`, `subtotal_centavo
 | `desconsiderado_observacao` | TEXT NULL, 1–140 | só com `desconsiderado_em` (CHECK); nota do admin, sem dado pessoal (o contrato recusa "@" e 8 dígitos seguidos) |
 | `comprador_nome` | TEXT NULL, 1–120 | migração 0017 (RIFA-076, D36): `buyer.name`, espaços juntados; **só o admin vê**. Atualizado por todo evento do pedido que o traz (ausente não apaga) |
 | `comprador_telefone` | TEXT NULL, E.164 | migração 0017 (D36): `buyer.phone` normalizado (`+5591988887777`); fora do E.164, NULL (CHECK). **Só o admin vê** (lista de pedidos e planilha de compradores) |
+| `celula_atribuida_id` | INTEGER FK → celulas (RESTRICT), NULL | migração 0020 (RIFA-088, D41): a célula atribuída à mão pelo admin a um pedido sem célula pelo afiliado; NULL = nenhuma. Conta só quando o afiliado do pedido não tem célula |
+| `celula_atribuida_em` | TEXT (UTC) NULL | 0020: quando o admin atribuiu; preenchido **se e somente se** `celula_atribuida_id` (CHECK) |
+| `celula_atribuida_por` | INTEGER NULL | 0020: o id do admin (`usuarios.id`, sem FK; quem fez também fica na trilha); **se e somente se** `celula_atribuida_id` (CHECK) |
+
+**Célula efetiva** (RIFA-088, D41): a célula em que a venda conta é a do afiliado (`afiliados.celula_id`, D7), se houver; senão, a atribuída à mão (`celula_atribuida_id`); senão, nenhuma ("sem célula"). Toda consulta que liga venda a célula usa os trechos de `src/worker/db/celula-efetiva.ts` (`coalesce(a.celula_id, p.celula_atribuida_id)`) ou a view `vendas_aprovadas` (recriada na 0020). A API só aceita atribuir quando o pedido não tem célula pelo afiliado; se o afiliado ganhar célula depois, a dele vence e a atribuída fica gravada sem contar. O webhook nunca escreve nessas três colunas.
 
 **Desconsiderado** (RIFA-028, D20): sai de toda soma (painel, rankings, público, bumbo, `/minha`, mapa, adesão, totais do afiliado, totais da lista de pedidos e as somas da conferência), porque toda consulta que soma repete `desconsiderado_em IS NULL` (e o índice da 0003 e a view já não o têm); continua na lista de pedidos (com o selo e o filtro), na de suspeitos e na conferência, à parte. Quem desconsiderou fica na trilha (`auditoria`), não no pedido. O webhook nunca escreve nessas colunas: um evento que chega depois muda o status, mas o pedido continua desconsiderado.
 
@@ -198,7 +203,7 @@ Auditoria de cada "Recuperar" da conferência pelo CSV que gravou pelo menos um 
 
 Pedidos `approved` que contam (sem os desconsiderados, desde a 0008) com a hierarquia resolvida por `LEFT JOIN`: afiliado → célula → discipulador → rede. As colunas são `pedido_id`, `campanha_id`, `affiliate_id`, `qtd_bilhetes`, `total_centavos`, `aprovado_em`, `ddd`, `pais`, `celula_id`, `discipulador_id`, `rede_id` e `divisao`.
 
-- `celula_id` NULL = venda **sem célula** (sem afiliado ou afiliado não vinculado). Ela entra no total da campanha, mas não entra em nenhum ranking.
+- `celula_id` é a célula **efetiva** desde a 0020 (D41): a do afiliado ou, sem ela, a atribuída à mão. NULL = venda **sem célula** (sem afiliado ou afiliado não vinculado, e sem atribuição). Ela entra no total da campanha, mas não entra em nenhum ranking.
 - Vincular um afiliado muda o resultado da view na hora, sem alterar `pedidos` (D7).
 
 ### `usuarios`, `links_acesso` e `sessoes` (acesso da equipe)
@@ -229,17 +234,18 @@ Migrations `0002_acessos.sql` (RIFA-007) e `0006_acesso_hierarquia.sql` (RIFA-01
 |---|---|
 | `pedidos_por_status_aprovacao (status, aprovado_em)` | ritmo e ranking por janela de tempo: `status = 'approved' AND aprovado_em >= ? AND aprovado_em < ?` (validado com `EXPLAIN QUERY PLAN`, também através da view) |
 | `pedidos_por_afiliado_status (affiliate_id, status)` | totais por afiliado (`GET /api/admin/afiliados`), "sem afiliado" (`affiliate_id IS NULL`) e a FK de `afiliados` |
-| `pedidos_aprovados_por_afiliado_dia (campanha_id, affiliate_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos, desconsiderado_em) WHERE status = 'approved' AND desconsiderado_em IS NULL` (migração 0003, recriado na 0008) | painel, rankings, ranking público e bumbo (`src/worker/db/painel.ts`): vendas por afiliado e dia local de UTC−3 já na ordem do `GROUP BY`, sem a view, com 1 linha lida no D1 por pedido que conta (pela view eram ~6; o desconsiderado não está no índice). A consulta precisa usar a mesma expressão do dia, literal, e repetir `status = 'approved' AND desconsiderado_em IS NULL` (`db/painel.test.ts` confere o plano). Também serve às somas da conferência (`PAGOS_DA_CAMPANHA` em `db/reconciliacao.ts`, com o filtro repetido; `routes/reconciliacao-desempenho.test.ts`) |
+| `pedidos_aprovados_por_afiliado_dia (campanha_id, affiliate_id, celula_atribuida_id, date(aprovado_em, '-180 minutes'), aprovado_em, qtd_bilhetes, total_centavos, desconsiderado_em) WHERE status = 'approved' AND desconsiderado_em IS NULL` (migração 0003, recriado na 0008 e na 0020, que pôs `celula_atribuida_id` depois do afiliado) | painel, rankings, ranking público e bumbo (`src/worker/db/painel.ts`): vendas por afiliado, célula atribuída (D41) e dia local de UTC−3 já na ordem do `GROUP BY`, com a célula efetiva resolvida só nas linhas agrupadas, sem a view, com 1 linha lida no D1 por pedido que conta (pela view eram ~6; o desconsiderado não está no índice). A consulta precisa usar a mesma expressão do dia, literal, e repetir `status = 'approved' AND desconsiderado_em IS NULL` (`db/painel.test.ts` confere o plano). Também serve às somas da conferência (`PAGOS_DA_CAMPANHA` em `db/reconciliacao.ts`, com o filtro repetido; `routes/reconciliacao-desempenho.test.ts`) |
 | `pedidos_desconsiderados_por_registro (campanha_id, registrado_em, id) WHERE desconsiderado_em IS NOT NULL` (migração 0008, parcial) | a lista de pedidos com `desconsiderado=true` sem filtro de célula: lê só os desconsiderados, na ordem da lista (~2 linhas por desconsiderado). Com `desconsiderado=false`, o índice da 0007, com `+desconsiderado_em IS NULL` (o `+` tira o índice parcial da 0003 do planejador). Também a contagem dos desconsiderados nos totais do relatório (`CONTAR_DESCONSIDERADOS` em `db/relatorio.ts`, D23): `USING INDEX (campanha_id=?)`, sem a palavra COVERING (a coluna do filtro não está no índice), e ~1 linha lida no D1 por desconsiderado da campanha (`routes/relatorio-desempenho.test.ts`) |
 | `afiliados_por_celula`, `celulas_por_discipulador`, `discipuladores_por_rede` | subir e descer a hierarquia, e as FKs |
 | `discipuladores_por_grupo (grupo_id)` (migração 0018, RIFA-084) | os discipuladores de cada grupo no ranking por grupo (`src/worker/db/grupos.ts`, no mesmo lote do cálculo) e o `SET NULL` ao apagar um grupo |
 | `celulas_por_grupo (grupo_id)` (migração 0019, RIFA-085) | as células com grupo próprio no ranking por grupo (a outra metade do `UNION ALL` de `src/worker/db/grupos.ts`) e o `SET NULL` ao apagar um grupo |
-| `pedidos_por_campanha_registro (campanha_id, registrado_em, id)` (migração 0007, RIFA-025) | lista de pedidos da coordenação (`GET /api/admin/pedidos`, `src/worker/db/lista-pedidos.ts`): os pedidos da campanha do registrado mais novo para o mais antigo, com o cursor `(registrado_em, id)`, saem na ordem do índice e a leitura para no limite (~133 linhas lidas na 1ª página com 7 mil pedidos; sem ele, ~26 mil). **Ele desvia o planejador** em consultas que pioram com ele, e elas fogem dele de propósito: totais com `+campanha_id` (senão ~2 linhas por pedido), lista e totais por célula com `afiliados CROSS JOIN pedidos` (senão percorre a campanha inteira), sem célula com `affiliate_id IS NULL OR affiliate_id IN (afiliados sem célula)` |
+| `pedidos_por_campanha_registro (campanha_id, registrado_em, id)` (migração 0007, RIFA-025) | lista de pedidos da coordenação (`GET /api/admin/pedidos`, `src/worker/db/lista-pedidos.ts`): os pedidos da campanha do registrado mais novo para o mais antigo, com o cursor `(registrado_em, id)`, saem na ordem do índice e a leitura para no limite (~133 linhas lidas na 1ª página com 7 mil pedidos; sem ele, ~26 mil). **Ele desvia o planejador** em consultas que pioram com ele, e elas fogem dele de propósito: totais com `+campanha_id` (senão ~2 linhas por pedido), lista e totais por célula com `affiliate_id IN (afiliados da célula) OR (celula_atribuida_id = célula AND sem célula pelo afiliado)`, um MULTI-INDEX OR (até a 0019, `afiliados CROSS JOIN pedidos`; pela campanha percorre a campanha inteira), sem célula com `affiliate_id IS NULL OR affiliate_id IN (afiliados sem célula)` |
 | `webhook_eventos_por_pedido`, `webhook_eventos_por_resultado (resultado, recebido_em)` | auditoria de um pedido; listar erros e ignorados recentes; no estado do webhook (`src/worker/db/estado-webhook.ts`), a contagem das últimas 24 h por resultado (com `resultado IN (...)`: sem ele, a contagem percorre o índice inteiro), os erros recentes e a última entrega de qualquer resultado por `MAX(recebido_em)` (com `ORDER BY ... LIMIT 1` o planejador ia para o índice da 0007 e lia ~34 mil linhas) |
 | `webhook_eventos_por_resultado_id (resultado, id)` (migração 0007, RIFA-025) | entregas de um resultado da mais nova para a mais antiga, pelo id, com o cursor (`GET /api/admin/webhook/entregas`, `src/worker/db/entregas-webhook.ts`): ~51 linhas lidas por página, sem B-tree temporária (sem ele, ~800 a ~21 mil) |
 | `webhook_eventos_da_campanha_por_slug (slug, recebido_em) WHERE resultado IN ('processado', 'duplicado', 'ignorado_transicao')` (migração 0007, parcial, RIFA-025) | a última entrega da campanha no estado do webhook (`MAX(recebido_em)` no slug da ativa, D16): 0 ou 1 linha lida. A consulta repete o MESMO `resultado IN (...)` do índice, senão o planejador não o usa. Pelo índice `(resultado, recebido_em)`, com o slug trocado depois de entregas processadas, o MAX percorria todas as entregas do slug antigo (~17,6 mil linhas por chamada) |
 | `recuperacoes_por_campanha (campanha_id, executado_em)` e `pedidos_por_recuperacao (recuperacao_id) WHERE recuperacao_id IS NOT NULL` (migração 0004) | auditoria da conferência: as recuperações e os pedidos que cada uma gravou; a FK de `pedidos.recuperacao_id` |
 | `pedidos_por_pagamento_recuperado (pagamento_recuperacao_id) WHERE pagamento_recuperacao_id IS NOT NULL` (migração 0011, RIFA-056) | os pagamentos registrados de cada recuperação (as contagens da gravação e o histórico); a FK de `pedidos.pagamento_recuperacao_id` |
+| `pedidos_por_celula_atribuida (celula_atribuida_id) WHERE celula_atribuida_id IS NOT NULL` (migração 0020, parcial, RIFA-088) | o ramo dos atribuídos à mão no filtro por célula da lista de pedidos (o MULTI-INDEX OR de `db/lista-pedidos.ts`, com os pedidos dos afiliados da célula no outro ramo) e a FK RESTRICT ao excluir uma célula |
 | `campanhas_uma_ativa` (parcial, único) | garantir uma única campanha ativa |
 
 Exemplo, ranking de células da campanha `?1` no período, com `[início, fim)` já convertido para UTC (`?2`, `?3`):
@@ -271,6 +277,9 @@ GROUP BY celula_id;
 2. A coordenação vincula com `PUT /api/admin/afiliados/:affiliateId { "celula_id": 7 }`, ou pré-cadastra o afiliado antes da primeira venda.
 3. As vendas passam para a célula imediatamente, porque a view resolve a célula na leitura.
 4. Venda sem `affiliate_id` fica em "sem afiliado".
+5. RIFA-088 (D41): a venda sem célula pelo afiliado (sem afiliado, ou afiliado não vinculado) pode ser atribuída à mão
+   pelo admin a uma célula (`PUT /api/admin/pedidos/:id/celula`, tela Pedidos): `pedidos.celula_atribuida_id`. A
+   célula do afiliado sempre vence; vincular o afiliado depois leva a venda para a célula dele.
 
 ## 7. Cálculos de metas, ritmo, ranking e bumbo
 
@@ -609,3 +618,17 @@ Quem escolhe é a coordenação, no Editar célula da Hierarquia (`PUT /api/admi
 importação da planilha não mexe na coluna. Testes: `src/worker/test/migrations.test.ts` ("0019 sobre dados que já
 existiam": nada muda além da coluna nova em NULL, o discipulador com grupo continua com ele, a FK e o `SET NULL` sem
 apagar a célula).
+
+## 17. Migração `0020_celula_atribuida.sql` (RIFA-088; D41)
+
+Aditiva: em `pedidos`, `celula_atribuida_id INTEGER NULL REFERENCES celulas(id) ON DELETE RESTRICT`,
+`celula_atribuida_em TEXT NULL` (instante UTC no formato da API) e `celula_atribuida_por INTEGER NULL` (o id do admin),
+nulas juntas ou preenchidas juntas (CHECK), com o índice parcial `pedidos_por_celula_atribuida`. Todo pedido que já
+existia fica sem atribuição: nada muda nas contas até o admin atribuir uma venda na tela Pedidos. Na mesma migração, o
+índice de cobertura do painel (`pedidos_aprovados_por_afiliado_dia`) é recriado com `celula_atribuida_id` logo depois de
+`affiliate_id` (o painel agrupa por afiliado, célula atribuída e dia na ordem do índice: o plano continua sem B-tree
+temporária no agrupamento por afiliado e dia, 1 linha lida por pedido) e a view `vendas_aprovadas` é recriada com a
+célula efetiva (`coalesce(a.celula_id, p.celula_atribuida_id)`). A célula com venda atribuída não é excluída (RESTRICT;
+a Hierarquia responde 409 `em_uso` e diz para remover a atribuição). O webhook nunca escreve nas três colunas. Testes:
+`src/worker/test/migrations.test.ts` ("0020 sobre dados que já existiam": nada muda além das colunas novas em NULL, o
+CHECK, a FK RESTRICT, a view e o painel com a célula efetiva e a do afiliado vencendo, e os índices com o plano do painel).

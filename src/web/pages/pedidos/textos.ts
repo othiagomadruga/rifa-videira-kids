@@ -229,6 +229,20 @@ export function seloDesconsiderado(motivo: MotivoDesconsideracao): string {
 /** A marca do pedido que entrou pela conferência pelo CSV (`origem`, D16 e D19). */
 export const MARCA_RECUPERADO = "Recuperado na conferência";
 
+// ---------------------------------------------------------------------------------------------------
+// Célula atribuída à mão (RIFA-088, D41)
+// ---------------------------------------------------------------------------------------------------
+
+/** O sinal discreto ao lado da célula da venda que o admin atribuiu à mão (`celula_origem: "manual"`). */
+export const MARCA_ATRIBUIDA = "atribuída à mão";
+
+/** A venda pode ganhar (ou trocar, ou perder) a célula à mão: só quando NÃO tem célula pelo afiliado. */
+export function podeAtribuirCelula(
+  pedido: Pick<ItemPedido, "celula_origem">,
+): boolean {
+  return pedido.celula_origem !== "afiliado";
+}
+
 type Totais = NonNullable<RespostaPedidos["totais"]>;
 
 /**
@@ -296,6 +310,9 @@ export const AJUDA = {
     "Um detalhe para quem conferir depois, como o número do estorno. Não escreva nome, telefone, e-mail nem documento do comprador.",
   filtroResultado:
     "O que aconteceu com cada aviso de venda que a Rifei mandou: processado, repetido, ignorado ou com erro. Ex.: escolha os com erro para ver o que falhou.",
+  // RIFA-088 (D41): só admin.
+  celulaAtribuida:
+    "A célula em que esta venda passa a contar: metas, rankings, painel do líder, telão e relatórios. Ex.: quem comprou pelo link geral é da célula Bunker.",
 } as const;
 
 export const DICAS = {
@@ -342,4 +359,18 @@ export const DICAS = {
     "Fecha esta janela. Para voltar a desconsiderar, o admin liga a regra na tela Campanha.",
   verTodasAsEntregas:
     "Tira o filtro de resultado e mostra todas as entregas de novo.",
+  // RIFA-088 (D41): só admin, nas vendas sem célula pelo afiliado.
+  atribuirCelula:
+    "Escolhe a célula desta venda que chegou sem link de célula. A venda passa a contar para ela em todo o sistema.",
+  trocarCelula:
+    "Troca a célula escolhida à mão para esta venda, ou tira a escolha.",
+  confirmarAtribuir:
+    "A venda passa a contar para a célula escolhida agora. Fica registrado na Trilha.",
+  removerAtribuicao:
+    "Tira a célula escolhida à mão. A venda volta a ficar sem célula e não conta para nenhuma.",
+  cancelarAtribuir: "Fecha sem mudar a célula desta venda.",
+  atribuindo:
+    "Indisponível enquanto a célula da venda é gravada. Espere um instante.",
+  entendiAtribuir:
+    "Fecha esta janela. A venda já tem célula pelo link do afiliado, e essa vale.",
 } as const;

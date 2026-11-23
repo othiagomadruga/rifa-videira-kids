@@ -166,7 +166,7 @@ describe("GET /api/admin/auditoria", () => {
       }).toEqual({ consulta, ok: false });
   });
 
-  it("resposta: as 30 ações conhecidas, o cursor e quem fez", () => {
+  it("resposta: as 31 ações conhecidas, o cursor e quem fez", () => {
     expect(ACOES_AUDITORIA).toEqual([
       "campanha.salvar",
       "afiliado.salvar",
@@ -210,6 +210,8 @@ describe("GET /api/admin/auditoria", () => {
       "compradores.exportar",
       // RIFA-086 (D40): o relatório diário enviado pelo admin (o do cron não tem usuário e fica só no log).
       "relatorio_diario.enviar",
+      // RIFA-088 (D41): a célula atribuída à mão a uma venda sem célula pelo afiliado.
+      "pedido.atribuir_celula",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
     for (const acao of ACOES_AUDITORIA)

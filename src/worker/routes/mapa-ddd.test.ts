@@ -1008,6 +1008,8 @@ describe("CA7: nenhum dado pessoal na resposta nem na leitura", () => {
               "bilhetes",
               "c",
               "campanha_id",
+              // RIFA-088 (D41): a célula atribuída à mão (a célula efetiva da venda na divisão).
+              "celula_atribuida_id",
               "celula_id",
               "celulas",
               "centavos",

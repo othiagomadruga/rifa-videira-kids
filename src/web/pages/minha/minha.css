@@ -440,3 +440,70 @@
   font-weight: var(--peso-forte);
   white-space: nowrap;
 }
+
+/* Quem comprou (RIFA-089, adendo da D38; só o líder da célula): a lista das compras pagas, como a dos compradores. */
+.minha-quem-comprou__corpo {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.minha-quem-comprou__vazio {
+  color: var(--cor-texto-suave);
+}
+
+.minha-quem-comprou__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */
+.minha-quem-comprou__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+}
+
+.minha-quem-comprou__quem {
+  display: grid;
+  min-width: 0;
+}
+
+.minha-quem-comprou__nome {
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.minha-quem-comprou__nome--sem {
+  font-weight: var(--peso-normal);
+  color: var(--cor-texto-suave);
+}
+
+.minha-quem-comprou__quando {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.minha-quem-comprou__bilhetes {
+  font-weight: var(--peso-forte);
+  white-space: nowrap;
+}
+
+/* Região viva fixa (existe vazia desde o começo): só aparece com a falha do "Ver mais". */
+.minha-quem-comprou__falha:not(:empty) {
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-alerta);
+  border-radius: var(--raio-2);
+  background: var(--cor-alerta-suave);
+  color: var(--cor-alerta);
+  font-weight: var(--peso-forte);
+}

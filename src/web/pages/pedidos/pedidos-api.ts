@@ -12,6 +12,7 @@
 import type {
   Campanha,
   Celula,
+  CorpoAtribuirCelulaPedido,
   CorpoDesconsiderarPedido,
   ItemPedido,
   MotivoDesconsideracao,
@@ -268,6 +269,35 @@ export function desconsiderarPedido(
   corpo: CorpoDesconsiderarPedido,
 ): Promise<ItemPedido> {
   return api.post<ItemPedido>(CAMINHO_DESCONSIDERAR, corpo);
+}
+
+/**
+ * RIFA-088 (D41): o caminho de PUT /api/admin/pedidos/:id/celula (o id do pedido codificado: é o texto da Rifei).
+ */
+export function caminhoDaCelulaDoPedido(pedidoId: string): string {
+  return `/api/admin/pedidos/${encodeURIComponent(pedidoId)}/celula`;
+}
+
+/**
+ * RIFA-088 (D41), só admin: atribui à mão a célula do pedido sem célula pelo afiliado (`celulaId`) ou desfaz a
+ * atribuição (`null`). 200 com o pedido como a lista mostra (a célula efetiva e `celula_origem`).
+ */
+export function atribuirCelulaDoPedido(
+  pedidoId: string,
+  celulaId: number | null,
+): Promise<ItemPedido> {
+  return api.put<ItemPedido>(caminhoDaCelulaDoPedido(pedidoId), {
+    celula_id: celulaId,
+  } satisfies CorpoAtribuirCelulaPedido);
+}
+
+/** 409 `pedido_ja_tem_celula`: o afiliado do pedido ganhou célula (a do afiliado vale). */
+export function ehPedidoJaTemCelula(erro: unknown): boolean {
+  return (
+    erro instanceof ErroApi &&
+    erro.status === 409 &&
+    erro.codigo === "pedido_ja_tem_celula"
+  );
 }
 
 /** Desfaz: o pedido volta a contar. 200 com o pedido como a lista mostra (`desconsiderado: null`). */

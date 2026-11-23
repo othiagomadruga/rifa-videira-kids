@@ -9,10 +9,13 @@ import {
   PAPEIS_HIERARQUIA,
   ROTAS,
   ROTAS_LINK_VENDAS,
+  PAGINA_QUEM_COMPROU_PADRAO,
   ROTAS_MAIORES_COMPRADORES,
-  ROTAS_TODAS_AS_REDES,
+  ROTAS_QUEM_COMPROU,
   TIPO_ALVO_DO_PAPEL,
   consultaMaioresCompradoresSchema,
+  consultaQuemComprouSchema,
+  ROTAS_TODAS_AS_REDES,
   consultaTodasAsRedesSchema,
   consultaVisaoIndividualSchema,
   respostaVisaoIndividualSchema,
@@ -31,6 +34,11 @@ import {
   caminhoDosMeusMaioresCompradores,
 } from "./maiores-compradores-api";
 import { CAMINHO_VISAO, caminhoDaVisao, periodoDaFase } from "./minha-api";
+import {
+  CAMINHO_QUEM_COMPROU,
+  VENDAS_POR_PAGINA,
+  caminhoDeQuemComprou,
+} from "./quem-comprou-api";
 import {
   CAMINHO_TODAS_AS_REDES,
   caminhoDeTodasAsRedes,
@@ -81,6 +89,28 @@ describe("cópias do contrato na visão individual", () => {
           Object.fromEntries(url.searchParams),
         ),
       ).toEqual({ janela, limite: 10 });
+    }
+  });
+
+  it("quem comprou (RIFA-089): caminho, grupo, só o líder, o tamanho da página e a consulta passa no schema", () => {
+    const rota = ROTAS_QUEM_COMPROU.quemComprou;
+    expect(CAMINHO_QUEM_COMPROU).toBe(rota.caminho);
+    expect(rota.metodo).toBe("GET");
+    expect(rota.grupo).toBe("hierarquia");
+    expect(rota.papeis).toEqual(["lider"]);
+    expect(VENDAS_POR_PAGINA).toBe(PAGINA_QUEM_COMPROU_PADRAO);
+    for (const antesDe of [null, "abc_-1"]) {
+      const url = new URL(
+        caminhoDeQuemComprou(antesDe),
+        "https://site.example",
+      );
+      expect(url.pathname).toBe(CAMINHO_QUEM_COMPROU);
+      expect(
+        consultaQuemComprouSchema.parse(Object.fromEntries(url.searchParams)),
+      ).toEqual({
+        limite: PAGINA_QUEM_COMPROU_PADRAO,
+        ...(antesDe === null ? {} : { antes_de: antesDe }),
+      });
     }
   });
 

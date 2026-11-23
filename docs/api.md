@@ -53,7 +53,7 @@ Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a
 - `GET /api/sessao` diz quem está conectado (401 sem sessão). `POST /api/sessao/sair` encerra a sessão (204). O site não lê o cookie (HttpOnly).
 - **Login da célula** (RIFA-064, D29; [acesso.md, seção 10](acesso.md#10-login-da-célula-com-a-senha-padrão-rifa-064-d29)): `POST /api/sessao/senha { "celula", "senha" }` com o nome da célula e a senha padrão (`@` + nome normalizado + `1234`): **200** com a sessão do papel `lider` da célula (o mesmo corpo e o mesmo cookie do link). Toda recusa (senha errada, célula que não existe, nome ambíguo, usuário desativado, `acesso.celulas_senha` desligada) é o **mesmo** 401 `nao_autenticado`. O mesmo limite de tentativas e o mesmo teto de corpo do `POST /api/sessao`.
 - **Login do discipulador** (RIFA-082, D37; [acesso.md, seção 12](acesso.md#12-login-do-discipulador-com-o-nome-e-a-senha-padrão-rifa-082-d37)): `POST /api/sessao/discipulador { "discipulador", "senha" }` (corpo estrito: campo a mais é 400) com o nome do discipulador e a senha padrão, pela mesma regra da célula (`@` + nome normalizado + `1234`; "Pr. Fábio" → `@prfabio1234`): **200** com a sessão do papel `discipulador` (o mesmo corpo e o mesmo cookie do link; sem link). Só abre com `acesso.discipuladores` **e** `acesso.celulas_senha` ligadas. Toda recusa (senha errada, discipulador que não existe, nome ambíguo ou sem letra nem número, usuário desativado, qualquer uma das duas chaves desligada) é o **mesmo** 401 `nao_autenticado`. O mesmo limite de tentativas (no mesmo contador) e o mesmo teto de corpo do `POST /api/sessao`.
-- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`), as ações das regras da campanha (desconsiderar e reconsiderar pedido e remover afiliado, em `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, em `ROTAS_TOKEN_WEBHOOK`, D21) e o modelo do link de vendas (`PUT /api/admin/links-vendas/modelo`, em `ROTAS_LINK_VENDAS`, D24); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` (a visão e, na RIFA-046, os links de vendas das células deles) e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
+- Papéis: `admin` faz tudo, inclusive usuários e links (`/api/admin/usuarios`, `/api/admin/links`, em `ROTAS_ACESSO`), os acessos da hierarquia (`/api/admin/acessos-hierarquia`, em `ROTAS_ACESSO_HIERARQUIA`), a trilha de auditoria (`GET /api/admin/auditoria`, com `papeis: ["admin"]` em `ROTAS`), as ações das regras da campanha (desconsiderar e reconsiderar pedido, remover afiliado e, D41, atribuir à mão a célula de um pedido, em `ROTAS_REGRAS_CAMPANHA`, D20) e o token do webhook da Rifei (`/api/admin/webhook/token`, em `ROTAS_TOKEN_WEBHOOK`, D21) e o modelo do link de vendas (`PUT /api/admin/links-vendas/modelo`, em `ROTAS_LINK_VENDAS`, D24); `coordenacao` faz o resto de `/api/admin/*` e `/api/painel/*` (nas rotas só de admin: 403). `lider`, `discipulador` e `rede` (RIFA-014) entram só em `/api/minha/*` (a visão e, na RIFA-046, os links de vendas das células deles) e levam 403 em toda rota de `/api/admin/*` e `/api/painel/*`.
 - **Todo caminho** sob `/api/admin/*` e `/api/painel/*` exige sessão, exista a rota ou não: sem sessão, 401, nunca 404. `src/worker/protecao.test.ts` confere no app real.
 - **CSRF**: POST, PUT, PATCH e DELETE em `/api/sessao*`, `/api/admin/*` e `/api/painel/*` só com `Origin` igual à do site (ou `Sec-Fetch-Site: same-origin`); senão 403, antes de olhar a sessão. Fora do navegador, mande `-H "Origin: <site>"`.
 - As respostas autenticadas saem com `Cache-Control: no-store`. Toda resposta da API leva `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e a `Content-Security-Policy` do site (`default-src 'self'`, sem inline nem `eval`, `frame-ancestors 'none'`; valor exato em [acesso.md](acesso.md#4-segurança)).
@@ -80,10 +80,11 @@ Toda resposta que não é 2xx tem este corpo:
 | `proibido` | 403 | autenticado, sem permissão (inclusive a coordenação que muda `pedidos`, `acesso` ou `mensagens` no `PUT /api/admin/campanha`, RIFA-042); ou escrita de outra origem (CSRF) |
 | `nao_encontrado` | 404 | recurso do caminho não existe (ou campanha ainda não configurada) |
 | `nome_duplicado` | 409 | nome de rede, discipulador ou célula já usado; `slug_rifei` de outra campanha (`PUT /api/admin/campanha`) |
-| `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados; desativar o próprio acesso ou o último admin; revogar o último link válido de admin; gerar o token do webhook com uma credencial vigente sem `substituir: true` (D21; `detalhes` = `{ "vigente": "tela" \| "segredo" }`, `detalhesTokenWebhookEmUsoSchema`) |
+| `em_uso` | 409 | exclusão de rede com discipuladores, de discipulador com células ou de célula com afiliados ou com venda atribuída à mão (D41); desativar o próprio acesso ou o último admin; revogar o último link válido de admin; gerar o token do webhook com uma credencial vigente sem `substituir: true` (D21; `detalhes` = `{ "vigente": "tela" \| "segredo" }`, `detalhesTokenWebhookEmUsoSchema`) |
 | `acao_desligada` | 409 | a chave da campanha que libera a ação está desligada (D20): desconsiderar ou reconsiderar pedido com `pedidos.desconsiderar` desligada; gerar link de discipulador ou rede com o acesso do papel desligado. `detalhes` = `{ "chave": "pedidos.desconsiderar" \| "acesso.discipuladores" \| "acesso.redes" }` (`detalhesAcaoDesligadaSchema`) |
 | `acesso_desligado` | 403 | discipulador ou rede com o acesso do papel desligado na campanha (D20): no `POST /api/sessao` (link válido) e em todo `/api/minha/*`. `detalhes` = `{ "papel": "discipulador" \| "rede" }` (`detalhesAcessoDesligadoSchema`) |
 | `afiliado_com_pedidos` | 409 | remover afiliado que tem pedido que conta (D20). `detalhes` = `{ "pedidos_que_contam": 3, "pedidos": ["PED1", "PED2", "PED3"] }` (até 20 ids; `detalhesAfiliadoComPedidosSchema`) |
+| `pedido_ja_tem_celula` | 409 | atribuir à mão a célula de um pedido que já tem célula pelo afiliado (RIFA-088, D41: a do afiliado vence) |
 | `corpo_muito_grande` | 413 | corpo acima do limite (abaixo): do webhook (1 MiB, `LIMITE_CORPO_WEBHOOK_BYTES`), do `POST /api/sessao` (4 KiB), das escritas da coordenação (1 MiB) ou da conferência (1 MiB, `LIMITE_CORPO_CONFERENCIA_BYTES`) |
 | `muitas_requisicoes` | 429 | passou do limite de requisições por IP (abaixo), com `Retry-After` em segundos |
 | `erro_interno` | 500 | falha inesperada (ex.: banco) |
@@ -460,6 +461,7 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `pedido.desconsiderar` | `POST /api/admin/pedidos/desconsiderar` (D20) | `pedido:<id>` (só `pedido` se não couber em 64 caracteres: `alvoDoPedidoNaAuditoria`) | o id do pedido em JSON, o status, os bilhetes, a célula (pelo id) e o motivo; da observação, só "observação informada" |
 | `pedido.reconsiderar` | `POST /api/admin/pedidos/reconsiderar` (D20) | idem | o id, o motivo que tinha e quando fora desconsiderado |
 | `afiliado.remover` | `DELETE /api/admin/afiliados/:affiliateId` (D20) | `afiliado:<affiliate_id>` | a célula que ele tinha (pelo id) e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se couberem) |
+| `pedido.atribuir_celula` | `PUT /api/admin/pedidos/:id/celula` que muda a célula atribuída (RIFA-088, D41) | `pedido:<id>` (como a desconsideração) | o id do pedido em JSON e a célula atribuída antes e depois (só ids; "nenhuma"): `Pedido "PED1": célula atribuída à mão nenhuma → 12`; nada do comprador. Repetir não registra |
 | `sessao.entrar_com_senha` | `POST /api/sessao/senha` que abriu sessão (RIFA-064, D29) | `celula:<id>` | "Entrada com a senha padrão da célula: sessão de líder aberta (sem link)"; quem fez é o usuário líder da célula; nunca a senha. A recusa não registra |
 | `sessao.entrar_com_senha_discipulador` | `POST /api/sessao/discipulador` que abriu sessão (RIFA-082, D37) | `discipulador:<id>` | "Entrada com a senha padrão do discipulador: sessão de discipulador aberta (sem link)"; quem fez é o usuário do discipulador; nunca a senha. A recusa não registra |
 | `webhook.gerar_token` | `POST /api/admin/webhook/token` (D21) | `webhook` | o que deixou de valer: nada, o segredo do Worker ou o token anterior (com o `gerado_em` dele); **nunca o token nem o hash**. O 409 não registra |
@@ -942,7 +944,8 @@ Só leitura, na área da coordenação (admin e coordenacao). Nenhum dado pessoa
 Pedidos da campanha ativa, do registrado mais novo para o mais antigo. Consulta: `limite` (1 a 200, padrão 50),
 `antes_de` (cursor opaco, o `proximo` da página anterior; inválido dá 400), `status`, `celula_id` ou
 `sem_celula=true` (não os dois) e `id` (busca exata). Cada item traz status, bilhetes, total em centavos,
-afiliado, a célula resolvida na leitura (D7, `celula_id` e `celula_nome`), DDD, os instantes, `suspeito`,
+afiliado, a célula EFETIVA (`celula_id` e `celula_nome`: a do afiliado, resolvida na leitura, D7; sem ela, a atribuída à
+mão pelo admin, [D41](decisions.md#d41-célula-atribuída-à-mão-a-uma-venda-sem-célula-rifa-088-2026-11-23)) e de onde ela vem (`celula_origem`: `afiliado`, `manual` ou null), DDD, os instantes, `suspeito`,
 `desconsiderado` (D20), `origem` (`webhook` ou `conferencia`: recuperado na conferência pelo CSV, D19) e, **só na
 sessão de admin**, `comprador: { nome, telefone }` (RIFA-076, D36; telefone em E.164, null no que a Rifei não mandou;
 para a coordenação o campo não vem). `totais` traz pedidos, bilhetes e centavos por status com os mesmos filtros, menos a
@@ -960,11 +963,14 @@ paginação e os filtros de status e de desconsiderado, só na primeira página 
   (`registrado_em` não muda). Cursor que a API não emitiu (texto qualquer, JSON fora da forma, instante sem
   milissegundos, id vazio ou com mais de 128 caracteres, forma não canônica): 400 `requisicao_invalida`,
   "Consulta inválida", com o detalhe `{ caminho: ["antes_de"], codigo: "cursor_invalido" }`.
-- **Sem célula**: sem afiliado ou com afiliado ainda não vinculado. **`id`**: exato (maiúsculas contam), sem os
+- **Célula** (`celula_id`) e **sem célula** pela célula efetiva (D41): `celula_id` traz os pedidos dos afiliados da
+  célula e os atribuídos à mão a ela; sem célula = sem afiliado ou com afiliado ainda não vinculado, e sem atribuição.
+  **`id`**: exato (maiúsculas contam), sem os
   espaços das pontas; só acha pedido da campanha ativa e respeita os outros filtros.
 - **Custo no D1** (D10, D16; `src/worker/db/pedidos-webhook-desempenho.test.ts`, com 7 mil pedidos): a página
   lê ~135 linhas (~142 com o cursor); os totais sem filtro, ~1 por pedido (~7 mil), e por isso saem só na
-  primeira página. Com célula, ~3 linhas por pedido da célula; sem célula, ~2,5 por pedido sem célula.
+  primeira página. Com célula, ~4 linhas por pedido da célula (D41: um MULTI-INDEX OR com os atribuídos à mão); sem
+  célula, ~2,5 por pedido sem célula.
 
 ### `GET /api/admin/pedidos/compradores` (**só admin**; RIFA-076, D36)
 
@@ -1068,6 +1074,30 @@ primeira em português). **Sem telefone e sem R$** (D12): o schema estrito não 
 
 - **Erros:** 401; 403 `proibido` (líder, rede e coordenação); 403 `acesso_desligado` com `acesso.discipuladores`
   desligado (D20, como todo `/api/minha/*`); 400; 404 sem campanha ativa.
+
+### `GET /api/minha/compradores?limite=20&antes_de=<cursor>` (`hierarquia`, **só o líder da célula**; RIFA-089, adendo da D38)
+
+As vendas **pagas** que contam (aprovadas, sem os desconsiderados) da célula da sessão, pela célula efetiva (D41: as do
+link da célula e as atribuídas à mão a ela), da mais recente para a mais antiga (`aprovado_em`, empate pelo id). A
+célula vem só da sessão (D12): um id na consulta é ignorado. `limite` de 1 a 50 (padrão 20); `antes_de` é o `proximo`
+da página anterior. Cada item: `nome` (null quando a Rifei não mandou), `aprovado_em` e `bilhetes`. **Sem telefone,
+sem números dos bilhetes e sem R$**: o schema estrito não tem esses campos. `Cache-Control: no-store`.
+
+```json
+{
+  "fuso_horario": "America/Belem",
+  "itens": [
+    { "nome": "Comprador Fictício", "aprovado_em": "2026-11-23T17:03:00.000Z", "bilhetes": 2 },
+    { "nome": null, "aprovado_em": "2026-11-23T16:00:00.000Z", "bilhetes": 1 }
+  ],
+  "proximo": null,
+  "atualizado_em": "2026-11-23T18:00:00.000Z"
+}
+```
+
+- **Erros:** 401; 403 `proibido` (discipulador, rede e coordenação); 403 `acesso_desligado` (D20, como todo
+  `/api/minha/*`); 400 (`limite` fora da faixa; `antes_de` que a API não emitiu, com o detalhe `cursor_invalido`); 404
+  sem campanha ativa.
 
 ## Relatório diário por e-mail e Arrecadado (RIFA-086 e RIFA-087; docs/decisions.md D40)
 
@@ -1190,6 +1220,31 @@ Remove um afiliado de teste, vinculado ou não. **204**.
 - **Erros**: primeiro o login (401; 403 da coordenação, só no DELETE: o `PUT` do mesmo caminho continua da
   coordenação); depois 400 (`:affiliateId` não é inteiro positivo), 404 `nao_encontrado` (o afiliado não existe) e
   409 `afiliado_com_pedidos`.
+
+### `PUT /api/admin/pedidos/:id/celula` (**só admin**; RIFA-088, [D41](decisions.md#d41-célula-atribuída-à-mão-a-uma-venda-sem-célula-rifa-088-2026-11-23))
+
+Atribui à mão a célula de uma venda que chegou sem célula pelo afiliado (sem afiliado, pelo link geral da rifa, ou
+com afiliado ainda não vinculado), para ela contar nessa célula em todo lugar: rankings (o unificado, o por grupo e
+os da /minha), resumo (sai do "sem célula"), metas e percentuais, /minha, bumbo e telão, relatório por e-mail, CSV da
+coordenação, maiores compradores, mapa por DDD com divisão, adesão e os filtros da lista de pedidos.
+
+- **`:id`**: o id do pedido na Rifei, codificado na URL (`encodeURIComponent`), de 1 a 128 caracteres.
+- **Corpo** (`corpoAtribuirCelulaPedidoSchema`): `{ "celula_id": 12 }`; `{ "celula_id": null }` desfaz. Campo a mais
+  ou ausente: 400.
+- **200**: o pedido como um item de `GET /api/admin/pedidos` (`itemPedidoSchema`), com a célula efetiva e
+  `celula_origem` (`manual` depois de atribuir; null depois de desfazer, se o afiliado não tem célula).
+- **A célula do afiliado vence**: só se atribui pedido sem célula pelo afiliado. Se depois o afiliado ganhar célula
+  (vínculo na Adesão ou afiliado tardio, D7), vale a dele; a atribuída fica gravada, mas não conta (desfazer continua
+  valendo). O webhook nunca mexe na atribuição.
+- Qualquer status da campanha ativa (só o aprovado conta nas vendas; a reserva atribuída conta quando for paga).
+- **Repetir não muda nada**: atribuir a mesma célula ou desfazer o que não existe devolve 200 com o pedido como está,
+  sem trilha.
+- **Erros**: primeiro o login, antes de ler o corpo (401 sem sessão; 403 `proibido` da coordenação e da hierarquia);
+  depois, nesta ordem: 400 `requisicao_invalida` (parâmetro ou corpo); 404 `nao_encontrado` (sem campanha ativa, ou
+  pedido fora dela); 409 `pedido_ja_tem_celula` (o pedido tem célula pelo afiliado); 400 `referencia_invalida` (a
+  célula não existe; `detalhes` aponta `celula_id`).
+- Trilha: `pedido.atribuir_celula`, no mesmo lote da gravação. A mudança aparece nas rotas abertas e na visão
+  individual em até 30 s (os caches da D10 e da D14), como uma venda nova.
 
 ---
 

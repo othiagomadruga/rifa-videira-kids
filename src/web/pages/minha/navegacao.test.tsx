@@ -275,12 +275,13 @@ describe("CA1: /minha sem sessão segue o fluxo da coordenação", () => {
       await screen.findByRole("heading", { level: 1, name: "Célula Ágape" }),
     ).toBeInTheDocument();
     await screen.findByRole("heading", { level: 2, name: "Ranking" });
-    // A visão e, uma vez, o link de vendas (RIFA-046).
+    // A visão e, uma vez, o link de vendas (RIFA-046) e quem comprou (RIFA-089, só o líder).
     await waitFor(() =>
       expect(api.chamadas.map((chamada) => chamada.caminho)).toEqual([
         "/api/sessao",
         "/api/minha/visao?periodo=atual",
         "/api/minha/links-vendas",
+        "/api/minha/compradores?limite=20",
       ]),
     );
   });

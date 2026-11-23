@@ -23,6 +23,11 @@ import {
   type PapelComChaveDeAcesso,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
+import {
+  celulaEfetiva,
+  juntarAfiliado,
+  juntarCelulaEfetiva,
+} from "./celula-efetiva";
 import { COLUNAS_ITEM, itemDaLinha, type LinhaPedido } from "./lista-pedidos";
 
 const comoNumero = (valor: boolean) => (valor ? 1 : 0);
@@ -125,12 +130,12 @@ const CONDICAO = {
 const RESUMO = {
   desconsiderar: `'Pedido ' || ?5 || ' desconsiderado (motivo ' || ?6 || '): ' || p.status || ', '
     || p.qtd_bilhetes || CASE p.qtd_bilhetes WHEN 1 THEN ' bilhete' ELSE ' bilhetes' END
-    || ', célula ' || coalesce(a.celula_id, 'nenhuma')
+    || ', célula ' || coalesce(${celulaEfetiva()}, 'nenhuma')
     || CASE WHEN ?7 IS NULL THEN '' ELSE '; observação informada' END`,
   reconsiderar: `'Pedido ' || ?5 || ' volta a contar (era desconsiderado por ' || p.desconsiderado_motivo
     || ' em ' || p.desconsiderado_em || '): ' || p.status || ', '
     || p.qtd_bilhetes || CASE p.qtd_bilhetes WHEN 1 THEN ' bilhete' ELSE ' bilhetes' END
-    || ', célula ' || coalesce(a.celula_id, 'nenhuma')`,
+    || ', célula ' || coalesce(${celulaEfetiva()}, 'nenhuma')`,
 } as const;
 
 const ACAO = {
@@ -152,10 +157,10 @@ const GRAVAR = {
  * No lote, depois do UPDATE: o pedido como um item da lista (lista-pedidos.ts), só se o UPDATE mudou a linha
  * (`changes()` é o do comando anterior do lote, o UPDATE: sem mudança, a consulta nem lê o pedido inteiro).
  */
-const LER_ITEM_SE_MUDOU = `SELECT ${COLUNAS_ITEM}
+export const LER_ITEM_SE_MUDOU = `SELECT ${COLUNAS_ITEM}
   FROM pedidos AS p
-  LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-  LEFT JOIN celulas AS c ON c.id = a.celula_id
+  ${juntarAfiliado()}
+  ${juntarCelulaEfetiva()}
   WHERE p.id = ?1 AND changes() > 0`;
 
 /**
@@ -165,8 +170,8 @@ const LER_ITEM_SE_MUDOU = `SELECT ${COLUNAS_ITEM}
 const LER_CURTA = `SELECT k.chave, ${COLUNAS_ITEM}
   FROM (SELECT id, pedidos_desconsiderar AS chave FROM campanhas WHERE ativa = 1) AS k
   LEFT JOIN pedidos AS p ON p.id = ?1 AND p.campanha_id = k.id
-  LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-  LEFT JOIN celulas AS c ON c.id = a.celula_id`;
+  ${juntarAfiliado()}
+  ${juntarCelulaEfetiva()}`;
 
 export type AcaoDesconsideracao = keyof typeof GRAVAR;
 

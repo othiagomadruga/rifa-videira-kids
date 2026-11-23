@@ -6,10 +6,12 @@ import { z } from "zod";
 import {
   ACOES_AUDITORIA,
   LIMITE_ALVO_AUDITORIA,
+  ORIGENS_CELULA_PEDIDO,
   ROTAS,
   ROTAS_REGRAS_CAMPANHA,
   alvoDoPedidoNaAuditoria,
   consultaPedidosSchema,
+  corpoAtribuirCelulaPedidoSchema,
   corpoDesconsiderarPedidoSchema,
   corpoReconsiderarPedidoSchema,
   desconsideracaoSchema,
@@ -17,6 +19,7 @@ import {
   detalhesAfiliadoComPedidosSchema,
   grupoDesconsideradosSchema,
   itemPedidoSchema,
+  parametroPedidoIdSchema,
   pedidoSuspeitoSchema,
   respostaPedidosSchema,
   type ItemPedido,
@@ -730,7 +733,7 @@ describe("RIFA-031: remover afiliado", () => {
 describe("D20: o catálogo das rotas novas", () => {
   const definicoes = Object.values(ROTAS_REGRAS_CAMPANHA);
 
-  it("desconsiderar, reconsiderar e remover afiliado: só admin, no grupo da coordenação, sob /api/admin", () => {
+  it("desconsiderar, reconsiderar, remover afiliado e atribuir a célula (RIFA-088): só admin, no grupo da coordenação, sob /api/admin", () => {
     expect(
       definicoes.map((rota) => `${rota.metodo} ${rota.caminho}`).sort(),
     ).toEqual(
@@ -738,6 +741,7 @@ describe("D20: o catálogo das rotas novas", () => {
         "POST /api/admin/pedidos/desconsiderar",
         "POST /api/admin/pedidos/reconsiderar",
         "DELETE /api/admin/afiliados/:affiliateId",
+        "PUT /api/admin/pedidos/:id/celula",
       ].sort(),
     );
     for (const rota of definicoes) {
@@ -757,6 +761,33 @@ describe("D20: o catálogo das rotas novas", () => {
       status: 204,
       corpo: null,
     });
+    expect(ROTAS_REGRAS_CAMPANHA.atribuirCelulaPedido.sucesso.corpo).toBe(
+      itemPedidoSchema,
+    );
+  });
+
+  it("RIFA-088 (D41): o corpo da atribuição é só `celula_id` (id ou null), o id do pedido vai na URL e a origem da célula", () => {
+    const corpo = ROTAS_REGRAS_CAMPANHA.atribuirCelulaPedido.corpo;
+    expect(corpo).toBe(corpoAtribuirCelulaPedidoSchema);
+    expect(aceita(corpo, { celula_id: 7 })).toBe(true);
+    expect(aceita(corpo, { celula_id: null })).toBe(true);
+    for (const errado of [
+      {},
+      { celula_id: 0 },
+      { celula_id: -1 },
+      { celula_id: 1.5 },
+      { celula_id: "7" },
+      { celula_id: 7, pedido_id: "X" },
+    ])
+      expect(aceita(corpo, errado)).toBe(false);
+    const parametros = ROTAS_REGRAS_CAMPANHA.atribuirCelulaPedido.parametros;
+    expect(parametros).toBe(parametroPedidoIdSchema);
+    expect(aceita(parametros, { id: "a".repeat(128) })).toBe(true);
+    expect(aceita(parametros, { id: "" })).toBe(false);
+    expect(aceita(parametros, { id: "a".repeat(129) })).toBe(false);
+    expect(ORIGENS_CELULA_PEDIDO).toEqual(["afiliado", "manual"]);
+    expect(STATUS_HTTP_DO_ERRO.pedido_ja_tem_celula).toBe(409);
+    expect(ACOES_AUDITORIA).toContain("pedido.atribuir_celula");
   });
 
   it("não repete rota de nenhum outro catálogo, e o id do pedido vai no corpo (nunca na URL)", () => {

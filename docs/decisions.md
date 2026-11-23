@@ -2169,6 +2169,30 @@ maiores compradores." Contrato em `src/shared/contracts/` (`maiores-compradores.
   o discipulador (o PO não pediu e o contato continua com quem confere o pagamento, D36); contar o reservado (inflaria
   quem reservou e não pagou).
 
+**Adendo (RIFA-089, 2026-11-23): o nome de quem comprou também para o líder da célula.** Pedido do PO: "No painel do
+líder mostra quem comprou a rifa dele e o horário? Se não, pode colocar essa informação." Até aqui a /minha do líder
+não mostrava compradores (o discipulador via só o ranking dos maiores compradores, acima).
+
+- **Rota** `GET /api/minha/compradores?limite=1..50&antes_de=<cursor>` (`ROTAS_QUEM_COMPROU`, contrato em `api.ts`;
+  `src/worker/db/quem-comprou.ts` e `src/worker/routes/minha.ts`), **só o papel do líder** (o discipulador, a rede e a
+  coordenação levam 403 `proibido`; com o acesso da célula desligado, o 403 da D20 como todo `/api/minha/*`). Só a
+  própria célula: o alvo vem só da sessão (D12); um `celula_id` na consulta é descartado.
+- **O que mostra:** as vendas **pagas** (aprovadas) da campanha ativa que contam (sem os desconsiderados, D20) da
+  célula, pela célula **efetiva** (D41: as do link da célula e as atribuídas à mão a ela), da mais recente para a mais
+  antiga (`aprovado_em`, empate pelo id): o nome do comprador (null quando a Rifei não mandou; o site mostra "Comprador
+  sem nome"), o instante (o site mostra "23/11 às 14:03" no fuso da campanha, que vem na resposta) e os bilhetes.
+  **Sem telefone, sem os números dos bilhetes e sem R$** (D12: a /minha não mostra dinheiro); o schema da resposta é
+  estrito. A reserva não paga fica fora (a lista é de quem comprou).
+- **Privacidade:** a mesma razão do discipulador (acima): o nome já é público na página da Rifei, e o líder vê só os
+  compradores da própria célula. O telefone continua só do admin (D36).
+- **Paginação e custo** (D10): 20 por página com o cursor `(aprovado_em, id)` ("Ver mais"); lida do D1 a cada
+  requisição, sem cache, `Cache-Control: no-store`. A página é um MULTI-INDEX OR (os afiliados da célula e os
+  atribuídos), com os `+` que tiram do planejador os índices da campanha e de status: o custo acompanha as vendas da
+  célula, não a campanha. Na tela, a primeira página acompanha a atualização da visão (a cada minuto) enquanto o líder
+  não pediu "Ver mais".
+- **Descartado:** abrir para o discipulador e a rede (fora do pedido: eles já têm os maiores compradores, ou nada) e
+  mostrar o valor pago (a /minha não mostra R$).
+
 ## D39. Grupo do discipulador e ranking por grupo, só na coordenação (RIFA-084; contrato, 2026-11-23)
 
 Pedido do PO (23/11, com a campanha em andamento): "Faz o seguinte: unifica. E embaixo crie uma nova visualização:
@@ -2362,3 +2386,59 @@ de Belém (e não às 19h).
 **Suposições:** a parcial é só de hoje (400 em outro dia); a hora do assunto sai do instante do envio (no cron, 17h); o
 "Arrecadado" acompanha a atualização automática do painel (uma leitura a mais por minuto, só para o admin); sem
 idempotência entre os dois crons (cada um manda o seu).
+
+## D41. Célula atribuída à mão a uma venda sem célula (RIFA-088, 2026-11-23)
+
+Pedido do PO (23/11, com a campanha em andamento): um comprador da célula Bunker comprou pelo link geral da rifa (sem
+afiliado), e a venda não contava para nenhuma célula; ele quer colocar essa venda na Bunker. Até aqui a célula de uma
+venda vinha só do afiliado (`pedidos.affiliate_id` → `afiliados.celula_id`, D7). Contrato em `src/shared/contracts/`
+(`api.ts`: `ORIGENS_CELULA_PEDIDO`, `celula_origem` no `itemPedidoSchema`, `corpoAtribuirCelulaPedidoSchema`,
+`parametroPedidoIdSchema` e a rota em `ROTAS_REGRAS_CAMPANHA`; `erros.ts`: `pedido_ja_tem_celula`; a ação
+`pedido.atribuir_celula` da trilha), migração `0020_celula_atribuida.sql`, API em `src/worker/db/celula-atribuida.ts`
+e `src/worker/routes/pedidos.ts`, a regra em `src/worker/db/celula-efetiva.ts`, tela em `src/web/pages/pedidos/`.
+
+- **Atribuição manual, e não trocar o `affiliate_id`.** O `affiliate_id` é dado da Rifei: o webhook o grava e o
+  reescreve a cada evento que o traz (afiliado tardio, D7), e um afiliado é de uma pessoa, não de uma venda; inventar
+  um afiliado ou mexer no do pedido confundiria a conferência pelo CSV (D19), a adesão e os totais do afiliado. A
+  atribuição fica em colunas nossas do pedido (`celula_atribuida_id`, `_em`, `_por`; nulas juntas), como a
+  desconsideração (D20): o UPSERT do webhook não as lista, então nenhum evento da Rifei as apaga (testado).
+- **Célula efetiva** = a do afiliado do pedido, se houver; senão, a atribuída; senão, sem célula. **A do afiliado
+  vence**: a API só aceita atribuir quando o pedido não tem célula pelo afiliado (sem afiliado, ou afiliado não
+  vinculado), senão 409 `pedido_ja_tem_celula`; se o afiliado ganhar célula depois (vínculo na Adesão ou afiliado
+  tardio), vale a dele, e a atribuída fica gravada sem contar (desfazer continua valendo). Assim um vínculo feito pela
+  coordenação nunca briga com uma escolha à mão, e a venda volta a ter uma regra só.
+- **Em todo lugar que liga venda a célula** vale a efetiva, num lugar só: os trechos de SQL de `db/celula-efetiva.ts`
+  (`coalesce(a.celula_id, p.celula_atribuida_id)`, a origem e o "sem célula pelo afiliado") e a view `vendas_aprovadas`,
+  recriada na 0020. Passaram a usá-la: a leitura do painel (`db/painel.ts`: resumo e "sem célula", metas e percentuais,
+  ranking unificado e por divisão, por grupo, por discipulador e rede, ranking público, bumbo e telão, /minha do líder,
+  do discipulador e da rede, o ranking geral da /minha (RIFA-090), relatório por e-mail, CSV da coordenação e
+  "Arrecadado", que saem dela), a lista de
+  pedidos (item, filtros `celula_id` e `sem_celula`, totais), a leitura do item na desconsideração (e o resumo da trilha
+  dela), os pedidos suspeitos, os bilhetes por número, a planilha de compradores, os maiores compradores (admin e
+  discipulador), o mapa por DDD com divisão e a adesão (pela view). **Ficou como estava** a conferência pelo CSV (D19 e
+  D26): ela compara o relatório da Rifei, em que essa venda aparece sem afiliado, e mostra a célula do afiliado.
+- **Desempenho** (D10): o índice de cobertura do painel foi recriado na 0020 com `celula_atribuida_id` logo depois de
+  `affiliate_id`, para o painel agrupar por afiliado, célula atribuída e dia na ordem do índice (o mesmo plano, 1 linha
+  lida por pedido; `db/painel.test.ts` e o bloco da 0020 em `migrations.test.ts`). O filtro por célula da lista de
+  pedidos virou um MULTI-INDEX OR (os pedidos dos afiliados da célula pelo índice por afiliado e os atribuídos pelo
+  índice parcial novo, `pedidos_por_celula_atribuida`): +1 linha lida por pedido da célula (o afiliado de cada pedido
+  vem pelo JOIN da célula efetiva), ~4 por pedido em vez de ~3 (`db/pedidos-webhook-desempenho.test.ts`). O mapa com
+  divisão confere a atribuída na linha que já lê.
+- **Só o admin** (`PUT /api/admin/pedidos/:id/celula`, `ROTAS_REGRAS_CAMPANHA`, 403 da coordenação e da hierarquia
+  antes de ler o corpo, CSRF como toda escrita): é uma correção de dado de venda, como desconsiderar. A coordenação vê
+  a célula efetiva na lista, com o sinal "atribuída à mão", sem o botão. Não depende de chave na campanha. O id do pedido
+  vai na URL (decisão do SM; o site o codifica com `encodeURIComponent`), diferente do desconsiderar (D20), que o leva
+  no corpo. Qualquer status da campanha ativa: a reserva atribuída passa a contar quando for paga.
+- **Trilha** `pedido.atribuir_celula`, no mesmo lote da gravação e com a mesma condição (D20, OBRIGATÓRIO 2): alvo
+  `pedido:<id>` e o resumo com o id do pedido e as células de antes e de depois, só ids; nada do comprador. Repetir (a
+  mesma célula, ou desfazer o que não existe) não registra.
+- **Hierarquia:** a célula com venda atribuída não é excluída (FK RESTRICT); o 409 `em_uso` diz para remover a
+  atribuição na tela Pedidos.
+- **Descartado:** trocar o `affiliate_id` do pedido (acima); atribuir também o pedido que já tem célula pelo afiliado
+  (duas regras brigando; o caminho certo é trocar o vínculo do afiliado na Adesão, que leva todas as vendas dele);
+  uma view com a célula efetiva para todas as consultas (as consultas otimizadas não usam view: o SQLite não elimina os
+  LEFT JOIN da hierarquia numa consulta agregada, D10).
+
+**Suposições:** desfazer vale mesmo quando o afiliado já tem célula (a atribuída não contava); o pedido desconsiderado
+também pode ser atribuído (não conta de qualquer jeito); a tela troca o item e não recalcula os totais da lista (eles
+seguem os filtros e mudam ao recarregar); na já atribuída, o botão diz "Trocar a célula".

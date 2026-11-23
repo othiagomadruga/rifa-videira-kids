@@ -10,6 +10,11 @@ import {
   type RespostaPedidosSuspeitos,
 } from "../../shared/contracts";
 import type { MotivoSuspeita } from "../lib/plausibilidade";
+import {
+  celulaEfetiva,
+  juntarAfiliado,
+  juntarCelulaEfetiva,
+} from "./celula-efetiva";
 
 export interface MarcacaoSuspeito {
   pedidoId: string;
@@ -78,14 +83,14 @@ export async function listarPedidosSuspeitos(
   const [itens, contagem] = await db.batch([
     db
       .prepare(
-        `SELECT s.pedido_id, p.affiliate_id, a.celula_id, c.nome AS celula_nome,
+        `SELECT s.pedido_id, p.affiliate_id, ${celulaEfetiva()} AS celula_id, c.nome AS celula_nome,
                 s.qtd_bilhetes, s.total_centavos, s.esperado_centavos, s.motivos,
                 p.aprovado_em, s.marcado_em, p.desconsiderado_em, p.desconsiderado_motivo,
                 p.desconsiderado_observacao
          FROM pedidos_suspeitos AS s
          JOIN pedidos AS p ON p.id = s.pedido_id
-         LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-         LEFT JOIN celulas AS c ON c.id = a.celula_id
+         ${juntarAfiliado()}
+         ${juntarCelulaEfetiva()}
          WHERE p.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1)
          ORDER BY s.marcado_em DESC, s.pedido_id
          LIMIT ?1`,

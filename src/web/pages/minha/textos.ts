@@ -550,6 +550,9 @@ export const AJUDA = {
     "O link da Rifei da célula: toda compra feita por ele conta para a meta dela. Mande para quem vai comprar, pelo WhatsApp ou pelo QR code.",
   compradores:
     "Quem mais comprou bilhetes pelas suas células, com a célula de cada um. Serve para agradecer e para lembrar quem pode ajudar de novo. Ex.: em “Esta semana”, só as compras da semana.",
+  // RIFA-089: só o líder da célula.
+  quemComprou:
+    "Cada compra paga que conta para a sua célula, da mais recente para a mais antiga, com o nome de quem comprou, o dia e a hora e os bilhetes. Serve para agradecer. Ex.: quem comprou hoje à tarde.",
 } as const;
 
 // ---------------------------------------------------------------------------------------------------
@@ -561,6 +564,11 @@ export const AJUDA = {
 export const DICAS = {
   dadosDaCurva:
     "Abre uma tabela, dia a dia, com o esperado e o realizado acumulados, em % da meta.",
+  /** RIFA-089: "Ver mais" em Quem comprou. */
+  verMaisCompradores:
+    "Traz as próximas compras, mais antigas, para o fim da lista.",
+  carregandoMais:
+    "Indisponível enquanto as próximas compras chegam. Espere um instante.",
   /** RIFA-083: a troca de janela dos maiores compradores. */
   janelaCompradores: {
     atual:
@@ -592,4 +600,35 @@ export function textoDaJanelaDosCompradores(
 ): string {
   const nome = janela.tipo === "campanha" ? "Campanha inteira" : janela.nome;
   return `${nome} · ${dataCurta(janela.data_inicio)} a ${dataCurta(janela.data_fim)}`;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Quem comprou (RIFA-089, adendo da D38): só o nome, o dia e a hora e os bilhetes (sem telefone e sem dinheiro).
+// ---------------------------------------------------------------------------------------------------
+
+/** Quem comprou sem nome na Rifei. */
+export const COMPRADOR_SEM_NOME = "Comprador sem nome";
+
+const formatosDoFuso = new Map<string, Intl.DateTimeFormat>();
+
+/** "23/11 às 14:03", no fuso da campanha. */
+export function quandoComprou(instante: string, fuso: string): string {
+  let formato = formatosDoFuso.get(fuso);
+  if (!formato) {
+    formato = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: fuso,
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    formatosDoFuso.set(fuso, formato);
+  }
+  const partes = Object.fromEntries(
+    formato
+      .formatToParts(new Date(instante))
+      .map((parte) => [parte.type, parte.value]),
+  );
+  return `${partes.day}/${partes.month} às ${partes.hour}:${partes.minute}`;
 }

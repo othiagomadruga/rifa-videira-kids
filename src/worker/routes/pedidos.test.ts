@@ -203,6 +203,8 @@ describe("ordem e campos", () => {
       affiliate_id: 9101,
       celula_id: celulaA,
       celula_nome: "Célula Ágape dos Pedidos",
+      // RIFA-088 (D41): a célula efetiva vem do afiliado.
+      celula_origem: "afiliado",
       ddd: "91",
       criado_em: "2026-11-24T14:59:00.000Z",
       aprovado_em: "2026-11-24T15:01:00.000Z",
@@ -214,11 +216,12 @@ describe("ordem e campos", () => {
       desconsiderado: null,
       origem: "webhook",
     });
-    // Sem afiliado e afiliado órfão: sem célula.
+    // Sem afiliado e afiliado órfão: sem célula (nem origem).
     expect(porId.get("P-04")).toMatchObject({
       affiliate_id: null,
       celula_id: null,
       celula_nome: null,
+      celula_origem: null,
       ddd: null,
       expirado_em: "2026-11-24T12:30:00.000Z",
       suspeito: false,

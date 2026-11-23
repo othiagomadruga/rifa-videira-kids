@@ -9,6 +9,7 @@ import { vi } from "vitest";
 import {
   respostaMeusLinksVendasSchema,
   respostaMeusMaioresCompradoresSchema,
+  respostaQuemComprouSchema,
   respostaVisaoIndividualSchema,
   type Alvo,
   type CriterioRanking,
@@ -17,8 +18,10 @@ import {
   type PapelHierarquia,
   type ReferenciaCampanha,
   type ItemMeuMaiorComprador,
+  type ItemQuemComprou,
   type RespostaMeusLinksVendas,
   type RespostaMeusMaioresCompradores,
+  type RespostaQuemComprou,
   type RespostaVisaoIndividual,
   type UnidadeMeta,
   type UsuarioSessao,
@@ -925,6 +928,38 @@ export function meusCompradoresDe(
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Quem comprou (RIFA-089, adendo da D38): GET /api/minha/compradores (só o líder da célula)
+// ---------------------------------------------------------------------------------------------------
+
+/** Vendas pagas fictícias da célula, da mais recente para a mais antiga (uma sem nome). */
+export const QUEM_COMPROU: ItemQuemComprou[] = [
+  {
+    nome: "Rita Fictícia",
+    aprovado_em: "2026-12-04T17:03:00.000Z",
+    bilhetes: 4,
+  },
+  { nome: null, aprovado_em: "2026-12-04T12:30:00.000Z", bilhetes: 1 },
+  {
+    nome: "Caio Fictício",
+    aprovado_em: "2026-12-03T22:15:00.000Z",
+    bilhetes: 2,
+  },
+];
+
+/** A resposta de GET /api/minha/compradores, passada pelo schema (estrito). */
+export function quemComprouDe(
+  itens: ItemQuemComprou[] = [],
+  proximo: string | null = null,
+): RespostaQuemComprou {
+  return respostaQuemComprouSchema.parse({
+    fuso_horario: "America/Belem",
+    itens,
+    proximo,
+    atualizado_em: "2026-12-04T18:00:00.000Z",
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------
 // API falsa
 // ---------------------------------------------------------------------------------------------------
 
@@ -944,7 +979,8 @@ type Responder = (chamada: Chamada) => Response | Promise<Response>;
  * fetch simulado: GET /api/minha/visao responde com `visao` (ou com o que `visao(periodo)` devolver),
  * passando pelo schema; GET /api/minha/links-vendas, os `links` (padrão: os do alvo da visão, pelo schema; o
  * líder sem afiliado na visão, sem link); GET /api/minha/maiores-compradores (RIFA-083), o que `compradores(janela)`
- * devolver (padrão: nenhuma compra na janela); POST /api/sessao/sair, 204; GET /api/sessao, a `sessao` (sem ela,
+ * devolver (padrão: nenhuma compra na janela); GET /api/minha/compradores (RIFA-089), o que `quemComprou(antes_de)`
+ * devolver (padrão: nenhuma venda); POST /api/sessao/sair, 204; GET /api/sessao, a `sessao` (sem ela,
  * 401). Outra rota: 404 no formato da API.
  */
 export function criarApiFalsa(
@@ -955,6 +991,9 @@ export function criarApiFalsa(
   links: RespostaMeusLinksVendas | null = null,
   compradores: (janela: string) => RespostaMeusMaioresCompradores = (janela) =>
     meusCompradoresDe(janela),
+  /** RIFA-089: a página de GET /api/minha/compradores pelo cursor (`antes_de`, null na primeira); padrão: nenhuma. */
+  quemComprou: (antesDe: string | null) => RespostaQuemComprou = () =>
+    quemComprouDe(),
 ) {
   const chamadas: Chamada[] = [];
   const marcadas: { metodo: string; caminho: string; responder: Responder }[] =
@@ -998,6 +1037,13 @@ export function criarApiFalsa(
       return respostaJson(
         respostaMeusMaioresCompradoresSchema.parse(
           compradores(url.searchParams.get("janela") ?? "atual"),
+        ),
+      );
+    }
+    if (chamada.metodo === "GET" && url.pathname === "/api/minha/compradores") {
+      return respostaJson(
+        respostaQuemComprouSchema.parse(
+          quemComprou(url.searchParams.get("antes_de")),
         ),
       );
     }

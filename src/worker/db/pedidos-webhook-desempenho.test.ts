@@ -416,19 +416,34 @@ describe("pedidos: o filtro desconsiderado (RIFA-028, D20) e a origem (D16) na l
   });
 });
 
-describe("pedidos: por célula, afiliados CROSS JOIN pedidos (nunca o índice da 0007)", () => {
-  it("lista: os afiliados da célula e os pedidos de cada um, ~3 linhas por pedido da célula (pela campanha, ~3.900)", async () => {
+describe("pedidos: por célula (a efetiva, RIFA-088), um MULTI-INDEX OR: os pedidos dos afiliados da célula e os atribuídos à mão (nunca o índice da 0007)", () => {
+  // Antes da 0020 era `afiliados CROSS JOIN pedidos` (os afiliados da célula, depois os pedidos de cada um pelo índice
+  // por afiliado). O OR com os atribuídos à mão mantém esse caminho num ramo e lê os atribuídos pelo índice parcial da
+  // 0020 no outro: o custo continua acompanhando os pedidos da célula, não a campanha.
+  function conferirPlano(plano: string[]) {
+    expect(plano[0]).toBe("MULTI-INDEX OR");
+    expect(plano).toContain(
+      "SEARCH p USING INDEX pedidos_por_afiliado_status (affiliate_id=?)",
+    );
+    expect(plano).toContain(
+      "SEARCH afiliados USING INDEX afiliados_por_celula (celula_id=?)",
+    );
+    expect(plano).toContain(
+      "SEARCH p USING INDEX pedidos_por_celula_atribuida (celula_atribuida_id=?)",
+    );
+    expect(plano.join("\n")).not.toContain("pedidos_por_campanha_registro");
+  }
+
+  it("lista: os afiliados da célula e os pedidos de cada um, ~4 linhas por pedido da célula (pela campanha, ~3.900)", async () => {
     for (const cursor of [null, meio]) {
       const { plano, linhasLidas, linhas } = await medir(
         comandoListaPedidos({ celula_id: CELULA }, cursor, 50),
       );
       expect(linhas).toBe(51);
-      expect(plano.slice(0, 2)).toEqual([
-        "SEARCH a USING INDEX afiliados_por_celula (celula_id=?)",
-        "SEARCH p USING INDEX pedidos_por_afiliado_status (affiliate_id=?)",
-      ]);
-      expect(plano.join("\n")).not.toContain("pedidos_por_campanha_registro");
-      expect(linhasLidas).toBeLessThanOrEqual(4 * volume.daCelula);
+      conferirPlano(plano);
+      // Medido: ~707 com 175 pedidos da célula (antes da 0020, ~3 por pedido): o afiliado de cada pedido agora vem
+      // pelo LEFT JOIN da célula efetiva (antes era a tabela que guiava o laço), +1 linha por pedido da célula.
+      expect(linhasLidas).toBeLessThanOrEqual(4.5 * volume.daCelula);
     }
   });
 
@@ -436,11 +451,7 @@ describe("pedidos: por célula, afiliados CROSS JOIN pedidos (nunca o índice da
     const { plano, linhasLidas } = await medir(
       comandoTotaisPedidos({ celula_id: CELULA }),
     );
-    expect(plano.slice(0, 2)).toEqual([
-      "SEARCH a USING INDEX afiliados_por_celula (celula_id=?)",
-      "SEARCH p USING INDEX pedidos_por_afiliado_status (affiliate_id=?)",
-    ]);
-    expect(plano.join("\n")).not.toContain("pedidos_por_campanha_registro");
+    conferirPlano(plano);
     expect(linhasLidas).toBeLessThanOrEqual(3 * volume.daCelula);
   });
 });
