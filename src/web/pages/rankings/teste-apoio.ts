@@ -4,14 +4,17 @@
 import { vi } from "vitest";
 import {
   respostaMaioresCompradoresSchema,
+  respostaRankingGruposSchema,
   respostaRankingSchema,
 } from "../../../shared/contracts/api";
 import type {
   Divisao,
+  GrupoRanking,
   ItemRanking,
   JanelaRankingResposta,
   ReferenciaCampanha,
   RespostaRanking,
+  RespostaRankingGrupos,
 } from "../../../shared/contracts/calculos";
 import { ehListaDasRedes, respostaRedes } from "../../test/redes";
 import { respostaJson } from "../../test/renderizar";
@@ -137,6 +140,32 @@ export function respostaRanking(
   });
 }
 
+/**
+ * RIFA-084 (D39): uma resposta do ranking por grupo coerente com a consulta (nível e janela), conferida pelo schema
+ * estrito do contrato. Sem grupos (o padrão da API falsa), a tela não mostra a seção.
+ */
+export function respostaDosGrupos(
+  consulta: URLSearchParams,
+  grupos: GrupoRanking[] = [],
+): RespostaRankingGrupos {
+  return respostaRankingGruposSchema.parse({
+    nivel: consulta.get("nivel") ?? "celula",
+    janela:
+      consulta.get("janela") === "campanha" ? JANELA_CAMPANHA : JANELA_SEMANA_2,
+    criterio: "percentual_meta",
+    unidade: "bilhetes",
+    referencia: REFERENCIA_DIA_12,
+    grupos,
+    atualizado_em: AGORA,
+  });
+}
+
+/** O que a API falsa do ranking por grupo devolve para uma consulta. */
+export type ResponderGrupos = (
+  consulta: URLSearchParams,
+) =>
+  RespostaRankingGrupos | Response | Promise<RespostaRankingGrupos | Response>;
+
 /** O que a API falsa devolve para uma consulta: uma resposta, ou uma Response pronta (erro, por exemplo). */
 export type Responder = (
   consulta: URLSearchParams,
@@ -147,22 +176,34 @@ export type Responder = (
  * (com a consulta); outra rota responde 404 e fica em `inesperadas`. A lista das redes (RIFA-065, D30: a tela
  * pergunta quantas há) responde com `redes` redes (padrão: duas, a tela como sempre foi) e fica em `pedidosDasRedes`.
  * Os maiores compradores (RIFA-083, só o admin pede) respondem sem nenhuma compra na janela pedida e ficam em
- * `pedidosDosCompradores`.
+ * `pedidosDosCompradores`. O ranking por grupo (RIFA-084) responde com `grupos` (padrão: nenhum grupo, a seção não
+ * aparece) e fica em `pedidosDosGrupos`.
  */
 export function simularApiRanking(
   responder: Responder,
-  { redes = 2 }: { redes?: number } = {},
+  {
+    redes = 2,
+    grupos = (consulta) => respostaDosGrupos(consulta),
+  }: { redes?: number; grupos?: ResponderGrupos } = {},
 ) {
   const caminhos: string[] = [];
   const inesperadas: string[] = [];
   const pedidosDasRedes: string[] = [];
   const pedidosDosCompradores: string[] = [];
+  const pedidosDosGrupos: string[] = [];
   const fetchMock = vi.fn(async (entrada: RequestInfo | URL) => {
     const caminho = String(entrada);
     const url = new URL(caminho, "http://localhost");
     if (ehListaDasRedes(caminho)) {
       pedidosDasRedes.push(caminho);
       return respostaRedes(redes);
+    }
+    if (url.pathname === "/api/painel/ranking-grupos") {
+      pedidosDosGrupos.push(caminho);
+      const resultado = await grupos(url.searchParams);
+      return resultado instanceof Response
+        ? resultado
+        : respostaJson(resultado);
     }
     if (url.pathname === "/api/admin/maiores-compradores") {
       pedidosDosCompradores.push(caminho);
@@ -195,6 +236,7 @@ export function simularApiRanking(
     inesperadas,
     pedidosDasRedes,
     pedidosDosCompradores,
+    pedidosDosGrupos,
   };
 }
 

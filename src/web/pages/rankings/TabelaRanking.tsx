@@ -24,22 +24,31 @@ import { ajuda } from "../ajuda-sob-demanda";
 /** Posições até esta ganham destaque (empatados no 3º lugar também). */
 export const POSICOES_EM_DESTAQUE = 3;
 
+/** O que a tabela usa da resposta: a do ranking de todas ou a de um grupo (RIFA-084). */
+export type DadosDaTabela = Pick<
+  RespostaRanking,
+  "nivel" | "divisao" | "por_divisao" | "unidade" | "janela" | "itens"
+>;
+
 type Props = {
-  resposta: RespostaRanking;
+  resposta: DadosDaTabela;
   /** Uma rede só (RIFA-065, D30): o vínculo sem a rede. */
   redeUnica?: boolean;
+  /** RIFA-084 (D39): o nome do grupo, na legenda (o ranking de um grupo). */
+  grupo?: string;
 };
 
 // O ranking da coordenação: tabela no computador (a partir de 48rem) e, no celular, um cartão compacto
 // por linha (posição, nome e situação no topo; a barra do % da meta e realizado/meta embaixo), com o
 // mesmo HTML. Os papéis ARIA explícitos mantêm a semântica de tabela quando o CSS muda o display.
-export function TabelaRanking({ resposta, redeUnica = false }: Props) {
+export function TabelaRanking({ resposta, redeUnica = false, grupo }: Props) {
   const { nivel, divisao, unidade, janela, itens } = resposta;
   const textos = TEXTO_NIVEL[nivel];
-  // Sem ranking por divisão (D27), a legenda não fala de divisão.
+  // Sem ranking por divisão (D27), a legenda não fala de divisão; o de um grupo diz o grupo.
   const legenda = [
     `Ranking: ${textos.plural}`,
     janela.nome,
+    ...(grupo === undefined ? [] : [grupo]),
     ...(resposta.por_divisao === false
       ? []
       : [divisao ? NOMES_DIVISAO[divisao] : "todas as divisões"]),
@@ -156,7 +165,7 @@ function Linha({ item, unidade, vinculo }: PropsLinha) {
  */
 function vinculoDoItem(
   item: ItemRanking,
-  resposta: RespostaRanking,
+  resposta: DadosDaTabela,
   redeUnica: boolean,
 ): string {
   const partes: string[] = [];

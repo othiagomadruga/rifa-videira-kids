@@ -304,6 +304,12 @@ export function TabelaDiscipuladores({
       titulo: "Divisão",
       celula: (item) => <EtiquetaDivisao divisao={item.divisao} />,
     },
+    // RIFA-084 (D39): o grupo do ranking por grupo (escolhido em Editar).
+    {
+      chave: "grupo",
+      titulo: "Grupo",
+      celula: (item) => item.grupo_nome ?? "Sem grupo",
+    },
     {
       chave: "celulas",
       titulo: "Células",

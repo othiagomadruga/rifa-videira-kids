@@ -6,6 +6,7 @@ import type {
   Celula,
   Discipulador,
   Divisao,
+  Grupo,
   Rede,
   RespostaImportarHierarquia,
 } from "../../../shared/contracts";
@@ -78,6 +79,14 @@ export function criarCelula(
   };
 }
 
+/** RIFA-084 (D39): os 4 grupos da migração 0018, como GET /api/admin/grupos devolve. */
+export const GRUPOS: Grupo[] = [
+  { id: 1, nome: "Adultos da manhã", ordem: 1 },
+  { id: 2, nome: "Adultos da noite", ordem: 2 },
+  { id: 3, nome: "Jovens", ordem: 3 },
+  { id: 4, nome: "Adolescentes", ordem: 4 },
+];
+
 /** 2 redes (jovens e adultos), 3 discipuladores e 4 células, com 54 pessoas. Nomes fictícios. */
 export function hierarquiaExemplo(): Hierarquia {
   const jovem = criarRede(1, "Rede Jovem Norte", "jovens", "Pastor Fictício");
@@ -110,11 +119,12 @@ export function hierarquiaExemplo(): Hierarquia {
         lider_telefone: "(91) 90000-0004",
       }),
     ],
+    grupos: GRUPOS,
   };
 }
 
 export function hierarquiaVazia(): Hierarquia {
-  return { redes: [], discipuladores: [], celulas: [] };
+  return { redes: [], discipuladores: [], celulas: [], grupos: GRUPOS };
 }
 
 /** Corpo de erro no formato da API. */
@@ -189,6 +199,9 @@ export function criarApiFalsa(inicial: Hierarquia = hierarquiaExemplo()) {
   function responderComoAApi({ metodo, caminho, corpo }: Chamada): Response {
     const [, , , recurso, textoId] = caminho.split("/");
     const id = Number(textoId);
+    if (recurso === "grupos" && metodo === "GET" && textoId === undefined) {
+      return respostaJson({ itens: structuredClone(dados.grupos) });
+    }
     if (
       recurso === "redes" ||
       recurso === "discipuladores" ||
@@ -221,6 +234,10 @@ export function criarApiFalsa(inicial: Hierarquia = hierarquiaExemplo()) {
         discipulador.rede_nome = rede.nome;
         discipulador.divisao = rede.divisao;
       }
+      // RIFA-084 (D39): o nome do grupo vem do grupo, como no LEFT JOIN da API.
+      discipulador.grupo_nome =
+        dados.grupos.find((grupo) => grupo.id === discipulador.grupo_id)
+          ?.nome ?? null;
     }
     for (const celula of dados.celulas) {
       const discipulador = dados.discipuladores.find(

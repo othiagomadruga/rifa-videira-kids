@@ -72,6 +72,7 @@ import { DICAS as DICAS_RANKINGS } from "../rankings/textos";
 import {
   item,
   respostaDaConsulta,
+  respostaDosGrupos,
   simularApiRanking,
 } from "../rankings/teste-apoio";
 import { DICAS as DICAS_TRILHA } from "../trilha/textos";
@@ -559,6 +560,33 @@ describe("Rankings", () => {
       textoDaDica(screen.getByRole("button", { name: "Campanha toda" })),
     ).toBe(DICAS_RANKINGS.janelaCompradores.campanha);
     await conferirDicas(17 + 3);
+  });
+});
+
+describe("Rankings: o ranking por grupo (RIFA-084)", () => {
+  it("a seção 'Ranking por grupo' tem o '?' do título; o nome de cada grupo não pede ajuda (é o nome de um item)", async () => {
+    const celula = item({
+      posicao: 1,
+      id: 1,
+      nome: "Célula Ficticia 01",
+      realizado: 7,
+      meta: 29,
+      esperado: 5,
+    });
+    simularApiRanking((consulta) => respostaDaConsulta(consulta, [celula]), {
+      grupos: (consulta) =>
+        respostaDosGrupos(consulta, [
+          { id: 2, nome: "Adultos da noite", ordem: 2, itens: [celula] },
+        ]),
+    });
+    renderizarRota("/coordenacao/rankings");
+    await screen.findByRole(
+      "region",
+      { name: "Ranking por grupo" },
+      { timeout: 5000 },
+    );
+    expect(screen.getAllByRole("table")).toHaveLength(2);
+    await conferirDicas(17);
   });
 });
 

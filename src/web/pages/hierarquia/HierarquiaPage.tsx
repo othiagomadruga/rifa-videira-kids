@@ -274,6 +274,7 @@ export function HierarquiaPage() {
             <DialogoDiscipulador
               item={edicao.item}
               redes={dados.redes}
+              grupos={dados.grupos}
               redeUnica={redeUnica}
               aoFechar={() => setEdicao(null)}
               aoSalvar={(salvo) => aoSalvar(edicao, salvo.nome)}

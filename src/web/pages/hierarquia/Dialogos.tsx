@@ -9,6 +9,7 @@ import type {
   Celula,
   Discipulador,
   Divisao,
+  Grupo,
   Rede,
 } from "../../../shared/contracts";
 import {
@@ -348,28 +349,37 @@ function gruposPorRede(discipuladores: readonly Discipulador[]) {
 // Discipulador
 // ---------------------------------------------------------------------------------------------------
 
-const CAMPOS_DISCIPULADOR = ["nome", "rede_id"] as const;
+const CAMPOS_DISCIPULADOR = ["nome", "rede_id", "grupo_id"] as const;
 type CampoDiscipulador = (typeof CAMPOS_DISCIPULADOR)[number];
 
 const ROTULOS_DISCIPULADOR: Record<CampoDiscipulador, string> = {
   nome: "Nome do discipulador",
   rede_id: "Rede",
+  grupo_id: "Grupo",
 };
 
 const ERROS_API_DISCIPULADOR: Record<CampoDiscipulador, string> = {
   nome: `Confira o nome: obrigatório, até ${LIMITES.nome} caracteres.`,
   rede_id: "Escolha uma rede da lista.",
+  grupo_id: "Escolha um grupo da lista ou “Sem grupo”.",
 };
+
+/** O valor do seletor "Grupo" ("" = sem grupo) no corpo do PUT (null = sem grupo). */
+const grupoDoCampo = (valor: string): number | null =>
+  valor === "" ? null : Number(valor);
 
 export function DialogoDiscipulador({
   item: discipulador,
   redes,
+  grupos,
   redeUnica,
   aoFechar,
   aoSalvar,
   aoDesatualizar,
 }: PropsEdicao<Discipulador> & {
   redes: readonly Rede[];
+  /** RIFA-084 (D39): os grupos do seletor "Grupo", na ordem da API. */
+  grupos: readonly Grupo[];
   /** Uma rede só (RIFA-065, D30): sem o campo da rede (o discipulador fica nela; o PUT manda a mesma). */
   redeUnica: boolean;
 }) {
@@ -381,7 +391,12 @@ export function DialogoDiscipulador({
     aoDesatualizar,
   });
   const { valores, mudar } = useValores<CampoDiscipulador>(
-    { nome: discipulador.nome, rede_id: String(discipulador.rede_id) },
+    {
+      nome: discipulador.nome,
+      rede_id: String(discipulador.rede_id),
+      grupo_id:
+        discipulador.grupo_id === null ? "" : String(discipulador.grupo_id),
+    },
     formulario.limparErro,
   );
   const { erros } = formulario;
@@ -392,12 +407,14 @@ export function DialogoDiscipulador({
       erros: {
         nome: validarNome(valores.nome, "Informe o nome do discipulador."),
         rede_id: valores.rede_id ? undefined : "Escolha a rede.",
+        grupo_id: undefined,
       },
       nome: valores.nome.trim(),
       salvar: () =>
         salvarDiscipulador(discipulador.id, {
           rede_id: Number(valores.rede_id),
           nome: valores.nome.trim(),
+          grupo_id: grupoDoCampo(valores.grupo_id),
         }),
       aoSalvar,
     });
@@ -444,6 +461,23 @@ export function DialogoDiscipulador({
               ))}
           </Select>
         )}
+
+        <Select
+          ajuda={ajuda("grupoDoDiscipulador")}
+          rotulo={ROTULOS_DISCIPULADOR.grupo_id}
+          name="grupo_id"
+          dica="As células dele entram no ranking por grupo dos Rankings."
+          value={valores.grupo_id}
+          onChange={mudar("grupo_id")}
+          erro={erros.grupo_id}
+        >
+          <option value="">Sem grupo</option>
+          {grupos.map((grupo) => (
+            <option key={grupo.id} value={grupo.id}>
+              {grupo.nome}
+            </option>
+          ))}
+        </Select>
       </div>
     </Dialogo>
   );

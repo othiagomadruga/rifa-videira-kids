@@ -387,3 +387,40 @@
   color: var(--cor-texto-suave);
   white-space: nowrap;
 }
+
+/*
+ * RIFA-084 (D39): o ranking por grupo do discipulador, embaixo do ranking de todas. Cada grupo é um bloco com o nome
+ * e a mesma tabela (no celular, os cartões compactos), um embaixo do outro: a tabela de cada grupo usa a largura toda.
+ */
+.rankings-grupos {
+  display: grid;
+  gap: var(--espaco-4);
+  margin-top: var(--espaco-4);
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+  min-width: 0;
+}
+
+.rankings-grupos__titulo {
+  font-size: var(--texto-xl);
+}
+
+.rankings-grupos__descricao {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.rankings-grupos__grupo {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.rankings-grupos__nome {
+  font-size: var(--texto-lg);
+  overflow-wrap: anywhere;
+}
+
+.rankings-grupos__vazio {
+  color: var(--cor-texto-suave);
+}

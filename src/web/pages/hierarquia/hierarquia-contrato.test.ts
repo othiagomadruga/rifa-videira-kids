@@ -29,6 +29,7 @@ describe("cópias do contrato na tela da hierarquia", () => {
       redes: ROTAS.listarRedes.caminho,
       discipuladores: ROTAS.listarDiscipuladores.caminho,
       celulas: ROTAS.listarCelulas.caminho,
+      grupos: ROTAS.listarGrupos.caminho,
       importar: ROTAS.importarHierarquia.caminho,
     });
     expect(ROTAS.atualizarCelula.caminho).toBe(`${CAMINHOS.celulas}/:id`);

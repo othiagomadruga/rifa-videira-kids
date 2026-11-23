@@ -49,6 +49,8 @@ export const AJUDA = {
     "Como o discipulador aparece nas tabelas, no ranking dos discipuladores e no link pessoal dele. Ex.: Carlos Lima. Não pode repetir o de outro.",
   redeDoDiscipulador:
     "A rede a que o discipulador pertence. Mude quando ele passar para outra rede: ele e as células dele vão junto e ficam com a divisão da rede nova.",
+  grupoDoDiscipulador:
+    "O grupo do discipulador no ranking por grupo dos Rankings: as células dele disputam com as do mesmo grupo. Ex.: Adultos da noite. Sem grupo, ele fica só no ranking de todas.",
   nomeRede:
     "Como a rede aparece nas tabelas, no ranking das redes e no painel. Ex.: Rede Jovem. Não pode repetir o de outra rede.",
   divisaoRede:

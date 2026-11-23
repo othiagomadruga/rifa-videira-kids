@@ -7,17 +7,20 @@ import type {
   CelulaEntrada,
   Discipulador,
   DiscipuladorEntrada,
+  Grupo,
   Rede,
   RedeEntrada,
   RespostaImportarHierarquia,
 } from "../../../shared/contracts";
 import { api } from "../../lib/api";
 
-/** ROTAS.listarRedes / listarDiscipuladores / listarCelulas / importarHierarquia (.caminho). */
+/** ROTAS.listarRedes / listarDiscipuladores / listarCelulas / listarGrupos / importarHierarquia (.caminho). */
 export const CAMINHOS = {
   redes: "/api/admin/redes",
   discipuladores: "/api/admin/discipuladores",
   celulas: "/api/admin/celulas",
+  // RIFA-084 (D39): os grupos do discipulador (para o seletor "Grupo").
+  grupos: "/api/admin/grupos",
   importar: "/api/admin/hierarquia/importar",
 } as const;
 
@@ -33,26 +36,31 @@ export type Hierarquia = {
   redes: Rede[];
   discipuladores: Discipulador[];
   celulas: Celula[];
+  /** RIFA-084 (D39): os grupos do discipulador, na ordem da API (a dos blocos do ranking por grupo). */
+  grupos: Grupo[];
 };
 
-export type Recurso = keyof Hierarquia;
+/** O que se edita e exclui na tela (os grupos vêm prontos da migração, sem CRUD). */
+export type Recurso = "redes" | "discipuladores" | "celulas";
 
 type Lista<T> = { itens: T[] };
 type Opcoes = { signal?: AbortSignal };
 
-/** As três listas de uma vez (são pequenas: 36 células). */
+/** As listas de uma vez (são pequenas: 36 células e 4 grupos). */
 export async function carregarHierarquia(
   opcoes: Opcoes = {},
 ): Promise<Hierarquia> {
-  const [redes, discipuladores, celulas] = await Promise.all([
+  const [redes, discipuladores, celulas, grupos] = await Promise.all([
     api.get<Lista<Rede>>(CAMINHOS.redes, opcoes),
     api.get<Lista<Discipulador>>(CAMINHOS.discipuladores, opcoes),
     api.get<Lista<Celula>>(CAMINHOS.celulas, opcoes),
+    api.get<Lista<Grupo>>(CAMINHOS.grupos, opcoes),
   ]);
   return {
     redes: redes.itens,
     discipuladores: discipuladores.itens,
     celulas: celulas.itens,
+    grupos: grupos.itens,
   };
 }
 

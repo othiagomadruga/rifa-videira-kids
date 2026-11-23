@@ -8,7 +8,9 @@ import {
   ROTAS,
   ROTAS_MAIORES_COMPRADORES,
   SITUACOES_RITMO,
+  NIVEIS_RANKING_GRUPOS,
   consultaMaioresCompradoresSchema,
+  consultaRankingGruposSchema,
   consultaRankingPublicoSchema,
   consultaRankingSchema,
 } from "../../../shared/contracts/api";
@@ -25,7 +27,13 @@ import {
   CAMINHO_MAIORES_COMPRADORES,
   caminhoDosMaioresCompradores,
 } from "./maiores-compradores-api";
-import { CAMINHO_RANKING, caminhoDoRanking } from "./rankings-api";
+import {
+  CAMINHO_RANKING,
+  CAMINHO_RANKING_GRUPOS,
+  caminhoDoRanking,
+  caminhoDoRankingGrupos,
+  nivelDosGrupos,
+} from "./rankings-api";
 import {
   TEXTO_COLUNA_VALORES,
   TEXTO_CRITERIO,
@@ -51,6 +59,23 @@ describe("cópias do contrato dos rankings no site", () => {
           consultaDe(caminhoDosMaioresCompradores(janela)),
         ),
       ).toEqual({ janela, limite: 10 });
+  });
+
+  it("o ranking por grupo (RIFA-084): o caminho, da coordenação, e a consulta de cada aba e janela passa no schema", () => {
+    const rota = ROTAS.painelRankingGrupos;
+    expect(CAMINHO_RANKING_GRUPOS).toBe(rota.caminho);
+    expect(rota.grupo).toBe("coordenacao");
+    expect(NIVEIS.map(nivelDosGrupos)).toEqual([
+      ...NIVEIS_RANKING_GRUPOS,
+      null,
+    ]);
+    for (const nivel of NIVEIS_RANKING_GRUPOS)
+      for (const janela of JANELAS)
+        expect(
+          consultaRankingGruposSchema.parse(
+            consultaDe(caminhoDoRankingGrupos(nivel, janela)),
+          ),
+        ).toEqual({ nivel, janela });
   });
 
   it("caminhos das rotas", () => {

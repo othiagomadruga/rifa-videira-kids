@@ -22,6 +22,7 @@ import {
   JANELA_SEMANA_2,
   item,
   respostaDaConsulta,
+  respostaDosGrupos,
 } from "./teste-apoio";
 
 const CAMINHO = "/api/admin/maiores-compradores";
@@ -76,6 +77,9 @@ function simularApi(
     const caminho = String(entrada);
     const url = new URL(caminho, "http://localhost");
     if (ehListaDasRedes(caminho)) return respostaRedes(2);
+    // RIFA-084: o ranking por grupo, sem grupo (a seção não aparece).
+    if (url.pathname === "/api/painel/ranking-grupos")
+      return respostaJson(respostaDosGrupos(url.searchParams));
     if (url.pathname === CAMINHO) {
       pedidos.push(`${url.pathname}${url.search}`);
       const janela = url.searchParams.get("janela");

@@ -10,6 +10,7 @@ import { lerCss } from "../../test/indisponivel";
 import { renderizarRota } from "../../test/renderizar";
 import {
   criarApiFalsa,
+  hierarquiaExemplo,
   hierarquiaVazia,
   respostaErro,
   type ApiFalsa,
@@ -299,6 +300,7 @@ describe("CA1: visão da hierarquia", () => {
         "Carla Discipuladora",
         "Rede Adulta Sul",
         "Adultos",
+        "Sem grupo",
         "2",
         "33",
         "Editar Carla Discipuladora | Excluir Carla Discipuladora",
@@ -307,6 +309,7 @@ describe("CA1: visão da hierarquia", () => {
         "Ana Discipuladora",
         "Rede Jovem Norte",
         "Jovens",
+        "Sem grupo",
         "1",
         "12",
         "Editar Ana Discipuladora | Excluir Ana Discipuladora",
@@ -315,6 +318,7 @@ describe("CA1: visão da hierarquia", () => {
         "Bruno Discipulador",
         "Rede Jovem Norte",
         "Jovens",
+        "Sem grupo",
         "1",
         "9",
         "Editar Bruno Discipulador | Excluir Bruno Discipulador",
@@ -840,7 +844,7 @@ describe("CA2: editar e excluir", () => {
     );
     expect(
       api.chamadasA("PUT", "/api/admin/discipuladores/12")[0]?.corpo,
-    ).toEqual({ rede_id: 2, nome: "Bruno Discipulador" });
+    ).toEqual({ rede_id: 2, nome: "Bruno Discipulador", grupo_id: null });
     await waitFor(() =>
       expect(
         linhasDe("Discipuladores").find(
@@ -848,6 +852,94 @@ describe("CA2: editar e excluir", () => {
         )?.[1],
       ).toBe("Rede Adulta Sul"),
     );
+  });
+});
+
+describe("RIFA-084 (D39): o grupo do discipulador", () => {
+  it("a lista dos grupos vem com a hierarquia; a coluna Grupo mostra o grupo ou “Sem grupo”", async () => {
+    const dados = hierarquiaExemplo();
+    dados.discipuladores[2] = {
+      ...dados.discipuladores[2],
+      grupo_id: 1,
+      grupo_nome: "Adultos da manhã",
+    };
+    const { api } = await abrirTela(criarApiFalsa(dados));
+    expect(api.chamadasA("GET", "/api/admin/grupos")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Discipuladores" }));
+    expect(
+      within(tabela("Discipuladores"))
+        .getAllByRole("columnheader")
+        .map((cabecalho) => cabecalho.textContent),
+    ).toContain("Grupo");
+    expect(
+      linhasDe("Discipuladores").map((linha) => [linha[0], linha[3]]),
+    ).toEqual([
+      ["Carla Discipuladora", "Adultos da manhã"],
+      ["Ana Discipuladora", "Sem grupo"],
+      ["Bruno Discipulador", "Sem grupo"],
+    ]);
+  });
+
+  it("Editar: o seletor Grupo, com “Sem grupo” e os 4 grupos na ordem; salvar manda o grupo escolhido ou null", async () => {
+    const { api } = await abrirTela();
+    fireEvent.click(screen.getByRole("tab", { name: "Discipuladores" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Editar Ana Discipuladora" }),
+    );
+    let dialogo = within(
+      screen.getByRole("dialog", { name: "Editar discipulador" }),
+    );
+    const grupo = dialogo.getByLabelText("Grupo");
+    expect(grupo).toHaveValue("");
+    expect(
+      within(grupo)
+        .getAllByRole("option")
+        .map((opcao) => opcao.textContent),
+    ).toEqual([
+      "Sem grupo",
+      "Adultos da manhã",
+      "Adultos da noite",
+      "Jovens",
+      "Adolescentes",
+    ]);
+    fireEvent.change(grupo, { target: { value: "2" } });
+    fireEvent.click(dialogo.getByRole("button", { name: "Salvar" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(api.chamadasA("PUT", "/api/admin/discipuladores/11")).toEqual([
+      expect.objectContaining({
+        corpo: { rede_id: 1, nome: "Ana Discipuladora", grupo_id: 2 },
+      }),
+    ]);
+    await waitFor(() =>
+      expect(
+        linhasDe("Discipuladores").find(
+          (linha) => linha[0] === "Ana Discipuladora",
+        )?.[3],
+      ).toBe("Adultos da noite"),
+    );
+
+    // Abrir de novo: o seletor vem no grupo gravado; "Sem grupo" manda null.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Editar Ana Discipuladora" }),
+    );
+    dialogo = within(
+      screen.getByRole("dialog", { name: "Editar discipulador" }),
+    );
+    expect(dialogo.getByLabelText("Grupo")).toHaveValue("2");
+    fireEvent.change(dialogo.getByLabelText("Grupo"), {
+      target: { value: "" },
+    });
+    fireEvent.click(dialogo.getByRole("button", { name: "Salvar" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(
+      api.chamadasA("PUT", "/api/admin/discipuladores/11")[1]?.corpo,
+    ).toEqual({ rede_id: 1, nome: "Ana Discipuladora", grupo_id: null });
   });
 });
 

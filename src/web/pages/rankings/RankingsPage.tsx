@@ -34,9 +34,11 @@ import {
   caminhoDoRanking,
   carregarRanking,
   ehSemCampanha,
+  nivelDosGrupos,
   type FiltrosRanking,
 } from "./rankings-api";
 import { MaioresCompradores } from "./MaioresCompradores";
+import { RankingPorGrupo } from "./RankingPorGrupo";
 import { TabelaRanking } from "./TabelaRanking";
 import {
   DICAS,
@@ -64,7 +66,8 @@ type Carga = { caminho: string; resultado: Resultado };
 // (período atual ou campanha inteira), com posição (empates dividem a posição), % da meta, realizado e
 // meta na unidade da campanha e situação. Os filtros ficam na URL; cada mudança consulta a API de novo. Com uma rede
 // só (RIFA-065, D30), sem o nível das redes nem a rede no vínculo: o ranking não diz quantas redes há (com o filtro de
-// divisão, ele traz só parte delas), então a tela pergunta à API, se o site ainda não souber.
+// divisão, ele traz só parte delas), então a tela pergunta à API, se o site ainda não souber. Embaixo do ranking, o
+// ranking por grupo do discipulador (RIFA-084, D39), no mesmo nível e na mesma janela.
 export function RankingsPage() {
   const [parametros, setParametros] = useSearchParams();
   // RIFA-083 (D38): os maiores compradores, com telefone e R$, só para o admin (D36).
@@ -109,6 +112,7 @@ export function RankingsPage() {
 
   // Até chegar a resposta dos filtros atuais, a tela mostra o carregando (nunca a lista de outro filtro).
   const resultado = carga?.caminho === caminho ? carga.resultado : null;
+  const nivelGrupos = nivelDosGrupos(filtros.nivel);
 
   function mudarFiltros(mudanca: Partial<FiltrosRanking>) {
     setParametros(parametrosDosFiltros({ ...filtros, ...mudanca }), {
@@ -168,6 +172,14 @@ export function RankingsPage() {
         redeUnica={redes.unica}
         aoTentarDeNovo={tentarDeNovo}
       />
+      {/* RIFA-084 (D39): embaixo do ranking de todas, o mesmo ranking por grupo do discipulador (não na aba Redes). */}
+      {resultado?.tipo === "ok" && nivelGrupos !== null && (
+        <RankingPorGrupo
+          nivel={nivelGrupos}
+          periodo={filtros.periodo}
+          redeUnica={redes.unica}
+        />
+      )}
     </div>
   );
 

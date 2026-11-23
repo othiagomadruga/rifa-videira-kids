@@ -10,6 +10,8 @@ export const AJUDA = {
     "Quanto da própria meta cada um já vendeu nesta janela. Ex.: 80% = vendeu 8 de cada 10 bilhetes da meta. É o que deixa comparar células de tamanhos diferentes.",
   maioresCompradores:
     "Quem mais comprou bilhetes, com o telefone para agradecer ou tirar uma dúvida. Só o administrador vê esta lista. Ex.: em “Esta semana”, só as compras da semana.",
+  rankingPorGrupo:
+    "A mesma disputa, separada pelo grupo do discipulador (adultos da manhã, adultos da noite, jovens e adolescentes): a posição é dentro do grupo. O grupo de cada discipulador se escolhe na Hierarquia.",
   colunaSituacao:
     "Se está em dia com o que se esperava vender até ontem ou se ficou para trás. Ex.: “Em dia” quer dizer que vendeu pelo menos o esperado até ontem.",
 } as const;

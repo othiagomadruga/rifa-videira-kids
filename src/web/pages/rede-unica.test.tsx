@@ -27,6 +27,7 @@ import {
 } from "./campanha/teste-apoio";
 import { DICAS_REDE_UNICA as DICAS_HIERARQUIA } from "./hierarquia/textos";
 import {
+  GRUPOS,
   criarApiFalsa as criarApiHierarquia,
   criarCelula,
   criarDiscipulador,
@@ -135,6 +136,7 @@ function hierarquiaDeUmaRede() {
       criarCelula(103, "Célula Ágape", carla),
       criarCelula(104, "Célula Vida", carla),
     ],
+    grupos: GRUPOS,
   };
 }
 
@@ -202,7 +204,14 @@ describe("Hierarquia (admin)", () => {
       within(screen.getByRole("table", { name: "Discipuladores" }))
         .getAllByRole("columnheader")
         .map((titulo) => titulo.textContent),
-    ).toEqual(["Discipulador", "Divisão", "Células", "Pessoas", "Ações"]);
+    ).toEqual([
+      "Discipulador",
+      "Divisão",
+      "Grupo",
+      "Células",
+      "Pessoas",
+      "Ações",
+    ]);
   });
 
   it("os diálogos: a célula escolhe o discipulador numa lista só; o discipulador fica sem o campo da rede e salva na mesma", async () => {
@@ -242,7 +251,7 @@ describe("Hierarquia (admin)", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(
       api.chamadasA("PUT", "/api/admin/discipuladores/12")[0]?.corpo,
-    ).toEqual({ rede_id: 7, nome: "Bruno Discipulador Novo" });
+    ).toEqual({ rede_id: 7, nome: "Bruno Discipulador Novo", grupo_id: null });
   });
 });
 

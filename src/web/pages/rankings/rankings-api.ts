@@ -1,4 +1,4 @@
-// Chamada da tela de rankings: GET /api/painel/ranking (coordenação, com valores). Contrato em
+// Chamadas da tela de rankings: GET /api/painel/ranking e GET /api/painel/ranking-grupos (coordenação, com valores). Contrato em
 // docs/api.md e regras em docs/regras-de-calculo.md (R8: níveis, janela, critério, empates e situação).
 //
 // Do contrato vêm os tipos e os valores puros de calculos.ts (módulo sem zod) e, de api.ts, só o TIPO do
@@ -9,7 +9,9 @@ import type {
   Divisao,
   JanelaRanking,
   NivelRanking,
+  NivelRankingGrupos,
   RespostaRanking,
+  RespostaRankingGrupos,
 } from "../../../shared/contracts/calculos";
 import { ErroApi, api } from "../../lib/api";
 
@@ -40,6 +42,31 @@ export function carregarRanking(
   opcoes: { signal?: AbortSignal } = {},
 ): Promise<RespostaRanking> {
   return api.get<RespostaRanking>(caminho, opcoes);
+}
+
+// RIFA-084 (D39): o ranking por grupo do discipulador, só da coordenação.
+export const CAMINHO_RANKING_GRUPOS: (typeof ROTAS)["painelRankingGrupos"]["caminho"] =
+  "/api/painel/ranking-grupos";
+
+/** O nível do ranking por grupo para a aba atual: célula ou discipulador; na aba Redes, nenhum (a seção some). */
+export function nivelDosGrupos(nivel: NivelRanking): NivelRankingGrupos | null {
+  return nivel === "rede" ? null : nivel;
+}
+
+/** "/api/painel/ranking-grupos?nivel=celula&janela=atual". */
+export function caminhoDoRankingGrupos(
+  nivel: NivelRankingGrupos,
+  janela: JanelaRanking,
+): string {
+  const consulta = new URLSearchParams({ nivel, janela });
+  return `${CAMINHO_RANKING_GRUPOS}?${consulta.toString()}`;
+}
+
+export function carregarRankingGrupos(
+  caminho: string,
+  opcoes: { signal?: AbortSignal } = {},
+): Promise<RespostaRankingGrupos> {
+  return api.get<RespostaRankingGrupos>(caminho, opcoes);
 }
 
 /** 404 nao_encontrado: não há campanha ativa (o ranking não existe ainda). */
