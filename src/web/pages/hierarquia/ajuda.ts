@@ -35,6 +35,8 @@ export const AJUDA = {
     "Como a célula aparece nas tabelas, nos rankings e no telão. Ex.: Célula Betel. Não pode repetir o nome de outra célula.",
   discipuladorDaCelula:
     "Quem acompanha esta célula. Ao trocar, a célula passa a contar, com as vendas de antes, para o novo discipulador e a rede dele.",
+  grupoDaCelula:
+    "O grupo da célula no ranking por grupo dos Rankings. Normalmente é o do discipulador; escolha outro só se a célula for de outro grupo. Ex.: uma célula de Adolescentes de um discipulador de Jovens.",
   qtdPessoas:
     "Quantas pessoas a célula tem hoje. É a base da meta: com 5 bilhetes por pessoa, uma célula de 8 pessoas tem meta de 40. Com a meta total dividida, mudar aqui muda a das outras células.",
   lider:

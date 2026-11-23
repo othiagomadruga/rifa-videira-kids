@@ -10,6 +10,7 @@ import { lerCss } from "../../test/indisponivel";
 import { renderizarRota } from "../../test/renderizar";
 import {
   criarApiFalsa,
+  criarCelula,
   hierarquiaExemplo,
   hierarquiaVazia,
   respostaErro,
@@ -114,6 +115,7 @@ describe("CA1: visão da hierarquia", () => {
       "Discipulador",
       "Rede",
       "Divisão",
+      "Grupo",
       "Pessoas",
       "Líder",
       "Contato",
@@ -126,6 +128,7 @@ describe("CA1: visão da hierarquia", () => {
         "Carla Discipuladora",
         "Rede Adulta Sul",
         "Adultos",
+        "Sem grupo",
         "15",
         "Nina Líder",
         "nina@example.com",
@@ -136,6 +139,7 @@ describe("CA1: visão da hierarquia", () => {
         "Carla Discipuladora",
         "Rede Adulta Sul",
         "Adultos",
+        "Sem grupo",
         "18",
         "Otávio Líder",
         "(91) 90000-0004",
@@ -146,6 +150,7 @@ describe("CA1: visão da hierarquia", () => {
         "Ana Discipuladora",
         "Rede Jovem Norte",
         "Jovens",
+        "Sem grupo",
         "12",
         "Lucas Líder",
         "lucas@example.com(91) 90000-0001",
@@ -156,6 +161,7 @@ describe("CA1: visão da hierarquia", () => {
         "Bruno Discipulador",
         "Rede Jovem Norte",
         "Jovens",
+        "Sem grupo",
         "9",
         "Marta Líder",
         "Não informado",
@@ -442,6 +448,8 @@ describe("CA2: editar e excluir", () => {
           lider_nome: "Lucas Líder",
           lider_email: null,
           lider_telefone: "(91) 90000-0001",
+          // RIFA-085: o seletor "Grupo" ficou em "Igual ao do discipulador".
+          grupo_id: null,
         },
       },
     ]);
@@ -457,10 +465,11 @@ describe("CA2: editar e excluir", () => {
     // As tabelas são lidas de novo.
     await waitFor(() => expect(indicador("Total de pessoas")).toBe("56"));
     const linha = linhasDe("Células").find((l) => l[0] === "Célula Esperança");
-    expect(linha?.slice(1, 5)).toEqual([
+    expect(linha?.slice(1, 6)).toEqual([
       "Bruno Discipulador",
       "Rede Jovem Norte",
       "Jovens",
+      "Sem grupo",
       "14",
     ]);
   });
@@ -940,6 +949,126 @@ describe("RIFA-084 (D39): o grupo do discipulador", () => {
     expect(
       api.chamadasA("PUT", "/api/admin/discipuladores/11")[1]?.corpo,
     ).toEqual({ rede_id: 1, nome: "Ana Discipuladora", grupo_id: null });
+  });
+});
+
+describe("RIFA-085 (D39, adendo): o grupo próprio da célula", () => {
+  /** A Carla (das células Ágape e Vida) no grupo "Adultos da noite"; a Vida com o grupo próprio "Adolescentes". */
+  function hierarquiaComGrupos() {
+    const dados = hierarquiaExemplo();
+    const carla = {
+      ...dados.discipuladores[2],
+      grupo_id: 2,
+      grupo_nome: "Adultos da noite",
+    };
+    dados.discipuladores[2] = carla;
+    dados.celulas[2] = criarCelula(103, "Célula Ágape", carla, {
+      qtd_pessoas: 15,
+      lider_nome: "Nina Líder",
+      lider_email: "nina@example.com",
+    });
+    dados.celulas[3] = criarCelula(104, "Célula Vida", carla, {
+      qtd_pessoas: 18,
+      lider_nome: "Otávio Líder",
+      lider_telefone: "(91) 90000-0004",
+      grupo_id: 4,
+      grupo_nome: "Adolescentes",
+    });
+    return dados;
+  }
+
+  /** O nome da célula e a coluna Grupo (a 5ª). */
+  const grupos = () => linhasDe("Células").map((linha) => [linha[0], linha[4]]);
+
+  it("a coluna Grupo mostra o grupo que vale: o do discipulador, o próprio com a marca “(da célula)” ou “Sem grupo”", async () => {
+    await abrirTela(criarApiFalsa(hierarquiaComGrupos()));
+    expect(grupos()).toEqual([
+      ["Célula Ágape", "Adultos da noite"],
+      ["Célula Vida", "Adolescentes (da célula)"],
+      ["Célula Esperança", "Sem grupo"],
+      ["Célula Fé", "Sem grupo"],
+    ]);
+    // A marca é discreta (o texto suave e menor), só na célula de grupo próprio.
+    const marcas = within(tabela("Células")).getAllByText("(da célula)");
+    expect(marcas).toHaveLength(1);
+    expect(marcas[0]).toHaveClass("hierarquia-suave");
+    expect(marcas[0].closest(".hierarquia-grupo-proprio")).toHaveTextContent(
+      "Adolescentes (da célula)",
+    );
+  });
+
+  it("Editar: o seletor Grupo com “Igual ao do discipulador (<grupo>)” e os 4 grupos; o rótulo segue o discipulador escolhido", async () => {
+    await abrirTela(criarApiFalsa(hierarquiaComGrupos()));
+    acionar(screen.getByRole("button", { name: "Editar Célula Ágape" }));
+    const dialogo = within(
+      screen.getByRole("dialog", { name: "Editar célula" }),
+    );
+    const grupo = dialogo.getByLabelText("Grupo");
+    expect(grupo).toHaveValue("");
+    const opcoes = () =>
+      within(grupo)
+        .getAllByRole("option")
+        .map((opcao) => opcao.textContent);
+    expect(opcoes()).toEqual([
+      "Igual ao do discipulador (Adultos da noite)",
+      "Adultos da manhã",
+      "Adultos da noite",
+      "Jovens",
+      "Adolescentes",
+    ]);
+    // Trocar o discipulador (a Ana, sem grupo) muda o que a célula herdaria.
+    fireEvent.change(dialogo.getByLabelText("Discipulador"), {
+      target: { value: "11" },
+    });
+    expect(opcoes()[0]).toBe("Igual ao do discipulador (sem grupo)");
+    expect(grupo).toHaveValue("");
+  });
+
+  it("salvar manda o grupo escolhido; “Igual ao do discipulador” manda null; a coluna muda junto", async () => {
+    const { api } = await abrirTela(criarApiFalsa(hierarquiaComGrupos()));
+    acionar(screen.getByRole("button", { name: "Editar Célula Ágape" }));
+    let dialogo = within(screen.getByRole("dialog", { name: "Editar célula" }));
+    fireEvent.change(dialogo.getByLabelText("Grupo"), {
+      target: { value: "4" },
+    });
+    fireEvent.click(dialogo.getByRole("button", { name: "Salvar" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(api.chamadasA("PUT", "/api/admin/celulas/103")).toEqual([
+      expect.objectContaining({
+        corpo: {
+          discipulador_id: 13,
+          nome: "Célula Ágape",
+          qtd_pessoas: 15,
+          lider_nome: "Nina Líder",
+          lider_email: "nina@example.com",
+          lider_telefone: null,
+          grupo_id: 4,
+        },
+      }),
+    ]);
+    await waitFor(() =>
+      expect(grupos()[0]).toEqual(["Célula Ágape", "Adolescentes (da célula)"]),
+    );
+
+    // A Vida (com grupo próprio) abre no grupo gravado; “Igual ao do discipulador” manda null e ela volta a herdar.
+    acionar(screen.getByRole("button", { name: "Editar Célula Vida" }));
+    dialogo = within(screen.getByRole("dialog", { name: "Editar célula" }));
+    expect(dialogo.getByLabelText("Grupo")).toHaveValue("4");
+    fireEvent.change(dialogo.getByLabelText("Grupo"), {
+      target: { value: "" },
+    });
+    fireEvent.click(dialogo.getByRole("button", { name: "Salvar" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(
+      api.chamadasA("PUT", "/api/admin/celulas/104")[0]?.corpo,
+    ).toMatchObject({ grupo_id: null });
+    await waitFor(() =>
+      expect(grupos()[1]).toEqual(["Célula Vida", "Adultos da noite"]),
+    );
   });
 });
 

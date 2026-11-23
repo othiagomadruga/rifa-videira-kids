@@ -105,6 +105,13 @@ function ErroDoEnvio({ mensagem }: { mensagem: string | null }) {
   ) : null;
 }
 
+/**
+ * O valor do seletor "Grupo" no corpo do PUT: "" vira null (no discipulador, sem grupo; na célula, RIFA-085, igual ao
+ * do discipulador).
+ */
+const grupoDoCampo = (valor: string): number | null =>
+  valor === "" ? null : Number(valor);
+
 // ---------------------------------------------------------------------------------------------------
 // Célula
 // ---------------------------------------------------------------------------------------------------
@@ -112,6 +119,7 @@ function ErroDoEnvio({ mensagem }: { mensagem: string | null }) {
 const CAMPOS_CELULA = [
   "nome",
   "discipulador_id",
+  "grupo_id",
   "qtd_pessoas",
   "lider_nome",
   "lider_email",
@@ -122,6 +130,7 @@ type CampoCelula = (typeof CAMPOS_CELULA)[number];
 const ROTULOS_CELULA: Record<CampoCelula, string> = {
   nome: "Nome da célula",
   discipulador_id: "Discipulador",
+  grupo_id: "Grupo",
   qtd_pessoas: "Nº de pessoas",
   lider_nome: "Nome do líder",
   lider_email: "E-mail do líder",
@@ -131,6 +140,7 @@ const ROTULOS_CELULA: Record<CampoCelula, string> = {
 const ERROS_API_CELULA: Record<CampoCelula, string> = {
   nome: `Confira o nome: obrigatório, até ${LIMITES.nome} caracteres.`,
   discipulador_id: "Escolha um discipulador da lista.",
+  grupo_id: "Escolha um grupo da lista ou “Igual ao do discipulador”.",
   qtd_pessoas: `Use um número inteiro de ${LIMITES.pessoasMin} a ${LIMITES.pessoasMax}.`,
   lider_nome: `Confira o nome do líder: obrigatório, até ${LIMITES.nome} caracteres.`,
   lider_email: "Confira o e-mail (ou deixe em branco).",
@@ -140,12 +150,15 @@ const ERROS_API_CELULA: Record<CampoCelula, string> = {
 export function DialogoCelula({
   item: celula,
   discipuladores,
+  grupos,
   redeUnica,
   aoFechar,
   aoSalvar,
   aoDesatualizar,
 }: PropsEdicao<Celula> & {
   discipuladores: readonly Discipulador[];
+  /** RIFA-085: os grupos do seletor "Grupo" (o próprio da célula), na ordem da API. */
+  grupos: readonly Grupo[];
   /** Uma rede só (RIFA-065, D30): os discipuladores numa lista só, sem o nome da rede. */
   redeUnica: boolean;
 }) {
@@ -160,6 +173,7 @@ export function DialogoCelula({
     {
       nome: celula.nome,
       discipulador_id: String(celula.discipulador_id),
+      grupo_id: celula.grupo_id === null ? "" : String(celula.grupo_id),
       qtd_pessoas: String(celula.qtd_pessoas),
       lider_nome: celula.lider_nome,
       lider_email: celula.lider_email ?? "",
@@ -168,6 +182,10 @@ export function DialogoCelula({
     formulario.limparErro,
   );
   const { erros } = formulario;
+  // RIFA-085: o grupo que a célula herda é o do discipulador escolhido AGORA no formulário (muda junto com ele).
+  const grupoDoDiscipulador =
+    discipuladores.find((item) => String(item.id) === valores.discipulador_id)
+      ?.grupo_nome ?? null;
 
   function enviar(evento: FormEvent<HTMLFormElement>) {
     void formulario.enviar({
@@ -177,6 +195,7 @@ export function DialogoCelula({
         discipulador_id: valores.discipulador_id
           ? undefined
           : "Escolha o discipulador.",
+        grupo_id: undefined,
         qtd_pessoas: validarPessoas(valores.qtd_pessoas),
         lider_nome: validarNome(valores.lider_nome, "Informe o nome do líder."),
         lider_email: validarEmail(valores.lider_email),
@@ -194,6 +213,7 @@ export function DialogoCelula({
           lider_nome: valores.lider_nome.trim(),
           lider_email: textoOuNulo(valores.lider_email),
           lider_telefone: textoOuNulo(valores.lider_telefone),
+          grupo_id: grupoDoCampo(valores.grupo_id),
         }),
       aoSalvar,
     });
@@ -255,6 +275,25 @@ export function DialogoCelula({
                   ))}
                 </optgroup>
               ))}
+        </Select>
+
+        <Select
+          ajuda={ajuda("grupoDaCelula")}
+          rotulo={ROTULOS_CELULA.grupo_id}
+          name="grupo_id"
+          dica="Só para o ranking por grupo dos Rankings. Mude só se a célula for de outro grupo."
+          value={valores.grupo_id}
+          onChange={mudar("grupo_id")}
+          erro={erros.grupo_id}
+        >
+          <option value="">
+            {`Igual ao do discipulador (${grupoDoDiscipulador ?? "sem grupo"})`}
+          </option>
+          {grupos.map((grupo) => (
+            <option key={grupo.id} value={grupo.id}>
+              {grupo.nome}
+            </option>
+          ))}
         </Select>
 
         <Input
@@ -363,10 +402,6 @@ const ERROS_API_DISCIPULADOR: Record<CampoDiscipulador, string> = {
   rede_id: "Escolha uma rede da lista.",
   grupo_id: "Escolha um grupo da lista ou “Sem grupo”.",
 };
-
-/** O valor do seletor "Grupo" ("" = sem grupo) no corpo do PUT (null = sem grupo). */
-const grupoDoCampo = (valor: string): number | null =>
-  valor === "" ? null : Number(valor);
 
 export function DialogoDiscipulador({
   item: discipulador,

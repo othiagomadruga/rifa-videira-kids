@@ -264,6 +264,7 @@ export function HierarquiaPage() {
             <DialogoCelula
               item={edicao.item}
               discipuladores={dados.discipuladores}
+              grupos={dados.grupos}
               redeUnica={redeUnica}
               aoFechar={() => setEdicao(null)}
               aoSalvar={(salva) => aoSalvar(edicao, salva.nome)}

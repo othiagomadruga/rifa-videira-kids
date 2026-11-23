@@ -224,7 +224,8 @@ describe("Hierarquia", () => {
     await abrir();
     acionar(botao(/^Editar Célula Esperança/));
     await screen.findByRole("dialog", { name: "Editar célula" });
-    await conferirDicas(9);
+    // RIFA-085: + o seletor "Grupo" (o grupo próprio da célula), com a dica e a ajuda do rótulo.
+    await conferirDicas(10);
     fireEvent.click(botao("Cancelar"));
 
     acionar(screen.getByRole("tab", { name: "Discipuladores" }));

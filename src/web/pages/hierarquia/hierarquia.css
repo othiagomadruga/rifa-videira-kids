@@ -45,6 +45,12 @@
   color: var(--cor-texto-suave);
 }
 
+/* RIFA-085: o grupo próprio da célula, com a marca "(da célula)" menor e suave ao lado do nome. */
+.hierarquia-grupo-proprio .hierarquia-suave {
+  font-size: var(--texto-sm);
+  white-space: nowrap;
+}
+
 /* Botões de cada linha (Editar e Excluir): altura de toque inteira, menos espaço dos lados. */
 .hierarquia-acoes {
   display: inline-flex;

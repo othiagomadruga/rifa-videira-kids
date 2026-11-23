@@ -263,6 +263,15 @@ export function criarApiFalsa(inicial: Hierarquia = hierarquiaExemplo()) {
         celula.rede_nome = discipulador.rede_nome;
         celula.divisao = discipulador.divisao;
       }
+      // RIFA-085: o grupo próprio e o efetivo (o próprio; senão, o do discipulador), como nos LEFT JOINs da API.
+      celula.grupo_nome =
+        dados.grupos.find((grupo) => grupo.id === celula.grupo_id)?.nome ??
+        null;
+      celula.grupo_efetivo_id =
+        celula.grupo_id ?? discipulador?.grupo_id ?? null;
+      celula.grupo_efetivo_nome =
+        dados.grupos.find((grupo) => grupo.id === celula.grupo_efetivo_id)
+          ?.nome ?? null;
     }
   }
 

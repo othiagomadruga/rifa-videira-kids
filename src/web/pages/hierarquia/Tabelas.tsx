@@ -136,6 +136,12 @@ export function TabelaCelulas({
       titulo: "Divisão",
       celula: (celula) => <EtiquetaDivisao divisao={celula.divisao} />,
     },
+    // RIFA-085: o grupo que vale no ranking por grupo (o próprio da célula ou o do discipulador).
+    {
+      chave: "grupo",
+      titulo: "Grupo",
+      celula: (celula) => <GrupoDaCelula celula={celula} />,
+    },
     {
       chave: "pessoas",
       titulo: "Pessoas",
@@ -466,6 +472,21 @@ function somarPessoasPor(
     totais.set(id, (totais.get(id) ?? 0) + celula.qtd_pessoas);
   }
   return totais;
+}
+
+/**
+ * O grupo efetivo da célula (RIFA-085): o do discipulador, ou o próprio da célula, com a marca discreta "(da célula)"
+ * (escolhido no Editar da célula, vale no lugar do grupo do discipulador).
+ */
+function GrupoDaCelula({ celula }: { celula: Celula }) {
+  if (celula.grupo_efetivo_nome === null) return "Sem grupo";
+  if (celula.grupo_id === null) return celula.grupo_efetivo_nome;
+  return (
+    <span className="hierarquia-grupo-proprio">
+      {celula.grupo_efetivo_nome}{" "}
+      <span className="hierarquia-suave">(da célula)</span>
+    </span>
+  );
 }
 
 function EtiquetaDivisao({ divisao }: { divisao: Divisao }) {
