@@ -63,6 +63,7 @@ import {
   respostaMeusMaioresCompradoresSchema,
   respostaPainelResumoSchema,
   respostaPedidosSuspeitosSchema,
+  respostaRankingGruposSchema,
   respostaRankingPublicoSchema,
   respostaRankingSchema,
   respostaSessaoSchema,
@@ -2338,6 +2339,129 @@ describe("k) RIFA-082 (D37): login do discipulador com a senha padrão, só na /
       ).toBe(200);
     },
   );
+});
+
+describe("l) RIFA-084 (D39): o ranking por grupo e os grupos só da coordenação; o grupo do discipulador atrás do login", () => {
+  const CAMINHOS_FECHADOS = [
+    "/api/painel/ranking-grupos",
+    "/api/painel/ranking-grupos?janela=campanha&nivel=discipulador",
+    // O login vem antes da validação: a consulta inválida sem cookie também é 401.
+    "/api/painel/ranking-grupos?nivel=rede",
+    "/api/admin/grupos",
+  ];
+  const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
+
+  beforeAll(async () => {
+    // A hierarquia do painel (a célula 1, o discipulador 10 e a rede 1), o discipulador 10 num grupo e uma sessão de
+    // cada papel da hierarquia.
+    await semearCenario();
+    await env.DB.prepare(
+      "UPDATE discipuladores SET grupo_id = 1 WHERE id = 10",
+    ).run();
+    sessoes.lider = await cabecalhosDeSessaoDaHierarquia("lider", 1);
+    sessoes.discipulador = await cabecalhosDeSessaoDaHierarquia(
+      "discipulador",
+      10,
+    );
+    sessoes.rede = await cabecalhosDeSessaoDaHierarquia("rede", 1);
+  });
+
+  it("as rotas estão no contrato, na coordenação (admin e coordenacao), e montadas no app; nenhuma rota aberta de grupo", () => {
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho}`,
+    );
+    for (const rota of [ROTAS.painelRankingGrupos, ROTAS.listarGrupos]) {
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+      expect(
+        ROTAS_DA_COORDENACAO.find(
+          (item) =>
+            item.metodo === rota.metodo && item.caminho === rota.caminho,
+        )?.papeis,
+      ).toEqual(["admin", "coordenacao"]);
+    }
+    // Decisão do PO (23/11): o ranking aberto não muda; nada de grupo nas rotas abertas.
+    expect(
+      registradas.filter(
+        (rota) => rota.includes("/api/publico/") && rota.includes("grupo"),
+      ),
+    ).toEqual([]);
+    expect(
+      Object.values(ROTAS)
+        .filter((rota) => rota.grupo === "aberto")
+        .map((rota) => rota.caminho)
+        .filter((caminho) => caminho.includes("grupo")),
+    ).toEqual([]);
+  });
+
+  it.each(CAMINHOS_FECHADOS)(
+    "sem cookie: GET %s → 401, sem nenhum dado",
+    async (caminho) => {
+      const res = await requisitar("GET", caminho);
+      const texto = await res.text();
+      expect({ status: res.status, corpo: JSON.parse(texto) }).toEqual({
+        status: 401,
+        corpo: {
+          erro: { codigo: "nao_autenticado", mensagem: expect.any(String) },
+        },
+      });
+      expect(texto).not.toMatch(/Adultos|centavos|Célula/);
+      esperarCabecalhosDeSeguranca(res);
+    },
+  );
+
+  it("líder, discipulador e rede: 403 proibido nas duas rotas e no PUT do discipulador com o grupo", async () => {
+    for (const papel of ["lider", "discipulador", "rede"] as const) {
+      for (const caminho of CAMINHOS_FECHADOS) {
+        const res = await requisitar("GET", caminho, sessoes[papel]);
+        expect({ papel, caminho, status: res.status }).toEqual({
+          papel,
+          caminho,
+          status: 403,
+        });
+        expect(erroApiSchema.parse(await res.json()).erro.codigo).toBe(
+          "proibido",
+        );
+      }
+      const put = await requisitar(
+        "PUT",
+        "/api/admin/discipuladores/10",
+        sessoes[papel],
+        JSON.stringify({ rede_id: 1, nome: "Discipulador Abel", grupo_id: 2 }),
+      );
+      expect({ papel, status: put.status }).toEqual({ papel, status: 403 });
+    }
+    // Sem cookie (da mesma origem, para passar do CSRF), o PUT também não passa (401), e nada mudou.
+    const semSessao = await requisitar(
+      "PUT",
+      "/api/admin/discipuladores/10",
+      { Origin: ORIGEM },
+      JSON.stringify({ rede_id: 1, nome: "Discipulador Abel", grupo_id: 2 }),
+    );
+    expect(semSessao.status).toBe(401);
+    expect(
+      await env.DB.prepare(
+        "SELECT grupo_id FROM discipuladores WHERE id = 10",
+      ).first(),
+    ).toEqual({ grupo_id: 1 });
+  });
+
+  it("admin e coordenação: 200 com o ranking por grupo, no-store (contraprova)", async () => {
+    for (const cabecalhos of [admin, coordenacao]) {
+      const res = await requisitar(
+        "GET",
+        "/api/painel/ranking-grupos",
+        cabecalhos,
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      const corpo = respostaRankingGruposSchema.parse(await res.json());
+      expect(corpo.grupos.map((grupo) => grupo.nome)).toEqual([
+        "Adultos da manhã",
+      ]);
+      const grupos = await requisitar("GET", "/api/admin/grupos", cabecalhos);
+      expect(grupos.status).toBe(200);
+    }
+  });
 });
 
 describe("formato único de erro em todas as partes montadas", () => {

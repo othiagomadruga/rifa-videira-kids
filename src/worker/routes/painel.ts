@@ -3,6 +3,9 @@
  * - GET /api/painel/resumo: meta do dia, ritmo do período e da campanha, projeção, curva e vendas de um
  *   escopo (campanha, divisão, rede, discipulador ou célula);
  * - GET /api/painel/ranking: todas as instâncias do nível, com valores, situação e vizinhos;
+ * - GET /api/painel/ranking-grupos (RIFA-084, D39): o mesmo ranking separado pelo grupo do discipulador (adultos da
+ *   manhã, adultos da noite, jovens, adolescentes), com a posição dentro do grupo; só a coordenação (o ranking aberto
+ *   não muda). Os grupos vão no mesmo lote da leitura (db/grupos.ts): uma ida a mais, nenhuma;
  * - GET /api/painel/mapa-ddd (RIFA-015, D17): as vendas da janela por UF e DDD do comprador, mais exterior e sem
  *   DDD. Mesma janela e mesmo filtro de venda do painel (R6): db/mapa-ddd.ts lê, lib/mapa-ddd.ts monta;
  * - GET /api/painel/relatorio (RIFA-038, D23): o relatório da campanha para baixar, um CSV por tipo, das MESMAS
@@ -20,10 +23,12 @@ import {
   ROTAS,
   ROTAS_RELATORIO,
   cabecalhosDoRelatorio,
+  montarRankingGruposPainel,
   montarRankingPainel,
   montarResumoPainel,
 } from "../../shared/contracts";
 import { lerBilhete, lerBilhetes } from "../db/bilhetes";
+import { comandosDosGrupos, gruposDoRanking } from "../db/grupos";
 import { lerMapaDdd } from "../db/mapa-ddd";
 import {
   lerEntradaDoCalculo,
@@ -107,6 +112,34 @@ export function criarPainel(
         return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
       return c.json(
         montadores.montarRankingPainel(lido.entrada, consulta, lido.agora),
+      );
+    },
+  );
+
+  // Ranking por grupo (RIFA-084, D39): 400 consulta inválida; 404 sem campanha ativa; 200 (`grupos: []` sem grupo com
+  // células). A resposta passa pelo schema estrito do contrato antes de sair (um campo a mais vira 500).
+  painel.get(
+    local(ROTAS.painelRankingGrupos.caminho),
+    validarConsulta(ROTAS.painelRankingGrupos.consulta),
+    async (c) => {
+      const consulta = c.req.valid("query");
+      const lido = await lerEntradaDoCalculo(
+        c.env.DB,
+        relogio,
+        {},
+        comandosDosGrupos,
+      );
+      if (!lido.ok)
+        return responderErro(c, lido.codigo, lido.mensagem, lido.detalhes);
+      return c.json(
+        ROTAS.painelRankingGrupos.sucesso.corpo.parse(
+          montarRankingGruposPainel(
+            lido.entrada,
+            gruposDoRanking(lido.extras[0]),
+            consulta,
+            lido.agora,
+          ),
+        ),
       );
     },
   );

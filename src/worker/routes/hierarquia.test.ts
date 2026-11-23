@@ -472,6 +472,9 @@ describe("CA1: discipuladores", () => {
       nome: "Discipulador João",
       rede_nome: "Rede Adulta Leste",
       divisao: "adultos",
+      // RIFA-084 (D39): sem o campo no POST, sem grupo.
+      grupo_id: null,
+      grupo_nome: null,
       criado_em: qualquerTexto,
       atualizado_em: qualquerTexto,
     });
@@ -592,6 +595,116 @@ describe("CA1: discipuladores", () => {
       404,
       "nao_encontrado",
     );
+  });
+});
+
+describe("RIFA-084 (D39): o grupo do discipulador", () => {
+  const GRUPOS = [
+    { id: 1, nome: "Adultos da manhã", ordem: 1 },
+    { id: 2, nome: "Adultos da noite", ordem: 2 },
+    { id: 3, nome: "Jovens", ordem: 3 },
+    { id: 4, nome: "Adolescentes", ordem: 4 },
+  ];
+
+  it("GET /api/admin/grupos lista os 4 grupos da migração 0018, na ordem", async () => {
+    const resposta = await chamar("GET", "/api/admin/grupos");
+    expect(resposta).toEqual({ status: 200, corpo: { itens: GRUPOS } });
+  });
+
+  it("POST com grupo grava e devolve o grupo; PUT troca, tira (null) e, sem o campo, mantém o gravado", async () => {
+    const rede = await criarRede({ nome: "Rede dos Grupos" });
+    const criado = await chamar("POST", "/api/admin/discipuladores", {
+      rede_id: rede.id,
+      nome: "Discipulador com Grupo",
+      grupo_id: 2,
+    });
+    expect(criado.status).toBe(201);
+    const discipulador = conforme(discipuladorSchema, criado.corpo);
+    expect(discipulador).toMatchObject({
+      grupo_id: 2,
+      grupo_nome: "Adultos da noite",
+    });
+
+    const salvar = async (corpo: Record<string, unknown>) => {
+      const resposta = await chamar(
+        "PUT",
+        `/api/admin/discipuladores/${discipulador.id}`,
+        { rede_id: rede.id, nome: "Discipulador com Grupo", ...corpo },
+      );
+      expect(resposta.status).toBe(200);
+      const { grupo_id, grupo_nome } = conforme(
+        discipuladorSchema,
+        resposta.corpo,
+      );
+      return { grupo_id, grupo_nome };
+    };
+
+    expect(await salvar({ grupo_id: 4 })).toEqual({
+      grupo_id: 4,
+      grupo_nome: "Adolescentes",
+    });
+    // Sem o campo (uma aba antiga do site, que só renomeia): o grupo gravado fica.
+    expect(await salvar({})).toEqual({
+      grupo_id: 4,
+      grupo_nome: "Adolescentes",
+    });
+    expect(await salvar({ grupo_id: null })).toEqual({
+      grupo_id: null,
+      grupo_nome: null,
+    });
+    expect(await salvar({})).toEqual({ grupo_id: null, grupo_nome: null });
+    expect(
+      (await listarDiscipuladores()).map(({ nome, grupo_id }) => ({
+        nome,
+        grupo_id,
+      })),
+    ).toEqual([{ nome: "Discipulador com Grupo", grupo_id: null }]);
+  });
+
+  it("grupo que não existe: 400 referencia_invalida no POST e no PUT, e nada muda", async () => {
+    const rede = await criarRede();
+    const discipulador = await criarDiscipulador(rede.id, "Discipulador A");
+
+    for (const resposta of [
+      await chamar("POST", "/api/admin/discipuladores", {
+        rede_id: rede.id,
+        nome: "Discipulador Novo",
+        grupo_id: 999,
+      }),
+      await chamar("PUT", `/api/admin/discipuladores/${discipulador.id}`, {
+        rede_id: rede.id,
+        nome: "Discipulador A",
+        grupo_id: 999,
+      }),
+    ]) {
+      const erro = esperarErro(resposta, 400, "referencia_invalida");
+      expect(erro.detalhes).toEqual([
+        {
+          caminho: ["grupo_id"],
+          codigo: "referencia_invalida",
+          mensagem: "O grupo 999 não existe",
+        },
+      ]);
+    }
+    expect(await listarDiscipuladores()).toEqual([discipulador]);
+  });
+
+  it("grupo_id fora do contrato (texto, zero): 400 requisicao_invalida no campo", async () => {
+    const rede = await criarRede();
+    for (const grupo_id of ["1", 0]) {
+      const erro = esperarErro(
+        await chamar("POST", "/api/admin/discipuladores", {
+          rede_id: rede.id,
+          nome: "Discipulador Novo",
+          grupo_id,
+        }),
+        400,
+        "requisicao_invalida",
+      );
+      expect(erro.detalhes).toEqual([
+        expect.objectContaining({ caminho: ["grupo_id"] }),
+      ]);
+    }
   });
 });
 

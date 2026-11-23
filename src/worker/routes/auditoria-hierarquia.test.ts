@@ -514,3 +514,78 @@ describe("CA5: remover o alvo com acesso registra o acesso removido junto", () =
     },
   );
 });
+
+describe("RIFA-084 (D39): o grupo do discipulador na trilha", () => {
+  it("grupo_id entra no resumo como os outros ids (antes e depois); sem grupo, o resumo da criação e da remoção fica como antes", async () => {
+    const rede = await criar("/api/admin/redes", {
+      nome: "Rede do Grupo na Trilha",
+      divisao: "adultos",
+    });
+    const criacao = await comTrilha("POST", "/api/admin/discipuladores", {
+      rede_id: rede,
+      nome: "Discipulador do Grupo",
+      grupo_id: 1,
+    });
+    expect(criacao.status).toBe(201);
+    const discipulador = criacao.corpo!.id;
+    onTestFinished(async () => {
+      await requisitar(
+        "DELETE",
+        `/api/admin/discipuladores/${discipulador}`,
+        coordenacao,
+      );
+      await requisitar("DELETE", `/api/admin/redes/${rede}`, coordenacao);
+    });
+
+    const troca = await comTrilha(
+      "PUT",
+      `/api/admin/discipuladores/${discipulador}`,
+      { rede_id: rede, nome: "Discipulador do Grupo", grupo_id: 3 },
+    );
+    const sai = await comTrilha(
+      "PUT",
+      `/api/admin/discipuladores/${discipulador}`,
+      { rede_id: rede, nome: "Discipulador do Grupo", grupo_id: null },
+    );
+    // Sem o campo (uma aba antiga do site): o grupo gravado fica, e o PUT igual ao gravado não registra.
+    const semCampo = await comTrilha(
+      "PUT",
+      `/api/admin/discipuladores/${discipulador}`,
+      { rede_id: rede, nome: "Discipulador do Grupo" },
+    );
+
+    expect(
+      [criacao, troca, sai, semCampo].map(({ status, registros }) => ({
+        status,
+        resumos: registros.map((linha) => `${linha.acao}: ${linha.resumo}`),
+      })),
+    ).toEqual([
+      {
+        status: 201,
+        resumos: [
+          `hierarquia.criar: Discipulador "Discipulador do Grupo" criado (rede_id ${rede}, grupo_id 1)`,
+        ],
+      },
+      {
+        status: 200,
+        resumos: [
+          'hierarquia.atualizar: Discipulador "Discipulador do Grupo" alterado: grupo_id (1 → 3)',
+        ],
+      },
+      {
+        status: 200,
+        resumos: [
+          'hierarquia.atualizar: Discipulador "Discipulador do Grupo" alterado: grupo_id (3 → null)',
+        ],
+      },
+      { status: 200, resumos: [] },
+    ]);
+    const remocao = await comTrilha(
+      "DELETE",
+      `/api/admin/discipuladores/${discipulador}`,
+    );
+    expect(remocao.registros.map((linha) => linha.resumo)).toEqual([
+      `Discipulador "Discipulador do Grupo" removido (rede_id ${rede})`,
+    ]);
+  });
+});

@@ -26,6 +26,7 @@ import {
   type DetalheValidacao,
   type Discipulador,
   type Divisao,
+  type Grupo,
   type LinhaCsvHierarquia,
   type ProblemaZod,
   type Rede,
@@ -124,10 +125,13 @@ const SELECT_REDE = `
   SELECT id, nome, divisao, responsavel_nome, criado_em, atualizado_em
   FROM redes`;
 
+// RIFA-084 (D39): o grupo do discipulador (LEFT JOIN: sem grupo, os dois null).
 const SELECT_DISCIPULADOR = `
-  SELECT d.id, d.rede_id, d.nome, r.nome AS rede_nome, r.divisao, d.criado_em, d.atualizado_em
+  SELECT d.id, d.rede_id, d.nome, r.nome AS rede_nome, r.divisao, d.grupo_id, g.nome AS grupo_nome,
+    d.criado_em, d.atualizado_em
   FROM discipuladores AS d
-  JOIN redes AS r ON r.id = d.rede_id`;
+  JOIN redes AS r ON r.id = d.rede_id
+  LEFT JOIN grupos AS g ON g.id = d.grupo_id`;
 
 const SELECT_CELULA = `
   SELECT c.id, c.discipulador_id, c.nome, c.qtd_pessoas, c.lider_nome, c.lider_email,
@@ -162,6 +166,14 @@ export async function listarRedes(db: D1Database): Promise<Rede[]> {
   const { results } = await db
     .prepare(`${SELECT_REDE} ORDER BY nome, id`)
     .all<Rede>();
+  return results;
+}
+
+/** Os grupos do discipulador (RIFA-084, D39), na ordem da tela: `ordem`, depois o nome. */
+export async function listarGrupos(db: D1Database): Promise<Grupo[]> {
+  const { results } = await db
+    .prepare("SELECT id, nome, ordem FROM grupos ORDER BY ordem, nome, id")
+    .all<Grupo>();
   return results;
 }
 
@@ -232,9 +244,10 @@ type ValorColuna = string | number | null;
 /**
  * Como cada coluna entra no resumo da trilha: `nome` (da rede, do discipulador ou da célula) e `valor` (divisão,
  * ids e qtd_pessoas) com o antes e o depois; `pessoal` (os dados do líder e o responsável da rede) só pelo nome
- * da coluna, nunca o valor.
+ * da coluna, nunca o valor. `opcional` (o grupo do discipulador, RIFA-084) é um `valor` que, na criação e na remoção,
+ * só aparece quando não é null (o resumo de quem não tem grupo fica como antes da coluna).
  */
-type FormatoColuna = "nome" | "valor" | "pessoal";
+type FormatoColuna = "nome" | "valor" | "opcional" | "pessoal";
 
 interface Entidade {
   tabela: Tabela;
@@ -272,6 +285,8 @@ const ENTIDADES = {
     colunas: [
       { nome: "rede_id", formato: "valor" },
       { nome: "nome", formato: "nome" },
+      // RIFA-084 (D39): o grupo (null = sem grupo).
+      { nome: "grupo_id", formato: "opcional" },
     ],
     colunaDoAcesso: "discipulador_id",
     acesso: "acesso do discipulador",
@@ -387,7 +402,9 @@ function configuracao(
 ): string {
   return entidade.colunas
     .flatMap(({ nome, formato }, i) =>
-      formato === "valor" ? [`${nome} ${String(valores[i])}`] : [],
+      formato === "valor" || (formato === "opcional" && valores[i] !== null)
+        ? [`${nome} ${String(valores[i])}`]
+        : [],
     )
     .join(", ");
 }
@@ -440,7 +457,7 @@ function resumirRemocao(entidade: Entidade, retrato: Retrato): string {
 
 async function existe(
   db: D1Database,
-  tabela: Tabela,
+  tabela: Tabela | "grupos",
   id: number,
 ): Promise<boolean> {
   const linha = await db
@@ -467,7 +484,7 @@ async function nomeEmUso(
 }
 
 interface Referencia {
-  tabela: Tabela;
+  tabela: Tabela | "grupos";
   id: number;
   /** Campo do corpo que aponta para a tabela (vai em `detalhes`, como nos erros de validação). */
   campo: string;
@@ -483,25 +500,43 @@ function referenciaInvalida(referencia: Referencia): Falha {
   return falha("referencia_invalida", referencia.mensagem, [detalhe]);
 }
 
+/**
+ * Coluna ausente no corpo do PUT: mantém o valor gravado (o do retrato lido). No POST, vira null. Hoje só o grupo do
+ * discipulador (RIFA-084, D39): uma aba antiga do site, que não conhece o campo, não apaga o grupo ao renomear.
+ */
+const MANTER = Symbol("manter o valor gravado");
+type ValorGravado = ValorColuna | typeof MANTER;
+
 /** O que o POST e o PUT gravam. */
 interface Gravacao<T> {
-  /** Os valores das colunas, na ordem de `colunas` da entidade. */
-  valores: readonly ValorColuna[];
+  /** Os valores das colunas, na ordem de `colunas` da entidade (MANTER: o gravado, no PUT; null, no POST). */
+  valores: readonly ValorGravado[];
   nome: string;
-  referencia?: Referencia;
+  /** Os ids do corpo que apontam para outra tabela (cada um precisa existir). */
+  referencias: readonly Referencia[];
   reler: (db: D1Database, id: number) => Promise<T | null>;
 }
 
-/** Regras comuns de POST e PUT: a referência existe e o nome está livre. */
+/** Os valores que vão para o banco: MANTER vira o valor de `gravados` (o retrato, no PUT) ou null (no POST). */
+function valoresGravados(
+  valores: readonly ValorGravado[],
+  gravados?: readonly ValorColuna[],
+): ValorColuna[] {
+  return valores.map((valor, i) =>
+    valor === MANTER ? (gravados?.[i] ?? null) : valor,
+  );
+}
+
+/** Regras comuns de POST e PUT: as referências existem e o nome está livre. */
 async function conferir(
   db: D1Database,
   tabela: Tabela,
   gravacao: Gravacao<unknown>,
   exceto?: number,
 ): Promise<Falha | null> {
-  const { referencia } = gravacao;
-  if (referencia && !(await existe(db, referencia.tabela, referencia.id)))
-    return referenciaInvalida(referencia);
+  for (const referencia of gravacao.referencias)
+    if (!(await existe(db, referencia.tabela, referencia.id)))
+      return referenciaInvalida(referencia);
   if (await nomeEmUso(db, tabela, gravacao.nome, exceto))
     return falha("nome_duplicado", TEXTOS[tabela].duplicado);
   return null;
@@ -514,7 +549,7 @@ async function conferir(
 async function gravarLote(
   db: D1Database,
   tabela: Tabela,
-  referencia: Referencia | undefined,
+  referencias: readonly Referencia[],
   comandos: D1PreparedStatement[],
 ): Promise<Resultado<D1Result<{ id: number }>[]>> {
   try {
@@ -522,8 +557,13 @@ async function gravarLote(
   } catch (erro) {
     if (violou(erro, "UNIQUE"))
       return falha("nome_duplicado", TEXTOS[tabela].duplicado);
-    if (referencia && violou(erro, "FOREIGN KEY"))
-      return referenciaInvalida(referencia);
+    if (violou(erro, "FOREIGN KEY")) {
+      // Com uma referência só, é ela; com mais (o discipulador: a rede e o grupo), a que sumiu enquanto isso.
+      if (referencias.length === 1) return referenciaInvalida(referencias[0]);
+      for (const referencia of referencias)
+        if (!(await existe(db, referencia.tabela, referencia.id)))
+          return referenciaInvalida(referencia);
+    }
     throw erro;
   }
 }
@@ -552,13 +592,14 @@ async function criar<T>(
   const recusa = await conferir(db, entidade.tabela, gravacao);
   if (recusa) return recusa;
   const colunas = entidade.colunas.map(({ nome }) => nome);
-  const lote = await gravarLote(db, entidade.tabela, gravacao.referencia, [
+  const valores = valoresGravados(gravacao.valores);
+  const lote = await gravarLote(db, entidade.tabela, gravacao.referencias, [
     db
       .prepare(
         `INSERT INTO ${entidade.tabela} (${colunas.join(", ")})
          VALUES (${colunas.map((_, i) => `?${i + 1}`).join(", ")}) RETURNING id`,
       )
-      .bind(...gravacao.valores),
+      .bind(...valores),
     // Mesma transação: last_insert_rowid() é o item recém-criado.
     ...(autoria
       ? [
@@ -566,7 +607,7 @@ async function criar<T>(
             ...autoria,
             acao: "hierarquia.criar",
             alvo: { tipo: entidade.tipo, idSql: "last_insert_rowid()" },
-            resumo: resumirCriacao(entidade, gravacao.valores),
+            resumo: resumirCriacao(entidade, valores),
           }),
         ]
       : []),
@@ -599,12 +640,9 @@ async function atualizarItem<T>(
       return falha("nao_encontrado", TEXTOS[tabela].naoEncontrado);
     const recusa = await conferir(db, tabela, gravacao, id);
     if (recusa) return recusa;
-    const resumo = resumirAtualizacao(
-      entidade,
-      antes.valores,
-      gravacao.valores,
-    );
-    const lote = await gravarLote(db, tabela, gravacao.referencia, [
+    const valores = valoresGravados(gravacao.valores, antes.valores);
+    const resumo = resumirAtualizacao(entidade, antes.valores, valores);
+    const lote = await gravarLote(db, tabela, gravacao.referencias, [
       ...(autoria && resumo !== null
         ? [
             prepararRegistroAuditoria(
@@ -621,7 +659,7 @@ async function atualizarItem<T>(
         : []),
       db
         .prepare(atualizar)
-        .bind(...gravacao.valores, ...valoresDoRetrato(id, antes, false)),
+        .bind(...valores, ...valoresDoRetrato(id, antes, false)),
     ]);
     if (!lote.ok) return lote;
     if ((lote.valor.at(-1)?.meta.changes ?? 0) > 0)
@@ -645,6 +683,13 @@ const referenciaDiscipulador = (id: number): Referencia => ({
   mensagem: `O discipulador ${id} não existe`,
 });
 
+const referenciaGrupo = (id: number): Referencia => ({
+  tabela: "grupos",
+  id,
+  campo: "grupo_id",
+  mensagem: `O grupo ${id} não existe`,
+});
+
 /** Nomes e textos livres são gravados com os espaços normalizados, como a importação grava. */
 const textoOpcional = (valor: string | null) =>
   valor === null ? null : normalizarEspacos(valor);
@@ -655,9 +700,11 @@ const valoresRede = (dados: DadosRede): ValorColuna[] => [
   dados.divisao,
   textoOpcional(dados.responsavel_nome),
 ];
-const valoresDiscipulador = (dados: DadosDiscipulador): ValorColuna[] => [
+const valoresDiscipulador = (dados: DadosDiscipulador): ValorGravado[] => [
   dados.rede_id,
   normalizarEspacos(dados.nome),
+  // RIFA-084 (D39): ausente = MANTER (o gravado no PUT; sem grupo no POST).
+  dados.grupo_id === undefined ? MANTER : dados.grupo_id,
 ];
 const valoresCelula = (dados: DadosCelula): ValorColuna[] => [
   dados.discipulador_id,
@@ -671,6 +718,7 @@ const valoresCelula = (dados: DadosCelula): ValorColuna[] => [
 const gravacaoRede = (dados: DadosRede): Gravacao<Rede> => ({
   valores: valoresRede(dados),
   nome: dados.nome,
+  referencias: [],
   reler: buscarRede,
 });
 const gravacaoDiscipulador = (
@@ -678,13 +726,18 @@ const gravacaoDiscipulador = (
 ): Gravacao<Discipulador> => ({
   valores: valoresDiscipulador(dados),
   nome: dados.nome,
-  referencia: referenciaRede(dados.rede_id),
+  referencias: [
+    referenciaRede(dados.rede_id),
+    ...(typeof dados.grupo_id === "number"
+      ? [referenciaGrupo(dados.grupo_id)]
+      : []),
+  ],
   reler: buscarDiscipulador,
 });
 const gravacaoCelula = (dados: DadosCelula): Gravacao<Celula> => ({
   valores: valoresCelula(dados),
   nome: dados.nome,
-  referencia: referenciaDiscipulador(dados.discipulador_id),
+  referencias: [referenciaDiscipulador(dados.discipulador_id)],
   reler: buscarCelula,
 });
 

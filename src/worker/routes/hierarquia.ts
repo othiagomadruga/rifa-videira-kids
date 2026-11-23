@@ -1,5 +1,6 @@
 /**
- * Rotas da hierarquia (CRUD de redes, discipuladores e células) e da importação da planilha, do grupo
+ * Rotas da hierarquia (CRUD de redes, discipuladores e células; a lista dos grupos do discipulador, RIFA-084) e da
+ * importação da planilha, do grupo
  * `coordenacao` (docs/api.md). Os caminhos e os schemas vêm do contrato (`ROTAS`).
  *
  * Este sub-app NÃO autentica: o index.ts o monta sob /api/admin, depois do middleware da coordenação:
@@ -27,6 +28,7 @@ import {
   importarHierarquia,
   listarCelulas,
   listarDiscipuladores,
+  listarGrupos,
   listarRedes,
   obterCelula,
   obterDiscipulador,
@@ -266,6 +268,11 @@ hierarquia.delete(
     );
     return resultado.ok ? c.body(null, 204) : responder(c, resultado);
   },
+);
+
+// RIFA-084 (D39): os grupos do discipulador (os 4 da migração 0018), para o seletor "Grupo" da Hierarquia.
+hierarquia.get(local(ROTAS.listarGrupos.caminho), async (c) =>
+  c.json({ itens: await listarGrupos(c.env.DB) }),
 );
 
 // ---------------------------------------------------------------------------------------------------
