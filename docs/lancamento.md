@@ -112,7 +112,7 @@ A Rifei faz a venda, o pagamento e o sorteio. O sistema só recebe os pedidos pe
 
 ### 1.4 Conta Efí
 
-A Efí recebe os Pix das vendas da Rifei. O sistema não fala com a Efí nas vendas; desde a RIFA-086 (D40) ele só LÊ o saldo da conta, para o cartão do admin e o e-mail diário (3.8, parte B). Passo a passo com os links oficiais: [12.2](integracao-rifei.md#122-ligar-a-efí-à-rifei-recebimento-do-pix).
+A Efí recebe os Pix das vendas da Rifei. O sistema não fala com a Efí (o saldo da conta, que entrou na RIFA-086, saiu na RIFA-087: adendo da D40; o "quanto entrou" do painel e do e-mail é a soma dos pedidos pagos, do banco). Passo a passo com os links oficiais: [12.2](integracao-rifei.md#122-ligar-a-efí-à-rifei-recebimento-do-pix).
 
 - **Que conta:** a Rifei pede **Efí Pro** (pessoa física, CPF) ou **Efí Empresas** (CNPJ ativo e regular). A conta pessoal "Efí Para você" não basta.
   - Na Efí Empresas, a conta é aberta em nome do responsável legal do CNPJ. Para organização religiosa, a Efí pede o estatuto social, a ata de constituição e a ata de eleição da diretoria atual.
@@ -439,12 +439,14 @@ O link de vendas de uma célula é o link de afiliado do líder na Rifei, montad
 3. Se um dia aparecer **"A Rifei recusou o token: cole um novo"** (na tela de Conexão ou no topo do Extrato do banco),
    repita o passo 2. Enquanto isso, o caminho manual (Copiar os números e marcar no painel da Rifei) continua valendo.
 
-### 3.8 Relatório diário por e-mail e saldo da Efí [Thiago e SM] (RIFA-086, D40)
+### 3.8 Relatório diário por e-mail (manhã e tarde) [Thiago e SM] (RIFA-086 e RIFA-087, D40)
 
-O código já está publicado e espera a configuração: sem ela, o cron das 7h só avisa no log e o saldo fica "não
-configurado". **Situação em 23/11:** Email Routing ligado, segredos RELATORIO_EMAILS, EFI_CLIENT_ID e EFI_CLIENT_SECRET
-gravados, certificado da Efí enviado (vence em 23/11/2029) e os bindings `EMAIL` e `EFI_CERT` no `wrangler.jsonc`.
-O e-mail só chega a um destinatário depois que ele clica no link de verificação da Cloudflare. Nada daqui vai para o repositório (é público), o chat ou o DevMission: só os nomes dos segredos.
+Dois e-mails por dia: às **07:00** de Belém (10:00 UTC), o dia anterior fechado, e às **17:00** (20:00 UTC), a parcial
+de hoje até as 17h. O dinheiro que aparece é o que entrou pelos pedidos pagos que a Rifei avisa (do banco, antes da
+tarifa da Efí): o saldo da Efí saiu na RIFA-087 (adendo da D40). **Situação em 23/11:** Email Routing ligado, segredo
+RELATORIO_EMAILS gravado e o binding `EMAIL` no `wrangler.jsonc`. O e-mail só chega a um destinatário depois que ele
+clica no link de verificação da Cloudflare. Nada daqui vai para o repositório (é público), o chat ou o DevMission: só os
+nomes dos segredos.
 
 **A. O e-mail (Email Routing da Cloudflare e o binding `EMAIL`)**
 
@@ -454,57 +456,35 @@ O e-mail só chega a um destinatário depois que ele clica no link de verificaç
 2. **[Thiago]** **Email Routing → Endereços de destino → Adicionar** o e-mail do pastor e o seu. Cada um recebe um link
    de verificação e precisa clicar: o Email Routing só entrega para destino verificado.
 3. **[SM]** o segredo com os destinatários (separados por vírgula, até 10): `npx wrangler secret put RELATORIO_EMAILS`.
-4. **[SM, numa tarefa com commit]** no `wrangler.jsonc`, o binding, **sem** `destination_address` nem
-   `allowed_destination_addresses` (os endereços ficam só no segredo):
-
-   ```jsonc
-   "send_email": [{ "name": "EMAIL" }],
-   ```
-
-   No `src/worker/config-publicacao.test.ts` (parte "o relatório diário por e-mail"), troque a trava
-   `expect(config.send_email).toBeUndefined()` por `toEqual([{ name: "EMAIL" }])` e mantenha a de "nenhum endereço de
-   e-mail no arquivo". Merge na `main` = publicação.
+4. **[Feito na RIFA-086]** o binding no `wrangler.jsonc`, **sem** `destination_address` nem
+   `allowed_destination_addresses` (os endereços ficam só no segredo): `"send_email": [{ "name": "EMAIL" }]`, travado
+   em `src/worker/config-publicacao.test.ts` (com a trava de "nenhum endereço de e-mail no arquivo").
 5. **[Admin] Conferir:** com a sessão de admin, abra `https://projetokidsbelem.com.br/api/admin/relatorio-diario/previa`
-   (o e-mail de ontem; `?data=AAAA-MM-DD` mostra outro dia). Para mandar agora, sem esperar as 7h, no Console do
-   navegador (F12) da mesma aba:
+   (o e-mail da manhã, com ontem; `?data=AAAA-MM-DD` mostra outro dia) e
+   `.../previa?tipo=tarde` (a parcial de hoje até agora; só hoje vale). Para mandar agora, sem esperar o horário, no
+   Console do navegador (F12) da mesma aba:
    `fetch("/api/admin/relatorio-diario/enviar",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(r=>r.json()).then(console.log)`
-   → `{ data, destinatarios, enviados, falhas }` (503 `nao_configurado`: falta o binding ou o segredo). O envio fica na
-   Trilha ("Relatório diário enviado por e-mail").
-6. **Todo dia às 07:00** (10:00 UTC) o cron manda o e-mail de ontem. No log do Worker (Workers → rifa-videira-kids →
-   Logs): "Relatório diário enviado" com as contagens; "binding EMAIL não configurado" ou "sem destinatário válido" se
-   faltar algo. Antes do início e depois da manhã seguinte ao último dia, não manda nada.
+   (a da tarde: `body:'{"tipo":"tarde"}'`) → `{ tipo, data, destinatarios, enviados, falhas }` (503 `nao_configurado`:
+   falta o binding ou o segredo). O envio fica na Trilha ("Relatório diário enviado por e-mail", com "da manhã" ou "da
+   tarde" no resumo).
+6. **Todo dia às 07:00 e às 17:00** os crons mandam o e-mail (o da manhã com ontem; o da tarde com hoje até as 17h). No
+   log do Worker (Workers → rifa-videira-kids → Logs): "Relatório diário enviado" com o tipo e as contagens; "binding
+   EMAIL não configurado" ou "sem destinatário válido" se faltar algo. Fora da campanha, não manda nada (manhã: ontem
+   fora; tarde: hoje fora).
 
-**B. O saldo da Efí (certificado mTLS e os segredos)**
+**B. Limpeza do saldo da Efí (RIFA-087) [SM, depois do merge da RIFA-087]**
 
-1. **[Thiago, na Efí, no computador]** **API → Aplicações → Nova aplicação** (ex.: "Painel Videira Kids"), e em
-   **API Pix → Endpoints exclusivos Efí** marque só **Consultar saldo** (escopo `gn.balance.read`). Anote o
-   **Client_Id** e o **Client_Secret** de Produção no seu gerenciador de senhas.
-2. **[Thiago]** **API → Meus certificados → Produção → Novo certificado** e baixe o `.p12` (um certificado só para o
-   site, separado do da Rifei; ele só pode ser baixado uma vez).
-3. **[SM, no computador onde está o `.p12`, fora do repositório]** separe o certificado e a chave e suba para a
-   Cloudflare (se o openssl reclamar do algoritmo, acrescente `-legacy`):
+O saldo da Efí saiu (o certificado de cliente dos Workers não vale para a API da Efí, que fica atrás da Cloudflare, e o
+firewall da Efí bloqueia a nuvem; adendo da D40). Depois que a RIFA-087 estiver publicada (o Worker já sem o binding
+`EFI_CERT`), o SM apaga na Cloudflare o que sobrou, pelo terminal com a conta Cloudflare:
 
-   ```bash
-   openssl pkcs12 -in certificado.p12 -clcerts -nokeys -out efi.crt -passin pass:
-   openssl pkcs12 -in certificado.p12 -nocerts -nodes -out efi.key -passin pass:
-   npx wrangler mtls-certificate upload --cert efi.crt --key efi.key --name efi-producao
-   rm efi.key efi.crt
-   ```
+1. os segredos: `npx wrangler secret delete EFI_CLIENT_ID` e `npx wrangler secret delete EFI_CLIENT_SECRET`;
+2. o certificado mTLS: `npx wrangler mtls-certificate list` (o da Efí, enviado na RIFA-086, é o de id
+   `2bc05428-0e12-4e60-9e7f-89c087ee0dd2`, que ficava no `wrangler.jsonc`) e
+   `npx wrangler mtls-certificate delete --id 2bc05428-0e12-4e60-9e7f-89c087ee0dd2`.
 
-   O upload mostra o **ID do certificado** (não é segredo: vai no `wrangler.jsonc`). Guarde o `.p12` no gerenciador de
-   senhas ou apague.
-4. **[SM]** os segredos: `npx wrangler secret put EFI_CLIENT_ID` e `npx wrangler secret put EFI_CLIENT_SECRET`.
-5. **[SM, numa tarefa com commit]** no `wrangler.jsonc`:
-
-   ```jsonc
-   "mtls_certificates": [{ "binding": "EFI_CERT", "certificate_id": "<o ID do passo 3>" }],
-   ```
-
-   e, no `config-publicacao.test.ts`, troque `expect(config.mtls_certificates).toBeUndefined()` pela trava desse binding.
-   Merge na `main` = publicação.
-6. **[Admin] Conferir:** na Visão geral, o cartão **Saldo na Efí** mostra o valor (o mesmo do app da Efí). "Saldo
-   indisponível agora": `GET /api/admin/efi/saldo` diz o `erro` (`autenticacao`: Client_Id, Client_Secret, certificado
-   ou o escopo "Consultar saldo"; `consulta` ou `tempo_esgotado`: a Efí fora do ar; tente em um minuto).
+Na Efí, a aplicação "Painel Videira Kids" e o certificado de Produção dela podem ser revogados pelo Thiago (não são os da
+Rifei). Nada disso muda as vendas: o Pix continua caindo na Efí pela Rifei.
 
 ## 4. Compra de teste de ponta a ponta
 
