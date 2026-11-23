@@ -151,6 +151,31 @@ importa nada dos Rankings, que formatam dinheiro):
   `meusCompradoresDe`) respondem a rota sem nenhuma compra por padrão; as varreduras de dicas contam os dois botões e
   o "?" do título (admin nos Rankings em `dicas-fase2.test.tsx`; discipulador em `dicas-fora-da-coordenacao.test.tsx`).
 
+## Grupo do discipulador e ranking por grupo (RIFA-084, D39)
+
+O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Adolescentes") separa um ranking a mais,
+**só na coordenação**: o ranking aberto (`/`), o telão e a `/minha` não mudam.
+
+- **Hierarquia** (`pages/hierarquia`): `carregarHierarquia` pede também `GET /api/admin/grupos` (`CAMINHOS.grupos`,
+  cópia de `ROTAS.listarGrupos`, conferida em `hierarquia-contrato.test.ts`), junto com as outras listas. A tabela dos
+  discipuladores ganha a coluna **"Grupo"** (o nome, ou "Sem grupo"), e o **Editar discipulador**, o `Select` **"Grupo"**
+  com "Sem grupo" e os grupos na ordem da API, com a ajuda do rótulo (`grupoDoDiscipulador`) e a dica embaixo. O PUT
+  manda sempre `grupo_id` (o escolhido, ou `null`). Na API falsa (`teste-apoio.ts`), `GRUPOS` e o `grupo_nome`
+  recalculado no PUT.
+- **Rankings** (`pages/rankings/RankingPorGrupo.tsx`): embaixo do ranking de todas, dentro do painel da aba, a seção
+  **"Ranking por grupo"** (`h2` com a ajuda `rankingPorGrupo`), montada só quando o ranking de cima chegou. Pede
+  `GET /api/painel/ranking-grupos` (`caminhoDoRankingGrupos`, cópia conferida em `rankings-contrato.test.ts`) no nível
+  da aba (Células ou Discipuladores; na aba Redes, `nivelDosGrupos` dá null e a seção nem é pedida) e na janela do
+  filtro. Um bloco por grupo (`h3` com `data-sem-ajuda`: é o nome de um item) com a mesma `TabelaRanking` (no celular,
+  os cartões compactos; a legenda diz o grupo; sem a divisão no vínculo). Sem grupo com células (`grupos: []`), sem
+  campanha ou enquanto carrega, nada aparece (nada pisca); a falha mostra o `ErrorState` com "Tentar de novo" dentro
+  da seção, sem derrubar o ranking de cima. `TabelaRanking` aceita `DadosDaTabela` (o recorte da resposta que ela usa)
+  e o `grupo` da legenda.
+- **Testes:** `RankingPorGrupo.test.tsx` (ordem, posição no grupo, legenda, aba e janela, vazio, falha),
+  `HierarquiaPage.test.tsx` (coluna, seletor e o corpo do PUT) e as varreduras de dicas e ajuda (`dicas-fase2.test.tsx`).
+  A API falsa dos Rankings (`simularApiRanking`) responde a rota sem grupo por padrão (`respostaDosGrupos`) e guarda
+  `pedidosDosGrupos`.
+
 ## Trilha e pedidos suspeitos (RIFA-024)
 
 As duas telas leem rotas da RIFA-013b (`docs/api.md`) e carregam à parte (`lazy`, como a Campanha), cada uma com o próprio CSS; tabela no computador e cartões abaixo de 48rem (`DataTable`).

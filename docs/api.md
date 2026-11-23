@@ -247,11 +247,20 @@ O mesmo padrão vale para os três recursos (`:id` inteiro):
 | Recurso | Entrada (`*EntradaSchema`) | Saída (`*Schema`) | Consulta da lista |
 |---|---|---|---|
 | redes | `{ nome, divisao: "jovens"\|"adultos", responsavel_nome? }` | + `id`, `criado_em`, `atualizado_em` | — |
-| discipuladores | `{ rede_id, nome }` | + `rede_nome`, `divisao` | `?rede_id=` |
+| discipuladores | `{ rede_id, nome, grupo_id? }` | + `rede_nome`, `divisao`, `grupo_id`, `grupo_nome` | `?rede_id=` |
 | celulas | `{ discipulador_id, nome, qtd_pessoas (1–1000), lider_nome, lider_email?, lider_telefone? }` | + `discipulador_nome`, `rede_id`, `rede_nome`, `divisao` | `?discipulador_id=&rede_id=&divisao=` |
 
 - Os nomes são únicos dentro de cada recurso, sem diferenciar maiúsculas (inclusive acentuadas) e com os espaços normalizados (`normalizarEspacos`): os das pontas não contam e os em sequência, inclusive tab e espaço não separável, valem um só (`Rede  Jovem` = `Rede Jovem`). Os textos são gravados assim, com um espaço só: `nome`, `responsavel_nome`, `lider_nome` e `lider_telefone`.
 - No `400 requisicao_invalida`, a `mensagem` de cada item de `detalhes` é em português ("Campo obrigatório", "Use no máximo 120 caracteres", "Use um número inteiro", "E-mail inválido"...); `caminho` e `codigo` continuam os do zod.
+- **Grupo do discipulador** (RIFA-084, D39): `grupo_id` = o id de um dos grupos de `GET /api/admin/grupos` ou `null`
+  (sem grupo). No POST, ausente = sem grupo; no **PUT, ausente mantém o gravado** (a exceção ao "substitui tudo": uma aba
+  antiga do site, que não conhece o campo, não apaga o grupo ao renomear). Grupo que não existe: `400 referencia_invalida`
+  com o detalhe em `grupo_id` ("O grupo 9 não existe"). A saída traz `grupo_id` e `grupo_nome` (os dois `null` sem
+  grupo). As células herdam o grupo do discipulador. Na trilha, `grupo_id` entra como os outros ids:
+  `grupo_id (null → 2)` no PUT; na criação e na remoção, só quando há grupo (`criado (rede_id 1, grupo_id 2)`).
+- `GET /api/admin/grupos` (`coordenacao`; RIFA-084, D39): 200 `{ "itens": [{ "id", "nome", "ordem" }] }`, na ordem de
+  `ordem` (empate, pelo nome): os 4 da migração 0018 ("Adultos da manhã", "Adultos da noite", "Jovens",
+  "Adolescentes"). Sem CRUD dos grupos por enquanto.
 - `DELETE` não apaga em cascata:
   - rede com discipuladores: `409 em_uso`;
   - discipulador com células: `409 em_uso`;
@@ -615,6 +624,25 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 - `por_divisao` (D27): **só aparece**, com `false`, quando a campanha não separa o ranking por divisão; ausente, a resposta é a de sempre.
 - `acima` e `abaixo`: o vizinho na posição anterior e na seguinte (empatados não são vizinhos), com a distância no critério (pontos-base, bilhetes ou centavos; null se um dos dois está sem meta).
 - **Erros**: 400 `requisicao_invalida`, 401 `nao_autenticado`, 404 `nao_encontrado` (sem campanha ativa).
+
+### `GET /api/painel/ranking-grupos?janela=atual|campanha&nivel=celula|discipulador` (`coordenacao`; RIFA-084, D39)
+
+O mesmo ranking, separado pelo **grupo do discipulador** (adultos da manhã, adultos da noite, jovens, adolescentes): as
+células herdam o grupo do discipulador; quem não tem grupo fica fora daqui e continua no ranking de todas. **Só a
+coordenação** (admin e coordenação; a hierarquia leva 403 e sem sessão é 401): o ranking aberto não muda (decisão do
+PO, 23/11).
+
+- **Consulta** (`consultaRankingGruposSchema`): `janela` = `atual` (padrão) ou `campanha`, a mesma janela do
+  `periodo` do ranking de todas; `nivel` = `celula` (padrão) ou `discipulador` (a rede não cabe num grupo). Sempre na
+  data de hoje. Fora disso, 400 `requisicao_invalida`.
+- **200** (`respostaRankingGruposSchema`, estrito): `{ nivel, janela, criterio, unidade, referencia, grupos: [{ id,
+  nome, ordem, itens }], atualizado_em }`. Cada item é o do `GET /api/painel/ranking` (valores, situação e vizinhos),
+  com a **posição e os vizinhos dentro do grupo**; o critério, a janela e as metas são os do ranking de todas (a meta
+  de cada célula é a mesma: a proporcional reparte o total entre todas as células). Todas as instâncias do nível no
+  grupo, inclusive as que não venderam. Só os grupos que têm células, na ordem de `ordem` (empate, pelo nome); nenhum
+  = `grupos: []`. A divisão não entra (é outro recorte).
+- Sem ida a mais ao banco: os grupos vão no mesmo lote da leitura do ranking. `Cache-Control: no-store`, sem cache.
+- **Erros**: 400, 401, 403 (hierarquia), 404 `nao_encontrado` (sem campanha ativa).
 
 ### `GET /api/publico/ranking` (aberto, **sem nenhum valor em R$**)
 

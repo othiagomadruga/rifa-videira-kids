@@ -2155,3 +2155,44 @@ maiores compradores." Contrato em `src/shared/contracts/` (`maiores-compradores.
 - **Descartado:** abrir para o líder e a rede (fora do pedido: o PO falou do discipulador e do admin); o telefone para
   o discipulador (o PO não pediu e o contato continua com quem confere o pagamento, D36); contar o reservado (inflaria
   quem reservou e não pagou).
+
+## D39. Grupo do discipulador e ranking por grupo, só na coordenação (RIFA-084; contrato, 2026-11-23)
+
+Pedido do PO (23/11, com a campanha em andamento): "Faz o seguinte: unifica. E embaixo crie uma nova visualização:
+separar adultos da manhã, adultos da noite, jovens e adolescentes." O ranking principal já estava unificado
+(`ranking.por_divisao = false`, D27). Na mesma tarde o PO decidiu que a visualização por grupo é **só do painel da
+coordenação**: o ranking aberto fica exatamente como está. O PO diz qual discipulador é de qual grupo (os dados não
+existiam no sistema).
+
+- **O grupo é do discipulador, não a divisão da rede.** A `divisao` (D27) só tem `jovens` e `adultos`, é da rede (a
+  igreja tem uma rede só) e muda o ranking, o painel, o mapa e o relatório; reaproveitá-la para quatro valores mexeria
+  em tudo isso e na planilha. O grupo é outro recorte, só de um ranking a mais: tabela `grupos` (migração 0018; `nome`
+  único de 1 a 60 caracteres e `ordem`, semeada com os 4 grupos do pedido) e `discipuladores.grupo_id` (NULL = sem
+  grupo; `ON DELETE SET NULL`). As **células herdam** o grupo do discipulador: o PO separa os grupos pelos
+  discipuladores, e assim a coordenação escolhe 8 vezes, e não 38. Sem CRUD dos grupos por enquanto (os 4 vêm da
+  migração); um nome novo ou um 5º grupo é uma migração ou uma tarefa nova.
+- **Quem define:** a coordenação (admin e coordenação), na Hierarquia (o seletor "Grupo" do Editar discipulador e a
+  coluna "Grupo"). O `PUT /api/admin/discipuladores/:id` aceita `grupo_id` (id ou null); **ausente mantém o gravado**
+  (a exceção ao "PUT substitui tudo", como os grupos do admin na Campanha, D20): uma aba antiga do site, aberta antes da
+  publicação, que só renomeia o discipulador, não apaga o grupo. No POST, ausente = sem grupo. Grupo que não existe: 400
+  `referencia_invalida`. A trilha registra `grupo_id` como os outros ids (o antes e o depois; sem dado pessoal); na
+  criação e na remoção, só quando há grupo (o resumo de quem não tem fica como antes). A importação da planilha não mexe
+  no grupo.
+- **O ranking por grupo** (`GET /api/painel/ranking-grupos?janela=atual|campanha&nivel=celula|discipulador`, grupo
+  `coordenacao`): o **mesmo critério, a mesma janela e as mesmas metas** do ranking de todas (a meta de cada célula não
+  muda: a proporcional reparte o total entre todas as células), com a posição e os vizinhos **dentro do grupo**
+  (`montarRankingGruposPainel` em `calculos.ts`, sobre a mesma base do `montarRankingPainel`). O item é o da
+  coordenação, completo. Só os grupos com células, na ordem de `ordem`; nenhum, `grupos: []`, e a tela não mostra a
+  seção. A rede não é nível aqui (o grupo é do discipulador). Os grupos vão no mesmo lote da leitura do cálculo
+  (`comandosExtras`): nenhuma ida a mais ao D1; o comando lê só os discipuladores com grupo, pelo índice novo.
+  `no-store`, sem cache, e a resposta passa pelo schema estrito antes de sair.
+- **Na tela Rankings**, embaixo do ranking de todas (na mesma aba e na mesma janela), a seção "Ranking por grupo", com
+  um bloco por grupo e a tabela de sempre (no celular, os cartões). Na aba Redes, a seção some. Discipulador sem grupo
+  fica fora dela e continua no ranking de todas.
+- **Descartado:** a rota aberta `/api/publico/ranking-grupos` e a seção no ranking aberto (estavam no primeiro pedido;
+  o PO tirou: só a coordenação); usar a `divisao` (acima); grupo por célula (o PO separa pelos discipuladores; se uma
+  célula precisar de grupo próprio, vira uma coluna na célula que vence a do discipulador); mexer no telão e na
+  `/minha` (fora do pedido).
+- **Segurança:** a rota nova fica atrás do login da coordenação (401 sem sessão, 403 para líder, discipulador e rede;
+  `src/worker/protecao.test.ts`, parte l), como `GET /api/admin/grupos`; nenhuma rota aberta nova.
+
