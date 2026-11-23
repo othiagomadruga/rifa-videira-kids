@@ -25,6 +25,7 @@ import {
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 import {
   SQL_LOGIN_CELULAS_SENHA_LIGADO,
+  SQL_LOGIN_DISCIPULADORES_SENHA_LIGADO,
   sqlAcessoDoPapel,
 } from "./regras-campanha";
 
@@ -621,8 +622,9 @@ export interface SessaoEncontrada {
   acessoLigado: boolean;
   /**
    * O link que abriu a sessão (`sessoes.link_id`): a lista dos acessos o marca como "este aparelho" (RIFA-043).
-   * null na sessão aberta pela senha da célula (RIFA-064, D29: db/login-celula.ts) e na aberta pelo usuário e senha
-   * do admin (RIFA-073, D33: db/senha-admin.ts), que não têm link.
+   * null na sessão aberta pela senha da célula (RIFA-064, D29: db/login-celula.ts), na aberta pela senha do
+   * discipulador (RIFA-082, D37: db/login-discipulador.ts) e na aberta pelo usuário e senha do admin (RIFA-073, D33:
+   * db/senha-admin.ts), que não têm link.
    */
   linkId: number | null;
 }
@@ -648,8 +650,12 @@ export async function buscarUsuarioDaSessao(
  * `acesso.celulas_senha` ligada, lida na mesma consulta (+1 linha, só nessa sessão: com link, o OR nem lê a campanha).
  * Desligada, ela deixa de valer (401, e o cookie é expirado), como uma sessão vencida.
  * RIFA-073 (D33): a sessão sem link do ADMIN é a aberta pelo usuário e senha dele: vale enquanto ele tiver a senha
- * (senhas_admin), e não depende da chave das células. Remover a senha a derruba (e remove a linha da sessão). A sessão
- * sem link de qualquer outro papel não vale (só a célula e o admin entram por senha).
+ * (senhas_admin), e não depende da chave das células. Remover a senha a derruba (e remove a linha da sessão).
+ * RIFA-082 (D37): a sessão sem link do DISCIPULADOR é a aberta pela senha padrão dele: vale só com as duas chaves
+ * ligadas, `acesso.celulas_senha` e `acesso.discipuladores` (SQL_LOGIN_DISCIPULADORES_SENHA_LIGADO, +1 linha só nessa
+ * sessão). Desligar qualquer uma a derruba (401), como a da célula; a do link do discipulador segue a D20 (403 na /minha
+ * enquanto `acesso.discipuladores` estiver desligada). A sessão sem link da rede e da coordenação não vale (só a célula, o
+ * discipulador e o admin entram por senha).
  */
 export async function buscarSessao(
   db: D1Database,
@@ -665,6 +671,7 @@ export async function buscarSessao(
          AND CASE WHEN s.link_id IS NOT NULL THEN 1
                   WHEN u.papel = 'admin' THEN ${SQL_SESSAO_SEM_LINK_DO_ADMIN_VALE}
                   WHEN u.papel = 'lider' THEN ${SQL_LOGIN_CELULAS_SENHA_LIGADO}
+                  WHEN u.papel = 'discipulador' THEN ${SQL_LOGIN_DISCIPULADORES_SENHA_LIGADO}
                   ELSE 0 END`,
     )
     .bind(idHash, agora, limiteDeInatividade(agora))

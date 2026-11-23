@@ -16,6 +16,9 @@
 //    coordenação, a /minha só da própria célula, CSRF, e a chave desligada derruba a sessão aberta pela senha;
 // j) o login do admin com usuário e senha (RIFA-073, D33) abre a sessão do admin (a mesma do link); a senha do admin é
 //    só do papel admin (coordenação e hierarquia: 403), o login é aberto mas com CSRF, e remover a senha derruba a sessão;
+// k) o login do discipulador com a senha padrão (RIFA-082, D37) abre só a sessão do discipulador: 403 em toda a
+//    coordenação, a /minha só do próprio discipulador (as células dele), CSRF, e desligar qualquer uma das duas chaves
+//    (`acesso.celulas_senha` ou `acesso.discipuladores`) derruba a sessão aberta pela senha, e não a do link;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -2051,6 +2054,220 @@ describe("j) RIFA-073 (D33): login do admin com usuário e senha", () => {
       (await requisitar("GET", "/api/admin/usuarios", doLink)).status,
     ).toBe(200);
   });
+});
+
+describe("k) RIFA-082 (D37): login do discipulador com a senha padrão, só na /minha do próprio discipulador", () => {
+  /** O discipulador 10 do cenário ("Discipulador Abel", células 1 e 2) e o 30 ("Discipulador Caleb", células 4 e 5). */
+  const DISCIPULADOR = {
+    id: 10,
+    nome: "Discipulador Abel",
+    senha: "@discipuladorabel1234",
+    celulas: [1, 2],
+  };
+  const OUTRO = { id: 30, nome: "Discipulador Caleb", celulas: [4, 5] };
+  let sessaoPorSenha: Record<string, string>;
+  let discipuladorPeloLink: Record<string, string>;
+
+  const ligar = (
+    coluna: "acesso_celulas_senha" | "acesso_discipuladores",
+    ligada: 0 | 1,
+  ) =>
+    env.DB.prepare(`UPDATE campanhas SET ${coluna} = ?1 WHERE ativa = 1`)
+      .bind(ligada)
+      .run();
+  const entrarComoDiscipulador = (
+    corpo: object,
+    cabecalhos: Record<string, string> = { Origin: ORIGEM },
+  ) =>
+    exports.default.fetch(
+      `${ORIGEM}${ROTAS_ACESSO.entrarComoDiscipulador.caminho}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cabecalhos },
+        body: JSON.stringify(corpo),
+      },
+    );
+
+  beforeAll(async () => {
+    await semearCenario();
+    const res = await entrarComoDiscipulador({
+      discipulador: DISCIPULADOR.nome,
+      senha: DISCIPULADOR.senha,
+    });
+    expect(res.status).toBe(200);
+    const cookie = /^__Host-sessao=([^;]+)/.exec(
+      res.headers.get("Set-Cookie") ?? "",
+    )?.[1];
+    sessaoPorSenha = { Cookie: `__Host-sessao=${cookie}`, Origin: ORIGEM };
+    discipuladorPeloLink = await cabecalhosDeSessaoDaHierarquia(
+      "discipulador",
+      OUTRO.id,
+    );
+  });
+
+  // A trilha guarda o login (e segura o usuário do discipulador): limpa, para o próximo describe poder semear de novo.
+  afterAll(async () => {
+    await ligar("acesso_celulas_senha", 1);
+    await ligar("acesso_discipuladores", 1);
+    await env.DB.prepare(
+      "DELETE FROM auditoria WHERE acao = 'sessao.entrar_com_senha_discipulador'",
+    ).run();
+  });
+
+  it("o contrato declara POST /api/sessao/discipulador aberto, e ele está montado no app (corpo vazio: 400, não 404)", async () => {
+    expect(GRUPO_NO_CONTRATO.get("POST /api/sessao/discipulador")).toBe(
+      "aberto",
+    );
+    expect(
+      rotasRegistradas().map((rota) => `${rota.metodo} ${rota.caminho}`),
+    ).toContain("POST /api/sessao/discipulador");
+    const vazio = await requisitar("POST", "/api/sessao/discipulador", {
+      Origin: ORIGEM,
+    });
+    expect(vazio.status).toBe(400);
+    esperarCabecalhosDeSeguranca(vazio);
+  });
+
+  it("a sessão aberta pela senha é a do papel discipulador (o alvo dele, lido da sessão)", async () => {
+    const res = await requisitar("GET", "/api/sessao", sessaoPorSenha);
+    expect(res.status).toBe(200);
+    const { usuario } = respostaSessaoSchema.parse(await res.json());
+    expect(usuario).toMatchObject({
+      papel: "discipulador",
+      alvo: {
+        tipo: "discipulador",
+        id: DISCIPULADOR.id,
+        nome: DISCIPULADOR.nome,
+      },
+    });
+  });
+
+  it("403 em TODA rota registrada sob /api/admin e /api/painel (inclusive fora do contrato) e nos caminhos sem rota", async () => {
+    const protegidas = rotasRegistradas().filter((rota) =>
+      eDaCoordenacao(rota.caminho),
+    );
+    expect(protegidas.length).toBeGreaterThanOrEqual(30);
+    for (const rota of [
+      ...protegidas,
+      ...ROTAS_DA_COORDENACAO.filter((daCoordenacao) =>
+        daCoordenacao.caminho.startsWith("/api/admin"),
+      ),
+      ...["/api/admin", "/api/admin/qualquer", "/api/painel/x/y"].flatMap(
+        (caminho) =>
+          (["GET", ...ESCRITAS] as const).map((metodo) => ({
+            metodo,
+            caminho,
+          })),
+      ),
+    ]) {
+      const res = await requisitar(
+        rota.metodo,
+        concreto(rota.caminho),
+        sessaoPorSenha,
+      );
+      expect({
+        rota: `${rota.metodo} ${rota.caminho}`,
+        status: res.status,
+      }).toEqual({ rota: `${rota.metodo} ${rota.caminho}`, status: 403 });
+      expect(erroApiSchema.parse(await res.json()).erro.codigo).toBe(
+        "proibido",
+      );
+    }
+  });
+
+  it("a /minha é só a do discipulador: a visão e os links de vendas (mesmo pedindo outra célula) trazem o alvo da sessão e só as células dele", async () => {
+    const visao = await requisitar("GET", "/api/minha/visao", sessaoPorSenha);
+    expect(visao.status).toBe(200);
+    expect(visao.headers.get("Cache-Control")).toBe("no-store");
+    const corpoVisao = respostaVisaoIndividualSchema.parse(await visao.json());
+    expect(corpoVisao.alvo.id).toBe(DISCIPULADOR.id);
+    expect(
+      corpoVisao.equipe
+        .filter((item) => item.tipo === "celula")
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(DISCIPULADOR.celulas);
+    for (const caminho of [
+      ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+      `${ROTAS_LINK_VENDAS.meusLinksVendas.caminho}?celula_id=${OUTRO.celulas[0]}`,
+    ]) {
+      const res = await requisitar("GET", caminho, sessaoPorSenha);
+      expect(res.status).toBe(200);
+      const corpo = respostaMeusLinksVendasSchema.parse(await res.json());
+      expect({
+        caminho,
+        alvo: corpo.alvo.id,
+        celulas: corpo.itens.map((item) => item.celula_id).sort(),
+      }).toEqual({
+        caminho,
+        alvo: DISCIPULADOR.id,
+        celulas: DISCIPULADOR.celulas,
+      });
+      expect(JSON.stringify(corpo)).not.toContain(OUTRO.nome);
+    }
+  });
+
+  it("CSRF: o login de outra origem dá 403 sem sessão; com a sessão da senha, escrita de outra origem em /api/minha dá 403", async () => {
+    const antes = await env.DB.prepare(
+      "SELECT count(*) AS n FROM sessoes",
+    ).first();
+    const res = await entrarComoDiscipulador(
+      { discipulador: DISCIPULADOR.nome, senha: DISCIPULADOR.senha },
+      { Origin: ORIGEM_MALICIOSA },
+    );
+    await esperarErro(res, 403, "proibido");
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+    expect(
+      await env.DB.prepare("SELECT count(*) AS n FROM sessoes").first(),
+    ).toEqual(antes);
+    for (const metodo of ESCRITAS)
+      await esperarErro(
+        await requisitar(metodo, "/api/minha/visao", {
+          ...sessaoPorSenha,
+          Origin: ORIGEM_MALICIOSA,
+        }),
+        403,
+        "proibido",
+      );
+  });
+
+  it.each(["acesso_celulas_senha", "acesso_discipuladores"] as const)(
+    "%s desligada: o login dá 401 e a sessão da senha cai (401) em todo /api/minha; o discipulador pelo link não cai; religada, entra",
+    async (coluna) => {
+      await ligar(coluna, 0);
+      await esperarErro(
+        await entrarComoDiscipulador({
+          discipulador: DISCIPULADOR.nome,
+          senha: DISCIPULADOR.senha,
+        }),
+        401,
+        "nao_autenticado",
+      );
+      for (const caminho of [
+        "/api/sessao",
+        "/api/minha/visao",
+        ROTAS_LINK_VENDAS.meusLinksVendas.caminho,
+        "/api/minha/qualquer",
+      ])
+        await esperarErro(
+          await requisitar("GET", caminho, sessaoPorSenha),
+          401,
+          "nao_autenticado",
+        );
+      // A sessão do link continua: a chave do login por senha não a toca, e a do papel dá o 403 da D20 (seção h).
+      expect(
+        (await requisitar("GET", "/api/sessao", discipuladorPeloLink)).status,
+      ).toBe(200);
+      expect(
+        (await requisitar("GET", "/api/minha/visao", discipuladorPeloLink))
+          .status,
+      ).toBe(coluna === "acesso_discipuladores" ? 403 : 200);
+      await ligar(coluna, 1);
+      expect(
+        (await requisitar("GET", "/api/minha/visao", sessaoPorSenha)).status,
+      ).toBe(200);
+    },
+  );
 });
 
 describe("formato único de erro em todas as partes montadas", () => {

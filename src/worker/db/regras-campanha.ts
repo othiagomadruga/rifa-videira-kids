@@ -48,6 +48,15 @@ export function sqlAcessoDoPapel(papel: string): string {
  */
 export const SQL_LOGIN_CELULAS_SENHA_LIGADO = `coalesce((SELECT acesso_celulas_senha FROM campanhas WHERE ativa = 1), ${comoNumero(ACESSO_PADRAO.celulas_senha)}) = 1`;
 
+/**
+ * O login do discipulador com a senha padrão (RIFA-082, D37), em SQL: verdadeiro só com as DUAS chaves da campanha
+ * ativa ligadas, `acesso.celulas_senha` (o login com senha padrão, D29) e `acesso.discipuladores` (o papel tem acesso,
+ * D20). Nenhuma chave nova. Sem campanha ativa, o padrão das duas (ligadas). Lida na hora, numa subconsulta só (a
+ * campanha ativa, pelo índice campanhas_uma_ativa): no login (db/login-discipulador.ts) e na consulta da sessão do
+ * discipulador aberta pela senha (db/acessos.ts), nunca do cache da visão (D14).
+ */
+export const SQL_LOGIN_DISCIPULADORES_SENHA_LIGADO = `coalesce((SELECT acesso_celulas_senha = 1 AND acesso_discipuladores = 1 FROM campanhas WHERE ativa = 1), ${comoNumero(ACESSO_PADRAO.celulas_senha && ACESSO_PADRAO.discipuladores)}) = 1`;
+
 /** A chave do papel (o `chave` do 409 `acao_desligada`). */
 export const CHAVE_DO_PAPEL = {
   discipulador: "acesso.discipuladores",

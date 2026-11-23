@@ -13,6 +13,12 @@
  *   é derivada do nome da célula na hora e comparada em tempo constante: nunca é gravada nem vai para log ou trilha.
  *   Toda recusa (senha errada, célula que não existe, nome ambíguo, usuário desativado, chave desligada) é o MESMO
  *   401, sem dizer se a célula existe.
+ * - POST /api/sessao/discipulador { discipulador, senha } (RIFA-082, D37): o login do discipulador com o nome dele e a
+ *   senha padrão (a mesma regra da célula; src/shared/contracts/login-discipulador.ts) abre a sessão do discipulador,
+ *   como o link, sem link. Só com as DUAS chaves ligadas na campanha (`acesso.discipuladores` e `acesso.celulas_senha`).
+ *   A senha é derivada do nome na hora e comparada em tempo constante: nunca é gravada nem vai para log ou trilha. Toda
+ *   recusa (senha errada, discipulador que não existe, nome ambíguo ou sem letra, usuário desativado, uma das chaves
+ *   desligada) é o MESMO 401, sem dizer se o discipulador existe.
  * - POST /api/sessao/admin { usuario, senha } (RIFA-073, D33): o login do admin com o usuário e a senha que ele definiu
  *   em /api/admin/minha-senha abre a MESMA sessão do link do admin (sem link). A senha é conferida pelo PBKDF2
  *   (lib/senha.ts) mesmo quando o usuário não existe (o tempo não diz se ele existe), e toda recusa é o MESMO 401.
@@ -30,10 +36,13 @@ import {
   corpoCriarSessaoSchema,
   corpoEntrarComSenhaSchema,
   corpoEntrarComoAdminSchema,
+  corpoEntrarComoDiscipuladorSchema,
   normalizarUsuarioAdmin,
   formaDaSenhaDigitada,
   normalizarNomeCelula,
+  normalizarNomeLogin,
   senhaPadraoDaCelula,
+  senhaPadraoDoDiscipulador,
   type RespostaSessao,
 } from "../../shared/contracts";
 import {
@@ -43,6 +52,10 @@ import {
   criarSessao,
 } from "../db/acessos";
 import { abrirSessaoDaCelula, lerCelulasParaLogin } from "../db/login-celula";
+import {
+  abrirSessaoDoDiscipulador,
+  lerDiscipuladoresParaLogin,
+} from "../db/login-discipulador";
 import {
   abrirSessaoDoAdmin,
   buscarCredencialAdmin,
@@ -188,6 +201,75 @@ sessao.post(
     // Quem entrou, como GET /api/sessao devolve (com o alvo lido da hierarquia na hora).
     const aberta = await buscarSessao(c.env.DB, idHash, agora.toISOString());
     if (aberta === null) return respostaSenhaRecusada(c);
+
+    gravarCookieSessao(c, idSessao, expiraEm, agora);
+    return c.json({ usuario: aberta.usuario } satisfies RespostaSessao, 200);
+  },
+);
+
+/**
+ * A recusa do login do discipulador por senha (RIFA-082, D37): a MESMA resposta para todo caso, sem dizer se o
+ * discipulador existe nem por que não entrou (senha errada, discipulador que não existe, nome ambíguo ou sem letra nem
+ * dígito, usuário desativado, uma das duas chaves desligada).
+ */
+function respostaDiscipuladorRecusado(c: Context) {
+  return responderErro(
+    c,
+    "nao_autenticado",
+    "Não foi possível entrar com este discipulador e esta senha",
+  );
+}
+
+sessao.post(
+  "/discipulador",
+  exigirMesmaOrigem,
+  limitarRequisicoes(LIMITE_LOGIN),
+  limitarCorpo(LIMITE_CORPO_SESSAO_BYTES),
+  validarJson(corpoEntrarComoDiscipuladorSchema),
+  async (c) => {
+    c.header("Cache-Control", "no-store");
+    const { discipulador, senha } = c.req.valid("json");
+    const { ligado, discipuladores } = await lerDiscipuladoresParaLogin(
+      c.env.DB,
+    );
+    const nome = normalizarNomeLogin(discipulador);
+    const encontrados =
+      nome === ""
+        ? []
+        : discipuladores.filter(
+            (outro) => normalizarNomeLogin(outro.nome) === nome,
+          );
+    // Dois nomes de discipulador iguais depois da normalização: ambíguo, ninguém entra por eles (aviso na Hierarquia).
+    const alvo = encontrados.length === 1 ? encontrados[0] : null;
+    const esperada =
+      alvo === null ? null : senhaPadraoDoDiscipulador(alvo.nome);
+    // A comparação acontece sempre (contra uma senha que nunca confere quando não há discipulador): o tempo da resposta
+    // não diz se ele existe.
+    const confere = await textosIguaisEmTempoConstante(
+      formaDaSenhaDigitada(senha),
+      esperada ?? SENHA_QUE_NUNCA_CONFERE,
+    );
+    if (!ligado || alvo === null || esperada === null || !confere)
+      return respostaDiscipuladorRecusado(c);
+
+    const agora = new Date();
+    const idSessao = gerarSegredo();
+    const idHash = await sha256Hex(idSessao);
+    const anterior = lerCookieSessao(c);
+    const expiraEm = await abrirSessaoDoDiscipulador(c.env.DB, {
+      discipuladorId: alvo.id,
+      idHash,
+      criadoEm: agora.toISOString(),
+      expiraEm: new Date(
+        agora.getTime() + VALIDADE_SESSAO_DIAS * DIA_MS,
+      ).toISOString(),
+      idHashAnterior: anterior === null ? null : await sha256Hex(anterior),
+    });
+    // Uma chave desligada ou o usuário do discipulador desativado no meio (conferidos de novo dentro do lote).
+    if (expiraEm === null) return respostaDiscipuladorRecusado(c);
+    // Quem entrou, como GET /api/sessao devolve (com o alvo lido da hierarquia na hora).
+    const aberta = await buscarSessao(c.env.DB, idHash, agora.toISOString());
+    if (aberta === null) return respostaDiscipuladorRecusado(c);
 
     gravarCookieSessao(c, idSessao, expiraEm, agora);
     return c.json({ usuario: aberta.usuario } satisfies RespostaSessao, 200);

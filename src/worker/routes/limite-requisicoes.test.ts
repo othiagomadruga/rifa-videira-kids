@@ -3,6 +3,7 @@
 // - POST /api/sessao: 60 por minuto por IP desde a D12 (eram 10), toda tentativa conta; 60 logins de verdade
 //   do mesmo IP passam e o 61º leva 429 (RIFA-014, CA9: a reunião dos líderes atrás do Wi-Fi da igreja);
 // - POST /api/sessao/senha (RIFA-064, D29): o mesmo limite e o mesmo contador do POST /api/sessao;
+// - POST /api/sessao/discipulador (RIFA-082, D37): o mesmo limite e o mesmo contador do link e da senha da célula;
 // - /api/publico/*: 60 idas ao banco por minuto por IP; resposta do cache não conta.
 // Cada teste usa IPs próprios (aleatórios): os contadores do binding valem para o arquivo todo.
 import { env, exports } from "cloudflare:workers";
@@ -12,11 +13,17 @@ import {
   STATUS_HTTP_DO_ERRO,
   erroApiSchema,
   senhaPadraoDaCelula,
+  senhaPadraoDoDiscipulador,
 } from "../../shared/contracts";
 import { SEM_CACHE } from "../lib/cache-publico";
 import { LIMITE_LOGIN, LIMITE_PUBLICO } from "../lib/limite-requisicoes";
 import { ORIGEM, criarAcessoNoBanco } from "../test/acesso-teste";
-import { CELULAS, semearCampanha, semearCenario } from "../test/painel-apoio";
+import {
+  CELULAS,
+  DISCIPULADORES,
+  semearCampanha,
+  semearCenario,
+} from "../test/painel-apoio";
 import { PREFIXO_PUBLICO, criarPublico } from "./publico";
 
 /** Um IPv4 de documentação diferente a cada chamada. */
@@ -219,6 +226,89 @@ describe("RIFA-064 (D29): POST /api/sessao/senha usa o mesmo limite de tentativa
       ).toBe(401);
     await esperar429(
       await entrarComSenha(ip, { celula: "x", senha: "@x1234" }),
+    );
+    await esperar429(await entrar(ip));
+  });
+});
+
+describe("RIFA-082 (D37): POST /api/sessao/discipulador usa o mesmo limite e o mesmo contador do link e da célula", () => {
+  function pedirNoIp(ip: string, caminho: string, corpo: object) {
+    return exports.default.fetch(`${ORIGEM}${caminho}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: ORIGEM,
+        "CF-Connecting-IP": ip,
+      },
+      body: JSON.stringify(corpo),
+    });
+  }
+  const entrarComoDiscipulador = (ip: string, corpo: object) =>
+    pedirNoIp(ip, "/api/sessao/discipulador", corpo);
+  const certa = {
+    discipulador: DISCIPULADORES[0].nome,
+    senha: senhaPadraoDoDiscipulador(DISCIPULADORES[0].nome)!,
+  };
+
+  beforeAll(async () => {
+    await semearCenario();
+  });
+
+  // O login certo grava a trilha, que segura o usuário do discipulador: limpa para os testes de baixo poderem semear.
+  afterAll(async () => {
+    await env.DB.prepare(
+      "DELETE FROM auditoria WHERE acao = 'sessao.entrar_com_senha_discipulador'",
+    ).run();
+  });
+
+  it("60 senhas erradas do mesmo IP levam 401; a 61ª, 429, mesmo com a senha certa; outro IP entra", async () => {
+    await esperarJanelaInteira(LIMITE_LOGIN.periodoSegundos, 20_000);
+    const ip = ipNovo();
+    for (let vez = 1; vez <= LIMITE_LOGIN.limite; vez++) {
+      const res = await entrarComoDiscipulador(ip, {
+        discipulador: certa.discipulador,
+        senha: `@tentativa${vez}`,
+      });
+      expect({ vez, status: res.status }).toEqual({ vez, status: 401 });
+    }
+    const sessentaEUm = await entrarComoDiscipulador(ip, certa);
+    expect(sessentaEUm.headers.get("Set-Cookie")).toBeNull();
+    await esperar429(sessentaEUm);
+    expect((await entrarComoDiscipulador(ipNovo(), certa)).status).toBe(200);
+  });
+
+  it("o contador é o mesmo: 20 tentativas pelo link, 20 pela senha da célula e 20 pela do discipulador esgotam o IP", async () => {
+    await esperarJanelaInteira(LIMITE_LOGIN.periodoSegundos, 20_000);
+    const ip = ipNovo();
+    const terco = LIMITE_LOGIN.limite / 3;
+    for (let vez = 0; vez < terco; vez++)
+      expect((await entrar(ip)).status).toBe(401);
+    for (let vez = 0; vez < terco; vez++)
+      expect(
+        (
+          await pedirNoIp(ip, "/api/sessao/senha", {
+            celula: "x",
+            senha: "@x1234",
+          })
+        ).status,
+      ).toBe(401);
+    for (let vez = 0; vez < terco; vez++)
+      expect(
+        (
+          await entrarComoDiscipulador(ip, {
+            discipulador: "x",
+            senha: "@x1234",
+          })
+        ).status,
+      ).toBe(401);
+    await esperar429(
+      await entrarComoDiscipulador(ip, { discipulador: "x", senha: "@x1234" }),
+    );
+    await esperar429(
+      await pedirNoIp(ip, "/api/sessao/senha", {
+        celula: "x",
+        senha: "@x1234",
+      }),
     );
     await esperar429(await entrar(ip));
   });
