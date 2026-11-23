@@ -19,6 +19,7 @@ import ci from "../../.github/workflows/ci.yml?raw";
 import voltarVersao from "../../.github/workflows/voltar-versao.yml?raw";
 import packageJson from "../../package.json?raw";
 import wranglerJsonc from "../../wrangler.jsonc?raw";
+import { CRON_RELATORIO_DIARIO } from "../shared/contracts";
 import { LIMITE_LOGIN, LIMITE_PUBLICO } from "./lib/limite-requisicoes";
 
 /** JSONC → JSON: tira comentários (fora de strings) e vírgulas antes de } ou ]. */
@@ -47,6 +48,9 @@ function lerJsonc(texto: string): unknown {
 }
 
 interface ConfigWrangler {
+  triggers?: { crons?: string[] };
+  send_email?: unknown;
+  mtls_certificates?: unknown;
   preview_urls?: boolean;
   workers_dev?: boolean;
   routes?: unknown[];
@@ -81,6 +85,20 @@ describe("wrangler.jsonc", () => {
     expect(namespaces).toHaveLength(2);
     expect(new Set(namespaces).size).toBe(2);
     for (const id of namespaces) expect(id).toMatch(/^[1-9]\d*$/);
+  });
+});
+
+describe("wrangler.jsonc: o relatório diário por e-mail (RIFA-086, D40)", () => {
+  it("um cron só, o do relatório: 10:00 UTC (07:00 em Belém), o mesmo do código", () => {
+    expect(config.triggers).toEqual({ crons: [CRON_RELATORIO_DIARIO] });
+    expect(CRON_RELATORIO_DIARIO).toBe("0 10 * * *");
+  });
+
+  it("sem os bindings de e-mail e de mTLS por enquanto (o SM liga depois) e nenhum endereço de e-mail no arquivo", () => {
+    expect(config.send_email).toBeUndefined();
+    expect(config.mtls_certificates).toBeUndefined();
+    expect(wranglerJsonc).not.toContain("allowed_destination_addresses");
+    expect(wranglerJsonc).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
   });
 });
 

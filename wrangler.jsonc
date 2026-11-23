@@ -30,6 +30,13 @@
       "migrations_dir": "migrations",
     },
   ],
+  // Relatório diário por e-mail (RIFA-086, D40): 10:00 UTC = 07:00 em Belém (UTC−3), com o dia anterior. O handler é o
+  // `scheduled` de src/worker/agendado.ts (CRON_RELATORIO_DIARIO do contrato). O e-mail só sai com o binding
+  // `send_email` EMAIL e o segredo RELATORIO_EMAILS (docs/lancamento.md); sem eles, o cron só avisa no log.
+  // Os destinatários NUNCA entram aqui (nem na lista de destinos do binding): o repositório é público.
+  "triggers": {
+    "crons": ["0 10 * * *"],
+  },
   // Limite de requisições por IP (RIFA-013b; src/worker/lib/limite-requisicoes.ts, que tem as mesmas
   // regras). Conta por data center da Cloudflare; o período só pode ser 10 ou 60 s. Os namespace_id são
   // números escolhidos por nós, únicos na conta. Declarados também em src/worker/worker-env.d.ts.
