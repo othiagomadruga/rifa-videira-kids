@@ -79,10 +79,11 @@ import {
 } from "./regras";
 import { BOM_UTF8, TIPOS_RELATORIO, TIPO_CONTEUDO_CSV } from "./relatorio";
 import {
-  ERROS_SALDO_EFI,
   INICIO_HTML_RELATORIO_DIARIO,
   LIMITE_DESTINATARIOS_RELATORIO_DIARIO,
+  TIPOS_RELATORIO_DIARIO,
   TIPO_CONTEUDO_HTML,
+  TIPO_RELATORIO_DIARIO_PADRAO,
 } from "./relatorio-diario";
 import {
   LIMITE_NOME_COMPRADOR,
@@ -3798,18 +3799,28 @@ export const ROTAS_MAIORES_COMPRADORES = {
 export type NomeRotaMaioresCompradores = keyof typeof ROTAS_MAIORES_COMPRADORES;
 
 // ---------------------------------------------------------------------------------------------------
-// Relatório diário por e-mail e saldo da Efí (RIFA-086, D40): só admin. Constantes sem zod em ./relatorio-diario.
+// Relatório diário por e-mail (RIFA-086 e RIFA-087, D40) e o "Arrecadado" do admin (RIFA-087): só admin. Constantes
+// sem zod em ./relatorio-diario.
 // ---------------------------------------------------------------------------------------------------
 
 /** Alvo da trilha do envio pedido pelo admin (`relatorio_diario.enviar`). */
 export const ALVO_AUDITORIA_RELATORIO_DIARIO = "relatorio_diario";
 
+/** Qual dos dois e-mails do dia: `manha` (padrão: o dia anterior fechado) ou `tarde` (hoje até a hora do envio). */
+const tipoRelatorioDiarioSchema = z
+  .enum(TIPOS_RELATORIO_DIARIO)
+  .default(TIPO_RELATORIO_DIARIO_PADRAO);
+
 /**
- * Consulta da prévia: `data` (AAAA-MM-DD) é o dia de referência; ausente = ontem no fuso da campanha (o dia que o
- * e-mail das 7h mostra). Hoje também vale (o dia ainda aberto); depois de hoje, 400 `data_futura`; antes do início ou
- * depois do fim da campanha, 400 `fora_da_campanha` (o e-mail desses dias não sai).
+ * Consulta da prévia: `tipo` (TIPOS_RELATORIO_DIARIO; padrão `manha`) e `data` (AAAA-MM-DD), o dia de referência.
+ * - manhã: `data` ausente = ontem no fuso da campanha (o dia que o e-mail das 7h mostra); hoje também vale (o dia
+ *   ainda aberto);
+ * - tarde: `data` ausente = hoje; outro dia, 400 `parcial_so_de_hoje` (a parcial é de hoje até agora).
+ * Depois de hoje, 400 `data_futura`; antes do início ou depois do fim da campanha (qualquer data que exista, até
+ * 0001-01-01), 400 `fora_da_campanha` (o e-mail desses dias não sai).
  */
 export const consultaPreviaRelatorioDiarioSchema = z.object({
+  tipo: tipoRelatorioDiarioSchema,
   data: dataLocalSchema.optional(),
 });
 export type ConsultaPreviaRelatorioDiario = z.output<
@@ -3821,17 +3832,19 @@ export const respostaPreviaRelatorioDiarioSchema = z
   .string()
   .startsWith(INICIO_HTML_RELATORIO_DIARIO);
 
-/** Corpo do envio pedido pelo admin: `data` como na prévia (ausente = ontem). Campo a mais: 400. */
+/** Corpo do envio pedido pelo admin: `tipo` e `data` como na prévia. Campo a mais: 400. */
 export const corpoEnviarRelatorioDiarioSchema = z.strictObject({
+  tipo: tipoRelatorioDiarioSchema,
   data: dataLocalSchema.optional(),
 });
 export type CorpoEnviarRelatorioDiario = z.input<
   typeof corpoEnviarRelatorioDiarioSchema
 >;
 
-/** 200 do envio: o dia de referência e as contagens (um e-mail por destinatário). Nunca os e-mails. */
+/** 200 do envio: o tipo, o dia de referência e as contagens (um e-mail por destinatário). Nunca os e-mails. */
 export const respostaEnviarRelatorioDiarioSchema = z
   .strictObject({
+    tipo: z.enum(TIPOS_RELATORIO_DIARIO),
     data: dataLocalSchema,
     destinatarios: z
       .number()
@@ -3854,47 +3867,18 @@ export type RespostaEnviarRelatorioDiario = z.infer<
 >;
 
 /**
- * Saldo da conta Efí (GET /v2/gn/saldo da API Pix), em centavos:
- * - `configurado: false` (sem o certificado mTLS ou sem os segredos): `saldo_centavos` null, sem `erro`;
- * - configurado e a consulta falhou: `saldo_centavos` null e `erro` (ERROS_SALDO_EFI);
- * - configurado e deu certo: `saldo_centavos` (pode ser negativo, se a Efí um dia mandar) e sem `erro`.
- * `consultado_em`: quando a Efí foi consultada (a resposta vale CACHE_SALDO_EFI_MS na memória do Worker).
- */
-export const respostaSaldoEfiSchema = z
-  .strictObject({
-    configurado: z.boolean(),
-    saldo_centavos: z.number().int().nullable(),
-    consultado_em: instanteSchema,
-    erro: z.enum(ERROS_SALDO_EFI).optional(),
-  })
-  .superRefine((resposta, ctx) => {
-    const problema = !resposta.configurado
-      ? resposta.saldo_centavos !== null || resposta.erro !== undefined
-        ? "Sem a Efí configurada, não há saldo nem erro"
-        : null
-      : (resposta.saldo_centavos === null) === (resposta.erro === undefined)
-        ? "Com a Efí configurada, vem o saldo ou o erro (um dos dois)"
-        : null;
-    if (problema !== null)
-      ctx.addIssue({
-        code: "custom",
-        path: ["saldo_centavos"],
-        message: problema,
-      });
-  });
-export type RespostaSaldoEfi = z.infer<typeof respostaSaldoEfiSchema>;
-
-/**
- * Relatório diário por e-mail (RIFA-086, D40), SÓ ADMIN (o sub-app exige o papel no handler de cada rota, antes de ler
- * a consulta ou o corpo; nunca num use de /api/admin/*). Catálogo à parte de ROTAS, como ROTAS_MAIORES_COMPRADORES; o
- * src/worker/protecao.test.ts o percorre (401 sem sessão, 403 da coordenação e da hierarquia).
+ * Relatório diário por e-mail (RIFA-086 e RIFA-087, D40), SÓ ADMIN (o sub-app exige o papel no handler de cada rota,
+ * antes de ler a consulta ou o corpo; nunca num use de /api/admin/*). Catálogo à parte de ROTAS, como
+ * ROTAS_MAIORES_COMPRADORES; o src/worker/protecao.test.ts o percorre (401 sem sessão, 403 da coordenação e da
+ * hierarquia).
  *
  * - prévia: 200 com o HTML do e-mail (`tipoConteudo`), com uma CSP própria que libera só os estilos inline do e-mail
- *   (nenhum script). Erros em JSON: 400 (`data` inválida, futura ou fora da campanha), 404 `nao_encontrado` (sem
- *   campanha ativa).
+ *   (nenhum script). Erros em JSON: 400 (`tipo` ou `data` inválidos, data futura, fora da campanha ou, na tarde, outro
+ *   dia que não hoje), 404 `nao_encontrado` (sem campanha ativa).
  * - envio: um e-mail por destinatário do segredo `RELATORIO_EMAILS`, pelo binding `EMAIL` (send_email da Cloudflare).
  *   503 `nao_configurado` sem o binding ou sem destinatário válido (antes de ler o banco); 400 e 404 como a prévia.
- *   Trilha `relatorio_diario.enviar` (sem os e-mails). Mesma origem (CSRF), como toda escrita da coordenação.
+ *   Trilha `relatorio_diario.enviar` com o tipo (sem os e-mails). Mesma origem (CSRF), como toda escrita da
+ *   coordenação.
  */
 export const ROTAS_RELATORIO_DIARIO = {
   previaRelatorioDiario: {
@@ -3924,19 +3908,35 @@ export const ROTAS_RELATORIO_DIARIO = {
 export type NomeRotaRelatorioDiario = keyof typeof ROTAS_RELATORIO_DIARIO;
 
 /**
- * Saldo da conta Efí (RIFA-086, D40), SÓ ADMIN (a coordenação leva 403, a hierarquia também): 200 sempre que o login
- * passa, com `configurado: false` quando a Efí não está ligada e `erro` quando a consulta falhou (o cartão mostra
- * "indisponível"; a Efí fora do ar não vira 5xx). `Cache-Control: no-store`. Catálogo à parte, como o de cima.
+ * O "Arrecadado" do admin (RIFA-087): quanto entrou, do banco (a soma dos pedidos pagos que a Rifei manda pelo
+ * webhook, antes da tarifa da Efí; D2, D32). Nada é perguntado à Efí nem à Rifei.
+ * - `data`: hoje no fuso da campanha;
+ * - `campanha`: da campanha inteira até agora, com a MESMA regra de `vendas` do resumo do painel no escopo campanha
+ *   (aprovados, sem os desconsiderados, dentro das datas da campanha, com as vendas sem célula);
+ * - `hoje`: só o dia de hoje, pela mesma regra; null fora das datas da campanha (antes do início ou depois do fim).
  */
-export const ROTAS_SALDO_EFI = {
-  saldoEfi: {
+export const respostaArrecadadoSchema = z.strictObject({
+  data: dataLocalSchema,
+  campanha: totaisVendasSchema,
+  hoje: totaisVendasSchema.nullable(),
+  atualizado_em: instanteSchema,
+});
+export type RespostaArrecadado = z.infer<typeof respostaArrecadadoSchema>;
+
+/**
+ * O "Arrecadado" (RIFA-087), SÓ ADMIN (a coordenação e a hierarquia levam 403): o cartão da Visão geral. 404
+ * `nao_encontrado` sem campanha ativa. `Cache-Control: no-store` (o exigirSessao põe). Catálogo à parte, como o de
+ * cima; substitui o saldo da Efí da RIFA-086.
+ */
+export const ROTAS_ARRECADADO = {
+  arrecadado: {
     metodo: "GET",
-    caminho: "/api/admin/efi/saldo",
+    caminho: "/api/admin/arrecadado",
     grupo: "coordenacao",
     papeis: ["admin"],
     situacao: "detalhada",
-    sucesso: { status: 200, corpo: respostaSaldoEfiSchema },
+    sucesso: { status: 200, corpo: respostaArrecadadoSchema },
   },
 } as const satisfies Record<string, DefinicaoRota>;
 
-export type NomeRotaSaldoEfi = keyof typeof ROTAS_SALDO_EFI;
+export type NomeRotaArrecadado = keyof typeof ROTAS_ARRECADADO;
