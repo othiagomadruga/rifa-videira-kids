@@ -11,7 +11,7 @@ export const AJUDA = {
   maioresCompradores:
     "Quem mais comprou bilhetes, com o telefone para agradecer ou tirar uma dúvida. Só o administrador vê esta lista. Ex.: em “Esta semana”, só as compras da semana.",
   rankingPorGrupo:
-    "A mesma disputa, separada pelo grupo do discipulador (adultos da manhã, adultos da noite, jovens e adolescentes): a posição é dentro do grupo. O grupo de cada discipulador se escolhe na Hierarquia.",
+    "A mesma disputa, separada por grupo (adultos da manhã, adultos da noite, jovens e adolescentes): a posição é dentro do grupo. O grupo se escolhe na Hierarquia: o do discipulador vale para as células dele, menos as que têm grupo próprio.",
   colunaSituacao:
     "Se está em dia com o que se esperava vender até ontem ou se ficou para trás. Ex.: “Em dia” quer dizer que vendeu pelo menos o esperado até ontem.",
 } as const;

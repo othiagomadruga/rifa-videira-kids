@@ -82,8 +82,10 @@ export function RankingPorGrupo({ nivel, periodo, redeUnica }: Props) {
       ) : (
         <>
           <p className="rankings-grupos__descricao">
-            A mesma disputa, separada pelo grupo do discipulador: a posição é
-            dentro do grupo.
+            {/* RIFA-085: no nível célula, a célula de grupo próprio fica no grupo dela. */}
+            {resultado.resposta.nivel === "celula"
+              ? "A mesma disputa, separada por grupo: a posição é dentro do grupo. Cada célula fica no grupo do discipulador, ou no grupo próprio dela, se tiver."
+              : "A mesma disputa, separada pelo grupo do discipulador: a posição é dentro do grupo."}
           </p>
           {resultado.resposta.grupos.map((grupo) => (
             <Grupo

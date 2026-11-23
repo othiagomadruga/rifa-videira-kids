@@ -221,3 +221,25 @@ describe("RIFA-084: o ranking por grupo nos Rankings", () => {
     );
   });
 });
+
+describe("RIFA-085 (D39, adendo): o grupo próprio da célula", () => {
+  it("a descrição da seção: nas células, diz que a célula de grupo próprio fica no grupo dela; nos discipuladores, o grupo do discipulador", async () => {
+    abrir();
+    const descricao = async () =>
+      (await secao()).querySelector(".rankings-grupos__descricao")?.textContent;
+    expect(await descricao()).toBe(
+      "A mesma disputa, separada por grupo: a posição é dentro do grupo. Cada célula fica no grupo do discipulador, ou no grupo próprio dela, se tiver.",
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Discipuladores" }));
+    await waitFor(() =>
+      expect(api.pedidosDosGrupos.at(-1)).toBe(
+        "/api/painel/ranking-grupos?nivel=discipulador&janela=atual",
+      ),
+    );
+    await waitFor(async () =>
+      expect(await descricao()).toBe(
+        "A mesma disputa, separada pelo grupo do discipulador: a posição é dentro do grupo.",
+      ),
+    );
+  });
+});

@@ -168,7 +168,9 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   (`grupoDaCelula`) e a dica embaixo. O PUT manda sempre `grupo_id`. A tabela das células ganha a coluna **"Grupo"**
   depois da Divisão: o grupo efetivo (`grupo_efetivo_nome`), ou "Sem grupo"; quando é o próprio, o nome com a marca
   discreta "(da célula)" (`.hierarquia-suave`, menor). A API falsa calcula o próprio e o efetivo como os `LEFT JOIN`s da
-  API.
+  API. Nos Rankings, a descrição da seção "Ranking por grupo" no nível células diz que a célula de grupo próprio fica no
+  grupo dela (no nível discipuladores, continua "separada pelo grupo do discipulador"), e as ajudas `rankingPorGrupo` e
+  `grupoDoDiscipulador` citam o grupo próprio.
 - **Rankings** (`pages/rankings/RankingPorGrupo.tsx`): embaixo do ranking de todas, dentro do painel da aba, a seção
   **"Ranking por grupo"** (`h2` com a ajuda `rankingPorGrupo`), montada só quando o ranking de cima chegou. Pede
   `GET /api/painel/ranking-grupos` (`caminhoDoRankingGrupos`, cópia conferida em `rankings-contrato.test.ts`) no nível
