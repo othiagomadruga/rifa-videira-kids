@@ -1028,6 +1028,52 @@ primeira em português). **Sem telefone e sem R$** (D12): o schema estrito não 
 - **Erros:** 401; 403 `proibido` (líder, rede e coordenação); 403 `acesso_desligado` com `acesso.discipuladores`
   desligado (D20, como todo `/api/minha/*`); 400; 404 sem campanha ativa.
 
+## Relatório diário por e-mail e saldo da Efí (RIFA-086; docs/decisions.md D40)
+
+Contrato: as constantes em `src/shared/contracts/relatorio-diario.ts` (sem zod: o cron, o remetente, o link do painel, o
+teto de destinatários, `TIPO_CONTEUDO_HTML`, `ERROS_SALDO_EFI` e `CACHE_SALDO_EFI_MS`); os schemas e os catálogos à parte
+`ROTAS_RELATORIO_DIARIO` e `ROTAS_SALDO_EFI` em `api.ts`. As três rotas são **só do admin** (401 sem sessão; 403
+`proibido` para a coordenação e a hierarquia, antes de ler a consulta ou o corpo) e saem com `Cache-Control: no-store`.
+
+O e-mail das 7h não tem rota: é o `scheduled` do Worker (cron `0 10 * * *` no `wrangler.jsonc`, 07:00 em Belém), que
+manda o e-mail de ONTEM a cada destinatário do segredo `RELATORIO_EMAILS` pelo binding `EMAIL` (send_email). Antes do
+início e depois do fim da campanha, não manda; sem o binding ou sem destinatário, só avisa no log.
+
+### `GET /api/admin/relatorio-diario/previa?data=AAAA-MM-DD` (**só admin**)
+
+O HTML do e-mail do dia (o mesmo que o cron manda), para ver no navegador. `data` ausente = ontem no fuso da campanha;
+hoje também vale (o dia ainda aberto). 200 com `Content-Type: text/html; charset=utf-8` e a CSP própria da prévia
+(`default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors
+'none'`: só o estilo inline, nenhum script).
+
+- **Erros (JSON):** 400 `requisicao_invalida` com `data` fora do formato, depois de hoje (detalhe `data_futura`) ou
+  fora das datas da campanha (detalhe `fora_da_campanha`); 404 `nao_encontrado` sem campanha ativa.
+
+### `POST /api/admin/relatorio-diario/enviar` (**só admin**)
+
+Corpo `{ "data"?: "AAAA-MM-DD" }` (estrito; ausente = ontem). Envia agora um e-mail por destinatário do segredo.
+
+```json
+{ "data": "2026-11-23", "destinatarios": 2, "enviados": 2, "falhas": 0 }
+```
+
+- Só contagens, nunca os e-mails. Trilha `relatorio_diario.enviar` (alvo `relatorio_diario`; o dia e as contagens).
+- **Erros:** 503 `nao_configurado` sem o binding `EMAIL` ou sem destinatário válido (antes de ler o banco); 400 e 404
+  como a prévia; 403 de outra origem (CSRF).
+
+### `GET /api/admin/efi/saldo` (**só admin**)
+
+O saldo da conta Efí (`GET /v2/gn/saldo` da API Pix, pelo certificado mTLS `EFI_CERT` e os segredos `EFI_CLIENT_ID` e
+`EFI_CLIENT_SECRET`). 200 sempre que o login passa; a resposta vale ~60 s na memória do Worker.
+
+```json
+{ "configurado": true, "saldo_centavos": 1234567, "consultado_em": "2026-11-24T10:00:00.000Z" }
+```
+
+- Sem a Efí configurada: `{ "configurado": false, "saldo_centavos": null, "consultado_em": ... }`.
+- A Efí falhou: `saldo_centavos` null e `erro`: `autenticacao` (token ou certificado recusado), `consulta` (erro ou
+  conexão caída na consulta), `tempo_esgotado` (5 s) ou `resposta_invalida` (formato fora da documentação).
+
 ## Regras da campanha (Sprint 6; docs/decisions.md D20)
 
 Rotas **só de admin**, no catálogo `ROTAS_REGRAS_CAMPANHA` de `api.ts` (à parte de `ROTAS` até a API montá-las:

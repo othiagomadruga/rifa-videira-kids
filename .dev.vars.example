@@ -14,3 +14,12 @@ RIFEI_API_TOKEN=
 # Chave que cifra no D1 o token colado na tela (RIFA-070, D32): ao menos 32 caracteres aleatórios
 # (`openssl rand -base64 32`). Sem ela, a tela de Conexão com a Rifei não guarda o token.
 RIFEI_CHAVE_CIFRA=troque-me-por-uma-chave-aleatoria-de-32-caracteres
+
+# Relatório diário por e-mail (RIFA-086, D40): destinatários separados por vírgula. No dev, deixe vazio ou use um
+# endereço seu de teste: sem o binding EMAIL (que o `npm run dev` não tem), nada é enviado.
+RELATORIO_EMAILS=
+
+# Saldo da Efí (RIFA-086, D40): credenciais da aplicação na Efí. No dev, deixe vazio (sem o certificado mTLS EFI_CERT,
+# o saldo fica "não configurado").
+EFI_CLIENT_ID=
+EFI_CLIENT_SECRET=
