@@ -2,10 +2,11 @@
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
 // 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql, 0014_codigo_afiliado_rifei.sql, 0015_senha_admin.sql,
-// 0016_bilhetes_campanha.sql, 0017_comprador_contato.sql e 0018_grupos.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006
-// até a 0018 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações
+// 0016_bilhetes_campanha.sql, 0017_comprador_contato.sql, 0018_grupos.sql e 0019_grupo_da_celula.sql), aplicado pelo
+// setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006
+// até a 0019 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações
 // anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7;
-// RIFA-056; RIFA-061; RIFA-064; RIFA-070; RIFA-073; RIFA-075; RIFA-076; RIFA-084).
+// RIFA-056; RIFA-061; RIFA-064; RIFA-070; RIFA-073; RIFA-075; RIFA-076; RIFA-084; RIFA-085).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -116,7 +117,8 @@ describe("migrações: schema do D1", () => {
       campanhas: ["campanhas_uma_ativa"],
       // 0018 (RIFA-084, D39): os discipuladores de cada grupo (o ranking por grupo e o SET NULL ao apagar o grupo).
       discipuladores: ["discipuladores_por_rede", "discipuladores_por_grupo"],
-      celulas: ["celulas_por_discipulador"],
+      // 0019 (RIFA-085): as células com grupo próprio (o ranking por grupo e o SET NULL ao apagar o grupo).
+      celulas: ["celulas_por_discipulador", "celulas_por_grupo"],
       afiliados: ["afiliados_por_celula"],
       pedidos: [
         "pedidos_por_afiliado_status",
@@ -2610,7 +2612,10 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         TEST_MIGRATIONS.filter((migracao) => migracao.name < "0018"),
       );
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0019"),
+      );
     });
 
     it("a 0018 foi aplicada sobre tudo o que existia: nada muda, cada discipulador fica sem grupo e os 4 grupos nascem na ordem", async () => {
@@ -2689,6 +2694,92 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       expect(await grupoDoDiscipulador()).toBe(4);
       await db.prepare("DELETE FROM grupos WHERE id = 4").run();
       expect(await grupoDoDiscipulador()).toBeNull();
+    });
+  });
+
+  describe("0019 sobre dados que já existiam (RIFA-085, adendo da D39)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram as migrações até a 0018.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0019"),
+      );
+      // Um discipulador com grupo antes da 0019: as células dele continuam herdando (o grupo próprio nasce NULL).
+      const { id } = (await db
+        .prepare("SELECT id FROM discipuladores ORDER BY id LIMIT 1")
+        .first<{ id: number }>())!;
+      await db
+        .prepare("UPDATE discipuladores SET grupo_id = 3 WHERE id = ?1")
+        .bind(id)
+        .run();
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0019 foi aplicada sobre tudo o que existia: nada muda e cada célula fica sem grupo próprio (herda o do discipulador)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toContain(
+        "0019_grupo_da_celula.sql",
+      );
+      expect(antes.celulas.length).toBeGreaterThan(0);
+      expect(antes.celulas[0]).not.toHaveProperty("grupo_id");
+      const { celulas, ...depois } = await fotografarTodasAsTabelas(db);
+      const { celulas: celulasAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(celulas).toEqual(
+        celulasAntes.map((celula) => ({ ...celula, grupo_id: null })),
+      );
+      // O discipulador com grupo continua com ele (a coluna nova é só da célula).
+      expect(
+        (depois.discipuladores as { grupo_id: number | null }[]).some(
+          (discipulador) => discipulador.grupo_id === 3,
+        ),
+      ).toBe(true);
+    });
+
+    it("o grupo_id da célula aponta para um grupo que existe; apagar o grupo deixa a célula herdando (SET NULL), sem apagá-la", async () => {
+      const { id } = antes.celulas[0] as { id: number };
+      const grupoDaCelula = async () =>
+        (
+          await db
+            .prepare("SELECT grupo_id FROM celulas WHERE id = ?1")
+            .bind(id)
+            .first<{ grupo_id: number | null }>()
+        )?.grupo_id;
+      onTestFinished(async () => {
+        await db.batch([
+          db
+            .prepare("UPDATE celulas SET grupo_id = NULL WHERE id = ?1")
+            .bind(id),
+          db.prepare(
+            "INSERT OR IGNORE INTO grupos (id, nome, ordem) VALUES (4, 'Adolescentes', 4)",
+          ),
+        ]);
+      });
+      await expect(
+        db
+          .prepare("UPDATE celulas SET grupo_id = 999 WHERE id = ?1")
+          .bind(id)
+          .run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      await db
+        .prepare("UPDATE celulas SET grupo_id = 4 WHERE id = ?1")
+        .bind(id)
+        .run();
+      expect(await grupoDaCelula()).toBe(4);
+      const quantas = async () =>
+        (await db
+          .prepare("SELECT count(*) AS n FROM celulas")
+          .first<{ n: number }>())!.n;
+      const total = await quantas();
+      await db.prepare("DELETE FROM grupos WHERE id = 4").run();
+      expect(await grupoDaCelula()).toBeNull();
+      expect(await quantas()).toBe(total);
     });
   });
 

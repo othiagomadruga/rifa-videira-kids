@@ -133,13 +133,18 @@ const SELECT_DISCIPULADOR = `
   JOIN redes AS r ON r.id = d.rede_id
   LEFT JOIN grupos AS g ON g.id = d.grupo_id`;
 
+// RIFA-085 (D39, adendo): o grupo próprio da célula (LEFT JOIN: sem grupo próprio, os dois null) e o efetivo (o
+// próprio; senão, o do discipulador; senão, os dois null), lido na hora como o nome do discipulador e da rede.
 const SELECT_CELULA = `
   SELECT c.id, c.discipulador_id, c.nome, c.qtd_pessoas, c.lider_nome, c.lider_email,
     c.lider_telefone, d.nome AS discipulador_nome, d.rede_id, r.nome AS rede_nome, r.divisao,
+    c.grupo_id, gc.nome AS grupo_nome, ge.id AS grupo_efetivo_id, ge.nome AS grupo_efetivo_nome,
     c.criado_em, c.atualizado_em
   FROM celulas AS c
   JOIN discipuladores AS d ON d.id = c.discipulador_id
-  JOIN redes AS r ON r.id = d.rede_id`;
+  JOIN redes AS r ON r.id = d.rede_id
+  LEFT JOIN grupos AS gc ON gc.id = c.grupo_id
+  LEFT JOIN grupos AS ge ON ge.id = COALESCE(c.grupo_id, d.grupo_id)`;
 
 async function buscar<T>(
   db: D1Database,
@@ -244,8 +249,8 @@ type ValorColuna = string | number | null;
 /**
  * Como cada coluna entra no resumo da trilha: `nome` (da rede, do discipulador ou da célula) e `valor` (divisão,
  * ids e qtd_pessoas) com o antes e o depois; `pessoal` (os dados do líder e o responsável da rede) só pelo nome
- * da coluna, nunca o valor. `opcional` (o grupo do discipulador, RIFA-084) é um `valor` que, na criação e na remoção,
- * só aparece quando não é null (o resumo de quem não tem grupo fica como antes da coluna).
+ * da coluna, nunca o valor. `opcional` (o grupo do discipulador, RIFA-084, e o da célula, RIFA-085) é um `valor` que,
+ * na criação e na remoção, só aparece quando não é null (o resumo de quem não tem grupo fica como antes da coluna).
  */
 type FormatoColuna = "nome" | "valor" | "opcional" | "pessoal";
 
@@ -303,6 +308,8 @@ const ENTIDADES = {
       { nome: "lider_nome", formato: "pessoal" },
       { nome: "lider_email", formato: "pessoal" },
       { nome: "lider_telefone", formato: "pessoal" },
+      // RIFA-085 (D39, adendo): o grupo próprio (null = herda o do discipulador).
+      { nome: "grupo_id", formato: "opcional" },
     ],
     colunaDoAcesso: "celula_id",
     acesso: "acesso do líder",
@@ -502,7 +509,8 @@ function referenciaInvalida(referencia: Referencia): Falha {
 
 /**
  * Coluna ausente no corpo do PUT: mantém o valor gravado (o do retrato lido). No POST, vira null. Hoje só o grupo do
- * discipulador (RIFA-084, D39): uma aba antiga do site, que não conhece o campo, não apaga o grupo ao renomear.
+ * discipulador (RIFA-084, D39) e o da célula (RIFA-085): uma aba antiga do site, que não conhece o campo, não apaga o
+ * grupo ao editar.
  */
 const MANTER = Symbol("manter o valor gravado");
 type ValorGravado = ValorColuna | typeof MANTER;
@@ -558,7 +566,7 @@ async function gravarLote(
     if (violou(erro, "UNIQUE"))
       return falha("nome_duplicado", TEXTOS[tabela].duplicado);
     if (violou(erro, "FOREIGN KEY")) {
-      // Com uma referência só, é ela; com mais (o discipulador: a rede e o grupo), a que sumiu enquanto isso.
+      // Com uma referência só, é ela; com mais (a rede ou o discipulador, e o grupo), a que sumiu enquanto isso.
       if (referencias.length === 1) return referenciaInvalida(referencias[0]);
       for (const referencia of referencias)
         if (!(await existe(db, referencia.tabela, referencia.id)))
@@ -706,13 +714,15 @@ const valoresDiscipulador = (dados: DadosDiscipulador): ValorGravado[] => [
   // RIFA-084 (D39): ausente = MANTER (o gravado no PUT; sem grupo no POST).
   dados.grupo_id === undefined ? MANTER : dados.grupo_id,
 ];
-const valoresCelula = (dados: DadosCelula): ValorColuna[] => [
+const valoresCelula = (dados: DadosCelula): ValorGravado[] => [
   dados.discipulador_id,
   normalizarEspacos(dados.nome),
   dados.qtd_pessoas,
   normalizarEspacos(dados.lider_nome),
   dados.lider_email,
   textoOpcional(dados.lider_telefone),
+  // RIFA-085 (D39, adendo): ausente = MANTER (o gravado no PUT; herda o do discipulador no POST).
+  dados.grupo_id === undefined ? MANTER : dados.grupo_id,
 ];
 
 const gravacaoRede = (dados: DadosRede): Gravacao<Rede> => ({
@@ -737,7 +747,12 @@ const gravacaoDiscipulador = (
 const gravacaoCelula = (dados: DadosCelula): Gravacao<Celula> => ({
   valores: valoresCelula(dados),
   nome: dados.nome,
-  referencias: [referenciaDiscipulador(dados.discipulador_id)],
+  referencias: [
+    referenciaDiscipulador(dados.discipulador_id),
+    ...(typeof dados.grupo_id === "number"
+      ? [referenciaGrupo(dados.grupo_id)]
+      : []),
+  ],
   reler: buscarCelula,
 });
 

@@ -708,6 +708,179 @@ describe("RIFA-084 (D39): o grupo do discipulador", () => {
   });
 });
 
+describe("RIFA-085 (D39, adendo): o grupo próprio da célula", () => {
+  const JOVENS = 3;
+  const ADOLESCENTES = 4;
+
+  /** Um discipulador do grupo Jovens (como o do pedido do PO) e o corpo base de uma célula dele. */
+  async function montar() {
+    const rede = await criarRede({ nome: "Rede dos Grupos" });
+    const criado = await chamar("POST", "/api/admin/discipuladores", {
+      rede_id: rede.id,
+      nome: "Discipulador de Jovens",
+      grupo_id: JOVENS,
+    });
+    expect(criado.status).toBe(201);
+    const discipulador = conforme(discipuladorSchema, criado.corpo);
+    const corpo = {
+      discipulador_id: discipulador.id,
+      nome: "Célula Ficticia Teens",
+      qtd_pessoas: 10,
+      lider_nome: "Líder Ficticio",
+    };
+    return { rede, discipulador, corpo };
+  }
+
+  const grupos = (celula: Record<string, unknown>) => ({
+    grupo_id: celula.grupo_id,
+    grupo_nome: celula.grupo_nome,
+    grupo_efetivo_id: celula.grupo_efetivo_id,
+    grupo_efetivo_nome: celula.grupo_efetivo_nome,
+  });
+  const HERDA_JOVENS = {
+    grupo_id: null,
+    grupo_nome: null,
+    grupo_efetivo_id: JOVENS,
+    grupo_efetivo_nome: "Jovens",
+  };
+  const PROPRIO_ADOLESCENTES = {
+    grupo_id: ADOLESCENTES,
+    grupo_nome: "Adolescentes",
+    grupo_efetivo_id: ADOLESCENTES,
+    grupo_efetivo_nome: "Adolescentes",
+  };
+
+  it("POST sem o campo herda o grupo do discipulador; com o campo, o grupo próprio vale no lugar dele", async () => {
+    const { corpo } = await montar();
+    const herda = await chamar("POST", "/api/admin/celulas", corpo);
+    expect(herda.status).toBe(201);
+    expect(grupos(conforme(celulaSchema, herda.corpo))).toEqual(HERDA_JOVENS);
+
+    const propria = await chamar("POST", "/api/admin/celulas", {
+      ...corpo,
+      nome: "Célula Ficticia Maranata",
+      grupo_id: ADOLESCENTES,
+    });
+    expect(propria.status).toBe(201);
+    const celula = conforme(celulaSchema, propria.corpo);
+    expect(grupos(celula)).toEqual(PROPRIO_ADOLESCENTES);
+    const obtida = await chamar("GET", `/api/admin/celulas/${celula.id}`);
+    expect(conforme(celulaSchema, obtida.corpo)).toEqual(celula);
+  });
+
+  it("PUT com grupo grava; null volta a herdar; sem o campo mantém o gravado (uma aba antiga do site)", async () => {
+    const { corpo } = await montar();
+    const celula = conforme(
+      celulaSchema,
+      (await chamar("POST", "/api/admin/celulas", corpo)).corpo,
+    );
+    const salvar = async (extra: Record<string, unknown>) => {
+      const resposta = await chamar("PUT", `/api/admin/celulas/${celula.id}`, {
+        ...corpo,
+        ...extra,
+      });
+      expect(resposta.status).toBe(200);
+      return grupos(conforme(celulaSchema, resposta.corpo));
+    };
+
+    expect(await salvar({ grupo_id: ADOLESCENTES })).toEqual(
+      PROPRIO_ADOLESCENTES,
+    );
+    // Sem o campo (uma aba antiga, que só muda as pessoas): o grupo próprio fica.
+    expect(await salvar({ qtd_pessoas: 11 })).toEqual(PROPRIO_ADOLESCENTES);
+    expect(await salvar({ grupo_id: null })).toEqual(HERDA_JOVENS);
+    expect(await salvar({})).toEqual(HERDA_JOVENS);
+    expect((await listarCelulas()).map(grupos)).toEqual([HERDA_JOVENS]);
+  });
+
+  it("o efetivo segue o discipulador só quando a célula herda: trocar o grupo dele não mexe no grupo próprio", async () => {
+    const { rede, discipulador, corpo } = await montar();
+    await chamar("POST", "/api/admin/celulas", corpo);
+    await chamar("POST", "/api/admin/celulas", {
+      ...corpo,
+      nome: "Célula Ficticia Betel",
+      grupo_id: ADOLESCENTES,
+    });
+    const troca = await chamar(
+      "PUT",
+      `/api/admin/discipuladores/${discipulador.id}`,
+      { rede_id: rede.id, nome: discipulador.nome, grupo_id: 1 },
+    );
+    expect(troca.status).toBe(200);
+    expect(
+      (await listarCelulas()).map((celula) => [
+        celula.nome,
+        celula.grupo_id,
+        celula.grupo_efetivo_nome,
+      ]),
+    ).toEqual([
+      ["Célula Ficticia Betel", ADOLESCENTES, "Adolescentes"],
+      ["Célula Ficticia Teens", null, "Adultos da manhã"],
+    ]);
+
+    // Discipulador sem grupo: a que herda fica sem grupo; a de grupo próprio continua nele.
+    await chamar("PUT", `/api/admin/discipuladores/${discipulador.id}`, {
+      rede_id: rede.id,
+      nome: discipulador.nome,
+      grupo_id: null,
+    });
+    expect(
+      (await listarCelulas()).map((celula) => [
+        celula.nome,
+        celula.grupo_efetivo_id,
+        celula.grupo_efetivo_nome,
+      ]),
+    ).toEqual([
+      ["Célula Ficticia Betel", ADOLESCENTES, "Adolescentes"],
+      ["Célula Ficticia Teens", null, null],
+    ]);
+  });
+
+  it("grupo que não existe: 400 referencia_invalida no POST e no PUT, e nada muda", async () => {
+    const { corpo } = await montar();
+    const celula = conforme(
+      celulaSchema,
+      (await chamar("POST", "/api/admin/celulas", corpo)).corpo,
+    );
+    for (const resposta of [
+      await chamar("POST", "/api/admin/celulas", {
+        ...corpo,
+        nome: "Célula Nova",
+        grupo_id: 999,
+      }),
+      await chamar("PUT", `/api/admin/celulas/${celula.id}`, {
+        ...corpo,
+        grupo_id: 999,
+      }),
+    ]) {
+      const erro = esperarErro(resposta, 400, "referencia_invalida");
+      expect(erro.detalhes).toEqual([
+        {
+          caminho: ["grupo_id"],
+          codigo: "referencia_invalida",
+          mensagem: "O grupo 999 não existe",
+        },
+      ]);
+    }
+    expect(await listarCelulas()).toEqual([celula]);
+  });
+
+  it("grupo_id fora do contrato (texto, zero): 400 requisicao_invalida no campo", async () => {
+    const { corpo } = await montar();
+    for (const grupo_id of ["4", 0]) {
+      const erro = esperarErro(
+        await chamar("POST", "/api/admin/celulas", { ...corpo, grupo_id }),
+        400,
+        "requisicao_invalida",
+      );
+      expect(erro.detalhes).toEqual([
+        expect.objectContaining({ caminho: ["grupo_id"] }),
+      ]);
+    }
+    expect(await listarCelulas()).toEqual([]);
+  });
+});
+
 describe("CA1: células", () => {
   async function montarHierarquia() {
     const jovem = await criarRede({ nome: "Rede Jovem", divisao: "jovens" });
@@ -743,6 +916,11 @@ describe("CA1: células", () => {
       rede_id: rede.id,
       rede_nome: "Rede Jovem",
       divisao: "jovens",
+      // RIFA-085: sem o campo no POST, herda o grupo do discipulador (aqui, sem grupo).
+      grupo_id: null,
+      grupo_nome: null,
+      grupo_efetivo_id: null,
+      grupo_efetivo_nome: null,
       criado_em: qualquerTexto,
       atualizado_em: qualquerTexto,
     });

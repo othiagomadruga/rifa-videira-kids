@@ -5,7 +5,8 @@
 //
 // Cenário (test/painel-apoio.ts), no dia 9 (Semana 2): Betel 42%, Dorcas 25,2%, Ágape e Canaã 21% (empate), Éfeso 0%.
 // Grupos: Caleb (Dorcas, Éfeso) em "Adultos da manhã"; Abel (Ágape, Betel) em "Adultos da noite"; Davi (sem células)
-// em "Adolescentes"; Boaz (Canaã) sem grupo. "Jovens" não tem discipulador.
+// em "Adolescentes"; Boaz (Canaã) sem grupo. "Jovens" não tem discipulador. Nenhuma célula com grupo próprio, menos nos
+// testes da RIFA-085 (o grupo próprio da célula, que vale no lugar do grupo do discipulador no nível célula).
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -82,6 +83,18 @@ async function definirGrupos(grupos: Record<number, number | null>) {
       env.DB.prepare(
         "UPDATE discipuladores SET grupo_id = ?1 WHERE id = ?2",
       ).bind(grupo, Number(discipulador)),
+    ),
+  );
+}
+
+/** RIFA-085: o grupo próprio de cada célula (null = herda o do discipulador). */
+async function definirGruposDasCelulas(grupos: Record<number, number | null>) {
+  await env.DB.batch(
+    Object.entries(grupos).map(([celula, grupo]) =>
+      env.DB.prepare("UPDATE celulas SET grupo_id = ?1 WHERE id = ?2").bind(
+        grupo,
+        Number(celula),
+      ),
     ),
   );
 }
@@ -232,6 +245,92 @@ describe("GET /api/painel/ranking-grupos (RIFA-084, D39)", () => {
     const resposta = await chamar("", db);
     expect(resposta.status).toBe(200);
     expect(contagem.idas).toBe(2);
+  });
+
+  describe("RIFA-085 (D39, adendo): o grupo próprio da célula", () => {
+    const resumo = (corpo: Awaited<ReturnType<typeof rankingGrupos>>) =>
+      corpo.grupos.map((grupo) => [
+        grupo.nome,
+        grupo.itens.map((item) => `${item.posicao} ${item.nome}`),
+      ]);
+
+    it("nível célula: a célula com grupo próprio sai do grupo do discipulador e entra no dela, com a posição lá", async () => {
+      // A Betel (do Abel, "Adultos da noite") é de "Adolescentes", como as células do pedido do PO.
+      await definirGruposDasCelulas({ 2: GRUPO.adolescentes });
+      const corpo = await rankingGrupos();
+      expect(resumo(corpo)).toEqual([
+        ["Adultos da manhã", ["1 Célula Dorcas", "2 Célula Éfeso"]],
+        ["Adultos da noite", ["1 Célula Ágape"]],
+        ["Adolescentes", ["1 Célula Betel"]],
+      ]);
+      // A meta e o realizado continuam os do ranking de todas.
+      const todas = montarRankingPainel(
+        entradaEsperada(),
+        { nivel: "celula", periodo: "atual" },
+        AGORA,
+      );
+      const betel = corpo.grupos[2].itens[0];
+      expect(betel).toMatchObject({ acima: null, abaixo: null });
+      const geral = todas.itens.find((item) => item.id === 2)!;
+      expect([betel.meta, betel.realizado]).toEqual([
+        geral.meta,
+        geral.realizado,
+      ]);
+    });
+
+    it("a resposta é a do montador com o grupo próprio lido do banco (as duas janelas e os dois níveis)", async () => {
+      await definirGruposDasCelulas({ 2: GRUPO.adolescentes, 3: GRUPO.jovens });
+      const grupos: GrupoCalculo[] = [
+        ...GRUPOS_DO_CENARIO.map((grupo) =>
+          grupo.id === GRUPO.adolescentes ? { ...grupo, celulas: [2] } : grupo,
+        ),
+        {
+          id: GRUPO.jovens,
+          nome: "Jovens",
+          ordem: 3,
+          discipuladores: [],
+          celulas: [3],
+        },
+      ];
+      for (const consulta of CONSULTAS)
+        expect(
+          await rankingGrupos(`?${new URLSearchParams(consulta)}`),
+        ).toEqual(
+          montarRankingGruposPainel(entradaEsperada(), grupos, consulta, AGORA),
+        );
+    });
+
+    it("um grupo sem discipulador, só com células de grupo próprio, aparece no nível célula", async () => {
+      // A Canaã é do Boaz (sem grupo) e "Jovens" não tem discipulador.
+      await definirGruposDasCelulas({ 3: GRUPO.jovens });
+      expect(resumo(await rankingGrupos())).toEqual([
+        ["Adultos da manhã", ["1 Célula Dorcas", "2 Célula Éfeso"]],
+        ["Adultos da noite", ["1 Célula Betel", "2 Célula Ágape"]],
+        ["Jovens", ["1 Célula Canaã"]],
+      ]);
+    });
+
+    it("nível discipulador: nada muda (cada discipulador no grupo dele, com todas as células dele)", async () => {
+      const antes = await rankingGrupos("?nivel=discipulador&janela=campanha");
+      await definirGruposDasCelulas({
+        2: GRUPO.adolescentes,
+        3: GRUPO.jovens,
+        4: GRUPO.noite,
+      });
+      const depois = await rankingGrupos("?nivel=discipulador&janela=campanha");
+      expect(depois).toEqual(antes);
+      expect(resumo(depois)).toEqual([
+        ["Adultos da manhã", ["1 Discipulador Caleb"]],
+        ["Adultos da noite", ["1 Discipulador Abel"]],
+      ]);
+    });
+
+    it("a célula volta a herdar (null): o ranking fica como era", async () => {
+      const antes = await rankingGrupos();
+      await definirGruposDasCelulas({ 2: GRUPO.adolescentes });
+      await definirGruposDasCelulas({ 2: null });
+      expect(await rankingGrupos()).toEqual(antes);
+    });
   });
 
   it.each(["?nivel=rede", "?janela=semana", "?janela="])(

@@ -50,6 +50,7 @@ import {
   ROTAS_TOKEN_WEBHOOK,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
+  celulaSchema,
   diasEntre,
   erroApiSchema,
   hojeNoFuso,
@@ -2461,6 +2462,95 @@ describe("l) RIFA-084 (D39): o ranking por grupo e os grupos só da coordenaçã
       const grupos = await requisitar("GET", "/api/admin/grupos", cabecalhos);
       expect(grupos.status).toBe(200);
     }
+  });
+});
+
+describe("m) RIFA-085 (D39, adendo): o grupo próprio da célula só pela coordenação; nenhuma rota aberta nova", () => {
+  const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
+  const CORPO = JSON.stringify({
+    discipulador_id: 10,
+    nome: "Célula Ágape",
+    qtd_pessoas: 12,
+    lider_nome: "Líder da Célula Ágape",
+    grupo_id: 4,
+  });
+  const grupoGravado = async () =>
+    env.DB.prepare("SELECT grupo_id FROM celulas WHERE id = 1").first();
+
+  beforeAll(async () => {
+    // A hierarquia do painel (a célula 1 é do discipulador 10), sem grupo próprio, e uma sessão de cada papel.
+    await semearCenario();
+    sessoes.lider = await cabecalhosDeSessaoDaHierarquia("lider", 1);
+    sessoes.discipulador = await cabecalhosDeSessaoDaHierarquia(
+      "discipulador",
+      10,
+    );
+    sessoes.rede = await cabecalhosDeSessaoDaHierarquia("rede", 1);
+  });
+
+  it("líder (da própria célula), discipulador e rede: 403 no PUT e no POST da célula com o grupo; sem cookie, 401; nada muda", async () => {
+    for (const papel of ["lider", "discipulador", "rede"] as const) {
+      const put = await requisitar(
+        "PUT",
+        "/api/admin/celulas/1",
+        sessoes[papel],
+        CORPO,
+      );
+      const post = await requisitar(
+        "POST",
+        "/api/admin/celulas",
+        sessoes[papel],
+        CORPO.replace("Célula Ágape", "Célula Nova"),
+      );
+      expect({ papel, put: put.status, post: post.status }).toEqual({
+        papel,
+        put: 403,
+        post: 403,
+      });
+    }
+    const semSessao = await requisitar(
+      "PUT",
+      "/api/admin/celulas/1",
+      { Origin: ORIGEM },
+      CORPO,
+    );
+    expect(semSessao.status).toBe(401);
+    expect(await grupoGravado()).toEqual({ grupo_id: null });
+  });
+
+  it("nenhuma rota aberta nova: o grupo não aparece nas rotas abertas do contrato nem nas montadas", () => {
+    expect(
+      rotasRegistradas()
+        .map((rota) => `${rota.metodo} ${rota.caminho}`)
+        .filter(
+          (rota) => rota.includes("/api/publico/") && rota.includes("grupo"),
+        ),
+    ).toEqual([]);
+    for (const rota of [ROTAS.criarCelula, ROTAS.atualizarCelula])
+      expect(
+        ROTAS_DA_COORDENACAO.find(
+          (item) =>
+            item.metodo === rota.metodo && item.caminho === rota.caminho,
+        )?.papeis,
+      ).toEqual(["admin", "coordenacao"]);
+  });
+
+  it("admin e coordenação: 200 no PUT com o grupo próprio, que vale no lugar do grupo do discipulador (contraprova)", async () => {
+    for (const cabecalhos of [admin, coordenacao]) {
+      const res = await requisitar(
+        "PUT",
+        "/api/admin/celulas/1",
+        cabecalhos,
+        CORPO,
+      );
+      expect(res.status).toBe(200);
+      expect(celulaSchema.parse(await res.json())).toMatchObject({
+        grupo_id: 4,
+        grupo_efetivo_id: 4,
+        grupo_efetivo_nome: "Adolescentes",
+      });
+    }
+    expect(await grupoGravado()).toEqual({ grupo_id: 4 });
   });
 });
 

@@ -159,6 +159,42 @@ describe("CA2: importação da hierarquia", () => {
     expect(await listarCelulas()).toEqual(antes);
   });
 
+  it("RIFA-085: a importação não mexe no grupo próprio da célula (nem no do discipulador), mesmo quando atualiza a célula", async () => {
+    await importarComSucesso(EXEMPLO_DO_CONTRATO);
+    const [celula01] = await listarCelulas();
+    const [discipuladorA] = await listarDiscipuladores();
+    expect(celula01.nome).toBe("Célula Ficticia 01");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE celulas SET grupo_id = 4 WHERE id = ?1").bind(
+        celula01.id,
+      ),
+      env.DB.prepare(
+        "UPDATE discipuladores SET grupo_id = 3 WHERE id = ?1",
+      ).bind(discipuladorA.id),
+    ]);
+
+    // qtd_pessoas 12 → 14: a célula é atualizada pela planilha, que não tem coluna de grupo.
+    const alterado = EXEMPLO_DO_CONTRATO.replace(
+      "Célula Ficticia 01,12,",
+      "Célula Ficticia 01,14,",
+    );
+    expect(await importarComSucesso(alterado)).toMatchObject({
+      atualizados: { redes: 0, discipuladores: 0, celulas: 1 },
+    });
+    expect(
+      (await listarCelulas()).map((celula) => [
+        celula.nome,
+        celula.qtd_pessoas,
+        celula.grupo_id,
+        celula.grupo_efetivo_nome,
+      ]),
+    ).toEqual([
+      ["Célula Ficticia 01", 14, 4, "Adolescentes"],
+      ["Célula Ficticia 02", 9, null, "Jovens"],
+      ["Célula Ficticia 03", 15, null, null],
+    ]);
+  });
+
   it("atualiza pela chave de nome (maiúsculas não importam), move entidades e nunca apaga", async () => {
     await importarComSucesso(EXEMPLO_DO_CONTRATO);
     const [discipuladorA] = await listarDiscipuladores();

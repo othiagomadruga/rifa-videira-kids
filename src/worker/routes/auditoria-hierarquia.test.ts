@@ -589,3 +589,87 @@ describe("RIFA-084 (D39): o grupo do discipulador na trilha", () => {
     ]);
   });
 });
+
+describe("RIFA-085 (D39, adendo): o grupo próprio da célula na trilha", () => {
+  it("grupo_id entra no resumo como os outros ids (antes e depois); sem grupo próprio, o resumo da criação e da remoção fica como antes", async () => {
+    const rede = await criar("/api/admin/redes", {
+      nome: "Rede do Grupo da Célula",
+      divisao: "jovens",
+    });
+    const discipulador = await criar("/api/admin/discipuladores", {
+      rede_id: rede,
+      nome: "Discipulador do Grupo da Célula",
+      grupo_id: 3,
+    });
+    const base = {
+      discipulador_id: discipulador,
+      nome: "Celula do Grupo na Trilha",
+      ...CELULA,
+    };
+    const criacao = await comTrilha("POST", "/api/admin/celulas", {
+      ...base,
+      grupo_id: 4,
+    });
+    expect(criacao.status).toBe(201);
+    const celula = criacao.corpo!.id;
+    onTestFinished(async () => {
+      await requisitar("DELETE", `/api/admin/celulas/${celula}`, coordenacao);
+      await requisitar(
+        "DELETE",
+        `/api/admin/discipuladores/${discipulador}`,
+        coordenacao,
+      );
+      await requisitar("DELETE", `/api/admin/redes/${rede}`, coordenacao);
+    });
+
+    const troca = await comTrilha("PUT", `/api/admin/celulas/${celula}`, {
+      ...base,
+      grupo_id: 2,
+    });
+    const herda = await comTrilha("PUT", `/api/admin/celulas/${celula}`, {
+      ...base,
+      grupo_id: null,
+    });
+    // Sem o campo (uma aba antiga do site): o gravado fica, e o PUT igual ao gravado não registra.
+    const semCampo = await comTrilha(
+      "PUT",
+      `/api/admin/celulas/${celula}`,
+      base,
+    );
+
+    expect(
+      [criacao, troca, herda, semCampo].map(({ status, registros }) => ({
+        status,
+        resumos: registros.map((linha) => `${linha.acao}: ${linha.resumo}`),
+      })),
+    ).toEqual([
+      {
+        status: 201,
+        resumos: [
+          `hierarquia.criar: Célula "Celula do Grupo na Trilha" criada (discipulador_id ${discipulador}, qtd_pessoas 12, grupo_id 4)`,
+        ],
+      },
+      {
+        status: 200,
+        resumos: [
+          'hierarquia.atualizar: Célula "Celula do Grupo na Trilha" alterada: grupo_id (4 → 2)',
+        ],
+      },
+      {
+        status: 200,
+        resumos: [
+          'hierarquia.atualizar: Célula "Celula do Grupo na Trilha" alterada: grupo_id (2 → null)',
+        ],
+      },
+      { status: 200, resumos: [] },
+    ]);
+    // Nenhum dado pessoal do líder no resumo (só ids, como antes).
+    for (const { registros } of [criacao, troca, herda])
+      for (const { resumo } of registros)
+        expect(resumo).not.toMatch(/Lider Ficticio|example\.com|90000/);
+    const remocao = await comTrilha("DELETE", `/api/admin/celulas/${celula}`);
+    expect(remocao.registros.map((linha) => linha.resumo)).toEqual([
+      `Célula "Celula do Grupo na Trilha" removida (discipulador_id ${discipulador}, qtd_pessoas 12)`,
+    ]);
+  });
+});

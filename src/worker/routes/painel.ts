@@ -4,8 +4,9 @@
  *   escopo (campanha, divisão, rede, discipulador ou célula);
  * - GET /api/painel/ranking: todas as instâncias do nível, com valores, situação e vizinhos;
  * - GET /api/painel/ranking-grupos (RIFA-084, D39): o mesmo ranking separado pelo grupo do discipulador (adultos da
- *   manhã, adultos da noite, jovens, adolescentes), com a posição dentro do grupo; só a coordenação (o ranking aberto
- *   não muda). Os grupos vão no mesmo lote da leitura (db/grupos.ts): uma ida a mais, nenhuma;
+ *   manhã, adultos da noite, jovens, adolescentes), com a posição dentro do grupo; no nível célula, vale o grupo próprio
+ *   da célula quando há (RIFA-085). Só a coordenação (o ranking aberto não muda). Os grupos vão no mesmo lote da
+ *   leitura (db/grupos.ts): uma ida a mais, nenhuma;
  * - GET /api/painel/mapa-ddd (RIFA-015, D17): as vendas da janela por UF e DDD do comprador, mais exterior e sem
  *   DDD. Mesma janela e mesmo filtro de venda do painel (R6): db/mapa-ddd.ts lê, lib/mapa-ddd.ts monta;
  * - GET /api/painel/relatorio (RIFA-038, D23): o relatório da campanha para baixar, um CSV por tipo, das MESMAS
