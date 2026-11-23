@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   ESCOPOS_PAINEL,
   ROTAS,
+  ROTAS_ARRECADADO,
   ROTAS_RELATORIO,
-  ROTAS_SALDO_EFI,
   consultaPainelResumoSchema,
   consultaRelatorioSchema,
   respostaPainelResumoSchema,
@@ -34,7 +34,7 @@ import {
   CAMINHO_CELULAS,
   CAMINHO_RELATORIO,
   CAMINHO_RESUMO,
-  CAMINHO_SALDO_EFI,
+  CAMINHO_ARRECADADO,
   ESCOPOS,
   chaveDoEscopo,
   consultaDoRelatorio,
@@ -60,9 +60,9 @@ describe("cópias do contrato na Visão geral", () => {
     expect(CAMINHO_CELULAS).toBe(ROTAS.listarCelulas.caminho);
     expect(ROTAS.listarCelulas.metodo).toBe("GET");
     expect([...ESCOPOS]).toEqual([...ESCOPOS_PAINEL]);
-    // RIFA-086 (D40): o saldo da Efí (só admin).
-    expect(CAMINHO_SALDO_EFI).toBe(ROTAS_SALDO_EFI.saldoEfi.caminho);
-    expect(ROTAS_SALDO_EFI.saldoEfi.metodo).toBe("GET");
+    // RIFA-087 (adendo da D40): o Arrecadado (só admin), no lugar do saldo da Efí.
+    expect(CAMINHO_ARRECADADO).toBe(ROTAS_ARRECADADO.arrecadado.caminho);
+    expect(ROTAS_ARRECADADO.arrecadado.metodo).toBe("GET");
   });
 
   it.each(RECORTES)(
