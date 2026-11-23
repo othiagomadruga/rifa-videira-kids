@@ -3624,7 +3624,9 @@ export const respostaMaioresCompradoresSchema = z
   .superRefine((resposta, ctx) => {
     conferirPosicoes(resposta.itens, ctx);
     resposta.itens.forEach((item, indice) => {
-      if ((item.telefone === null) !== (item.whatsapp === null))
+      // O WhatsApp só existe com telefone; o telefone pode vir sem WhatsApp (E.164 curto, de 7 algarismos, que o
+      // numeroWhatsApp não aceita): a tela mostra o número sem o link, em vez de o cartão inteiro cair (revisão).
+      if (item.whatsapp !== null && item.telefone === null)
         ctx.addIssue({
           code: "custom",
           path: ["itens", indice, "whatsapp"],

@@ -163,6 +163,8 @@ function Comprador({ item }: { item: ItemMaiorComprador }) {
               </span>
             </a>
           </ComDica>
+        ) : item.telefone !== null ? (
+          <span className="rankings-comprador__telefone">{item.telefone}</span>
         ) : (
           <span className="rankings-comprador__sem">Sem telefone</span>
         )}

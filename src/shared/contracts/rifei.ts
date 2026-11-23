@@ -558,7 +558,7 @@ export function redigirPayloadRifei(
 /** Tamanho máximo do nome do comprador gravado (CHECK da migração 0017); o resto é cortado. */
 export const LIMITE_NOME_COMPRADOR = 120;
 
-/** Telefone E.164: "+", o país e o número, de 8 a 15 algarismos no total (CHECK da migração 0017). */
+/** Telefone E.164: "+", o país e o número, de 7 a 15 algarismos no total (o CHECK da migração 0017 aceita de 8 a 16 caracteres com o "+"). */
 export const TELEFONE_E164 = /^\+[1-9]\d{6,14}$/;
 
 export interface ContatoComprador {

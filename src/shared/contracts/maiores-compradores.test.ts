@@ -503,7 +503,10 @@ describe("os schemas das respostas: estritos e com as posições em ordem", () =
         resposta([{ ...base, ...dados }]),
       ).success;
     expect(aceita({})).toBe(true);
-    expect(aceita({ whatsapp: null })).toBe(false);
+    // Telefone sem WhatsApp é aceito (E.164 curto, de 7 algarismos: a tela mostra o número sem o link, em vez de o
+    // cartão cair com 500; revisão da RIFA-083). WhatsApp sem telefone, não.
+    expect(aceita({ whatsapp: null })).toBe(true);
+    expect(aceita({ telefone: null, whatsapp: null })).toBe(true);
     expect(aceita({ telefone: null })).toBe(false);
     expect(aceita({ celulas: [] })).toBe(false);
     expect(aceita({ celulas: [], sem_celula: true })).toBe(true);
