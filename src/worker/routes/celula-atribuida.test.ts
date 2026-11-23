@@ -19,6 +19,7 @@ import {
   respostaPedidosSchema,
   respostaRankingGruposSchema,
   respostaRankingSchema,
+  respostaTodasAsRedesSchema,
   respostaVisaoIndividualSchema,
   somarDias,
   hojeNoFuso,
@@ -429,6 +430,29 @@ describe("a venda atribuída conta na célula em todo lugar", () => {
     expect(await realizadoNoRanking(CANAA)).toBe(antes.ranking + 37);
     expect(await grupos()).toBe(antes.grupo + 37);
     expect(await semCelula()).toBe(antes.semCelula - 37);
+  });
+
+  it("no ranking geral da /minha do discipulador e da rede (RIFA-090)", async () => {
+    const discipulador = await cabecalhosDeSessaoDaHierarquia(
+      "discipulador",
+      10,
+    );
+    const bilhetesDaCanaa = async () =>
+      respostaTodasAsRedesSchema
+        .parse(
+          await (
+            await requisitar(
+              "GET",
+              "/api/minha/todas-as-redes?janela=campanha",
+              discipulador,
+            )
+          ).json(),
+        )
+        .celulas.find((celula) => celula.nome === "Célula Canaã")!.bilhetes;
+    const antes = await bilhetesDaCanaa();
+    await atribuirOk(SEM_AFILIADO.id, CANAA);
+    andarDoRelogio();
+    expect(await bilhetesDaCanaa()).toBe(antes + 37);
   });
 
   it("na /minha do líder da célula", async () => {

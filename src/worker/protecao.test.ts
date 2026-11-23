@@ -24,6 +24,8 @@
 // n) o relatório diário por e-mail (RIFA-086 e RIFA-087, D40) e o "Arrecadado" (RIFA-087): só do admin (coordenação e
 //    hierarquia: 403; sem sessão, 401), o envio com CSRF, e a prévia em HTML é a única resposta com a CSP própria (sem
 //    script);
+// o) o ranking geral da /minha (RIFA-090, adendo da D12): só do discipulador e da rede (líder e coordenação: 403; sem
+//    sessão, 401), sem valor e sem comprador;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -54,6 +56,7 @@ import {
   ROTAS_RELATORIO_DIARIO,
   ROTAS_ARRECADADO,
   ROTAS_TOKEN_WEBHOOK,
+  ROTAS_TODAS_AS_REDES,
   afiliadoResumoSchema,
   campanhaEntradaSchema,
   celulaSchema,
@@ -75,6 +78,7 @@ import {
   respostaRankingPublicoSchema,
   respostaRankingSchema,
   respostaSessaoSchema,
+  respostaTodasAsRedesSchema,
   respostaVisaoIndividualSchema,
   respostaWebhookRifeiSchema,
   somarDias,
@@ -259,6 +263,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_ARRECADADO),
     // RIFA-089 (adendo da D38): quem comprou, só do líder, em /api/minha.
     ...Object.values(ROTAS_QUEM_COMPROU),
+    ...Object.values(ROTAS_TODAS_AS_REDES),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -1401,6 +1406,9 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
     // RIFA-089 (adendo da D38): quem comprou, só do líder da célula.
     "/api/minha/compradores",
     "/api/minha/compradores?celula_id=2&limite=50",
+    // RIFA-090: o ranking geral (todos os discipuladores e células).
+    "/api/minha/todas-as-redes",
+    "/api/minha/todas-as-redes?janela=campanha&discipulador_id=20",
   ];
   const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
 
@@ -1445,6 +1453,16 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
         rota.papeis,
       ]),
     ).toEqual([["GET /api/minha/compradores", "hierarquia", ["lider"]]]);
+    // O catálogo à parte do ranking geral (RIFA-090): do discipulador e da rede.
+    expect(
+      Object.values(ROTAS_TODAS_AS_REDES).map((rota) => [
+        `${rota.metodo} ${rota.caminho}`,
+        rota.grupo,
+        rota.papeis,
+      ]),
+    ).toEqual([
+      ["GET /api/minha/todas-as-redes", "hierarquia", ["discipulador", "rede"]],
+    ]);
     const registradas = rotasRegistradas().map(
       (rota) => `${rota.metodo} ${rota.caminho}`,
     );
@@ -1452,6 +1470,7 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
     expect(registradas).toContain("GET /api/minha/links-vendas");
     expect(registradas).toContain("GET /api/minha/maiores-compradores");
     expect(registradas).toContain("GET /api/minha/compradores");
+    expect(registradas).toContain("GET /api/minha/todas-as-redes");
   });
 
   it("RIFA-089 (adendo da D38): quem comprou é só do líder (200, no-store, sem telefone nem valor, só a célula dele); discipulador, rede e coordenação, 403", async () => {
@@ -1504,6 +1523,29 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
       await requisitar("GET", caminho, { Origin: ORIGEM }),
       401,
       "nao_autenticado",
+    );
+  });
+
+  it("RIFA-090: o ranking geral da /minha é do discipulador e da rede (200, sem valor nem comprador); o líder, 403", async () => {
+    const caminho = ROTAS_TODAS_AS_REDES.todasAsRedes.caminho;
+    for (const papel of ["discipulador", "rede"] as const) {
+      const res = await requisitar("GET", caminho, sessoes[papel]);
+      expect({ papel, status: res.status }).toEqual({ papel, status: 200 });
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      esperarCabecalhosDeSeguranca(res);
+      const texto = await res.text();
+      respostaTodasAsRedesSchema.parse(JSON.parse(texto));
+      expect(texto).not.toMatch(
+        /centavos|total|telefone|whatsapp|comprador|"id"|R\$/,
+      );
+    }
+    const lider = await requisitar("GET", caminho, sessoes.lider);
+    await esperarErro(lider, 403, "proibido");
+    esperarCabecalhosDeSeguranca(lider);
+    await esperarErro(
+      await requisitar("GET", caminho, coordenacao),
+      403,
+      "proibido",
     );
   });
 
@@ -1701,6 +1743,7 @@ describe("h) RIFA-029 (D20, CA4): acesso de discipuladores e redes pela chave da
     "/api/minha/links-vendas",
     // RIFA-083 (D38): os maiores compradores também (a rede leva o 403 da chave antes do 403 do papel).
     "/api/minha/maiores-compradores",
+    "/api/minha/todas-as-redes",
     "/api/minha/qualquer",
     "/api/minha/qualquer/coisa/funda",
     "/api/minha",

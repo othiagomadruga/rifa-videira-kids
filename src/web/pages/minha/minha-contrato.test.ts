@@ -15,6 +15,8 @@ import {
   TIPO_ALVO_DO_PAPEL,
   consultaMaioresCompradoresSchema,
   consultaQuemComprouSchema,
+  ROTAS_TODAS_AS_REDES,
+  consultaTodasAsRedesSchema,
   consultaVisaoIndividualSchema,
   respostaVisaoIndividualSchema,
   usuarioSessaoSchema,
@@ -37,6 +39,10 @@ import {
   VENDAS_POR_PAGINA,
   caminhoDeQuemComprou,
 } from "./quem-comprou-api";
+import {
+  CAMINHO_TODAS_AS_REDES,
+  caminhoDeTodasAsRedes,
+} from "./todas-as-redes-api";
 import {
   SESSOES,
   meusLinksDe,
@@ -105,6 +111,24 @@ describe("cópias do contrato na visão individual", () => {
         limite: PAGINA_QUEM_COMPROU_PADRAO,
         ...(antesDe === null ? {} : { antes_de: antesDe }),
       });
+    }
+  });
+
+  it("o ranking geral (RIFA-090): caminho, grupo, discipulador e rede, e a consulta passa no schema", () => {
+    const rota = ROTAS_TODAS_AS_REDES.todasAsRedes;
+    expect(CAMINHO_TODAS_AS_REDES).toBe(rota.caminho);
+    expect(rota.metodo).toBe("GET");
+    expect(rota.grupo).toBe("hierarquia");
+    expect(rota.papeis).toEqual(["discipulador", "rede"]);
+    for (const janela of ["atual", "campanha"] as const) {
+      const url = new URL(
+        caminhoDeTodasAsRedes(janela),
+        "https://site.example",
+      );
+      expect(url.pathname).toBe(CAMINHO_TODAS_AS_REDES);
+      expect(
+        consultaTodasAsRedesSchema.parse(Object.fromEntries(url.searchParams)),
+      ).toEqual({ janela });
     }
   });
 

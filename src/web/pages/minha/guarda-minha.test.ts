@@ -2,14 +2,14 @@
 // renderizada (MinhaPage.test.tsx varre o DOM em todos os cenários). O código da pasta não formata nem lê
 // dinheiro, não lê a distância até os vizinhos, só conhece as rotas /api/minha/... e só importa da própria
 // pasta, dos componentes base, de lib/ e do contrato sem zod (calculos.ts e, desde a RIFA-046, link-vendas.ts;
-// de api.ts, dominio.ts e acesso.ts, só tipos).
+// de api.ts, dominio.ts, acesso.ts e, desde a RIFA-090, todas-as-redes.ts, só tipos).
 import { describe, expect, it } from "vitest";
 
 const PASTA = "/src/web/pages/minha/";
 
 /** O código da tela (sem os testes e sem o apoio deles, que nunca vai para o pacote do site). */
 const FONTES = import.meta.glob<string>(
-  ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio.ts"],
+  ["./**/*.{ts,tsx}", "!./**/*.test.{ts,tsx}", "!./teste-apoio*.ts"],
   { query: "?raw", import: "default", eager: true },
 );
 
@@ -76,6 +76,9 @@ describe("CA2: o código da visão individual não mostra dinheiro", () => {
         // RIFA-089: quem comprou, só do líder.
         "./QuemComprou.tsx",
         "./quem-comprou-api.ts",
+        "./TodasAsRedes.tsx",
+        "./todas-as-redes-api.ts",
+        "./textos-todas-as-redes.ts",
       ]),
     );
   });
@@ -115,6 +118,7 @@ describe("CA2: o código da visão individual não mostra dinheiro", () => {
     expect(rotas).toContain("/api/minha/links-vendas");
     expect(rotas).toContain("/api/minha/maiores-compradores");
     expect(rotas).toContain("/api/minha/compradores");
+    expect(rotas).toContain("/api/minha/todas-as-redes");
   });
 });
 
@@ -140,6 +144,8 @@ describe("CA2: de onde a visão individual importa", () => {
                 "/src/shared/contracts/api",
                 "/src/shared/contracts/dominio",
                 "/src/shared/contracts/acesso",
+                // RIFA-090: os tipos do ranking geral (o módulo tem zod: só tipos).
+                "/src/shared/contracts/todas-as-redes",
               ].includes(destino));
           expect(permitido, contexto).toBe(true);
         }

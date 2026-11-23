@@ -11,6 +11,7 @@ import { LinksDeVendas } from "./LinksDeVendas";
 import { MaioresCompradores } from "./MaioresCompradores";
 import { QuemComprou } from "./QuemComprou";
 import { RankingIndividual } from "./RankingIndividual";
+import { TodasAsRedes } from "./TodasAsRedes";
 import { useVisaoIndividual } from "./useVisaoIndividual";
 import "./minha.css";
 
@@ -112,6 +113,10 @@ function Visao({
         <QuemComprou atualizadoEm={visao.atualizado_em} />
       )}
       {alvo.tipo !== "celula" && <LinksDeVendas alvo={alvo} />}
+      {/* O ranking geral (RIFA-090): todos os discipuladores e todas as células, embaixo de tudo; o líder não vê. */}
+      {alvo.tipo !== "celula" && (
+        <TodasAsRedes alvo={alvo} atualizadoEm={visao.atualizado_em} />
+      )}
       <div className="minha-rodape">
         <p>
           Atualizado às {formatarHora(visao.atualizado_em)}. A página se

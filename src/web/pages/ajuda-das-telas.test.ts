@@ -10,6 +10,7 @@ import { AJUDA as AJUDA_EXTRATO } from "./conferencia/extrato/textos";
 import { AJUDA as AJUDA_CONFERENCIA } from "./conferencia/textos";
 import { AJUDA as AJUDA_MAPA } from "./mapa/textos";
 import { AJUDA as AJUDA_MINHA } from "./minha/textos";
+import { AJUDA_TODAS_AS_REDES } from "./minha/textos-todas-as-redes";
 import { AJUDA as AJUDA_PEDIDOS } from "./pedidos/textos";
 import { AJUDA as AJUDA_ABERTA } from "./ranking-publico/ajuda";
 
@@ -42,6 +43,7 @@ const TODOS = [
   ...textos(AJUDA_CONFERENCIA, "conferencia."),
   ...textos(AJUDA_EXTRATO, "extrato."),
   ...textos(AJUDA_MINHA, "minha."),
+  ...textos(AJUDA_TODAS_AS_REDES, "minha.todasAsRedes."),
   ...textos(AJUDA_DO_QR, "qr."),
   ...textos(AJUDA_ABERTA, "aberta."),
 ];
@@ -58,6 +60,7 @@ describe("os textos de ajuda", () => {
     for (const [chave, texto] of [
       ...textos(AJUDA),
       ...textos(AJUDA_MINHA, "minha."),
+      ...textos(AJUDA_TODAS_AS_REDES, "minha.todasAsRedes."),
       ...textos(AJUDA_ABERTA, "aberta."),
     ])
       expect(texto, chave).not.toMatch(/R\$|reais/);

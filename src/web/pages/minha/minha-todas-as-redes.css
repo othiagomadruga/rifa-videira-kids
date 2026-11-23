@@ -1,0 +1,116 @@
+/* Ranking geral (RIFA-090; discipulador e rede): a troca de janela e as duas listas, como a dos maiores compradores e
+   a dos primeiros. Só variáveis do tema; nada de largura fixa (cabe em 360 px e é legível ao sol: minha-css.test.ts). */
+.minha-todas__corpo {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.minha-todas__janelas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.minha-todas__janela {
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+}
+
+/* As duas listas: uma embaixo da outra no celular; lado a lado quando cabem duas de 26rem. */
+.minha-todas__listas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  align-items: start;
+  gap: var(--espaco-5) var(--espaco-6);
+  min-width: 0;
+}
+
+.minha-todas__secao {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  justify-items: start;
+}
+
+.minha-todas__titulo {
+  font-size: var(--texto-lg);
+}
+
+.minha-todas__vazio,
+.minha-todas__nota {
+  color: var(--cor-texto-suave);
+}
+
+.minha-todas__lista {
+  display: grid;
+  gap: var(--espaco-2);
+  justify-self: stretch;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Os espaços entre as partes não aparecem (o item é uma grade), mas separam as palavras na leitura. */
+.minha-todas__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+}
+
+/* As linhas de quem vê: borda grossa, fundo e peso (não depende só da cor) e o selo. */
+.minha-todas__item[data-eu] {
+  border: 2px solid var(--cor-primaria);
+  background: var(--cor-primaria-suave);
+}
+
+/* A primeira das linhas dele que ficaram abaixo das primeiras: um respiro marca o corte. */
+.minha-todas__item[data-depois-do-corte] {
+  margin-top: var(--espaco-3);
+}
+
+.minha-todas__posicao {
+  min-width: 2.5ch;
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrito);
+}
+
+.minha-todas__quem {
+  display: grid;
+  min-width: 0;
+}
+
+.minha-todas__nome {
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.minha-todas__discipulador {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.minha-todas__numeros {
+  display: grid;
+  justify-items: end;
+  text-align: end;
+}
+
+.minha-todas__percentual {
+  font-weight: var(--peso-negrito);
+  white-space: nowrap;
+}
+
+.minha-todas__bilhetes {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+  white-space: nowrap;
+}

@@ -5,7 +5,13 @@
 // (/acesso), a 404 e as falhas com "Tentar de novo" das telas abertas. As telas e os estados sem nenhum botão nem
 // campo (o telão, /entrar, o ranking aberto e o /status carregados) também entram, para a regra valer se um botão
 // aparecer nelas.
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { respostaRankingPublicoSchema } from "../../shared/contracts/api";
 import type {
@@ -38,6 +44,7 @@ import {
   type ApiFalsa,
 } from "./minha/teste-apoio";
 import { DICAS as DICAS_MINHA } from "./minha/textos";
+import { DICAS_TODAS_AS_REDES } from "./minha/textos-todas-as-redes";
 import { DICAS_DA_MOLDURA } from "./minha/textos-moldura";
 import { DICAS as DICAS_404 } from "./nao-encontrada/textos";
 
@@ -136,13 +143,30 @@ describe("/minha (visão individual, com a moldura)", () => {
     ).toBeGreaterThan(0);
     // RIFA-083: o cartão dos maiores compradores, com "Esta semana", "Campanha toda" e o "?" do título.
     await screen.findByText("Ainda não há compras nesta semana.");
-    expect(textoDaDica(botao("Esta semana"))).toBe(
-      DICAS_MINHA.janelaCompradores.atual,
+    const compradores = within(
+      screen.getByRole("group", { name: "Período dos maiores compradores" }),
     );
-    expect(textoDaDica(botao("Campanha toda"))).toBe(
-      DICAS_MINHA.janelaCompradores.campanha,
+    expect(
+      textoDaDica(compradores.getByRole("button", { name: "Esta semana" })),
+    ).toBe(DICAS_MINHA.janelaCompradores.atual);
+    expect(
+      textoDaDica(compradores.getByRole("button", { name: "Campanha toda" })),
+    ).toBe(DICAS_MINHA.janelaCompradores.campanha);
+    // RIFA-090: o ranking geral, com a mesma troca de janela, o "Ver todos/todas" de cada lista e o "?" dos títulos.
+    await screen.findByRole("heading", { level: 3, name: "Discipuladores" });
+    const geral = within(
+      screen.getByRole("group", { name: "Período do ranking geral" }),
     );
-    await conferirDicas(13);
+    expect(
+      textoDaDica(geral.getByRole("button", { name: "Esta semana" })),
+    ).toBe(DICAS_TODAS_AS_REDES.janela.atual);
+    expect(
+      textoDaDica(geral.getByRole("button", { name: "Campanha toda" })),
+    ).toBe(DICAS_TODAS_AS_REDES.janela.campanha);
+    expect(textoDaDica(botao("Ver todas as 14 células"))).toBe(
+      DICAS_TODAS_AS_REDES.verTodas,
+    );
+    await conferirDicas(17);
   });
 
   it("rede: a equipe agrupada e os links de todas as células", async () => {

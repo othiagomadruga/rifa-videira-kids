@@ -23,3 +23,4 @@ export * from "./rifei-api";
 export * from "./compradores";
 export * from "./maiores-compradores";
 export * from "./relatorio-diario";
+export * from "./todas-as-redes";

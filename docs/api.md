@@ -772,6 +772,47 @@ Contrato: `respostaVisaoIndividualSchema` e `ROTAS.visaoIndividual` em `api.ts`;
   mudou, a hierarquia (quem está em qual equipe, nomes, rankings) pode aparecer até 30 s atrasada. Por requisição:
   a sessão e, sem a base guardada, a campanha e um lote no D1 (o orçamento do painel, ~1,3 linha lida por pedido).
 
+### `GET /api/minha/todas-as-redes?janela=atual|campanha` (`hierarquia`, **só discipulador e rede**; RIFA-090)
+
+O ranking geral, embaixo do que o discipulador já vê na /minha (adendo da D12): **todos** os discipuladores (os que têm
+células, R8) e **todas** as células da campanha, em ranking. Contrato à parte em `src/shared/contracts/todas-as-redes.ts`
+(`ROTAS_TODAS_AS_REDES`, `respostaTodasAsRedesSchema`, `montarTodasAsRedes`).
+
+- `janela`: `atual` (padrão; o período que contém hoje, "esta semana") ou `campanha` (do 1º dia até hoje); fora disso,
+  400. Outros parâmetros são ignorados: o alvo vem só da sessão.
+- **A mesma conta da coordenação**: os itens saem de `montarRankingPainel` (o `GET /api/painel/ranking?nivel=...&periodo=...`
+  sem `divisao`), no critério da campanha (hoje `percentual_meta`, a meta por pessoa) e com a posição e a ordem de lá
+  (empates dividem a posição: 1, 1, 3). A atribuição das vendas às células é a da leitura do painel.
+- Cada discipulador: `posicao`, `nome`, `percentual_meta_bp` (null sem meta na janela), `bilhetes` (vendidos na janela)
+  e `eu`. Cada célula: o mesmo e o `discipulador` (o nome). `eu` marca as linhas de quem pede, pelo id: o discipulador,
+  a linha dele e as células dele; a rede, os discipuladores e as células dela. Também `janela`, `criterio`,
+  `referencia` (sem valores) e `atualizado_em`.
+- **Sem R$, sem comprador, sem telefone, sem id** (D12): o schema estrito só tem esses campos (um campo a mais vira 500).
+
+```json
+{
+  "janela": { "tipo": "atual", "ordem": 2, "nome": "Semana 2", "data_inicio": "2026-11-30", "data_fim": "2026-12-06" },
+  "criterio": "percentual_meta",
+  "referencia": { "data": "2026-12-01", "fase": "durante", "...": "..." },
+  "discipuladores": [
+    { "posicao": 1, "nome": "Discipuladora Ficticia", "percentual_meta_bp": 8600, "bilhetes": 26, "eu": false },
+    { "posicao": 2, "nome": "Discipulador Ficticio", "percentual_meta_bp": 4200, "bilhetes": 21, "eu": true }
+  ],
+  "celulas": [
+    { "posicao": 1, "nome": "Célula Ágape", "discipulador": "Discipulador Ficticio", "percentual_meta_bp": 8000,
+      "bilhetes": 20, "eu": true }
+  ],
+  "atualizado_em": "2026-12-01T15:00:00.000Z"
+}
+```
+
+- **Erros:** 401 sem sessão; 403 `proibido` para o líder da célula (o PO pediu só para os discipuladores) e para a
+  coordenação; 403 `acesso_desligado` com o acesso do papel desligado (D20, como todo `/api/minha/*`); 400; 404 sem
+  campanha ativa.
+- **Cache e custo:** a resposta é por pessoa (o `eu`) e sai com `Cache-Control: no-store`. Os dois rankings (iguais para
+  todo mundo) ficam até 30 s na memória do isolate, por janela, como a base da visão (D14); sem eles, a leitura do
+  painel (a campanha e um lote, ~1,3 linha lida por pedido) e duas chamadas a `montarRankingPainel`. Nenhum SQL novo.
+
 ### `GET /api/admin/acessos-hierarquia?papel=lider|discipulador|rede` (**só admin**)
 
 Todos os alvos do papel, com ou sem acesso: o alvo, quem deve receber o link (`pessoa_nome`, da hierarquia), o
