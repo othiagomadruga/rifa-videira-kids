@@ -19,14 +19,23 @@
  * discipuladores dela), do alvo da sessão; a consulta da URL é ignorada (um `?celula_id=` não muda nada). Um lote do
  * D1 por requisição (db/links-vendas.ts), sem cache: o modelo novo ou o afiliado vinculado valem na hora. Sem
  * campanha ativa, 404. Com o acesso do papel desligado (D20), o login daqui já deu 403 `acesso_desligado`.
+ *
+ * Os maiores compradores (RIFA-083, D38): GET /api/minha/maiores-compradores?janela=atual|campanha&limite=1..50, SÓ
+ * do discipulador (o líder e a rede levam 403 `proibido`), com os pedidos das células dele (o alvo da sessão; a
+ * consulta só tem `janela` e `limite`, o resto é descartado pelo schema). Cada item sai com `itemMeuMaiorComprador`:
+ * posição, nome, bilhetes e a célula, sem telefone e sem R$ (D12), conferido no schema estrito. Lido do D1 a cada
+ * requisição, sem cache (db/maiores-compradores.ts); sem campanha ativa, 404.
  */
 import { Hono } from "hono";
 import {
   ROTAS,
   ROTAS_LINK_VENDAS,
+  ROTAS_MAIORES_COMPRADORES,
+  itemMeuMaiorComprador,
   type UsuarioSessao,
 } from "../../shared/contracts";
 import { lerLinksVendas } from "../db/links-vendas";
+import { lerMaioresCompradores } from "../db/maiores-compradores";
 import {
   criarCacheDaBase,
   lerBaseDaVisao,
@@ -48,6 +57,7 @@ export const PREFIXO_MINHA = "/api/minha";
 
 const ROTA = ROTAS.visaoIndividual;
 const LINKS = ROTAS_LINK_VENDAS.meusLinksVendas;
+const COMPRADORES = ROTAS_MAIORES_COMPRADORES.meusMaioresCompradores;
 
 export interface OpcoesMinha {
   /** "Agora" (os testes fixam o instante); padrão: o relógio do sistema. */
@@ -126,6 +136,38 @@ export function criarMinha({
       200,
     );
   });
+
+  // Só o discipulador (o líder e a rede: 403), antes de ler a consulta; a chave do papel já foi conferida acima.
+  minha.get(
+    COMPRADORES.caminho.slice(PREFIXO_MINHA.length),
+    exigirSessao(COMPRADORES.papeis, { acessoDaCampanha: true }),
+    validarConsulta(COMPRADORES.consulta),
+    async (c) => {
+      const { alvo } = c.var.usuario;
+      // O papel discipulador sempre tem o alvo dele (o banco garante); a conferência é a defesa a mais.
+      if (alvo?.tipo !== "discipulador")
+        return responderErro(
+          c,
+          "proibido",
+          "Seu acesso não tem células para ver os compradores",
+        );
+      const lido = await lerMaioresCompradores(
+        c.env.DB,
+        relogio,
+        c.req.valid("query"),
+        { discipuladorId: alvo.id },
+      );
+      if (!lido.ok) return responderErro(c, lido.codigo, lido.mensagem);
+      return c.json(
+        COMPRADORES.sucesso.corpo.parse({
+          janela: lido.janela,
+          itens: lido.compradores.map(itemMeuMaiorComprador),
+          atualizado_em: lido.agora.toISOString(),
+        }),
+        200,
+      );
+    },
+  );
 
   return minha;
 }

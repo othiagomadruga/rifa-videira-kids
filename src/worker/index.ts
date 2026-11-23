@@ -20,6 +20,10 @@ import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
 import { PREFIXO_LINKS_VENDAS, linksVendas } from "./routes/links-vendas";
+import {
+  PREFIXO_MAIORES_COMPRADORES,
+  maioresCompradores,
+} from "./routes/maiores-compradores";
 import { PREFIXO_MINHA, minha } from "./routes/minha";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
 import { PREFIXO_PEDIDOS, pedidos } from "./routes/pedidos";
@@ -103,6 +107,9 @@ app.route(PREFIXO_PEDIDOS_SUSPEITOS, pedidosSuspeitos);
 // Pedidos da campanha, entregas e estado do webhook (RIFA-025, D16): leitura, sob /api/admin (passo 4). Com
 // desconsiderar e reconsiderar pedido (RIFA-028, D20), só admin (o sub-app exige nas duas rotas).
 app.route(PREFIXO_PEDIDOS, pedidos);
+// Maiores compradores do admin (RIFA-083, D38): GET /api/admin/maiores-compradores, só admin (o sub-app exige no
+// handler, antes da consulta). O do discipulador fica no sub-app de /api/minha (abaixo).
+app.route(PREFIXO_MAIORES_COMPRADORES, maioresCompradores);
 app.route(PREFIXO_WEBHOOK_COORDENACAO, webhookCoordenacao);
 // Token do webhook da Rifei gerado pela tela (RIFA-039, D21): GET e POST /api/admin/webhook/token, só admin (o
 // sub-app exige no handler das duas rotas, nunca num use de /api/admin/webhook/*: as entregas e o estado acima
@@ -125,8 +132,9 @@ app.route(PREFIXO_PAINEL, painel);
 // Visão pública (RIFA-PAINEL): ranking e bumbo sob /api/publico, ABERTOS (fora dos prefixos do
 // passo 4) e nunca com valores em R$ ou bilhetes (o sub-app confere a resposta no schema estrito).
 app.route(PREFIXO_PUBLICO, publico);
-// Visão individual (RIFA-014) e links de vendas das células do alvo (RIFA-046, D24): sob /api/minha, protegidos
-// pelo passo 4c; o alvo vem só da sessão e a resposta nunca traz dinheiro (o sub-app confere no schema estrito).
+// Visão individual (RIFA-014), links de vendas das células do alvo (RIFA-046, D24) e os maiores compradores das células
+// do discipulador (RIFA-083, D38; só o discipulador): sob /api/minha, protegidos pelo passo 4c; o alvo vem só da sessão
+// e a resposta nunca traz dinheiro nem telefone (o sub-app confere no schema estrito).
 app.route(PREFIXO_MINHA, minha);
 
 app.notFound(rotaInexistente);

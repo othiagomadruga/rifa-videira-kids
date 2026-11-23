@@ -19,6 +19,8 @@
 // k) o login do discipulador com a senha padrão (RIFA-082, D37) abre só a sessão do discipulador: 403 em toda a
 //    coordenação, a /minha só do próprio discipulador (as células dele), CSRF, e desligar qualquer uma das duas chaves
 //    (`acesso.celulas_senha` ou `acesso.discipuladores`) derruba a sessão aberta pela senha, e não a do link;
+// l) os maiores compradores (RIFA-083, D38): a rota do admin dá 403 para a coordenação e a hierarquia; a da /minha é só
+//    do discipulador (líder, rede e coordenação: 403; sem sessão, 401) e responde sem telefone e sem valor;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -40,6 +42,7 @@ import {
   ROTAS_ACESSO,
   ROTAS_ACESSO_HIERARQUIA,
   ROTAS_LINK_VENDAS,
+  ROTAS_MAIORES_COMPRADORES,
   ROTAS_REGRAS_CAMPANHA,
   ROTAS_CONEXAO_RIFEI,
   ROTAS_RIFEI_API,
@@ -55,7 +58,9 @@ import {
   respostaBumboSchema,
   respostaListaAfiliadosSchema,
   respostaListaRecuperacoesSchema,
+  respostaMaioresCompradoresSchema,
   respostaMeusLinksVendasSchema,
+  respostaMeusMaioresCompradoresSchema,
   respostaPainelResumoSchema,
   respostaPedidosSuspeitosSchema,
   respostaRankingPublicoSchema,
@@ -122,7 +127,9 @@ interface RotaDaCoordenacao {
  * rota), ROTAS_REGRAS_CAMPANHA (Sprint 6, D20: só admin), ROTAS_TOKEN_WEBHOOK (RIFA-039, D21: só admin),
  * ROTAS_RELATORIO (RIFA-038, D23: admin e coordenação) e ROTAS_LINK_VENDAS (RIFA-046, D24: a lista de admin e coordenação
  * e o PUT do modelo só de admin; a visão da hierarquia, em /api/minha, fica no filtro de fora) e ROTAS_RIFEI_API
- * (RIFA-070, D32: só admin) e ROTAS_CONEXAO_RIFEI (RIFA-070, D32: a conexão com a Rifei e a busca do pedido, só admin). O relatório entrou aqui
+ * (RIFA-070, D32: só admin) e ROTAS_CONEXAO_RIFEI (RIFA-070, D32: a conexão com a Rifei e a busca do pedido, só admin) e
+ * ROTAS_MAIORES_COMPRADORES (RIFA-083, D38: a do admin, só admin; a do discipulador, em /api/minha, fica no filtro de
+ * fora). O relatório entrou aqui
  * já no contrato (sem `papeis`, ele passava nos três testes mesmo antes de montado) e o primeiro teste abaixo confere que
  * ele está registrado no app; com sessão, sem `tipo`, ele responde o 400 do formato único (passou do login).
  */
@@ -135,6 +142,7 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_LINK_VENDAS),
     ...Object.values(ROTAS_RIFEI_API),
     ...Object.values(ROTAS_CONEXAO_RIFEI),
+    ...Object.values(ROTAS_MAIORES_COMPRADORES),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -232,6 +240,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_LINK_VENDAS),
     ...Object.values(ROTAS_RIFEI_API),
     ...Object.values(ROTAS_CONEXAO_RIFEI),
+    ...Object.values(ROTAS_MAIORES_COMPRADORES),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -303,6 +312,15 @@ describe("a) toda rota da coordenação exige sessão", () => {
     ]);
     expect(doFiltro(ROTAS_LINK_VENDAS.meusLinksVendas)).toBeUndefined();
     for (const rota of Object.values(ROTAS_LINK_VENDAS))
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    // Os maiores compradores (RIFA-083, D38): a do admin no filtro, só de admin; a do discipulador fora; as duas montadas.
+    expect(doFiltro(ROTAS_MAIORES_COMPRADORES.maioresCompradores)).toEqual([
+      "admin",
+    ]);
+    expect(
+      doFiltro(ROTAS_MAIORES_COMPRADORES.meusMaioresCompradores),
+    ).toBeUndefined();
+    for (const rota of Object.values(ROTAS_MAIORES_COMPRADORES))
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
   });
 
@@ -1351,6 +1369,9 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
     "/api/minha/links-vendas",
     "/api/minha/links-vendas?celula_id=2",
     "/api/minha/links-vendas/",
+    // RIFA-083 (D38): os maiores compradores das células do discipulador.
+    "/api/minha/maiores-compradores",
+    "/api/minha/maiores-compradores?janela=campanha&discipulador_id=20",
   ];
   const sessoes = {} as Record<PapelHierarquia, Record<string, string>>;
 
@@ -1381,11 +1402,58 @@ describe("g) RIFA-014 (CA3): papéis da hierarquia só em /api/minha, e /api/min
         .filter((rota) => rota.grupo === "hierarquia")
         .map((rota) => [`${rota.metodo} ${rota.caminho}`, rota.papeis]),
     ).toEqual([["GET /api/minha/links-vendas", PAPEIS_HIERARQUIA]]);
+    // O catálogo à parte dos maiores compradores (D38): a da /minha é só do discipulador.
+    expect(
+      Object.values(ROTAS_MAIORES_COMPRADORES)
+        .filter((rota) => rota.grupo === "hierarquia")
+        .map((rota) => [`${rota.metodo} ${rota.caminho}`, rota.papeis]),
+    ).toEqual([["GET /api/minha/maiores-compradores", ["discipulador"]]]);
     const registradas = rotasRegistradas().map(
       (rota) => `${rota.metodo} ${rota.caminho}`,
     );
     expect(registradas).toContain("GET /api/minha/visao");
     expect(registradas).toContain("GET /api/minha/links-vendas");
+    expect(registradas).toContain("GET /api/minha/maiores-compradores");
+  });
+
+  it("RIFA-083 (D38): os maiores compradores da /minha são só do discipulador (200, sem telefone nem valor); líder e rede, 403", async () => {
+    const caminho = ROTAS_MAIORES_COMPRADORES.meusMaioresCompradores.caminho;
+    const res = await requisitar("GET", caminho, sessoes.discipulador);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const corpo = await res.json();
+    respostaMeusMaioresCompradoresSchema.parse(corpo);
+    expect(JSON.stringify(corpo)).not.toMatch(
+      /telefone|whatsapp|centavos|total/,
+    );
+    for (const papel of ["lider", "rede"] as const) {
+      const recusada = await requisitar("GET", caminho, sessoes[papel]);
+      expect({ papel, status: recusada.status }).toEqual({
+        papel,
+        status: 403,
+      });
+      expect(erroApiSchema.parse(await recusada.json()).erro.codigo).toBe(
+        "proibido",
+      );
+      esperarCabecalhosDeSeguranca(recusada);
+    }
+    // A do admin: o admin entra; a coordenação e a hierarquia, 403 (o caso geral está na parte a e acima).
+    const doAdmin = await requisitar(
+      "GET",
+      ROTAS_MAIORES_COMPRADORES.maioresCompradores.caminho,
+      admin,
+    );
+    expect(doAdmin.status).toBe(200);
+    respostaMaioresCompradoresSchema.parse(await doAdmin.json());
+    await esperarErro(
+      await requisitar(
+        "GET",
+        ROTAS_MAIORES_COMPRADORES.maioresCompradores.caminho,
+        coordenacao,
+      ),
+      403,
+      "proibido",
+    );
   });
 
   it.each(PAPEIS_HIERARQUIA)(
@@ -1540,6 +1608,8 @@ describe("h) RIFA-029 (D20, CA4): acesso de discipuladores e redes pela chave da
     "/api/minha/visao?periodo=invalido",
     // RIFA-046 (D24): os links de vendas seguem a chave, como todo /api/minha.
     "/api/minha/links-vendas",
+    // RIFA-083 (D38): os maiores compradores também (a rede leva o 403 da chave antes do 403 do papel).
+    "/api/minha/maiores-compradores",
     "/api/minha/qualquer",
     "/api/minha/qualquer/coisa/funda",
     "/api/minha",

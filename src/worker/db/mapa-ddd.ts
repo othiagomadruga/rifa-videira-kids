@@ -86,7 +86,7 @@ export function comandoMapaDdd(
  * o calendário e o período da data de referência (hoje no fuso da campanha). Assim a janela do mapa é a dos
  * rankings por construção: `atual` é o período que contém hoje (antes do início, o primeiro; depois do fim, o último).
  */
-function janelaDosRankings(
+export function janelaDosRankings(
   campanha: Campanha,
   periodo: ConsultaMapaDdd["periodo"],
   agora: Date,
