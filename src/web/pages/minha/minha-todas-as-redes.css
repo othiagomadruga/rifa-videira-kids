@@ -17,6 +17,15 @@
   color: var(--cor-texto-suave);
 }
 
+/* As duas listas: uma embaixo da outra no celular; lado a lado quando cabem duas de 26rem. */
+.minha-todas__listas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  align-items: start;
+  gap: var(--espaco-5) var(--espaco-6);
+  min-width: 0;
+}
+
 .minha-todas__secao {
   display: grid;
   gap: var(--espaco-2);

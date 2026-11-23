@@ -145,18 +145,21 @@ function Quadro({
       <p className="minha-todas__janela">
         {textoDaJanela(resposta.janela, resposta.referencia)}
       </p>
-      <Lista
-        nivel="discipulador"
-        itens={resposta.discipuladores}
-        tipo={tipo}
-        ajuda={AJUDA_TODAS_AS_REDES.discipuladores}
-      />
-      <Lista
-        nivel="celula"
-        itens={resposta.celulas}
-        tipo={tipo}
-        ajuda={AJUDA_TODAS_AS_REDES.celulas}
-      />
+      {/* Uma lista embaixo da outra no celular; lado a lado no computador. */}
+      <div className="minha-todas__listas">
+        <Lista
+          nivel="discipulador"
+          itens={resposta.discipuladores}
+          tipo={tipo}
+          ajuda={AJUDA_TODAS_AS_REDES.discipuladores}
+        />
+        <Lista
+          nivel="celula"
+          itens={resposta.celulas}
+          tipo={tipo}
+          ajuda={AJUDA_TODAS_AS_REDES.celulas}
+        />
+      </div>
       <p className="minha-todas__nota">
         {TEXTO_DO_CRITERIO[resposta.criterio]}
       </p>
