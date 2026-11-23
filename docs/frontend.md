@@ -143,6 +143,15 @@ importa nada dos Rankings, que formatam dinheiro):
   células"): `GET /api/minha/maiores-compradores` (`maiores-compradores-api.ts`). Posição, nome, célula e bilhetes;
   nunca telefone nem dinheiro (`guarda-minha.test.ts` confere o código). Pede de novo a cada atualização da visão (a
   cada minuto, pelo `atualizado_em`), sem voltar ao "carregando"; se essa atualização falha, a lista de antes fica.
+- **`/minha`, só o líder da célula: "Quem comprou"** (RIFA-089, adendo da D38; `pages/minha/QuemComprou.tsx`, no
+  pacote da `VisaoIndividual`, depois do ranking): `GET /api/minha/compradores` (`quem-comprou-api.ts`, 20 por página).
+  Cada compra paga da célula (as do link e as atribuídas à mão, D41), da mais recente para a mais antiga: o nome (ou
+  **"Comprador sem nome"**), o dia e a hora no fuso da campanha (`quandoComprou`: "23/11 às 14:03") e os bilhetes;
+  nunca telefone, números nem dinheiro (`guarda-minha.test.ts`). **"Ver mais"** (com dica) traz a próxima página pelo
+  cursor e põe o foco na primeira compra nova; a falha dele vai numa região viva fixa. A primeira página acompanha a
+  atualização da visão (a cada minuto) enquanto o líder não pediu "Ver mais". Vazio: "Ainda não há compras pagas da sua
+  célula." Testes em `pages/minha/QuemComprou.test.tsx` (`criarApiFalsa` com `quemComprou`, `quemComprouDe` e
+  `QUEM_COMPROU` em `teste-apoio.ts`).
 - **Comum aos dois:** a troca **"Esta semana"** / **"Campanha toda"** (dois botões com `aria-pressed` e dica, num
   `role="group"`; padrão: a semana), a janela com as datas, o carregando, o erro com "Tentar de novo" e o vazio ("Ainda
   não há compras nesta semana." / "Ainda não há compras na campanha."). Trocar a janela nunca mostra a lista da outra.

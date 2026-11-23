@@ -1034,6 +1034,30 @@ primeira em português). **Sem telefone e sem R$** (D12): o schema estrito não 
 - **Erros:** 401; 403 `proibido` (líder, rede e coordenação); 403 `acesso_desligado` com `acesso.discipuladores`
   desligado (D20, como todo `/api/minha/*`); 400; 404 sem campanha ativa.
 
+### `GET /api/minha/compradores?limite=20&antes_de=<cursor>` (`hierarquia`, **só o líder da célula**; RIFA-089, adendo da D38)
+
+As vendas **pagas** que contam (aprovadas, sem os desconsiderados) da célula da sessão, pela célula efetiva (D41: as do
+link da célula e as atribuídas à mão a ela), da mais recente para a mais antiga (`aprovado_em`, empate pelo id). A
+célula vem só da sessão (D12): um id na consulta é ignorado. `limite` de 1 a 50 (padrão 20); `antes_de` é o `proximo`
+da página anterior. Cada item: `nome` (null quando a Rifei não mandou), `aprovado_em` e `bilhetes`. **Sem telefone,
+sem números dos bilhetes e sem R$**: o schema estrito não tem esses campos. `Cache-Control: no-store`.
+
+```json
+{
+  "fuso_horario": "America/Belem",
+  "itens": [
+    { "nome": "Comprador Fictício", "aprovado_em": "2026-11-23T17:03:00.000Z", "bilhetes": 2 },
+    { "nome": null, "aprovado_em": "2026-11-23T16:00:00.000Z", "bilhetes": 1 }
+  ],
+  "proximo": null,
+  "atualizado_em": "2026-11-23T18:00:00.000Z"
+}
+```
+
+- **Erros:** 401; 403 `proibido` (discipulador, rede e coordenação); 403 `acesso_desligado` (D20, como todo
+  `/api/minha/*`); 400 (`limite` fora da faixa; `antes_de` que a API não emitiu, com o detalhe `cursor_invalido`); 404
+  sem campanha ativa.
+
 ## Relatório diário por e-mail e Arrecadado (RIFA-086 e RIFA-087; docs/decisions.md D40)
 
 Contrato: as constantes em `src/shared/contracts/relatorio-diario.ts` (sem zod: os tipos `manha` e `tarde`

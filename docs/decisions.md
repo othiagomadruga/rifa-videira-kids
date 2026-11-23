@@ -2156,6 +2156,30 @@ maiores compradores." Contrato em `src/shared/contracts/` (`maiores-compradores.
   o discipulador (o PO não pediu e o contato continua com quem confere o pagamento, D36); contar o reservado (inflaria
   quem reservou e não pagou).
 
+**Adendo (RIFA-089, 2026-11-23): o nome de quem comprou também para o líder da célula.** Pedido do PO: "No painel do
+líder mostra quem comprou a rifa dele e o horário? Se não, pode colocar essa informação." Até aqui a /minha do líder
+não mostrava compradores (o discipulador via só o ranking dos maiores compradores, acima).
+
+- **Rota** `GET /api/minha/compradores?limite=1..50&antes_de=<cursor>` (`ROTAS_QUEM_COMPROU`, contrato em `api.ts`;
+  `src/worker/db/quem-comprou.ts` e `src/worker/routes/minha.ts`), **só o papel do líder** (o discipulador, a rede e a
+  coordenação levam 403 `proibido`; com o acesso da célula desligado, o 403 da D20 como todo `/api/minha/*`). Só a
+  própria célula: o alvo vem só da sessão (D12); um `celula_id` na consulta é descartado.
+- **O que mostra:** as vendas **pagas** (aprovadas) da campanha ativa que contam (sem os desconsiderados, D20) da
+  célula, pela célula **efetiva** (D41: as do link da célula e as atribuídas à mão a ela), da mais recente para a mais
+  antiga (`aprovado_em`, empate pelo id): o nome do comprador (null quando a Rifei não mandou; o site mostra "Comprador
+  sem nome"), o instante (o site mostra "23/11 às 14:03" no fuso da campanha, que vem na resposta) e os bilhetes.
+  **Sem telefone, sem os números dos bilhetes e sem R$** (D12: a /minha não mostra dinheiro); o schema da resposta é
+  estrito. A reserva não paga fica fora (a lista é de quem comprou).
+- **Privacidade:** a mesma razão do discipulador (acima): o nome já é público na página da Rifei, e o líder vê só os
+  compradores da própria célula. O telefone continua só do admin (D36).
+- **Paginação e custo** (D10): 20 por página com o cursor `(aprovado_em, id)` ("Ver mais"); lida do D1 a cada
+  requisição, sem cache, `Cache-Control: no-store`. A página é um MULTI-INDEX OR (os afiliados da célula e os
+  atribuídos), com os `+` que tiram do planejador os índices da campanha e de status: o custo acompanha as vendas da
+  célula, não a campanha. Na tela, a primeira página acompanha a atualização da visão (a cada minuto) enquanto o líder
+  não pediu "Ver mais".
+- **Descartado:** abrir para o discipulador e a rede (fora do pedido: eles já têm os maiores compradores, ou nada) e
+  mostrar o valor pago (a /minha não mostra R$).
+
 ## D39. Grupo do discipulador e ranking por grupo, só na coordenação (RIFA-084; contrato, 2026-11-23)
 
 Pedido do PO (23/11, com a campanha em andamento): "Faz o seguinte: unifica. E embaixo crie uma nova visualização:
