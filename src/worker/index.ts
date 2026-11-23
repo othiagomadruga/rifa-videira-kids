@@ -27,6 +27,7 @@ import {
   maioresCompradores,
 } from "./routes/maiores-compradores";
 import { PREFIXO_MINHA, minha } from "./routes/minha";
+import { minhaTodasAsRedes } from "./routes/minha-todas-as-redes";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
 import { PREFIXO_PEDIDOS, pedidos } from "./routes/pedidos";
 import {
@@ -147,6 +148,9 @@ app.route(PREFIXO_PUBLICO, publico);
 // do discipulador (RIFA-083, D38; só o discipulador): sob /api/minha, protegidos pelo passo 4c; o alvo vem só da sessão
 // e a resposta nunca traz dinheiro nem telefone (o sub-app confere no schema estrito).
 app.route(PREFIXO_MINHA, minha);
+// Ranking geral (RIFA-090, adendo da D12): GET /api/minha/todas-as-redes, só do discipulador e da rede (o sub-app exige
+// na rota), protegido pelo passo 4c; sem dinheiro e sem compradores (schema estrito).
+app.route(PREFIXO_MINHA, minhaTodasAsRedes);
 
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);
