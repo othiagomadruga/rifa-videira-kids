@@ -553,6 +553,9 @@ describe("/minha", () => {
         },
         { timeout: 5000 },
       );
+      // RIFA-090: o ranking geral do discipulador já carregado (o título é "Ranking geral", sem a palavra).
+      if (papel === "discipulador")
+        await screen.findByRole("heading", { level: 3, name: "Células" });
       conferirSemRede();
     },
   );

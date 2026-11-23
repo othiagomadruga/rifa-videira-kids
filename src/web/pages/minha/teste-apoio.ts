@@ -24,6 +24,7 @@ import {
   type UsuarioSessao,
 } from "../../../shared/contracts";
 import { respostaJson } from "../../test/renderizar";
+import { todasAsRedesDe } from "./teste-apoio-todas-as-redes";
 
 // ---------------------------------------------------------------------------------------------------
 // Sessões
@@ -960,6 +961,16 @@ export function criarApiFalsa(
     [];
 
   function responderComoAApi(chamada: Chamada, url: URL): Response {
+    // RIFA-090: o ranking geral (fictício) para o alvo da visão; outro conteúdo, com `proxima`.
+    if (
+      chamada.metodo === "GET" &&
+      url.pathname === "/api/minha/todas-as-redes"
+    ) {
+      const daVisao = typeof visao === "function" ? visao("atual") : visao;
+      return respostaJson(
+        todasAsRedesDe(url.searchParams.get("janela") ?? "atual", daVisao.alvo),
+      );
+    }
     if (chamada.metodo === "GET" && url.pathname === "/api/minha/visao") {
       const periodo = url.searchParams.get("periodo") ?? "atual";
       const resposta = typeof visao === "function" ? visao(periodo) : visao;

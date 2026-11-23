@@ -31,8 +31,10 @@ const molduraCss = semComentarios(lerArquivo("./minha-moldura.css"));
 const visaoCss = semComentarios(lerArquivo("./minha.css"));
 /** O link de vendas (RIFA-046), que também vem com a VisaoIndividual. */
 const linksCss = semComentarios(lerArquivo("./minha-links.css"));
-/** Todo o CSS da tela: a moldura (pacote inicial), o da visão e o do link de vendas (pacote à parte). */
-const minhaCss = `${molduraCss}\n${visaoCss}\n${linksCss}`;
+/** O ranking geral (RIFA-090), que vem com o cartão dele (só o discipulador e a rede). */
+const todasCss = semComentarios(lerArquivo("./minha-todas-as-redes.css"));
+/** Todo o CSS da tela: a moldura (pacote inicial), o da visão, o do link de vendas e o do ranking geral (pacote à parte). */
+const minhaCss = `${molduraCss}\n${visaoCss}\n${linksCss}\n${todasCss}`;
 
 /** As declarações dos dois arquivos: propriedade e valor. */
 const DECLARACOES = [...minhaCss.matchAll(/([\w-]+)\s*:\s*([^;{}]+);/g)].map(
@@ -116,6 +118,9 @@ describe("CA5: o CSS da visão individual", () => {
       // RIFA-083: os maiores compradores (o nome do comprador e a célula).
       ".minha-compradores__nome",
       ".minha-compradores__celula",
+      // RIFA-090: o ranking geral (o nome e o discipulador da célula).
+      ".minha-todas__nome",
+      ".minha-todas__discipulador",
     ]) {
       const inicio = minhaCss.indexOf(`${seletor} {`);
       expect(inicio, seletor).toBeGreaterThanOrEqual(0);
@@ -294,6 +299,9 @@ describe("CSS no pacote inicial: só a moldura da visão individual", () => {
     expect(quemImporta("minha.css")).toEqual(["./VisaoIndividual.tsx"]);
     // O do link de vendas, com o cartão dele, que só a VisaoIndividual importa.
     expect(quemImporta("minha-links.css")).toEqual(["./LinksDeVendas.tsx"]);
+    expect(quemImporta("minha-todas-as-redes.css")).toEqual([
+      "./TodasAsRedes.tsx",
+    ]);
     for (const [arquivo, fonte] of Object.entries(FONTES))
       if (arquivo !== "./VisaoIndividual.tsx")
         expect(fonte, arquivo).not.toMatch(/from "\.\/LinksDeVendas"/);
@@ -314,5 +322,6 @@ describe("CSS no pacote inicial: só a moldura da visão individual", () => {
     for (const nome of classes(visaoCss))
       expect(nome).not.toMatch(/^minha-(moldura|cabecalho|links)/);
     for (const nome of classes(linksCss)) expect(nome).toMatch(/^minha-links/);
+    for (const nome of classes(todasCss)) expect(nome).toMatch(/^minha-todas/);
   });
 });
