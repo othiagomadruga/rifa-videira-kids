@@ -1,0 +1,18 @@
+# Teste temporário (RIFA-087): a API Pix da Efí responde a um runner do GitHub? Sem segredo nenhum.
+name: Teste de rede da Efí
+on:
+  push:
+    branches: [teste/RIFA-087-rede-efi]
+permissions:
+  contents: read
+jobs:
+  rede:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar a Efí sem certificado nem credencial
+        run: |
+          for url in https://pix.api.efipay.com.br/oauth/token https://pix.api.efipay.com.br/v2/gn/saldo; do
+            code=$(curl -s -m 20 -o corpo.txt -w "%{http_code}" -u teste:teste -H "Content-Type: application/json" -d '{"grant_type":"client_credentials"}' "$url" || echo erro)
+            if grep -q "you have been blocked" corpo.txt; then tipo="BLOQUEIO do firewall"; else tipo="resposta da Efí"; fi
+            echo "$url -> $code ($tipo)"; head -c 200 corpo.txt | tr -d '\n' | sed 's/^/   corpo: /'; echo
+          done
