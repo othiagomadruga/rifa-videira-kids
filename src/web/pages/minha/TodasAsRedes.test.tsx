@@ -39,6 +39,17 @@ async function cartao(): Promise<HTMLElement> {
   return elemento;
 }
 
+/** O cartão já com as listas carregadas (no CI, sob carga, a resposta pode passar de 1 s). */
+async function cartaoCarregado(): Promise<HTMLElement> {
+  const elemento = await cartao();
+  await within(elemento).findByRole(
+    "heading",
+    { level: 3, name: "Discipuladores" },
+    { timeout: 5000 },
+  );
+  return elemento;
+}
+
 /** A seção de uma das listas ("Discipuladores" ou "Células"). */
 function secao(dentro: HTMLElement, titulo: string): HTMLElement {
   const elemento = within(dentro)
@@ -70,7 +81,7 @@ afterEach(() => {
 describe("RIFA-090: o ranking geral na /minha do discipulador", () => {
   it("embaixo de tudo o que ele já vê: as duas listas da semana, com as 10 primeiras e as linhas dele em destaque", async () => {
     const api = await abrir("discipulador");
-    const geral = await cartao();
+    const geral = await cartaoCarregado();
     const discipuladores = secao(geral, "Discipuladores");
     const celulas = secao(geral, "Células");
     await waitFor(() => expect(itens(discipuladores)).toHaveLength(10));
@@ -131,7 +142,7 @@ describe("RIFA-090: o ranking geral na /minha do discipulador", () => {
 
   it("'Ver todos' e 'Ver todas' mostram a lista inteira na própria página; 'Mostrar só' volta às 10 primeiras", async () => {
     await abrir("discipulador");
-    const geral = await cartao();
+    const geral = await cartaoCarregado();
     const discipuladores = secao(geral, "Discipuladores");
     const celulas = secao(geral, "Células");
     await waitFor(() => expect(itens(discipuladores)).toHaveLength(10));
@@ -183,7 +194,7 @@ describe("RIFA-090: o ranking geral na /minha do discipulador", () => {
 
   it("a troca de janela: 'Campanha toda' pede a campanha e mostra o ranking dela; volta para a semana", async () => {
     const api = await abrir("discipulador");
-    const geral = await cartao();
+    const geral = await cartaoCarregado();
     const discipuladores = secao(geral, "Discipuladores");
     await waitFor(() => expect(itens(discipuladores)).toHaveLength(10));
     const janelas = within(
@@ -264,7 +275,7 @@ describe("RIFA-090: o ranking geral na /minha do discipulador", () => {
 describe("RIFA-090: quem vê o ranking geral", () => {
   it("a rede também vê, com os discipuladores e as células dela em destaque ('Sua rede')", async () => {
     await abrir("rede");
-    const geral = await cartao();
+    const geral = await cartaoCarregado();
     const discipuladores = secao(geral, "Discipuladores");
     await waitFor(() => expect(itens(discipuladores)).toHaveLength(10));
     expect(destacados(discipuladores)).toEqual([

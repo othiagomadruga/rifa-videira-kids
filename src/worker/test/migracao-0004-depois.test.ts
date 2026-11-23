@@ -142,6 +142,10 @@ describe("0004 aplicada depois da 0005 à 0007 (RIFA-012)", () => {
         // 0017 (RIFA-076, D36): sem o contato do comprador até o próximo evento.
         comprador_nome: null,
         comprador_telefone: null,
+        // 0020 (RIFA-088, D41): nenhuma célula atribuída à mão.
+        celula_atribuida_id: null,
+        celula_atribuida_em: null,
+        celula_atribuida_por: null,
       })),
     );
   });
