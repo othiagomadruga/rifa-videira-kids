@@ -28,7 +28,7 @@ export type DicasFormulario = {
 export const DICAS = {
   nome: "Escreva o nome da sua célula, como aparece no ranking. Maiúsculas, acentos e espaços não fazem diferença.",
   senha:
-    "A senha que a coordenação passou para a sua célula. Começa com @ e termina com 1234.",
+    "A senha que a coordenação passou para a sua célula. Não sabe? Peça ao seu discipulador.",
   entrar:
     "Confere a célula e a senha e conecta este aparelho. Depois, abre a página da sua célula.",
   entrando:
@@ -81,11 +81,12 @@ export const TEXTOS_ADMIN = {
   souCelula: "Sou líder de célula",
 } as const satisfies TextosFormulario & Record<string, string>;
 
-// RIFA-082 (D37): o discipulador entra com o nome dele e a mesma senha padrão das células (@ + nome + 1234).
+// RIFA-082 (D37): o discipulador entra com o nome dele e a mesma senha padrão das células. A regra da senha NUNCA
+// aparece nas telas abertas (pedido do PO em 23/11): só na Hierarquia, para a coordenação.
 export const DICAS_DISCIPULADOR = {
   nome: "Escreva o seu nome, como a coordenação cadastrou. Maiúsculas, acentos e espaços não fazem diferença.",
   senha:
-    "A senha que a coordenação passou para você. Começa com @ e termina com 1234.",
+    "A senha que a coordenação passou para você. Não sabe? Peça à coordenação.",
   entrar:
     "Confere o nome e a senha e conecta este aparelho. Depois, abre a página com as suas células.",
   entrando:

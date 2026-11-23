@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { controlesSemDica } from "../../test/dicas";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import { DISCIPULADOR, criarApiFalsa, visaoDe } from "../minha/teste-apoio";
+import { AJUDA as AJUDA_DO_RANKING_PUBLICO } from "../ranking-publico/ajuda";
 import {
+  DICAS as DICAS_CELULA,
   DICAS_DISCIPULADOR,
   TEXTOS,
   TEXTOS_ADMIN,
@@ -203,8 +205,16 @@ describe("RIFA-082: Sou discipulador em /entrar", () => {
     ).toBeInTheDocument();
   });
 
-  it("as dicas dizem de onde vem a senha (começa com @ e termina com 1234)", () => {
-    expect(DICAS_DISCIPULADOR.senha).toMatch(/@.*1234/);
+  it("nenhuma dica da tela aberta revela a regra da senha (pedido do PO, 23/11): nada de @ nem de 1234", () => {
+    const textos: unknown[] = [
+      ...Object.values(DICAS_DISCIPULADOR),
+      ...Object.values(DICAS_CELULA),
+      ...Object.values(AJUDA_DO_RANKING_PUBLICO),
+    ];
+    for (const texto of textos) {
+      expect(JSON.stringify(texto)).not.toMatch(/@|1234/);
+    }
+    expect(DICAS_DISCIPULADOR.senha).toMatch(/coordenação/);
     expect(DICAS_DISCIPULADOR.nome).toMatch(/acentos/);
   });
 });
