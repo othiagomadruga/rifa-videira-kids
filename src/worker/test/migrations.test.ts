@@ -2,11 +2,11 @@
 // 0004_conferencia.sql, 0005_auditoria.sql, 0006_acesso_hierarquia.sql, 0007_indices_pedidos_entregas.sql,
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
 // 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql, 0014_codigo_afiliado_rifei.sql, 0015_senha_admin.sql,
-// 0016_bilhetes_campanha.sql, 0017_comprador_contato.sql, 0018_grupos.sql e 0019_grupo_da_celula.sql), aplicado pelo
-// setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006
-// até a 0019 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações
+// 0016_bilhetes_campanha.sql, 0017_comprador_contato.sql, 0018_grupos.sql, 0019_grupo_da_celula.sql e
+// 0020_celula_atribuida.sql), aplicado pelo setup apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006
+// até a 0020 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts) SOBRE dados gravados com as migrações
 // anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028, CA8; RIFA-039, CA8; RIFA-046, CA7;
-// RIFA-056; RIFA-061; RIFA-064; RIFA-070; RIFA-073; RIFA-075; RIFA-076; RIFA-084; RIFA-085).
+// RIFA-056; RIFA-061; RIFA-064; RIFA-070; RIFA-073; RIFA-075; RIFA-076; RIFA-084; RIFA-085; RIFA-088).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -28,6 +28,23 @@ import {
   LER_HASH_TOKEN_WEBHOOK,
   SUBSTITUIR_TOKEN,
 } from "../db/token-webhook";
+
+/**
+ * A leitura do painel por afiliado e dia em UTC−3 como era da 0008 à 0019 (db/painel.ts antes da RIFA-088, que passou a
+ * agrupar também pela célula atribuída da 0020). Os blocos da 0008 rodam com o banco ainda sem a coluna nova.
+ */
+const PAINEL_ATE_0019 = `
+  SELECT a.celula_id AS celula_id, v.dia AS dia, sum(v.pedidos) AS pedidos,
+    sum(v.bilhetes) AS bilhetes, sum(v.centavos) AS centavos
+  FROM (
+    SELECT affiliate_id, date(aprovado_em, '-180 minutes') AS dia, count(*) AS pedidos,
+      sum(qtd_bilhetes) AS bilhetes, sum(total_centavos) AS centavos
+    FROM pedidos
+    WHERE campanha_id = ?1 AND status = 'approved' AND desconsiderado_em IS NULL
+    GROUP BY affiliate_id, dia
+  ) AS v
+  LEFT JOIN afiliados AS a ON a.affiliate_id = v.affiliate_id
+  GROUP BY a.celula_id, v.dia`;
 
 const TABELAS = [
   "_meta",
@@ -134,6 +151,8 @@ describe("migrações: schema do D1", () => {
         // 0011 (RIFA-056): parcial (pagamento_recuperacao_id IS NOT NULL), os pagamentos registrados de cada
         // recuperação.
         "pedidos_por_pagamento_recuperado",
+        // 0020 (RIFA-088, D41): parcial (celula_atribuida_id IS NOT NULL), os pedidos atribuídos à mão a cada célula.
+        "pedidos_por_celula_atribuida",
       ],
       webhook_eventos: [
         "webhook_eventos_por_pedido",
@@ -1141,10 +1160,13 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       };
     };
 
-    /** As vendas somadas pela consulta do painel de hoje (db/painel.ts), por afiliado e dia. */
+    /**
+     * As vendas somadas pela consulta do painel como era da 0008 à 0019 (db/painel.ts antes da RIFA-088), por afiliado
+     * e dia: a de hoje lê `celula_atribuida_id`, que só existe a partir da 0020 (o bloco da 0020 confere a de hoje).
+     */
     const somarPeloPainel = async (id: number) => {
       const { results } = await db
-        .prepare(SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3)
+        .prepare(PAINEL_ATE_0019)
         .bind(id)
         .all<{ pedidos: number; bilhetes: number; centavos: number }>();
       return results.reduce(
@@ -1427,9 +1449,9 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       expect(await definicao("pedidos_desconsiderados_por_registro")).toMatch(
         /ON pedidos \(campanha_id, registrado_em, id\) WHERE desconsiderado_em IS NOT NULL$/,
       );
-      // O painel continua no índice de cobertura (sem voltar à tabela) no banco migrado.
+      // O painel (como era até a 0019) continua no índice de cobertura (sem voltar à tabela) no banco migrado.
       const { results } = await db
-        .prepare(`EXPLAIN QUERY PLAN ${SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3}`)
+        .prepare(`EXPLAIN QUERY PLAN ${PAINEL_ATE_0019}`)
         .bind(campanhaId)
         .all<{ detail: string }>();
       expect(results.map((linha) => linha.detail)).toContain(
@@ -2716,7 +2738,10 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         .bind(id)
         .run();
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0020"),
+      );
     });
 
     it("a 0019 foi aplicada sobre tudo o que existia: nada muda e cada célula fica sem grupo próprio (herda o do discipulador)", async () => {
@@ -2780,6 +2805,206 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
       await db.prepare("DELETE FROM grupos WHERE id = 4").run();
       expect(await grupoDaCelula()).toBeNull();
       expect(await quantas()).toBe(total);
+    });
+  });
+
+  describe("0020 sobre dados que já existiam (RIFA-088, D41)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+    let campanhaId: number;
+    let celulaA: number;
+    let celulaB: number;
+    /** Um afiliado vinculado a uma célula (para a regra "a do afiliado vence") e um não vinculado. */
+    const AFILIADO_COM_CELULA = 8_020_001;
+    const AFILIADO_SEM_CELULA = 8_020_002;
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram as migrações até a 0019.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0020"),
+      );
+      campanhaId = (await db
+        .prepare("SELECT id FROM campanhas ORDER BY ativa DESC, id LIMIT 1")
+        .first<{ id: number }>())!.id;
+      const celulas = (
+        await db
+          .prepare("SELECT id FROM celulas ORDER BY id LIMIT 2")
+          .all<{ id: number }>()
+      ).results;
+      [celulaA, celulaB] = celulas.map((linha) => linha.id);
+      // Antes da 0020: um pedido aprovado sem afiliado, um de afiliado não vinculado e um de afiliado com célula.
+      await db.batch([
+        db
+          .prepare(
+            `INSERT INTO afiliados (affiliate_id, celula_id, origem, vinculado_em) VALUES
+             (?1, ?2, 'manual', '2026-12-01T10:00:00.000Z'), (?3, NULL, 'webhook', NULL)`,
+          )
+          .bind(AFILIADO_COM_CELULA, celulaB, AFILIADO_SEM_CELULA),
+        db
+          .prepare(
+            `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em)
+             VALUES ('ANTES-0020-SEM', ?1, NULL, 'approved', 3, 6000, '2026-12-01T13:00:00.000Z'),
+                    ('ANTES-0020-ORFAO', ?1, ?2, 'approved', 2, 4000, '2026-12-01T14:00:00.000Z'),
+                    ('ANTES-0020-COM', ?1, ?3, 'approved', 1, 2000, '2026-12-01T15:00:00.000Z')`,
+          )
+          .bind(campanhaId, AFILIADO_SEM_CELULA, AFILIADO_COM_CELULA),
+      ]);
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    const atribuir = (
+      id: string,
+      celula: number | null,
+      por: number | null = 1,
+    ) =>
+      db
+        .prepare(
+          `UPDATE pedidos SET celula_atribuida_id = ?2,
+             celula_atribuida_em = CASE WHEN ?2 IS NULL THEN NULL ELSE '2026-12-02T12:00:00.000Z' END,
+             celula_atribuida_por = ?3
+           WHERE id = ?1`,
+        )
+        .bind(id, celula, celula === null ? null : por)
+        .run();
+
+    const naView = async (id: string) =>
+      (
+        await db
+          .prepare(
+            "SELECT celula_id, discipulador_id FROM vendas_aprovadas WHERE pedido_id = ?1",
+          )
+          .bind(id)
+          .first<{ celula_id: number | null; discipulador_id: number | null }>()
+      )?.celula_id;
+
+    it("a 0020 foi aplicada sobre tudo o que existia: nada muda e cada pedido fica sem célula atribuída (as três colunas nulas)", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toContain(
+        "0020_celula_atribuida.sql",
+      );
+      expect(antes.pedidos.length).toBeGreaterThan(3);
+      expect(antes.pedidos[0]).not.toHaveProperty("celula_atribuida_id");
+      const { pedidos, ...depois } = await fotografarTodasAsTabelas(db);
+      const { pedidos: pedidosAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(pedidos).toEqual(
+        pedidosAntes.map((pedido) => ({
+          ...pedido,
+          celula_atribuida_id: null,
+          celula_atribuida_em: null,
+          celula_atribuida_por: null,
+        })),
+      );
+    });
+
+    it("o CHECK: as três colunas andam juntas, o instante no formato da API e os ids inteiros", async () => {
+      onTestFinished(async () => {
+        await atribuir("ANTES-0020-SEM", null);
+      });
+      const gravar = (id: unknown, em: unknown, por: unknown) =>
+        db
+          .prepare(
+            `UPDATE pedidos SET celula_atribuida_id = ?1, celula_atribuida_em = ?2, celula_atribuida_por = ?3
+             WHERE id = 'ANTES-0020-SEM'`,
+          )
+          .bind(id, em, por)
+          .run();
+      const em = "2026-12-02T12:00:00.000Z";
+      for (const [id, quando, por] of [
+        [celulaA, null, null],
+        [celulaA, em, null],
+        [celulaA, null, 1],
+        [null, em, 1],
+        [null, null, 1],
+        [null, em, null],
+        [celulaA, "2026-12-02 12:00", 1],
+        [celulaA, em, 1.5],
+      ] as const)
+        await expect(gravar(id, quando, por)).rejects.toThrow(
+          /CHECK constraint failed/,
+        );
+      await gravar(celulaA, em, 1);
+      await gravar(null, null, null);
+    });
+
+    it("a célula atribuída aponta para uma célula que existe, e a célula com venda atribuída não sai (FK RESTRICT)", async () => {
+      onTestFinished(async () => {
+        await atribuir("ANTES-0020-SEM", null);
+      });
+      await expect(atribuir("ANTES-0020-SEM", 999_999)).rejects.toThrow(
+        /FOREIGN KEY constraint failed/,
+      );
+      await atribuir("ANTES-0020-SEM", celulaA);
+      await expect(
+        db.prepare("DELETE FROM celulas WHERE id = ?1").bind(celulaA).run(),
+      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      expect(
+        (await db
+          .prepare("SELECT count(*) AS n FROM celulas WHERE id = ?1")
+          .bind(celulaA)
+          .first<{ n: number }>())!.n,
+      ).toBe(1);
+    });
+
+    it("a view e o painel usam a célula efetiva: a atribuída no pedido sem célula pelo afiliado; a do afiliado vence", async () => {
+      onTestFinished(async () => {
+        await atribuir("ANTES-0020-SEM", null);
+        await atribuir("ANTES-0020-ORFAO", null);
+        await atribuir("ANTES-0020-COM", null);
+      });
+      expect(await naView("ANTES-0020-SEM")).toBeNull();
+      await atribuir("ANTES-0020-SEM", celulaA);
+      await atribuir("ANTES-0020-ORFAO", celulaA);
+      // Gravada à mão no banco num pedido de afiliado com célula: não conta (a API nem aceita, 409).
+      await atribuir("ANTES-0020-COM", celulaA);
+      expect(await naView("ANTES-0020-SEM")).toBe(celulaA);
+      expect(await naView("ANTES-0020-ORFAO")).toBe(celulaA);
+      expect(await naView("ANTES-0020-COM")).toBe(celulaB);
+      const { results } = await db
+        .prepare(SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3)
+        .bind(campanhaId)
+        .all<{ celula_id: number | null; dia: string; bilhetes: number }>();
+      const doDia = results.filter((linha) => linha.dia === "2026-12-01");
+      expect(
+        doDia.find((linha) => linha.celula_id === celulaA)?.bilhetes,
+      ).toBeGreaterThanOrEqual(5);
+      expect(
+        doDia.find((linha) => linha.celula_id === celulaB)?.bilhetes,
+      ).toBeGreaterThanOrEqual(1);
+    });
+
+    it("os índices: o da 0003 recriado com a célula atribuída depois do afiliado (o painel no índice de cobertura) e o parcial da célula atribuída", async () => {
+      const definicao = async (indice: string) =>
+        (
+          await db
+            .prepare(
+              "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?1",
+            )
+            .bind(indice)
+            .first<{ sql: string }>()
+        )?.sql.replace(/\s+/g, " ");
+      expect(await definicao("pedidos_aprovados_por_afiliado_dia")).toMatch(
+        /\( ?campanha_id, affiliate_id, celula_atribuida_id, date\(aprovado_em, '-180 minutes'\), aprovado_em, qtd_bilhetes, total_centavos, desconsiderado_em \) WHERE status = 'approved' AND desconsiderado_em IS NULL$/,
+      );
+      expect(await definicao("pedidos_por_celula_atribuida")).toMatch(
+        /ON pedidos \(celula_atribuida_id\) WHERE celula_atribuida_id IS NOT NULL$/,
+      );
+      const { results } = await db
+        .prepare(`EXPLAIN QUERY PLAN ${SELECIONAR_VENDAS_POR_DIA_UTC_MENOS_3}`)
+        .bind(campanhaId)
+        .all<{ detail: string }>();
+      const plano = results.map((linha) => linha.detail);
+      expect(plano).toContain(
+        "SEARCH pedidos USING COVERING INDEX pedidos_aprovados_por_afiliado_dia (campanha_id=?)",
+      );
+      // A única B-tree temporária é a do agrupamento final por célula (o GROUP BY de dentro segue o índice).
+      expect(
+        plano.filter((passo) => passo.includes("TEMP B-TREE")),
+      ).toHaveLength(1);
     });
   });
 

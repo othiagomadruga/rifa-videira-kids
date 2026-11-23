@@ -28,6 +28,7 @@ import { buscarCampanhaAtiva, montarCampanha } from "./campanha";
 import type { ComandoSql } from "./lista-pedidos";
 import { intervaloUtcDaJanela, janelaDosRankings } from "./mapa-ddd";
 import type { Relogio } from "./painel";
+import { juntarAfiliado, juntarCelulaEfetiva } from "./celula-efetiva";
 
 /**
  * Os pedidos que contam: aprovados da campanha (?1) com `aprovado_em` em [?2, ?3), sem desconsideração, com nome ou
@@ -48,8 +49,8 @@ export function comandoMaioresCompradores(
   SELECT p.comprador_nome AS nome, p.comprador_telefone AS telefone, p.qtd_bilhetes, p.total_centavos,
     c.nome AS celula_nome, p.aprovado_em
   FROM pedidos AS p
-  LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-  LEFT JOIN celulas AS c ON c.id = a.celula_id
+  ${juntarAfiliado()}
+  ${juntarCelulaEfetiva()}
   WHERE p.status = 'approved' AND p.aprovado_em >= ?2 AND p.aprovado_em < ?3 AND +p.campanha_id = ?1
     AND +p.desconsiderado_em IS NULL
     AND (p.comprador_nome IS NOT NULL OR p.comprador_telefone IS NOT NULL)${doDiscipulador}`;

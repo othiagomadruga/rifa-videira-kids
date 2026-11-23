@@ -13,6 +13,7 @@ import {
   type PedidoDoComprador,
 } from "../../shared/contracts";
 import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
+import { juntarAfiliado, juntarCelulaEfetiva } from "./celula-efetiva";
 
 /** O alvo do registro na trilha (sem id: há uma planilha só). */
 export const ALVO_AUDITORIA_COMPRADORES = "compradores";
@@ -22,8 +23,8 @@ const LER_CAMPANHA = "SELECT id, fuso_horario FROM campanhas WHERE ativa = 1";
 const LER_PEDIDOS = `SELECT p.comprador_nome AS nome, p.comprador_telefone AS telefone, p.status, p.qtd_bilhetes,
     p.total_centavos, c.nome AS celula_nome, COALESCE(p.criado_em, p.registrado_em) AS reservado_em
   FROM pedidos AS p
-  LEFT JOIN afiliados AS a ON a.affiliate_id = p.affiliate_id
-  LEFT JOIN celulas AS c ON c.id = a.celula_id
+  ${juntarAfiliado()}
+  ${juntarCelulaEfetiva()}
   WHERE p.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1)
     AND p.desconsiderado_em IS NULL
     AND (p.comprador_nome IS NOT NULL OR p.comprador_telefone IS NOT NULL)`;

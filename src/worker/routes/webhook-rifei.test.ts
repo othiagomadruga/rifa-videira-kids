@@ -188,6 +188,10 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
     // RIFA-076 (D36): o contato do comprador tem o teste dele (routes/compradores.test.ts); fora da comparação.
     comprador_nome,
     comprador_telefone,
+    // RIFA-088 (D41, 0020): a célula atribuída à mão pelo admin; o webhook nunca escreve nela.
+    celula_atribuida_id,
+    celula_atribuida_em,
+    celula_atribuida_por,
     ...linha
   } = completa;
   void comprador_nome;
@@ -199,6 +203,9 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
     desconsiderado_em,
     desconsiderado_motivo,
     desconsiderado_observacao,
+    celula_atribuida_id,
+    celula_atribuida_em,
+    celula_atribuida_por,
   }).toEqual({
     origem: "webhook",
     recuperacao_id: null,
@@ -207,6 +214,9 @@ async function lerPedido(id: string): Promise<LinhaPedido | null> {
     desconsiderado_em: null,
     desconsiderado_motivo: null,
     desconsiderado_observacao: null,
+    celula_atribuida_id: null,
+    celula_atribuida_em: null,
+    celula_atribuida_por: null,
   });
   pedidoSchema.parse({
     ...linha,

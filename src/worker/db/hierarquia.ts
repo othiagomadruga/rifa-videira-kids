@@ -836,6 +836,11 @@ interface Dependentes {
   mensagem: (quantidade: number) => string;
   /** Quando a trilha de auditoria segura o acesso do alvo (o usuário dele aparece como autor de uma ação). */
   mensagemDaTrilha: string;
+  /**
+   * Só da célula (RIFA-088, D41): quando pedidos atribuídos à mão a ela a seguram (pedidos.celula_atribuida_id é
+   * RESTRICT, migração 0020).
+   */
+  mensagemDosPedidosAtribuidos?: (quantidade: number) => string;
 }
 
 /** Recusada por uma referência que sumiu antes da conferência (outra exclusão ao mesmo tempo). */
@@ -902,7 +907,7 @@ async function motivoDaRecusa(
   id: number,
   dependentes: Dependentes,
 ): Promise<Falha> {
-  const [filhos, naTrilha] = await db.batch<{ total: number }>([
+  const [filhos, naTrilha, atribuidos] = await db.batch<{ total: number }>([
     db
       .prepare(
         `SELECT count(*) AS total FROM ${dependentes.tabela} WHERE ${dependentes.coluna} = ?`,
@@ -914,9 +919,24 @@ async function motivoDaRecusa(
          WHERE usuario_id IN (SELECT id FROM usuarios WHERE ${entidade.colunaDoAcesso} = ?)`,
       )
       .bind(id),
+    ...(dependentes.mensagemDosPedidosAtribuidos
+      ? [
+          db
+            .prepare(
+              "SELECT count(*) AS total FROM pedidos WHERE celula_atribuida_id = ?",
+            )
+            .bind(id),
+        ]
+      : []),
   ]);
   const quantidade = filhos.results[0]?.total ?? 0;
   if (quantidade > 0) return falha("em_uso", dependentes.mensagem(quantidade));
+  const quantosAtribuidos = atribuidos?.results[0]?.total ?? 0;
+  if (dependentes.mensagemDosPedidosAtribuidos && quantosAtribuidos > 0)
+    return falha(
+      "em_uso",
+      dependentes.mensagemDosPedidosAtribuidos(quantosAtribuidos),
+    );
   if ((naTrilha.results[0]?.total ?? 0) > 0)
     return falha("em_uso", dependentes.mensagemDaTrilha);
   return falha("em_uso", MENSAGEM_REFERENCIA_QUE_MUDOU);
@@ -980,6 +1000,8 @@ export function removerCelula(
         `A célula tem afiliados vinculados (${quantidade}). Passe os afiliados para outra célula (Adesão → Todas as células → Trocar), que leva as vendas junto, antes de excluir esta.`,
       mensagemDaTrilha:
         "A célula não pode ser excluída: o acesso dela aparece como autor na trilha de auditoria, que guarda quem fez cada ação.",
+      mensagemDosPedidosAtribuidos: (quantidade) =>
+        `A célula tem ${quantidade === 1 ? "1 pedido atribuído" : `${quantidade} pedidos atribuídos`} à mão. Remova a atribuição na tela Pedidos ("Atribuir a uma célula") antes de excluir esta.`,
     },
     autoria,
   );
