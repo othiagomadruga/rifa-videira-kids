@@ -13,6 +13,7 @@
 // inteiro, "realizado ≥ alvo arredondado" vale exatamente quando "percentual ≥ 100%".
 import type {
   ConsultaRanking,
+  ConsultaRankingGrupos,
   ConsultaRankingPublico,
   EscopoPainel,
   ItemRanking,
@@ -22,6 +23,7 @@ import type {
   RespostaBumbo,
   RespostaPainelResumo,
   RespostaRanking,
+  RespostaRankingGrupos,
   RespostaRankingPublico,
   Ritmo,
   SituacaoRitmo,
@@ -144,15 +146,18 @@ export type {
   ConsultaBumbo,
   ConsultaPainelResumo,
   ConsultaRanking,
+  ConsultaRankingGrupos,
   ConsultaRankingPublico,
   EscopoPainel,
   ItemRanking,
   JanelaRanking,
   NivelRanking,
+  NivelRankingGrupos,
   ReferenciaCampanha,
   RespostaBumbo,
   RespostaPainelResumo,
   RespostaRanking,
+  RespostaRankingGrupos,
   RespostaRankingPublico,
   Ritmo,
   SituacaoRitmo,
@@ -184,6 +189,8 @@ export type VizinhoRanking = NonNullable<ItemRanking["acima"]>;
 export type VinculoRanking = NonNullable<ItemRanking["rede"]>;
 /** Um item do ranking público (sem valores). */
 export type ItemRankingPublico = RespostaRankingPublico["itens"][number];
+/** Um grupo do ranking por grupo da coordenação (RIFA-084, D39): id, nome, ordem e os itens, com a posição no grupo. */
+export type GrupoRanking = RespostaRankingGrupos["grupos"][number];
 
 // ---------------------------------------------------------------------------------------------------
 // Frações exatas (R11)
@@ -1310,13 +1317,6 @@ export function montarRankingPainel(
     janela,
     corteDoDia(base),
   );
-  const vizinho = (colocacao: VizinhoNoRanking<LinhaRanking> | null) =>
-    colocacao && {
-      id: obrigatorio(colocacao.item.id, "id"),
-      nome: colocacao.item.nome,
-      posicao: colocacao.posicao,
-      diferenca: colocacao.diferenca,
-    };
   return {
     nivel: consulta.nivel,
     divisao: divisao ?? null,
@@ -1325,24 +1325,42 @@ export function montarRankingPainel(
     criterio: campanha.ranking.criterio,
     unidade: campanha.meta.unidade,
     referencia: referenciaDaCampanha(campanha, data),
-    itens: linhas.map(({ item, posicao, acima, abaixo }) => ({
-      posicao,
-      id: obrigatorio(item.instancia.id, "id"),
-      nome: item.nome,
-      divisao: obrigatorio(item.instancia.divisao, "divisão"),
-      discipulador: item.instancia.discipulador,
-      rede: item.instancia.rede,
-      meta: item.calculo.ritmo.meta,
-      esperado: item.calculo.ritmo.esperado,
-      realizado: item.calculo.ritmo.realizado,
-      diferenca: item.calculo.ritmo.diferenca,
-      situacao: item.calculo.ritmo.situacao,
-      percentual_meta_bp: item.calculo.ritmo.percentual_meta_bp,
-      vendas: paraTotaisVendas(item.calculo.totais),
-      acima: vizinho(acima),
-      abaixo: vizinho(abaixo),
-    })),
+    itens: linhas.map(itemDoRankingPainel),
     atualizado_em: agora.toISOString(),
+  };
+}
+
+const vizinhoNoPainel = (colocacao: VizinhoNoRanking<LinhaRanking> | null) =>
+  colocacao && {
+    id: obrigatorio(colocacao.item.id, "id"),
+    nome: colocacao.item.nome,
+    posicao: colocacao.posicao,
+    diferenca: colocacao.diferenca,
+  };
+
+/** Um item do ranking da coordenação: valores, situação e os vizinhos (os da mesma lista). */
+function itemDoRankingPainel({
+  item,
+  posicao,
+  acima,
+  abaixo,
+}: ColocacaoRanking<LinhaRanking>): ItemRanking {
+  return {
+    posicao,
+    id: obrigatorio(item.instancia.id, "id"),
+    nome: item.nome,
+    divisao: obrigatorio(item.instancia.divisao, "divisão"),
+    discipulador: item.instancia.discipulador,
+    rede: item.instancia.rede,
+    meta: item.calculo.ritmo.meta,
+    esperado: item.calculo.ritmo.esperado,
+    realizado: item.calculo.ritmo.realizado,
+    diferenca: item.calculo.ritmo.diferenca,
+    situacao: item.calculo.ritmo.situacao,
+    percentual_meta_bp: item.calculo.ritmo.percentual_meta_bp,
+    vendas: paraTotaisVendas(item.calculo.totais),
+    acima: vizinhoNoPainel(acima),
+    abaixo: vizinhoNoPainel(abaixo),
   };
 }
 
@@ -1392,18 +1410,115 @@ export function montarRankingPublico(
     criterio: campanha.ranking.criterio,
     referencia: referenciaDaCampanha(campanha, data),
     itens: visiveisNoPublico(linhas, campanha.publico.limite_ranking).map(
-      ({ item, posicao }) => {
-        const percentual = item.calculo.ritmo.percentual_meta_bp;
-        return {
-          posicao,
-          nome: item.nome,
-          divisao: obrigatorio(item.instancia.divisao, "divisão"),
-          ...(campanha.publico.mostra_percentual_meta && percentual !== null
-            ? { percentual_meta_bp: percentual }
-            : {}),
-        };
-      },
+      (colocacao) => itemDoRankingPublico(campanha, colocacao),
     ),
+    atualizado_em: agora.toISOString(),
+  };
+}
+
+/** Um item do ranking aberto: posição, nome e divisão, e o % da meta só se a campanha permitir (R9). */
+function itemDoRankingPublico(
+  campanha: CampanhaCalculo,
+  { item, posicao }: ColocacaoRanking<LinhaRanking>,
+): ItemRankingPublico {
+  const percentual = item.calculo.ritmo.percentual_meta_bp;
+  return {
+    posicao,
+    nome: item.nome,
+    divisao: obrigatorio(item.instancia.divisao, "divisão"),
+    ...(campanha.publico.mostra_percentual_meta && percentual !== null
+      ? { percentual_meta_bp: percentual }
+      : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// GET /api/painel/ranking-grupos (RIFA-084, D39): só a coordenação
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Um grupo do discipulador e os discipuladores dele (o Worker lê de `discipuladores.grupo_id`). As células herdam o
+ * grupo do discipulador; um discipulador sem grupo fica fora de todos (e continua no ranking de todas).
+ */
+export type GrupoCalculo = {
+  id: number;
+  nome: string;
+  ordem: number;
+  discipuladores: readonly number[];
+};
+
+/** Os grupos que têm células, na ordem da tela (`ordem`; empate, o nome em português e o id), com as células. */
+function gruposComCelulas(
+  celulas: readonly CelulaCalculo[],
+  grupos: readonly GrupoCalculo[],
+): { grupo: GrupoCalculo; celulas: CelulaCalculo[] }[] {
+  const ordenados = [...grupos].sort(
+    (a, b) =>
+      a.ordem - b.ordem || ordemDosNomes.compare(a.nome, b.nome) || a.id - b.id,
+  );
+  return ordenados.flatMap((grupo) => {
+    const doGrupo = new Set(grupo.discipuladores);
+    const suas = celulas.filter((celula) =>
+      doGrupo.has(celula.discipulador_id),
+    );
+    return suas.length === 0 ? [] : [{ grupo, celulas: suas }];
+  });
+}
+
+/**
+ * O ranking de cada grupo, na data de hoje: o mesmo critério, a mesma janela, as mesmas metas (a meta de cada célula é
+ * a do ranking de todas: a proporcional reparte o total entre TODAS as células) e a posição DENTRO do grupo. A divisão
+ * não entra (o grupo é outro recorte, D39).
+ */
+function rankingsDosGrupos(
+  entrada: EntradaCalculo,
+  grupos: readonly GrupoCalculo[],
+  nivel: NivelRanking,
+  periodo: JanelaRanking,
+  agora: Date,
+) {
+  const { campanha } = entrada;
+  const data = diaLocalDoInstante(agora, campanha.fuso_horario);
+  const base = prepararBase(entrada, data);
+  const { janela, resposta } = janelaDaConsulta(base, periodo, base.dia);
+  const corte = corteDoDia(base);
+  return {
+    data,
+    janela: resposta,
+    grupos: gruposComCelulas(entrada.celulas, grupos).map(
+      ({ grupo, celulas }) => ({
+        grupo: { id: grupo.id, nome: grupo.nome, ordem: grupo.ordem },
+        linhas: linhasDoRanking(base, celulas, nivel, undefined, janela, corte),
+      }),
+    ),
+  };
+}
+
+/** Ranking por grupo da coordenação: o item completo do ranking (valores, situação e vizinhos dentro do grupo). */
+export function montarRankingGruposPainel(
+  entrada: EntradaCalculo,
+  grupos: readonly GrupoCalculo[],
+  consulta: ConsultaRankingGrupos,
+  agora: Date,
+): RespostaRankingGrupos {
+  const { campanha } = entrada;
+  const calculado = rankingsDosGrupos(
+    entrada,
+    grupos,
+    consulta.nivel,
+    consulta.janela,
+    agora,
+  );
+  return {
+    nivel: consulta.nivel,
+    janela: calculado.janela,
+    criterio: campanha.ranking.criterio,
+    unidade: campanha.meta.unidade,
+    referencia: referenciaDaCampanha(campanha, calculado.data),
+    grupos: calculado.grupos.map(({ grupo, linhas }) => ({
+      ...grupo,
+      itens: linhas.map(itemDoRankingPainel),
+    })),
     atualizado_em: agora.toISOString(),
   };
 }

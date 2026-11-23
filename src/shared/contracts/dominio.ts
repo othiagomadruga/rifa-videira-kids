@@ -366,9 +366,30 @@ export const redeSchema = z.object({
 });
 export type Rede = z.infer<typeof redeSchema>;
 
+/**
+ * Grupo do discipulador (RIFA-084, D39): "Adultos da manhã", "Adultos da noite", "Jovens" e "Adolescentes", semeados
+ * pela migração 0018 (sem CRUD por enquanto). Não é a `divisao` da rede (jovens|adultos, D27): é outro recorte, só do
+ * ranking por grupo. `ordem` é a ordem dos blocos na tela (menor primeiro; empate, pelo nome).
+ */
+export const LIMITE_NOME_GRUPO = 60;
+
+export const grupoSchema = z.object({
+  id: idSchema,
+  nome: z.string().min(1).max(LIMITE_NOME_GRUPO),
+  ordem: z.number().int(),
+});
+export type Grupo = z.infer<typeof grupoSchema>;
+
 export const discipuladorEntradaSchema = z.object({
   rede_id: idSchema,
   nome: nomeSchema,
+  /**
+   * RIFA-084 (D39): o grupo do discipulador (adultos da manhã, adultos da noite, jovens, adolescentes), que separa o
+   * ranking por grupo; as células dele herdam o grupo. null = sem grupo (fica fora do ranking por grupo e continua no
+   * ranking de todas). No POST, ausente = sem grupo; no PUT, ausente MANTÉM o gravado (uma aba antiga do site, que não
+   * conhece o campo, não apaga o grupo ao renomear o discipulador). Um id que não existe: 400 `referencia_invalida`.
+   */
+  grupo_id: idSchema.nullable().optional(),
 });
 export type DiscipuladorEntrada = z.input<typeof discipuladorEntradaSchema>;
 
@@ -378,6 +399,9 @@ export const discipuladorSchema = z.object({
   nome: z.string().min(1).max(120),
   rede_nome: z.string().min(1).max(120),
   divisao: divisaoSchema,
+  /** RIFA-084 (D39): o grupo (null = sem grupo) e o nome dele. */
+  grupo_id: idSchema.nullable(),
+  grupo_nome: z.string().min(1).max(LIMITE_NOME_GRUPO).nullable(),
   criado_em: instanteSchema,
   atualizado_em: instanteSchema,
 });

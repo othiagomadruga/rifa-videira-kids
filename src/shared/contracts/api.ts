@@ -24,8 +24,10 @@ import {
   discipuladorEntradaSchema,
   discipuladorSchema,
   divisaoSchema,
+  grupoSchema,
   idSchema,
   instanteSchema,
+  LIMITE_NOME_GRUPO,
   redeEntradaSchema,
   redeSchema,
   resultadoEventoWebhookSchema,
@@ -227,6 +229,12 @@ export const consultaDiscipuladoresSchema = z.object({
   rede_id: z.coerce.number().int().positive().optional(),
 });
 export const respostaListaDiscipuladoresSchema = lista(discipuladorSchema);
+
+/**
+ * GET /api/admin/grupos (RIFA-084, D39): os grupos do discipulador, para o seletor "Grupo" da Hierarquia, na ordem de
+ * `ordem` (empate, pelo nome). Os 4 vêm da migração 0018; não há CRUD dos grupos por enquanto.
+ */
+export const respostaListaGruposSchema = lista(grupoSchema);
 
 export const consultaCelulasSchema = z.object({
   discipulador_id: z.coerce.number().int().positive().optional(),
@@ -1139,6 +1147,52 @@ export const respostaRankingPublicoSchema = z.strictObject({
 export type RespostaRankingPublico = z.infer<
   typeof respostaRankingPublicoSchema
 >;
+
+// ---------------------------------------------------------------------------------------------------
+// Ranking por grupo (RIFA-084, D39): GET /api/painel/ranking-grupos (coordenação, com valores). Só a coordenação vê
+// (decisão do PO, 23/11): o ranking aberto (`GET /api/publico/ranking`) não muda.
+// ---------------------------------------------------------------------------------------------------
+
+/** Os níveis do ranking por grupo (a rede não cabe num grupo: o grupo é do discipulador). */
+export const NIVEIS_RANKING_GRUPOS = ["celula", "discipulador"] as const;
+export type NivelRankingGrupos = (typeof NIVEIS_RANKING_GRUPOS)[number];
+
+/**
+ * `janela`: `atual` (o período de hoje; padrão) ou `campanha` (do 1º dia até hoje), a mesma janela do ranking de todas
+ * (`periodo` lá). `nivel`: célula (padrão) ou discipulador. Sempre na data de hoje.
+ */
+export const consultaRankingGruposSchema = z.object({
+  janela: z.enum(JANELAS_RANKING).default("atual"),
+  nivel: z.enum(NIVEIS_RANKING_GRUPOS).default("celula"),
+});
+export type ConsultaRankingGrupos = z.output<
+  typeof consultaRankingGruposSchema
+>;
+
+/**
+ * O ranking de cada grupo, com o mesmo critério, a mesma janela e as mesmas metas do `GET /api/painel/ranking` (a meta
+ * de cada célula é a do ranking de todas) e o item completo dele (valores, situação e vizinhos), com a posição e os
+ * vizinhos DENTRO do grupo; todas as instâncias do nível no grupo, inclusive as que ainda não venderam. Só os grupos
+ * que têm células (as células herdam o grupo do discipulador), na ordem de `ordem` (empate, pelo nome); nenhum
+ * discipulador com grupo e com células = `grupos: []` (a tela não mostra a seção). Ignora a divisão (outro recorte).
+ */
+export const respostaRankingGruposSchema = z.strictObject({
+  nivel: z.enum(NIVEIS_RANKING_GRUPOS),
+  janela: janelaRankingSchema,
+  criterio: z.enum(CRITERIOS_RANKING),
+  unidade: z.enum(UNIDADES_META),
+  referencia: referenciaCampanhaSchema,
+  grupos: z.array(
+    z.strictObject({
+      id: idSchema,
+      nome: z.string().min(1).max(LIMITE_NOME_GRUPO),
+      ordem: z.number().int(),
+      itens: z.array(itemRankingSchema),
+    }),
+  ),
+  atualizado_em: instanteSchema,
+});
+export type RespostaRankingGrupos = z.infer<typeof respostaRankingGruposSchema>;
 
 /**
  * Janela do `data` do bumbo: do 1º dia da campanha até este número de dias depois do último. No dia
@@ -2474,6 +2528,14 @@ export const ROTAS = {
     parametros: parametroIdSchema,
     sucesso: { status: 204, corpo: null },
   },
+  /** RIFA-084 (D39): os grupos do discipulador (os 4 da migração 0018), para o seletor da Hierarquia. */
+  listarGrupos: {
+    metodo: "GET",
+    caminho: "/api/admin/grupos",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaListaGruposSchema },
+  },
   listarCelulas: {
     metodo: "GET",
     caminho: "/api/admin/celulas",
@@ -2611,6 +2673,19 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaRankingPublicoSchema,
     sucesso: { status: 200, corpo: respostaRankingPublicoSchema },
+  },
+  /**
+   * RIFA-084 (D39), só a coordenação (admin e coordenacao; a hierarquia leva 403 e o público, 401). Como o
+   * `painelRanking`: sem campanha ativa, 404 `nao_encontrado`; `no-store`, sem cache. Sem grupo com células: 200 com
+   * `grupos: []`.
+   */
+  painelRankingGrupos: {
+    metodo: "GET",
+    caminho: "/api/painel/ranking-grupos",
+    grupo: "coordenacao",
+    situacao: "detalhada",
+    consulta: consultaRankingGruposSchema,
+    sucesso: { status: 200, corpo: respostaRankingGruposSchema },
   },
   bumbo: {
     metodo: "GET",

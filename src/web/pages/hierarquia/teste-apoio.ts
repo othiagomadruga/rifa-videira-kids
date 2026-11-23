@@ -41,6 +41,9 @@ export function criarDiscipulador(
     nome,
     rede_nome: rede.nome,
     divisao: rede.divisao,
+    // RIFA-084 (D39): sem grupo, como todo discipulador antes de a coordenação escolher.
+    grupo_id: null,
+    grupo_nome: null,
     criado_em: INSTANTE,
     atualizado_em: INSTANTE,
   };

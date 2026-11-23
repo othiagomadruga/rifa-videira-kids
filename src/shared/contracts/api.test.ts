@@ -123,6 +123,9 @@ describe("CA3: catálogo de rotas", () => {
         // RIFA-075 (D35): bilhetes pagos, reservados e livres.
         "GET /api/painel/bilhetes",
         "GET /api/painel/bilhetes/:numero",
+        // RIFA-084 (D39): os grupos do discipulador e o ranking por grupo, só da coordenação.
+        "GET /api/admin/grupos",
+        "GET /api/painel/ranking-grupos",
       ].sort(),
     );
   });
