@@ -244,6 +244,8 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Conexão com a Rifei salva",
       "Conexão com a Rifei apagada",
       "Planilha de compradores baixada",
+      // RIFA-086 (D40): o relatório diário enviado agora pelo admin.
+      "Relatório diário enviado por e-mail",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();
