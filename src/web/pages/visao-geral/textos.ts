@@ -434,8 +434,6 @@ export const DICAS = {
   baixando: "Indisponível enquanto o relatório baixa. Espere um instante.",
   tentarBaixarDeNovo:
     "Pede o mesmo relatório de novo. Se continuar falhando, confira a internet.",
-  consultarSaldo:
-    "Pergunta o saldo à Efí de novo. A resposta vale por um minuto: antes disso, volta o mesmo valor.",
 } as const;
 
 /**

@@ -1,16 +1,16 @@
 // Chamadas da tela Visão geral (RIFA-009): o resumo do painel (GET /api/painel/resumo) e as células com a
 // hierarquia (GET /api/admin/celulas), que dão as opções do filtro (redes e discipuladores saem delas); o
-// relatório da campanha para baixar (GET /api/painel/relatorio?tipo=..., RIFA-038, D23); e, só para o admin, o saldo
-// da conta Efí (GET /api/admin/efi/saldo, RIFA-086, D40).
+// relatório da campanha para baixar (GET /api/painel/relatorio?tipo=..., RIFA-038, D23); e, só para o admin, quanto
+// entrou (GET /api/admin/arrecadado, RIFA-087, adendo da D40).
 //
 // Do contrato: regras e tipos de shared/contracts/calculos e de shared/contracts/relatorio (módulos sem zod)
 // e, de api.ts, só o TIPO dos catálogos (o catálogo e os schemas poriam o zod no pacote do site). Os caminhos
 // e a lista de escopos são cópias, conferidas por visao-geral-contrato.test.ts.
 import type {
   ROTAS,
+  ROTAS_ARRECADADO,
   ROTAS_RELATORIO,
-  ROTAS_SALDO_EFI,
-  RespostaSaldoEfi,
+  RespostaArrecadado,
 } from "../../../shared/contracts/api";
 import {
   ORDEM_DIVISOES,
@@ -31,8 +31,8 @@ export const CAMINHO_CELULAS: (typeof ROTAS)["listarCelulas"]["caminho"] =
   "/api/admin/celulas";
 export const CAMINHO_RELATORIO: (typeof ROTAS_RELATORIO)["baixarRelatorio"]["caminho"] =
   "/api/painel/relatorio";
-export const CAMINHO_SALDO_EFI: (typeof ROTAS_SALDO_EFI)["saldoEfi"]["caminho"] =
-  "/api/admin/efi/saldo";
+export const CAMINHO_ARRECADADO: (typeof ROTAS_ARRECADADO)["arrecadado"]["caminho"] =
+  "/api/admin/arrecadado";
 
 type EscopoComId = Exclude<EscopoPainel, "campanha" | "divisao">;
 
@@ -167,9 +167,9 @@ export function baixarRelatorio(
   });
 }
 
-/** O saldo da conta Efí (só o admin: a coordenação leva 403, e a tela nem pede). */
-export function carregarSaldoEfi(
+/** Quanto entrou: a campanha e hoje (só o admin: a coordenação leva 403, e a tela nem pede). */
+export function carregarArrecadado(
   opcoes: Opcoes = {},
-): Promise<RespostaSaldoEfi> {
-  return api.get<RespostaSaldoEfi>(CAMINHO_SALDO_EFI, opcoes);
+): Promise<RespostaArrecadado> {
+  return api.get<RespostaArrecadado>(CAMINHO_ARRECADADO, opcoes);
 }

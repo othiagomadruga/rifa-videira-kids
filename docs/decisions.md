@@ -2306,3 +2306,46 @@ e `routes/relatorio-diario.ts` e `routes/efi.ts`; site no cartão `pages/visao-g
    registros MX do domínio (o e-mail que chega passaria a ser roteado pela Cloudflare).
 3. A conta Efí está aberta e aprovada? Em 16/11 o lançamento saiu sem ela (Pix manual): o saldo só aparece com uma
    aplicação da Efí com o escopo de consulta de saldo e um certificado para o Worker.
+
+### Adendo (RIFA-087, 2026-11-23): sai o saldo da Efí; dois e-mails por dia e o "Arrecadado" do banco
+
+Pedido do PO (23/11, campanha em andamento): "Pode tirar o saldo então. Programe para duas vezes ao dia enviar o
+relatório. Você consegue fazer o cálculo de quanto entrou pela API da Rifei?" e, no mesmo dia, o segundo envio às 17h
+de Belém (e não às 19h).
+
+- **Por que o saldo saiu.** A consulta não funciona e não vai funcionar daqui: o host `pix.api.efipay.com.br` fica atrás
+  da Cloudflare, e o certificado de cliente dos Workers (`mtls_certificates`) não vale para uma zona proxiada pela
+  própria Cloudflare (a chamada sai sem o certificado e a Efí recusa); o firewall da Efí também bloqueia a sessão de
+  nuvem e os runners do GitHub, então não há de onde consultar. O PO decidiu tirar. Saíram `lib/efi.ts`,
+  `GET /api/admin/efi/saldo` (e `routes/efi.ts`), o cartão "Saldo na Efí", a linha do saldo no e-mail, os schemas e as
+  constantes da Efí no contrato, os segredos `EFI_CERT`, `EFI_CLIENT_ID` e `EFI_CLIENT_SECRET` do `worker-env.d.ts` e o
+  bloco `mtls_certificates` do `wrangler.jsonc` (`config-publicacao.test.ts` trava que ele não volta). O SM apaga o
+  certificado mTLS e os segredos `EFI_*` na Cloudflare (`docs/lancamento.md` 3.8). Nada da Efí é chamado.
+- **"Quanto entrou" vem do banco**, sem chamada nova à Rifei: a soma dos pedidos pagos que a Rifei manda pelo webhook
+  (D2, D32), com a mesma regra do total da campanha do painel (aprovados, sem os desconsiderados, dentro das datas da
+  campanha, com os sem célula). É o valor ANTES da tarifa da Efí (o que de fato caiu na conta é menos). No e-mail, o
+  número grande continua sendo esse total, agora com "arrecadados · N bilhetes pagos"; a linha do dia ganha o valor
+  ("No dia: 61 bilhetes · R$ 1.440,00 (meta 227)"), a mesma fonte filtrada pelo dia (`totaisDoDia` em
+  `lib/arrecadado.ts`). Na Visão geral, o cartão do admin virou **"Arrecadado"** (mesma posição, só o admin): o total
+  pago, os bilhetes pagos e o valor de hoje, pela rota nova `GET /api/admin/arrecadado` (só admin; o resumo do painel
+  não serve: depende do recorte e não traz o R$ do dia), com a legenda "Soma dos bilhetes pagos recebidos da Rifei,
+  antes da tarifa da Efí." e atualizando junto com o painel.
+- **Dois envios por dia** (`CRONS_RELATORIO_DIARIO` no contrato, os dois no `triggers.crons`; o `scheduled` escolhe pelo
+  `controller.cron` e outro cron só avisa no log):
+  - **manhã**, `0 10 * * *` (07:00 de Belém): o dia anterior fechado, como antes ("resumo de segunda, 23/11");
+  - **tarde**, `0 20 * * *` (17:00 de Belém): o DIA DE HOJE até a hora do envio, parcial. Assunto "Projeto Videira
+    Kids · parcial de segunda, 23/11 (até 17h)", subtítulo "Parcial de segunda, 23/11, até 17h · dia 1 de 21" e "Hoje
+    até 17h" no lugar de "No dia"; o resto igual. A hora sai do "agora" (o horário agendado do disparo, no fuso da
+    campanha): no cron é sempre 17h; num envio do admin às 15:42, "até 15h42".
+  - Fora da campanha não sai (manhã: ontem fora; tarde: hoje fora). Rodapé "Enviado todo dia às 7h e às 17h".
+- **Prévia e envio do admin com `tipo`** (`manha` | `tarde`, padrão `manha`; `data` continua opcional): na tarde, o
+  padrão é hoje e só hoje vale (400 `parcial_so_de_hoje`: os números de um dia passado não têm hora de corte, então
+  não dá para mostrar a parcial das 17h dele). A resposta do envio e a trilha levam o tipo ("Relatório da tarde de
+  2026-12-01 enviado: ...").
+- **Correção da revisão da RIFA-086:** uma data absurda na prévia (ex.: `?data=0001-01-01`) quebrava o fuso dos
+  montadores antes da checagem da campanha e virava 500. A checagem agora vem antes do cálculo, só com aritmética de
+  calendário (`referenciaDaCampanha`), e responde 400 `fora_da_campanha` para qualquer data que exista.
+
+**Suposições:** a parcial é só de hoje (400 em outro dia); a hora do assunto sai do instante do envio (no cron, 17h); o
+"Arrecadado" acompanha a atualização automática do painel (uma leitura a mais por minuto, só para o admin); sem
+idempotência entre os dois crons (cada um manda o seu).

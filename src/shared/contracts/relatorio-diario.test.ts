@@ -1,4 +1,4 @@
-// RIFA-086 (D40): contrato do relatório diário por e-mail e do saldo da Efí (só admin).
+// RIFA-086 e RIFA-087 (D40): contrato do relatório diário por e-mail (manhã e tarde) e do "Arrecadado" (só admin).
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   ACOES_AUDITORIA,
@@ -13,40 +13,44 @@ import {
   ROTAS_RELATORIO,
   ROTAS_RELATORIO_DIARIO,
   ROTAS_RIFEI_API,
-  ROTAS_SALDO_EFI,
+  ROTAS_ARRECADADO,
   ROTAS_TOKEN_WEBHOOK,
   consultaPreviaRelatorioDiarioSchema,
   corpoEnviarRelatorioDiarioSchema,
   respostaEnviarRelatorioDiarioSchema,
+  respostaArrecadadoSchema,
   respostaPreviaRelatorioDiarioSchema,
-  respostaSaldoEfiSchema,
   type DefinicaoRota,
 } from "./index";
+import * as contrato from "./index";
 import {
-  CRON_RELATORIO_DIARIO,
-  ERROS_SALDO_EFI,
+  CRONS_RELATORIO_DIARIO,
+  CRON_RELATORIO_MANHA,
+  CRON_RELATORIO_TARDE,
   LINK_PAINEL_RELATORIO_DIARIO,
   REMETENTE_RELATORIO_DIARIO,
+  TIPOS_RELATORIO_DIARIO,
   TIPO_CONTEUDO_HTML,
+  TIPO_RELATORIO_DIARIO_PADRAO,
 } from "./relatorio-diario";
 
-const INSTANTE = "2026-11-24T10:00:00.000Z";
+const INSTANTE = "2026-11-24T20:00:00.000Z";
 
-describe("ROTAS_RELATORIO_DIARIO e ROTAS_SALDO_EFI", () => {
+describe("ROTAS_RELATORIO_DIARIO e ROTAS_ARRECADADO", () => {
   it("as três rotas são só do admin, sob /api/admin, no grupo da coordenação", () => {
     expect(Object.keys(ROTAS_RELATORIO_DIARIO)).toEqual([
       "previaRelatorioDiario",
       "enviarRelatorioDiario",
     ]);
-    expect(Object.keys(ROTAS_SALDO_EFI)).toEqual(["saldoEfi"]);
+    expect(Object.keys(ROTAS_ARRECADADO)).toEqual(["arrecadado"]);
     const rotas = [
       ...Object.values(ROTAS_RELATORIO_DIARIO),
-      ...Object.values(ROTAS_SALDO_EFI),
+      ...Object.values(ROTAS_ARRECADADO),
     ];
     expect(rotas.map((rota) => `${rota.metodo} ${rota.caminho}`)).toEqual([
       "GET /api/admin/relatorio-diario/previa",
       "POST /api/admin/relatorio-diario/enviar",
-      "GET /api/admin/efi/saldo",
+      "GET /api/admin/arrecadado",
     ]);
     for (const rota of rotas) {
       expect(rota.grupo).toBe("coordenacao");
@@ -76,7 +80,7 @@ describe("ROTAS_RELATORIO_DIARIO e ROTAS_SALDO_EFI", () => {
     const chaves = outras.map((outra) => `${outra.metodo} ${outra.caminho}`);
     for (const rota of [
       ...Object.values(ROTAS_RELATORIO_DIARIO),
-      ...Object.values(ROTAS_SALDO_EFI),
+      ...Object.values(ROTAS_ARRECADADO),
     ])
       expect(chaves).not.toContain(`${rota.metodo} ${rota.caminho}`);
     expect(ROTAS_RELATORIO_DIARIO.previaRelatorioDiario.sucesso).toEqual({
@@ -92,17 +96,32 @@ describe("ROTAS_RELATORIO_DIARIO e ROTAS_SALDO_EFI", () => {
           outra.sucesso.tipoConteudo === TIPO_CONTEUDO_HTML,
       ),
     ).toEqual([]);
-    expect("tipoConteudo" in ROTAS_SALDO_EFI.saldoEfi.sucesso).toBe(false);
+    expect("tipoConteudo" in ROTAS_ARRECADADO.arrecadado.sucesso).toBe(false);
   });
 
-  it("prévia: `data` opcional no formato AAAA-MM-DD (ausente = ontem); o corpo é o HTML do e-mail", () => {
-    expect(consultaPreviaRelatorioDiarioSchema.parse({})).toEqual({});
+  it("prévia: `tipo` manha|tarde (padrão manha) e `data` opcional no formato AAAA-MM-DD; o corpo é o HTML do e-mail", () => {
+    expect(TIPOS_RELATORIO_DIARIO).toEqual(["manha", "tarde"]);
+    expect(TIPO_RELATORIO_DIARIO_PADRAO).toBe("manha");
+    expect(consultaPreviaRelatorioDiarioSchema.parse({})).toEqual({
+      tipo: "manha",
+    });
     expect(
-      consultaPreviaRelatorioDiarioSchema.parse({ data: "2026-11-23" }),
-    ).toEqual({ data: "2026-11-23" });
+      consultaPreviaRelatorioDiarioSchema.parse({
+        tipo: "tarde",
+        data: "2026-11-23",
+      }),
+    ).toEqual({ tipo: "tarde", data: "2026-11-23" });
+    // Uma data absurda, mas que existe, passa no schema: a rota responde 400 fora_da_campanha (não 500).
+    expect(
+      consultaPreviaRelatorioDiarioSchema.parse({ data: "0001-01-01" }),
+    ).toEqual({ tipo: "manha", data: "0001-01-01" });
     for (const data of ["23/11/2026", "2026-02-30", "ontem", ""])
       expect(
         consultaPreviaRelatorioDiarioSchema.safeParse({ data }).success,
+      ).toBe(false);
+    for (const tipo of ["noite", "MANHA", ""])
+      expect(
+        consultaPreviaRelatorioDiarioSchema.safeParse({ tipo }).success,
       ).toBe(false);
     expect(
       respostaPreviaRelatorioDiarioSchema.safeParse("<!doctype html><html>")
@@ -113,69 +132,83 @@ describe("ROTAS_RELATORIO_DIARIO e ROTAS_SALDO_EFI", () => {
     ).toBe(false);
   });
 
-  it("envio: corpo estrito com `data` opcional; a resposta só traz contagens, que fecham", () => {
-    expect(corpoEnviarRelatorioDiarioSchema.parse({})).toEqual({});
-    expect(
-      corpoEnviarRelatorioDiarioSchema.safeParse({
-        destinatarios: ["pastor@example.com"],
-      }).success,
-    ).toBe(false);
-    const ok = { data: "2026-11-23", destinatarios: 2, enviados: 1, falhas: 1 };
+  it("envio: corpo estrito com `tipo` e `data` opcionais; a resposta traz o tipo e só contagens, que fecham", () => {
+    expect(corpoEnviarRelatorioDiarioSchema.parse({})).toEqual({
+      tipo: "manha",
+    });
+    expect(corpoEnviarRelatorioDiarioSchema.parse({ tipo: "tarde" })).toEqual({
+      tipo: "tarde",
+    });
+    for (const errado of [
+      { destinatarios: ["pastor@example.com"] },
+      { tipo: "noite" },
+    ])
+      expect(corpoEnviarRelatorioDiarioSchema.safeParse(errado).success).toBe(
+        false,
+      );
+    const ok = {
+      tipo: "tarde",
+      data: "2026-11-23",
+      destinatarios: 2,
+      enviados: 1,
+      falhas: 1,
+    };
     expect(respostaEnviarRelatorioDiarioSchema.parse(ok)).toEqual(ok);
     for (const errada of [
       { ...ok, falhas: 0 },
       { ...ok, destinatarios: 0, enviados: 0, falhas: 0 },
       { ...ok, emails: ["pastor@example.com"] },
+      { ...ok, tipo: undefined },
     ])
       expect(
         respostaEnviarRelatorioDiarioSchema.safeParse(errada).success,
       ).toBe(false);
   });
 
-  it("saldo da Efí: sem configuração, nem saldo nem erro; configurada, o saldo ou o erro", () => {
-    for (const certa of [
-      { configurado: false, saldo_centavos: null, consultado_em: INSTANTE },
-      { configurado: true, saldo_centavos: 1234567, consultado_em: INSTANTE },
-      { configurado: true, saldo_centavos: 0, consultado_em: INSTANTE },
-      ...ERROS_SALDO_EFI.map((erro) => ({
-        configurado: true,
-        saldo_centavos: null,
-        consultado_em: INSTANTE,
-        erro,
-      })),
-    ])
-      expect(respostaSaldoEfiSchema.parse(certa)).toEqual(certa);
+  it("arrecadado: a campanha até agora e hoje (null fora das datas), só totais, nada da Efí", () => {
+    const totais = {
+      pedidos_aprovados: 40,
+      bilhetes: 61,
+      total_centavos: 144_000,
+    };
+    const certa = {
+      data: "2026-11-23",
+      campanha: totais,
+      hoje: totais,
+      atualizado_em: INSTANTE,
+    };
+    expect(respostaArrecadadoSchema.parse(certa)).toEqual(certa);
+    expect(respostaArrecadadoSchema.parse({ ...certa, hoje: null })).toEqual({
+      ...certa,
+      hoje: null,
+    });
     for (const errada of [
-      { configurado: false, saldo_centavos: 100, consultado_em: INSTANTE },
-      {
-        configurado: false,
-        saldo_centavos: null,
-        consultado_em: INSTANTE,
-        erro: "consulta",
-      },
-      { configurado: true, saldo_centavos: null, consultado_em: INSTANTE },
-      {
-        configurado: true,
-        saldo_centavos: 100,
-        consultado_em: INSTANTE,
-        erro: "consulta",
-      },
-      { configurado: true, saldo_centavos: 10.5, consultado_em: INSTANTE },
-      {
-        configurado: true,
-        saldo_centavos: 100,
-        consultado_em: INSTANTE,
-        token: "x",
-      },
+      { ...certa, hoje: undefined },
+      { ...certa, campanha: { ...totais, total_centavos: 10.5 } },
+      { ...certa, saldo_centavos: 100 },
+      { ...certa, data: "23/11/2026" },
     ])
-      expect(respostaSaldoEfiSchema.safeParse(errada).success).toBe(false);
+      expect(respostaArrecadadoSchema.safeParse(errada).success).toBe(false);
+  });
+
+  it("nada da Efí no contrato (o saldo saiu na RIFA-087)", () => {
+    expect(
+      Object.keys(contrato).filter((nome) =>
+        /(^|_)EFI(_|$)|Efi|saldo|Saldo|SALDO/.test(nome),
+      ),
+    ).toEqual([]);
   });
 
   it("trilha, cron, remetente e o link do painel", () => {
     expect(ACOES_AUDITORIA).toContain("relatorio_diario.enviar");
     expect(ALVO_AUDITORIA_RELATORIO_DIARIO).toBe("relatorio_diario");
-    // 10:00 UTC = 07:00 em Belém (UTC−3).
-    expect(CRON_RELATORIO_DIARIO).toBe("0 10 * * *");
+    // 10:00 UTC = 07:00 em Belém (UTC−3), o dia anterior; 20:00 UTC = 17:00 em Belém, a parcial de hoje.
+    expect(CRON_RELATORIO_MANHA).toBe("0 10 * * *");
+    expect(CRON_RELATORIO_TARDE).toBe("0 20 * * *");
+    expect(CRONS_RELATORIO_DIARIO).toEqual({
+      manha: CRON_RELATORIO_MANHA,
+      tarde: CRON_RELATORIO_TARDE,
+    });
     expect(REMETENTE_RELATORIO_DIARIO).toEqual({
       nome: "Projeto Videira Kids",
       email: "relatorio@projetokidsbelem.com.br",

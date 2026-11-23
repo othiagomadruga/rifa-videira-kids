@@ -16,9 +16,9 @@ import {
   PREFIXO_AFILIADOS_ADESAO,
   afiliadosAdesao,
 } from "./routes/afiliados-adesao";
+import { PREFIXO_ARRECADADO, arrecadado } from "./routes/arrecadado";
 import { PREFIXO_AUDITORIA, auditoria } from "./routes/auditoria";
 import { PREFIXO_CAMPANHA, campanha } from "./routes/campanha";
-import { PREFIXO_EFI, efi } from "./routes/efi";
 import { health } from "./routes/health";
 import { PREFIXO_HIERARQUIA, hierarquia } from "./routes/hierarquia";
 import { PREFIXO_LINKS_VENDAS, linksVendas } from "./routes/links-vendas";
@@ -116,11 +116,11 @@ app.route(PREFIXO_PEDIDOS, pedidos);
 // Maiores compradores do admin (RIFA-083, D38): GET /api/admin/maiores-compradores, só admin (o sub-app exige no
 // handler, antes da consulta). O do discipulador fica no sub-app de /api/minha (abaixo).
 app.route(PREFIXO_MAIORES_COMPRADORES, maioresCompradores);
-// Relatório diário por e-mail (RIFA-086, D40): a prévia (GET) e o envio agora (POST) sob /api/admin/relatorio-diario, e
-// o saldo da Efí, GET /api/admin/efi/saldo. Só admin: cada sub-app exige no handler, antes da consulta e do corpo. O envio
-// das 7h é o `scheduled` (abaixo), sem rota.
+// Relatório diário por e-mail (RIFA-086 e RIFA-087, D40): a prévia (GET) e o envio agora (POST) sob
+// /api/admin/relatorio-diario, e o "Arrecadado" do admin (RIFA-087), GET /api/admin/arrecadado. Só admin: cada sub-app
+// exige no handler, antes da consulta e do corpo. Os envios das 7h e das 17h são o `scheduled` (abaixo), sem rota.
 app.route(PREFIXO_RELATORIO_DIARIO, relatorioDiario);
-app.route(PREFIXO_EFI, efi);
+app.route(PREFIXO_ARRECADADO, arrecadado);
 app.route(PREFIXO_WEBHOOK_COORDENACAO, webhookCoordenacao);
 // Token do webhook da Rifei gerado pela tela (RIFA-039, D21): GET e POST /api/admin/webhook/token, só admin (o
 // sub-app exige no handler das duas rotas, nunca num use de /api/admin/webhook/*: as entregas e o estado acima
@@ -151,6 +151,6 @@ app.route(PREFIXO_MINHA, minha);
 app.notFound(rotaInexistente);
 app.onError(erroNaoTratado);
 
-// O Worker: o app (fetch, e o `routes` e o `request` que os testes usam) com o handler dos crons (RIFA-086: o relatório
-// diário das 7h; agendado.ts). O Hono continua sendo o próprio objeto exportado.
+// O Worker: o app (fetch, e o `routes` e o `request` que os testes usam) com o handler dos crons (RIFA-086 e RIFA-087:
+// o relatório das 7h e a parcial das 17h; agendado.ts). O Hono continua sendo o próprio objeto exportado.
 export default Object.assign(app, { scheduled });

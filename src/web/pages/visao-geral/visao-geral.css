@@ -272,21 +272,25 @@
   color: var(--cor-texto-suave);
 }
 
-/* Saldo da Efí (RIFA-086, D40), só do admin: discreto, o valor e a hora da consulta. */
-.visao-saldo__corpo {
+/* Arrecadado (RIFA-087), só do admin: o total pago, os bilhetes pagos, o de hoje e a legenda. */
+.visao-arrecadado__corpo {
   display: grid;
   justify-items: start;
   gap: var(--espaco-2);
   min-width: 0;
-}
-
-.visao-saldo__valor {
-  font-size: var(--texto-2xl);
-  font-weight: var(--peso-forte);
   font-variant-numeric: tabular-nums;
 }
 
-.visao-saldo__nota {
+.visao-arrecadado__valor {
+  font-size: var(--texto-2xl);
+  font-weight: var(--peso-forte);
+}
+
+.visao-arrecadado__hoje strong {
+  font-weight: var(--peso-forte);
+}
+
+.visao-arrecadado__nota {
   font-size: var(--texto-sm);
   color: var(--cor-texto-suave);
 }

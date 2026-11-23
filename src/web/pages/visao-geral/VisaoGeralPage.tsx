@@ -14,6 +14,7 @@ import { useUsuarioConectado } from "../../lib/sessao";
 import { DICA_DO_MENU } from "../coordenacao/textos";
 import { contarRedes, useRedes } from "../../lib/redes";
 import { AlertaWebhook } from "../pedidos/AlertaWebhook";
+import { Arrecadado } from "./Arrecadado";
 import { AvisosVendas } from "./AvisosVendas";
 import { CartaoCampanha, CartaoHoje, CartaoPeriodo } from "./Cartoes";
 import { CurvaDaCampanha } from "./CurvaDaCampanha";
@@ -21,7 +22,6 @@ import { EsqueletoDoPainel } from "./EsqueletoDoPainel";
 import { FiltroEscopo } from "./FiltroEscopo";
 import { Referencia } from "./Referencia";
 import { RelatorioCampanha } from "./RelatorioCampanha";
-import { SaldoEfi } from "./SaldoEfi";
 import { DICAS, ROTULO_DO_ESCOPO, textoSemVendas } from "./textos";
 import { useCelulasDoFiltro } from "./useCelulasDoFiltro";
 import {
@@ -51,7 +51,7 @@ const ehNaoEncontrado = (erro: unknown) =>
 // Visão geral da coordenação (RIFA-009), pensada para o celular: em que dia e período a campanha está,
 // quanto vender hoje, se está em dia ou abaixo (e quanto), para onde vai no ritmo atual e a curva
 // esperado × realizado. O recorte (campanha, divisão, rede, discipulador ou célula) fica na URL. No fim, só para o
-// admin, o saldo da conta Efí (RIFA-086, D40) e, para todos, o relatório da campanha para baixar (RIFA-038).
+// admin, quanto entrou (o "Arrecadado", RIFA-087) e, para todos, o relatório da campanha para baixar (RIFA-038).
 export function VisaoGeralPage() {
   const [params, setParams] = useSearchParams();
   const escopo = escopoDosParams(params);
@@ -127,8 +127,9 @@ export function VisaoGeralPage() {
         tentarDeNovo={tentarDeNovo}
         verCampanhaToda={() => mudarEscopo(ESCOPO_CAMPANHA)}
       />
-      {/* Saldo da Efí (RIFA-086, D40): só o admin (a coordenação nem pede a rota, que lhe dá 403). */}
-      {admin && <SaldoEfi />}
+      {/* Arrecadado (RIFA-087, no lugar do saldo da Efí): só o admin (a coordenação nem pede a rota, que lhe dá 403).
+          Atualiza junto com o painel; é sempre da campanha toda, qualquer que seja o recorte. */}
+      {admin && <Arrecadado sinal={resumo?.atualizado_em ?? null} />}
       {/* Relatório da campanha para baixar (RIFA-038): não depende do recorte nem do painel carregado. */}
       <RelatorioCampanha />
     </>

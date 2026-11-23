@@ -1,4 +1,4 @@
-// RIFA-086 (D40): o montador do relatório diário por e-mail (puro: sem banco, sem rede). Cenário do painel
+// RIFA-086 e RIFA-087 (D40): o montador do relatório diário por e-mail, manhã e tarde (puro: sem banco, sem rede). Cenário do painel
 // (test/painel-apoio.ts): 5 células, 10 bilhetes por pessoa, 21 dias desde 23/11/2026 em Belém, 3 semanas 35/25/45.
 // Grupos: Caleb (Dorcas, Éfeso) em "Adultos da manhã", Abel (Ágape, Betel) em "Adultos da noite" e Boaz (Canaã) em
 // "Adolescentes"; Davi, sem células, em "Jovens".
@@ -8,7 +8,6 @@ import {
   type CelulaCalculo,
   type EntradaCalculo,
   type GrupoCalculo,
-  type RespostaSaldoEfi,
 } from "../../shared/contracts";
 import {
   CAMPANHA,
@@ -25,11 +24,13 @@ import {
   formatarInteiro,
   formatarPercentualBp,
   formatarReais,
+  horaCurta,
   horaNoFuso,
   intervaloDeDias,
   juntarNomes,
   montarRelatorioDiario,
   type DadosRelatorioDiario,
+  type EnvioDoRelatorio,
 } from "./relatorio-diario";
 
 const GRUPOS: GrupoCalculo[] = [
@@ -39,38 +40,27 @@ const GRUPOS: GrupoCalculo[] = [
   { id: 4, nome: "Adolescentes", ordem: 4, discipuladores: [20] },
 ];
 
-const SALDO_OK: RespostaSaldoEfi = {
-  configurado: true,
-  saldo_centavos: 1234567,
-  consultado_em: "2026-12-01T10:00:03.000Z",
-};
+const MANHA: EnvioDoRelatorio = { tipo: "manha" };
 
-const SALDO_FALHOU: RespostaSaldoEfi = {
-  configurado: true,
-  saldo_centavos: null,
-  consultado_em: "2026-12-01T10:00:03.000Z",
-  erro: "tempo_esgotado",
-};
-
-const SEM_EFI: RespostaSaldoEfi = {
-  configurado: false,
-  saldo_centavos: null,
-  consultado_em: "2026-12-01T10:00:03.000Z",
-};
+/** A tarde de `data` às 17:00 de Belém (20:00 UTC). */
+const tardeDe = (data: string): EnvioDoRelatorio => ({
+  tipo: "tarde",
+  ate: new Date(`${data}T20:00:00.000Z`),
+});
 
 function dadosDe(
   data: string,
   opcoes: {
     entrada?: EntradaCalculo;
     grupos?: GrupoCalculo[];
-    saldo?: RespostaSaldoEfi;
+    envio?: EnvioDoRelatorio;
   } = {},
 ): DadosRelatorioDiario {
   const dados = dadosDoRelatorioDiario(
     opcoes.entrada ?? entradaEsperada(),
     opcoes.grupos ?? GRUPOS,
     data,
-    opcoes.saldo ?? SALDO_OK,
+    opcoes.envio ?? MANHA,
   );
   if (dados === null) throw new Error(`${data}: fora da campanha`);
   return dados;
@@ -107,10 +97,11 @@ describe("montarRelatorioDiario: o e-mail de segunda, 30/11 (dia 8, o 1º da Sem
         "Resumo de segunda, 30/11 · dia 8 de 21",
         "",
         // 135 bilhetes (com os 6 sem célula); R$ 2.700,00 menos o desconto de R$ 16,00 da Dorcas.
-        "R$ 2.684,00 arrecadados · 135 bilhetes vendidos",
+        "R$ 2.684,00 arrecadados · 135 bilhetes pagos",
         "22,5% do alvo da campanha (600 bilhetes)",
         "",
-        "No dia: 17 bilhetes (meta 103)",
+        // 30/11: Canaã 6, Ágape 5 e Betel 6, a R$ 20,00 cada bilhete.
+        "No dia: 17 bilhetes · R$ 340,00 (meta 103)",
         // 17 de 142,857... (25/105 de 600) = 11,9%.
         "Semana 2 · 30/11 a 06/12: 17 de 143 · 11,9%",
         "",
@@ -133,11 +124,10 @@ describe("montarRelatorioDiario: o e-mail de segunda, 30/11 (dia 8, o 1º da Sem
         "ATENÇÃO",
         "• Todas as 5 células já venderam",
         "• 6 bilhetes foram vendidos sem link de célula (não contam para nenhuma)",
-        "• Saldo na Efí: R$ 12.345,67 (às 07:00)",
         "",
         `Abrir o painel completo: ${LINK_PAINEL_RELATORIO_DIARIO}`,
         "",
-        "Enviado todo dia às 7h · Projeto Videira Kids",
+        "Enviado todo dia às 7h e às 17h · Projeto Videira Kids",
         "",
       ].join("\n"),
     );
@@ -150,11 +140,11 @@ describe("montarRelatorioDiario: o e-mail de segunda, 30/11 (dia 8, o 1º da Sem
         "PROJETO VIDEIRA KIDS",
         "Resumo de segunda, 30/11 · dia 8 de 21",
         "R$ 2.684,00",
-        "<b>135 bilhetes</b> vendidos",
+        "arrecadados · <b>135 bilhetes pagos</b>",
         "width:22.5%",
         "22,5% do alvo da campanha (600 bilhetes)",
         "No dia",
-        "<b>17</b> bilhetes",
+        "<b>17</b> bilhetes · <b>R$ 340,00</b>",
         "(meta 103)",
         "Semana 2 · 30/11 a 06/12",
         "<b>17</b> de 143 · 11,9%",
@@ -172,10 +162,9 @@ describe("montarRelatorioDiario: o e-mail de segunda, 30/11 (dia 8, o 1º da Sem
         "Atenção",
         "Todas as 5 células já venderam",
         "6 bilhetes foram vendidos sem link de célula",
-        "Saldo na Efí: <b>R$ 12.345,67</b>",
         `href="${LINK_PAINEL_RELATORIO_DIARIO}"`,
         "Abrir o painel completo",
-        "Enviado todo dia às 7h · Projeto Videira Kids",
+        "Enviado todo dia às 7h e às 17h · Projeto Videira Kids",
       ]),
     ).toEqual([]);
   });
@@ -198,6 +187,61 @@ describe("montarRelatorioDiario: o e-mail de segunda, 30/11 (dia 8, o 1º da Sem
     // Só um link, o do painel.
     expect(email.html.match(/href=/g)).toHaveLength(1);
   });
+
+  it("nenhuma menção à Efí nem a saldo (o saldo saiu na RIFA-087), no assunto, no HTML e no texto", () => {
+    for (const conteudo of [email.assunto, email.html, email.texto])
+      expect(conteudo).not.toMatch(/ef[ií]|saldo/i);
+    expect(JSON.stringify(dadosDe("2026-11-30"))).not.toMatch(/ef[ií]|saldo/i);
+  });
+});
+
+describe("montarRelatorioDiario: a parcial da tarde (hoje até 17h)", () => {
+  const dados = dadosDe("2026-11-30", { envio: tardeDe("2026-11-30") });
+  const email = montarRelatorioDiario(dados);
+
+  it("assunto 'parcial de <dia da semana>, <dd/mm> (até 17h)'; subtítulo 'Parcial de ..., até 17h'; 'Hoje até 17h' no lugar de 'No dia'", () => {
+    expect(dados.parcial_ate).toBe("17h");
+    expect(email.assunto).toBe(
+      "Projeto Videira Kids · parcial de segunda, 30/11 (até 17h)",
+    );
+    expect(email.html).toContain(
+      "<title>Projeto Videira Kids · parcial de segunda, 30/11 (até 17h)</title>",
+    );
+    for (const conteudo of [email.html, email.texto]) {
+      expect(conteudo).toContain(
+        "Parcial de segunda, 30/11, até 17h · dia 8 de 21",
+      );
+      expect(conteudo).not.toContain("Resumo de");
+      expect(conteudo).not.toContain("No dia");
+    }
+    expect(email.texto).toContain(
+      "\nHoje até 17h: 17 bilhetes · R$ 340,00 (meta 103)\n",
+    );
+    expect(email.html).toMatch(
+      /Hoje até 17h<\/td><td[^>]*><b>17<\/b> bilhetes · <b>R\$ 340,00<\/b>/,
+    );
+  });
+
+  it("o resto é igual ao da manhã do mesmo dia (números, seções, botão e rodapé)", () => {
+    const manha = montarRelatorioDiario(dadosDe("2026-11-30"));
+    const semCabecalho = (texto: string) =>
+      texto
+        .split("\n")
+        .filter(
+          (linha) =>
+            !/^(Resumo|Parcial) de |^(No dia|Hoje até 17h): /.test(linha),
+        );
+    expect(semCabecalho(email.texto)).toEqual(semCabecalho(manha.texto));
+  });
+
+  it("fora da hora cheia, a hora com os minutos: 'até 15h42'", () => {
+    const parcial = dadosDe("2026-11-30", {
+      envio: { tipo: "tarde", ate: new Date("2026-11-30T18:42:10.000Z") },
+    });
+    expect(montarRelatorioDiario(parcial).assunto).toBe(
+      "Projeto Videira Kids · parcial de segunda, 30/11 (até 15h42)",
+    );
+  });
 });
 
 describe("dadosDoRelatorioDiario", () => {
@@ -205,7 +249,7 @@ describe("dadosDoRelatorioDiario", () => {
     // Dia 7 (29/11): a venda de 30/11 02:59:59.999Z (Ágape, 6) entra; a de 30/11 03:00Z (Canaã, 6) não.
     const dados = dadosDe("2026-11-29");
     expect(dados.dia_campanha).toBe(7);
-    expect(dados.dia.realizado).toBe(6);
+    expect(dados.dia).toMatchObject({ bilhetes: 6, total_centavos: 12_000 });
     // Sem as 17 do dia 8 (Canaã 6, Ágape 5, Betel 6).
     expect(dados.vendas.bilhetes).toBe(135 - 17);
     expect(dados.periodo).toMatchObject({
@@ -284,29 +328,50 @@ describe("dadosDoRelatorioDiario", () => {
     expect(semGrupos.html).not.toContain("POR GRUPO");
   });
 
-  it("saldo da Efí indisponível: a consulta falhou ou a Efí não está configurada", () => {
-    for (const saldo of [SALDO_FALHOU, SEM_EFI]) {
-      const dados = dadosDe("2026-11-30", { saldo });
-      expect(dados.saldo_efi).toBeNull();
-      const { texto, html } = montarRelatorioDiario(dados);
-      expect(texto).toContain("• Saldo na Efí: indisponível\n");
-      expect(html).toContain(
-        'Saldo na Efí: <span style="color:#8a8499">indisponível</span>',
+  it("o valor do dia é a soma dos pedidos pagos do dia: nem de outro dia, nem não pago, nem de outra campanha", () => {
+    // Pedidos aprovados da campanha ativa com o dia local (Belém) igual ao de referência.
+    const doDia = (data: string) =>
+      PEDIDOS.filter(
+        (pedido) =>
+          pedido.status === "approved" &&
+          pedido.campanha !== "outra" &&
+          pedido.aprovado_em !== null &&
+          new Date(Date.parse(pedido.aprovado_em) - 3 * 3_600_000)
+            .toISOString()
+            .slice(0, 10) === data,
       );
-      expect(texto).not.toContain("R$ 12.345,67");
+    // 25/11 (dia 3) tem o pedido de outra campanha (50 bilhetes) e uma venda sem célula; 30/11 tem a da virada (03:00Z).
+    for (const data of [
+      "2026-11-25",
+      "2026-11-29",
+      "2026-11-30",
+      "2026-12-01",
+    ]) {
+      const esperados = doDia(data);
+      expect(esperados.length).toBeGreaterThan(0);
+      expect({ data, dia: dadosDe(data).dia }).toMatchObject({
+        data,
+        dia: {
+          bilhetes: esperados.reduce((soma, p) => soma + p.qtd_bilhetes, 0),
+          total_centavos: esperados.reduce(
+            (soma, p) => soma + p.total_centavos,
+            0,
+          ),
+        },
+      });
     }
+    // 25/11: Ágape 6, Betel 4 e 4 sem célula; o de outra campanha (50, no mesmo dia) fica de fora. Os não pagos, no
+    // banco: routes/relatorio-diario.test.ts.
+    expect(dadosDe("2026-11-25").dia.bilhetes).toBe(6 + 4 + 4);
+    // Com a meta em bilhetes, os bilhetes do dia são o realizado do dia do painel.
+    expect(dadosDe("2026-11-30").dia.bilhetes).toBe(17);
   });
 
   it("fora da campanha (antes do 1º dia ou depois do último), null: o e-mail não sai", () => {
     for (const data of ["2026-11-20", "2026-11-22", "2026-12-14", "2027-01-10"])
       expect({
         data,
-        dados: dadosDoRelatorioDiario(
-          entradaEsperada(),
-          GRUPOS,
-          data,
-          SALDO_OK,
-        ),
+        dados: dadosDoRelatorioDiario(entradaEsperada(), GRUPOS, data, MANHA),
       }).toEqual({ data, dados: null });
     expect(dadosDe("2026-11-23").dia_campanha).toBe(1);
     // O último dia (13/12) sai: o e-mail de 14/12 de manhã fecha a campanha.
@@ -370,7 +435,9 @@ describe("dadosDoRelatorioDiario", () => {
     const { texto } = montarRelatorioDiario(dados);
     // R$ 2.684,00 de R$ 25.000,00 (5 células × R$ 5.000,00).
     expect(texto).toContain("10,7% do alvo da campanha (R$ 25.000,00)");
-    expect(texto).toMatch(/^No dia: R\$ 340,00 \(meta R\$ [\d.]+,\d{2}\)$/m);
+    expect(texto).toMatch(
+      /^No dia: 17 bilhetes · R\$ 340,00 \(meta R\$ [\d.]+,\d{2}\)$/m,
+    );
     expect(texto).toMatch(
       /^Semana 2 · 30\/11 a 06\/12: R\$ 340,00 de R\$ [\d.]+,\d{2} · \d+,\d%$/m,
     );
@@ -447,6 +514,8 @@ describe("formatação em pt-BR", () => {
     expect(horaNoFuso("2026-11-24T02:30:00.000Z", "America/Belem")).toBe(
       "23:30",
     );
+    expect(horaCurta("2026-11-24T20:00:00.000Z", "America/Belem")).toBe("17h");
+    expect(horaCurta("2026-11-24T12:05:00.000Z", "America/Belem")).toBe("9h05");
     expect(juntarNomes([])).toBe("");
     expect(juntarNomes(["Ana"])).toBe("Ana");
     expect(juntarNomes(["Ana", "Bia"])).toBe("Ana e Bia");
