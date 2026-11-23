@@ -317,6 +317,22 @@
   color: var(--cor-info);
 }
 
+/* RIFA-088 (D41): a célula da venda, o sinal discreto "atribuída à mão" e o botão do admin (quebram linha no celular). */
+.pedidos-celula-da-venda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* No cartão do celular os valores ficam à direita, como as outras linhas; na tabela, à esquerda (no @media). */
+  justify-content: flex-end;
+  gap: var(--espaco-1) var(--espaco-2);
+}
+
+.pedidos-atribuida {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-xs);
+  font-style: italic;
+}
+
 .pedidos-desconsiderado__detalhe {
   flex-basis: 100%;
   color: var(--cor-texto-suave);
@@ -498,6 +514,10 @@
 }
 
 @media (min-width: 48rem) {
+  .pedidos-celula-da-venda {
+    justify-content: flex-start;
+  }
+
   /* No computador, os filtros à mostra como antes: sem o <summary> (o <details> fica sempre aberto). */
   .pedidos-filtros-caixa__resumo {
     display: none;
