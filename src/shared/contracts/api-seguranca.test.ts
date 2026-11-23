@@ -192,6 +192,8 @@ describe("GET /api/admin/auditoria", () => {
       "webhook.gerar_token",
       // RIFA-064 (D29): o login da célula com a senha padrão.
       "sessao.entrar_com_senha",
+      // RIFA-082 (D37): o login do discipulador com a senha padrão.
+      "sessao.entrar_com_senha_discipulador",
       // RIFA-073 (D33): o login do admin com usuário e senha e a senha dele (definir, trocar, remover).
       "sessao.entrar_como_admin",
       "senha_admin.definir",

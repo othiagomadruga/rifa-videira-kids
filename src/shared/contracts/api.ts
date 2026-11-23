@@ -601,6 +601,9 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - sessao.entrar_com_senha (RIFA-064, D29): ROTAS_ACESSO.entrarComSenha, cada login da célula com a senha padrão que
  *   abriu sessão; quem fez é o usuário líder da célula, alvo `celula:<id>`; resumo sem a senha (que nunca é gravada).
  *   A tentativa recusada não registra.
+ * - sessao.entrar_com_senha_discipulador (RIFA-082, D37): ROTAS_ACESSO.entrarComoDiscipulador, cada login do
+ *   discipulador com a senha padrão que abriu sessão; quem fez é o usuário do discipulador, alvo `discipulador:<id>`;
+ *   resumo sem a senha (que nunca é gravada). A tentativa recusada não registra.
  * - sessao.entrar_como_admin (RIFA-073, D33): ROTAS_ACESSO.entrarComoAdmin, cada login do admin com usuário e senha que
  *   abriu sessão; quem fez é o próprio admin, alvo `usuario:<id>`; resumo sem a senha e sem o usuário de login. A
  *   tentativa recusada não registra.
@@ -638,6 +641,7 @@ export const ACOES_AUDITORIA = [
   "afiliado.remover",
   "webhook.gerar_token",
   "sessao.entrar_com_senha",
+  "sessao.entrar_com_senha_discipulador",
   "sessao.entrar_como_admin",
   "senha_admin.definir",
   "senha_admin.trocar",

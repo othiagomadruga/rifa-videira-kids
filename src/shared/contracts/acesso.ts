@@ -156,6 +156,22 @@ export const corpoEntrarComSenhaSchema = z.object({
 export type CorpoEntrarComSenha = z.input<typeof corpoEntrarComSenhaSchema>;
 
 /**
+ * POST /api/sessao/discipulador (RIFA-082, D37): o login do discipulador com o nome dele e a senha padrão (a regra da
+ * célula; login-discipulador.ts). Os dois campos são texto livre, com os limites do corpo da célula: vazio, um nome que
+ * não é de discipulador ou uma senha errada dão o MESMO 401 (a resposta não diz se o discipulador existe). Só a falta
+ * de um campo (ou um não texto), um campo a mais e o texto acima do limite dão 400.
+ */
+export const corpoEntrarComoDiscipuladorSchema = z.strictObject({
+  /** O nome do discipulador, como a pessoa digitou: comparado normalizado (normalizarNomeLogin). */
+  discipulador: z.string().max(LIMITE_CAMPO_LOGIN_CELULA),
+  /** A senha padrão: "@" + o nome do discipulador normalizado + "1234" (comparada com formaDaSenhaDigitada). */
+  senha: z.string().max(LIMITE_CAMPO_LOGIN_CELULA),
+});
+export type CorpoEntrarComoDiscipulador = z.input<
+  typeof corpoEntrarComoDiscipuladorSchema
+>;
+
+/**
  * POST /api/sessao/admin (RIFA-073, D33): o login do admin com usuário e senha (senha-admin.ts). Os dois campos são
  * texto livre: vazio, um usuário que não existe ou uma senha errada dão o MESMO 401 (a resposta não diz se o usuário
  * existe). Só a falta de um campo (ou um não texto) e o texto acima do limite dão 400.
@@ -212,7 +228,10 @@ export const respostaSenhaAdminSchema = z.strictObject({
 });
 export type RespostaSenhaAdmin = z.infer<typeof respostaSenhaAdminSchema>;
 
-/** 200 de POST /api/sessao, de POST /api/sessao/senha e de POST /api/sessao/admin (junto com o Set-Cookie) e de GET /api/sessao. */
+/**
+ * 200 de POST /api/sessao, de POST /api/sessao/senha, de POST /api/sessao/discipulador e de POST /api/sessao/admin (junto
+ * com o Set-Cookie) e de GET /api/sessao.
+ */
 export const respostaSessaoSchema = z.object({ usuario: usuarioSessaoSchema });
 export type RespostaSessao = z.infer<typeof respostaSessaoSchema>;
 
@@ -356,6 +375,30 @@ export const ROTAS_ACESSO = {
     papeis: null,
     situacao: "detalhada",
     corpo: corpoEntrarComSenhaSchema,
+    sucesso: { status: 200, corpo: respostaSessaoSchema },
+  },
+  /**
+   * RIFA-082 (D37): o login do discipulador com o nome dele e a senha padrão (a mesma regra da célula: "@" + nome
+   * normalizado + "1234"; login-discipulador.ts). Abre a sessão do papel `discipulador` preso ao discipulador, igual à
+   * do link (cookie `__Host-sessao`, 45 dias, parada há 7 dias deixa de valer), sem link (`sessoes.link_id` NULL), com o
+   * mesmo usuário do link do discipulador; o discipulador que ainda não tem esse usuário ganha um, com o nome dele (como
+   * o lote de links). Só abre com as DUAS chaves da campanha ligadas: `acesso.discipuladores` (D20) e
+   * `acesso.celulas_senha` (D29); desligar qualquer uma recusa o login e derruba as sessões do discipulador abertas pela
+   * senha (as do link seguem a D20). Mesma origem (CSRF), o mesmo limite de tentativas por IP e o mesmo contador do
+   * POST /api/sessao e do POST /api/sessao/senha (429) e o mesmo teto do corpo (413).
+   * 401 `nao_autenticado`, com a MESMA mensagem em todos os casos (a resposta não diz se o discipulador existe): senha
+   * errada, nome que não é de nenhum discipulador, dois nomes de discipulador iguais depois da normalização (ambíguo: a
+   * coordenação vê o aviso na Hierarquia), nome sem letra nem dígito, o usuário do discipulador desativado e qualquer
+   * uma das duas chaves desligada. A senha nunca é gravada (nem na trilha, que registra cada login por senha
+   * (`sessao.entrar_com_senha_discipulador`), sem ela).
+   */
+  entrarComoDiscipulador: {
+    metodo: "POST",
+    caminho: "/api/sessao/discipulador",
+    grupo: "aberto",
+    papeis: null,
+    situacao: "detalhada",
+    corpo: corpoEntrarComoDiscipuladorSchema,
     sucesso: { status: 200, corpo: respostaSessaoSchema },
   },
   /**

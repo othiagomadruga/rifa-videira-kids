@@ -73,7 +73,7 @@ const usuarioExemplo = {
 };
 
 describe("contrato do acesso (RIFA-007): catálogo", () => {
-  it("traz as 13 rotas de sessão e de administração", () => {
+  it("traz as 14 rotas de sessão e de administração", () => {
     expect(
       rotas.map(([, rota]) => `${rota.metodo} ${rota.caminho}`).sort(),
     ).toEqual(
@@ -81,6 +81,8 @@ describe("contrato do acesso (RIFA-007): catálogo", () => {
         "POST /api/sessao",
         // RIFA-064 (D29): o login da célula com a senha padrão.
         "POST /api/sessao/senha",
+        // RIFA-082 (D37): o login do discipulador com a senha padrão.
+        "POST /api/sessao/discipulador",
         "GET /api/sessao",
         "POST /api/sessao/sair",
         "POST /api/admin/usuarios",

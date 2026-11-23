@@ -31,6 +31,12 @@ export function normalizarNomeCelula(nome: string): string {
 }
 
 /**
+ * A mesma normalização com o nome de quem a usa fora da célula: o login do discipulador (RIFA-082, D37;
+ * login-discipulador.ts) compara o nome dele exatamente assim.
+ */
+export const normalizarNomeLogin = normalizarNomeCelula;
+
+/**
  * A senha padrão da célula: "@" + o nome normalizado + "1234" ("Geração que Clama" → "@geracaoqueclama1234"). null
  * quando o nome não tem letra nem dígito (nada sobra na normalização): essa célula não entra por senha.
  */
