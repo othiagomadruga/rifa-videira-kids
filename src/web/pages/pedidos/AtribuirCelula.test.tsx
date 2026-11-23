@@ -17,6 +17,7 @@ import {
 } from "../../test/renderizar";
 import {
   ROTA_ATRIBUIR_CELULA,
+  ROTA_CELULAS,
   pedido,
   respostaErro,
   simularApi,
@@ -211,6 +212,26 @@ describe("RIFA-088: o diálogo", () => {
     expect(
       within(dialogo).queryByRole("button", { name: "Atribuir" }),
     ).toBeNull();
+  });
+
+  it("as células não carregaram: o diálogo diz isso (não fica em 'Carregando as células…') e não manda nada", async () => {
+    const api = simularApi({ pedidos: pedidosDoTeste() });
+    api.proxima(ROTA_CELULAS, () =>
+      respostaErro(500, "erro_interno", "Falhou"),
+    );
+    abrir();
+    acionar(botaoAtribuirDe(await linhaDo("PED-SEM-AFILIADO"))!);
+    const dialogo = await screen.findByRole("dialog");
+    expect(
+      await within(dialogo).findByText(
+        /Não foi possível carregar as células\. Feche e recarregue a página/,
+      ),
+    ).toBeVisible();
+    expect(
+      within(dialogo).queryByText("Carregando as células…"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Atribuir" }));
+    expect(api.envios).toEqual([]);
   });
 
   it("dicas: o botão na lista e cada controle do diálogo têm dica, e o campo tem a ajuda", async () => {

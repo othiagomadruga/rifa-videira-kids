@@ -45,6 +45,8 @@ type Props = {
   pedido: ItemPedido;
   /** null enquanto as células carregam (ou se falharam). */
   grupos: GruposDeCelulas | null;
+  /** As células não carregaram: o diálogo diz isso em vez de "Carregando as células…". */
+  celulasFalharam?: boolean;
   aoFechar: () => void;
   /** Deu certo: o pedido como a API devolveu (com a célula efetiva). */
   aoConcluir: (pedido: ItemPedido) => void;
@@ -55,6 +57,7 @@ type Props = {
 export function DialogoAtribuirCelula({
   pedido,
   grupos,
+  celulasFalharam = false,
   aoFechar,
   aoConcluir,
   focoAoFechar,
@@ -184,7 +187,14 @@ export function DialogoAtribuirCelula({
           {pedido.affiliate_id !== null &&
             ` · afiliado ${pedido.affiliate_id} sem célula`}
         </p>
-        {grupos === null ? (
+        {grupos === null && celulasFalharam ? (
+          <Aviso tom="perigo" titulo="As células não carregaram">
+            <p>
+              Não foi possível carregar as células. Feche e recarregue a página
+              para tentar de novo.
+            </p>
+          </Aviso>
+        ) : grupos === null ? (
           <p className="pedidos-suave" role="status">
             Carregando as células…
           </p>

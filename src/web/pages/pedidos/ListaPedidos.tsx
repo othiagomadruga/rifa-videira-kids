@@ -256,6 +256,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
           grupos={
             celulas.tipo === "ok" ? celulasPorRede(celulas.celulas) : null
           }
+          celulasFalharam={celulas.tipo === "erro"}
           aoFechar={() => setAtribuindo(null)}
           aoConcluir={aoConcluirAtribuicao}
           focoAoFechar={refFocoAposAcao}
