@@ -10,6 +10,8 @@ import { TITULO_SEM_CONEXAO } from "../../components/ui";
 import { MENSAGEM_SEM_CONEXAO } from "../../lib/api";
 import { renderizarRota, respostaJson } from "../../test/renderizar";
 import {
+  CELULAS,
+  CELULAS_COM_GRUPOS,
   CENARIOS,
   RESPOSTAS_DE_ERRO,
   resolverEscopo,
@@ -771,6 +773,149 @@ describe("CA4: filtro do recorte e atualização", () => {
     expect(
       screen.queryByText(/^Não foi possível carregar as redes/),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("RIFA-092: o grupo no filtro (Adultos da manhã, Adultos da noite...)", () => {
+  /** As seções do filtro (rótulo e opções), na ordem do campo. */
+  const secoes = () =>
+    within(filtro())
+      .getAllByRole("group")
+      .map((grupo) => [
+        grupo.getAttribute("label"),
+        within(grupo)
+          .getAllByRole("option")
+          .map((opcao) => opcao.textContent),
+      ]);
+
+  /** Abre a tela com as células dadas (padrão: as do cenário com o grupo efetivo) e espera o filtro com elas. */
+  async function abrirComGrupos(
+    celulas = CELULAS_COM_GRUPOS,
+    caminho = "/coordenacao",
+  ) {
+    const api = simularApi(CENARIOS.emDia);
+    api.hierarquia = celulas;
+    const tela = renderizarRota(caminho);
+    await esperarAtualizacao();
+    await waitFor(() =>
+      expect(within(filtro()).getAllByRole("option").length).toBeGreaterThan(6),
+    );
+    return { api, ...tela };
+  }
+
+  it("a seção Grupo logo depois da Campanha toda, só com os grupos que têm células, na ordem dos grupos", async () => {
+    const { api } = await abrirComGrupos();
+
+    expect(api.chamadas).toContain("/api/admin/grupos");
+    expect(within(filtro()).getAllByRole("option")[0]).toHaveTextContent(
+      "Campanha toda",
+    );
+    // A 01 (Adolescentes) vem antes da 02 (Adultos da manhã) no id e no nome; a ordem é a dos grupos.
+    expect(secoes()).toEqual([
+      ["Grupo", ["Adultos da manhã", "Adolescentes"]],
+      ["Divisão", ["Jovens", "Adultos"]],
+      ["Rede", ["Rede Adulta Ficticia", "Rede Jovem Ficticia"]],
+      ["Discipulador", ["Discipulador Ficticio A", "Discipulador Ficticio B"]],
+      [
+        "Célula",
+        ["Célula Ficticia 01", "Célula Ficticia 02", "Célula Ficticia 03"],
+      ],
+    ]);
+  });
+
+  it("sem a lista dos grupos, o filtro continua, com os grupos das células pelo nome", async () => {
+    const api = simularApi(CENARIOS.emDia);
+    api.hierarquia = CELULAS_COM_GRUPOS;
+    api.grupos = () => RESPOSTAS_DE_ERRO.interno();
+    renderizarRota("/coordenacao");
+    await esperarAtualizacao();
+
+    await waitFor(() =>
+      expect(secoes()[0]).toEqual([
+        "Grupo",
+        ["Adolescentes", "Adultos da manhã"],
+      ]),
+    );
+    expect(
+      screen.queryByText(/^Não foi possível carregar/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("a Divisão some com as células numa divisão só e volta com duas", async () => {
+    const umaDivisao = CELULAS_COM_GRUPOS.map((celula) => ({
+      ...celula,
+      divisao: "jovens" as const,
+    }));
+    const { unmount } = await abrirComGrupos(umaDivisao);
+    expect(secoes().map(([rotulo]) => rotulo)).toEqual([
+      "Grupo",
+      "Rede",
+      "Discipulador",
+      "Célula",
+    ]);
+    unmount();
+
+    // Uma URL antiga com a divisão: a seção fica, para o campo mostrar o recorte da tela.
+    const comDivisao = await abrirComGrupos(
+      umaDivisao,
+      "/coordenacao?escopo=divisao&divisao=jovens",
+    );
+    expect(secoes().map(([rotulo]) => rotulo)).toContain("Divisão");
+    expect(filtro()).toHaveDisplayValue("Jovens");
+    comDivisao.unmount();
+
+    // As células do cenário, em duas divisões (e sem grupo nenhum: sem a seção Grupo).
+    await abrirComGrupos(CELULAS);
+    expect(secoes().map(([rotulo]) => rotulo)).toEqual([
+      "Divisão",
+      "Rede",
+      "Discipulador",
+      "Célula",
+    ]);
+  });
+
+  it("escolher Adultos da manhã: a URL e a consulta mudam, o nome do grupo vai para o topo e os números são os das células dele", async () => {
+    const { api, roteador } = await abrirComGrupos();
+
+    fireEvent.change(filtro(), { target: { value: "escopo=grupo&id=1" } });
+
+    await waitFor(() =>
+      expect(cabecalhoDaFase(/^Dia 12 de 24/)).toHaveTextContent(
+        "Grupo: Adultos da manhã",
+      ),
+    );
+    expect(roteador.state.location.search).toBe("?escopo=grupo&id=1");
+    expect(api.chamadas.at(-1)).toBe("/api/painel/resumo?escopo=grupo&id=1");
+    expect(filtro()).toHaveDisplayValue("Adultos da manhã");
+    expect(
+      screen.getByText("Mostrando Grupo: Adultos da manhã."),
+    ).toHaveAttribute("role", "status");
+    // Só a Célula Ficticia 02 está no grupo: a meta e o vendido são os dela.
+    const daCelula = resumoDoCenario(
+      CENARIOS.emDia,
+      resolverEscopo(new URLSearchParams("escopo=celula&id=2"))!,
+    ).campanha;
+    expect(
+      cartao("Campanha").getByRole("progressbar", {
+        name: `Realizado: ${daCelula.realizado} de ${daCelula.meta} bilhetes`,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Para conferir" })).toBeNull();
+  });
+
+  it("abrir com o grupo na URL consulta o grupo; antes da lista chegar, o campo já mostra o nome que a API deu", async () => {
+    const api = simularApi(CENARIOS.emDia);
+    api.hierarquia = CELULAS_COM_GRUPOS;
+    // A lista das células fica pendente: a opção avulsa usa o nome do recorte que veio no resumo.
+    api.celulas = () => new Promise<Response>(() => {});
+    renderizarRota("/coordenacao?escopo=grupo&id=4");
+    await esperarAtualizacao();
+
+    expect(api.chamadas).toContain("/api/painel/resumo?escopo=grupo&id=4");
+    expect(cabecalhoDaFase(/^Dia 12 de 24/)).toHaveTextContent(
+      "Grupo: Adolescentes",
+    );
+    await waitFor(() => expect(filtro()).toHaveDisplayValue("Adolescentes"));
   });
 });
 

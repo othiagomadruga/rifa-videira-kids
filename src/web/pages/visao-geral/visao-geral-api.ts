@@ -1,5 +1,6 @@
 // Chamadas da tela Visão geral (RIFA-009): o resumo do painel (GET /api/painel/resumo) e as células com a
-// hierarquia (GET /api/admin/celulas), que dão as opções do filtro (redes e discipuladores saem delas); o
+// hierarquia (GET /api/admin/celulas), que dão as opções do filtro (redes, discipuladores e, pelo grupo efetivo de cada
+// célula, os grupos saem delas), com a ordem dos grupos (GET /api/admin/grupos, RIFA-092); o
 // relatório da campanha para baixar (GET /api/painel/relatorio?tipo=..., RIFA-038, D23); e, só para o admin, quanto
 // entrou (GET /api/admin/arrecadado, RIFA-087, adendo da D40).
 //
@@ -12,6 +13,7 @@ import type {
   ROTAS_RELATORIO,
   RespostaArrecadado,
 } from "../../../shared/contracts/api";
+import type { Celula, Grupo } from "../../../shared/contracts/dominio";
 import {
   ORDEM_DIVISOES,
   type CelulaCalculo,
@@ -29,6 +31,8 @@ export const CAMINHO_RESUMO: (typeof ROTAS)["painelResumo"]["caminho"] =
   "/api/painel/resumo";
 export const CAMINHO_CELULAS: (typeof ROTAS)["listarCelulas"]["caminho"] =
   "/api/admin/celulas";
+export const CAMINHO_GRUPOS: (typeof ROTAS)["listarGrupos"]["caminho"] =
+  "/api/admin/grupos";
 export const CAMINHO_RELATORIO: (typeof ROTAS_RELATORIO)["baixarRelatorio"]["caminho"] =
   "/api/painel/relatorio";
 export const CAMINHO_ARRECADADO: (typeof ROTAS_ARRECADADO)["arrecadado"]["caminho"] =
@@ -38,6 +42,7 @@ type EscopoComId = Exclude<EscopoPainel, "campanha" | "divisao">;
 
 /** Escopos que pedem `id` na consulta. */
 const ESCOPOS_COM_ID = [
+  "grupo",
   "rede",
   "discipulador",
   "celula",
@@ -59,7 +64,7 @@ export type Escopo =
 export const ESCOPO_CAMPANHA: Escopo = { tipo: "campanha" };
 
 /**
- * Parâmetros da consulta, que são também os da URL da tela (`?escopo=celula&id=3`,
+ * Parâmetros da consulta, que são também os da URL da tela (`?escopo=celula&id=3`, `?escopo=grupo&id=1`,
  * `?escopo=divisao&divisao=jovens`). A campanha toda não leva nenhum (é o padrão da API).
  */
 export function paramsDoEscopo(escopo: Escopo): URLSearchParams {
@@ -121,7 +126,10 @@ export function carregarResumo(
   );
 }
 
-/** O que o filtro usa de cada célula (um item de GET /api/admin/celulas traz isso e mais). */
+/**
+ * O que o filtro usa de cada célula (um item de GET /api/admin/celulas traz isso e mais). O grupo efetivo (RIFA-092: o
+ * próprio da célula, senão o do discipulador) dá as opções do grupo; ausente ou null, a célula não está em nenhum.
+ */
 export type CelulaDoFiltro = Pick<
   CelulaCalculo,
   | "id"
@@ -131,13 +139,28 @@ export type CelulaDoFiltro = Pick<
   | "rede_id"
   | "rede_nome"
   | "divisao"
->;
+> &
+  Partial<Pick<Celula, "grupo_efetivo_id" | "grupo_efetivo_nome">>;
+
+/** Um grupo de GET /api/admin/grupos, que já vem na ordem da tela (`ordem`; empate, o nome). */
+export type GrupoDoFiltro = Pick<Grupo, "id" | "nome">;
 
 export async function carregarCelulas(
   opcoes: Opcoes = {},
 ): Promise<CelulaDoFiltro[]> {
   const { itens } = await api.get<{ itens: CelulaDoFiltro[] }>(
     CAMINHO_CELULAS,
+    opcoes,
+  );
+  return itens;
+}
+
+/** Os grupos na ordem da tela (Adultos da manhã, Adultos da noite, Jovens, Adolescentes), para ordenar o filtro. */
+export async function carregarGrupos(
+  opcoes: Opcoes = {},
+): Promise<GrupoDoFiltro[]> {
+  const { itens } = await api.get<{ itens: GrupoDoFiltro[] }>(
+    CAMINHO_GRUPOS,
     opcoes,
   );
   return itens;
