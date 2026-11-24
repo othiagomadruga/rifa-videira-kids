@@ -161,6 +161,32 @@ importa nada dos Rankings, que formatam dinheiro):
   `meusCompradoresDe`) respondem a rota sem nenhuma compra por padrão; as varreduras de dicas contam os dois botões e
   o "?" do título (admin nos Rankings em `dicas-fase2.test.tsx`; discipulador em `dicas-fora-da-coordenacao.test.tsx`).
 
+## Quem comprou por célula, do admin (RIFA-093, adendo da D36)
+
+Tela **"Quem comprou"** (`pages/quem-comprou/QuemComprouPage.tsx`, `/coordenacao/quem-comprou`, no menu logo depois de
+Pedidos, `papeis: ["admin"]`: a coordenação não vê o link e, pela URL, vê "sem permissão" sem nada pedido à API).
+Mobile-first, no máximo dois toques:
+
+- **Busca** "Buscar célula" (`Input` com a ajuda `buscaQuemComprou`, em `ajuda.ts`, que entra em `ajuda-das-telas.ts`):
+  filtra enquanto digita, sem acento nem maiúscula (`paraBusca`); sem resultado, "Limpar busca". A busca não vai à URL.
+- **Cartões das células** (`GET /api/admin/quem-comprou/celulas`, na ordem da API: mais bilhetes primeiro, empate pelo
+  nome): o cartão inteiro é um botão (`aria-expanded`, com dica) com o nome, o discipulador (menor) e "N bilhetes · M
+  compras". Tocar abre ali mesmo (acordeão; **uma célula por vez**, guardada em `?celula=<id>` com `replace`) e tocar
+  de novo fecha. Chegando com `?celula=` (os atalhos abaixo), a célula vem aberta e a tela rola até ela.
+- **As compras da célula aberta** (`GET /api/admin/celulas/:id/compradores`, só ao abrir; `quem-comprou-api.ts`, 20 por
+  página): o nome (ou "Comprador sem nome"), "23/11 às 14:03" no fuso da campanha, o sinal discreto "atribuída à mão"
+  (`origem_celula = manual`), os bilhetes e o telefone legível com o link do WhatsApp (nova aba, com dica; as mesmas
+  funções de `pages/pedidos/comprador.ts`). "Ver mais" (com dica; o foco vai para a primeira compra nova) e o link
+  discreto "Abrir em Pedidos" (`/coordenacao/pedidos?celula_id=<id>`). Sem R$, sem DDD e sem o id do pedido.
+- **Layout** (`quem-comprou.css`, só tokens): sem tabela, nada de rolagem lateral a 390 px (abaixo de 26rem os totais
+  descem para baixo do nome), todo alvo de toque com `--alvo-toque` (44 px).
+- **Atalhos, só admin:** em Rankings, no ranking de células (e no por grupo), o nome da célula é um link com dica
+  (`TabelaRanking`, `DICAS.quemComprou`); na Hierarquia, cada linha da tabela de células ganha o botão-link "Quem
+  comprou" antes de Editar (`Tabelas.tsx`). Para a coordenação, o nome continua só texto e o botão não aparece.
+- **Testes:** `pages/quem-comprou/QuemComprouPage.test.tsx` (com `criarApiQuemComprou` de `teste-apoio.ts`: a lista, o
+  acordeão, a URL, "Ver mais", a busca, sem campanha, as varreduras de dicas e ajuda), `atalhos.test.tsx` (Rankings e
+  Hierarquia, admin e coordenação, com as varreduras) e `quem-comprou-contrato.test.ts` (as cópias do contrato).
+
 ## Grupo do discipulador e ranking por grupo (RIFA-084, D39)
 
 O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Adolescentes") separa um ranking a mais,
