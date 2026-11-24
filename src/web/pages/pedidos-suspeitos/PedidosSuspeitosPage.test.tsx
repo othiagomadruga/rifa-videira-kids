@@ -379,9 +379,11 @@ describe("RIFA-024: menu da coordenação", () => {
       simularApi({ itens: [pedido()], total: 1 });
       const { roteador } = renderizarRota("/coordenacao", { usuario });
       const menu = screen.getByRole("navigation", { name: "Coordenação" });
+      // "Quem comprou" (RIFA-093, só do admin) fica entre os dois no menu do admin.
       const rotulos = within(menu)
         .getAllByRole("link")
-        .map((link) => link.textContent);
+        .map((link) => link.textContent)
+        .filter((rotulo) => rotulo !== "Quem comprou");
       expect(rotulos[rotulos.indexOf("Pedidos") + 1]).toBe("Pedidos suspeitos");
 
       fireEvent.click(
