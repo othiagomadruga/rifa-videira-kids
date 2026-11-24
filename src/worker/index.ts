@@ -35,6 +35,10 @@ import {
   pedidosSuspeitos,
 } from "./routes/pedidos-suspeitos";
 import { PREFIXO_PUBLICO, publico } from "./routes/publico";
+import {
+  PREFIXO_QUEM_COMPROU_ADMIN,
+  quemComprouAdmin,
+} from "./routes/quem-comprou-admin";
 import { PREFIXO_SENHA_ADMIN, senhaAdmin } from "./routes/senha-admin";
 import { PREFIXO_RECONCILIACAO, reconciliacao } from "./routes/reconciliacao";
 import {
@@ -117,6 +121,9 @@ app.route(PREFIXO_PEDIDOS, pedidos);
 // Maiores compradores do admin (RIFA-083, D38): GET /api/admin/maiores-compradores, só admin (o sub-app exige no
 // handler, antes da consulta). O do discipulador fica no sub-app de /api/minha (abaixo).
 app.route(PREFIXO_MAIORES_COMPRADORES, maioresCompradores);
+// Quem comprou por célula do admin (RIFA-093, adendo da D36): GET /api/admin/quem-comprou/celulas e
+// GET /api/admin/celulas/:id/compradores, só admin (o sub-app exige no handler, antes do id e da consulta).
+app.route(PREFIXO_QUEM_COMPROU_ADMIN, quemComprouAdmin);
 // Relatório diário por e-mail (RIFA-086 e RIFA-087, D40): a prévia (GET) e o envio agora (POST) sob
 // /api/admin/relatorio-diario, e o "Arrecadado" do admin (RIFA-087), GET /api/admin/arrecadado. Só admin: cada sub-app
 // exige no handler, antes da consulta e do corpo. Os envios das 7h e das 17h são o `scheduled` (abaixo), sem rota.

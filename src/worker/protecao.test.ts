@@ -49,6 +49,7 @@ import {
   ROTAS_LINK_VENDAS,
   ROTAS_MAIORES_COMPRADORES,
   ROTAS_QUEM_COMPROU,
+  ROTAS_QUEM_COMPROU_ADMIN,
   ROTAS_REGRAS_CAMPANHA,
   ROTAS_CONEXAO_RIFEI,
   ROTAS_RIFEI_API,
@@ -161,6 +162,8 @@ const ROTAS_DA_COORDENACAO: RotaDaCoordenacao[] = [
     ...Object.values(ROTAS_MAIORES_COMPRADORES),
     ...Object.values(ROTAS_RELATORIO_DIARIO),
     ...Object.values(ROTAS_ARRECADADO),
+    // RIFA-093 (adendo da D36): quem comprou por célula, só admin.
+    ...Object.values(ROTAS_QUEM_COMPROU_ADMIN),
   ]
     .filter((rota) => rota.grupo === "coordenacao")
     .map((rota) => ({
@@ -263,6 +266,7 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_ARRECADADO),
     // RIFA-089 (adendo da D38): quem comprou, só do líder, em /api/minha.
     ...Object.values(ROTAS_QUEM_COMPROU),
+    ...Object.values(ROTAS_QUEM_COMPROU_ADMIN),
     ...Object.values(ROTAS_TODAS_AS_REDES),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
@@ -345,10 +349,12 @@ describe("a) toda rota da coordenação exige sessão", () => {
     ).toBeUndefined();
     for (const rota of Object.values(ROTAS_MAIORES_COMPRADORES))
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
-    // O relatório diário e o Arrecadado (RIFA-086 e RIFA-087, D40): os três no filtro, só de admin, e montados.
+    // O relatório diário e o Arrecadado (RIFA-086 e RIFA-087, D40) e quem comprou por célula (RIFA-093): no filtro, só
+    // de admin, e montados.
     for (const rota of [
       ...Object.values(ROTAS_RELATORIO_DIARIO),
       ...Object.values(ROTAS_ARRECADADO),
+      ...Object.values(ROTAS_QUEM_COMPROU_ADMIN),
     ]) {
       expect(doFiltro(rota)).toEqual(["admin"]);
       expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
@@ -2691,6 +2697,8 @@ describe("n) RIFA-086 e RIFA-087 (D40): o relatório diário por e-mail e o Arre
   const ROTAS_SO_ADMIN = [
     ...Object.values(ROTAS_RELATORIO_DIARIO),
     ...Object.values(ROTAS_ARRECADADO),
+    // RIFA-093 (adendo da D36): quem comprou por célula (o 403 vem antes de o `:id` ser lido).
+    ...Object.values(ROTAS_QUEM_COMPROU_ADMIN),
   ];
 
   // O app real usa o relógio do sistema: a campanha começa hoje (no fuso dela), e a prévia é a de hoje.
