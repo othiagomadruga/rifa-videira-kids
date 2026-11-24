@@ -1031,6 +1031,8 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
     "/api/painel/resumo",
     "/api/painel/resumo?escopo=rede&id=1",
     "/api/painel/resumo?escopo=celula&id=999",
+    // RIFA-092: o recorte por grupo (adultos da manhã...) é da coordenação, como os outros.
+    "/api/painel/resumo?escopo=grupo&id=1",
     "/api/painel/ranking",
     "/api/painel/ranking?nivel=rede&periodo=campanha&divisao=adultos",
     // O login vem antes da validação: consulta inválida ou data futura sem cookie também é 401.

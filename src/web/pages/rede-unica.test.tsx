@@ -281,14 +281,15 @@ describe("Visão geral (coordenação)", () => {
     renderizarRota("/coordenacao");
     await screen.findByText(/^Atualizado às/);
     const filtro = screen.getByLabelText("Filtrar por");
+    // Com uma rede só, as células estão numa divisão só: sem a seção Divisão também (RIFA-092).
     await waitFor(() =>
-      expect(within(filtro).getAllByRole("group")).toHaveLength(3),
+      expect(within(filtro).getAllByRole("group")).toHaveLength(2),
     );
     expect(
       within(filtro)
         .getAllByRole("group")
         .map((grupo) => grupo.getAttribute("label")),
-    ).toEqual(["Divisão", "Discipulador", "Célula"]);
+    ).toEqual(["Discipulador", "Célula"]);
     expect(
       within(
         screen.getByRole("region", { name: "Para conferir" }),

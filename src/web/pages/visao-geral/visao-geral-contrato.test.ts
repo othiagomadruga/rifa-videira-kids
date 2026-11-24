@@ -32,6 +32,7 @@ import {
 import { TEXTOS_TIPO_RELATORIO } from "./textos";
 import {
   CAMINHO_CELULAS,
+  CAMINHO_GRUPOS,
   CAMINHO_RELATORIO,
   CAMINHO_RESUMO,
   CAMINHO_ARRECADADO,
@@ -48,6 +49,8 @@ const RECORTES: Escopo[] = [
   { tipo: "campanha" },
   { tipo: "divisao", divisao: "jovens" },
   { tipo: "divisao", divisao: "adultos" },
+  // RIFA-092: o grupo (Adultos da manhã).
+  { tipo: "grupo", id: 1 },
   { tipo: "rede", id: 1 },
   { tipo: "discipulador", id: 2 },
   { tipo: "celula", id: 3 },
@@ -59,6 +62,9 @@ describe("cópias do contrato na Visão geral", () => {
     expect(ROTAS.painelResumo.metodo).toBe("GET");
     expect(CAMINHO_CELULAS).toBe(ROTAS.listarCelulas.caminho);
     expect(ROTAS.listarCelulas.metodo).toBe("GET");
+    // RIFA-092: a ordem dos grupos do filtro.
+    expect(CAMINHO_GRUPOS).toBe(ROTAS.listarGrupos.caminho);
+    expect(ROTAS.listarGrupos.metodo).toBe("GET");
     expect([...ESCOPOS]).toEqual([...ESCOPOS_PAINEL]);
     // RIFA-087 (adendo da D40): o Arrecadado (só admin), no lugar do saldo da Efí.
     expect(CAMINHO_ARRECADADO).toBe(ROTAS_ARRECADADO.arrecadado.caminho);
@@ -88,6 +94,8 @@ describe("cópias do contrato na Visão geral", () => {
     "escopo=rede&id=1.5",
     "escopo=divisao",
     "escopo=divisao&divisao=criancas",
+    "escopo=grupo",
+    "escopo=grupo&id=abc",
     "escopo=bairro&id=1",
   ])("URL fora do contrato (%s) vira a campanha toda", (consulta) => {
     expect(escopoDosParams(new URLSearchParams(consulta))).toEqual({

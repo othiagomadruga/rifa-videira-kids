@@ -685,6 +685,58 @@ describe("R1: metas", () => {
       expect(resumo([], meioDia(8), escopo).campanha.meta).toBe(meta);
     },
   );
+
+  it("RIFA-092: escopo grupo = as células do grupo efetivo (Ágape e Dorcas no 1; Betel no 2; sem grupo, fora de todos)", () => {
+    // Grupo efetivo já resolvido pelo Worker: Ágape (1) e Dorcas (4) no grupo 1, de divisões diferentes; Betel (2) no
+    // 2; Canaã (3) sem grupo (null) e Éfeso (5) sem o campo (ausente = sem grupo).
+    const GRUPO_EFETIVO: Record<number, number | null | undefined> = {
+      1: 1,
+      2: 2,
+      3: null,
+      4: 1,
+      5: undefined,
+    };
+    const celulas = CELULAS.map((item) =>
+      GRUPO_EFETIVO[item.id] === undefined
+        ? item
+        : { ...item, grupo_efetivo_id: GRUPO_EFETIVO[item.id] },
+    );
+    const vendas = [
+      ...porDia(1, 1, 7, 2),
+      ...porDia(2, 1, 7, 1),
+      ...porDia(3, 1, 7, 5),
+      ...porDia(4, 1, 7, 3),
+      ...porDia(5, 1, 7, 4),
+      ...porDia(null, 1, 7, 9),
+    ];
+    const doGrupo = (id: number, nome: string) =>
+      montarResumoPainel(
+        entrada(vendas, CAMPANHA, celulas),
+        { escopo: { tipo: "grupo", id, divisao: null, nome } },
+        meioDia(8),
+      );
+    const manha = doGrupo(1, "Adultos da manhã");
+    expect(respostaPainelResumoSchema.parse(manha)).toEqual(manha);
+    expect(manha.escopo).toEqual({
+      tipo: "grupo",
+      id: 1,
+      divisao: null,
+      nome: "Adultos da manhã",
+    });
+    // Metas: Ágape 120 + Dorcas 200; vendas: (2 + 3) por dia nos 7 dias, sem as vendas sem célula.
+    expect(manha.campanha.meta).toBe(320);
+    expect(manha.campanha.realizado).toBe(35);
+    expect(manha.vendas_sem_celula).toBeNull();
+    expect(doGrupo(2, "Adultos da noite").campanha).toMatchObject({
+      meta: 60,
+      realizado: 7,
+    });
+    // Um grupo sem células: sem meta e sem vendas (a API só chega aqui com um grupo que existe).
+    expect(doGrupo(4, "Adolescentes").campanha).toMatchObject({
+      meta: 0,
+      realizado: 0,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------

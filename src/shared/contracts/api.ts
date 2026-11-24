@@ -799,20 +799,34 @@ export type ReferenciaCampanha = z.infer<typeof referenciaCampanhaSchema>;
 // GET /api/painel/resumo (coordenação, com valores)
 // ---------------------------------------------------------------------------------------------------
 
+/**
+ * Os recortes do painel. RIFA-092 (adendo da D39): `grupo` = as células do grupo EFETIVO (o próprio da célula,
+ * `celulas.grupo_id`, se houver; senão, o do discipulador), o mesmo do ranking por grupo no nível célula; a célula sem
+ * grupo nenhum fica fora de todos os grupos (e continua na campanha, na divisão, na rede, no discipulador e na célula).
+ */
 export const ESCOPOS_PAINEL = [
   "campanha",
   "divisao",
+  "grupo",
   "rede",
   "discipulador",
   "celula",
 ] as const;
 export type EscopoPainel = (typeof ESCOPOS_PAINEL)[number];
-const ESCOPOS_COM_ID: readonly string[] = ["rede", "discipulador", "celula"];
+const ESCOPOS_COM_ID: readonly string[] = [
+  "grupo",
+  "rede",
+  "discipulador",
+  "celula",
+];
 
 export const consultaPainelResumoSchema = z
   .object({
     escopo: z.enum(ESCOPOS_PAINEL).default("campanha"),
-    /** id da rede, do discipulador ou da célula (obrigatório nesses escopos). */
+    /**
+     * id do grupo (RIFA-092), da rede, do discipulador ou da célula (obrigatório nesses escopos). Um id que não existe:
+     * 404 `nao_encontrado` ("Grupo não encontrado", "Rede não encontrada"...).
+     */
     id: z.coerce.number().int().positive().optional(),
     /** Obrigatória no escopo `divisao`. */
     divisao: divisaoSchema.optional(),
@@ -889,7 +903,10 @@ export const respostaPainelResumoSchema = z.strictObject({
     tipo: z.enum(ESCOPOS_PAINEL),
     /** null nos escopos campanha e divisão. */
     id: idSchema.nullable(),
-    /** A divisão do escopo (a da rede, nos escopos rede, discipulador e célula); null na campanha. */
+    /**
+     * A divisão do escopo (a da rede, nos escopos rede, discipulador e célula); null na campanha e no grupo (RIFA-092:
+     * o grupo é outro recorte, que pode juntar células de divisões diferentes).
+     */
     divisao: divisaoSchema.nullable(),
     nome: z.string().min(1),
   }),

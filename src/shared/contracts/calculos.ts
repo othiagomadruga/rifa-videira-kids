@@ -71,6 +71,12 @@ export type CelulaCalculo = {
   rede_id: number;
   rede_nome: string;
   divisao: Divisao;
+  /**
+   * RIFA-092 (adendo da D39): o grupo EFETIVO da célula (o próprio, se houver; senão, o do discipulador), que filtra o
+   * escopo `grupo` do painel. null ou ausente = sem grupo (fora de todos os grupos). O mesmo campo do `Celula` do
+   * contrato; o Worker lê `coalesce(celulas.grupo_id, discipuladores.grupo_id)`.
+   */
+  grupo_efetivo_id?: number | null;
 };
 
 /**
@@ -989,6 +995,8 @@ function celulasDoEscopo(
   const filtros: Record<EscopoPainel, (celula: CelulaCalculo) => boolean> = {
     campanha: () => true,
     divisao: (celula) => celula.divisao === exigir(escopo.divisao, "divisão"),
+    grupo: (celula) =>
+      (celula.grupo_efetivo_id ?? null) === exigir(escopo.id, "id"),
     rede: (celula) => celula.rede_id === exigir(escopo.id, "id"),
     discipulador: (celula) =>
       celula.discipulador_id === exigir(escopo.id, "id"),
