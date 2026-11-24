@@ -28,7 +28,10 @@
   min-width: 0;
 }
 
+/* Levado à vista ao chegar com ?celula= (Rankings, Hierarquia): a margem o deixa abaixo da barra fixa do topo no
+ * celular (como .adesao-alvo-foco). */
 .quem-comprou-celula {
+  scroll-margin-top: 5rem;
   min-width: 0;
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio-2);
