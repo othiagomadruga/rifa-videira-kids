@@ -147,6 +147,8 @@ export const DICAS = {
     campanha: "Mostra quem mais comprou desde o primeiro dia da campanha.",
   } satisfies Record<JanelaRanking, string>,
   whatsapp: "Abre uma conversa no WhatsApp com quem comprou.",
+  /** RIFA-093: o nome da célula, só para o admin, leva a Quem comprou com ela aberta. */
+  quemComprou: "Abre a tela Quem comprou com as compras desta célula.",
 } as const;
 
 // ---------------------------------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import { MapaPage } from "../mapa/MapaPage";
 import { MinhaSenhaPage } from "../minha-senha/MinhaSenhaPage";
 import { PedidosPage } from "../pedidos/PedidosPage";
 import { PedidosSuspeitosPage } from "../pedidos-suspeitos/PedidosSuspeitosPage";
+import { QuemComprouPage } from "../quem-comprou/QuemComprouPage";
 import { RankingsPage } from "../rankings/RankingsPage";
 import { TrilhaPage } from "../trilha/TrilhaPage";
 import { VisaoGeralPage } from "../visao-geral/VisaoGeralPage";
@@ -71,6 +72,15 @@ export const TELAS_COORDENACAO: readonly TelaCoordenacao[] = [
     dica: DICA_DO_MENU.pedidos,
     icone: "pedidos",
     Component: PedidosPage,
+  },
+  // RIFA-093 (adendo da D36): quem comprou por célula, com o telefone, só do admin (as duas rotas são só dele).
+  {
+    segmento: "quem-comprou",
+    rotulo: "Quem comprou",
+    dica: DICA_DO_MENU["quem-comprou"],
+    icone: "pessoas",
+    Component: QuemComprouPage,
+    papeis: ["admin"],
   },
   {
     segmento: "pedidos-suspeitos",

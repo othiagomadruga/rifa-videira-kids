@@ -12,6 +12,8 @@ export const DICA_DO_MENU = {
     "Quais células já têm o código de afiliado da Rifei. Sem ele, as vendas não contam para a célula.",
   pedidos:
     "Todos os pedidos que chegaram da Rifei, com filtros, e os avisos de venda que a Rifei mandou.",
+  "quem-comprou":
+    "Quem comprou de cada célula, com o telefone para agradecer. Toque na célula para ver as compras.",
   "pedidos-suspeitos":
     "Pedidos aprovados com bilhetes demais ou com o total fora do esperado, para conferir na Rifei.",
   bilhetes:

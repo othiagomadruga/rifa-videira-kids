@@ -83,10 +83,14 @@ export function criarQuemComprouAdmin({
         return responderErro(c, "nao_encontrado", SEM_CAMPANHA);
       if (lido.tipo === "sem_celula")
         return responderErro(c, "nao_encontrado", "Célula não encontrada");
-      const { tipo: _tipo, ...resposta } = lido;
+      const { celula, fuso_horario, totais, itens, proximo } = lido;
       return c.json(
         COMPRADORES.sucesso.corpo.parse({
-          ...resposta,
+          celula,
+          fuso_horario,
+          totais,
+          itens,
+          proximo,
           atualizado_em: relogio().toISOString(),
         }),
         200,

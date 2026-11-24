@@ -35,9 +35,11 @@ const MENU_COORDENACAO = [
   ["Conferência", "/coordenacao/conferencia"],
 ] as const;
 
-// O admin vê também a gestão dos acessos e a trilha de auditoria, no fim.
+// O admin vê também Quem comprou (RIFA-093, depois de Pedidos) e, no fim, a gestão dos acessos e a trilha de auditoria.
 const MENU_ADMIN = [
-  ...MENU_COORDENACAO,
+  ...MENU_COORDENACAO.slice(0, 5),
+  ["Quem comprou", "/coordenacao/quem-comprou"],
+  ...MENU_COORDENACAO.slice(5),
   ["Acessos", "/coordenacao/acessos"],
   ["Trilha", "/coordenacao/trilha"],
   // RIFA-073 (D33): o usuário e a senha do próprio admin.

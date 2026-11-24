@@ -8,6 +8,7 @@ import { AJUDA as BILHETES } from "./bilhetes/ajuda";
 import { AJUDA as BUMBO } from "./bumbo/ajuda";
 import { AJUDA as HIERARQUIA } from "./hierarquia/ajuda";
 import { AJUDA as MINHA_SENHA } from "./minha-senha/ajuda";
+import { AJUDA as QUEM_COMPROU } from "./quem-comprou/ajuda";
 import { AJUDA as RANKINGS } from "./rankings/ajuda";
 import { AJUDA as VISAO_GERAL } from "./visao-geral/ajuda";
 
@@ -21,6 +22,7 @@ export const AJUDA_DAS_TELAS = [
   ACESSOS,
   MINHA_SENHA,
   BILHETES,
+  QUEM_COMPROU,
 ] as const;
 
 export const AJUDA = {
@@ -32,4 +34,5 @@ export const AJUDA = {
   ...ACESSOS,
   ...MINHA_SENHA,
   ...BILHETES,
+  ...QUEM_COMPROU,
 };

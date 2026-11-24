@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router";
 import type {
   Celula,
   Discipulador,
@@ -13,9 +14,12 @@ import {
   EmptyState,
   Input,
   Select,
+  classesBotao,
   type ColunaTabela,
 } from "../../components/ui";
 import { formatarNumero } from "../../lib/formatadores";
+import { useUsuarioConectado } from "../../lib/sessao";
+import { caminhoDeQuemComprou } from "../quem-comprou/quem-comprou-api";
 import {
   DICAS,
   DICAS_REDE_UNICA,
@@ -58,6 +62,8 @@ export function TabelaCelulas({
   const [divisao, setDivisao] = useState<Divisao | "">("");
   const [redeId, setRedeId] = useState("");
   const [busca, setBusca] = useState("");
+  // RIFA-093: o admin abre Quem comprou da célula pela linha (a coordenação não vê o botão: o telefone é só do admin).
+  const admin = useUsuarioConectado().papel === "admin";
 
   if (celulas.length === 0) {
     return (
@@ -165,6 +171,19 @@ export function TabelaCelulas({
           nome={celula.nome}
           aoEditar={() => aoEditar(celula)}
           aoExcluir={() => aoExcluir(celula)}
+          antes={
+            admin && (
+              <ComDica texto={DICAS.quemComprou}>
+                <Link
+                  className={classesBotao({ variante: "secundario" })}
+                  to={caminhoDeQuemComprou(celula.id)}
+                >
+                  Quem comprou{" "}
+                  <span className="visualmente-oculto">{celula.nome}</span>
+                </Link>
+              </ComDica>
+            )
+          }
         />
       ),
     },
@@ -540,6 +559,7 @@ function BotoesDaLinha({
   dicaEditar = DICAS.editar[entidade],
   aoEditar,
   aoExcluir,
+  antes,
 }: {
   entidade: Entidade;
   nome: string;
@@ -547,9 +567,12 @@ function BotoesDaLinha({
   dicaEditar?: string;
   aoEditar: () => void;
   aoExcluir: () => void;
+  /** Uma ação antes do "Editar" (RIFA-093: "Quem comprou" da célula, só o admin). */
+  antes?: ReactNode;
 }) {
   return (
     <span className="hierarquia-acoes">
+      {antes}
       <ComDica texto={dicaEditar}>
         <Button variante="secundario" onClick={aoEditar}>
           Editar <span className="visualmente-oculto">{nome}</span>
