@@ -129,6 +129,10 @@ A ordem importa:
    - **Pedido novo** (`processado`): todos os campos vêm deste evento (centavos exatos, instantes em UTC, `ddd`/`pais`, `utm`); os informativos podem ser NULL. `created_at` nulo deixa `criado_em` NULL.
    - **Pedido existente**: o `status` segue a máquina de estados (tabela abaixo). Os campos informativos (`affiliate_id`, `criado_em`, `expirado_em`, `utm_*`, `cupom_id` e descontos, `subtotal_centavos`, `status_rifei`, `status_detail_rifei`, `metodo_pagamento`) só são sobrescritos por valor **não nulo**, com `COALESCE(excluded.x, pedidos.x)` no UPSERT. Assim um campo que chegou null por tolerância (inválido, com aviso) nunca apaga um valor bom já gravado.
    - **Afiliado tardio**: se o pedido está sem afiliado e **qualquer** evento dele traz `affiliate_id` válido, o afiliado é preenchido. Isso vale inclusive para os eventos `duplicado` e `ignorado_transicao`; o resto do pedido não muda.
+     O sistema também preenche o afiliado por conta própria quando o admin atribui a célula à mão e a Rifei aceita
+     ligar a venda ao afiliado da célula (RIFA-091, adendo da D41; seção 13.1): a Rifei **não manda webhook** nessa
+     troca. Depois disso, um evento com outro `affiliate_id` continua valendo (o do evento vence, com o aviso
+     `afiliado_alterado`).
    - Pedido `approved` com `approved_at` nulo: `aprovado_em` recebe o instante do recebimento.
 10. Grava o evento em `webhook_eventos` (resultado, status anterior e resultante, payload redigido e `avisosParaGravar(avisos)`) e responde **200** `{ "resultado", "evento_id" }`.
 11. Qualquer falha de banco nos passos 3 a 10: **500** `erro_interno` (D9). Se a Rifei não reenviar, a conferência pelo CSV (seção 10) recupera a venda que não ficou no sistema; se o pedido já estava gravado (ex.: o `paid_order` falhou depois do `new_order`), ela o mostra como `pagamento_nao_registrado` e o admin o marca como pago (seção 10, Recuperar; RIFA-056).
@@ -571,8 +575,14 @@ sincronizar os afiliados e gerar os convites (D32; rotas em [api.md](api.md#api-
 | Restaurar expirado | `PUT [v2/]raffles/expired-orders/<id>/restore` |
 | Afiliados da conta | `GET my-affiliates` → `affiliate_id`, `code`, `affiliate.{name,email}` |
 | Convite de afiliado | `POST affiliates { commission_type, commission_value, products_type, products }` → `{ link }` |
+| Ligar uma venda sem afiliado a um afiliado (RIFA-091; capturado pelo PO em 24/11) | `PUT raffles/<raffleId>/orders/<id>/link-affiliate { affiliate_id }` → o vínculo do afiliado na conta (`id`, `affiliate_id`, `code`, `commission_*`, `affiliate.{id,email,name}`, ...) |
 
-Cabeçalhos: `Authorization: Bearer <token>`, `x-rate-limit: true`. O link de vendas do afiliado é
+Cabeçalhos: `Authorization: Bearer <token>`, `x-rate-limit: true` (e `Content-Type: application/json` quando há
+corpo). **Ligar a venda a um afiliado não dispara webhook** (conferido em 24/11: o pedido ligado no painel às 02:19 UTC
+continuou sem `affiliate_id` no sistema); por isso, quando a Rifei aceita, o próprio sistema grava o afiliado no pedido.
+Da resposta, o sistema confere só o `affiliate_id` (o e-mail e o nome do afiliado não são lidos nem guardados). Não se
+conhece a chamada de **desligar** o afiliado: o sistema não desliga (se precisar, à mão no painel). O link de vendas do
+afiliado é
 `https://rifei.com.br/<slug>?ref=<code>` (a página da campanha lê o `ref`). A campanha do Projeto Kids expira a reserva
 em 24 h (`time_to_expire_orders: 1440`): o extrato do dia anterior pode achar pedidos já expirados, que a marcação
 restaura. Para reduzir isso, o PO pode subir o prazo da reserva no painel da Rifei.
@@ -606,6 +616,12 @@ Toda chamada real à Rifei grava o resultado na linha da conexão: sucesso → `
   acha o pedido da campanha pelo número do pedido ou de um bilhete (`pedidos.numeros`), mostra célula, bilhetes,
   valor e situação e marca com confirmação (pedido já pago: avisa; não achou: diz o que conferir). Só admin. O
   **Copiar os números** continua ao lado (caminho manual).
+- **Pedidos → Atribuir a uma célula** (RIFA-088 e RIFA-091, D41): na venda sem afiliado, se a célula escolhida tem
+  exatamente um afiliado vinculado, o sistema liga a venda a ele também na Rifei (o líder passa a ver a venda no painel
+  de afiliado dele) e grava o afiliado no pedido. O aviso diz o resultado: "Também ligada ao afiliado da célula na
+  Rifei." ou "Na Rifei não deu (motivo): ligue lá à mão." (sem conexão, célula sem afiliado ou com vários, a Rifei
+  recusou, não respondeu ou deu erro). A atribuição no sistema vale do mesmo jeito. Atribuir de novo a mesma célula
+  numa venda ainda sem afiliado tenta a Rifei outra vez. Trilha: `pedido.vincular_afiliado_rifei`.
 - **Adesão → Afiliados na Rifei:** **Ler os afiliados da Rifei** mostra quem já é afiliado; **Sincronizar** grava os
   códigos e liga à célula quem tem o e-mail do líder; **Gerar os convites** cria um convite por célula sem afiliado, com
   Copiar e Enviar no WhatsApp. Depois que o líder cria a conta, Sincronizar de novo. Por fim, o modelo do link de vendas

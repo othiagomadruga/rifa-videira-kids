@@ -462,6 +462,7 @@ Trilha de quem mudou o quê. Cada linha é gravada no **mesmo lote** (transaçã
 | `pedido.reconsiderar` | `POST /api/admin/pedidos/reconsiderar` (D20) | idem | o id, o motivo que tinha e quando fora desconsiderado |
 | `afiliado.remover` | `DELETE /api/admin/afiliados/:affiliateId` (D20) | `afiliado:<affiliate_id>` | a célula que ele tinha (pelo id) e quantos pedidos desconsiderados ficaram sem afiliado (os ids, se couberem) |
 | `pedido.atribuir_celula` | `PUT /api/admin/pedidos/:id/celula` que muda a célula atribuída (RIFA-088, D41) | `pedido:<id>` (como a desconsideração) | o id do pedido em JSON e a célula atribuída antes e depois (só ids; "nenhuma"): `Pedido "PED1": célula atribuída à mão nenhuma → 12`; nada do comprador. Repetir não registra |
+| `pedido.vincular_afiliado_rifei` | cada chamada à Rifei do `PUT /api/admin/pedidos/:id/celula` para ligar a venda ao afiliado da célula (RIFA-091, adendo da D41), mesmo quando a atribuição não mudou | `pedido:<id>` | o id do pedido em JSON, o afiliado, a célula e a situação: `Pedido "PED1": afiliado 1042 da célula 12 na Rifei: vinculado` (ou `recusado`, `indisponivel`, `falhou (token_invalido)`); nunca o token, o e-mail ou o nome do afiliado |
 | `sessao.entrar_com_senha` | `POST /api/sessao/senha` que abriu sessão (RIFA-064, D29) | `celula:<id>` | "Entrada com a senha padrão da célula: sessão de líder aberta (sem link)"; quem fez é o usuário líder da célula; nunca a senha. A recusa não registra |
 | `sessao.entrar_com_senha_discipulador` | `POST /api/sessao/discipulador` que abriu sessão (RIFA-082, D37) | `discipulador:<id>` | "Entrada com a senha padrão do discipulador: sessão de discipulador aberta (sem link)"; quem fez é o usuário do discipulador; nunca a senha. A recusa não registra |
 | `webhook.gerar_token` | `POST /api/admin/webhook/token` (D21) | `webhook` | o que deixou de valer: nada, o segredo do Worker ou o token anterior (com o `gerado_em` dele); **nunca o token nem o hash**. O 409 não registra |
@@ -1231,8 +1232,29 @@ coordenação, maiores compradores, mapa por DDD com divisão, adesão e os filt
 - **`:id`**: o id do pedido na Rifei, codificado na URL (`encodeURIComponent`), de 1 a 128 caracteres.
 - **Corpo** (`corpoAtribuirCelulaPedidoSchema`): `{ "celula_id": 12 }`; `{ "celula_id": null }` desfaz. Campo a mais
   ou ausente: 400.
-- **200**: o pedido como um item de `GET /api/admin/pedidos` (`itemPedidoSchema`), com a célula efetiva e
-  `celula_origem` (`manual` depois de atribuir; null depois de desfazer, se o afiliado não tem célula).
+- **200** (`respostaAtribuirCelulaPedidoSchema`): o pedido como um item de `GET /api/admin/pedidos`
+  (`itemPedidoSchema`), com a célula efetiva e `celula_origem` (`manual` depois de atribuir; null depois de desfazer,
+  se o afiliado não tem célula), e, desde a RIFA-091, `rifei: { situacao, mensagem? }`, o resultado na Rifei (abaixo).
+- **Na Rifei** (RIFA-091, adendo da D41): com `celula_id`, num pedido **sem afiliado** e a célula com **exatamente um**
+  afiliado vinculado, o sistema liga a venda a ele na Rifei (`GET raffles/<slug>` e `PUT raffles/<raffleId>/orders/
+  <id>/link-affiliate`, com o token da Conexão com a Rifei, D32) e, se a Rifei aceitar, grava o `affiliate_id` no
+  pedido (só se ainda nulo): o item volta com o afiliado e `celula_origem: "afiliado"` (a mesma célula). A Rifei não
+  manda webhook nessa troca. `rifei.situacao` (`SITUACOES_RIFEI_NA_ATRIBUICAO`):
+
+  | situacao | quando | `mensagem` |
+  |---|---|---|
+  | `vinculado` | a Rifei ligou; o afiliado foi gravado no pedido | — |
+  | `sem_conexao` | sem token da Rifei (nem o da tela nem o segredo), ou o da tela ilegível | — |
+  | `celula_sem_afiliado` | a célula não tem afiliado vinculado | — |
+  | `varios_afiliados` | a célula tem mais de um afiliado vinculado | — |
+  | `recusado` | a Rifei respondeu que não (outra resposta que não 401/403/429/5xx) | a da Rifei, cortada em 300, se veio |
+  | `indisponivel` | 429, 5xx, rede ou tempo esgotado | `MENSAGEM_FALHA_RIFEI.indisponivel` |
+  | `falhou` | token recusado (401/403), campanha não achada ou resposta em outro formato | `MENSAGEM_FALHA_RIFEI[motivo]` |
+  | `nao_se_aplica` | o pedido já tinha afiliado, ou foi um desfazer | — |
+
+  Em todas, a atribuição no sistema vale do mesmo jeito: **a Rifei nunca faz a rota falhar** (nada de 5xx por ela).
+  Repetir com a mesma célula num pedido ainda sem afiliado tenta a Rifei de novo. Depois de `vinculado`, a venda é do
+  afiliado: atribuir de novo dá 409 `pedido_ja_tem_celula`. Não há "desligar" na Rifei.
 - **A célula do afiliado vence**: só se atribui pedido sem célula pelo afiliado. Se depois o afiliado ganhar célula
   (vínculo na Adesão ou afiliado tardio, D7), vale a dele; a atribuída fica gravada, mas não conta (desfazer continua
   valendo). O webhook nunca mexe na atribuição.
@@ -1243,8 +1265,9 @@ coordenação, maiores compradores, mapa por DDD com divisão, adesão e os filt
   depois, nesta ordem: 400 `requisicao_invalida` (parâmetro ou corpo); 404 `nao_encontrado` (sem campanha ativa, ou
   pedido fora dela); 409 `pedido_ja_tem_celula` (o pedido tem célula pelo afiliado); 400 `referencia_invalida` (a
   célula não existe; `detalhes` aponta `celula_id`).
-- Trilha: `pedido.atribuir_celula`, no mesmo lote da gravação. A mudança aparece nas rotas abertas e na visão
-  individual em até 30 s (os caches da D10 e da D14), como uma venda nova.
+- Trilha: `pedido.atribuir_celula`, no mesmo lote da gravação, e `pedido.vincular_afiliado_rifei` a cada chamada à
+  Rifei (RIFA-091). A mudança aparece nas rotas abertas e na visão individual em até 30 s (os caches da D10 e da D14),
+  como uma venda nova.
 
 ---
 
