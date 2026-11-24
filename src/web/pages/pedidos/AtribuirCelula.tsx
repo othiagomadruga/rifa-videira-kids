@@ -109,7 +109,9 @@ export function DialogoAtribuirCelula({
       refCampo.current?.focus();
       return;
     }
-    if (id === atribuida) {
+    // A mesma célula não muda nada, salvo na venda sem afiliado: aí o PUT tenta de novo ligar a venda ao afiliado da
+    // célula na Rifei (RIFA-091; ex.: depois de "Na Rifei não deu", ou a atribuição feita antes da RIFA-091).
+    if (id === atribuida && pedido.affiliate_id !== null) {
       aoFechar();
       return;
     }

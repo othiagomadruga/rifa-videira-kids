@@ -2,7 +2,7 @@
 // pacote do site; veja pedidos-api.ts e alerta-webhook.ts). Este teste garante que as cópias continuam iguais ao
 // contrato, que todo status, resultado e código de recusa tem texto em português, que os códigos de problema do zod
 // e da D11 têm texto, e que as consultas que a tela monta passam pelos schemas das rotas.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import {
   CHAVES_REGRAS,
@@ -25,6 +25,7 @@ import {
   ROTAS,
   SITUACOES_WEBHOOK as SITUACOES_DO_CONTRATO,
   STATUS_PEDIDO as STATUS_DO_CONTRATO,
+  TEMPO_LIMITE_API_RIFEI_MS,
   consultaEntregasWebhookSchema,
   consultaPedidosSchema,
   consultaCompradoresSchema,
@@ -64,12 +65,14 @@ import {
   SEM_FILTROS,
   STATUS_PEDIDO,
   TAMANHO_MAXIMO_ID,
+  atribuirCelulaDoPedido,
   caminhoDasEntregas,
   caminhoDosPedidos,
   filtrosDasEntregas,
   filtrosDosPedidos,
   type FiltrosPedidos,
 } from "./pedidos-api";
+import { pedido } from "./teste-apoio";
 import {
   ROTULO_MOTIVO,
   RESULTADO,
@@ -377,5 +380,49 @@ describe("cópias do contrato das regras da campanha (RIFA-028, D20)", () => {
     expect(corpoReconsiderarPedidoSchema.parse({ pedido_id: "PED-1" })).toEqual(
       { pedido_id: "PED-1" },
     );
+  });
+});
+
+describe("RIFA-091: o tempo limite da atribuição de célula (a API chama a Rifei duas vezes)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("espera o pior caso da Rifei (o id da campanha e o link-affiliate, cada um até TEMPO_LIMITE_API_RIFEI_MS) e mostra o resultado, não um tempo esgotado", async () => {
+    vi.useFakeTimers();
+    // A API responde só depois de esgotar as duas chamadas à Rifei: a atribuição foi gravada e `rifei` diz o motivo.
+    const piorCaso = 2 * TEMPO_LIMITE_API_RIFEI_MS + 1_000;
+    const resposta = {
+      ...pedido(1, { id: "PED-1" }),
+      rifei: { situacao: "indisponivel" },
+    };
+    vi.stubGlobal(
+      "fetch",
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((resolver, rejeitar) => {
+          const pronto = setTimeout(
+            () =>
+              resolver(
+                new Response(JSON.stringify(resposta), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                }),
+              ),
+            piorCaso,
+          );
+          init?.signal?.addEventListener("abort", () => {
+            clearTimeout(pronto);
+            rejeitar(
+              new DOMException("A operação foi abortada.", "AbortError"),
+            );
+          });
+        }),
+    );
+    const verificacao = expect(
+      atribuirCelulaDoPedido("PED-1", 2),
+    ).resolves.toMatchObject({ rifei: { situacao: "indisponivel" } });
+    await vi.advanceTimersByTimeAsync(piorCaso);
+    await verificacao;
   });
 });

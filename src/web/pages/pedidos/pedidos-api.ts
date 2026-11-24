@@ -280,8 +280,17 @@ export function caminhoDaCelulaDoPedido(pedidoId: string): string {
 }
 
 /**
+ * RIFA-091: o tempo limite da atribuição. Na venda sem afiliado a API chama a Rifei duas vezes, uma depois da outra (o
+ * id da campanha e o link-affiliate), cada uma com até TEMPO_LIMITE_API_RIFEI_MS (10 s, cópia conferida por
+ * pedidos-contrato.test.ts). Com o padrão do site (10 s), a Rifei lenta cortava a espera antes da resposta: a tela dizia
+ * que não deu com a atribuição já gravada (e o Worker podia ser cancelado no meio da chamada à Rifei).
+ */
+export const TEMPO_LIMITE_ATRIBUIR_MS = 30_000;
+
+/**
  * RIFA-088 (D41), só admin: atribui à mão a célula do pedido sem célula pelo afiliado (`celulaId`) ou desfaz a
- * atribuição (`null`). 200 com o pedido como a lista mostra (a célula efetiva e `celula_origem`).
+ * atribuição (`null`). 200 com o pedido como a lista mostra (a célula efetiva e `celula_origem`) e o resultado na
+ * Rifei (RIFA-091).
  */
 export function atribuirCelulaDoPedido(
   pedidoId: string,
@@ -292,6 +301,7 @@ export function atribuirCelulaDoPedido(
     {
       celula_id: celulaId,
     } satisfies CorpoAtribuirCelulaPedido,
+    { tempoLimiteMs: TEMPO_LIMITE_ATRIBUIR_MS },
   );
 }
 

@@ -2480,3 +2480,10 @@ cliente em `lib/rifei-api.ts` (`vincularAfiliadoAoPedido`), regra em `lib/afilia
 **Suposições (RIFA-091):** vale para pedido de qualquer status e também para o desconsiderado (como a atribuição);
 token recusado, campanha não achada e formato desconhecido ficam juntos em `falhou`, com a explicação do sistema em
 `mensagem`; a resposta 2xx sem o mesmo `affiliate_id` não grava nada (conservador: a tela pede para conferir à mão).
+
+**Revisão (RIFA-091):** a tela espera a atribuição por até 30 s (`TEMPO_LIMITE_ATRIBUIR_MS` em `pedidos-api.ts`), não
+os 10 s do padrão do site: a API chama a Rifei duas vezes seguidas (o id da campanha e o link-affiliate), cada uma com
+até 10 s, e com a Rifei lenta a tela dizia "Não foi possível mudar a célula" com a atribuição já gravada (e o Worker
+podia ser cancelado no meio). E escolher de novo a mesma célula numa venda **sem afiliado** manda o PUT (antes o
+diálogo só fechava): é o "Atribuir de novo" da seção 13.3 de integracao-rifei.md, para tentar a Rifei outra vez ou
+mandar a ela as atribuições feitas antes da RIFA-091. Na venda de afiliado sem célula, a mesma célula só fecha.

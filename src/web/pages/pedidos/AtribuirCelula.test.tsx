@@ -2,7 +2,13 @@
 // com a API falsa de teste-apoio.ts (corpo pelo schema do contrato; 400, 404 e 409 como a API). Só o admin vê o botão,
 // só nas vendas sem célula pelo afiliado; a coordenação vê a célula efetiva e o sinal "atribuída à mão", sem o botão.
 // O seletor agrupa as células por rede; "Remover atribuição" aparece quando há uma; todo controle tem dica.
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   RifeiNaAtribuicao,
@@ -348,6 +354,49 @@ describe("RIFA-091: o resultado na Rifei no aviso depois de atribuir", () => {
       `${ATRIBUIDO} Na Rifei não deu (a Rifei deu erro): ligue lá à mão. ${mensagem}`,
     );
     expect(caixa).toHaveClass("ui-aviso--alerta");
+  });
+
+  it("atribuir de novo a mesma célula numa venda sem afiliado manda o PUT outra vez (tenta a Rifei de novo); na de afiliado sem célula, só fecha", async () => {
+    const api = simularApi({
+      pedidos: [
+        ...pedidosDoTeste(),
+        pedido(5, {
+          id: "PED-ORFAO-ATRIBUIDO",
+          affiliate_id: 9901,
+          celula_id: 2,
+          celula_nome: "Célula Ficticia 10",
+          celula_origem: "manual",
+        }),
+      ],
+      rifei: { situacao: "vinculado" },
+    });
+    abrir();
+    acionar(botaoAtribuirDe(await linhaDo("PED-ATRIBUIDO"))!);
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Trocar a célula do pedido PED-ATRIBUIDO",
+    });
+    expect(
+      within(dialogo).getByRole("combobox", { name: /Célula/ }),
+    ).toHaveValue("2");
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Atribuir" }));
+    const caixa = await aviso(
+      "Pedido PED-ATRIBUIDO atribuído à Célula Ficticia 10: a venda conta para ela em todo o sistema. Também ligada ao afiliado da célula na Rifei.",
+    );
+    expect(caixa).toHaveClass("ui-aviso--sucesso");
+    expect(api.envios).toEqual([
+      ["/api/admin/pedidos/PED-ATRIBUIDO/celula", { celula_id: 2 }],
+    ]);
+
+    // A venda de afiliado sem célula não vai à Rifei: a mesma célula não muda nada, e o diálogo só fecha.
+    acionar(botaoAtribuirDe(await linhaDo("PED-ORFAO-ATRIBUIDO"))!);
+    const outro = await screen.findByRole("dialog", {
+      name: "Trocar a célula do pedido PED-ORFAO-ATRIBUIDO",
+    });
+    fireEvent.click(within(outro).getByRole("button", { name: "Atribuir" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(api.envios).toHaveLength(1);
   });
 
   it("não se aplica (venda com afiliado sem célula): só o aviso de hoje, em sucesso", async () => {
