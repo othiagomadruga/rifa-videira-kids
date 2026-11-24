@@ -16,6 +16,7 @@ import type {
   CorpoDesconsiderarPedido,
   ItemPedido,
   MotivoDesconsideracao,
+  RespostaAtribuirCelulaPedido,
   RespostaEntregasWebhook,
   RespostaPedidos,
   ResultadoEventoWebhook,
@@ -285,10 +286,13 @@ export function caminhoDaCelulaDoPedido(pedidoId: string): string {
 export function atribuirCelulaDoPedido(
   pedidoId: string,
   celulaId: number | null,
-): Promise<ItemPedido> {
-  return api.put<ItemPedido>(caminhoDaCelulaDoPedido(pedidoId), {
-    celula_id: celulaId,
-  } satisfies CorpoAtribuirCelulaPedido);
+): Promise<RespostaAtribuirCelulaPedido> {
+  return api.put<RespostaAtribuirCelulaPedido>(
+    caminhoDaCelulaDoPedido(pedidoId),
+    {
+      celula_id: celulaId,
+    } satisfies CorpoAtribuirCelulaPedido,
+  );
 }
 
 /** 409 `pedido_ja_tem_celula`: o afiliado do pedido ganhou célula (a do afiliado vale). */

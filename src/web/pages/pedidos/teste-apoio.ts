@@ -12,6 +12,7 @@ import {
   corpoReconsiderarPedidoSchema,
   detalhesDeValidacao,
   itemPedidoSchema,
+  respostaAtribuirCelulaPedidoSchema,
   respostaCampanhaSchema,
   consultaEntregasWebhookSchema,
   consultaPedidosSchema,
@@ -24,6 +25,7 @@ import {
   type ItemPedido,
   type RespostaEstadoWebhook,
   type RespostaPedidos,
+  type RifeiNaAtribuicao,
   type StatusPedido,
 } from "../../../shared/contracts";
 import { respostaJson } from "../../test/renderizar";
@@ -241,7 +243,15 @@ export type DadosApi = {
   desconsiderar?: boolean;
   /** Responde só o estado do webhook e repassa o resto ao fetch que já estava trocado (ex.: a API da Visão geral). */
   repassar?: boolean;
+  /**
+   * RIFA-091: o resultado na Rifei que a atribuição devolve (padrão: `nao_se_aplica`). Com `vinculado` numa venda sem
+   * afiliado, o pedido volta com o afiliado `AFILIADO_DA_RIFEI` e a célula pelo afiliado, como a API.
+   */
+  rifei?: RifeiNaAtribuicao;
 };
+
+/** RIFA-091: o afiliado que a API falsa grava quando a Rifei liga a venda (`rifei: { situacao: "vinculado" }`). */
+const AFILIADO_DA_RIFEI = 7700;
 
 export const respostaErro = (
   status: number,
@@ -451,9 +461,16 @@ function campanhaCom(desconsiderar: boolean) {
  * POST desconsiderar e reconsiderar como a API (D20): 400 do corpo, 409 `acao_desligada` com a chave desligada,
  * 404 do pedido que não está na lista; repetir devolve o pedido como está. Muda `dados.pedidos` no lugar.
  */
-/** RIFA-088 (D41): a atribuição como a API faz (400, 404, 409 e o item com a célula efetiva). */
+/**
+ * RIFA-088 (D41): a atribuição como a API faz (400, 404, 409 e o item com a célula efetiva). RIFA-091: com o
+ * resultado na Rifei (`dados.rifei`).
+ */
 function responderAtribuicao(
-  dados: { pedidos: ItemPedido[]; celulas: CelulaFicticia[] },
+  dados: {
+    pedidos: ItemPedido[];
+    celulas: CelulaFicticia[];
+    rifei?: RifeiNaAtribuicao;
+  },
   id: string,
   corpo: unknown,
 ): Response {
@@ -485,6 +502,9 @@ function responderAtribuicao(
       "referencia_invalida",
       `A célula ${celulaId} não existe`,
     );
+  const rifei = dados.rifei ?? { situacao: "nao_se_aplica" };
+  const vinculado =
+    rifei.situacao === "vinculado" && celula && atual.affiliate_id === null;
   const depois: ItemPedido =
     atual.celula_origem === "afiliado"
       ? atual
@@ -492,10 +512,13 @@ function responderAtribuicao(
           ...atual,
           celula_id: celula?.id ?? null,
           celula_nome: celula?.nome ?? null,
-          celula_origem: celula ? "manual" : null,
+          celula_origem: vinculado ? "afiliado" : celula ? "manual" : null,
+          affiliate_id: vinculado ? AFILIADO_DA_RIFEI : atual.affiliate_id,
         };
   dados.pedidos[indice] = depois;
-  return respostaJson(itemPedidoSchema.parse(depois));
+  return respostaJson(
+    respostaAtribuirCelulaPedidoSchema.parse({ ...depois, rifei }),
+  );
 }
 
 function responderAcao(

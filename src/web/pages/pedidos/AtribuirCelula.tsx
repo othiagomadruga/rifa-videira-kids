@@ -1,9 +1,10 @@
 // Atribuir à mão a célula de uma venda sem célula pelo afiliado (RIFA-088, D41; só admin). A venda que chegou sem link
 // de célula (sem afiliado, ou afiliado ainda não vinculado) passa a contar na célula escolhida em todo o sistema; o
 // diálogo também troca a célula escolhida e tira a escolha ("Remover atribuição"). A célula do afiliado sempre vale:
-// se o afiliado ganhou célula enquanto isso, a API responde 409 e o diálogo diz isso.
+// se o afiliado ganhou célula enquanto isso, a API responde 409 e o diálogo diz isso. RIFA-091: na venda sem afiliado,
+// a API também liga a venda ao afiliado da célula na Rifei, e devolve o resultado (`rifei`) junto com o pedido.
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { ItemPedido } from "../../../shared/contracts";
+import type { ItemPedido, RifeiNaAtribuicao } from "../../../shared/contracts";
 import { Aviso, Button, ComDica, Dialogo, Select } from "../../components/ui";
 import { ErroApi, mensagemDoErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/formatadores";
@@ -48,8 +49,11 @@ type Props = {
   /** As células não carregaram: o diálogo diz isso em vez de "Carregando as células…". */
   celulasFalharam?: boolean;
   aoFechar: () => void;
-  /** Deu certo: o pedido como a API devolveu (com a célula efetiva). */
-  aoConcluir: (pedido: ItemPedido) => void;
+  /**
+   * Deu certo: o pedido como a API devolveu (com a célula efetiva) e o resultado na Rifei (RIFA-091; null se a API
+   * não mandou).
+   */
+  aoConcluir: (pedido: ItemPedido, rifei: RifeiNaAtribuicao | null) => void;
   /** Recebe o foco ao fechar. */
   focoAoFechar: RefObject<HTMLElement | null>;
 };
@@ -84,7 +88,11 @@ export function DialogoAtribuirCelula({
     setEnviando(celulaId === null ? "remover" : "atribuir");
     setFalha(null);
     try {
-      aoConcluir(await atribuirCelulaDoPedido(pedido.id, celulaId));
+      const { rifei, ...depois } = await atribuirCelulaDoPedido(
+        pedido.id,
+        celulaId,
+      );
+      aoConcluir(depois, rifei ?? null);
     } catch (erro) {
       setFalha(falhaDe(erro));
     } finally {
@@ -118,7 +126,11 @@ export function DialogoAtribuirCelula({
     <Dialogo
       aberto
       titulo={titulo}
-      descricao="A venda chegou sem link de célula. Escolha a célula em que ela passa a contar: metas, rankings, painel do líder, telão e relatórios. Fica registrado na Trilha."
+      descricao={`A venda chegou sem link de célula. Escolha a célula em que ela passa a contar: metas, rankings, painel do líder, telão e relatórios.${
+        pedido.affiliate_id === null
+          ? " Se a célula tiver link de afiliado, a venda também é ligada a ele na Rifei."
+          : ""
+      } Fica registrado na Trilha.`}
       aoFechar={() => {
         if (!ocupado) aoFechar();
       }}

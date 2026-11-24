@@ -4,7 +4,10 @@
 // O seletor agrupa as células por rede; "Remover atribuição" aparece quando há uma; todo controle tem dica.
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { UsuarioSessao } from "../../../shared/contracts";
+import type {
+  RifeiNaAtribuicao,
+  UsuarioSessao,
+} from "../../../shared/contracts";
 import {
   contarControles,
   controlesSemDica,
@@ -244,5 +247,115 @@ describe("RIFA-088: o diálogo", () => {
     expect(contarControles(dialogo)).toBeGreaterThanOrEqual(4);
     expect(controlesSemDica()).toEqual([]);
     expect(await titulosSemAjuda()).toEqual([]);
+  });
+});
+
+describe("RIFA-091: o resultado na Rifei no aviso depois de atribuir", () => {
+  async function atribuirNaTela(id: string, rifei: RifeiNaAtribuicao) {
+    simularApi({ pedidos: pedidosDoTeste(), rifei });
+    abrir();
+    acionar(botaoAtribuirDe(await linhaDo(id))!);
+    const dialogo = await screen.findByRole("dialog");
+    fireEvent.change(
+      within(dialogo).getByRole("combobox", { name: /Célula/ }),
+      { target: { value: "2" } },
+    );
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Atribuir" }));
+  }
+
+  const ATRIBUIDO =
+    "Pedido PED-SEM-AFILIADO atribuído à Célula Ficticia 10: a venda conta para ela em todo o sistema.";
+
+  /** O aviso visível (o texto inteiro) e o tom dele. */
+  async function aviso(texto: string) {
+    const paragrafo = await screen.findByText(texto, {
+      selector: "p:not(.visualmente-oculto)",
+    });
+    return paragrafo.closest(".ui-aviso");
+  }
+
+  it("o diálogo diz que a venda sem afiliado também é ligada ao afiliado da célula na Rifei (a de afiliado sem célula, não)", async () => {
+    simularApi({ pedidos: pedidosDoTeste() });
+    abrir();
+    acionar(botaoAtribuirDe(await linhaDo("PED-SEM-AFILIADO"))!);
+    expect(await screen.findByRole("dialog")).toHaveAccessibleDescription(
+      /Se a célula tiver link de afiliado, a venda também é ligada a ele na Rifei\./,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    acionar(botaoAtribuirDe(await linhaDo("PED-ORFAO"))!);
+    expect(await screen.findByRole("dialog")).not.toHaveAccessibleDescription(
+      /Rifei/,
+    );
+  });
+
+  it("vinculado: 'Também ligada ao afiliado da célula na Rifei.', em sucesso; a célula passa a vir do afiliado", async () => {
+    await atribuirNaTela("PED-SEM-AFILIADO", { situacao: "vinculado" });
+    const caixa = await aviso(
+      `${ATRIBUIDO} Também ligada ao afiliado da célula na Rifei.`,
+    );
+    expect(caixa).toHaveClass("ui-aviso--sucesso");
+    // A região viva anuncia o mesmo texto.
+    expect(
+      screen.getByText(
+        `${ATRIBUIDO} Também ligada ao afiliado da célula na Rifei.`,
+        { selector: "p.visualmente-oculto" },
+      ),
+    ).toBeInTheDocument();
+    const linha = await linhaDo("PED-SEM-AFILIADO");
+    expect(linha).toHaveTextContent("Célula Ficticia 10");
+    expect(linha).not.toHaveTextContent(MARCA_ATRIBUIDA);
+    expect(botaoAtribuirDe(linha)).toBeNull();
+  });
+
+  it.each([
+    [{ situacao: "sem_conexao" }, "o sistema não está conectado à Rifei"],
+    [{ situacao: "celula_sem_afiliado" }, "a célula não tem link de afiliado"],
+    [
+      { situacao: "varios_afiliados" },
+      "a célula tem mais de um link de afiliado",
+    ],
+    [
+      { situacao: "recusado", mensagem: "Pedido já tem afiliado" },
+      "a Rifei recusou: Pedido já tem afiliado",
+    ],
+    [
+      {
+        situacao: "indisponivel",
+        mensagem:
+          "A Rifei não respondeu agora. Tente de novo em alguns minutos ou faça no painel da Rifei.",
+      },
+      "a Rifei não respondeu agora",
+    ],
+  ] as const)(
+    "%o: 'Na Rifei não deu (…): ligue lá à mão.', em alerta; a atribuição vale",
+    async (rifei, motivo) => {
+      await atribuirNaTela("PED-SEM-AFILIADO", rifei);
+      const caixa = await aviso(
+        `${ATRIBUIDO} Na Rifei não deu (${motivo}): ligue lá à mão.`,
+      );
+      expect(caixa).toHaveClass("ui-aviso--alerta");
+      const linha = await linhaDo("PED-SEM-AFILIADO");
+      expect(linha).toHaveTextContent("Célula Ficticia 10");
+      expect(linha).toHaveTextContent(MARCA_ATRIBUIDA);
+    },
+  );
+
+  it("falhou (token recusado): o motivo e o que fazer, que vem da API", async () => {
+    const mensagem =
+      "A Rifei recusou o token: cole um novo em Conexão com a Rifei (Acessos → Conexão com a Rifei).";
+    await atribuirNaTela("PED-SEM-AFILIADO", { situacao: "falhou", mensagem });
+    const caixa = await aviso(
+      `${ATRIBUIDO} Na Rifei não deu (a Rifei deu erro): ligue lá à mão. ${mensagem}`,
+    );
+    expect(caixa).toHaveClass("ui-aviso--alerta");
+  });
+
+  it("não se aplica (venda com afiliado sem célula): só o aviso de hoje, em sucesso", async () => {
+    await atribuirNaTela("PED-ORFAO", { situacao: "nao_se_aplica" });
+    const caixa = await aviso(
+      "Pedido PED-ORFAO atribuído à Célula Ficticia 10: a venda conta para ela em todo o sistema.",
+    );
+    expect(caixa).toHaveClass("ui-aviso--sucesso");
+    expect(caixa).not.toHaveTextContent(/Rifei/);
   });
 });
