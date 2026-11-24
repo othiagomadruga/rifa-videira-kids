@@ -22,6 +22,9 @@ export default defineConfig({
                 TEST_MIGRATIONS: await readD1Migrations(pastaMigracoes),
                 // Segredo do webhook da Rifei nos testes (valor fictício; em dev vem do .dev.vars).
                 RIFEI_WEBHOOK_TOKEN: "token-ficticio-dos-testes-do-webhook",
+                // RIFA-091: sem token da API da Rifei nos testes, mesmo com um .dev.vars de dev: nenhum teste chama a
+                // Rifei de verdade (a atribuição de célula a chama sozinha; os testes da Rifei passam o env próprio).
+                RIFEI_API_TOKEN: "",
               },
             },
           })),

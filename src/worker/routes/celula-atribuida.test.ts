@@ -14,7 +14,7 @@ import {
   vi,
 } from "vitest";
 import {
-  itemPedidoSchema,
+  respostaAtribuirCelulaPedidoSchema,
   respostaPainelResumoSchema,
   respostaPedidosSchema,
   respostaRankingGruposSchema,
@@ -107,7 +107,8 @@ async function atribuir(
 async function atribuirOk(id: string, celulaId: number | null) {
   const res = await atribuir(id, celulaId);
   expect(res.status).toBe(200);
-  return itemPedidoSchema.parse(await res.json());
+  // RIFA-091: o item + `rifei` (nos testes não há token da Rifei: vitest.config.ts; a Rifei tem o arquivo dela).
+  return respostaAtribuirCelulaPedidoSchema.parse(await res.json());
 }
 
 async function lerJson<T>(
@@ -183,6 +184,8 @@ describe("PUT /api/admin/pedidos/:id/celula: atribuir e desfazer", () => {
       celula_id: CANAA,
       celula_nome: "Célula Canaã",
       celula_origem: "manual",
+      // A Canaã tem um afiliado, mas os testes não têm conexão com a Rifei (celula-atribuida-rifei.test.ts).
+      rifei: { situacao: "sem_conexao" },
     });
     // Só o admin atribui: o item volta com o comprador, como na lista dele.
     expect(item.comprador).toBeDefined();
@@ -210,6 +213,7 @@ describe("PUT /api/admin/pedidos/:id/celula: atribuir e desfazer", () => {
       celula_id: null,
       celula_nome: null,
       celula_origem: null,
+      rifei: { situacao: "nao_se_aplica" },
     });
     expect(await colunas(DE_ORFAO.id)).toEqual({
       celula_atribuida_id: null,

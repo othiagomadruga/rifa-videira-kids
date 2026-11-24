@@ -11,12 +11,15 @@
  * pedido como está (atribuir de novo a mesma célula, ou desfazer o que não existe), sem trilha.
  *
  * O webhook nunca escreve nestas colunas (db/pedidos.ts): a atribuição sobrevive a qualquer evento da Rifei.
+ *
+ * RIFA-091 (adendo da D41): no fim do arquivo, o que a atribuição grava quando liga a venda ao afiliado da célula na
+ * Rifei (lib/afiliado-na-rifei.ts): o `affiliate_id` do pedido e a trilha `pedido.vincular_afiliado_rifei`.
  */
 import {
   alvoDoPedidoNaAuditoria,
   type ItemPedido,
 } from "../../shared/contracts";
-import type { Autoria } from "./auditoria";
+import { prepararRegistroAuditoria, type Autoria } from "./auditoria";
 import { juntarAfiliado, juntarCelulaEfetiva } from "./celula-efetiva";
 import { COLUNAS_ITEM, itemDaLinha, type LinhaPedido } from "./lista-pedidos";
 import { LER_ITEM_SE_MUDOU } from "./regras-campanha";
@@ -130,4 +133,100 @@ export async function atribuirCelulaDoPedido(
     item: itemDaLinha({ ...linha, id: curta.id }, true),
     mudou: false,
   };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// RIFA-091 (adendo da D41): a venda ligada na Rifei ao afiliado da célula atribuída (lib/afiliado-na-rifei.ts)
+// ---------------------------------------------------------------------------------------------------
+
+/** Os afiliados vinculados à célula, no máximo 2 (basta saber se é exatamente um), pelo índice por célula. */
+export async function afiliadosDaCelula(
+  db: D1Database,
+  celulaId: number,
+): Promise<number[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT affiliate_id FROM afiliados WHERE celula_id = ?1 ORDER BY affiliate_id LIMIT 2`,
+    )
+    .bind(celulaId)
+    .all<{ affiliate_id: number }>();
+  return results.map((linha) => linha.affiliate_id);
+}
+
+/** O pedido como um item da lista, com o comprador (só o admin atribui). */
+const LER_ITEM = `SELECT ${COLUNAS_ITEM}
+  FROM pedidos AS p
+  ${juntarAfiliado()}
+  ${juntarCelulaEfetiva()}
+  WHERE p.id = ?1`;
+
+/** O registro da tentativa na trilha (`pedido.vincular_afiliado_rifei`): só ids e a situação, nunca token ou nome. */
+function registroDaTentativa(
+  db: D1Database,
+  autoria: Autoria,
+  pedidoId: string,
+  resumo: string,
+): D1PreparedStatement {
+  return prepararRegistroAuditoria(db, {
+    ...autoria,
+    acao: "pedido.vincular_afiliado_rifei",
+    alvo: alvoDoPedidoNaAuditoria(pedidoId),
+    resumo: `Pedido ${JSON.stringify(pedidoId)}: ${resumo}`,
+  });
+}
+
+/** Os ids da tentativa, para o resumo da trilha. */
+export interface TentativaNaRifei {
+  pedidoId: string;
+  affiliateId: number;
+  celulaId: number;
+}
+
+const naRifei = ({ affiliateId, celulaId }: TentativaNaRifei) =>
+  `afiliado ${affiliateId} da célula ${celulaId} na Rifei`;
+
+/**
+ * A Rifei ligou a venda ao afiliado: num lote só, a trilha, o `affiliate_id` gravado no pedido (só se ele ainda está
+ * sem afiliado: o webhook ou outro admin podem ter preenchido; a célula atribuída fica como está, D41) e o item lido
+ * de novo (a célula efetiva passa a vir do afiliado, que é da mesma célula). null: o pedido sumiu (não acontece: a
+ * FK do afiliado e a da campanha são RESTRICT).
+ */
+export async function gravarAfiliadoDaRifei(
+  db: D1Database,
+  tentativa: TentativaNaRifei,
+  autoria: Autoria,
+): Promise<ItemPedido | null> {
+  const { pedidoId, affiliateId } = tentativa;
+  const [, , lido] = await db.batch([
+    registroDaTentativa(
+      db,
+      autoria,
+      pedidoId,
+      `${naRifei(tentativa)}: vinculado`,
+    ),
+    db
+      .prepare(
+        `UPDATE pedidos SET affiliate_id = ?2, atualizado_em = ?3
+         WHERE id = ?1 AND affiliate_id IS NULL`,
+      )
+      .bind(pedidoId, affiliateId, autoria.em),
+    db.prepare(LER_ITEM).bind(pedidoId),
+  ]);
+  const linha = lido.results[0] as LinhaPedido | undefined;
+  return linha ? itemDaLinha(linha, true) : null;
+}
+
+/** A Rifei não ligou (recusou, não respondeu ou falhou): só a trilha, com a situação e o motivo em código. */
+export async function registrarTentativaNaRifei(
+  db: D1Database,
+  tentativa: TentativaNaRifei,
+  situacao: string,
+  autoria: Autoria,
+): Promise<void> {
+  await registroDaTentativa(
+    db,
+    autoria,
+    tentativa.pedidoId,
+    `${naRifei(tentativa)}: ${situacao}`,
+  ).run();
 }

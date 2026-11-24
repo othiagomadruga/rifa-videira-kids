@@ -389,7 +389,7 @@ describe("o webhook nunca escreve na desconsideração (db/pedidos.ts)", () => {
     });
   });
 
-  it("a concorrência otimista do webhook tem 7 tentativas: a remoção do afiliado de teste (RIFA-031) e o afiliado tardio de novo (D20)", () => {
-    expect(MAX_TENTATIVAS).toBe(7);
+  it("a concorrência otimista do webhook tem 8 tentativas: a remoção do afiliado de teste (RIFA-031), o afiliado tardio de novo (D20) e o afiliado gravado quando a Rifei liga a venda à célula (RIFA-091)", () => {
+    expect(MAX_TENTATIVAS).toBe(8);
   });
 });
