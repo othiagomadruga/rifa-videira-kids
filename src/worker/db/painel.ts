@@ -6,8 +6,8 @@
  * Por requisição, duas idas ao banco, sem N+1:
  * 1. a campanha ativa e os períodos dela (`buscarCampanhaAtiva`, um comando só);
  * 2. um `db.batch` com TODAS as células e a hierarquia (com `qtd_pessoas`; a meta proporcional reparte o
- *    total entre todas), as vendas aprovadas agrupadas por célula e dia local e, no resumo de rede,
- *    discipulador ou célula, o nome e a divisão do escopo.
+ *    total entre todas; com o grupo efetivo de cada uma, RIFA-092), as vendas aprovadas agrupadas por célula e dia
+ *    local e, no resumo de grupo, rede, discipulador ou célula, o nome e a divisão do escopo.
  * As vendas são os pedidos `approved` da campanha que contam (sem os desconsiderados pelo admin, D20), de
  * QUALQUER data, com a célula EFETIVA (RIFA-088, D41; db/celula-efetiva.ts): a do afiliado, resolvida na leitura (D7)
  * ou, sem ela, a atribuída à mão pelo admin; `celula_id` null para as sem célula (sem afiliado ou afiliado não
@@ -67,10 +67,14 @@ export const relogioDoSistema: Relogio = () => new Date();
 // Consultas
 // ---------------------------------------------------------------------------------------------------
 
-/** Todas as células com a hierarquia resolvida (o formato de `CelulaCalculo`). */
+/**
+ * Todas as células com a hierarquia resolvida (o formato de `CelulaCalculo`), com o grupo EFETIVO (RIFA-092, adendo da
+ * D39: o próprio da célula, senão o do discipulador; null = sem grupo), que filtra o escopo `grupo`. As duas colunas já
+ * estão nas linhas lidas (sem JOIN nem linha a mais).
+ */
 const SELECIONAR_CELULAS = `
   SELECT c.id, c.nome, c.qtd_pessoas, c.discipulador_id, d.nome AS discipulador_nome, d.rede_id,
-    r.nome AS rede_nome, r.divisao
+    r.nome AS rede_nome, r.divisao, coalesce(c.grupo_id, d.grupo_id) AS grupo_efetivo_id
   FROM celulas AS c
   JOIN discipuladores AS d ON d.id = c.discipulador_id
   JOIN redes AS r ON r.id = d.rede_id
@@ -121,10 +125,17 @@ export const SELECIONAR_VENDAS = `
   ${juntarAfiliado()}
   WHERE p.campanha_id = ?1 AND p.status = 'approved' AND p.desconsiderado_em IS NULL`;
 
-type EscopoComId = Extract<EscopoPainel, "rede" | "discipulador" | "celula">;
+type EscopoComId = Extract<
+  EscopoPainel,
+  "grupo" | "rede" | "discipulador" | "celula"
+>;
 
-/** Nome e divisão (a da rede) da entidade do escopo, para o resumo. */
+/**
+ * Nome e divisão (a da rede) da entidade do escopo, para o resumo. O grupo (RIFA-092) não tem divisão: pode juntar
+ * células de divisões diferentes.
+ */
 const SELECIONAR_ESCOPO: Record<EscopoComId, string> = {
+  grupo: "SELECT nome, NULL AS divisao FROM grupos WHERE id = ?1",
   rede: "SELECT nome, divisao FROM redes WHERE id = ?1",
   discipulador: `
     SELECT d.nome, r.divisao
@@ -139,6 +150,7 @@ const SELECIONAR_ESCOPO: Record<EscopoComId, string> = {
 };
 
 const NAO_ENCONTRADO: Record<EscopoComId, string> = {
+  grupo: "Grupo não encontrado",
   rede: "Rede não encontrada",
   discipulador: "Discipulador não encontrado",
   celula: "Célula não encontrada",
@@ -258,7 +270,7 @@ function exigir<T>(valor: T | undefined, nome: string): T {
  * - sem campanha ativa: 404 `nao_encontrado`;
  * - `data` depois de hoje (`hojeNoFuso(fuso da campanha, agora)`, a função única do contrato):
  *   400 `requisicao_invalida`, com o detalhe `data_futura`;
- * - escopo de rede, discipulador ou célula com id inexistente: 404 `nao_encontrado`.
+ * - escopo de grupo (RIFA-092), rede, discipulador ou célula com id inexistente: 404 `nao_encontrado`.
  * Chama o relógio uma vez só: o `agora` devolvido é o que a rota passa ao montador.
  * `comandosExtras` (a visão individual, RIFA-014; o relatório, RIFA-038) vão no MESMO lote, depois dos do cálculo:
  * sem ida a mais. Recebem o id da campanha ativa, lida na 1ª ida (ex.: a contagem dos desconsiderados do relatório).
@@ -291,7 +303,11 @@ export async function lerEntradaDoCalculo(
 
   const pedido = consulta.escopo ?? { escopo: "campanha" };
   const tipo = pedido.escopo;
-  const comId = tipo === "rede" || tipo === "discipulador" || tipo === "celula";
+  const comId =
+    tipo === "grupo" ||
+    tipo === "rede" ||
+    tipo === "discipulador" ||
+    tipo === "celula";
   const id = comId ? exigir(pedido.id, "id") : null;
   // O deslocamento no 1º dia da campanha; os dias devolvidos são conferidos depois.
   const minutos = deslocamentoEmMinutos(
@@ -320,7 +336,7 @@ export async function lerEntradaDoCalculo(
   let escopo: EscopoResolvido;
   if (comId) {
     const entidade = linhasEscopo.results[0] as
-      { nome: string; divisao: Divisao } | undefined;
+      { nome: string; divisao: Divisao | null } | undefined;
     if (!entidade) return falha("nao_encontrado", NAO_ENCONTRADO[tipo]);
     escopo = { tipo, id, divisao: entidade.divisao, nome: entidade.nome };
   } else if (tipo === "divisao") {

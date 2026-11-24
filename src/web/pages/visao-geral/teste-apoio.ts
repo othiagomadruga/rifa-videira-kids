@@ -79,10 +79,33 @@ export const CELULAS: CelulaCalculo[] = [
   },
 ];
 
+/** RIFA-092: os 4 grupos da migração 0018, como GET /api/admin/grupos devolve (na ordem da tela). */
+export const GRUPOS = [
+  { id: 1, nome: "Adultos da manhã", ordem: 1 },
+  { id: 2, nome: "Adultos da noite", ordem: 2 },
+  { id: 3, nome: "Jovens", ordem: 3 },
+  { id: 4, nome: "Adolescentes", ordem: 4 },
+] as const;
+
+const nomeDoGrupo = (id: number | null | undefined) =>
+  GRUPOS.find((grupo) => grupo.id === id)?.nome ?? null;
+
+/**
+ * RIFA-092: as mesmas três células com o grupo efetivo, de divisões diferentes e fora da ordem dos grupos (o nome e o
+ * id dariam outra ordem): a 01 em "Adolescentes", a 02 em "Adultos da manhã" e a 03 sem grupo. "Adultos da noite" e
+ * "Jovens" ficam sem células.
+ */
+export const CELULAS_COM_GRUPOS: CelulaCalculo[] = CELULAS.map((celula) => ({
+  ...celula,
+  grupo_efetivo_id: { 1: 4, 2: 1 }[celula.id] ?? null,
+}));
+
 /** Um item de GET /api/admin/celulas (Celula do contrato), com dados fictícios. */
 export function celulaDaApi(celula: CelulaCalculo) {
   return {
     ...celula,
+    grupo_efetivo_id: celula.grupo_efetivo_id ?? null,
+    grupo_efetivo_nome: nomeDoGrupo(celula.grupo_efetivo_id),
     lider_nome: `Lider Ficticio ${String(celula.id).padStart(2, "0")}`,
     lider_email: null,
     lider_telefone: null,
@@ -225,6 +248,11 @@ export function resolverEscopo(
   const id = Number(params.get("id"));
   if (tipo === "campanha")
     return { ...ESCOPO_CAMPANHA_RESOLVIDO, nome: campanha.nome };
+  // RIFA-092: o grupo existe mesmo sem células; sem divisão.
+  if (tipo === "grupo") {
+    const nome = nomeDoGrupo(id);
+    return nome === null ? null : { tipo, id, divisao: null, nome };
+  }
   if (tipo === "divisao") {
     const divisao = params.get("divisao");
     return divisao === "jovens" || divisao === "adultos"
@@ -248,16 +276,17 @@ export function resolverEscopo(
   return { tipo, id, divisao: celula.divisao, nome };
 }
 
-/** O resumo que a API devolveria no cenário (padrão: escopo campanha). */
+/** O resumo que a API devolveria no cenário (padrão: escopo campanha; as células sem grupo). */
 export function resumoDoCenario(
   cenario: Cenario,
   escopo: EscopoResolvido = {
     ...ESCOPO_CAMPANHA_RESOLVIDO,
     nome: cenario.campanha.nome,
   },
+  celulas: readonly CelulaCalculo[] = CELULAS,
 ): RespostaPainelResumo {
   return montarResumoPainel(
-    { campanha: cenario.campanha, celulas: CELULAS, vendas: cenario.vendas },
+    { campanha: cenario.campanha, celulas, vendas: cenario.vendas },
     { escopo },
     cenario.agora,
   );
@@ -329,10 +358,11 @@ type Resposta = Response | Promise<Response>;
 
 /**
  * Troca o fetch por uma API simulada do cenário. Responde GET /api/painel/resumo (montarResumoPainel com
- * o escopo da consulta), GET /api/admin/celulas e GET /api/painel/relatorio (o CSV do tipo, por
- * respostaRelatorio; 400 sem tipo válido). `api.resumo`, `api.celulas` e `api.relatorio` trocam a resposta da
- * próxima chamada (devolvendo undefined, vale a padrão); `api.chamadas` guarda cada caminho pedido, com a
- * consulta, e `api.pedidos` cada Request (método, cabeçalhos, credenciais e signal).
+ * o escopo da consulta), GET /api/admin/celulas, GET /api/admin/grupos (RIFA-092) e GET /api/painel/relatorio (o CSV
+ * do tipo, por respostaRelatorio; 400 sem tipo válido). `api.resumo`, `api.celulas`, `api.grupos` e `api.relatorio`
+ * trocam a resposta da próxima chamada (devolvendo undefined, vale a padrão); `api.hierarquia` são as células do
+ * cenário (a lista e o resumo; `CELULAS_COM_GRUPOS` para o filtro por grupo); `api.chamadas` guarda cada caminho
+ * pedido, com a consulta, e `api.pedidos` cada Request (método, cabeçalhos, credenciais e signal).
  */
 export function simularApi(cenarioInicial: Cenario) {
   const api = {
@@ -341,6 +371,8 @@ export function simularApi(cenarioInicial: Cenario) {
     pedidos: [] as { url: URL; init: RequestInit | undefined }[],
     resumo: undefined as ((url: URL) => Resposta | undefined) | undefined,
     celulas: undefined as (() => Resposta | undefined) | undefined,
+    grupos: undefined as (() => Resposta | undefined) | undefined,
+    hierarquia: CELULAS as readonly CelulaCalculo[],
     relatorio: undefined as ((url: URL) => Resposta | undefined) | undefined,
     /** As consultas ao relatório (caminho e consulta), na ordem. */
     get consultasAoRelatorio() {
@@ -371,15 +403,18 @@ export function simularApi(cenarioInicial: Cenario) {
       if (url.pathname === "/api/admin/celulas") {
         return (
           (await api.celulas?.()) ??
-          respostaJson({ itens: CELULAS.map(celulaDaApi) })
+          respostaJson({ itens: api.hierarquia.map(celulaDaApi) })
         );
+      }
+      if (url.pathname === "/api/admin/grupos") {
+        return (await api.grupos?.()) ?? respostaJson({ itens: GRUPOS });
       }
       if (url.pathname === "/api/painel/resumo") {
         const especial = await api.resumo?.(url);
         if (especial) return especial;
         const escopo = resolverEscopo(url.searchParams, api.cenario.campanha);
         return escopo
-          ? respostaJson(resumoDoCenario(api.cenario, escopo))
+          ? respostaJson(resumoDoCenario(api.cenario, escopo, api.hierarquia))
           : RESPOSTAS_DE_ERRO.naoEncontrado();
       }
       return erroJson(404, "nao_encontrado", "Rota não encontrada");

@@ -1768,7 +1768,7 @@ discipulador → célula.
   | Tela | Com uma rede só |
   | --- | --- |
   | Hierarquia | Sem o número "Redes", a aba Redes, as colunas Rede (células e discipuladores) e o filtro Rede; no "Editar célula", os discipuladores numa lista só; no "Editar discipulador", sem o campo Rede (o PUT manda a mesma). A aba "Importar planilha" é a exceção: a dica e a explicação da coluna dizem que a rede pode ser uma só, e o resultado só tem a linha "Redes" se a planilha cria ou muda uma rede |
-  | Visão geral | O filtro sem o grupo Rede; o aviso das vendas sem célula diz "em nenhuma divisão nem célula"; o relatório sem o tipo "Por rede" |
+  | Visão geral | O filtro sem o grupo Rede (e, desde a RIFA-092, sem a Divisão: as células ficam numa divisão só); o aviso das vendas sem célula diz "em nenhuma divisão nem célula"; o relatório sem o tipo "Por rede" |
   | Rankings | Sem a aba Redes (uma URL de antes com `?nivel=rede` mostra as células) e sem a rede no vínculo |
   | Pedidos | O filtro de célula numa lista só, sem o grupo com o nome da rede |
   | Adesão | "Líder: …" sem a rede nos cartões; as dicas das buscas sem citar a rede |
@@ -2260,6 +2260,35 @@ existiam no sistema).
   "Grupo" mostra o efetivo, com a marca discreta "(da célula)" quando é o próprio.
 - **Segurança:** nenhuma rota nova; o PUT e o POST da célula continuam só da coordenação (`src/worker/protecao.test.ts`,
   parte m: 401 sem sessão, 403 para líder, discipulador e rede, e nada muda).
+
+**Adendo (RIFA-092, 2026-11-24): o grupo vira recorte da Visão geral.** Pedido do PO (campanha em andamento): separar
+"Adultos da manhã" e "Adultos da noite" no "Filtrar por" da Visão geral. A divisão (D27) não serve: a igreja tem uma
+rede só (D30) e ela é "jovens", então "Adultos" dava vazio e "Jovens", a igreja inteira.
+
+- **Contrato:** `ESCOPOS_PAINEL` ganha `grupo` (`GET /api/painel/resumo?escopo=grupo&id=<grupo>`; o `id` é obrigatório,
+  como na rede, no discipulador e na célula). O recorte é o **grupo efetivo** de cada célula, o mesmo do ranking por
+  grupo no nível célula: a célula com grupo próprio entra no grupo dela e sai do grupo do discipulador; a célula sem
+  grupo nenhum fica fora de todos (e continua na campanha, na divisão, no discipulador e na célula). A resposta sai com
+  `divisao: null` (um grupo pode juntar divisões), o nome do grupo e o resto como nos outros escopos (metas, ritmo,
+  hoje, curva e vendas, com a venda atribuída à mão, D41); um grupo que não existe dá o mesmo 404 `nao_encontrado` de
+  um discipulador inexistente ("Grupo não encontrado"); um grupo sem células, 200 sem meta. `CelulaCalculo` ganha
+  `grupo_efetivo_id` (opcional; null ou ausente = sem grupo) e `celulasDoEscopo` filtra por ele.
+- **Custo:** nenhuma ida nem linha a mais no D1. A leitura das células já lê `celulas` e `discipuladores`: o grupo
+  efetivo é `coalesce(c.grupo_id, d.grupo_id)` na mesma linha, e o nome do grupo vai no mesmo lote do cálculo, como o
+  da rede, do discipulador e da célula.
+- **Só o resumo:** o escopo do painel só existe no `GET /api/painel/resumo` (o ranking, o mapa e o relatório não
+  recebem escopo); a Visão geral é a única tela com este filtro.
+- **Tela:** a seção "Grupo" logo depois de "Campanha toda", com os grupos que têm células, na `ordem` dos grupos (a de
+  `GET /api/admin/grupos`, rota que já existia). **A seção "Divisão" sai do filtro quando todas as células estão na
+  mesma divisão**: com uma divisão só, escolher a divisão daria a campanha toda (a mesma de "Campanha toda") ou nada
+  (vazio), e o PO lia "Adultos" como os adultos da igreja. Ela volta sozinha se um dia houver células em divisões
+  diferentes; fica enquanto a lista não chegou (ou falhou) e quando a URL já pede uma divisão (o campo mostra o recorte
+  da tela). A URL guarda `?escopo=grupo&id=<id>`, como os outros recortes.
+- **Descartado:** um filtro de grupo só no site, somando as células no navegador (a meta proporcional, a curva e o
+  ritmo são do contrato: o site não refaz cálculo); reaproveitar a divisão (acima); a ordem dos grupos pelo nome
+  ("Adolescentes" viria primeiro).
+- **Segurança:** nenhuma rota nova; o resumo continua só da coordenação (`protecao.test.ts` com
+  `?escopo=grupo&id=1` sem sessão: 401).
 
 ## D40. Relatório diário por e-mail e saldo da Efí, só do admin (RIFA-086, 2026-11-23)
 

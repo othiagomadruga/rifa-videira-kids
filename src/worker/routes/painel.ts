@@ -1,7 +1,7 @@
 /**
  * Painel e ranking da coordenação (RIFA-PAINEL; docs/api.md, Sprint 3), do grupo `coordenacao`:
  * - GET /api/painel/resumo: meta do dia, ritmo do período e da campanha, projeção, curva e vendas de um
- *   escopo (campanha, divisão, rede, discipulador ou célula);
+ *   escopo (campanha, divisão, grupo, rede, discipulador ou célula; o grupo, RIFA-092, pelo grupo efetivo da célula);
  * - GET /api/painel/ranking: todas as instâncias do nível, com valores, situação e vizinhos;
  * - GET /api/painel/ranking-grupos (RIFA-084, D39): o mesmo ranking separado pelo grupo do discipulador (adultos da
  *   manhã, adultos da noite, jovens, adolescentes), com a posição dentro do grupo; no nível célula, vale o grupo próprio

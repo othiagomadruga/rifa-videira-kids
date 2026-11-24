@@ -21,7 +21,7 @@ export const AJUDA = {
   referencia:
     "Em que ponto do calendário a campanha está: o dia de hoje, a etapa e quanto falta para ela acabar. Os números abaixo são do recorte escolhido no filtro.",
   filtro:
-    "Escolhe o pedaço da campanha que a tela mostra: a campanha toda, uma divisão, uma rede, um discipulador ou uma célula. Ex.: escolha uma rede para ver só as células dela.",
+    "Escolhe o pedaço da campanha que a tela mostra: a campanha toda, um grupo, uma divisão (se houver mais de uma), uma rede, um discipulador ou uma célula. Ex.: escolha Adultos da manhã para ver só as células desse grupo.",
   esperado:
     "Quanto já deveria ter sido vendido até o fim de ontem para chegar à meta no prazo, seguindo o percentual de cada período. Hoje ainda não conta: o dia não acabou.",
   ritmo:

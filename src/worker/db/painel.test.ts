@@ -225,11 +225,17 @@ describe("CA2: escopo do resumo e data de referência", () => {
       { escopo: "celula", id: 3 },
       { tipo: "celula", id: 3, divisao: "jovens", nome: "Célula Canaã" },
     ],
+    // RIFA-092: o grupo da migração 0018 (mesmo sem células), sem divisão.
+    [
+      { escopo: "grupo", id: 1 },
+      { tipo: "grupo", id: 1, divisao: null, nome: "Adultos da manhã" },
+    ],
   ] as const)("resolve %o", async (pedido, esperado) => {
     expect(lida(await ler({ escopo: pedido })).escopo).toEqual(esperado);
   });
 
   it.each([
+    ["grupo", "Grupo não encontrado"],
     ["rede", "Rede não encontrada"],
     ["discipulador", "Discipulador não encontrado"],
     ["celula", "Célula não encontrada"],
@@ -239,6 +245,41 @@ describe("CA2: escopo do resumo e data de referência", () => {
       codigo: "nao_encontrado",
       mensagem,
     });
+  });
+
+  it("RIFA-092: cada célula vem com o grupo efetivo (o próprio; senão, o do discipulador; senão, null), no mesmo lote", async () => {
+    // Abel (10) em "Adultos da noite" (2), Caleb (30) em "Adultos da manhã" (1), Boaz (20) sem grupo; a Betel (2, do
+    // Abel) com o grupo próprio "Adolescentes" (4) e a Éfeso (5, do Caleb) com o próprio igual ao do discipulador.
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE discipuladores SET grupo_id = CASE id WHEN 10 THEN 2 WHEN 30 THEN 1 END",
+      ),
+      env.DB.prepare(
+        "UPDATE celulas SET grupo_id = CASE id WHEN 2 THEN 4 WHEN 5 THEN 1 END",
+      ),
+    ]);
+    try {
+      const banco = bancoQueConta();
+      const { entrada } = lida(
+        await ler({ escopo: { escopo: "grupo", id: 4 } }, banco.db),
+      );
+
+      expect(
+        entrada.celulas.map((celula) => [celula.id, celula.grupo_efetivo_id]),
+      ).toEqual([
+        [1, 2],
+        [2, 4],
+        [3, null],
+        [4, 1],
+        [5, 1],
+      ]);
+      expect(banco.contagem).toMatchObject({ idas: 2, comandos: 4 });
+    } finally {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE discipuladores SET grupo_id = NULL"),
+        env.DB.prepare("UPDATE celulas SET grupo_id = NULL"),
+      ]);
+    }
   });
 
   it("data futura no fuso da campanha: 400 com o detalhe data_futura; hoje e o passado passam", async () => {

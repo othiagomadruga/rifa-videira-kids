@@ -55,6 +55,8 @@ function celula(
     rede_id: rede.id,
     rede_nome: rede.nome,
     divisao: rede.divisao,
+    // RIFA-092: como a leitura devolve (nenhum discipulador nem célula do cenário tem grupo, menos nos testes do grupo).
+    grupo_efetivo_id: null,
   };
 }
 

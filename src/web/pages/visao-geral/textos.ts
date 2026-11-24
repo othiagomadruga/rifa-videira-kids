@@ -72,6 +72,7 @@ function concordar(
 export const ROTULO_DO_ESCOPO: Record<EscopoPainel, string> = {
   campanha: "Campanha toda",
   divisao: "Divisão",
+  grupo: "Grupo",
   rede: "Rede",
   discipulador: "Discipulador",
   celula: "Célula",
@@ -442,7 +443,7 @@ export const DICAS = {
  */
 export const TEXTOS_REDE_UNICA = {
   filtro:
-    "Mostra o painel de uma divisão, de um discipulador ou de uma célula. A escolha fica no endereço da página.",
+    "Mostra o painel de um grupo (ex.: Adultos da manhã), de um discipulador ou de uma célula. A escolha fica no endereço da página.",
   falhaDoFiltro:
     "Não foi possível carregar as células. Toque em Atualizar para tentar de novo.",
   relatorioCelulas:

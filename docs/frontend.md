@@ -194,6 +194,18 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   `HierarquiaPage.test.tsx` (coluna, seletor e o corpo do PUT) e as varreduras de dicas e ajuda (`dicas-fase2.test.tsx`).
   A API falsa dos Rankings (`simularApiRanking`) responde a rota sem grupo por padrão (`respostaDosGrupos`) e guarda
   `pedidosDosGrupos`.
+- **Grupo no filtro da Visão geral** (RIFA-092, adendo da D39): o "Filtrar por" (`FiltroEscopo.tsx`) ganha a seção
+  **"Grupo"** logo depois de "Campanha toda", com os grupos que têm células (o `grupo_efetivo_id`/`grupo_efetivo_nome`
+  de cada item de `GET /api/admin/celulas`), na ordem de `GET /api/admin/grupos` (`carregarGrupos`, `CAMINHO_GRUPOS`,
+  cópia conferida em `visao-geral-contrato.test.ts`). `useCelulasDoFiltro` pede as duas listas juntas; a falha dos
+  grupos não derruba o filtro (os grupos das células saem pelo nome). Escolher um grupo pede
+  `GET /api/painel/resumo?escopo=grupo&id=<id>`, guarda `?escopo=grupo&id=<id>` na URL (como os outros recortes) e o
+  topo diz "Grupo: <nome>". A seção **"Divisão" só aparece com células em duas divisões** (`gruposDoFiltro(...).divisoes`):
+  com uma divisão só (o caso da rede única), escolher a divisão daria a campanha toda ou nada; antes da lista chegar (ou
+  se ela falhar) e com o recorte da URL numa divisão, ela fica. Só a Visão geral usa este filtro. A API falsa
+  (`simularApi` de `pages/visao-geral/teste-apoio.ts`) responde `GRUPOS` (`api.grupos` troca a resposta) e
+  `api.hierarquia` troca as células (`CELULAS_COM_GRUPOS`). Testes em `VisaoGeralPage.test.tsx` e
+  `rede-unica.test.tsx`.
 
 ## Trilha e pedidos suspeitos (RIFA-024)
 
