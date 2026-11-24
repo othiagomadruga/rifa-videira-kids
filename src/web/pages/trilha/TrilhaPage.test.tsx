@@ -248,6 +248,8 @@ describe("RIFA-024: a trilha lista do mais novo para o mais antigo", () => {
       "Relatório diário enviado por e-mail",
       // RIFA-088 (D41): a venda sem célula atribuída à mão pelo admin.
       "Célula do pedido atribuída à mão",
+      // RIFA-091 (adendo da D41): a tentativa de ligar a venda ao afiliado da célula na Rifei.
+      "Ligação da venda ao afiliado da célula na Rifei",
     ]);
     for (const acao of ACOES_AUDITORIA) {
       expect(screen.queryByText(acao)).not.toBeInTheDocument();

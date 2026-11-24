@@ -104,6 +104,7 @@ import {
   MOTIVOS_FALHA_RIFEI,
   RESULTADOS_MARCADOS_NA_RIFEI,
   RESULTADOS_MARCAR_NA_RIFEI,
+  SITUACOES_RIFEI_NA_ATRIBUICAO,
   eLinkDeConviteRifei,
 } from "./rifei-api";
 import {
@@ -643,6 +644,10 @@ export type RespostaPedidosSuspeitos = z.infer<
  * - pedido.atribuir_celula (RIFA-088, D41): ROTAS_REGRAS_CAMPANHA.atribuirCelulaPedido, alvo `pedido:<id>` (como a
  *   desconsideração); resumo com o id do pedido entre aspas e as células de antes e de depois (só ids; "nenhuma"),
  *   NUNCA dado do comprador. Atribuir de novo a mesma célula (ou desfazer o que não existe) não registra.
+ * - pedido.vincular_afiliado_rifei (RIFA-091, adendo da D41): cada tentativa de ligar na Rifei a venda ao afiliado da
+ *   célula atribuída (SITUACOES_RIFEI_TENTADAS, mesmo quando a atribuição não mudou), alvo `pedido:<id>`; resumo com o
+ *   id do pedido entre aspas, o affiliate_id, a célula e a situação (com o motivo da falha, em código), NUNCA o token,
+ *   o e-mail ou o nome do afiliado, nem dado do comprador.
  * Não registram o que não muda nada (RIFA-018): o PUT igual da hierarquia, revogar link já revogado, reativar
  * quem está ativo e desativar quem está desativado. O PUT da campanha e o do afiliado registram também o
  * salvamento igual ("Configuração salva sem mudanças", "Célula <id> mantida").
@@ -679,6 +684,7 @@ export const ACOES_AUDITORIA = [
   "compradores.exportar",
   "relatorio_diario.enviar",
   "pedido.atribuir_celula",
+  "pedido.vincular_afiliado_rifei",
 ] as const;
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number];
 
@@ -1945,6 +1951,30 @@ export type CorpoAtribuirCelulaPedido = z.input<
 >;
 
 /**
+ * RIFA-091 (adendo da D41): o resultado na Rifei de PUT /api/admin/pedidos/:id/celula (SITUACOES_RIFEI_NA_ATRIBUICAO).
+ * `mensagem`: em `recusado`, o texto da Rifei (cortado em LIMITE_MENSAGEM_RIFEI), se ela mandou; em `indisponivel` e
+ * `falhou`, a explicação do sistema (MENSAGEM_FALHA_RIFEI); nas outras, ausente. Nunca o token, o e-mail ou o nome do
+ * afiliado.
+ */
+export const rifeiNaAtribuicaoSchema = z.strictObject({
+  situacao: z.enum(SITUACOES_RIFEI_NA_ATRIBUICAO),
+  mensagem: z.string().min(1).max(LIMITE_MENSAGEM_RIFEI).optional(),
+});
+export type RifeiNaAtribuicao = z.infer<typeof rifeiNaAtribuicaoSchema>;
+
+/**
+ * 200 de PUT /api/admin/pedidos/:id/celula: o pedido como a lista mostra (itemPedidoSchema) e, desde a RIFA-091, o
+ * resultado na Rifei (`rifei`). Com `vinculado`, o item já vem com o `affiliate_id` gravado e a célula efetiva pelo
+ * afiliado (`celula_origem: "afiliado"`, a mesma célula; a atribuída continua gravada).
+ */
+export const respostaAtribuirCelulaPedidoSchema = itemPedidoSchema.extend({
+  rifei: rifeiNaAtribuicaoSchema,
+});
+export type RespostaAtribuirCelulaPedido = z.infer<
+  typeof respostaAtribuirCelulaPedidoSchema
+>;
+
+/**
  * `detalhes` do 409 `acao_desligada`: a chave da campanha que está desligada (o site leva à tela Campanha).
  * - pedidos.desconsiderar: desconsiderar e reconsiderar pedido;
  * - acesso.discipuladores e acesso.redes: gerar link para o papel (em lote ou avulso).
@@ -2904,6 +2934,11 @@ export const ROTAS_REGRAS_CAMPANHA = {
    * não muda nada (200 com o pedido como está, sem trilha). Pedido de qualquer status (só o aprovado conta nas vendas).
    * 200: o pedido como a lista mostra, com a célula efetiva e `celula_origem`. Trilha: `pedido.atribuir_celula` (o id
    * do pedido e as células de antes e de depois, só ids). O webhook nunca mexe na atribuição.
+   * RIFA-091 (adendo da D41): a resposta traz também `rifei` (respostaAtribuirCelulaPedidoSchema). Com `celula_id` num
+   * pedido SEM afiliado e a célula com exatamente um afiliado vinculado, o sistema liga a venda a ele na Rifei e, se a
+   * Rifei aceitar, grava o `affiliate_id` no pedido (só se ainda nulo). Repetir com a mesma célula num pedido ainda sem
+   * afiliado tenta a Rifei de novo. A Rifei nunca faz a rota falhar (nada de 5xx por ela). Trilha da tentativa:
+   * `pedido.vincular_afiliado_rifei`.
    */
   atribuirCelulaPedido: {
     metodo: "PUT",
@@ -2913,7 +2948,7 @@ export const ROTAS_REGRAS_CAMPANHA = {
     situacao: "detalhada",
     parametros: parametroPedidoIdSchema,
     corpo: corpoAtribuirCelulaPedidoSchema,
-    sucesso: { status: 200, corpo: itemPedidoSchema },
+    sucesso: { status: 200, corpo: respostaAtribuirCelulaPedidoSchema },
   },
 } as const satisfies Record<string, DefinicaoRota>;
 

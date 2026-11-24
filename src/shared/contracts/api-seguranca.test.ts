@@ -212,6 +212,8 @@ describe("GET /api/admin/auditoria", () => {
       "relatorio_diario.enviar",
       // RIFA-088 (D41): a célula atribuída à mão a uma venda sem célula pelo afiliado.
       "pedido.atribuir_celula",
+      // RIFA-091 (adendo da D41): a tentativa de ligar a venda ao afiliado da célula na Rifei.
+      "pedido.vincular_afiliado_rifei",
     ]);
     // O CHECK da coluna `acao` (migração 0005) aceita só [a-z_.] e de 3 a 64 caracteres.
     for (const acao of ACOES_AUDITORIA)
