@@ -101,6 +101,110 @@ describe("criarClienteRifei", () => {
   });
 });
 
+describe("RIFA-091: vincularAfiliadoAoPedido (ligar a venda a um afiliado)", () => {
+  it("PUT raffles/<raffleId>/orders/<pedido>/link-affiliate com { affiliate_id } e os cabeçalhos do painel", async () => {
+    const { cliente, chamadas } = clienteCom((_url, init) =>
+      json(200, {
+        id: 1,
+        affiliate_id: 1979669,
+        code: "lider",
+        affiliate: { id: 1979669, email: "a@example.com", name: "Nome" },
+        corpo_recebido: init.body,
+      }),
+    );
+    expect(
+      await cliente.vincularAfiliadoAoPedido("1671784", "euzr/5wz", 1979669),
+    ).toEqual({ tipo: "vinculado" });
+    expect(chamadas).toHaveLength(1);
+    const [chamada] = chamadas;
+    expect(chamada.url).toBe(
+      "https://api.rifei.com.br/raffles/1671784/orders/euzr%2F5wz/link-affiliate",
+    );
+    expect(chamada.init.method).toBe("PUT");
+    // O corpo da captura do PO: Content-Length 24.
+    expect(chamada.init.body).toBe('{"affiliate_id":1979669}');
+    expect(String(chamada.init.body)).toHaveLength(24);
+    const cabecalhos = new Headers(chamada.init.headers);
+    expect(cabecalhos.get("Authorization")).toBe("Bearer token-x");
+    expect(cabecalhos.get("x-rate-limit")).toBe("true");
+    expect(cabecalhos.get("Content-Type")).toBe("application/json");
+    expect(chamada.init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("o affiliate_id da resposta pode vir como texto; outro afiliado ou sem ele: resposta_inesperada", async () => {
+    expect(
+      await clienteCom(() =>
+        json(201, { affiliate_id: "77" }),
+      ).cliente.vincularAfiliadoAoPedido("1", "P1", 77),
+    ).toEqual({ tipo: "vinculado" });
+    for (const corpo of [
+      { affiliate_id: 78 },
+      { id: 5 },
+      null,
+      [],
+      { affiliate_id: "77a" },
+    ])
+      await expect(
+        clienteCom(() => json(200, corpo)).cliente.vincularAfiliadoAoPedido(
+          "1",
+          "P1",
+          77,
+        ),
+      ).rejects.toMatchObject({ motivo: "resposta_inesperada" });
+  });
+
+  it("outra resposta = recusado com a mensagem da Rifei cortada (ou null); 401/403/429/5xx/rede/tempo param", async () => {
+    expect(
+      await clienteCom(() =>
+        json(422, { message: "  Pedido\n já tem afiliado " }),
+      ).cliente.vincularAfiliadoAoPedido("1", "P1", 77),
+    ).toEqual({ tipo: "recusado", mensagem: "Pedido já tem afiliado" });
+    expect(
+      await clienteCom(() => json(404, {})).cliente.vincularAfiliadoAoPedido(
+        "1",
+        "P1",
+        77,
+      ),
+    ).toEqual({ tipo: "recusado", mensagem: null });
+    const longa = await clienteCom(() =>
+      json(400, { message: "x".repeat(900) }),
+    ).cliente.vincularAfiliadoAoPedido("1", "P1", 77);
+    expect(longa.tipo === "recusado" && longa.mensagem).toHaveLength(
+      LIMITE_MENSAGEM_RIFEI,
+    );
+    for (const [status, motivo] of [
+      [401, "token_invalido"],
+      [403, "token_invalido"],
+      [429, "indisponivel"],
+      [500, "indisponivel"],
+      [503, "indisponivel"],
+    ] as const)
+      await expect(
+        clienteCom(() => json(status, {})).cliente.vincularAfiliadoAoPedido(
+          "1",
+          "P1",
+          77,
+        ),
+      ).rejects.toMatchObject({ motivo });
+    await expect(
+      clienteCom(() => {
+        throw new TypeError("rede caiu");
+      }).cliente.vincularAfiliadoAoPedido("1", "P1", 77),
+    ).rejects.toMatchObject({ motivo: "indisponivel" });
+    // Tempo esgotado (o tempo limite do cliente nos testes é 50 ms).
+    await expect(
+      clienteCom(
+        (_url, init) =>
+          new Promise((_, rejeitar) =>
+            init.signal?.addEventListener("abort", () =>
+              rejeitar(init.signal?.reason),
+            ),
+          ),
+      ).cliente.vincularAfiliadoAoPedido("1", "P1", 77),
+    ).rejects.toMatchObject({ motivo: "indisponivel" });
+  });
+});
+
 describe("marcarPedidoNaRifei", () => {
   it("a conferência sem o status aceita a aprovação; status de outro tipo vira recusa com o status", async () => {
     const semStatus = clienteCom((url) =>

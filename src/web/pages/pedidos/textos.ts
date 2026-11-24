@@ -8,6 +8,8 @@ import type {
   MotivoDesconsideracao,
   RespostaPedidos,
   ResultadoEventoWebhook,
+  RifeiNaAtribuicao,
+  SituacaoRifeiNaAtribuicao,
   StatusPedido,
 } from "../../../shared/contracts";
 import type { CODIGOS_RECUSA_WEBHOOK } from "../../../shared/contracts/api";
@@ -235,6 +237,40 @@ export const MARCA_RECUPERADO = "Recuperado na conferência";
 
 /** O sinal discreto ao lado da célula da venda que o admin atribuiu à mão (`celula_origem: "manual"`). */
 export const MARCA_ATRIBUIDA = "atribuída à mão";
+
+/**
+ * RIFA-091 (adendo da D41): por que a venda não foi ligada ao afiliado da célula na Rifei, em português simples (vai
+ * entre parênteses em "Na Rifei não deu (…): ligue lá à mão."). `vinculado` e `nao_se_aplica` não têm motivo.
+ */
+export const MOTIVO_RIFEI_NA_ATRIBUICAO: Record<
+  Exclude<SituacaoRifeiNaAtribuicao, "vinculado" | "nao_se_aplica">,
+  string
+> = {
+  sem_conexao: "o sistema não está conectado à Rifei",
+  celula_sem_afiliado: "a célula não tem link de afiliado",
+  varios_afiliados: "a célula tem mais de um link de afiliado",
+  recusado: "a Rifei recusou",
+  indisponivel: "a Rifei não respondeu agora",
+  falhou: "a Rifei deu erro",
+};
+
+/** A frase do aviso sobre a Rifei depois de atribuir; null quando não se aplica (pedido com afiliado, desfazer). */
+export function textoDaRifeiNaAtribuicao(
+  rifei: RifeiNaAtribuicao | null | undefined,
+): string | null {
+  if (!rifei || rifei.situacao === "nao_se_aplica") return null;
+  if (rifei.situacao === "vinculado")
+    return "Também ligada ao afiliado da célula na Rifei.";
+  const motivo =
+    rifei.situacao === "recusado" && rifei.mensagem
+      ? `${MOTIVO_RIFEI_NA_ATRIBUICAO.recusado}: ${rifei.mensagem}`
+      : MOTIVO_RIFEI_NA_ATRIBUICAO[rifei.situacao];
+  const frase = `Na Rifei não deu (${motivo}): ligue lá à mão.`;
+  // O token recusado (e os outros erros) vêm explicados pela API: o que fazer.
+  return rifei.situacao === "falhou" && rifei.mensagem
+    ? `${frase} ${rifei.mensagem}`
+    : frase;
+}
 
 /** A venda pode ganhar (ou trocar, ou perder) a célula à mão: só quando NÃO tem célula pelo afiliado. */
 export function podeAtribuirCelula(

@@ -15,7 +15,9 @@
  *   pedido sem célula pelo afiliado (ou desfaz, com `celula_id: null`), num lote só com a trilha
  *   (db/celula-atribuida.ts). Erros, depois do login (401) e do papel (403, antes de ler o corpo): 400 (corpo), 404
  *   sem campanha ativa ou pedido fora dela, 409 `pedido_ja_tem_celula` e 400 `referencia_invalida` (célula que não
- *   existe). Repetir dá 200 com o pedido como está, sem trilha.
+ *   existe). Repetir dá 200 com o pedido como está, sem trilha. RIFA-091 (adendo da D41): com `celula_id`, num pedido
+ *   sem afiliado e a célula com exatamente um afiliado, liga a venda a ele também na Rifei (lib/afiliado-na-rifei.ts;
+ *   repetir tenta de novo) e responde o item + `rifei` (a situação); a Rifei nunca faz a rota falhar.
  *
  * Este sub-app NÃO autentica o grupo: o index.ts o monta sob /api/admin, depois do login da coordenação (passo
  * 4): `app.route(PREFIXO_PEDIDOS, pedidos)`. O "só admin" das duas escritas fica nelas (exigirSessao).
@@ -26,6 +28,7 @@ import {
   ROTAS_REGRAS_CAMPANHA,
   cabecalhosDosCompradores,
   hojeNoFuso,
+  type RespostaAtribuirCelulaPedido,
 } from "../../shared/contracts";
 import { atribuirCelulaDoPedido } from "../db/celula-atribuida";
 import { exportarCompradores } from "../db/compradores";
@@ -35,6 +38,7 @@ import {
   type AcaoDesconsideracao,
   type ResultadoDesconsideracao,
 } from "../db/regras-campanha";
+import { ligarAfiliadoNaRifei } from "../lib/afiliado-na-rifei";
 import { responderErro } from "../lib/respostas-erro";
 import {
   autoriaDaSessao,
@@ -201,7 +205,19 @@ pedidos.put(
       celulaId,
       quem,
     );
-    if (resultado.ok) return c.json(resultado.item, 200);
+    if (resultado.ok) {
+      // RIFA-091: a venda ligada também na Rifei ao afiliado da célula, quando dá; nunca muda o status da resposta.
+      const { item, rifei } = await ligarAfiliadoNaRifei(
+        c.env,
+        resultado.item,
+        celulaId,
+        quem,
+      );
+      return c.json(
+        { ...item, rifei } satisfies RespostaAtribuirCelulaPedido,
+        200,
+      );
+    }
     switch (resultado.motivo) {
       case "pedido_nao_encontrado":
         return responderErro(

@@ -19,15 +19,17 @@ import { prepararRegistroEventoSePedidoIgual } from "./webhook-eventos";
 
 /**
  * Uma tentativa só falha se o pedido (status ou afiliado) mudou entre a leitura e a gravação. Na vida
- * de um pedido isso acontece no máximo 6 vezes: a criação, 2 transições (in_process → expired →
+ * de um pedido isso acontece no máximo 7 vezes: a criação, 2 transições (in_process → expired →
  * approved), o preenchimento do afiliado tardio (de null para um id), a remoção do afiliado de teste pelo
- * admin (RIFA-031, D20: o pedido desconsiderado fica sem afiliado, de um id para null) e um evento depois que
- * o preenche de novo (o afiliado tardio, outra vez). A 7ª sempre grava. A desconsideração (RIFA-028) não
+ * admin (RIFA-031, D20: o pedido desconsiderado fica sem afiliado, de um id para null), um evento depois que
+ * o preenche de novo (o afiliado tardio, outra vez) e o afiliado gravado pelo próprio sistema quando a Rifei
+ * liga a venda ao afiliado da célula atribuída (RIFA-091, adendo da D41: de null para um id, sem webhook).
+ * A 8ª sempre grava. A desconsideração (RIFA-028) não
  * conta: não muda status nem afiliado, e o UPSERT abaixo nunca toca nas colunas dela. O pagamento registrado pela
  * conferência (RIFA-056, db/reconciliacao.ts) também não soma: é a transição para approved (a mesma, por outra via;
  * approved é terminal), e o UPSERT abaixo nunca toca em `pagamento_recuperacao_id`.
  */
-export const MAX_TENTATIVAS = 7;
+export const MAX_TENTATIVAS = 8;
 
 /** O que o processamento lê do pedido gravado: o status (guarda da transição, D4) e o afiliado (D7). */
 interface PedidoAtual {

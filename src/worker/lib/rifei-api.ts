@@ -88,6 +88,22 @@ export interface AfiliadoDaConta {
   email: string | null;
 }
 
+/**
+ * O vínculo de afiliado que a Rifei devolve ao ligar a venda a um afiliado (`PUT raffles/<id>/orders/<pedido>/
+ * link-affiliate`; RIFA-091). Só o `affiliate_id` é conferido: o resto (inclusive o e-mail e o nome do afiliado, dado
+ * pessoal) não é lido nem guardado.
+ */
+const vinculoAfiliadoSchema = z.looseObject({
+  affiliate_id: z.union([
+    z.number().int().positive(),
+    z.string().regex(/^[1-9]\d{0,15}$/),
+  ]),
+});
+
+/** O que aconteceu ao ligar a venda a um afiliado na Rifei (os outros casos são FalhaRifei). */
+export type VinculoAfiliadoNaRifei =
+  { tipo: "vinculado" } | { tipo: "recusado"; mensagem: string | null };
+
 /** O status de um pedido no corpo de `GET raffles/<id>/orders/<pedido>` (no objeto ou em `order`). */
 function statusDoPedido(corpo: unknown): string | null {
   if (!corpo || typeof corpo !== "object") return null;
@@ -222,6 +238,31 @@ export function criarClienteRifei(
         `${prefixo}raffles/expired-orders/${encodeURIComponent(pedidoId)}/restore`,
       );
       return { restaurado: ok(status), mensagem: mensagemDaRifei(corpo) };
+    },
+
+    /**
+     * Liga a venda sem afiliado a um afiliado da conta (RIFA-091; o "Vincular afiliado" do pedido no painel, capturado
+     * pelo PO em 24/11): `PUT raffles/<raffleId>/orders/<pedido>/link-affiliate { affiliate_id }`. 2xx com o mesmo
+     * `affiliate_id` na resposta: vinculado; 2xx em outro formato (ou com outro afiliado): `resposta_inesperada`; outra
+     * resposta (que não 401/403/429/5xx): recusado, com a mensagem da Rifei cortada. A Rifei não manda webhook nessa
+     * troca. Não há chamada conhecida para desligar.
+     */
+    async vincularAfiliadoAoPedido(
+      raffleId: string,
+      pedidoId: string,
+      affiliateId: number,
+    ): Promise<VinculoAfiliadoNaRifei> {
+      const { status, corpo } = await chamar(
+        "PUT",
+        `raffles/${encodeURIComponent(raffleId)}/orders/${encodeURIComponent(pedidoId)}/link-affiliate`,
+        { affiliate_id: affiliateId },
+      );
+      if (!ok(status))
+        return { tipo: "recusado", mensagem: mensagemDaRifei(corpo) };
+      const lido = vinculoAfiliadoSchema.safeParse(corpo);
+      if (!lido.success || Number(lido.data.affiliate_id) !== affiliateId)
+        throw new FalhaRifei("resposta_inesperada");
+      return { tipo: "vinculado" };
     },
 
     /** Os afiliados da conta. Fora do formato: `resposta_inesperada`. */

@@ -8,7 +8,11 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { Link } from "react-router";
-import type { ItemPedido, RespostaPedidos } from "../../../shared/contracts";
+import type {
+  ItemPedido,
+  RespostaPedidos,
+  RifeiNaAtribuicao,
+} from "../../../shared/contracts";
 import {
   Aviso,
   Badge,
@@ -71,6 +75,7 @@ import {
   filtrosAtivos,
   pedidos,
   podeAtribuirCelula,
+  textoDaRifeiNaAtribuicao,
   seloDesconsiderado,
   textoDaCelula,
   totaisDepoisDe,
@@ -132,6 +137,10 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     pedido: ItemPedido;
   } | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
+  // RIFA-091: a Rifei não ligou a venda ao afiliado da célula: o aviso do resultado fica em alerta.
+  const [resultadoTom, setResultadoTom] = useState<"sucesso" | "alerta">(
+    "sucesso",
+  );
   // RIFA-088 (D41): a venda sem célula pelo afiliado em que o admin escolhe a célula à mão.
   const [atribuindo, setAtribuindo] = useState<ItemPedido | null>(null);
   // Depois da ação, o botão troca de nome ("Desconsiderar" ↔ "Desfazer"): o foco vai para o id do pedido.
@@ -149,15 +158,29 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     setAtribuindo(pedido);
   }
 
-  /** A célula mudou: o item troca na lista (os totais seguem os filtros e só mudam ao recarregar). */
-  function aoConcluirAtribuicao(depois: ItemPedido) {
+  /**
+   * A célula mudou: o item troca na lista (os totais seguem os filtros e só mudam ao recarregar). RIFA-091: o aviso diz
+   * também o resultado na Rifei (nada quando não se aplica).
+   */
+  function aoConcluirAtribuicao(
+    depois: ItemPedido,
+    rifei: RifeiNaAtribuicao | null,
+  ) {
     substituirItem(depois);
     refFocoAposAcao.current = document.getElementById(idDoPedido(depois.id));
     setAtribuindo(null);
+    const naRifei = textoDaRifeiNaAtribuicao(rifei);
+    setResultadoTom(
+      naRifei !== null && rifei?.situacao !== "vinculado"
+        ? "alerta"
+        : "sucesso",
+    );
     setResultado(
-      depois.celula_nome === null
-        ? `Pedido ${depois.id} sem célula de novo: não conta para nenhuma.`
-        : `Pedido ${depois.id} atribuído à ${depois.celula_nome}: a venda conta para ela em todo o sistema.`,
+      `${
+        depois.celula_nome === null
+          ? `Pedido ${depois.id} sem célula de novo: não conta para nenhuma.`
+          : `Pedido ${depois.id} atribuído à ${depois.celula_nome}: a venda conta para ela em todo o sistema.`
+      }${naRifei === null ? "" : ` ${naRifei}`}`,
     );
   }
 
@@ -172,6 +195,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
     );
     refFocoAposAcao.current = document.getElementById(idDoPedido(depois.id));
     setAcao(null);
+    setResultadoTom("sucesso");
     setResultado(
       depois.desconsiderado
         ? `Pedido ${depois.id} desconsiderado: saiu de todas as contas e dos totais.`
@@ -221,7 +245,7 @@ export function ListaPedidos({ filtros, aoMudar }: Props) {
       </p>
       {resultado && (
         <Aviso
-          tom="sucesso"
+          tom={resultadoTom}
           anuncio="nenhum"
           aoFechar={() => setResultado(null)}
         >

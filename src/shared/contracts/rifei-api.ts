@@ -91,6 +91,43 @@ export const MENSAGEM_FALHA_RIFEI: Record<MotivoFalhaRifei, string> = {
 };
 
 /**
+ * RIFA-091 (adendo da D41): o que aconteceu na Rifei ao atribuir à mão a célula de um pedido (o `rifei` da resposta de
+ * PUT /api/admin/pedidos/:id/celula). Com `celula_id` (não null), num pedido SEM afiliado no sistema, se a célula tem
+ * exatamente um afiliado vinculado, o sistema liga a venda a ele na Rifei (`PUT raffles/<raffleId>/orders/<pedido>/
+ * link-affiliate`) e, se a Rifei aceitar, grava o `affiliate_id` no pedido (a Rifei não manda webhook nessa troca):
+ * - vinculado: a Rifei ligou a venda ao afiliado da célula, e o pedido passou a ter esse afiliado no sistema;
+ * - sem_conexao: não há token da Rifei (nem o da tela nem o segredo), ou o da tela não pode ser lido;
+ * - celula_sem_afiliado: a célula não tem afiliado vinculado (nada a ligar na Rifei);
+ * - varios_afiliados: a célula tem mais de um afiliado vinculado (o sistema não escolhe por ela);
+ * - recusado: a Rifei respondeu que não liga (a mensagem dela vai em `mensagem`, se veio);
+ * - indisponivel: a Rifei não respondeu a tempo, respondeu 5xx ou limitou as chamadas (429);
+ * - falhou: a Rifei recusou o token (401/403), não achou a campanha ou respondeu num formato desconhecido (o motivo,
+ *   em português, vai em `mensagem`);
+ * - nao_se_aplica: o pedido já tinha afiliado, ou foi um "desfazer" (`celula_id: null`).
+ * Em todas, a atribuição no sistema vale do mesmo jeito: a Rifei nunca faz a rota falhar.
+ */
+export const SITUACOES_RIFEI_NA_ATRIBUICAO = [
+  "vinculado",
+  "sem_conexao",
+  "celula_sem_afiliado",
+  "varios_afiliados",
+  "recusado",
+  "indisponivel",
+  "falhou",
+  "nao_se_aplica",
+] as const;
+export type SituacaoRifeiNaAtribuicao =
+  (typeof SITUACOES_RIFEI_NA_ATRIBUICAO)[number];
+
+/** As situações em que o sistema chamou a Rifei: só estas entram na trilha (`pedido.vincular_afiliado_rifei`). */
+export const SITUACOES_RIFEI_TENTADAS: readonly SituacaoRifeiNaAtribuicao[] = [
+  "vinculado",
+  "recusado",
+  "indisponivel",
+  "falhou",
+];
+
+/**
  * O convite de afiliado gerado por célula: comissão zero e todas as campanhas da conta (a venda de um líder não rende
  * comissão; o que importa é a venda contar para a célula). É o corpo do POST `affiliates` do painel.
  */

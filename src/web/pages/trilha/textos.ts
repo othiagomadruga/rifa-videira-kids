@@ -46,6 +46,9 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
   "relatorio_diario.enviar": "Relatório diário enviado por e-mail",
   // RIFA-088 (D41): a venda sem célula atribuída à mão a uma célula pelo admin (tela Pedidos; alvo `pedido:<id>`).
   "pedido.atribuir_celula": "Célula do pedido atribuída à mão",
+  // RIFA-091 (adendo da D41): a tentativa de ligar a venda ao afiliado da célula na Rifei (alvo `pedido:<id>`).
+  "pedido.vincular_afiliado_rifei":
+    "Ligação da venda ao afiliado da célula na Rifei",
 };
 
 /** A ação em português; uma ação nova, que o site ainda não conhece, aparece como veio da API. */

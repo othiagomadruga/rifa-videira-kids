@@ -1,6 +1,10 @@
 // RIFA-025: os textos da tela Pedidos e do alerta, sem renderizar (os casos de borda que a tela não mostra todos).
 import { describe, expect, it } from "vitest";
 import {
+  MENSAGEM_FALHA_RIFEI,
+  SITUACOES_RIFEI_NA_ATRIBUICAO,
+} from "../../../shared/contracts";
+import {
   haQuanto,
   horasEntre,
   sugereConferirSlug,
@@ -8,8 +12,10 @@ import {
 } from "./alerta-webhook";
 import { estado } from "./teste-apoio";
 import {
+  MOTIVO_RIFEI_NA_ATRIBUICAO,
   rotuloDoEvento,
   textoDaCelula,
+  textoDaRifeiNaAtribuicao,
   textoDoCampo,
   textoDoDetalhe,
   transicao,
@@ -176,5 +182,62 @@ describe("alerta: tempo e slug", () => {
     expect(umErro.tipo === "aviso" && umErro.paragrafos[0]).toMatch(
       /^Nas últimas 24 h, 1 entrega foi recusada por erro, contando qualquer slug \(também de outras campanhas da conta na Rifei\)\./,
     );
+  });
+});
+
+describe("RIFA-091: o resultado na Rifei depois de atribuir a célula", () => {
+  it("toda situação do contrato tem texto (menos vinculado e nao_se_aplica, que não têm motivo)", () => {
+    expect(Object.keys(MOTIVO_RIFEI_NA_ATRIBUICAO).sort()).toEqual(
+      SITUACOES_RIFEI_NA_ATRIBUICAO.filter(
+        (situacao) => situacao !== "vinculado" && situacao !== "nao_se_aplica",
+      ).sort(),
+    );
+  });
+
+  it.each([
+    [
+      { situacao: "vinculado" },
+      "Também ligada ao afiliado da célula na Rifei.",
+    ],
+    [{ situacao: "nao_se_aplica" }, null],
+    [
+      { situacao: "sem_conexao" },
+      "Na Rifei não deu (o sistema não está conectado à Rifei): ligue lá à mão.",
+    ],
+    [
+      { situacao: "celula_sem_afiliado" },
+      "Na Rifei não deu (a célula não tem link de afiliado): ligue lá à mão.",
+    ],
+    [
+      { situacao: "varios_afiliados" },
+      "Na Rifei não deu (a célula tem mais de um link de afiliado): ligue lá à mão.",
+    ],
+    [
+      { situacao: "recusado" },
+      "Na Rifei não deu (a Rifei recusou): ligue lá à mão.",
+    ],
+    [
+      { situacao: "recusado", mensagem: "Pedido já tem afiliado" },
+      "Na Rifei não deu (a Rifei recusou: Pedido já tem afiliado): ligue lá à mão.",
+    ],
+    [
+      { situacao: "indisponivel", mensagem: MENSAGEM_FALHA_RIFEI.indisponivel },
+      "Na Rifei não deu (a Rifei não respondeu agora): ligue lá à mão.",
+    ],
+    [
+      { situacao: "falhou", mensagem: MENSAGEM_FALHA_RIFEI.token_invalido },
+      `Na Rifei não deu (a Rifei deu erro): ligue lá à mão. ${MENSAGEM_FALHA_RIFEI.token_invalido}`,
+    ],
+    [
+      { situacao: "falhou" },
+      "Na Rifei não deu (a Rifei deu erro): ligue lá à mão.",
+    ],
+  ] as const)("%o → %s", (rifei, texto) => {
+    expect(textoDaRifeiNaAtribuicao(rifei)).toBe(texto);
+  });
+
+  it("sem `rifei` na resposta (API de antes): nada", () => {
+    expect(textoDaRifeiNaAtribuicao(null)).toBeNull();
+    expect(textoDaRifeiNaAtribuicao(undefined)).toBeNull();
   });
 });

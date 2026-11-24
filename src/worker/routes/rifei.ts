@@ -47,15 +47,13 @@ import {
   buscarPedidosParaMarcar,
   gravarConexaoRifei,
   lerConexaoRifei,
-  registrarUsoDaConexaoRifei,
-  type LinhaConexaoRifei,
   gravarSincronizacao,
   lerCelulas,
   lerCelulasEAfiliados,
   lerPedidosParaMarcar,
   registrarNaTrilha,
 } from "../db/rifei";
-import { cifrarTokenRifei, decifrarTokenRifei } from "../lib/cifra-rifei";
+import { cifrarTokenRifei } from "../lib/cifra-rifei";
 import { responderErro } from "../lib/respostas-erro";
 import {
   montarAfiliadosRifei,
@@ -66,8 +64,13 @@ import {
   criarClienteRifei,
   emLotes,
   marcarPedidoNaRifei,
-  type ClienteRifei,
 } from "../lib/rifei-api";
+import {
+  abrirConexaoRifei,
+  abrirTokenDaTela,
+  registrarUsoDaConexao,
+  type ConexaoEmUso,
+} from "../lib/rifei-conexao";
 import {
   autoriaDaSessao,
   exigirSessao,
@@ -115,53 +118,16 @@ const MENSAGEM_SEM_LINK =
   "A Rifei não devolveu o link do convite: gere no painel da Rifei (Afiliados → Convidar).";
 
 /**
- * O token que vale (D32): o da tela (no D1, cifrado) tem prioridade; sem ele, o segredo RIFEI_API_TOKEN. `uso` junta o
- * que a Rifei respondeu nesta requisição, para gravar o último sucesso ou a recusa do token da tela.
+ * A conexão que vale (D32, lib/rifei-conexao.ts): o token da tela (no D1, cifrado) tem prioridade; sem ele, o segredo
+ * RIFEI_API_TOKEN. Sem token, ou com o da tela ilegível: a resposta 503.
  */
-interface ConexaoEmUso {
-  api: ClienteRifei;
-  /** O token cifrado da linha da tela (null quando vale o segredo do Worker). */
-  tokenCifrado: string | null;
-  uso: { ok: boolean; recusado: boolean };
-}
-
-/** O token da tela aberto com a chave; null sem chave ou se a chave não abre. */
-async function abrirTokenDaTela(
-  c: Contexto,
-  linha: LinhaConexaoRifei,
-): Promise<string | null> {
-  const chave = c.env[SEGREDO_CHAVE_CIFRA_RIFEI];
-  if (!chaveCifraRifeiConfigurada(chave)) return null;
-  return decifrarTokenRifei(linha.token_cifrado, chave ?? "");
-}
-
-function clienteComUso(token: string, uso: ConexaoEmUso["uso"]): ClienteRifei {
-  return criarClienteRifei(token, {
-    aoResponder: (status) => {
-      if (status === 401 || status === 403) uso.recusado = true;
-      else if (status < 500 && status !== 429) uso.ok = true;
-    },
-  });
-}
-
-/** A conexão para chamar a Rifei, ou a resposta 503 (sem token, ou o da tela ilegível). */
 async function abrirConexao(c: Contexto): Promise<ConexaoEmUso | Response> {
-  const uso = { ok: false, recusado: false };
-  const linha = await lerConexaoRifei(c.env.DB);
-  if (linha) {
-    const token = await abrirTokenDaTela(c, linha);
-    if (token === null)
-      return responderErro(c, "nao_configurado", MENSAGEM_TOKEN_ILEGIVEL);
-    return {
-      api: clienteComUso(token, uso),
-      tokenCifrado: linha.token_cifrado,
-      uso,
-    };
-  }
-  const segredo = c.env[SEGREDO_API_RIFEI];
-  if (!apiRifeiConfigurada(segredo))
+  const conexao = await abrirConexaoRifei(c.env);
+  if (conexao === "token_ilegivel")
+    return responderErro(c, "nao_configurado", MENSAGEM_TOKEN_ILEGIVEL);
+  if (conexao === "sem_token")
     return responderErro(c, "nao_configurado", MENSAGEM_NAO_CONFIGURADO);
-  return { api: clienteComUso(segredo ?? "", uso), tokenCifrado: null, uso };
+  return conexao;
 }
 
 /**
@@ -187,14 +153,7 @@ async function comRifei(
       );
     throw erro;
   } finally {
-    const { uso, tokenCifrado } = conexao;
-    if (tokenCifrado !== null && (uso.ok || uso.recusado))
-      await registrarUsoDaConexaoRifei(
-        c.env.DB,
-        tokenCifrado,
-        uso.recusado ? "recusado" : "ok",
-        new Date().toISOString(),
-      );
+    await registrarUsoDaConexao(c.env.DB, conexao);
   }
 }
 
@@ -213,7 +172,9 @@ async function estadoDaConexao(c: Contexto): Promise<EstadoConexaoRifei> {
     recusado_em: linha?.recusado_em ?? null,
     expira_em: linha?.expira_em ?? null,
     chave_configurada: chaveConfigurada,
-    token_legivel: linha ? (await abrirTokenDaTela(c, linha)) !== null : false,
+    token_legivel: linha
+      ? (await abrirTokenDaTela(c.env, linha)) !== null
+      : false,
     segredo_configurado: segredoConfigurado,
   });
 }

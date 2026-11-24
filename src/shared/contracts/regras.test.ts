@@ -21,9 +21,16 @@ import {
   itemPedidoSchema,
   parametroPedidoIdSchema,
   pedidoSuspeitoSchema,
+  respostaAtribuirCelulaPedidoSchema,
   respostaPedidosSchema,
+  rifeiNaAtribuicaoSchema,
   type ItemPedido,
 } from "./api";
+import {
+  LIMITE_MENSAGEM_RIFEI,
+  SITUACOES_RIFEI_NA_ATRIBUICAO,
+  SITUACOES_RIFEI_TENTADAS,
+} from "./rifei-api";
 import {
   PAPEIS,
   ROTAS_ACESSO,
@@ -761,8 +768,9 @@ describe("D20: o catálogo das rotas novas", () => {
       status: 204,
       corpo: null,
     });
+    // RIFA-091: o item de hoje + o resultado na Rifei.
     expect(ROTAS_REGRAS_CAMPANHA.atribuirCelulaPedido.sucesso.corpo).toBe(
-      itemPedidoSchema,
+      respostaAtribuirCelulaPedidoSchema,
     );
   });
 
@@ -788,6 +796,61 @@ describe("D20: o catálogo das rotas novas", () => {
     expect(ORIGENS_CELULA_PEDIDO).toEqual(["afiliado", "manual"]);
     expect(STATUS_HTTP_DO_ERRO.pedido_ja_tem_celula).toBe(409);
     expect(ACOES_AUDITORIA).toContain("pedido.atribuir_celula");
+  });
+
+  it("RIFA-091: a resposta da atribuição é o item de hoje + `rifei` (situação e mensagem opcional), estrita", () => {
+    const resposta = respostaAtribuirCelulaPedidoSchema;
+    expect(SITUACOES_RIFEI_NA_ATRIBUICAO).toEqual([
+      "vinculado",
+      "sem_conexao",
+      "celula_sem_afiliado",
+      "varios_afiliados",
+      "recusado",
+      "indisponivel",
+      "falhou",
+      "nao_se_aplica",
+    ]);
+    expect(SITUACOES_RIFEI_TENTADAS).toEqual([
+      "vinculado",
+      "recusado",
+      "indisponivel",
+      "falhou",
+    ]);
+    for (const situacao of SITUACOES_RIFEI_NA_ATRIBUICAO)
+      expect(aceita(resposta, { ...itemDeHoje, rifei: { situacao } })).toBe(
+        true,
+      );
+    const lida = resposta.parse({
+      ...itemDeHoje,
+      rifei: { situacao: "recusado", mensagem: "Pedido não encontrado" },
+    });
+    expect(lida.rifei).toEqual({
+      situacao: "recusado",
+      mensagem: "Pedido não encontrado",
+    });
+    expect(lida.celula_origem).toBeNull();
+    for (const errado of [
+      itemDeHoje,
+      { ...itemDeHoje, rifei: null },
+      { ...itemDeHoje, rifei: {} },
+      { ...itemDeHoje, rifei: { situacao: "outra" } },
+      { ...itemDeHoje, rifei: { situacao: "recusado", mensagem: "" } },
+      {
+        ...itemDeHoje,
+        rifei: {
+          situacao: "recusado",
+          mensagem: "x".repeat(LIMITE_MENSAGEM_RIFEI + 1),
+        },
+      },
+      // Nada além da situação e da mensagem: nunca o token, o e-mail ou o nome do afiliado.
+      { ...itemDeHoje, rifei: { situacao: "vinculado", token: "x" } },
+      { ...itemDeHoje, rifei: { situacao: "vinculado" }, extra: 1 },
+    ])
+      expect(aceita(resposta, errado)).toBe(false);
+    expect(rifeiNaAtribuicaoSchema.shape.situacao.options).toEqual(
+      SITUACOES_RIFEI_NA_ATRIBUICAO,
+    );
+    expect(ACOES_AUDITORIA).toContain("pedido.vincular_afiliado_rifei");
   });
 
   it("não repete rota de nenhum outro catálogo, e o id do pedido vai no corpo (nunca na URL)", () => {

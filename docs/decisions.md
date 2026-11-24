@@ -2442,3 +2442,41 @@ e `src/worker/routes/pedidos.ts`, a regra em `src/worker/db/celula-efetiva.ts`, 
 **Suposições:** desfazer vale mesmo quando o afiliado já tem célula (a atribuída não contava); o pedido desconsiderado
 também pode ser atribuído (não conta de qualquer jeito); a tela troca o item e não recalcula os totais da lista (eles
 seguem os filtros e mudam ao recarregar); na já atribuída, o botão diz "Trocar a célula".
+
+**Adendo (RIFA-091, 24/11): a atribuição vale também na Rifei.** Pedido do PO: a Rifei deixa ligar uma venda sem
+afiliado a um afiliado, e o líder passa a ver a venda no painel de afiliado dele. Chamada capturada pelo PO no painel:
+`PUT raffles/<raffleId>/orders/<pedido>/link-affiliate { "affiliate_id": <id> }` (integracao-rifei.md 13.1); a Rifei
+**não manda webhook** nessa troca. Contrato: `SITUACOES_RIFEI_NA_ATRIBUICAO` (`rifei-api.ts`),
+`respostaAtribuirCelulaPedidoSchema` e `rifeiNaAtribuicaoSchema` (`api.ts`), a ação `pedido.vincular_afiliado_rifei`;
+cliente em `lib/rifei-api.ts` (`vincularAfiliadoAoPedido`), regra em `lib/afiliado-na-rifei.ts`, gravação em
+`db/celula-atribuida.ts`, a conexão (token da tela ou segredo, D32) em `lib/rifei-conexao.ts`, tela em
+`src/web/pages/pedidos/`.
+
+- **Quando chama a Rifei:** no `PUT /api/admin/pedidos/:id/celula` com `celula_id` (não no desfazer), depois de gravar a
+  atribuição como antes, se o pedido está **sem afiliado** no sistema e a célula tem **exatamente um** afiliado
+  vinculado. O pedido de afiliado não vinculado não vai (a Rifei já tem um afiliado nele). Célula sem afiliado, com
+  vários (o sistema não escolhe por ela) ou sem conexão: não chama.
+- **A Rifei aceitou** (2xx com o mesmo `affiliate_id`): o sistema grava `pedidos.affiliate_id` (UPDATE próprio, só se
+  ainda nulo, com `atualizado_em`), no mesmo lote da trilha. A célula efetiva passa a vir do afiliado (é a mesma
+  célula); a atribuída continua gravada e não conta mais. Daí em diante a venda é uma venda do afiliado: atribuir de
+  novo dá 409 `pedido_ja_tem_celula` (a regra da D41) e o botão some da lista; desfazer ainda tira a atribuída. Não há
+  chamada conhecida para desligar na Rifei: trocar, só à mão no painel.
+- **A Rifei nunca faz a rota falhar:** recusou (outra resposta, com a mensagem dela cortada), não respondeu (429, 5xx,
+  rede, tempo), recusou o token (401/403, que também fica gravado na conexão da tela, como nas outras chamadas) ou
+  respondeu outro formato: 200 com a atribuição feita e `rifei.situacao` (`recusado`, `indisponivel`, `falhou`); o
+  pedido fica sem afiliado e a tela pede para ligar à mão no painel da Rifei.
+- **Repetir** o PUT com a mesma célula num pedido ainda sem afiliado tenta a Rifei de novo (sem trilha nova da
+  atribuição, que não mudou): é o caminho para mandar à Rifei as atribuições feitas antes desta tarefa.
+- **Trilha** `pedido.vincular_afiliado_rifei`, uma linha por chamada à Rifei (`SITUACOES_RIFEI_TENTADAS`), alvo
+  `pedido:<id>`: `Pedido "<id>": afiliado <affiliate_id> da célula <id> na Rifei: <situação>` (com o motivo em código
+  quando falhou). Nunca o token, o e-mail ou o nome do afiliado (a resposta da Rifei traz os dois e não é guardada).
+- **Webhook:** `MAX_TENTATIVAS` (db/pedidos.ts) subiu de 7 para 8: o afiliado gravado pelo sistema é mais uma mudança
+  de afiliado na vida do pedido que a concorrência otimista conta. O webhook continua sem tocar nas colunas da
+  atribuição; um evento depois com outro `affiliate_id` vence, como sempre (aviso `afiliado_alterado`).
+- **Testes** sem rede: o cliente com fetch falso e a rota com a Rifei falsa (`celula-atribuida-rifei.test.ts`); o
+  `vitest.config.ts` fixa `RIFEI_API_TOKEN` vazio nos testes do Worker, para nenhum teste chamar a Rifei de verdade
+  mesmo com um `.dev.vars` de dev.
+
+**Suposições (RIFA-091):** vale para pedido de qualquer status e também para o desconsiderado (como a atribuição);
+token recusado, campanha não achada e formato desconhecido ficam juntos em `falhou`, com a explicação do sistema em
+`mensagem`; a resposta 2xx sem o mesmo `affiliate_id` não grava nada (conservador: a tela pede para conferir à mão).
