@@ -524,11 +524,12 @@ Exemplos abaixo: a campanha do PUT (10/7/7 dias com 35/25/45, 10 bilhetes por pe
 ### `GET /api/painel/resumo` (`coordenacao`)
 
 - **Consulta** (`consultaPainelResumoSchema`):
-  - `escopo` = `campanha` (padrão), `divisao`, `rede`, `discipulador` ou `celula`;
-  - `id`: obrigatório nos escopos rede, discipulador e célula;
+  - `escopo` = `campanha` (padrão), `divisao`, `grupo`, `rede`, `discipulador` ou `celula`;
+  - `id`: obrigatório nos escopos grupo, rede, discipulador e célula;
   - `divisao`: obrigatória no escopo divisão;
   - `data` (`YYYY-MM-DD`, no máximo hoje): padrão hoje no fuso da campanha. Com data passada, o retrato é o do fim daquele dia.
-- A rota resolve o escopo antes de chamar a função: confere se o `id` existe (`404 nao_encontrado`, senão) e passa `{ tipo, id, divisao, nome }`. Na campanha, `nome` é o da campanha e `divisao` é null; na divisão, `nome` é `NOMES_DIVISAO[divisao]`; nos outros, o nome da entidade e a divisão da rede dela.
+- A rota resolve o escopo antes de chamar a função: confere se o `id` existe (`404 nao_encontrado`, senão: "Grupo não encontrado", "Rede não encontrada", "Discipulador não encontrado", "Célula não encontrada") e passa `{ tipo, id, divisao, nome }`. Na campanha, `nome` é o da campanha e `divisao` é null; na divisão, `nome` é `NOMES_DIVISAO[divisao]`; no grupo, o nome do grupo e `divisao` null; nos outros, o nome da entidade e a divisão da rede dela.
+- **Escopo `grupo`** (RIFA-092, adendo da D39; ex.: `?escopo=grupo&id=1`, "Adultos da manhã"): as células do grupo **efetivo** (o próprio da célula, `celulas.grupo_id`, se houver; senão, o do discipulador), o mesmo recorte do ranking por grupo (`GET /api/painel/ranking-grupos`) no nível célula. A célula com grupo próprio entra no grupo dela e sai do grupo do discipulador; a célula sem grupo nenhum fica fora de todos os grupos. Metas, ritmo, vendas (com a venda atribuída à mão, D41) e curva saem como nos outros escopos, somando as células do grupo; `vendas_sem_celula` e `vendas_fora_da_janela` são null (só na campanha). Um grupo que existe e não tem células responde 200, sem meta. Sem ida a mais ao D1: o grupo efetivo vem na mesma leitura das células (`coalesce(c.grupo_id, d.grupo_id)`) e o nome do grupo no mesmo lote, como os outros escopos.
 - **200** (`respostaPainelResumoSchema`):
 
 ```json

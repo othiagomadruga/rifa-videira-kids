@@ -499,6 +499,29 @@ describe("CA3: parâmetros, consultas e corpos", () => {
     ).toBe(true);
   });
 
+  it("RIFA-092: o escopo grupo exige o id do grupo, como a rede, o discipulador e a célula", () => {
+    expect(
+      consultaPainelResumoSchema.parse({ escopo: "grupo", id: "2" }),
+    ).toEqual({ escopo: "grupo", id: 2 });
+    const semId = consultaPainelResumoSchema.safeParse({ escopo: "grupo" });
+    expect(semId.success).toBe(false);
+    expect(semId.error?.issues.map((problema) => problema.path)).toEqual([
+      ["id"],
+    ]);
+    for (const id of ["0", "-1", "abc"])
+      expect(
+        consultaPainelResumoSchema.safeParse({ escopo: "grupo", id }).success,
+      ).toBe(false);
+    expect(
+      respostaPainelResumoSchema.shape.escopo.safeParse({
+        tipo: "grupo",
+        id: 1,
+        divisao: null,
+        nome: "Adultos da manhã",
+      }).success,
+    ).toBe(true);
+  });
+
   it("ranking: padrão célula e período atual; níveis célula, discipulador e rede; data válida", () => {
     expect(consultaRankingSchema.parse({})).toEqual({
       nivel: "celula",
