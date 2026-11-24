@@ -194,6 +194,9 @@ export const DICAS = {
       "Apaga o discipulador, depois de pedir confirmação. Só dá se ele não tiver células.",
     rede: "Apaga a rede, depois de pedir confirmação. Só dá se ela não tiver discipuladores.",
   } satisfies Record<Entidade, string>,
+  /** RIFA-093: só o admin vê, na linha da célula. */
+  quemComprou:
+    "Abre a tela Quem comprou com as compras desta célula, com o telefone de quem comprou.",
   cancelarEdicao: "Fecha sem salvar. Nada muda na hierarquia.",
   salvar:
     "Grava as mudanças e atualiza as tabelas. Se algum campo estiver errado, ele avisa.",

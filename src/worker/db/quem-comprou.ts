@@ -47,18 +47,34 @@ export function decodificarCursorQuemComprou(
     : { aprovado_em: cursor.registrado_em, id: cursor.id };
 }
 
-const LER_CAMPANHA = "SELECT id, fuso_horario FROM campanhas WHERE ativa = 1";
+export const LER_CAMPANHA =
+  "SELECT id, fuso_horario FROM campanhas WHERE ativa = 1";
 
-/** A página: ?1 a célula, ?2 o limite + 1 e, com o cursor, ?3 e ?4. */
-export function comandoQuemComprou(comCursor: boolean): string {
-  return `SELECT p.id, p.comprador_nome AS nome, p.aprovado_em, p.qtd_bilhetes AS bilhetes
-  FROM pedidos AS p
-  WHERE +p.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1)
+/** As vendas pagas que contam da célula ?1 (a célula efetiva): o filtro da página e dos totais do admin. */
+export const VENDAS_DA_CELULA = `+p.campanha_id = (SELECT id FROM campanhas WHERE ativa = 1)
     AND +p.status = 'approved' AND +p.desconsiderado_em IS NULL
     AND (p.affiliate_id IN (SELECT affiliate_id FROM afiliados WHERE celula_id = ?1)
-      OR (p.celula_atribuida_id = ?1 AND ${semCelulaDoAfiliado()}))${
-        comCursor ? "\n    AND (p.aprovado_em, p.id) < (?3, ?4)" : ""
-      }
+      OR (p.celula_atribuida_id = ?1 AND ${semCelulaDoAfiliado()}))`;
+
+/**
+ * A página: ?1 a célula, ?2 o limite + 1 e, com o cursor, ?3 e ?4. `doAdmin` (RIFA-093, adendo da D36) acrescenta o
+ * telefone do pedido e a origem da célula (o pedido que não é de um afiliado da célula entrou pela atribuição à mão);
+ * o filtro, a ordem e o plano são os mesmos.
+ */
+export function comandoQuemComprou(
+  comCursor: boolean,
+  doAdmin = false,
+): string {
+  const colunasDoAdmin = doAdmin
+    ? `, p.comprador_telefone AS telefone,
+    CASE WHEN p.affiliate_id IN (SELECT affiliate_id FROM afiliados WHERE celula_id = ?1)
+      THEN 'afiliado' ELSE 'manual' END AS origem_celula`
+    : "";
+  return `SELECT p.id, p.comprador_nome AS nome, p.aprovado_em, p.qtd_bilhetes AS bilhetes${colunasDoAdmin}
+  FROM pedidos AS p
+  WHERE ${VENDAS_DA_CELULA}${
+    comCursor ? "\n    AND (p.aprovado_em, p.id) < (?3, ?4)" : ""
+  }
   ORDER BY p.aprovado_em DESC, p.id DESC
   LIMIT ?2`;
 }

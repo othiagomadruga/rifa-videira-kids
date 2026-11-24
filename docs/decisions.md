@@ -2072,6 +2072,31 @@ dia: uma planilha de compradores para agradecer a compra e para as campanhas fut
 - **Ver D38** (RIFA-083, 23/11): o **nome** do comprador passa a aparecer também para o discipulador, só dos compradores
   das células dele, no ranking dos maiores compradores; o telefone e o R$ continuam só do admin.
 
+**Adendo (RIFA-093, 2026-11-24): quem comprou por célula, com o telefone, numa tela só do admin.** Pedido do PO: "No
+painel do admin não estamos conseguindo visualizar quem comprou por célula" (dava, mas escondido: Pedidos → Filtros →
+Célula) e, depois, "uma visualização com menos cliques, limpa porém prática no mobile".
+
+- **Tela "Quem comprou"** (`/coordenacao/quem-comprou`, no menu logo depois de Pedidos, `papeis: ["admin"]`): a busca
+  "Buscar célula" no topo (filtra enquanto digita, sem acento nem maiúscula) e todas as células em cartões compactos,
+  de mais bilhetes para menos (empate pelo nome), com o discipulador e "N bilhetes · M compras". Tocar no cartão abre
+  ali mesmo (acordeão, uma célula por vez, guardada em `?celula=<id>`) as compras pagas da célula: o nome (ou
+  "Comprador sem nome"), "23/11 às 14:03", os bilhetes, o telefone legível com o link do WhatsApp (como a coluna
+  Comprador de Pedidos) e o sinal "atribuída à mão" (D41); "Ver mais" (20 por página) e o link "Abrir em Pedidos"
+  (`/coordenacao/pedidos?celula_id=<id>`). Sem R$, sem DDD e sem o id do pedido na lista. Mobile-first: sem tabela
+  larga nem rolagem lateral a 390 px, alvos de toque de 44 px.
+- **Atalhos:** em Rankings (ranking de células, também o por grupo) o nome da célula vira link e na Hierarquia (tabela de
+  células) cada linha ganha o botão "Quem comprou", os dois só para o admin, levando à tela com a célula já aberta. Para
+  a coordenação, o nome continua só texto e o botão não aparece.
+- **Rotas, só admin** (`ROTAS_QUEM_COMPROU_ADMIN`; `src/worker/routes/quem-comprou-admin.ts`, `db/quem-comprou-admin.ts`):
+  `GET /api/admin/quem-comprou/celulas` (todas as células com o discipulador, os pedidos e os bilhetes pela célula
+  efetiva, as sem venda com zero; uma ida ao D1 com um GROUP BY das vendas aprovadas da campanha) e
+  `GET /api/admin/celulas/:id/compradores?limite=&antes_de=` (a mesma consulta e o mesmo cursor do "Quem comprou" do
+  líder, RIFA-089, mais o telefone E.164 do pedido, o `pedido_id` e a `origem_celula`, com os totais da célula; célula
+  inexistente, 404). A coordenação e a hierarquia levam 403 (o exigirSessao do admin vem antes do id e da consulta);
+  sem campanha ativa, 404; `no-store`, schema estrito; a leitura não vai para a trilha (não exporta nada).
+- **Por que só o admin:** a regra desta decisão (o telefone do comprador é só dele). A coordenação continua vendo as
+  vendas por célula nos números (Rankings, Pedidos sem a coluna Comprador), sem o contato.
+
 ## D37. Login do discipulador com o nome e a senha padrão (RIFA-082; contrato, 2026-11-23)
 
 Pedido do PO (23/11, no dia em que a campanha começou): "Mas eles [os discipuladores] não têm o login e senha deles?"

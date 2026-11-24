@@ -5,13 +5,18 @@ import {
   type UnidadeMeta,
 } from "../../../shared/contracts/calculos";
 import { useId, type ReactNode } from "react";
+import { Link } from "react-router";
 import {
   Badge,
   ComAjuda,
+  ComDica,
   ProgressBar,
   type TextoDeAjuda,
 } from "../../components/ui";
+import { useUsuarioConectado } from "../../lib/sessao";
+import { caminhoDeQuemComprou } from "../quem-comprou/quem-comprou-api";
 import {
+  DICAS,
   TEXTO_COLUNA_VALORES,
   TEXTO_NIVEL,
   TEXTO_SITUACAO,
@@ -43,6 +48,9 @@ type Props = {
 // mesmo HTML. Os papéis ARIA explícitos mantêm a semântica de tabela quando o CSS muda o display.
 export function TabelaRanking({ resposta, redeUnica = false, grupo }: Props) {
   const { nivel, divisao, unidade, janela, itens } = resposta;
+  // RIFA-093: para o admin, o nome da célula leva a Quem comprou com ela aberta (a coordenação vê só o texto).
+  const admin = useUsuarioConectado().papel === "admin";
+  const comQuemComprou = nivel === "celula" && admin;
   const textos = TEXTO_NIVEL[nivel];
   // Sem ranking por divisão (D27), a legenda não fala de divisão; o de um grupo diz o grupo.
   const legenda = [
@@ -84,6 +92,7 @@ export function TabelaRanking({ resposta, redeUnica = false, grupo }: Props) {
               item={item}
               unidade={unidade}
               vinculo={vinculoDoItem(item, resposta, redeUnica)}
+              comQuemComprou={comQuemComprou}
             />
           ))}
         </tbody>
@@ -96,9 +105,11 @@ type PropsLinha = {
   item: ItemRanking;
   unidade: UnidadeMeta;
   vinculo: string;
+  /** O nome vira o link para Quem comprou (só o admin, no ranking de células). */
+  comQuemComprou: boolean;
 };
 
-function Linha({ item, unidade, vinculo }: PropsLinha) {
+function Linha({ item, unidade, vinculo, comQuemComprou }: PropsLinha) {
   const situacao = TEXTO_SITUACAO[item.situacao];
   const falta = item.situacao === "abaixo" && item.diferenca < 0;
   return (
@@ -113,7 +124,18 @@ function Linha({ item, unidade, vinculo }: PropsLinha) {
         </span>
       </td>
       <th role="rowheader" scope="row" className="rankings-linha__nome">
-        <span className="rankings-linha__titulo">{item.nome}</span>
+        {comQuemComprou ? (
+          <ComDica texto={DICAS.quemComprou}>
+            <Link
+              className="rankings-linha__titulo"
+              to={caminhoDeQuemComprou(item.id)}
+            >
+              {item.nome}
+            </Link>
+          </ComDica>
+        ) : (
+          <span className="rankings-linha__titulo">{item.nome}</span>
+        )}
         {vinculo && (
           <>
             {/* A vírgula (só para o leitor de tela) separa o nome do vínculo, que fica na linha de baixo. */}

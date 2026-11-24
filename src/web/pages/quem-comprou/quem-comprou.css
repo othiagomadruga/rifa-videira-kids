@@ -1,0 +1,209 @@
+/*
+ * Quem comprou (RIFA-093; só o admin): mobile-first. A busca no topo e as células em cartões compactos, um embaixo do
+ * outro; tocar no cartão abre as compras ali mesmo (acordeão). Nada de tabela larga: tudo quebra linha a 390 px, e
+ * cada alvo de toque tem pelo menos --alvo-toque (44 px).
+ */
+.quem-comprou {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+  max-width: 48rem;
+}
+
+.quem-comprou__busca {
+  min-width: 0;
+}
+
+.quem-comprou__contagem {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.quem-comprou__celulas {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.quem-comprou-celula {
+  min-width: 0;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-2);
+  background: var(--cor-superficie);
+}
+
+.quem-comprou-celula[data-aberta] {
+  border-color: var(--cor-borda-forte);
+  box-shadow: var(--sombra-1);
+}
+
+/* O cartão inteiro é o botão: nome e discipulador à esquerda; bilhetes e compras e a seta à direita. */
+.quem-comprou-celula__cabeca {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+  width: 100%;
+  min-height: var(--alvo-toque);
+  padding: var(--espaco-3);
+  border: 0;
+  border-radius: var(--raio-2);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quem-comprou-celula__cabeca:hover {
+  background: var(--cor-superficie-2);
+}
+
+.quem-comprou-celula__cabeca:focus-visible {
+  outline: var(--foco-anel);
+  outline-offset: var(--foco-distancia);
+}
+
+.quem-comprou-celula__textos {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.quem-comprou-celula__nome {
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.quem-comprou-celula__discipulador {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.quem-comprou-celula__totais {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+  text-align: right;
+}
+
+.quem-comprou-celula__seta {
+  color: var(--cor-texto-suave);
+}
+
+.quem-comprou-celula[data-aberta] .quem-comprou-celula__seta {
+  transform: rotate(180deg);
+}
+
+/* No celular estreito, os totais descem para a linha de baixo do nome (a seta fica no canto). */
+@media (max-width: 26rem) {
+  .quem-comprou-celula__cabeca {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .quem-comprou-celula__totais {
+    grid-column: 1;
+    grid-row: 2;
+    text-align: left;
+  }
+
+  .quem-comprou-celula__seta {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+.quem-comprou-celula__painel {
+  display: grid;
+  gap: var(--espaco-3);
+  padding: 0 var(--espaco-3) var(--espaco-3);
+  min-width: 0;
+}
+
+.quem-comprou-celula__vazio {
+  color: var(--cor-texto-suave);
+}
+
+.quem-comprou-celula__falha:empty {
+  display: none;
+}
+
+.quem-comprou-celula__falha {
+  color: var(--cor-perigo);
+  font-size: var(--texto-sm);
+}
+
+.quem-comprou-celula__pedidos {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--alvo-toque);
+  font-size: var(--texto-sm);
+}
+
+.quem-comprou-compras {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--cor-borda);
+}
+
+/* Cada compra: quem e quando à esquerda, os bilhetes à direita; o telefone na linha de baixo. */
+.quem-comprou-compra {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 var(--espaco-3);
+  padding: var(--espaco-2) 0;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.quem-comprou-compra:focus-visible {
+  outline: var(--foco-anel);
+  outline-offset: var(--foco-distancia);
+}
+
+.quem-comprou-compra__quem {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.quem-comprou-compra__nome {
+  font-weight: var(--peso-forte);
+  overflow-wrap: anywhere;
+}
+
+.quem-comprou-compra__nome--sem {
+  font-weight: var(--peso-normal);
+  font-style: italic;
+  color: var(--cor-texto-suave);
+}
+
+.quem-comprou-compra__detalhes {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.quem-comprou-compra__manual {
+  font-style: italic;
+}
+
+.quem-comprou-compra__bilhetes {
+  font-weight: var(--peso-forte);
+  white-space: nowrap;
+}
+
+.quem-comprou-compra__telefone {
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-height: var(--alvo-toque);
+  font-size: var(--texto-sm);
+}

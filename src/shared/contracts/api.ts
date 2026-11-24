@@ -3980,6 +3980,98 @@ export const ROTAS_QUEM_COMPROU = {
 export type NomeRotaQuemComprou = keyof typeof ROTAS_QUEM_COMPROU;
 
 // ---------------------------------------------------------------------------------------------------
+// Quem comprou por célula, para o admin (RIFA-093, adendo da D36): a lista das células com os totais e as vendas pagas
+// de uma célula, com o telefone do pedido (como a tela Pedidos mostra ao admin). Só admin: a coordenação leva 403.
+// ---------------------------------------------------------------------------------------------------
+
+/** Uma célula na tela "Quem comprou" do admin: o nome, o discipulador e o que vendeu (pela célula efetiva, D41). */
+export const celulaQuemComprouSchema = z.strictObject({
+  id: idSchema,
+  nome: z.string().min(1).max(120),
+  discipulador: z.string().min(1).max(120),
+  /** Vendas pagas que contam (aprovadas, sem os desconsiderados, D20) da campanha ativa. */
+  pedidos: z.number().int().nonnegative(),
+  bilhetes: z.number().int().nonnegative(),
+});
+export type CelulaQuemComprou = z.infer<typeof celulaQuemComprouSchema>;
+
+/** Todas as células (as sem venda também), de mais bilhetes para menos; empate, pelo nome em português. */
+export const respostaCelulasQuemComprouSchema = z.strictObject({
+  celulas: z.array(celulaQuemComprouSchema),
+  atualizado_em: instanteSchema,
+});
+export type RespostaCelulasQuemComprou = z.infer<
+  typeof respostaCelulasQuemComprouSchema
+>;
+
+/**
+ * Uma venda paga da célula para o admin: a do líder (nome, quando e bilhetes) mais o telefone do pedido (E.164, D36),
+ * o id do pedido (para abrir na tela Pedidos) e de onde vem a célula (`manual` = atribuída à mão pelo admin, D41).
+ */
+export const itemCompradorDaCelulaSchema = z.strictObject({
+  pedido_id: z.string().min(1).max(128),
+  nome: nomeMaiorCompradorSchema,
+  /** E.164 (+5591988887777), como a Rifei mandou; null quando não mandou. O site mostra legível, com o WhatsApp. */
+  telefone: z.string().regex(TELEFONE_E164).nullable(),
+  aprovado_em: instanteSchema,
+  bilhetes: z.number().int().nonnegative(),
+  origem_celula: z.enum(ORIGENS_CELULA_PEDIDO),
+});
+export type ItemCompradorDaCelula = z.infer<typeof itemCompradorDaCelulaSchema>;
+
+export const respostaCompradoresDaCelulaSchema = z.strictObject({
+  celula: z.strictObject({ id: idSchema, nome: z.string().min(1).max(120) }),
+  /** O fuso da campanha, para o site mostrar a data e a hora locais ("23/11 às 14:03"). */
+  fuso_horario: z.string().min(1),
+  /** As vendas pagas que contam da célula, todas (não só as da página). */
+  totais: z.strictObject({
+    pedidos: z.number().int().nonnegative(),
+    bilhetes: z.number().int().nonnegative(),
+  }),
+  itens: z.array(itemCompradorDaCelulaSchema).max(PAGINA_QUEM_COMPROU_MAXIMA),
+  /** Para a página seguinte, passe em `antes_de`; null = não há mais. */
+  proximo: z.string().min(1).max(2048).nullable(),
+  atualizado_em: instanteSchema,
+});
+export type RespostaCompradoresDaCelula = z.infer<
+  typeof respostaCompradoresDaCelulaSchema
+>;
+
+/**
+ * Quem comprou por célula (RIFA-093, adendo da D36), SÓ ADMIN (o telefone do comprador é só dele): 401 sem sessão;
+ * 403 `proibido` para a coordenação (antes de ler a consulta) e para os papéis da hierarquia (passo 4 do index). Sem
+ * campanha ativa, 404. Respostas com `Cache-Control: no-store`, lidas do D1 a cada requisição e passadas pelo schema
+ * estrito. Catálogo à parte de ROTAS, como ROTAS_QUEM_COMPROU; o src/worker/protecao.test.ts o percorre.
+ *
+ * - `celulasQuemComprou`: todas as células com o discipulador e as vendas pagas que contam, pela célula EFETIVA (D41).
+ * - `compradoresDaCelula`: as vendas pagas que contam da célula `:id`, a mesma consulta e a mesma paginação de
+ *   `ROTAS_QUEM_COMPROU.quemComprou` (limite 1 a 50, padrão 20; cursor `antes_de`, inválido = 400 com o detalhe
+ *   `cursor_invalido`), da mais recente para a mais antiga, com os totais da célula. Célula inexistente: 404.
+ */
+export const ROTAS_QUEM_COMPROU_ADMIN = {
+  celulasQuemComprou: {
+    metodo: "GET",
+    caminho: "/api/admin/quem-comprou/celulas",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    sucesso: { status: 200, corpo: respostaCelulasQuemComprouSchema },
+  },
+  compradoresDaCelula: {
+    metodo: "GET",
+    caminho: "/api/admin/celulas/:id/compradores",
+    grupo: "coordenacao",
+    papeis: ["admin"],
+    situacao: "detalhada",
+    parametros: parametroIdSchema,
+    consulta: consultaQuemComprouSchema,
+    sucesso: { status: 200, corpo: respostaCompradoresDaCelulaSchema },
+  },
+} as const satisfies Record<string, DefinicaoRota>;
+
+export type NomeRotaQuemComprouAdmin = keyof typeof ROTAS_QUEM_COMPROU_ADMIN;
+
+// ---------------------------------------------------------------------------------------------------
 // Relatório diário por e-mail (RIFA-086 e RIFA-087, D40) e o "Arrecadado" do admin (RIFA-087): só admin. Constantes
 // sem zod em ./relatorio-diario.
 // ---------------------------------------------------------------------------------------------------

@@ -1101,6 +1101,60 @@ sem números dos bilhetes e sem R$**: o schema estrito não tem esses campos. `C
   `/api/minha/*`); 400 (`limite` fora da faixa; `antes_de` que a API não emitiu, com o detalhe `cursor_invalido`); 404
   sem campanha ativa.
 
+## Quem comprou por célula, do admin (RIFA-093; docs/decisions.md D36, adendo)
+
+Contrato: `ROTAS_QUEM_COMPROU_ADMIN` em `src/shared/contracts/api.ts`; leitura em `src/worker/db/quem-comprou-admin.ts`
+(a página reaproveita `comandoQuemComprou` de `db/quem-comprou.ts`); rota em `src/worker/routes/quem-comprou-admin.ts`.
+As duas são **só do admin** (`exigirSessao(["admin"])` no handler, antes do id e da consulta): 401 sem sessão; 403
+`proibido` para a coordenação e para a hierarquia; 404 sem campanha ativa; `Cache-Control: no-store`; schema estrito.
+Contam só as vendas pagas da campanha ativa que contam (aprovadas, sem os desconsiderados), pela célula efetiva (D41).
+
+### `GET /api/admin/quem-comprou/celulas` (**só admin**)
+
+Todas as células (as sem venda também, com zero), de mais bilhetes para menos (empate pelo nome em português).
+
+```json
+{
+  "celulas": [
+    { "id": 3, "nome": "Célula Fictícia", "discipulador": "Discipulador Fictício", "pedidos": 4, "bilhetes": 12 },
+    { "id": 4, "nome": "Célula Sem Venda", "discipulador": "Discipulador Fictício", "pedidos": 0, "bilhetes": 0 }
+  ],
+  "atualizado_em": "2026-11-24T18:00:00.000Z"
+}
+```
+
+### `GET /api/admin/celulas/:id/compradores?limite=20&antes_de=<cursor>` (**só admin**)
+
+As vendas da célula `:id`, a mesma consulta e paginação de `GET /api/minha/compradores` (acima): da mais recente para a
+mais antiga, `limite` de 1 a 50 (padrão 20), `antes_de` = o `proximo` da página anterior. Cada item traz também o
+`telefone` do pedido (E.164, null quando a Rifei não mandou; o site mostra legível, com o link do WhatsApp), o
+`pedido_id` e a `origem_celula` (`afiliado` ou `manual` = atribuída à mão). `totais` são da célula inteira (não só da
+página). Sem R$, sem DDD e sem os números dos bilhetes.
+
+```json
+{
+  "celula": { "id": 3, "nome": "Célula Fictícia" },
+  "fuso_horario": "America/Belem",
+  "totais": { "pedidos": 4, "bilhetes": 12 },
+  "itens": [
+    {
+      "pedido_id": "PED-2",
+      "nome": "Comprador Fictício",
+      "telefone": "+5591900000001",
+      "aprovado_em": "2026-11-24T13:00:00.000Z",
+      "bilhetes": 5,
+      "origem_celula": "manual"
+    }
+  ],
+  "proximo": null,
+  "atualizado_em": "2026-11-24T18:00:00.000Z"
+}
+```
+
+- **Erros:** 401; 403 `proibido` (coordenação e hierarquia, mesmo com a consulta inválida); 400 (`:id` que não é um
+  inteiro positivo, `limite` fora da faixa, `antes_de` com o detalhe `cursor_invalido`); 404 (célula inexistente ou sem
+  campanha ativa).
+
 ## Relatório diário por e-mail e Arrecadado (RIFA-086 e RIFA-087; docs/decisions.md D40)
 
 Contrato: as constantes em `src/shared/contracts/relatorio-diario.ts` (sem zod: os tipos `manha` e `tarde`
