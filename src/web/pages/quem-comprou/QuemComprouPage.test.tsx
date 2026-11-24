@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   contarControles,
   controlesSemDica,
@@ -244,5 +244,72 @@ describe("Quem comprou (só o admin)", () => {
     });
     expect(controlesSemDica()).toEqual([]);
     expect(DICAS.limparBusca).toMatch(/\.$/);
+  });
+});
+
+// Revisão da RIFA-093: a tela rola até a célula SÓ quando ela chega aberta pela URL (de Rankings ou da Hierarquia), e o
+// cartão para abaixo da barra fixa do topo do celular. Antes, o primeiro toque num cartão também rolava a tela, e nos
+// dois casos o nome da célula ficava embaixo da barra (a 390 px, no Chromium).
+type ModuloFs = { readFileSync(caminho: string, codificacao: "utf8"): string };
+const { process } = globalThis as unknown as {
+  process: { getBuiltinModule(nome: "node:fs"): ModuloFs };
+};
+// O caminho vai numa variável: com um texto fixo, o Vite trocaria o new URL(..., import.meta.url) pela URL do asset.
+const lerCss = (relativo: string) =>
+  process
+    .getBuiltinModule("node:fs")
+    .readFileSync(
+      decodeURIComponent(new URL(relativo, import.meta.url).pathname),
+      "utf8",
+    )
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+
+describe("Quem comprou: a rolagem até a célula aberta", () => {
+  // O jsdom não tem scrollIntoView: o simulado guarda quem pediu para aparecer na tela.
+  const rolarAte = vi.fn();
+  const levadosAVista = () =>
+    rolarAte.mock.contexts.map(
+      (elemento) =>
+        (elemento as Element).querySelector(".quem-comprou-celula__nome")
+          ?.textContent,
+    );
+
+  beforeEach(() => {
+    rolarAte.mockClear();
+    Element.prototype.scrollIntoView = rolarAte;
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+  });
+
+  it("chegando com ?celula=, rola uma vez até o cartão dela; tocar em outra célula depois não rola", async () => {
+    await abrir(caminhoDeQuemComprou(3));
+    await screen.findByRole("region", { name: "Compras da Célula Canaã" });
+    expect(levadosAVista()).toEqual(["Célula Canaã"]);
+    acionar(cartaoDe("Célula Ágape"));
+    await screen.findByRole("region", { name: "Compras da Célula Ágape" });
+    expect(levadosAVista()).toEqual(["Célula Canaã"]);
+  });
+
+  it("sem ?celula=, o toque no cartão abre ali mesmo, sem rolar a tela (o cartão fica onde o dedo está)", async () => {
+    await abrir();
+    await cartoes();
+    acionar(cartaoDe("Célula Ágape"));
+    await screen.findByRole("region", { name: "Compras da Célula Ágape" });
+    acionar(cartaoDe("Célula Canaã"));
+    await screen.findByRole("region", { name: "Compras da Célula Canaã" });
+    expect(rolarAte).not.toHaveBeenCalled();
+  });
+
+  it("o cartão levado à vista para abaixo da barra fixa do topo do celular (scroll-margin-top)", () => {
+    const regras = [
+      ...lerCss("./quem-comprou.css").matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ]
+      .map(([, seletor, corpo]) => ({ seletor: seletor.trim(), corpo }))
+      .filter(({ seletor }) => seletor === ".quem-comprou-celula");
+    expect(regras.map(({ corpo }) => corpo).join("")).toMatch(
+      /scroll-margin-top:\s*5rem/,
+    );
   });
 });

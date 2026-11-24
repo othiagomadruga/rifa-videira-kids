@@ -159,14 +159,15 @@ function ListaDeCelulas({
     termo === ""
       ? celulas
       : celulas.filter((celula) => paraBusca(celula.nome).includes(termo));
-  // A célula que veio aberta pela URL (Rankings, Hierarquia) aparece na tela: rola até ela uma vez.
-  const rolou = useRef(false);
+  // Só a célula que CHEGOU aberta pela URL (Rankings, Hierarquia) é levada à vista, uma vez, ao montar a lista; o toque
+  // num cartão abre ali mesmo, sem rolar. O scroll-margin-top do cartão (quem-comprou.css) o deixa abaixo da barra fixa
+  // do topo no celular.
+  const [aChegada] = useState(aberta);
   const refAberta = useRef<HTMLLIElement>(null);
   useEffect(() => {
-    if (rolou.current || aberta === null) return;
-    rolou.current = true;
+    if (aChegada === null) return;
     refAberta.current?.scrollIntoView?.({ block: "start" });
-  }, [aberta]);
+  }, [aChegada]);
 
   return (
     <div className="quem-comprou">
