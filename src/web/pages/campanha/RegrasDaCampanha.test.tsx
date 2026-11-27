@@ -447,6 +447,11 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
         "O que o público vê",
         "Todas as posições do ranking, com o percentual da meta. Nunca valores em R$.",
       ],
+      // RIFA-094 (D42): a linha nova da opção.
+      [
+        "Avisos de venda",
+        "Ligados: cada venda paga aparece por alguns segundos no ranking aberto e no painel dos líderes, com a célula e os bilhetes.",
+      ],
       [
         "Desconsiderar pedidos",
         "Desligado: ninguém desconsidera nem desfaz agora.",
@@ -483,6 +488,10 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       [
         "O que o público vê",
         "As 3 primeiras posições do ranking, sem o percentual da meta. Nunca valores em R$. (padrão)",
+      ],
+      [
+        "Avisos de venda",
+        "Ligados: cada venda paga aparece por alguns segundos no ranking aberto e no painel dos líderes, com a célula e os bilhetes. (padrão)",
       ],
       [
         "Desconsiderar pedidos",

@@ -43,9 +43,9 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 | `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <token>`, comparado em tempo constante (D6) com o token gerado pela tela da coordenação (RIFA-039, D21; no banco, só o SHA-256) ou, **só sem ele**, com o segredo do Worker `RIFEI_WEBHOOK_TOKEN`. Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; nenhum dos dois configurado: `503 nao_configurado` |
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
 | `hierarquia` | `/api/minha/*` (RIFA-014, D12) | a mesma sessão, aberta pelo link pessoal de um `lider`, `discipulador` ou `rede`; o alvo (célula, discipulador ou rede) vem **só da sessão** | `401 nao_autenticado`: sem sessão; `403 proibido`: sessão da coordenação. **Nunca devolve dinheiro** |
-| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao`, `POST /api/sessao/senha` (RIFA-064), `POST /api/sessao/discipulador` (RIFA-082), `POST /api/sessao/admin` (RIFA-073) e `POST /api/sessao/sair` | nenhum (os POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** |
+| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao`, `POST /api/sessao/senha` (RIFA-064), `POST /api/sessao/discipulador` (RIFA-082), `POST /api/sessao/admin` (RIFA-073) e `POST /api/sessao/sair` | nenhum (os POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** (a única exceção: os bilhetes de cada venda nos avisos de venda, RIFA-094, D42) |
 
-Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada.
+Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada. A exceção é `GET /api/publico/vendas-recentes` (RIFA-094, D42): o `bilhetes` de cada venda, com a lista fechada própria (`k`, `celula`, `bilhetes`, `em`, `ligados`, `itens`, `agora`).
 
 **Coordenação** (RIFA-007; contrato em `acesso.ts`, detalhes em [acesso.md](acesso.md)):
 
@@ -112,7 +112,7 @@ No Worker, `responderErro()` (`src/worker/lib/respostas-erro.ts`) monta o corpo 
 | Rota | Limite | O que conta |
 |---|---|---|
 | `POST /api/sessao`, `POST /api/sessao/senha` (RIFA-064), `POST /api/sessao/discipulador` (RIFA-082) e `POST /api/sessao/admin` (RIFA-073), no mesmo contador | 60 por minuto (desde a D12; eram 10) | toda tentativa que passa da checagem de origem |
-| `/api/publico/*` e `GET /api/health` | 60 por minuto, somados | só as que vão ao banco: no público, a resposta do cache de 30 s **não conta** (muita gente atrás do mesmo IP, como o Wi-Fi da igreja, não esbarra no limite); o health lê o banco toda vez |
+| `/api/publico/*` e `GET /api/health` | 60 por minuto, somados | só as que vão ao banco: no público, a resposta do cache (30 s; 10 s nos avisos de venda) **não conta** (muita gente atrás do mesmo IP, como o Wi-Fi da igreja, não esbarra no limite); o health lê o banco toda vez |
 
 Acima do limite: **429** `muitas_requisicoes`, `Retry-After: 60` e `Cache-Control: no-store`, sem ler o banco. O contador é por data center da Cloudflare e aproximado ("permissivo"). Sem o binding, vale uma janela na memória de cada isolate.
 
@@ -197,6 +197,7 @@ Corpo do PUT:
 (As mensagens estão encurtadas; os padrões completos são `MENSAGENS_PADRAO`, em `regras.ts`.)
 
 - `fuso_horario` (padrão `America/Belem`) e `publico` (padrão `{ false, 3 }`) são opcionais.
+- `publico.avisos_de_venda` (RIFA-094, [D42](decisions.md#d42-avisos-de-venda-no-ranking-aberto-e-na-minha-rifa-094-contrato-2026-11-27)): os avisos de venda no ranking aberto e na /minha. Na resposta, sempre (padrão `true`); no PUT, ausente mantém o gravado (no primeiro PUT, ligada), como `ranking.por_divisao`. Desligada, `GET /api/publico/vendas-recentes` responde `ligados: false` e a lista vazia. É do grupo `publico` (a coordenação também muda); a trilha diz "publico.avisos_de_venda: ligado → desligado".
 - `ranking.por_divisao` (RIFA-061, [D27](decisions.md#d27-ranking-único-separar-ou-não-o-ranking-por-divisão-rifa-061-contrato-2026-11-17)): separa o ranking por divisão (`true`, o padrão) ou não (`false`: um ranking só, de todas as células). No PUT é opcional e, ausente, **mantém o gravado** (no primeiro PUT, o padrão), como os grupos do admin; na resposta, sempre presente. É do grupo `ranking`: a coordenação também muda, como o critério.
 - **Regras do admin** (Sprint 6, [D20](decisions.md#d20-regras-do-admin-na-campanha-desconsiderar-pedido-acesso-da-hierarquia-remover-afiliado-e-mensagens-rifa-028-029-031-e-032-contrato-2026-11-11)): `pedidos`, `acesso` e `mensagens` são opcionais e, diferente de `publico`, **o grupo ausente mantém o que está gravado** (no primeiro PUT, o padrão); o grupo presente vem inteiro e substitui o gravado.
   - **Só o `admin` muda os três** (RIFA-042). A coordenação pode mandá-los ausentes ou iguais ao gravado (passa, e a gravação vai sem eles: o PUT dela nunca escreve essas colunas nem desfaz o que um admin gravar no meio); diferente do gravado, 403 `proibido`. O resto da campanha a coordenação continua mudando.
@@ -730,6 +731,39 @@ Faltam 13 dias. Bora manter o ritmo: compartilhe hoje o seu link de afiliado com
 - **Nunca contém R$, centavos nem quantidade de bilhetes**, com qualquer configuração (R9). Os % (da meta, da curva e da projeção) aparecem; % por célula só se `publico.mostra_percentual_meta`. Um bumbo interno da coordenação, com bilhetes, é pendência ([regras-de-calculo.md, seção 6](regras-de-calculo.md#6-pendências)).
 - Sempre cabe em 4000 caracteres (o pior caso, com 72 células empatadas e nomes de 120 caracteres, dá 2436), com o *negrito* e o _itálico_ do WhatsApp.
 - **Erros**: 400 `requisicao_invalida` (`data` fora do formato, fora da janela da campanha ou futura), 404 `nao_encontrado` (sem campanha ativa).
+
+### `GET /api/publico/vendas-recentes` (aberto; RIFA-094, [D42](decisions.md#d42-avisos-de-venda-no-ranking-aberto-e-na-minha-rifa-094-contrato-2026-11-27))
+
+> Cache: respostas 200 ficam **10 s** (`TTL_VENDAS_RECENTES_MS`) em cache no servidor e saem com
+> `Cache-Control: public, max-age=10` (`CACHE_VENDAS_RECENTES`): todos os visitantes veem a mesma resposta. O limite
+> por IP é o das outras abertas (só as idas ao banco contam). Ver docs/decisions.md D10 e D42.
+
+Os avisos de venda ("A célula X vendeu N bilhetes!") do ranking aberto e da /minha (líder, discipulador e rede).
+
+- **Consulta**: nenhuma (`consultaVendasRecentesSchema`; o que vier na URL é ignorado e não entra na chave do cache).
+- **200** (`respostaVendasRecentesSchema`, estrito):
+
+```json
+{
+  "ligados": true,
+  "itens": [
+    { "k": "3f9a0c1d2e4b5a67", "celula": "Célula Ficticia 01", "bilhetes": 3, "em": "2026-12-04T18:29:41.512Z" }
+  ],
+  "agora": "2026-12-04T18:30:00.000Z"
+}
+```
+
+- `itens`: as vendas **pagas que contam** (pedido `approved` da campanha ativa, sem desconsiderar, D20, com a **célula
+  efetiva**, D41, e com o dia local da aprovação dentro das datas da campanha) dos **últimos 3 minutos**
+  (`JANELA_VENDAS_RECENTES_MS`, pela aprovação, até `agora`), da mais recente para a mais antiga, no máximo 30
+  (`LIMITE_VENDAS_RECENTES`). Venda sem célula não aparece.
+- Cada item: `k`, a chave **opaca** e estável do pedido (os 16 primeiros hex do SHA-256 do id com um sal da campanha que
+  o público não vê: não leva ao id), `celula` (o nome), `bilhetes` (os desta venda) e `em` (o instante da aprovação).
+  **Nada do comprador, nenhum número de bilhete, nenhum valor em R$ e nenhum id.**
+- `ligados: false` (com `itens: []`): a opção `publico.avisos_de_venda` desligada ou nenhuma campanha ativa (sempre 200).
+- `agora`: o instante do servidor em que a resposta foi montada.
+- Custo: o índice `pedidos_por_status_aprovacao` (status, aprovado_em) lê só a janela (`db/vendas-recentes.ts`, plano
+  travado em teste).
 
 ---
 

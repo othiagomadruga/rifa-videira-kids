@@ -1266,6 +1266,55 @@ export const respostaBumboSchema = z.strictObject({
 export type RespostaBumbo = z.infer<typeof respostaBumboSchema>;
 
 // ---------------------------------------------------------------------------------------------------
+// GET /api/publico/vendas-recentes (RIFA-094, D42): os avisos de venda do ranking aberto e da /minha
+// ---------------------------------------------------------------------------------------------------
+
+/** Até quanto tempo atrás (pela aprovação) uma venda entra nos avisos: 3 minutos. */
+export const JANELA_VENDAS_RECENTES_MS = 180_000;
+/** No máximo estas vendas por resposta (as mais recentes). */
+export const LIMITE_VENDAS_RECENTES = 30;
+/** Tamanho da chave opaca de cada venda (`k`), em caracteres hexadecimais minúsculos. */
+export const TAMANHO_CHAVE_VENDA_RECENTE = 16;
+
+/**
+ * Uma venda paga que conta (aprovada, sem desconsiderar, da campanha ativa, dentro das datas dela e com célula
+ * EFETIVA, D41). Só o nome da célula e a quantidade de bilhetes DESTA venda (a exceção à R9 que a D42 explica): nada
+ * do comprador, nenhum número de bilhete, nenhum valor em R$ e nenhum id. `k` é uma chave opaca e estável por pedido
+ * (um resumo SHA-256 do id com um sal da campanha que não é público), só para a tela não repetir o aviso.
+ */
+export const itemVendaRecenteSchema = z.strictObject({
+  k: z.string().regex(new RegExp(`^[0-9a-f]{${TAMANHO_CHAVE_VENDA_RECENTE}}$`)),
+  celula: z.string().min(1),
+  bilhetes: z.number().int().positive(),
+  /** O instante da aprovação. */
+  em: instanteSchema,
+});
+export type ItemVendaRecente = z.infer<typeof itemVendaRecenteSchema>;
+
+/**
+ * As vendas dos últimos JANELA_VENDAS_RECENTES_MS, da mais recente para a mais antiga, no máximo
+ * LIMITE_VENDAS_RECENTES. `ligados: false` (com a lista vazia): a opção `publico.avisos_de_venda` desligada ou nenhuma
+ * campanha ativa; a tela não mostra os avisos nem o botão do som. `agora` é o instante do servidor em que a resposta
+ * foi montada.
+ */
+export const respostaVendasRecentesSchema = z
+  .strictObject({
+    ligados: z.boolean(),
+    itens: z.array(itemVendaRecenteSchema).max(LIMITE_VENDAS_RECENTES),
+    agora: instanteSchema,
+  })
+  .refine(({ ligados, itens }) => ligados || itens.length === 0, {
+    message: "Com os avisos desligados, a lista é vazia",
+    path: ["itens"],
+  });
+export type RespostaVendasRecentes = z.infer<
+  typeof respostaVendasRecentesSchema
+>;
+
+/** Sem parâmetros: o que vier na URL é ignorado (e não entra na chave do cache). */
+export const consultaVendasRecentesSchema = z.object({});
+
+// ---------------------------------------------------------------------------------------------------
 // GET /api/minha/visao (líder, discipulador e rede: a visão individual, RIFA-014, RF08, D12)
 //
 // - O alvo vem SÓ da sessão (usuarios.celula_id, discipulador_id ou rede_id): a rota não aceita id.
@@ -2803,6 +2852,19 @@ export const ROTAS = {
     situacao: "detalhada",
     consulta: consultaBumboSchema,
     sucesso: { status: 200, corpo: respostaBumboSchema },
+  },
+  /**
+   * RIFA-094 (D42): os avisos de venda ("A célula X vendeu N bilhetes!") do ranking aberto e da /minha. Aberta, como as
+   * outras de /api/publico (D10: cache curto de 10 s e o limite por IP só nas idas ao banco). Sempre 200 com a lista
+   * (vazia sem campanha ativa ou com a opção `publico.avisos_de_venda` desligada).
+   */
+  vendasRecentes: {
+    metodo: "GET",
+    caminho: "/api/publico/vendas-recentes",
+    grupo: "aberto",
+    situacao: "detalhada",
+    consulta: consultaVendasRecentesSchema,
+    sucesso: { status: 200, corpo: respostaVendasRecentesSchema },
   },
   /**
    * Sem sessão: 401. Sessão da coordenação: 403 (`proibido`). Sem campanha ativa: como o painel. Discipulador ou

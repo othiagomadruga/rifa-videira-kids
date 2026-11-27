@@ -146,6 +146,8 @@ type Cenario = {
 let api: {
   cenario: Cenario;
   caminhos: string[];
+  /** RIFA-094 (D42): as consultas dos avisos de venda, à parte (aqui, 404: testes próprios em components/). */
+  avisos: string[];
   /** Quantas chamadas por janela (cada atualização pede jovens e adultos). */
   contagem: () => Record<JanelaRanking, number>;
 };
@@ -164,12 +166,20 @@ function simularApi(cenario: Partial<Cenario> = {}) {
     ...cenario,
   };
   const caminhos: string[] = [];
+  const avisos: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (entrada: RequestInfo | URL) => {
       const caminho = String(entrada);
-      caminhos.push(caminho);
       const url = new URL(caminho, "http://localhost");
+      if (url.pathname === "/api/publico/vendas-recentes") {
+        avisos.push(caminho);
+        return respostaJson(
+          { erro: { codigo: "nao_encontrado", mensagem: "Fora do teste" } },
+          404,
+        );
+      }
+      caminhos.push(caminho);
       if (url.pathname !== "/api/publico/ranking") {
         return respostaJson(
           { erro: { codigo: "nao_encontrado", mensagem: "Rota inesperada" } },
@@ -207,6 +217,7 @@ function simularApi(cenario: Partial<Cenario> = {}) {
   api = {
     cenario: completo,
     caminhos,
+    avisos,
     contagem: () => ({
       atual: caminhos.filter((c) => c.endsWith("periodo=atual")).length,
       campanha: caminhos.filter((c) => c.endsWith("periodo=campanha")).length,
@@ -261,12 +272,16 @@ function definirVisibilidade(estado: DocumentVisibilityState) {
 }
 
 afterEach(() => {
-  // CA2: a tela pública só chama a rota aberta do ranking (nada da coordenação, nem a sessão).
+  // CA2: a tela pública só chama as rotas abertas: a do ranking e, desde a RIFA-094 (D42), a dos avisos de venda
+  // (nada da coordenação, nem a sessão).
   expect(
     api.caminhos.filter(
       (pedido) => !pedido.startsWith("/api/publico/ranking?"),
     ),
   ).toEqual([]);
+  expect(
+    api.avisos.every((pedido) => pedido === "/api/publico/vendas-recentes"),
+  ).toBe(true);
   vi.useRealTimers();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(document, "visibilityState");

@@ -2541,3 +2541,68 @@ até 10 s, e com a Rifei lenta a tela dizia "Não foi possível mudar a célula"
 podia ser cancelado no meio). E escolher de novo a mesma célula numa venda **sem afiliado** manda o PUT (antes o
 diálogo só fechava): é o "Atribuir de novo" da seção 13.3 de integracao-rifei.md, para tentar a Rifei outra vez ou
 mandar a ela as atribuições feitas antes da RIFA-091. Na venda de afiliado sem célula, a mesma célula só fecha.
+
+## D42. Avisos de venda no ranking aberto e na /minha (RIFA-094; contrato, 2026-11-27)
+
+Pedido do PO (27/11, com a campanha em andamento), aprovado a partir de um protótipo do SM: "No ranking geral, quando
+subir uma venda, suba um pop-up como uma notificação em tempo real com o nome da célula e quantos vendeu: 'célula X
+vendeu 3'. No celular também." Ajustes do mesmo dia: os avisos também na /minha (líder, discipulador e rede); "vai
+subindo vários pop-ups, é por comprador" (um aviso por compra, empilhados); "coloque som, um plim por venda".
+Contrato em `src/shared/contracts/` (`api.ts`: `respostaVendasRecentesSchema`, `itemVendaRecenteSchema`,
+`JANELA_VENDAS_RECENTES_MS`, `LIMITE_VENDAS_RECENTES`, a rota `vendasRecentes` em `ROTAS`; `dominio.ts`:
+`publico.avisos_de_venda`, `AVISOS_DE_VENDA_PADRAO`, `publicoConfigEntradaSchema`), migração
+`0021_avisos_de_venda.sql`, leitura em `src/worker/db/vendas-recentes.ts`, rota em `src/worker/routes/publico.ts`,
+tela em `src/web/components/avisos-de-venda/` (montada em `pages/ranking-publico/` e em `pages/minha/MinhaLayout.tsx`).
+
+- **O que aparece e por que só a célula e os bilhetes.** Cada aviso diz "A célula X vendeu N bilhetes!": o nome da
+  célula (o que o ranking aberto já mostra) e a quantidade **daquela venda**, que é o que o PO pediu. É a única exceção
+  à R9 (o público não vê bilhetes): não há total, meta, R$, comprador, telefone, número de bilhete nem id do pedido, e
+  a página aberta e a /minha são vistas por todos (o nome do comprador continua só do admin, D36). Venda sem célula
+  efetiva (D41) não vira aviso. Os testes do contrato têm uma lista fechada própria para esta rota, e as outras rotas
+  abertas continuam sem bilhetes.
+- **Quais vendas.** As que contam no painel: pedido `approved` da campanha ativa, sem desconsiderar (D20), com a célula
+  efetiva (D41) e com o dia local da aprovação dentro das datas da campanha (a compra de teste de antes do início não
+  vira aviso), aprovadas nos últimos 3 minutos (até o "agora" do servidor), da mais recente para a mais antiga, até 30.
+  A janela de 3 min cobre com folga o cache (10 s), a consulta da tela (15 s) e um webhook que chega com atraso.
+- **Chave opaca `k`.** A tela precisa saber que já mostrou uma venda; o id do pedido (da Rifei) não sai para o público.
+  `k` = os 16 primeiros hex do SHA-256 de `vendas-recentes:<id da campanha>:<criado_em da campanha>:<id do pedido>`:
+  estável entre respostas e isolates, diferente por pedido, e o sal (o `criado_em`, em milissegundos) não é público,
+  então não dá para chegar ao id por tentativa.
+- **Cache e custo (D10).** A rota é aberta como as outras de `/api/publico` (sem sessão; o limite por IP só nas idas ao
+  banco), com o cache das respostas 200 em **10 s** (e não 30: o aviso perde a graça se chega meio minuto depois),
+  `Cache-Control: public, max-age=10`: todos os visitantes veem a mesma resposta, e o banco é lido no máximo uma vez a
+  cada 10 s por isolate (`lib/cache-publico.ts` ganhou o prazo por rota). A consulta usa o índice
+  `pedidos_por_status_aprovacao` (status, aprovado_em), da 0001, com `INDEXED BY` (o planejador poderia escolher o
+  índice parcial da campanha e ler todos os pedidos aprovados): lê só a janela. Sem campanha ativa, ou com a opção
+  desligada, responde 200 com `ligados: false` e a lista vazia, sem ler os pedidos.
+- **A opção da campanha** `publico.avisos_de_venda` (padrão ligada; coluna `publico_avisos_de_venda` da 0021, aditiva,
+  1 em todas as campanhas), na tela Campanha junto das outras opções do público ("Mostrar avisos de venda no ranking
+  aberto") e no resumo "Regras da campanha". É do grupo `publico` (a coordenação também muda); ausente no PUT mantém o
+  gravado (uma aba antiga do site não liga nem desliga), como o `ranking.por_divisao` (D27). Desligada, a rota responde
+  `ligados: false` e as telas não mostram os avisos nem o botão do som.
+- **A tela.** Um aviso por compra (a mesma célula duas vezes = dois avisos), empilhados: entram um a cada 0,8 s, cada
+  um fica 5 s e sai sozinho; até 4 no computador (canto de baixo à direita, o mais novo embaixo) e até 3 no celular
+  (descendo do topo, compactos, para não cobrir o ranking); esperando, no máximo 12 (os mais antigos saem). A primeira
+  resposta só marca as vendas como vistas (quem abre a página não vê o passado); a consulta pausa com a aba escondida.
+  Os avisos não recebem toque (o que está embaixo continua clicável): a /minha não tem barra fixa, e no celular o
+  aviso cobre o topo só pelos 5 s. Região viva `role="log"` com `aria-live="polite"`, sem roubar o foco; as animações
+  só sem `prefers-reduced-motion`.
+- **O plim.** Cada aviso toca um plim curto quando aparece (dois tons senoidais, ~260 ms, volume moderado), gerado
+  pela Web Audio API: sem arquivo de áudio, então a CSP não muda. Como os avisos entram um de cada vez, dois plins
+  nunca tocam juntos. Os navegadores só deixam tocar depois de um gesto da pessoa na página: o contexto de áudio só é
+  criado dentro de um toque, clique ou tecla (nenhum erro no console antes). O botão "Som das vendas" (ao lado do
+  título do ranking e, na /minha, do título da tela; embaixo dele no celular) começa ligado; enquanto o áudio
+  ainda está bloqueado, o primeiro toque nele libera e toca um plim de teste; depois, alterna. A escolha fica no
+  aparelho (`localStorage`, com try/catch). Com a aba escondida, não toca.
+- **Descartado:** tempo real por WebSocket/Durable Object (custo e um serviço novo para um aviso de alguns segundos; a
+  consulta a cada 15 s com o cache de 10 s basta); mandar o id do pedido ou um hash sem sal (daria para chegar ao id);
+  juntar as vendas da mesma célula num aviso só (o PO pediu um por compra); arquivo de áudio (precisaria de um asset e
+  de outra regra na CSP; o tom gerado é menor que qualquer arquivo); o emoji 🎟️ do protótipo e o 🔔 do botão (mudam de
+  desenho em cada celular, docs/frontend.md: viraram os ícones `bilhetes`, `sino` e `sino-mudo`).
+
+**Suposições:** sem campanha ativa, 200 com `ligados: false` (e não 404, como o ranking): a tela não precisa tratar
+erro; a região viva é `role="log"` (e não `status`, que as telas já usam para o carregando); na /minha, o botão do som
+fica no cabeçalho da tela, ao lado do título (na barra de cima, com o "Sair", ela quebraria em duas linhas no celular);
+o botão aparece desde o primeiro quadro (o padrão da campanha é ligado) e sai se a resposta disser que não: com a
+opção desligada, ele pisca por um instante ao abrir; venda aprovada com o relógio da Rifei adiantado entra só quando
+o "agora" do servidor passa dela.

@@ -26,6 +26,9 @@
 //    script);
 // o) o ranking geral da /minha (RIFA-090, adendo da D12): só do discipulador e da rede (líder e coordenação: 403; sem
 //    sessão, 401), sem valor e sem comprador;
+// p) os avisos de venda (RIFA-094, D42): GET /api/publico/vendas-recentes aberta como as públicas (sem sessão, sem
+//    cookie, cache curto de 10 s), só com a chave opaca, a célula, os bilhetes e o instante de cada venda (nada do
+//    comprador, nenhum valor e nenhum id), a mesma resposta com ou sem sessão;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -80,6 +83,7 @@ import {
   respostaRankingSchema,
   respostaSessaoSchema,
   respostaTodasAsRedesSchema,
+  respostaVendasRecentesSchema,
   respostaVisaoIndividualSchema,
   respostaWebhookRifeiSchema,
   somarDias,
@@ -93,7 +97,7 @@ import {
   CABECALHOS_SEGURANCA,
   CSP_PREVIA_EMAIL,
 } from "./middleware/cabecalhos-seguranca";
-import { CACHE_PUBLICO } from "./routes/publico";
+import { CACHE_PUBLICO, CACHE_VENDAS_RECENTES } from "./routes/publico";
 import {
   ORIGEM,
   cabecalhosDeSessao,
@@ -1184,6 +1188,100 @@ describe("e) painel atrás do login e visão pública aberta, sem valores (RIFA-
         ).text(),
       ).toBe(texto);
     expect(batch.mock.calls.length).toBe(lidas);
+  });
+});
+
+describe("p) RIFA-094 (D42): os avisos de venda, abertos como as rotas públicas", () => {
+  // Relógio fixo só no Date (como no bloco e), num dia que já passou: as sessões do beforeAll continuam válidas.
+  const AGORA_FIXO = new Date("2026-11-05T15:00:00.000Z");
+  const CAMINHO = ROTAS.vendasRecentes.caminho;
+  let instante = AGORA_FIXO.getTime();
+
+  beforeAll(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(instante);
+    const { campanhaId } = await semearCenario({
+      campanha: campanhaEntradaSchema.parse({
+        ...DADOS_CAMPANHA,
+        data_inicio: "2026-11-01",
+      }),
+      pedidos: [],
+    });
+    // Duas vendas de 30 s e 1 min atrás (Ágape pelo afiliado 101 e Betel pelo 102) e uma sem célula.
+    await env.DB.prepare(
+      `INSERT INTO pedidos (id, campanha_id, affiliate_id, status, qtd_bilhetes, total_centavos, aprovado_em,
+         comprador_nome, comprador_telefone)
+       VALUES ('PROTECAO-AVISO-1', ?1, 101, 'approved', 3, 6000, ?2, 'Comprador Ficticio', '+5591999990000'),
+              ('PROTECAO-AVISO-2', ?1, 102, 'approved', 2, 4000, ?3, 'Outro Ficticio', '+5591999990001'),
+              ('PROTECAO-AVISO-3', ?1, NULL, 'approved', 9, 18000, ?2, NULL, NULL)`,
+    )
+      .bind(
+        campanhaId,
+        new Date(instante - 30_000).toISOString(),
+        new Date(instante - 60_000).toISOString(),
+      )
+      .run();
+  });
+
+  beforeEach(() => {
+    // Cada teste começa depois do prazo do cache (10 s) do anterior, ainda dentro da janela de 3 min das vendas.
+    instante += 11_000;
+    vi.setSystemTime(instante);
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  it("está no contrato como aberta e registrada no app real", () => {
+    expect(ROTAS.vendasRecentes.grupo).toBe("aberto");
+    expect(
+      rotasRegistradas().map((rota) => `${rota.metodo} ${rota.caminho}`),
+    ).toContain(`GET ${CAMINHO}`);
+  });
+
+  it("sem cookie: 200, cache curto, sem Set-Cookie, com os cabeçalhos de segurança e só célula, bilhetes, chave e instante", async () => {
+    const res = await requisitar("GET", CAMINHO);
+    const texto = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe(CACHE_VENDAS_RECENTES);
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+    esperarCabecalhosDeSeguranca(res);
+    const corpo = respostaVendasRecentesSchema.parse(JSON.parse(texto));
+    expect(
+      corpo.itens.map(({ celula, bilhetes }) => [celula, bilhetes]),
+    ).toEqual([
+      ["Célula Ágape", 3],
+      ["Célula Betel", 2],
+    ]);
+    expect([...camposDe(corpo)].sort()).toEqual([
+      "agora",
+      "bilhetes",
+      "celula",
+      "em",
+      "itens",
+      "k",
+      "ligados",
+    ]);
+    // Nada do comprador, do pedido nem de valor.
+    expect(texto).not.toMatch(
+      /PROTECAO|Ficticio|91999|centavos|R\$|6000|4000|affiliate/,
+    );
+  });
+
+  it("com sessão (admin ou coordenação), a resposta é a mesma: a sessão não abre nada a mais", async () => {
+    const anonimo = await (await requisitar("GET", CAMINHO)).json();
+    for (const cabecalhos of [admin, coordenacao])
+      expect(
+        await (await requisitar("GET", CAMINHO, cabecalhos)).json(),
+      ).toEqual(anonimo);
+  });
+
+  it("escrita na rota aberta não existe: POST é recusado no formato único", async () => {
+    const res = await requisitar("POST", CAMINHO, { Origin: ORIGEM });
+    expect([403, 404, 405]).toContain(res.status);
+    expect(erroApiSchema.parse(await res.json())).toBeTruthy();
   });
 });
 

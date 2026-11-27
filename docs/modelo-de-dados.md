@@ -71,6 +71,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `ranking_por_divisao` | INTEGER 0/1 | padrão 1 (migração 0012, D27): `ranking.por_divisao`. 1 = Jovens e Adultos com rankings separados; 0 = um ranking só, de todas as células |
 | `publico_mostra_percentual_meta` | INTEGER 0/1 | padrão 0: o público vê só posições |
 | `publico_limite_ranking` | INTEGER 1–100 ou NULL | padrão 3 (top 3); NULL mostra todas as posições |
+| `publico_avisos_de_venda` | INTEGER 0/1 | padrão 1 (migração 0021, D42): `publico.avisos_de_venda`. 1 = os avisos de venda ("A célula X vendeu N bilhetes!") no ranking aberto e na /minha; 0 = `GET /api/publico/vendas-recentes` responde `ligados: false` e a lista vazia |
 | `pedidos_desconsiderar` | INTEGER 0/1 | padrão 0 (migração 0008, D20): a chave `pedidos.desconsiderar` |
 | `acesso_discipuladores`, `acesso_redes` | INTEGER 0/1 | padrão 1 (0008): as chaves `acesso.discipuladores` e `acesso.redes` |
 | `acesso_celulas_senha` | INTEGER 0/1 NOT NULL | padrão 1 (0013, RIFA-064, D29): a chave `acesso.celulas_senha`, o login das células com a senha padrão. A senha não é gravada em lugar nenhum (sai do nome da célula); a sessão aberta por ela fica em `sessoes` com `link_id` NULL |

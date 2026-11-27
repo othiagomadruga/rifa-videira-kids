@@ -694,6 +694,33 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                     )
                   }
                 />
+                {/* RIFA-094 (D42): os avisos de venda no ranking aberto e na /minha. */}
+                <ComAjuda
+                  id={`${idDoCampo("publico.avisos_de_venda")}-dica`}
+                  texto={AJUDA.avisosDeVenda}
+                  idDoTitulo={`${idDoCampo("publico.avisos_de_venda")}-rotulo`}
+                >
+                  <label
+                    className="campanha-opcao"
+                    htmlFor={idDoCampo("publico.avisos_de_venda")}
+                  >
+                    <input
+                      id={idDoCampo("publico.avisos_de_venda")}
+                      type="checkbox"
+                      checked={formulario.publico_avisos_de_venda}
+                      aria-describedby={`${idDoCampo("publico.avisos_de_venda")}-dica`}
+                      onChange={(evento) =>
+                        alterar(
+                          { publico_avisos_de_venda: evento.target.checked },
+                          "publico.avisos_de_venda",
+                        )
+                      }
+                    />
+                    <span id={`${idDoCampo("publico.avisos_de_venda")}-rotulo`}>
+                      Mostrar avisos de venda no ranking aberto
+                    </span>
+                  </label>
+                </ComAjuda>
               </div>
             </div>
           </Card>

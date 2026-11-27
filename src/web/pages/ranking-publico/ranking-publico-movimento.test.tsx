@@ -97,6 +97,13 @@ function simularApi(...lista: Rodada[]) {
     "fetch",
     vi.fn(async (entrada: RequestInfo | URL) => {
       const url = new URL(String(entrada), "http://localhost");
+      // RIFA-094 (D42): os avisos de venda (testes próprios em components/avisos-de-venda) ficam de fora: 404, sem
+      // gastar uma rodada do ranking.
+      if (url.pathname === "/api/publico/vendas-recentes")
+        return respostaJson(
+          { erro: { codigo: "nao_encontrado", mensagem: "Fora do teste" } },
+          404,
+        );
       const divisao = url.searchParams.get("divisao") as Divisao;
       // Cada atualização pede as duas divisões: a rodada avança a cada par.
       const rodada = rodadas[Math.min(pedidos++ >> 1, rodadas.length - 1)];

@@ -4,7 +4,10 @@
  * - GET /api/publico/ranking: posição, nome e divisão de quem já vendeu na janela (e o % da meta, se a
  *   campanha permitir), sempre na data de hoje (um `data` na URL é ignorado pelo schema);
  * - GET /api/publico/bumbo: o texto do dia para o grupo dos líderes, sobre o dia anterior já fechado;
- *   um `data` informado só vale na janela da campanha (do 1º dia ao dia seguinte ao último).
+ *   um `data` informado só vale na janela da campanha (do 1º dia ao dia seguinte ao último);
+ * - GET /api/publico/vendas-recentes (RIFA-094, D42): as vendas pagas dos últimos 3 minutos para os avisos de venda
+ *   do ranking aberto e da /minha, só com a célula e os bilhetes DE CADA VENDA (a exceção à R9 que a D42 explica:
+ *   nunca R$, comprador, número de bilhete ou id; db/vendas-recentes.ts). Cache de 10 s, e não de 30.
  *
  * O index.ts monta este sub-app sob /api/publico, FORA dos prefixos do login (passo 6).
  * A regra é toda de calculos.ts. Como defesa a mais, a resposta passa pelo schema ESTRITO do contrato
@@ -35,6 +38,9 @@ import {
 } from "../db/painel";
 import {
   CACHE_PUBLICO,
+  CACHE_VENDAS_RECENTES,
+  TTL_CACHE_PUBLICO_MS,
+  TTL_VENDAS_RECENTES_MS,
   cacheDeProducao,
   chaveDoCache,
   type CacheDeRespostas,
@@ -46,8 +52,9 @@ import {
 } from "../lib/limite-requisicoes";
 import { responderErro } from "../lib/respostas-erro";
 import { validarConsulta } from "../middleware/validacao";
+import { lerVendasRecentes } from "../db/vendas-recentes";
 
-export { CACHE_PUBLICO };
+export { CACHE_PUBLICO, CACHE_VENDAS_RECENTES };
 
 type Ambiente = { Bindings: Cloudflare.Env };
 
@@ -117,9 +124,15 @@ export function criarPublico({
 
   publico.use("*", async (c, next) => {
     await next();
+    // Os avisos de venda (D42) com o prazo curto; as demais, 30 s.
+    const curto = c.req.path === ROTAS.vendasRecentes.caminho;
     c.header(
       "Cache-Control",
-      c.res.status === 200 ? CACHE_PUBLICO : "no-store",
+      c.res.status !== 200
+        ? "no-store"
+        : curto
+          ? CACHE_VENDAS_RECENTES
+          : CACHE_PUBLICO,
     );
   });
 
@@ -135,15 +148,16 @@ export function criarPublico({
     c: Context<Ambiente>,
     consulta: Readonly<Record<string, string | undefined>>,
     montar: (agora: Date) => Promise<Response>,
+    prazoMs = TTL_CACHE_PUBLICO_MS,
   ): Promise<Response> {
     const agora = relogio();
     const chave = chaveDoCache(c.req.url, consulta);
-    const guardada = await cache.ler(chave, agora);
+    const guardada = await cache.ler(chave, agora, prazoMs);
     if (guardada !== null) return guardada;
     if (!(await dentroDoLimite(c.env, c.req.raw, LIMITE_PUBLICO)))
       return responderLimiteExcedido(c, LIMITE_PUBLICO);
     const resposta = await montar(agora);
-    await cache.gravar(chave, resposta, agora);
+    await cache.gravar(chave, resposta, agora, prazoMs);
     return resposta;
   }
 
@@ -189,6 +203,24 @@ export function criarPublico({
         );
       });
     },
+  );
+
+  // RIFA-094 (D42): sempre 200 (lista vazia sem campanha ativa ou com a opção desligada), com o prazo curto.
+  publico.get(
+    local(ROTAS.vendasRecentes.caminho),
+    validarConsulta(ROTAS.vendasRecentes.consulta),
+    (c) =>
+      comCache(
+        c,
+        c.req.valid("query"),
+        async (agora) =>
+          c.json(
+            ROTAS.vendasRecentes.sucesso.corpo.parse(
+              await lerVendasRecentes(c.env.DB, agora),
+            ),
+          ),
+        TTL_VENDAS_RECENTES_MS,
+      ),
   );
 
   return publico;
