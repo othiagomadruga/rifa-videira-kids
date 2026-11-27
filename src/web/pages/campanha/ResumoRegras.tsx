@@ -3,6 +3,7 @@
 import type { MouseEvent } from "react";
 import {
   ACESSO_PADRAO,
+  AVISOS_DE_VENDA_PADRAO,
   MENSAGENS_PADRAO,
   NOTIFICACOES_PADRAO,
   PEDIDOS_PADRAO,
@@ -71,7 +72,12 @@ function textoDaMeta(meta: Campanha["meta"]): string {
   }
 }
 
-function textoDoPublico(publico: Campanha["publico"]): string {
+function textoDoPublico(
+  publico: Pick<
+    Campanha["publico"],
+    "mostra_percentual_meta" | "limite_ranking"
+  >,
+): string {
   const posicoes =
     publico.limite_ranking === null
       ? "Todas as posições do ranking"
@@ -170,6 +176,16 @@ export function itensDoResumo(
       valor: textoDoPublico(campanha?.publico ?? PUBLICO_PADRAO),
       padrao,
       campo: idDoCampo("publico.limite_ranking"),
+    },
+    // RIFA-094 (D42): os avisos de venda no ranking aberto e na /minha.
+    {
+      nome: "Avisos de venda",
+      valor:
+        (campanha?.publico.avisos_de_venda ?? AVISOS_DE_VENDA_PADRAO)
+          ? "Ligados: cada venda paga aparece por alguns segundos no ranking aberto e no painel dos líderes, com a célula e os bilhetes."
+          : "Desligados: o ranking aberto e o painel dos líderes não mostram as vendas.",
+      padrao,
+      campo: idDoCampo("publico.avisos_de_venda"),
     },
     {
       nome: "Desconsiderar pedidos",

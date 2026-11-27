@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
+import { AvisosDeVenda, AvisosLigados } from "../../components/avisos-de-venda";
 import {
   Button,
   ComDica,
@@ -20,10 +21,16 @@ type Saida = { saindo: boolean; erro: string | null };
 // para a área deles (/coordenacao). O topo tem a altura final desde o primeiro quadro (a linha do papel reservada
 // e a barra com a altura do "Sair", só no CSS, em minha-moldura.css: nenhum texto de mentira na marca para o leitor
 // de tela): nada pula quando a sessão chega.
+// RIFA-094 (D42): com a sessão, os avisos de venda (os mesmos do ranking aberto, da rota aberta) para o líder, o
+// discipulador e a rede. O botão "Som das vendas" fica no cabeçalho da tela (Cabecalho.tsx, ao lado do título, como
+// no ranking aberto), que sabe pelo contexto AvisosLigados se os avisos estão ligados: na barra de cima, ao lado do
+// "Sair", ele faria a barra quebrar em duas linhas a 390 px. A /minha não tem barra fixa, e os avisos não recebem
+// toque: nada fica bloqueado.
 export function MinhaLayout() {
   const { estado, verificar, sair } = useSessao();
   const usuario = useGuardaDaArea("hierarquia");
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
+  const [avisosLigados, setAvisosLigados] = useState(false);
 
   async function sairDoSistema() {
     // Saindo, o botão fica com aria-disabled (RIFA-045: continua no Tab, com a dica dizendo por quê): barra aqui.
@@ -70,10 +77,16 @@ export function MinhaLayout() {
           </div>
         )}
       </header>
+      <AvisosDeVenda
+        ativo={usuario !== null}
+        aoSaberSeLigados={setAvisosLigados}
+      />
       <main id="conteudo" className="minha-moldura__conteudo">
         <div className="minha-moldura__limite minha-moldura__pagina">
           {usuario ? (
-            <Outlet />
+            <AvisosLigados value={avisosLigados}>
+              <Outlet />
+            </AvisosLigados>
           ) : estado.situacao === "erro" ? (
             <ErrorState
               titulo="Não foi possível conferir o seu acesso."

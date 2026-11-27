@@ -1,0 +1,163 @@
+/* Os avisos de venda (RIFA-094, D42): o cartão branco com a borda amarela do Kids, o bilhete num círculo com o degradê
+   forte da marca e a frase com o nome e os bilhetes no roxo. Só variáveis do tema. Fixos na janela, por cima da tela,
+   sem receber toque (pointer-events: none): nada embaixo deles fica bloqueado. Computador: no canto de baixo à
+   direita, o mais novo embaixo. Celular (até 37,5rem, a mesma CONSULTA_DO_CELULAR do useAvisosDeVenda): descendo do
+   topo, com 0,75rem de margem, compactos, sem rolagem lateral. */
+
+.avisos-de-venda {
+  position: fixed;
+  right: var(--espaco-5);
+  bottom: var(--espaco-5);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  width: min(22.5rem, calc(100vw - 2 * var(--espaco-5)));
+  pointer-events: none;
+}
+
+.aviso-de-venda {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-4);
+  min-width: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  border-left: 0.375rem solid var(--kids-amarelo);
+  border-radius: var(--raio-4);
+  background: var(--cor-superficie);
+  box-shadow: var(--sombra-3);
+  color: var(--cor-texto);
+}
+
+.aviso-de-venda__icone {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--gradiente-marca-forte);
+  color: var(--cor-sobre-primaria);
+  font-size: 1.375rem;
+}
+
+.aviso-de-venda__textos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.aviso-de-venda__frase {
+  font-size: var(--texto-md);
+  line-height: 1.3;
+}
+
+.aviso-de-venda__frase strong {
+  color: var(--cor-primaria);
+  font-weight: var(--peso-negrito);
+}
+
+.aviso-de-venda__quando {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+}
+
+/* Celular: do topo, na largura toda (com a margem), compactos: o ícone menor e a frase numa linha mais baixa. */
+@media (max-width: 37.5rem) {
+  .avisos-de-venda {
+    top: max(var(--espaco-3), env(safe-area-inset-top));
+    right: var(--espaco-3);
+    bottom: auto;
+    left: var(--espaco-3);
+    gap: var(--espaco-2);
+    width: auto;
+  }
+
+  .aviso-de-venda {
+    gap: var(--espaco-3);
+    padding: var(--espaco-2) var(--espaco-3);
+    border-radius: var(--raio-3);
+  }
+
+  .aviso-de-venda__icone {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1rem;
+  }
+
+  .aviso-de-venda__frase {
+    font-size: var(--texto-sm);
+    line-height: 1.25;
+  }
+
+  .aviso-de-venda__quando {
+    font-size: var(--texto-xs);
+  }
+}
+
+/* O botão do som: o ícone e o texto juntos, sem quebrar. */
+.som-das-vendas {
+  white-space: nowrap;
+}
+
+/* Entrada e saída, só sem reduce (com reduce, o aviso aparece e some parado). */
+@media (prefers-reduced-motion: no-preference) {
+  .aviso-de-venda {
+    animation: avisos-entra var(--duracao-lenta) var(--curva-saida) both;
+  }
+
+  .aviso-de-venda[data-saindo] {
+    animation: avisos-sai var(--duracao-media) ease-in both;
+  }
+
+  @media (max-width: 37.5rem) {
+    .aviso-de-venda {
+      animation-name: avisos-desce;
+    }
+
+    .aviso-de-venda[data-saindo] {
+      animation-name: avisos-sobe;
+    }
+  }
+}
+
+@keyframes avisos-entra {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes avisos-sai {
+  to {
+    opacity: 0;
+    transform: translateX(2.5rem);
+  }
+}
+
+@keyframes avisos-desce {
+  from {
+    opacity: 0;
+    transform: translateY(-1.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes avisos-sobe {
+  to {
+    opacity: 0;
+    transform: translateY(-1.5rem);
+  }
+}

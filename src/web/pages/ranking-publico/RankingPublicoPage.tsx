@@ -1,7 +1,11 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import type { ItemRankingPublico } from "../../../shared/contracts/calculos";
+import {
+  AvisosDeVenda,
+  BotaoSomDasVendas,
+} from "../../components/avisos-de-venda";
 import { TextoContado } from "../../components/movimento";
-import { AvisosDeVenda } from "../../components/notificacoes";
+import { AvisosNoCelular } from "../../components/notificacoes";
 import {
   EmptyState,
   ErrorState,
@@ -46,14 +50,23 @@ const META_BATIDA_BP = 10_000;
 // desliza para o lugar novo, o % conta até o valor e a meta batida pulsa de leve (e comemora, quando passa a
 // ser batida numa atualização: RIFA-050). RIFA-050 (A-07, A-18, A-19): a linha do tempo da campanha na faixa
 // da fase, a falha de conexão neutra, o vazio com o convite do primeiro dia e o "↑ subiu" (como no telão: até a
-// próxima atualização que muda a ordem).
+// próxima atualização que muda a ordem). RIFA-094 (D42): os avisos de venda ("A célula X vendeu N bilhetes!", um por
+// compra, com o plim) por cima da tela, e o botão "Som das vendas" ao lado do título, só com os avisos ligados na
+// campanha (components/avisos-de-venda: a quantidade de bilhetes de cada venda é a exceção à R9 que a D42 explica).
 export function RankingPublicoPage() {
   const { estado, tentarDeNovo } = useRankingPublico();
+  const [avisosLigados, setAvisosLigados] = useState(false);
   return (
     <>
-      <PageHeader titulo="Ranking da campanha" ajuda={ajudaAberta("ranking")} />
-      {/* RIFA-095 (D43): o botão "Receber avisos de venda" (some sem suporte ou com as notificações desligadas). */}
-      <AvisosDeVenda origem="publico" />
+      <PageHeader
+        titulo="Ranking da campanha"
+        ajuda={ajudaAberta("ranking")}
+        acoes={avisosLigados ? <BotaoSomDasVendas /> : undefined}
+      />
+      <AvisosDeVenda aoSaberSeLigados={setAvisosLigados} />
+      {/* RIFA-095 (D43): o botão "Receber avisos de venda" no celular (some sem suporte ou com as notificações
+          desligadas). */}
+      <AvisosNoCelular origem="publico" />
       {estado.tipo === "carregando" && (
         <div className="ranking-publico__carregando">
           <Loading texto="Carregando o ranking…" />

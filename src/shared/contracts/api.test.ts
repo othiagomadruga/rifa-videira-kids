@@ -16,6 +16,7 @@ import {
   respostaBumboSchema,
   respostaPainelResumoSchema,
   respostaRankingPublicoSchema,
+  respostaVendasRecentesSchema,
   respostaRankingSchema,
   respostaWebhookRifeiSchema,
   detalhesCsvInvalidoSchema,
@@ -106,6 +107,8 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/painel/ranking",
         "GET /api/publico/ranking",
         "GET /api/publico/bumbo",
+        // RIFA-094 (D42): os avisos de venda.
+        "GET /api/publico/vendas-recentes",
         // Sprint 4 (RIFA-012): conferência pelo CSV da Rifei.
         "POST /api/admin/reconciliacao/analisar",
         "POST /api/admin/reconciliacao/recuperar",
@@ -214,17 +217,62 @@ describe("CA3: rotas abertas nunca devolvem valores financeiros", () => {
   const FINANCEIRO =
     /centavos|valor|reais|total|preco|arrecad|vendas|realizado|bilhetes/i;
 
+  /**
+   * RIFA-094 (D42): a única exceção, os avisos de venda. Cada item traz os bilhetes DE UMA VENDA (o pedido do PO: "a
+   * célula X vendeu 3"), nunca R$, totais, comprador, número de bilhete ou id; a lista fechada deles está abaixo.
+   */
+  const EXCECOES: Record<string, string[]> = { vendasRecentes: ["bilhetes"] };
+
   it.each(rotas.filter(([, rota]) => rota.grupo === "aberto"))(
     "%s não tem campo financeiro",
-    (_nome, rota) => {
+    (nome, rota) => {
       const corpo = rota.sucesso.corpo;
       expect(corpo).not.toBeNull();
       if (corpo)
         expect(
           nomesDeCampos(corpo).filter((campo) => FINANCEIRO.test(campo)),
-        ).toEqual([]);
+        ).toEqual(EXCECOES[nome] ?? []);
     },
   );
+
+  it("RIFA-094 (D42): os avisos de venda só têm a chave, a célula, os bilhetes e o instante (lista fechada)", () => {
+    expect(
+      [...new Set(nomesDeCampos(respostaVendasRecentesSchema))].sort(),
+    ).toEqual(["agora", "bilhetes", "celula", "em", "itens", "k", "ligados"]);
+    const item = {
+      k: "0123456789abcdef",
+      celula: "Célula Ágape",
+      bilhetes: 3,
+      em: "2026-12-01T14:59:50.000Z",
+    };
+    const valida = (itens: unknown[]) =>
+      respostaVendasRecentesSchema.safeParse({
+        ligados: true,
+        itens,
+        agora: "2026-12-01T15:00:00.000Z",
+      }).success;
+    expect(valida([item])).toBe(true);
+    // Desligados (a opção da campanha), a lista é sempre vazia.
+    const desligados = (itens: unknown[]) =>
+      respostaVendasRecentesSchema.safeParse({
+        ligados: false,
+        itens,
+        agora: "2026-12-01T15:00:00.000Z",
+      }).success;
+    expect(desligados([])).toBe(true);
+    expect(desligados([item])).toBe(false);
+    // Estrito: um campo a mais (o id, o comprador, o valor) não passa; a chave só em hex de 16.
+    for (const errado of [
+      { ...item, id: "PEDIDO-1" },
+      { ...item, comprador: "Fulano" },
+      { ...item, total_centavos: 6000 },
+      { ...item, k: "PEDIDO-1" },
+      { ...item, k: "0123456789ABCDEF" },
+      { ...item, bilhetes: 0 },
+    ])
+      expect(valida([errado])).toBe(false);
+    expect(valida(Array.from({ length: 31 }, () => item))).toBe(false);
+  });
 
   const referencia = {
     data: "2026-12-02",
@@ -363,7 +411,10 @@ describe("CA3: rotas abertas nunca devolvem valores financeiros", () => {
       "db",
       "latenciaMs",
     ];
-    const abertas = rotas.filter(([, rota]) => rota.grupo === "aberto");
+    // RIFA-094 (D42): os avisos de venda têm a lista fechada própria (no describe "CA3: rotas abertas nunca...").
+    const abertas = rotas.filter(
+      ([nome, rota]) => rota.grupo === "aberto" && nome !== "vendasRecentes",
+    );
     for (const [nome, rota] of abertas) {
       const corpo = rota.sucesso.corpo;
       if (!corpo) continue;

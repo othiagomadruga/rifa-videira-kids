@@ -12,10 +12,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { respostaEstadoNotificacoesSchema } from "../../../shared/contracts/notificacoes";
 import { contarControles, controlesSemDica } from "../../test/dicas";
 import {
-  AvisosDeVenda,
+  AvisosNoCelular,
   CHAVE_SINCRONIA,
   INTERVALO_SINCRONIA_MS,
-} from "./AvisosDeVenda";
+} from "./AvisosNoCelular";
 import type { ApiNotificacoes } from "./notificacoes-api";
 import type {
   InscricaoDoNavegador,
@@ -77,7 +77,7 @@ function desenhar(
   origem: "publico" | "minha" = "publico",
 ) {
   return render(
-    <AvisosDeVenda origem={origem} navegador={navegador} api={api} />,
+    <AvisosNoCelular origem={origem} navegador={navegador} api={api} />,
   );
 }
 
@@ -244,7 +244,7 @@ describe("ligado e desligar", () => {
     const navegador = () =>
       criarNavegador({ permissao: "granted", inscricao: INSCRICAO });
     const primeira = render(
-      <AvisosDeVenda
+      <AvisosNoCelular
         origem="publico"
         navegador={navegador()}
         api={api}
@@ -259,7 +259,7 @@ describe("ligado e desligar", () => {
     primeira.unmount();
 
     render(
-      <AvisosDeVenda
+      <AvisosNoCelular
         origem="publico"
         navegador={navegador()}
         api={api}

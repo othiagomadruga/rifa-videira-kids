@@ -1,7 +1,7 @@
 /* O cartão "Avisos de venda no celular" (RIFA-095, D43), no ranking aberto e na /minha. Celular primeiro: o sino, o
    texto e o botão numa coluna; a partir de 36rem, numa linha só, com o botão à direita. Sem rolagem lateral em 390 px. */
 
-.avisos-venda {
+.avisos-celular {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: start;
@@ -14,7 +14,7 @@
   min-width: 0;
 }
 
-.avisos-venda__icone {
+.avisos-celular__icone {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -26,46 +26,46 @@
   font-size: var(--texto-lg);
 }
 
-.avisos-venda__texto {
+.avisos-celular__texto {
   display: grid;
   gap: var(--espaco-1);
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.avisos-venda__texto p {
+.avisos-celular__texto p {
   margin: 0;
   color: var(--cor-texto-suave);
   font-size: var(--texto-sm);
 }
 
-.avisos-venda__texto .avisos-venda__titulo {
+.avisos-celular__texto .avisos-celular__titulo {
   color: var(--cor-texto);
   font-size: var(--texto-md);
   font-weight: var(--peso-forte);
 }
 
 /* O botão ocupa a linha de baixo inteira no celular (alvo de toque grande). */
-.avisos-venda > :last-child:not(.avisos-venda__texto) {
+.avisos-celular > :last-child:not(.avisos-celular__texto) {
   grid-column: 1 / -1;
 }
 
-.avisos-venda__botao {
+.avisos-celular__botao {
   width: 100%;
   min-height: var(--alvo-toque);
 }
 
 @media (min-width: 36rem) {
-  .avisos-venda {
+  .avisos-celular {
     grid-template-columns: auto 1fr auto;
     align-items: center;
   }
 
-  .avisos-venda > :last-child:not(.avisos-venda__texto) {
+  .avisos-celular > :last-child:not(.avisos-celular__texto) {
     grid-column: auto;
   }
 
-  .avisos-venda__botao {
+  .avisos-celular__botao {
     width: auto;
   }
 }

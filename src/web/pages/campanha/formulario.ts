@@ -4,6 +4,7 @@
 // lê o que foi digitado e se traduz cada problema para o campo certo.
 import {
   ACESSO_PADRAO,
+  AVISOS_DE_VENDA_PADRAO,
   BILHETES_PADRAO,
   FUSO_PADRAO,
   LIMITE_CARACTERES_MENSAGEM,
@@ -56,6 +57,8 @@ export type Formulario = {
   publico_mostra_percentual_meta: boolean;
   /** "" = todas as posições (null na API). */
   publico_limite_ranking: string;
+  /** RIFA-094 (D42): os avisos de venda no ranking aberto e na /minha. */
+  publico_avisos_de_venda: boolean;
   /** Regras do admin (D20): desconsiderar pedido e o acesso de discipuladores e de redes. */
   pedidos_desconsiderar: boolean;
   acesso_discipuladores: boolean;
@@ -131,6 +134,7 @@ export function formularioVazio(): Formulario {
     ranking_por_divisao: RANKING_POR_DIVISAO_PADRAO,
     publico_mostra_percentual_meta: PUBLICO_PADRAO.mostra_percentual_meta,
     publico_limite_ranking: String(PUBLICO_PADRAO.limite_ranking),
+    publico_avisos_de_venda: AVISOS_DE_VENDA_PADRAO,
     pedidos_desconsiderar: PEDIDOS_PADRAO.desconsiderar,
     acesso_discipuladores: ACESSO_PADRAO.discipuladores,
     acesso_redes: ACESSO_PADRAO.redes,
@@ -169,6 +173,8 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
       campanha.publico.limite_ranking === null
         ? ""
         : String(campanha.publico.limite_ranking),
+    // Só false desliga: uma resposta sem a opção (API de antes dela) vale o padrão.
+    publico_avisos_de_venda: campanha.publico.avisos_de_venda !== false,
     pedidos_desconsiderar: campanha.pedidos.desconsiderar,
     acesso_discipuladores: campanha.acesso.discipuladores,
     acesso_redes: campanha.acesso.redes,
@@ -409,6 +415,8 @@ export function montarCorpo(
         formulario.publico_limite_ranking.trim() === ""
           ? null
           : (lerInteiro(formulario.publico_limite_ranking) ?? -1),
+      // RIFA-094 (D42): vai sempre (o grupo `publico` é da coordenação também).
+      avisos_de_venda: formulario.publico_avisos_de_venda,
     },
     // RIFA-075 (D35): os números da rifa vão sempre (a coordenação também muda, como o ranking).
     bilhetes: {
@@ -486,6 +494,7 @@ const MENSAGEM_DO_CAMPO: Record<string, string> = {
   "publico.mostra_percentual_meta": "Marque ou desmarque esta opção.",
   "publico.limite_ranking":
     "Use um número inteiro de 1 a 100, ou deixe em branco para mostrar todas.",
+  "publico.avisos_de_venda": "Marque ou desmarque esta opção.",
   "pedidos.desconsiderar": "Marque ou desmarque esta opção.",
   "acesso.discipuladores": "Marque ou desmarque esta opção.",
   "acesso.redes": "Marque ou desmarque esta opção.",
@@ -558,6 +567,7 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   "notificacoes.vendas": "Enviar notificações de venda",
   "publico.mostra_percentual_meta": "Percentual da meta no ranking público",
   "publico.limite_ranking": "Posições no ranking público",
+  "publico.avisos_de_venda": "Avisos de venda no ranking aberto",
   "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
   "acesso.discipuladores": "Acesso dos discipuladores",
   "acesso.redes": "Acesso das redes",
@@ -591,6 +601,7 @@ const ORDEM_DOS_CAMPOS = [
   "ranking.por_divisao",
   "publico.mostra_percentual_meta",
   "publico.limite_ranking",
+  "publico.avisos_de_venda",
   "pedidos.desconsiderar",
   "acesso.discipuladores",
   "acesso.redes",

@@ -10,6 +10,7 @@ import {
   respostaMeusLinksVendasSchema,
   respostaMeusMaioresCompradoresSchema,
   respostaQuemComprouSchema,
+  respostaVendasRecentesSchema,
   respostaVisaoIndividualSchema,
   type Alvo,
   type CriterioRanking,
@@ -22,6 +23,7 @@ import {
   type RespostaMeusLinksVendas,
   type RespostaMeusMaioresCompradores,
   type RespostaQuemComprou,
+  type RespostaVendasRecentes,
   type RespostaVisaoIndividual,
   type UnidadeMeta,
   type UsuarioSessao,
@@ -1058,9 +1060,25 @@ export function criarApiFalsa(
     return respostaErro(404, "nao_encontrado", "Rota não encontrada");
   }
 
+  // RIFA-094 (D42): os avisos de venda (a rota aberta que a moldura consulta) ficam à parte das chamadas da visão:
+  // sem respostas marcadas, ligados e sem venda nenhuma (o padrão da campanha: o botão "Som das vendas" fica no
+  // cabeçalho, sem aviso); com `responderAvisos`, as respostas em ordem (a última se repete).
+  const avisos: string[] = [];
+  let respostasDosAvisos: RespostaVendasRecentes[] = [
+    { ligados: true, itens: [], agora: "2026-12-04T18:30:00.000Z" },
+  ];
+
   const fetchFalso = vi.fn(
     async (entrada: string | URL | Request, init?: RequestInit) => {
       const url = new URL(String(entrada), window.location.origin);
+      if (url.pathname === "/api/publico/vendas-recentes") {
+        avisos.push(`${url.pathname}${url.search}`);
+        const resposta =
+          respostasDosAvisos[
+            Math.min(avisos.length - 1, respostasDosAvisos.length - 1)
+          ];
+        return respostaJson(respostaVendasRecentesSchema.parse(resposta));
+      }
       const chamada: Chamada = {
         metodo: init?.method ?? "GET",
         caminho: `${url.pathname}${url.search}`,
@@ -1081,6 +1099,12 @@ export function criarApiFalsa(
   return {
     fetch: fetchFalso,
     chamadas,
+    /** RIFA-094: as consultas dos avisos de venda (fora de `chamadas`). */
+    avisos,
+    /** RIFA-094: as respostas dos avisos de venda, em ordem (a última se repete). */
+    responderAvisos(...respostas: RespostaVendasRecentes[]) {
+      respostasDosAvisos = respostas;
+    },
     /** A próxima chamada a `metodo caminho` (sem a consulta) recebe esta resposta (uma vez só). */
     proxima(metodo: string, caminho: string, resposta: Response | Responder) {
       marcadas.push({

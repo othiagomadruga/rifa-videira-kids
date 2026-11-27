@@ -148,6 +148,8 @@ export const AJUDA = {
     "Mostra no telão e no ranking aberto quanto da meta cada célula já fez. Ex.: Célula Betel, 80%. Valores em R$ nunca aparecem.",
   limiteRanking:
     "Quantas células aparecem no telão e no ranking aberto. Ex.: 3 mostra só as três primeiras. Em branco, aparecem todas.",
+  avisosDeVenda:
+    'Mostra por alguns segundos, no ranking aberto e no painel dos líderes, cada venda paga que chega. Ex.: "A célula Betel vendeu 3 bilhetes!". Nunca o nome de quem comprou nem valores em R$.',
   chave: {
     pedidos_desconsiderar:
       "Deixa o admin tirar das contas um pedido de teste, fraude ou estorno, na tela Pedidos. Ex.: um pedido de teste de R$ 1,00 deixa de contar na meta. Dá para desfazer.",

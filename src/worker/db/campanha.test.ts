@@ -81,6 +81,8 @@ describe("buscarCampanhaAtiva", () => {
       acesso_celulas_senha: 1,
       bilhetes_quantidade: 7005,
       bilhetes_numero_inicial: null,
+      // 0021 (RIFA-094, D42): os avisos de venda nascem ligados.
+      publico_avisos_de_venda: 1,
       // 0022 (RIFA-095, D43): as notificações de venda nascem ligadas.
       notificacoes_vendas: 1,
       criado_em: expect.stringMatching(/Z$/),
@@ -435,5 +437,57 @@ describe("regras do admin na campanha (D20, migração 0008)", () => {
         ranking: { criterio: "bilhetes", por_divisao: false },
       }),
     ).toBe("Alterado: ranking, ranking.por_divisao: ligado → desligado");
+  });
+
+  it("RIFA-094 (D42): publico.avisos_de_venda: nasce ligada; com a opção grava; o PUT seguinte sem ela mantém; a trilha diz quando muda", async () => {
+    const avisos = async () =>
+      (await db
+        .prepare(
+          "SELECT publico_avisos_de_venda FROM campanhas WHERE ativa = 1",
+        )
+        .first<{ publico_avisos_de_venda: number }>())!.publico_avisos_de_venda;
+    const PUBLICO = { mostra_percentual_meta: false, limite_ranking: 3 };
+
+    expect((await salvar(BASE)).publico).toEqual({
+      ...PUBLICO,
+      avisos_de_venda: true,
+    });
+    expect(await avisos()).toBe(1);
+    const antes = await buscarCampanhaAtiva(db);
+    const desligar = {
+      ...BASE,
+      publico: { ...PUBLICO, avisos_de_venda: false },
+    };
+    expect(
+      resumirMudancaDaCampanha(
+        antes,
+        corpoSalvarCampanhaSchema.parse(desligar),
+      ),
+    ).toBe("Alterado: publico.avisos_de_venda: ligado → desligado");
+    expect((await salvar(desligar)).publico.avisos_de_venda).toBe(false);
+    expect(await avisos()).toBe(0);
+    // Sem a opção no corpo (uma aba antiga do site), com ou sem o grupo `publico`: o gravado fica.
+    expect((await salvar(BASE)).publico.avisos_de_venda).toBe(false);
+    expect(
+      (await salvar({ ...BASE, publico: { ...PUBLICO, limite_ranking: 5 } }))
+        .publico,
+    ).toEqual({ ...PUBLICO, limite_ranking: 5, avisos_de_venda: false });
+    const ativa = await buscarCampanhaAtiva(db);
+    expect(ativa && montarCampanha(ativa).publico.avisos_de_venda).toBe(false);
+    // Nasce desligada: a trilha da criação diz; ligada (o padrão), o resumo de sempre.
+    expect(
+      resumirMudancaDaCampanha(null, corpoSalvarCampanhaSchema.parse(desligar)),
+    ).toMatch(/, publico\.avisos_de_venda: desligado$/);
+    expect(
+      resumirMudancaDaCampanha(
+        null,
+        corpoSalvarCampanhaSchema.parse({
+          ...BASE,
+          publico: { ...PUBLICO, avisos_de_venda: true },
+        }),
+      ),
+    ).toBe(
+      resumirMudancaDaCampanha(null, corpoSalvarCampanhaSchema.parse(BASE)),
+    );
   });
 });

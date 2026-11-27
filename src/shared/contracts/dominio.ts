@@ -178,12 +178,29 @@ export const rankingConfigEntradaSchema = z.object({
   por_divisao: z.boolean().optional(),
 });
 
+/** RIFA-094 (D42): os avisos de venda no ranking aberto e na /minha começam ligados. */
+export const AVISOS_DE_VENDA_PADRAO = true;
+
 /** Visão pública (telão e grupo). Valores em R$ nunca aparecem em /api/publico, com qualquer configuração. */
 export const publicoConfigSchema = z.object({
   /** Se o ranking público mostra o % da meta (indicador não financeiro). Padrão: não. */
   mostra_percentual_meta: z.boolean(),
   /** Quantas posições o ranking público mostra; null = todas. Padrão: 3. */
   limite_ranking: z.number().int().min(1).max(100).nullable(),
+  /**
+   * RIFA-094 (D42): os avisos de venda ("A célula X vendeu N bilhetes!") no ranking aberto e na /minha
+   * (GET /api/publico/vendas-recentes). Desligada, a rota responde a lista vazia. Padrão: ligada
+   * (AVISOS_DE_VENDA_PADRAO). O `.default()` é da transição: antes da migração 0021 vale o padrão.
+   */
+  avisos_de_venda: z.boolean().default(AVISOS_DE_VENDA_PADRAO),
+});
+
+/**
+ * `publico` na entrada (PUT). `avisos_de_venda` ausente mantém o gravado (no primeiro PUT, o padrão), como o
+ * `ranking.por_divisao`: um corpo que não conhece a opção (uma aba antiga do site) não a liga nem a desliga.
+ */
+export const publicoConfigEntradaSchema = publicoConfigSchema.extend({
+  avisos_de_venda: z.boolean().optional(),
 });
 
 export const PUBLICO_PADRAO = {
@@ -302,7 +319,7 @@ export const campanhaEntradaSchema = z.object({
       },
     ),
   ranking: rankingConfigEntradaSchema,
-  publico: publicoConfigSchema.default(() => ({ ...PUBLICO_PADRAO })),
+  publico: publicoConfigEntradaSchema.default(() => ({ ...PUBLICO_PADRAO })),
   /**
    * Regras do admin (Sprint 6, D20). Diferente de `publico`: cada grupo AUSENTE mantém o que está gravado (no
    * primeiro PUT, o padrão), e um grupo presente substitui o grupo inteiro. Assim um corpo que não conhece os

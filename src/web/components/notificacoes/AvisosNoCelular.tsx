@@ -9,7 +9,7 @@ import {
   type PushDoNavegador,
 } from "./navegador";
 import { DICAS_AVISOS, TEXTOS_AVISOS } from "./textos";
-import "./avisos-de-venda.css";
+import "./avisos-no-celular.css";
 
 // O cartão "Avisos de venda no celular" (RIFA-095, D43): o botão "Receber avisos de venda" do ranking aberto e da
 // /minha (líder, discipulador e rede). Pede a permissão, inscreve o aparelho no Web Push e mostra o estado ("Avisos
@@ -58,7 +58,7 @@ function gravarSincronia(instante: number): void {
   }
 }
 
-export function AvisosDeVenda({
+export function AvisosNoCelular({
   origem,
   navegador,
   api = apiNotificacoes,
@@ -167,14 +167,14 @@ export function AvisosDeVenda({
 
   return (
     <section
-      className="avisos-venda"
+      className="avisos-celular"
       aria-label={TEXTOS_AVISOS.titulo}
       data-estado={estado.tipo}
     >
-      <span className="avisos-venda__icone">
-        <Icone nome="sino" />
+      <span className="avisos-celular__icone">
+        <Icone nome="celular" />
       </span>
-      <div className="avisos-venda__texto" aria-live="polite">
+      <div className="avisos-celular__texto" aria-live="polite">
         <Conteudo estado={estado} />
       </div>
       <Acao estado={estado} aoLigar={ligar} aoDesligar={desligar} />
@@ -187,14 +187,14 @@ function Conteudo({ estado }: { estado: Estado }) {
     case "iphone":
       return (
         <>
-          <p className="avisos-venda__titulo">{TEXTOS_AVISOS.titulo}</p>
+          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.titulo}</p>
           <p>{TEXTOS_AVISOS.iphone}</p>
         </>
       );
     case "negado":
       return (
         <>
-          <p className="avisos-venda__titulo">{TEXTOS_AVISOS.negado}</p>
+          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.negado}</p>
           <p>
             {estado.noIphone
               ? TEXTOS_AVISOS.negadoComoLiberarNoIphone
@@ -206,7 +206,7 @@ function Conteudo({ estado }: { estado: Estado }) {
     case "desligando":
       return (
         <>
-          <p className="avisos-venda__titulo">{TEXTOS_AVISOS.ligado}</p>
+          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.ligado}</p>
           <p>
             {estado.tipo === "ligado" && estado.erro
               ? estado.erro
@@ -217,7 +217,7 @@ function Conteudo({ estado }: { estado: Estado }) {
     default:
       return (
         <>
-          <p className="avisos-venda__titulo">{TEXTOS_AVISOS.titulo}</p>
+          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.titulo}</p>
           <p>
             {estado.tipo === "disponivel" && estado.erro
               ? estado.erro
@@ -244,7 +244,7 @@ function Acao({
       return (
         <ComDica texto={ligando ? DICAS_AVISOS.ocupado : DICAS_AVISOS.ligar}>
           <Button
-            className="avisos-venda__botao"
+            className="avisos-celular__botao"
             aria-disabled={ligando || undefined}
             onClick={() => {
               if (!ligando) aoLigar(estado.chave);
@@ -264,7 +264,7 @@ function Acao({
         >
           <Button
             variante="secundario"
-            className="avisos-venda__botao"
+            className="avisos-celular__botao"
             aria-disabled={desligando || undefined}
             onClick={() => {
               if (!desligando) aoDesligar(estado.chave);

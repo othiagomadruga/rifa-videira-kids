@@ -71,7 +71,12 @@ const CORPO_DO_FORMULARIO_VALIDO = {
   ],
   // RIFA-061 (D27): a opção do ranking por divisão vai sempre, com o padrão (separa).
   ranking: { criterio: "percentual_meta", por_divisao: true },
-  publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+  // RIFA-094 (D42): os avisos de venda vão sempre, com o padrão (ligados).
+  publico: {
+    mostra_percentual_meta: false,
+    limite_ranking: 3,
+    avisos_de_venda: true,
+  },
   // RIFA-075 (D35): os números da rifa vão sempre, com o padrão (7005, número inicial automático).
   bilhetes: { quantidade: 7005, numero_inicial: null },
   // RIFA-095 (D43): as notificações de venda vão sempre, com o padrão (ligadas).
@@ -385,8 +390,15 @@ describe("CA2: slug, meta e público", () => {
     expect(publico).toHaveTextContent(
       "Valores em R$ nunca aparecem para o público, com qualquer configuração.",
     );
-    // O percentual da meta e, desde a RIFA-095 (D43), as notificações de venda (nenhuma em R$).
-    expect(within(publico).getAllByRole("checkbox")).toHaveLength(2);
+    // O percentual da meta, desde a RIFA-094 (D42) os avisos de venda e, desde a RIFA-095 (D43), as notificações de
+    // venda no celular (ligados por padrão).
+    expect(within(publico).getAllByRole("checkbox")).toEqual([
+      campo("Mostrar também o percentual da meta atingido"),
+      campo("Mostrar avisos de venda no ranking aberto"),
+      campo("Enviar notificações de venda"),
+    ]);
+    expect(campo("Mostrar avisos de venda no ranking aberto")).toBeChecked();
+    expect(campo("Enviar notificações de venda")).toBeChecked();
     expect(within(publico).getAllByRole("textbox")).toEqual([
       campo("Quantas posições o público vê"),
     ]);
@@ -444,6 +456,35 @@ describe("CA3: ativar e salvar", () => {
     expect(screen.queryByText("Não ativada")).toBeNull();
     expect(campo("Nome da campanha")).toHaveValue("Rifa de teste");
     await waitFor(() => expect(botao("Salvar alterações")).toHaveFocus());
+  });
+
+  it("RIFA-094 (D42): desmarcar 'Mostrar avisos de venda no ranking aberto' manda a opção desligada no PUT", async () => {
+    const { puts } = simularApi();
+    await abrirTela();
+    preencherFormularioValido();
+    const avisos = campo("Mostrar avisos de venda no ranking aberto");
+    expect(avisos).toBeChecked();
+    fireEvent.click(avisos);
+    expect(avisos).not.toBeChecked();
+    fireEvent.click(botao("Ativar a campanha"));
+
+    fireEvent.click(botao("Sim, ativar a campanha"));
+
+    await waitFor(() =>
+      expect(puts()).toEqual([
+        {
+          metodo: "PUT",
+          caminho: "/api/admin/campanha",
+          corpo: {
+            ...CORPO_DO_FORMULARIO_VALIDO,
+            publico: {
+              ...CORPO_DO_FORMULARIO_VALIDO.publico,
+              avisos_de_venda: false,
+            },
+          },
+        },
+      ]),
+    );
   });
 
   it("enquanto salva, o formulário fica travado: nada digitado se perde quando a resposta chega", async () => {

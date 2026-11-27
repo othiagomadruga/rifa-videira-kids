@@ -1,3 +1,4 @@
+import { use } from "react";
 import type { Alvo } from "../../../shared/contracts/dominio";
 import { NOMES_DIVISAO } from "../../../shared/contracts/calculos";
 import {
@@ -6,6 +7,10 @@ import {
   ajudasSobDemanda,
   type BlocoEsqueleto,
 } from "../../components/ui";
+import {
+  AvisosLigados,
+  BotaoSomDasVendas,
+} from "../../components/avisos-de-venda";
 import "./minha-moldura.css";
 
 /**
@@ -49,9 +54,12 @@ export function Cabecalho({
   /** D27: a campanha separa o ranking por divisão (antes da visão chegar, o padrão). */
   porDivisao?: boolean;
 }) {
+  // RIFA-094 (D42): o "Som das vendas" ao lado do título (embaixo dele no celular), com os avisos ligados.
+  const avisosLigados = use(AvisosLigados);
   return (
     <PageHeader
       titulo={alvo?.nome ?? "Sua visão da campanha"}
+      acoes={avisosLigados ? <BotaoSomDasVendas /> : undefined}
       ajuda={ajuda(alvo ? AJUDA_DO_ALVO[alvo.tipo] : "cabecalho")}
       descricao={
         <>

@@ -17,6 +17,10 @@
  *      custom domain). Por isso a memória vem primeiro.
  * - Uma falha da Cache API vai para o log e a requisição segue sem esse nível.
  *
+ * - Prazo por rota (RIFA-094, D42): 30 s (TTL_CACHE_PUBLICO_MS) por padrão; os avisos de venda
+ *   (/api/publico/vendas-recentes) usam 10 s (TTL_VENDAS_RECENTES_MS), para a venda aparecer logo. O mesmo prazo vai
+ *   no `ler` e no `gravar` de cada rota (o `gravar` o usa no Cache-Control da cópia da Cache API).
+ *
  * Só o sub-app de /api/publico usa este módulo: as rotas da coordenação nunca passam por cache
  * (src/worker/protecao.test.ts confere no app real).
  */
@@ -24,8 +28,20 @@
 /** Prazo de uma resposta guardada. */
 export const TTL_CACHE_PUBLICO_MS = 30_000;
 
+/** Cache-Control das respostas 200 de um prazo (o da cópia guardada na Cache API também). */
+export const cacheControlDoPrazo = (prazoMs: number) =>
+  `public, max-age=${prazoMs / 1000}`;
+
 /** Cache-Control das respostas 200 abertas; também dá o prazo da cópia guardada na Cache API. */
-export const CACHE_PUBLICO = `public, max-age=${TTL_CACHE_PUBLICO_MS / 1000}`;
+export const CACHE_PUBLICO = cacheControlDoPrazo(TTL_CACHE_PUBLICO_MS);
+
+/** RIFA-094 (D42): o prazo curto dos avisos de venda (GET /api/publico/vendas-recentes). */
+export const TTL_VENDAS_RECENTES_MS = 10_000;
+
+/** Cache-Control dos avisos de venda. */
+export const CACHE_VENDAS_RECENTES = cacheControlDoPrazo(
+  TTL_VENDAS_RECENTES_MS,
+);
 
 /** Instante (ms) em que a resposta foi gerada: só na cópia da Cache API, nunca na resposta ao cliente. */
 const CABECALHO_GERADO_EM = "X-Cache-Gerado-Em";
@@ -34,10 +50,18 @@ const CABECALHO_GERADO_EM = "X-Cache-Gerado-Em";
 const LIMITE_MEMORIA = 100;
 
 export interface CacheDeRespostas {
-  /** A resposta guardada para a chave, se ainda estiver no prazo em `agora`; senão, null. */
-  ler(chave: string, agora: Date): Promise<Response | null>;
-  /** Guarda a resposta, se for 200, como gerada em `agora` (lê o corpo de um clone). */
-  gravar(chave: string, resposta: Response, agora: Date): Promise<void>;
+  /**
+   * A resposta guardada para a chave, se ainda estiver no prazo (`prazoMs`, padrão TTL_CACHE_PUBLICO_MS) em `agora`;
+   * senão, null.
+   */
+  ler(chave: string, agora: Date, prazoMs?: number): Promise<Response | null>;
+  /** Guarda a resposta, se for 200, como gerada em `agora` (lê o corpo de um clone), com o prazo da rota. */
+  gravar(
+    chave: string,
+    resposta: Response,
+    agora: Date,
+    prazoMs?: number,
+  ): Promise<void>;
 }
 
 interface Guardada {
@@ -46,9 +70,9 @@ interface Guardada {
   tipo: string | null;
 }
 
-function noPrazo(geradoEm: number, agora: Date): boolean {
+function noPrazo(geradoEm: number, agora: Date, prazoMs: number): boolean {
   const idade = agora.getTime() - geradoEm;
-  return idade >= 0 && idade < TTL_CACHE_PUBLICO_MS;
+  return idade >= 0 && idade < prazoMs;
 }
 
 /** A resposta como saiu da rota: o corpo e o Content-Type (o Cache-Control é posto pela rota). */
@@ -110,13 +134,14 @@ export function criarCacheDeRespostas({
   async function lerDaCacheApi(
     chave: string,
     agora: Date,
+    prazoMs: number,
   ): Promise<Guardada | null> {
     if (cacheApi === null) return null;
     try {
       const resposta = await cacheApi().match(new Request(chave));
       if (resposta === undefined) return null;
       const geradoEm = Number(resposta.headers.get(CABECALHO_GERADO_EM));
-      if (!noPrazo(geradoEm, agora)) {
+      if (!noPrazo(geradoEm, agora, prazoMs)) {
         await resposta.body?.cancel();
         return null;
       }
@@ -134,10 +159,11 @@ export function criarCacheDeRespostas({
   async function gravarNaCacheApi(
     chave: string,
     guardada: Guardada,
+    prazoMs: number,
   ): Promise<void> {
     if (cacheApi === null) return;
     const cabecalhos = new Headers({
-      "Cache-Control": CACHE_PUBLICO,
+      "Cache-Control": cacheControlDoPrazo(prazoMs),
       [CABECALHO_GERADO_EM]: String(guardada.geradoEm),
     });
     if (guardada.tipo !== null) cabecalhos.set("Content-Type", guardada.tipo);
@@ -155,19 +181,20 @@ export function criarCacheDeRespostas({
   }
 
   return {
-    async ler(chave, agora) {
+    async ler(chave, agora, prazoMs = TTL_CACHE_PUBLICO_MS) {
       const daMemoria = naMemoria.get(chave);
       if (daMemoria !== undefined) {
-        if (noPrazo(daMemoria.geradoEm, agora)) return paraResposta(daMemoria);
+        if (noPrazo(daMemoria.geradoEm, agora, prazoMs))
+          return paraResposta(daMemoria);
         naMemoria.delete(chave);
       }
-      const daCacheApi = await lerDaCacheApi(chave, agora);
+      const daCacheApi = await lerDaCacheApi(chave, agora, prazoMs);
       if (daCacheApi === null) return null;
       guardarNaMemoria(chave, daCacheApi);
       return paraResposta(daCacheApi);
     },
 
-    async gravar(chave, resposta, agora) {
+    async gravar(chave, resposta, agora, prazoMs = TTL_CACHE_PUBLICO_MS) {
       if (resposta.status !== 200) return;
       const guardada: Guardada = {
         geradoEm: agora.getTime(),
@@ -175,7 +202,7 @@ export function criarCacheDeRespostas({
         tipo: resposta.headers.get("Content-Type"),
       };
       guardarNaMemoria(chave, guardada);
-      await gravarNaCacheApi(chave, guardada);
+      await gravarNaCacheApi(chave, guardada, prazoMs);
     },
   };
 }

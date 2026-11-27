@@ -193,7 +193,12 @@ describe("CA1: PUT /api/admin/campanha grava campanha e períodos", () => {
       soma_percentuais_bp: 10500,
       // RIFA-061 (D27): a opção do ranking por divisão sai sempre, com o padrão (separa).
       ranking: { criterio: "percentual_meta", por_divisao: true },
-      publico: { mostra_percentual_meta: false, limite_ranking: 3 },
+      publico: {
+        mostra_percentual_meta: false,
+        limite_ranking: 3,
+        // RIFA-094 (D42): sempre na resposta (ausente no PUT, o padrão: ligada).
+        avisos_de_venda: true,
+      },
       // D20: os padrões das regras do admin (a API ainda não grava os grupos; o parse completa).
       pedidos: { desconsiderar: false },
       acesso: { discipuladores: true, redes: true, celulas_senha: true },
