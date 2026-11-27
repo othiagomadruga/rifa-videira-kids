@@ -294,7 +294,9 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   `visibilitychange`; ao voltar, na hora). **Entrada** (RIFA-096): a primeira resposta com `ligados: true` mostra as
   vendas da janela da rota (10 min), no máximo as `AVISOS_NA_ENTRADA` (5) mais recentes, da mais antiga para a mais
   nova, e marca **todas** as chaves (`k`) da resposta como vistas (as de fora não aparecem depois). Voltar para a aba
-  escondida é uma entrada nova, só com o que ainda não foi mostrado; `ligados: false` faz a próxima resposta ligada
+  escondida é uma entrada nova, só com o que ainda não foi mostrado (ao esconder, o que esperava a vez sai da fila e
+  volta a valer nessa entrada, se a rota ainda o trouxer: o celular congela a página escondida e não entra aviso
+  velho na volta); `ligados: false` faz a próxima resposta ligada
   ser uma entrada. Nas seguintes, cada venda nova vira **um aviso por compra** (a mesma célula duas vezes = dois
   avisos), da mais antiga para a mais nova. Uma falha não aparece (a próxima tenta de novo).
 - **Fila**: um aviso entra a cada 0,8 s; cada um fica 5 s e sai (0,25 s de animação). Visíveis: até 4 no computador

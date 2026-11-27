@@ -7,8 +7,9 @@
 //   minutos), no máximo as AVISOS_NA_ENTRADA mais recentes, da mais antiga para a mais nova, e marca TODAS as chaves
 //   da resposta como vistas (as que ficaram de fora não aparecem depois): quem chega depois também sente a
 //   movimentação, sem ver venda velha. Voltar para a aba depois de escondida é entrar de novo (a mesma regra, só com
-//   o que ainda não foi mostrado). Nas respostas seguintes, cada venda nova (pela chave opaca `k`) vira um aviso, da
-//   mais antiga para a mais nova.
+//   o que ainda não foi mostrado; o que esperava a vez ao esconder sai da fila e volta a valer nessa entrada, se
+//   ainda estiver na janela). Nas respostas seguintes, cada venda nova (pela chave opaca `k`) vira um aviso, da mais
+//   antiga para a mais nova.
 // - Cada aviso diz há quanto tempo foi a venda ("agora mesmo", "há 3 min"), pela `em` dela e pelo `agora` da mesma
 //   resposta (o relógio do servidor, não o do aparelho; textos.ts).
 // - Fila: os avisos entram um de cada vez, com INTERVALO_ENTRE_AVISOS_MS entre eles; cada um fica TEMPO_NA_TELA_MS e
@@ -207,13 +208,21 @@ export function useAvisosDeVenda({ ativo = true }: { ativo?: boolean } = {}): {
     return () => consulta.removeEventListener("change", aoMudar);
   }, []);
 
-  // A aba: escondida, para de consultar; ao voltar, consulta na hora, como uma entrada.
+  // A aba: escondida, para de consultar; ao voltar, consulta na hora, como uma entrada. O que esperava a vez sai da
+  // fila e deixa de contar como visto (revisão da RIFA-096): o celular congela a página escondida e, sem isso, esses
+  // avisos entrariam na volta, horas depois, ainda com o "há 2 min" da resposta antiga. Na volta, a entrada nova os
+  // mostra se a rota ainda os trouxer (dentro da janela), com o tempo certo.
   useEffect(() => {
     function aoMudarVisibilidade() {
       const agoraVisivel = abaVisivel();
       setVisivel(agoraVisivel);
-      if (agoraVisivel) setRodada((n) => n + 1);
-      else entrando.current = true;
+      if (agoraVisivel) {
+        setRodada((n) => n + 1);
+        return;
+      }
+      entrando.current = true;
+      for (const { k } of fila.current) vistas.current.delete(k);
+      agendador.current?.esvaziar();
     }
     document.addEventListener("visibilitychange", aoMudarVisibilidade);
     return () =>

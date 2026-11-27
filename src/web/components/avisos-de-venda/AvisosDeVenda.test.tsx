@@ -158,6 +158,32 @@ async function tudoQueApareceu(ms: number): Promise<string[]> {
   return [...vistos];
 }
 
+/**
+ * Cada aviso que ENTRA na pilha, em ordem e com as repetições (cada aviso é um elemento novo, que fica na tela pelo
+ * menos 5 s; o mesmo aviso saindo não conta de novo). `avancar` avança o relógio olhando a pilha a cada 100 ms.
+ */
+function registrarEntradas() {
+  const conhecidos = new WeakSet<Element>();
+  const frases: string[] = [];
+  const olhar = () => {
+    for (const aviso of document.querySelectorAll("[data-aviso-de-venda]")) {
+      if (conhecidos.has(aviso)) continue;
+      conhecidos.add(aviso);
+      frases.push(frase(aviso.textContent ?? ""));
+    }
+  };
+  return {
+    frases,
+    async avancar(ms: number) {
+      olhar();
+      for (let passo = 0; passo < ms; passo += 100) {
+        await avancar(Math.min(100, ms - passo));
+        olhar();
+      }
+    },
+  };
+}
+
 let ligados = vi.fn<(ligados: boolean) => void>();
 
 async function abrir() {
@@ -302,6 +328,61 @@ describe("RIFA-094: os avisos de venda", () => {
       "A Célula 7 vendeu 1 bilhete!",
     ]);
     expect(depois.map(linha)[0]).toBe("há 4 min · Projeto Videira Kids");
+  });
+
+  it("RIFA-096 (revisão): o que esperava a vez ao esconder a aba não volta atrasado (o celular congela a página); na volta, só a entrada nova", async () => {
+    simularTela(true);
+    // 5 vendas na janela (de 5 a 1 min atrás). Na volta (a página ficou congelada, digamos, 1 hora), a rota já não
+    // traz nenhuma delas: só uma venda de 20 s atrás.
+    const vendas = Array.from({ length: 5 }, (_, i) =>
+      venda(`Célula ${i + 1}`, 1, (5 - i) * 60),
+    );
+    simularApi([...vendas].reverse(), [venda("Nova", 2, 20)]);
+    const entradas = registrarEntradas();
+
+    await abrir();
+    await entradas.avancar(INTERVALO_ENTRE_AVISOS_MS * 3);
+    // No celular, 3 na tela; as Células 4 e 5 esperam a vez.
+    expect(avisosNaTela().map(frase)).toEqual([
+      "A Célula 1 vendeu 1 bilhete!",
+      "A Célula 2 vendeu 1 bilhete!",
+      "A Célula 3 vendeu 1 bilhete!",
+    ]);
+    // A pessoa troca de app: a página congela (nenhum temporizador corre até ela voltar).
+    definirVisibilidade("hidden");
+    definirVisibilidade("visible");
+    await entradas.avancar(INTERVALO_CONSULTA_MS * 2);
+
+    // As que esperavam não entram com o "há 2 min" de uma hora atrás: só a venda nova, da entrada da volta.
+    expect(entradas.frases).toEqual([
+      "A Célula 1 vendeu 1 bilhete!",
+      "A Célula 2 vendeu 1 bilhete!",
+      "A Célula 3 vendeu 1 bilhete!",
+      "A célula Nova vendeu 2 bilhetes!",
+    ]);
+  });
+
+  it("RIFA-096 (revisão): numa troca rápida de aba, o que esperava a vez e ainda está na janela entra uma vez só na volta", async () => {
+    // 6 vendas na janela: a entrada mostra as 5 mais recentes (Células 2 a 6); no computador, 4 na tela e a 6 espera.
+    const vendas = Array.from({ length: 6 }, (_, i) =>
+      venda(`Célula ${i + 1}`, 1, (6 - i) * 60),
+    );
+    simularApi([...vendas].reverse());
+    const entradas = registrarEntradas();
+
+    await abrir();
+    await entradas.avancar(INTERVALO_ENTRE_AVISOS_MS * 4);
+    definirVisibilidade("hidden");
+    definirVisibilidade("visible");
+    await entradas.avancar(INTERVALO_CONSULTA_MS * 2);
+
+    expect(entradas.frases).toEqual([
+      "A Célula 2 vendeu 1 bilhete!",
+      "A Célula 3 vendeu 1 bilhete!",
+      "A Célula 4 vendeu 1 bilhete!",
+      "A Célula 5 vendeu 1 bilhete!",
+      "A Célula 6 vendeu 1 bilhete!",
+    ]);
   });
 
   it("uma venda nova vira um aviso com a célula e os bilhetes", async () => {

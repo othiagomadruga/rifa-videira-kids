@@ -2636,6 +2636,11 @@ abria a página num momento parado não via aviso nenhum, mesmo com vendas de 1 
 um aviso pode esperar uns segundos na fila: "agora mesmo" pode valer para uma venda de 1 min e poucos segundos); na
 volta à aba, as vendas já mostradas antes de esconder não voltam (a regra das 5 vale para o que a pessoa ainda não viu).
 
+**Revisão da RIFA-096:** ao esconder a aba, o que esperava a vez na fila sai dela e deixa de contar como visto. O
+celular congela a página escondida: sem isso, esses avisos entravam na volta, horas depois, ainda com o "há 2 min" da
+resposta antiga. Na volta, a entrada nova os mostra só se a rota ainda os trouxer (dentro dos 10 min), com o tempo
+certo (`useAvisosDeVenda.ts`; teste em `AvisosDeVenda.test.tsx`).
+
 ## D43. Notificações de venda no celular e no computador: Web Push com VAPID próprio (RIFA-095, 2026-11-27)
 
 Pedido do PO (27/11, campanha em andamento): uma notificação de venda no celular (e no computador), como as de
