@@ -178,8 +178,10 @@ describe("VAPID (RFC 8292)", () => {
   it("as chaves do ambiente: sem uma delas, vazia ou fora do formato, o recurso fica desligado", async () => {
     const { publica, privada } = await gerarChavesVapid();
     const erro = vi.spyOn(console, "error").mockImplementation(() => {});
-    // O wrangler.jsonc dos testes tem a pública vazia (o placeholder) e nenhum segredo.
-    expect(env.VAPID_PUBLIC_KEY).toBe("");
+    // O env dos testes tem a pública do wrangler.jsonc (vazia = desligado, ou a de produção: não é segredo) e nunca a
+    // privada (o vitest.config.ts a força vazia, mesmo com um .dev.vars): o recurso fica desligado.
+    expect(env.VAPID_PUBLIC_KEY).toMatch(/^(|B[A-Za-z0-9_-]{86})$/);
+    expect(env.VAPID_PRIVATE_KEY ?? "").toBe("");
     expect(chavesVapidDoAmbiente(env)).toBeNull();
     for (const [VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY] of [
       [publica, undefined],

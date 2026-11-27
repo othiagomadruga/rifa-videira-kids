@@ -488,8 +488,9 @@ Rifei). Nada disso muda as vendas: o Pix continua caindo na Efí pela Rifei.
 
 ### 3.9 Notificações de venda no celular (Web Push) [SM] (RIFA-095, D43)
 
-O recurso entra **desligado** (a chave pública vazia no `wrangler.jsonc`): o botão "Receber avisos de venda" não
-aparece e nada é enviado. Para ligar, o par de chaves VAPID: a **pública** vai no `wrangler.jsonc` (não é segredo) e a
+O recurso entrou **desligado** (a chave pública vazia no `wrangler.jsonc`) e foi ligado em 27/11 (a pública no
+`wrangler.jsonc` e a privada no segredo do Worker). Sem uma das duas, o botão "Receber avisos de venda" não aparece e
+nada é enviado. Para ligar (ou trocar o par), o par de chaves VAPID: a **pública** vai no `wrangler.jsonc` (não é segredo) e a
 **privada** vira o segredo do Worker `VAPID_PRIVATE_KEY` (nunca no repositório, no chat ou no DevMission).
 
 1. **[SM, no checkout, sem rede]** gere o par; a privada vai só para um arquivo novo, com permissão 600:

@@ -25,6 +25,10 @@ export default defineConfig({
                 // RIFA-091: sem token da API da Rifei nos testes, mesmo com um .dev.vars de dev: nenhum teste chama a
                 // Rifei de verdade (a atribuição de célula a chama sozinha; os testes da Rifei passam o env próprio).
                 RIFEI_API_TOKEN: "",
+                // RIFA-095 (D43): sem a chave VAPID privada nos testes, mesmo com um .dev.vars: o Web Push fica
+                // desligado no env padrão (a pública do wrangler.jsonc não basta) e nenhum teste manda push de verdade;
+                // os testes do push passam o env próprio (src/worker/test/push-apoio.ts, ambienteComVapid).
+                VAPID_PRIVATE_KEY: "",
               },
             },
           })),
