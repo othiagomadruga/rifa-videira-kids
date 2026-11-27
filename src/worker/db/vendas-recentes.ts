@@ -5,13 +5,14 @@
  *
  * - Contam como no painel (db/painel.ts): pedido `approved` da campanha ativa, sem desconsiderar (D20), com a célula
  *   EFETIVA (D41; db/celula-efetiva.ts) e com o dia local da aprovação dentro das datas da campanha. Venda sem célula
- *   (sem afiliado, afiliado não vinculado, sem atribuição) não aparece.
+ *   (sem afiliado, afiliado não vinculado, sem atribuição) não aparece, nem a de 0 bilhetes (o webhook aceita
+ *   `numbers_count` 0, e o contrato pede bilhetes positivos: uma linha dessas daria 500 a todos por 3 minutos).
  * - Sai só o nome da célula, os bilhetes e o instante da aprovação, mais a chave opaca `k`: o resumo SHA-256 do id do
  *   pedido com um sal da campanha (o id e o `criado_em` dela, que o público não vê), cortado em
  *   TAMANHO_CHAVE_VENDA_RECENTE caracteres. É estável (a mesma venda, a mesma chave em toda resposta e em todo isolate)
  *   e não deixa chegar ao id: nada do comprador, número de bilhete, valor ou id sai daqui.
  * - Custo (D10): o índice `pedidos_por_status_aprovacao` (status, aprovado_em), da 0001, entrega só os pedidos aprovados
- *   na janela (o INDEXED BY garante o plano; db/vendas-recentes.test.ts trava): poucas linhas lidas por consulta, com
+ *   na janela (o INDEXED BY garante o plano; routes/vendas-recentes.test.ts trava): poucas linhas lidas por consulta, com
  *   qualquer tamanho de campanha. A rota ainda guarda a resposta por 10 s (lib/cache-publico.ts).
  * - Opção `publico.avisos_de_venda` desligada (ou nenhuma campanha ativa): `ligados: false` e a lista vazia, sem ler
  *   os pedidos (a tela não mostra os avisos nem o botão do som).
@@ -39,7 +40,7 @@ export const SELECIONAR_VENDAS_RECENTES = `
   ${juntarAfiliado()}
   JOIN celulas AS c ON c.id = ${celulaEfetiva()}
   WHERE p.status = 'approved' AND p.aprovado_em >= ?2 AND p.aprovado_em <= ?3
-    AND p.campanha_id = ?1 AND p.desconsiderado_em IS NULL
+    AND p.campanha_id = ?1 AND p.desconsiderado_em IS NULL AND p.qtd_bilhetes > 0
   ORDER BY p.aprovado_em DESC, p.id DESC
   LIMIT ?4`;
 

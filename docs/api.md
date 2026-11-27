@@ -756,7 +756,7 @@ Os avisos de venda ("A célula X vendeu N bilhetes!") do ranking aberto e da /mi
 - `itens`: as vendas **pagas que contam** (pedido `approved` da campanha ativa, sem desconsiderar, D20, com a **célula
   efetiva**, D41, e com o dia local da aprovação dentro das datas da campanha) dos **últimos 3 minutos**
   (`JANELA_VENDAS_RECENTES_MS`, pela aprovação, até `agora`), da mais recente para a mais antiga, no máximo 30
-  (`LIMITE_VENDAS_RECENTES`). Venda sem célula não aparece.
+  (`LIMITE_VENDAS_RECENTES`). Venda sem célula não aparece, nem a de 0 bilhetes (revisão da RIFA-094).
 - Cada item: `k`, a chave **opaca** e estável do pedido (os 16 primeiros hex do SHA-256 do id com um sal da campanha que
   o público não vê: não leva ao id), `celula` (o nome), `bilhetes` (os desta venda) e `em` (o instante da aprovação).
   **Nada do comprador, nenhum número de bilhete, nenhum valor em R$ e nenhum id.**
