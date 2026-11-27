@@ -48,7 +48,7 @@
   // o recurso fica desligado: o botão não aparece, a inscrição responde 503 e nada é enviado. Como gerar e gravar as
   // duas: docs/lancamento.md, 3.9 (`node scripts/gerar-chaves-vapid.mjs`).
   "vars": {
-    "VAPID_PUBLIC_KEY": "",
+    "VAPID_PUBLIC_KEY": "BAi1M1gSiTi0AOjd1C9Y5rllhdk-BwD_FpAG0Cdjr6-QrvpS_cHV1AsD6qvHcojzEyTcwoyEJe7_9SUbvMvNt4A",
     "VAPID_SUBJECT": "https://projetokidsbelem.com.br",
   },
   // Limite de requisições por IP (RIFA-013b; src/worker/lib/limite-requisicoes.ts, que tem as mesmas
