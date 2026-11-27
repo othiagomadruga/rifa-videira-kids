@@ -52,6 +52,7 @@ function lerJsonc(texto: string): unknown {
 }
 
 interface ConfigWrangler {
+  vars?: Record<string, unknown>;
   triggers?: { crons?: string[] };
   send_email?: unknown;
   mtls_certificates?: unknown;
@@ -89,6 +90,24 @@ describe("wrangler.jsonc", () => {
     expect(namespaces).toHaveLength(2);
     expect(new Set(namespaces).size).toBe(2);
     for (const id of namespaces) expect(id).toMatch(/^[1-9]\d*$/);
+  });
+});
+
+describe("wrangler.jsonc: as notificações de venda (Web Push, RIFA-095, D43)", () => {
+  it("os `vars` só têm a chave VAPID pública (vazia = desligado, ou 87 caracteres) e o `sub` (uma URL https, sem e-mail)", () => {
+    expect(Object.keys(config.vars ?? {}).sort()).toEqual([
+      "VAPID_PUBLIC_KEY",
+      "VAPID_SUBJECT",
+    ]);
+    expect(config.vars?.VAPID_PUBLIC_KEY).toMatch(/^(|B[A-Za-z0-9_-]{86})$/);
+    expect(config.vars?.VAPID_SUBJECT).toBe("https://projetokidsbelem.com.br");
+  });
+
+  it("a chave privada é segredo do Worker: nunca no wrangler.jsonc (nem em `vars`)", () => {
+    expect(config.vars).not.toHaveProperty("VAPID_PRIVATE_KEY");
+    expect(wranglerJsonc).not.toMatch(/"VAPID_PRIVATE_KEY"\s*:/);
+    // Nada com cara de chave privada P-256 em base64url (43 caracteres) entre aspas.
+    expect(wranglerJsonc).not.toMatch(/"[A-Za-z0-9_-]{43}"/);
   });
 });
 

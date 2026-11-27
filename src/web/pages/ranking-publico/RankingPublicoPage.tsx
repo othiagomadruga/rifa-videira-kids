@@ -5,6 +5,7 @@ import {
   BotaoSomDasVendas,
 } from "../../components/avisos-de-venda";
 import { TextoContado } from "../../components/movimento";
+import { AvisosNoCelular } from "../../components/notificacoes";
 import {
   EmptyState,
   ErrorState,
@@ -63,6 +64,9 @@ export function RankingPublicoPage() {
         acoes={avisosLigados ? <BotaoSomDasVendas /> : undefined}
       />
       <AvisosDeVenda aoSaberSeLigados={setAvisosLigados} />
+      {/* RIFA-095 (D43): o botão "Receber avisos de venda" no celular (some sem suporte ou com as notificações
+          desligadas). */}
+      <AvisosNoCelular origem="publico" />
       {estado.tipo === "carregando" && (
         <div className="ranking-publico__carregando">
           <Loading texto="Carregando o ranking…" />

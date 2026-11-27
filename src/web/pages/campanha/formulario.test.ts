@@ -130,6 +130,8 @@ describe("montarCorpo", () => {
           limite_ranking: null,
           avisos_de_venda: true,
         },
+        // RIFA-095 (D43): as notificações de venda vão sempre, com o padrão (ligadas).
+        notificacoes: { vendas: true },
         // Regras do admin (D20): do admin, os três grupos vão sempre, com o que está no formulário.
         pedidos: { ...PEDIDOS_PADRAO },
         acesso: { ...ACESSO_PADRAO },
@@ -161,6 +163,7 @@ describe("montarCorpo", () => {
       "ranking",
       "publico",
       "bilhetes",
+      "notificacoes",
     ]);
   });
 

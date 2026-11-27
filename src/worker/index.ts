@@ -28,6 +28,7 @@ import {
 } from "./routes/maiores-compradores";
 import { PREFIXO_MINHA, minha } from "./routes/minha";
 import { minhaTodasAsRedes } from "./routes/minha-todas-as-redes";
+import { PREFIXO_NOTIFICACOES, notificacoes } from "./routes/notificacoes";
 import { PREFIXO_PAINEL, painel } from "./routes/painel";
 import { PREFIXO_PEDIDOS, pedidos } from "./routes/pedidos";
 import {
@@ -148,6 +149,10 @@ app.route(PREFIXO_RECONCILIACAO, reconciliacao);
 app.route(PREFIXO_RIFEI_API, rifeiApi);
 // Painel e ranking da coordenação (RIFA-PAINEL): sob /api/painel, protegidos pelo passo 4.
 app.route(PREFIXO_PAINEL, painel);
+// Notificações de venda (RIFA-095, D43): o estado, a inscrição e o cancelamento sob /api/publico/notificacoes, ABERTOS
+// (como a visão pública), com a mesma origem e o limite por IP nos POSTs. ANTES do sub-app de /api/publico: o cache e o
+// Cache-Control de lá não valem aqui.
+app.route(PREFIXO_NOTIFICACOES, notificacoes);
 // Visão pública (RIFA-PAINEL): ranking e bumbo sob /api/publico, ABERTOS (fora dos prefixos do
 // passo 4) e nunca com valores em R$ ou bilhetes (o sub-app confere a resposta no schema estrito).
 app.route(PREFIXO_PUBLICO, publico);

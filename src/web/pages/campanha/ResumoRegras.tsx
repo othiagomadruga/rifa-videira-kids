@@ -5,6 +5,7 @@ import {
   ACESSO_PADRAO,
   AVISOS_DE_VENDA_PADRAO,
   MENSAGENS_PADRAO,
+  NOTIFICACOES_PADRAO,
   PEDIDOS_PADRAO,
   PUBLICO_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
@@ -19,6 +20,8 @@ import {
   formatarNumero,
 } from "../../lib/formatadores";
 import { textoPercentual } from "./formulario";
+import { CAMPO_NOTIFICACOES } from "./OpcaoNotificacoes";
+import { textoDoResumoDasNotificacoes } from "./textos-notificacoes";
 import { mensagensVisiveis } from "./RegrasDoAdmin";
 import { AJUDA, TEXTO_CRITERIO } from "./textos";
 
@@ -219,6 +222,15 @@ export function itensDoResumo(
         : "Desligado: só pelo link pessoal.",
       padrao,
       campo: idDoCampo("acesso.celulas_senha"),
+    },
+    // RIFA-095 (D43): as notificações de venda no celular.
+    {
+      nome: "Notificações de venda",
+      valor: textoDoResumoDasNotificacoes(
+        campanha?.notificacoes?.vendas ?? NOTIFICACOES_PADRAO.vendas,
+      ),
+      padrao,
+      campo: idDoCampo(CAMPO_NOTIFICACOES),
     },
     {
       nome: "Mensagens do link pessoal",

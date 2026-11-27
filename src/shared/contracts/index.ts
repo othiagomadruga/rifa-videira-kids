@@ -24,3 +24,4 @@ export * from "./compradores";
 export * from "./maiores-compradores";
 export * from "./relatorio-diario";
 export * from "./todas-as-redes";
+export * from "./notificacoes";

@@ -13,6 +13,7 @@ import {
   NUMEROS_INICIAIS,
 } from "./bilhetes";
 import { detalheResumidoSchema } from "./erros";
+import { NOTIFICACOES_PADRAO, notificacoesConfigSchema } from "./notificacoes";
 import {
   ACESSO_PADRAO,
   LIMITE_CARACTERES_MENSAGEM,
@@ -329,6 +330,8 @@ export const campanhaEntradaSchema = z.object({
   mensagens: mensagensConfigSchema.optional(),
   /** RIFA-075 (D35): ausente mantém o gravado (no primeiro PUT, o padrão), como os grupos do admin. */
   bilhetes: bilhetesConfigSchema.optional(),
+  /** RIFA-095 (D43): as notificações de venda. Ausente mantém o gravado (no primeiro PUT, o padrão: ligadas). */
+  notificacoes: notificacoesConfigSchema.optional(),
 });
 export type CampanhaEntrada = z.input<typeof campanhaEntradaSchema>;
 
@@ -356,6 +359,10 @@ export const campanhaSchema = z.object({
   mensagens: mensagensGravadasSchema.default(() => ({ ...MENSAGENS_PADRAO })),
   /** RIFA-075 (D35). O `.default()` é da transição (antes da migração 0016 vale o padrão). */
   bilhetes: bilhetesConfigSchema.default(() => ({ ...BILHETES_PADRAO })),
+  /** RIFA-095 (D43). O `.default()` é da transição (antes da migração 0022 vale o padrão). */
+  notificacoes: notificacoesConfigSchema.default(() => ({
+    ...NOTIFICACOES_PADRAO,
+  })),
   criado_em: instanteSchema,
   atualizado_em: instanteSchema,
 });

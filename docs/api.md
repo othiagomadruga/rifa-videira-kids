@@ -43,7 +43,7 @@ Este documento explica o contrato. Se ele divergir dos schemas, valem os schemas
 | `rifei_bearer` | `/api/webhooks/*` | `Authorization: Bearer <token>`, comparado em tempo constante (D6) com o token gerado pela tela da coordenação (RIFA-039, D21; no banco, só o SHA-256) ou, **só sem ele**, com o segredo do Worker `RIFEI_WEBHOOK_TOKEN`. Não usa a sessão: o cookie não abre o webhook | `401 nao_autenticado`; nenhum dos dois configurado: `503 nao_configurado` |
 | `coordenacao` | `/api/admin/*`, `/api/painel/*` e `GET /api/sessao` | sessão em cookie (`__Host-sessao`) aberta pelo link pessoal de cada pessoa da equipe ([acesso.md](acesso.md)), com as rotas `/api/sessao` (abaixo) | `401 nao_autenticado`: sem sessão válida; `403 proibido`: papel sem permissão ou escrita de outra origem |
 | `hierarquia` | `/api/minha/*` (RIFA-014, D12) | a mesma sessão, aberta pelo link pessoal de um `lider`, `discipulador` ou `rede`; o alvo (célula, discipulador ou rede) vem **só da sessão** | `401 nao_autenticado`: sem sessão; `403 proibido`: sessão da coordenação. **Nunca devolve dinheiro** |
-| `aberto` | `/api/health`, `/api/publico/*`, `POST /api/sessao`, `POST /api/sessao/senha` (RIFA-064), `POST /api/sessao/discipulador` (RIFA-082), `POST /api/sessao/admin` (RIFA-073) e `POST /api/sessao/sair` | nenhum (os POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** (a única exceção: os bilhetes de cada venda nos avisos de venda, RIFA-094, D42) |
+| `aberto` | `/api/health`, `/api/publico/*` (com as notificações de venda, RIFA-095), `POST /api/sessao`, `POST /api/sessao/senha` (RIFA-064), `POST /api/sessao/discipulador` (RIFA-082), `POST /api/sessao/admin` (RIFA-073) e `POST /api/sessao/sair` | nenhum (os POSTs, só da mesma origem) | **`/api/publico/*` nunca devolve valores em unidades: R$ ou bilhetes** (a única exceção: os bilhetes de cada venda nos avisos de venda, RIFA-094, D42) |
 
 Os schemas de `/api/publico/*` são **estritos** em todos os níveis: um campo a mais, como `total_centavos`, invalida a resposta. Os testes conferem que nenhum campo de valor (centavos, total, bilhetes, realizado…) existe nas respostas abertas e que todos os campos delas estão numa lista fechada. A exceção é `GET /api/publico/vendas-recentes` (RIFA-094, D42): o `bilhetes` de cada venda, com a lista fechada própria (`k`, `celula`, `bilhetes`, `em`, `ligados`, `itens`, `agora`).
 
@@ -160,6 +160,7 @@ Configuração da campanha ativa: tudo que é regra de campanha vive aqui, e nã
   - **O primeiro PUT cria a campanha já ativa**: o contrato não tem rascunho nem passo separado de ativação. A partir dele, o webhook passa a contar as vendas da Rifei com esse `slug_rifei` (D5). Preço e meta podem entrar provisórios e ser corrigidos depois.
   - Os PUTs seguintes substituem a configuração da mesma campanha (mesmo `id`: os pedidos já gravados continuam ligados a ela), e os períodos são substituídos inteiros. Campanha e períodos vão numa transação: se algo falha, nada muda. Nunca há duas campanhas ativas.
   - Grupo `bilhetes` (RIFA-075, D35): `quantidade` (1 a 1.000.000; padrão 7005) e `numero_inicial` (0, 1 ou null = automático). Ausente mantém o gravado (no primeiro PUT, o padrão). A tela Bilhetes desenha a grade com ele.
+  - Grupo `notificacoes` (RIFA-095, [D43](decisions.md#d43-notificações-de-venda-no-celular-e-no-computador-web-push-com-vapid-próprio-rifa-095-2026-11-27)): `{ "vendas": true | false }`, "Enviar notificações de venda". Ausente mantém o gravado (no primeiro PUT, o padrão: ligada); a resposta traz sempre o grupo. Da coordenação também (não é dos grupos só do admin). Desligada, o botão "Receber avisos de venda" some e nenhuma notificação sai (veja "Notificações de venda", abaixo).
   - **200** `Campanha`, como ficou gravada.
   - **400** `json_invalido`: o corpo não é JSON, ou veio sem `Content-Type: application/json` (ou `application/<tipo>+json`), mesmo que o texto seja JSON.
   - **400** `requisicao_invalida`: fora do schema (`detalhes` = problemas).
@@ -764,6 +765,48 @@ Os avisos de venda ("A célula X vendeu N bilhetes!") do ranking aberto e da /mi
 - `agora`: o instante do servidor em que a resposta foi montada.
 - Custo: o índice `pedidos_por_status_aprovacao` (status, aprovado_em) lê só a janela (`db/vendas-recentes.ts`, plano
   travado em teste).
+
+---
+
+## Notificações de venda no celular (RIFA-095; docs/decisions.md D43)
+
+Web Push padrão com as chaves VAPID do próprio Worker: cada venda paga que passa a contar (o `paid_order` que o webhook
+aprova, com célula efetiva, sem desconsiderar, dentro das datas da campanha) vira, em todo aparelho inscrito, a
+notificação `{ "titulo": "Projeto Videira Kids", "corpo": "🎟️ A célula Betel vendeu 3 bilhetes!", "url": "/" }`
+(cifrada, `aes128gcm`; nada do comprador, nenhum R$). Rotas em `ROTAS_NOTIFICACOES` (`notificacoes.ts`), abertas
+(sem login), montadas antes do sub-app de `/api/publico`. O envio fica no `waitUntil` do webhook (a resposta à Rifei não
+espera): 6 por vez, 8 s cada, teto de 800 por venda; 404/410 apaga a inscrição e 5 falhas seguidas também.
+
+### `GET /api/publico/notificacoes` (aberto)
+
+- **200** (`respostaEstadoNotificacoesSchema`, estrito): `{ "ligadas": true, "chave_publica": "<87 caracteres>" }`
+  quando o servidor tem as chaves VAPID, há campanha ativa e `notificacoes.vendas` está ligada; senão
+  `{ "ligadas": false, "chave_publica": null }` (o botão some). `chave_publica` é o `applicationServerKey` da inscrição.
+- Cache das rotas abertas (D10): 30 s no servidor e `Cache-Control: public, max-age=30`; o limite por IP só nas idas ao
+  banco (429 `muitas_requisicoes`).
+
+### `POST /api/publico/notificacoes/inscrever` (aberto, só da mesma origem)
+
+- **Corpo** (`corpoInscreverNotificacoesSchema`, estrito, até 4 KiB):
+  `{ "endpoint": "https://fcm.googleapis.com/fcm/send/...", "chaves": { "p256dh": "<87>", "auth": "<22>" }, "origem": "publico" | "minha" }`
+  (o `PushSubscription` do navegador; o `=` do base64url é tirado). O `endpoint` só de um serviço de push conhecido
+  (contra SSRF): `https:`, sem usuário, senha nem porta, servidor `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+  `web.push.apple.com` ou `<nome>.notify.windows.com` (`endpointDePushPermitido`).
+- **204**: gravada; o mesmo `endpoint` de novo troca as chaves e a origem e zera as falhas. `Cache-Control: no-store`.
+- **Erros**, nesta ordem: 403 `proibido` (outra origem: `Origin` ou `Sec-Fetch-Site`, como `/api/sessao`); 429
+  `muitas_requisicoes` (60 por minuto por IP, toda requisição conta); **503 `nao_configurado`** sem as chaves VAPID no
+  servidor (antes de ler o corpo); 413 `corpo_muito_grande`; 400 `json_invalido` ou `requisicao_invalida` (o endpoint
+  fora da lista também; `detalhes` sem o valor recebido); **409 `acao_desligada`** sem campanha ativa ou com
+  `notificacoes.vendas` desligada; 400 `requisicao_invalida` com `detalhes` `[{ "caminho": ["chaves", "p256dh"], "codigo": "chave_invalida" }]`
+  quando a chave do aparelho não é um ponto da P-256.
+
+### `POST /api/publico/notificacoes/cancelar` (aberto, só da mesma origem)
+
+- **Corpo** (`corpoCancelarNotificacoesSchema`, estrito, até 4 KiB): `{ "endpoint": "..." }`.
+- **204** sempre (apagada ou não existia: a resposta não diz se o endpoint estava lá). Vale sem as chaves VAPID.
+- **Erros**: 403 (outra origem), 429, 413 e 400, como na inscrição.
+
+O endpoint de uma inscrição **nunca** vai para log, resposta ou trilha.
 
 ---
 

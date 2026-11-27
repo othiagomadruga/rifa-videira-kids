@@ -324,6 +324,8 @@ describe("D20: as regras na resposta da campanha", () => {
         limite_ranking: 3,
         avisos_de_venda: false,
       },
+      // RIFA-095 (D43): as notificações de venda.
+      notificacoes: { vendas: false },
     };
     expect(campanhaSchema.parse(gravada)).toEqual(gravada);
     expect(

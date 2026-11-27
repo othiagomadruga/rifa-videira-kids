@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { AJUDA, AJUDA_DAS_TELAS } from "./ajuda-das-telas";
 import { AJUDA as AJUDA_DO_QR } from "../components/qr/textos";
 import { AJUDA as AJUDA_CAMPANHA } from "./campanha/textos";
+import { AJUDA_NOTIFICACOES } from "./campanha/textos-notificacoes";
 import { AJUDA as AJUDA_EXTRATO } from "./conferencia/extrato/textos";
 import { AJUDA as AJUDA_CONFERENCIA } from "./conferencia/textos";
 import { AJUDA as AJUDA_MAPA } from "./mapa/textos";
@@ -38,6 +39,8 @@ function frases(texto: string): string[] {
 const TODOS = [
   ...textos(AJUDA),
   ...textos(AJUDA_CAMPANHA, "campanha."),
+  // RIFA-095 (D43): a opção das notificações de venda.
+  ...textos(AJUDA_NOTIFICACOES, "campanha.notificacoes."),
   ...textos(AJUDA_PEDIDOS, "pedidos."),
   ...textos(AJUDA_MAPA, "mapa."),
   ...textos(AJUDA_CONFERENCIA, "conferencia."),

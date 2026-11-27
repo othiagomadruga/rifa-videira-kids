@@ -22,6 +22,14 @@ declare namespace Cloudflare {
     EMAIL?: SendEmail;
     // Destinatários, separados por vírgula: `wrangler secret put RELATORIO_EMAILS`. Nunca no repositório (é público).
     RELATORIO_EMAILS?: string;
+    // Notificações de venda (Web Push, RIFA-095, D43; lib/web-push.ts). Opcionais: sem a pública ou sem a privada (ou
+    // com uma delas vazia), o recurso fica desligado (GET /api/publico/notificacoes diz `ligadas: false`, a inscrição
+    // responde 503 `nao_configurado` e nada é enviado). A pública e o `sub` ficam nos `vars` do wrangler.jsonc (não
+    // são segredo); a privada é segredo: `wrangler secret put VAPID_PRIVATE_KEY` (docs/lancamento.md 3.9). Nunca no
+    // repositório.
+    VAPID_PUBLIC_KEY?: string;
+    VAPID_PRIVATE_KEY?: string;
+    VAPID_SUBJECT?: string;
   }
 
   // Tipa o `exports` de "cloudflare:workers" (usado nos testes do Worker).

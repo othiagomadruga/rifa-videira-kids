@@ -3,11 +3,11 @@
 // 0008_regras_campanha.sql, 0009_token_webhook.sql, 0010_link_vendas.sql, 0011_pagamento_conferencia.sql,
 // 0012_ranking_por_divisao.sql, 0013_login_celulas_senha.sql, 0014_codigo_afiliado_rifei.sql, 0015_senha_admin.sql,
 // 0016_bilhetes_campanha.sql, 0017_comprador_contato.sql, 0018_grupos.sql, 0019_grupo_da_celula.sql,
-// 0020_celula_atribuida.sql e 0021_avisos_de_venda.sql), aplicado pelo setup apply-migrations.ts no D1 local dos
-// testes, dentro do workerd. A 0006 até a 0021 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts)
+// 0020_celula_atribuida.sql, 0021_avisos_de_venda.sql e 0022_notificacoes_push.sql), aplicado pelo setup
+// apply-migrations.ts no D1 local dos testes, dentro do workerd. A 0006 até a 0022 também são aplicadas num D1 à parte (DB_MIGRACAO, vitest.config.ts)
 // SOBRE dados gravados com as migrações anteriores: o que existia continua lá (RIFA-014, CA7; RIFA-025, CA5; RIFA-028,
 // CA8; RIFA-039, CA8; RIFA-046, CA7; RIFA-056; RIFA-061; RIFA-064; RIFA-070; RIFA-073; RIFA-075; RIFA-076; RIFA-084;
-// RIFA-085; RIFA-088; RIFA-094).
+// RIFA-085; RIFA-088; RIFA-094; RIFA-095).
 import { applyD1Migrations, type D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
@@ -62,6 +62,8 @@ const TABELAS = [
   "pedidos",
   // 0005 (RIFA-013b): pedidos aprovados marcados como implausíveis.
   "pedidos_suspeitos",
+  // 0022 (RIFA-095, D43): as inscrições das notificações de venda (Web Push).
+  "push_inscricoes",
   // 0004 (RIFA-012): auditoria do "Recuperar" da conferência pelo CSV.
   "recuperacoes",
   "redes",
@@ -172,6 +174,8 @@ describe("migrações: schema do D1", () => {
       // 0005 (RIFA-013b).
       auditoria: ["auditoria_por_usuario"],
       pedidos_suspeitos: ["pedidos_suspeitos_por_marcacao"],
+      // 0022 (RIFA-095, D43): a ordem do envio (os que esperam há mais tempo primeiro).
+      push_inscricoes: ["push_inscricoes_por_envio"],
       // 0004 (RIFA-012).
       recuperacoes: ["recuperacoes_por_campanha"],
       // 0006 (RIFA-014): no máximo um usuário por alvo.
@@ -2913,25 +2917,6 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
   describe("0021 sobre dados que já existiam (RIFA-094, D42)", () => {
     const db = DB_MIGRACAO;
     let antes: Record<string, Record<string, unknown>[]>;
-    // RIFA-046 (veio do describe da 0016): o modelo do link de vendas, que o PUT de hoje não apaga.
-    const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
-
-    const modelos = async () =>
-      (
-        await db
-          .prepare(
-            "SELECT id, ativa, link_vendas_modelo FROM campanhas ORDER BY id",
-          )
-          .all<{
-            id: number;
-            ativa: number;
-            link_vendas_modelo: string | null;
-          }>()
-      ).results;
-    const apagarModelos = async () => {
-      await db.prepare("UPDATE campanhas SET link_vendas_modelo = NULL").run();
-    };
-
     beforeAll(async () => {
       // Idempotente: os describes anteriores já aplicaram as migrações até a 0020.
       await applyD1Migrations(
@@ -2939,7 +2924,11 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
         TEST_MIGRATIONS.filter((migracao) => migracao.name < "0021"),
       );
       antes = await fotografarTodasAsTabelas(db);
-      await applyD1Migrations(db, TEST_MIGRATIONS);
+      // Até a 0021: a 0022 (RIFA-095) é aplicada depois, sobre tudo isto (describe "0022 sobre dados que já existiam").
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0022"),
+      );
     });
 
     it("a 0021 foi aplicada sobre os dados: nada muda e cada campanha ganha só publico_avisos_de_venda = 1 (ligada)", async () => {
@@ -2971,9 +2960,107 @@ describe("migrações sobre dados que já existiam", { shuffle: false }, () => {
             .run(),
         ).rejects.toThrow(/CHECK constraint failed/);
     });
+  });
 
-    // RIFA-061 (veio do describe da 0012, depois da 0016): o PUT de hoje nomeia as colunas da 0021 (RIFA-094), então
-    // roda sobre o schema completo, aqui.
+  describe("0022 sobre dados que já existiam (RIFA-095, D43)", () => {
+    const db = DB_MIGRACAO;
+    let antes: Record<string, Record<string, unknown>[]>;
+    // RIFA-046 (veio do describe da 0016 e, na RIFA-095, do da 0021): o modelo do link de vendas, que o PUT de hoje não apaga.
+    const MODELO = "https://rifei.com.br/{slug}?afiliado={afiliado}";
+
+    const modelos = async () =>
+      (
+        await db
+          .prepare(
+            "SELECT id, ativa, link_vendas_modelo FROM campanhas ORDER BY id",
+          )
+          .all<{
+            id: number;
+            ativa: number;
+            link_vendas_modelo: string | null;
+          }>()
+      ).results;
+    const apagarModelos = async () => {
+      await db.prepare("UPDATE campanhas SET link_vendas_modelo = NULL").run();
+    };
+
+    beforeAll(async () => {
+      // Idempotente: os describes anteriores já aplicaram as migrações de antes da 0022.
+      await applyD1Migrations(
+        db,
+        TEST_MIGRATIONS.filter((migracao) => migracao.name < "0022"),
+      );
+      antes = await fotografarTodasAsTabelas(db);
+      await applyD1Migrations(db, TEST_MIGRATIONS);
+    });
+
+    it("a 0022 foi aplicada sobre tudo o que existia: nada muda, cada campanha fica com as notificações ligadas e a tabela nova vem vazia", async () => {
+      const { results } = await db
+        .prepare("SELECT name FROM d1_migrations ORDER BY id")
+        .all<{ name: string }>();
+      expect(results.map((linha) => linha.name)).toContain(
+        "0022_notificacoes_push.sql",
+      );
+      expect(antes.campanhas.length).toBeGreaterThan(0);
+      expect(antes.campanhas[0]).not.toHaveProperty("notificacoes_vendas");
+      expect(antes).not.toHaveProperty("push_inscricoes");
+      const { campanhas, push_inscricoes, ...depois } =
+        await fotografarTodasAsTabelas(db);
+      const { campanhas: campanhasAntes, ...resto } = antes;
+      expect(depois).toEqual(resto);
+      expect(campanhas).toEqual(
+        campanhasAntes.map((campanha) => ({
+          ...campanha,
+          notificacoes_vendas: 1,
+        })),
+      );
+      expect(push_inscricoes).toEqual([]);
+    });
+
+    it("push_inscricoes: o endpoint https e único, as chaves no formato, a origem e as falhas pelos CHECKs; a opção só 0 ou 1", async () => {
+      const p256dh = `B${"A".repeat(86)}`;
+      const auth = "A".repeat(22);
+      const inserir = (
+        endpoint: string,
+        chave = p256dh,
+        segredo = auth,
+        origem = "publico",
+        falhas = 0,
+      ) =>
+        db
+          .prepare(
+            `INSERT INTO push_inscricoes (endpoint, p256dh, auth, origem, criado_em, falhas)
+             VALUES (?1, ?2, ?3, ?4, '2026-11-27T12:00:00.000Z', ?5)`,
+          )
+          .bind(endpoint, chave, segredo, origem, falhas)
+          .run();
+      const valido = "https://fcm.googleapis.com/fcm/send/ficticio-0022";
+      await inserir(valido);
+      await expect(inserir(valido)).rejects.toThrow(/UNIQUE constraint failed/);
+      for (const recusado of [
+        () => inserir("http://fcm.googleapis.com/fcm/send/x"),
+        () => inserir(`https://${"a".repeat(2048)}`),
+        () => inserir(`${valido}-2`, p256dh.slice(1)),
+        () => inserir(`${valido}-3`, `${p256dh.slice(1)}+`),
+        () => inserir(`${valido}-4`, p256dh, `${auth.slice(1)}/`),
+        () => inserir(`${valido}-5`, p256dh, auth, "telao"),
+        () => inserir(`${valido}-6`, p256dh, auth, "minha", -1),
+        () =>
+          db
+            .prepare(
+              `INSERT INTO push_inscricoes (endpoint, p256dh, auth, origem, criado_em)
+               VALUES ('https://fcm.googleapis.com/x7', ?1, ?2, 'minha', '27/11/2026')`,
+            )
+            .bind(p256dh, auth)
+            .run(),
+        () => db.prepare("UPDATE campanhas SET notificacoes_vendas = 2").run(),
+      ])
+        await expect(recusado()).rejects.toThrow(/CHECK constraint failed/);
+      await db.prepare("DELETE FROM push_inscricoes").run();
+    });
+
+    // RIFA-061 (veio do describe da 0012, depois da 0016 e da 0021): o PUT de hoje nomeia as colunas da 0021 (RIFA-094) e
+    // da 0022 (RIFA-095), então roda sobre o schema completo, aqui.
     it("a campanha que já existia sai com o ranking por divisão ligado; o PUT sem a opção mantém, com a opção grava", async () => {
       const ativa = async () =>
         (await db

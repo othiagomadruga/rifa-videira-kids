@@ -6,6 +6,7 @@ import {
   AVISOS_DE_VENDA_PADRAO,
   BILHETES_PADRAO,
   MENSAGENS_PADRAO,
+  NOTIFICACOES_PADRAO,
   PEDIDOS_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
   calcularCalendario,
@@ -59,6 +60,8 @@ export function campanhaDaEntrada(
     acesso: { ...ACESSO_PADRAO, ...entrada.acesso },
     mensagens: entrada.mensagens ?? { ...MENSAGENS_PADRAO },
     bilhetes: entrada.bilhetes ?? { ...BILHETES_PADRAO },
+    // RIFA-095 (D43): as notificações de venda ausentes no PUT ficam com o padrão (ligadas).
+    notificacoes: entrada.notificacoes ?? { ...NOTIFICACOES_PADRAO },
     criado_em: "2026-11-06T18:00:00.000Z",
     atualizado_em: "2026-11-06T18:00:00.000Z",
     ...extra,

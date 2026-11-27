@@ -463,6 +463,11 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
         "Login com senha padrão",
         "Ligado: células e discipuladores entram com o nome e a senha padrão.",
       ],
+      // RIFA-095 (D43).
+      [
+        "Notificações de venda",
+        "Ligadas: quem ativou os avisos recebe no celular cada venda paga, com a célula e os bilhetes.",
+      ],
       ["Mensagens do link pessoal", "As 4 com o texto padrão."],
     ]);
     expect(screen.queryByText(/Falta preencher/)).not.toBeInTheDocument();
@@ -505,6 +510,11 @@ describe("CA2 (RIFA-030): o resumo 'Regras da campanha'", () => {
       [
         "Login com senha padrão",
         "Ligado: células e discipuladores entram com o nome e a senha padrão. (padrão)",
+      ],
+      // RIFA-095 (D43).
+      [
+        "Notificações de venda",
+        "Ligadas: quem ativou os avisos recebe no celular cada venda paga, com a célula e os bilhetes. (padrão)",
       ],
       ["Mensagens do link pessoal", "As 4 com o texto padrão. (padrão)"],
     ]);

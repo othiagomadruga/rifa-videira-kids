@@ -29,6 +29,8 @@
 // p) os avisos de venda (RIFA-094, D42): GET /api/publico/vendas-recentes aberta como as públicas (sem sessão, sem
 //    cookie, cache curto de 10 s), só com a chave opaca, a célula, os bilhetes e o instante de cada venda (nada do
 //    comprador, nenhum valor e nenhum id), a mesma resposta com ou sem sessão;
+// q) as notificações de venda (RIFA-095, D43): as três rotas de /api/publico/notificacoes abertas como as públicas (sem
+//    sessão; nenhuma rota de /api/admin, /api/painel ou /api/minha nova), os POSTs só da mesma origem;
 // e o formato único de erro vale em todas as partes montadas.
 import { env, exports } from "cloudflare:workers";
 import {
@@ -51,6 +53,7 @@ import {
   ROTAS_ACESSO_HIERARQUIA,
   ROTAS_LINK_VENDAS,
   ROTAS_MAIORES_COMPRADORES,
+  ROTAS_NOTIFICACOES,
   ROTAS_QUEM_COMPROU,
   ROTAS_QUEM_COMPROU_ADMIN,
   ROTAS_REGRAS_CAMPANHA,
@@ -272,6 +275,8 @@ const GRUPO_NO_CONTRATO = new Map(
     ...Object.values(ROTAS_QUEM_COMPROU),
     ...Object.values(ROTAS_QUEM_COMPROU_ADMIN),
     ...Object.values(ROTAS_TODAS_AS_REDES),
+    // RIFA-095 (D43): as notificações de venda, abertas.
+    ...Object.values(ROTAS_NOTIFICACOES),
   ].map((rota): [string, string] => [
     `${rota.metodo} ${rota.caminho}`,
     rota.grupo,
@@ -2888,6 +2893,71 @@ describe("n) RIFA-086 e RIFA-087 (D40): o relatório diário por e-mail e o Arre
     expect(
       ROTAS_ARRECADADO.arrecadado.sucesso.corpo.parse(await arrecadado.json()),
     ).toMatchObject({ data: hoje, hoje: { total_centavos: 0 } });
+  });
+});
+
+describe("q) RIFA-095 (D43): as notificações de venda, abertas como as rotas públicas", () => {
+  it("as três rotas estão no contrato como abertas, sob /api/publico, e montadas no app", () => {
+    const registradas = rotasRegistradas().map(
+      (rota) => `${rota.metodo} ${rota.caminho.replace(/(.)\/$/, "$1")}`,
+    );
+    for (const rota of Object.values(ROTAS_NOTIFICACOES)) {
+      expect(rota.grupo).toBe("aberto");
+      expect(rota.caminho.startsWith("/api/publico/")).toBe(true);
+      expect(GRUPO_NO_CONTRATO.get(`${rota.metodo} ${rota.caminho}`)).toBe(
+        "aberto",
+      );
+      expect(registradas).toContain(`${rota.metodo} ${rota.caminho}`);
+    }
+  });
+
+  it("sem sessão: o estado responde 200 (sem as chaves, desligadas), a inscrição 503 e o cancelamento 204; outra origem, 403", async () => {
+    const res = await requisitar(
+      "GET",
+      ROTAS_NOTIFICACOES.estadoNotificacoes.caminho,
+    );
+    expect(res.status).toBe(200);
+    esperarCabecalhosDeSeguranca(res);
+    expect(await res.json()).toEqual({ ligadas: false, chave_publica: null });
+
+    const mesmaOrigem = { Origin: ORIGEM };
+    const corpo = JSON.stringify({
+      endpoint: "https://fcm.googleapis.com/fcm/send/ficticio-da-protecao",
+      chaves: { p256dh: `B${"A".repeat(86)}`, auth: "A".repeat(22) },
+      origem: "publico",
+    });
+    await esperarErro(
+      await requisitar(
+        "POST",
+        ROTAS_NOTIFICACOES.inscreverNotificacoes.caminho,
+        mesmaOrigem,
+        corpo,
+      ),
+      503,
+      "nao_configurado",
+    );
+    const cancelar = await requisitar(
+      "POST",
+      ROTAS_NOTIFICACOES.cancelarNotificacoes.caminho,
+      mesmaOrigem,
+      JSON.stringify({ endpoint: "https://fcm.googleapis.com/fcm/send/x" }),
+    );
+    expect(cancelar.status).toBe(204);
+    esperarCabecalhosDeSeguranca(cancelar);
+    for (const rota of [
+      ROTAS_NOTIFICACOES.inscreverNotificacoes,
+      ROTAS_NOTIFICACOES.cancelarNotificacoes,
+    ])
+      await esperarErro(
+        await requisitar(
+          "POST",
+          rota.caminho,
+          { Origin: ORIGEM_MALICIOSA },
+          corpo,
+        ),
+        403,
+        "proibido",
+      );
   });
 });
 

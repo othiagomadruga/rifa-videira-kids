@@ -118,6 +118,36 @@ Para líder, discipulador e rede (o alvo vem só da sessão: a tela não manda i
 - **Pacote à parte**: `MinhaPage.tsx` carrega `VisaoIndividual.tsx` com `lazy` (como a configuração da Campanha); enquanto ele chega, o cabeçalho (`Cabecalho.tsx`, da sessão) e o carregando. O CSS segue a mesma divisão: `minha-moldura.css` (moldura e cabeçalho) vai no pacote inicial; `minha.css` (o resto da tela) vem só com a `VisaoIndividual` (`minha-css.test.ts` confere quem importa cada um). As dicas também: a do "Sair" da moldura fica em `textos-moldura.ts` (`DICAS_DA_MOLDURA`), para o pacote inicial não levar o `textos.ts` da visão (que tem o `DICAS` do resto da tela).
 - **Ranking geral (RIFA-090, adendo da D12), só discipulador e rede**: embaixo de tudo o que eles já veem (depois dos links de vendas das células, antes do rodapé), o cartão **"Ranking geral"** (`TodasAsRedes.tsx`, no pacote da `VisaoIndividual`, com `minha-todas-as-redes.css`; textos em `textos-todas-as-redes.ts`): `GET /api/minha/todas-as-redes` (`todas-as-redes-api.ts`; do contrato, só tipos de `todas-as-redes.ts`, que tem zod). A mesma troca "Esta semana" / "Campanha toda" dos maiores compradores (`aria-pressed`, dica, `role="group"`), a janela, e duas listas, **Discipuladores** e **Células** (uma embaixo da outra no celular; lado a lado a partir de duas colunas de 26rem): posição, nome (na célula, o discipulador embaixo), "% da meta" e bilhetes. As linhas de quem vê ficam em destaque (borda, fundo e o selo "Você" na do discipulador, "Sua" nas células dele, "Sua rede" na rede; `aria-current`). Cada lista mostra as 10 primeiras e o botão "Ver todos os N discipuladores" / "Ver todas as N células" (`aria-expanded`, `aria-controls`; "Mostrar só os 10 primeiros" volta), que abre na própria página; fechada, as linhas dele abaixo das 10 primeiras aparecem mesmo assim, depois de um respiro. Pede de novo a cada atualização da visão, sem voltar ao "carregando"; erro com "Tentar de novo"; vazio ("Ainda não há células na campanha."). O líder não vê o cartão nem pede a rota. A palavra "rede" não aparece para o discipulador (D30): o título é "Ranking geral". Nunca R$ nem comprador (`guarda-minha.test.ts`, que aceita só tipos de `todas-as-redes.ts`). Testes: `TodasAsRedes.test.tsx`, as varreduras de dicas (`dicas-fora-da-coordenacao.test.tsx`) e de ajuda (`ajuda-das-telas.test.ts`), `rede-unica.test.tsx` e `minha-css.test.ts`; a API falsa responde a rota com `todasAsRedesDe` (`teste-apoio-todas-as-redes.ts`).
 
+## Avisos de venda no celular (RIFA-095, D43)
+
+O cartão **"Avisos de venda no celular"** (`components/notificacoes/`: `AvisosNoCelular.tsx`, `navegador.ts`,
+`notificacoes-api.ts`, `textos.ts` e `avisos-no-celular.css`; o ícone `celular`) fica logo abaixo do título no ranking
+aberto (`<AvisosNoCelular origem="publico" />`, depois dos avisos dentro da página da RIFA-094) e na `/minha` (`origem="minha"`, para o líder, o discipulador e a rede). Web Push:
+cada venda paga chega como notificação "🎟️ A célula X vendeu N bilhetes!", mesmo com o site fechado; tocar abre o
+ranking aberto.
+
+- **Estados:** some quando o navegador não tem service worker, Push API ou notificações, quando
+  `GET /api/publico/notificacoes` diz `ligadas: false` (sem as chaves no servidor ou com a opção da campanha
+  desligada) e quando a API não responde (é um extra). **iPhone e iPad fora do app** (no navegador, não aberto pelo
+  ícone da Tela de Início): no lugar do botão, "No iPhone: toque em Compartilhar → Adicionar à Tela de Início, abra
+  pelo ícone e ative aqui." (o iOS só dá notificação ao app da Tela de Início, iOS 16.4+). **Pronto:** o botão
+  "Receber avisos de venda" (o service worker já fica registrado ao abrir); o toque pede a permissão (primeiro, ainda
+  dentro do toque: o Safari exige), inscreve com a chave VAPID pública e manda a inscrição à API; "Ligando…" com
+  `aria-disabled` e trava contra o toque duplo. **Ligado:** "Avisos ligados neste aparelho" + "Desligar" (cancela no
+  navegador e na API). **Negado:** explica como liberar (no iPhone, pelos Ajustes). Falha: a mensagem e o botão para
+  tentar de novo. Uma inscrição feita com outra chave VAPID (o servidor trocou a chave) volta ao botão. O aparelho já
+  inscrito manda a inscrição de novo no máximo uma vez por dia (`localStorage`, com try/catch).
+- **Sem zod no ranking aberto:** do contrato, só tipos (`notificacoes.ts`); os caminhos são conferidos pelo tipo de
+  `ROTAS_NOTIFICACOES`, como em `ranking-publico-api.ts`. Nunca o comprador nem R$. Todo botão com dica (RIFA-045).
+- **Service worker** `public/sw.js` (escopo `/`, sem build): só `push` (a notificação com `icone-192.png`) e
+  `notificationclick` (foca a aba do ranking aberto ou abre uma); nada de cache offline. **Manifesto**
+  `public/manifest.webmanifest` (`standalone`, ícones 192 e 512), ligado no `index.html`.
+- **Tela Campanha:** a caixa "Enviar notificações de venda" (`OpcaoNotificacoes.tsx`, textos em
+  `textos-notificacoes.ts`) no cartão "O que o público vê", e o item "Notificações de venda" no resumo das regras.
+- **Testes:** `AvisosNoCelular.test.tsx` (com o navegador e a API falsos: sem suporte, desligado, iPhone fora do app,
+  pedir permissão, ligado, negado, desligar, falhas, dicas), `navegador.test.ts`, `src/web/service-worker.test.ts` (o
+  `sw.js` com um `self` falso e o manifesto) e `pages/campanha/OpcaoNotificacoes.test.tsx`.
+
 ## Link de vendas e QR code de cada célula (RIFA-046)
 
 As regras estão na D24 de `docs/decisions.md` e as rotas em `docs/api.md` ("Link de vendas e QR code de cada célula"). A venda só conta para a célula quando é feita na Rifei pelo link de afiliado do líder: o link sai do modelo que só o admin grava (`{slug}` e `{afiliado}`), e o QR code é gerado no navegador, sem rede.

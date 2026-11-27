@@ -83,6 +83,8 @@ describe("buscarCampanhaAtiva", () => {
       bilhetes_numero_inicial: null,
       // 0021 (RIFA-094, D42): os avisos de venda nascem ligados.
       publico_avisos_de_venda: 1,
+      // 0022 (RIFA-095, D43): as notificações de venda nascem ligadas.
+      notificacoes_vendas: 1,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],

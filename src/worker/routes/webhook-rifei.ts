@@ -3,6 +3,7 @@ import {
   CAMINHOS_WEBHOOK_RIFEI,
   LIMITE_CORPO_WEBHOOK_BYTES,
   SEGREDO_WEBHOOK_RIFEI,
+  STATUS_ALVO_POR_EVENTO,
   analisarPayloadRifei,
   avisosParaGravar,
   credencialVigenteDoWebhook,
@@ -20,6 +21,7 @@ import { processarEventoPedido } from "../db/pedidos";
 import { lerHashDoTokenWebhook } from "../db/token-webhook";
 import { registrarEvento } from "../db/webhook-eventos";
 import { lerCorpoComLimite } from "../lib/corpo-limitado";
+import { agendarNotificacaoDeVenda } from "../lib/notificacoes-venda";
 import { sha256Hex } from "../lib/cripto";
 import { MENSAGEM_JSON_INVALIDO, responderErro } from "../lib/respostas-erro";
 import { textosIguaisEmTempoConstante } from "../lib/tempo-constante";
@@ -216,6 +218,13 @@ async function receberWebhookRifei(c: Context<Ambiente>): Promise<Response> {
     avisos: analise.avisos,
     recebidoEm,
   });
+  // RIFA-095 (D43): o pedido que este evento aprovou (o único `processado` de um paid_order; a reentrega é
+  // `duplicado`) vira a notificação de venda, em segundo plano (a resposta não espera).
+  if (
+    resposta.resultado === "processado" &&
+    STATUS_ALVO_POR_EVENTO[payload.event] === "approved"
+  )
+    agendarNotificacaoDeVenda(c, campanha, payload.id);
   return c.json(resposta satisfies RespostaWebhookRifei, 200);
 }
 

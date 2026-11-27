@@ -65,6 +65,7 @@ import {
   MensagensDoLink,
   type ChaveDoFormulario,
 } from "./RegrasDoAdmin";
+import { OpcaoNotificacoes } from "./OpcaoNotificacoes";
 import { ResumoRegras } from "./ResumoRegras";
 import { SituacaoCampanha } from "./SituacaoCampanha";
 import {
@@ -721,6 +722,17 @@ export function FormularioCampanha({ campanhaInicial }: Props) {
                     </span>
                   </label>
                 </ComAjuda>
+                {/* RIFA-095 (D43): as notificações de venda no celular. */}
+                <OpcaoNotificacoes
+                  ligada={formulario.notificacoes_vendas}
+                  idDoCampo={idDoCampo}
+                  aoAlterar={(ligada) =>
+                    alterar(
+                      { notificacoes_vendas: ligada },
+                      "notificacoes.vendas",
+                    )
+                  }
+                />
               </div>
             </div>
           </Card>
