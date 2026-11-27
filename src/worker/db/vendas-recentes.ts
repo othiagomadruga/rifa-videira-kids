@@ -6,7 +6,7 @@
  * - Contam como no painel (db/painel.ts): pedido `approved` da campanha ativa, sem desconsiderar (D20), com a célula
  *   EFETIVA (D41; db/celula-efetiva.ts) e com o dia local da aprovação dentro das datas da campanha. Venda sem célula
  *   (sem afiliado, afiliado não vinculado, sem atribuição) não aparece, nem a de 0 bilhetes (o webhook aceita
- *   `numbers_count` 0, e o contrato pede bilhetes positivos: uma linha dessas daria 500 a todos por 3 minutos).
+ *   `numbers_count` 0, e o contrato pede bilhetes positivos: uma linha dessas daria 500 a todos durante a janela).
  * - Sai só o nome da célula, os bilhetes e o instante da aprovação, mais a chave opaca `k`: o resumo SHA-256 do id do
  *   pedido com um sal da campanha (o id e o `criado_em` dela, que o público não vê), cortado em
  *   TAMANHO_CHAVE_VENDA_RECENTE caracteres. É estável (a mesma venda, a mesma chave em toda resposta e em todo isolate)

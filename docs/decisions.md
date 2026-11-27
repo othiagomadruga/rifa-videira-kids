@@ -2609,6 +2609,33 @@ o botão aparece desde o primeiro quadro (o padrão da campanha é ligado) e sai
 opção desligada, ele pisca por um instante ao abrir; venda aprovada com o relógio da Rifei adiantado entra só quando
 o "agora" do servidor passa dela.
 
+**Adendo (RIFA-096, 2026-11-27): quem entra vê as vendas dos últimos 10 minutos.** Pedido do PO: "as notificações
+precisam aparecer para as pessoas que entrarem mesmo se elas entrarem depois, pra dar a sensação de movimentação, mas
+não pode ser muito distante da entrada do valor." Até aqui, a primeira resposta só marcava as vendas como vistas: quem
+abria a página num momento parado não via aviso nenhum, mesmo com vendas de 1 minuto antes.
+
+- **A janela da rota passa de 3 para 10 minutos** (`JANELA_VENDAS_RECENTES_MS = 600_000`; o limite continua 30 e o
+  cache, 10 s). Dez minutos é "agora há pouco" para quem chega (a venda ainda é notícia) e cobre a pausa comum entre
+  duas vendas numa campanha de células; mais que isso já seria a venda de outra hora, que o PO não quer ("não pode ser
+  muito distante"). O índice da aprovação continua lendo só a janela (no máximo 30 linhas por consulta).
+- **Ao entrar** (a primeira resposta com os avisos ligados), a tela mostra as vendas dessa janela, **no máximo as 5
+  mais recentes**, da mais antiga para a mais nova, com o mesmo intervalo (0,8 s), a mesma pilha e a mesma fila das
+  vendas novas, e marca **todas** as chaves da resposta como vistas: as que ficaram de fora das 5 não aparecem depois.
+  Cinco avisos (~4 s de entrada e uns 9 s até o último sair) dão a sensação de movimento sem cobrir a tela por muito
+  tempo; mostrar as 30 levaria quase meio minuto de avisos de vendas velhas. **Voltar para a aba depois de escondida é
+  entrar de novo** (a consulta pausa com a aba escondida): a mesma regra, só com o que ainda não foi mostrado (nada se
+  repete). Os avisos religados na campanha também contam como entrada. Daí em diante, como antes: só o que é novo.
+- **Há quanto tempo.** A linha menor deixa de ser fixa ("agora mesmo") e diz há quanto tempo foi a venda, pela `em`
+  dela e pelo `agora` da mesma resposta (o relógio do servidor: o do aparelho pode estar adiantado ou atrasado): menos
+  de 1 minuto, "agora mesmo"; senão, "há N min" (1 a 10). Ex.: "há 3 min · Projeto Videira Kids".
+- **O plim** toca também nos avisos da entrada, com as mesmas regras (o botão "Som das vendas" e o áudio liberado por
+  um gesto). Na primeira abertura da página o navegador ainda não deixou tocar (nenhum gesto), então a entrada costuma
+  vir em silêncio; na volta à aba, com o som já liberado, toca.
+
+**Suposições (RIFA-096):** o "há N min" é calculado quando a resposta chega (a resposta pode ter até ~10 s de cache, e
+um aviso pode esperar uns segundos na fila: "agora mesmo" pode valer para uma venda de 1 min e poucos segundos); na
+volta à aba, as vendas já mostradas antes de esconder não voltam (a regra das 5 vale para o que a pessoa ainda não viu).
+
 ## D43. Notificações de venda no celular e no computador: Web Push com VAPID próprio (RIFA-095, 2026-11-27)
 
 Pedido do PO (27/11, campanha em andamento): uma notificação de venda no celular (e no computador), como as de
@@ -2687,7 +2714,11 @@ disparo), `db/push-inscricoes.ts` e `routes/notificacoes.ts`; site em `public/sw
 - **Site:** `public/sw.js` (escopo `/`, arquivo estático, sem build) só trata `push` (mostra a notificação com o ícone
   da Videira, `icone-192.png`; uma URL de fora vira `/`) e `notificationclick` (foca a aba do ranking aberto ou abre
   uma), mais o `install`/`activate` para a versão nova valer logo. **Nada de cache offline** nem de `fetch`. A CSP não
-  mudou (`default-src 'self'` cobre o service worker e o manifesto). O cartão "Avisos de venda no celular"
+  mudou (`default-src 'self'` cobre o service worker e o manifesto). Desde a RIFA-096 (pedido do PO: "está ocupando
+  muito espaço, tem que ser muito mais discreto"), um botão compacto "Avisos no celular" (do tamanho e do estilo do
+  "Som das vendas", na mesma linha dele, no ranking aberto e no cabeçalho da /minha; ligado, "Avisos ligados") e um
+  balão de uma frase ancorado nele para o iPhone fora do app, a permissão negada e as falhas, no lugar do cartão
+  abaixo. O cartão "Avisos de venda no celular"
   (`components/notificacoes/`) aparece logo abaixo do título no ranking aberto e na /minha: pede a permissão no toque,
   inscreve e mostra "Avisos ligados neste aparelho" + "Desligar"; navegador sem suporte ou API sem resposta, some;
   permissão negada, explica como liberar. Um aparelho já inscrito manda a inscrição de novo no máximo uma vez por dia

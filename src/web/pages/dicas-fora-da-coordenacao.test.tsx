@@ -48,6 +48,8 @@ import { DICAS_TODAS_AS_REDES } from "./minha/textos-todas-as-redes";
 import { DICAS_DA_MOLDURA } from "./minha/textos-moldura";
 import { DICAS as DICAS_404 } from "./nao-encontrada/textos";
 import { DICAS_SOM } from "../components/avisos-de-venda/textos";
+import { DICAS_AVISOS } from "../components/notificacoes/textos";
+import { ESTADO_NOTIFICACOES_LIGADAS, simularWebPush } from "../test/web-push";
 
 /** As telas com `lazy` (a visão individual e o QR code): o primeiro teste do arquivo carrega os pacotes. */
 const ESPERA_DO_PACOTE = { timeout: 5000 };
@@ -377,9 +379,14 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
 
   /**
    * fetch simulado do ranking aberto (o mesmo da página inicial e do telão); `falhar`: sem conexão. RIFA-094: os avisos
-   * de venda, ligados (sem venda nenhuma) ou desligados (`avisos: false`).
+   * de venda, ligados (sem venda nenhuma) ou desligados (`avisos: false`). RIFA-096: `notificacoes`, o Web Push ligado
+   * no servidor (sem ele, a rota não existe e o botão "Avisos no celular" some).
    */
-  function simularRanking({ falhar = false, avisos = true } = {}) {
+  function simularRanking({
+    falhar = false,
+    avisos = true,
+    notificacoes = false,
+  } = {}) {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (entrada: string) => {
@@ -390,6 +397,8 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
             itens: [],
             agora: "2026-12-04T18:30:00.000Z",
           });
+        if (notificacoes && url.pathname === "/api/publico/notificacoes")
+          return respostaJson(ESTADO_NOTIFICACOES_LIGADAS);
         if (url.pathname !== "/api/publico/ranking")
           return respostaErro(404, "nao_encontrado", "Rota inesperada");
         if (falhar) throw new TypeError("Failed to fetch");
@@ -455,6 +464,50 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     renderizarRota("/", { usuario: null });
     await screen.findByRole("button", { name: "Tentar de novo" });
     await conferirDicas(1);
+  });
+
+  it("ranking da campanha com o Web Push (RIFA-096): o 'Avisos no celular' na linha do 'Som das vendas', com dica; sem os avisos, só ele; no iPhone, o balão e o X, com dica", async () => {
+    let desfazer = simularWebPush();
+    simularRanking({ notificacoes: true });
+    let tela = renderizarRota("/", { usuario: null });
+    const celular = await screen.findByRole("button", {
+      name: "Avisos no celular",
+    });
+    const som = screen.getByRole("button", { name: "Som das vendas" });
+    // Os dois nas ações do cabeçalho, lado a lado (quebram para a linha de baixo só se não couberem).
+    expect(celular.closest(".ui-page-header__acoes")).toBe(
+      som.closest(".ui-page-header__acoes"),
+    );
+    const ajudas = document.querySelectorAll("[data-ajuda-botao]").length;
+    expect(contarControles() - ajudas).toBe(2);
+    await conferirDicas(2);
+    expect(textoDaDica(celular)).toBe(DICAS_AVISOS.ligar);
+    tela.unmount();
+
+    simularRanking({ notificacoes: true, avisos: false });
+    tela = renderizarRota("/", { usuario: null });
+    await screen.findByRole("button", { name: "Avisos no celular" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Som das vendas" }),
+      ).toBeNull(),
+    );
+    await conferirDicas(1);
+    tela.unmount();
+    desfazer();
+
+    desfazer = simularWebPush({ iphone: true });
+    simularRanking({ notificacoes: true });
+    renderizarRota("/", { usuario: null });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Avisos no celular" }),
+    );
+    const balao = screen.getByRole("dialog", { name: "Avisos no celular" });
+    await conferirDicas(3);
+    expect(
+      textoDaDica(within(balao).getByRole("button", { name: "Fechar" })),
+    ).toBe(DICAS_AVISOS.fechar);
+    desfazer();
   });
 
   it("telão: sem botão nem campo, com o ranking e na falha (ele tenta de novo sozinho)", async () => {

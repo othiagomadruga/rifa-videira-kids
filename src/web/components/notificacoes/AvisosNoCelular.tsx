@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import type { OrigemInscricaoPush } from "../../../shared/contracts/notificacoes";
 import { Button, ComDica, Icone } from "../ui";
 import { apiNotificacoes, type ApiNotificacoes } from "./notificacoes-api";
@@ -11,12 +19,13 @@ import {
 import { DICAS_AVISOS, TEXTOS_AVISOS } from "./textos";
 import "./avisos-no-celular.css";
 
-// O cartão "Avisos de venda no celular" (RIFA-095, D43): o botão "Receber avisos de venda" do ranking aberto e da
-// /minha (líder, discipulador e rede). Pede a permissão, inscreve o aparelho no Web Push e mostra o estado ("Avisos
-// ligados neste aparelho" + "Desligar"). Some quando o navegador não suporta, quando a API diz que as notificações
-// estão desligadas (sem as chaves no servidor ou com a opção da campanha desligada) e quando a API não responde (é um
-// extra: a tela continua igual). No iPhone fora do app da Tela de Início, a explicação no lugar do botão; com a
-// permissão negada, como liberar.
+// O botão "Avisos no celular" (RIFA-095, D43; compacto desde a RIFA-096): no ranking aberto e na /minha (líder,
+// discipulador e rede), na mesma linha do "Som das vendas" (as ações do cabeçalho da tela), do mesmo tamanho e estilo.
+// Pede a permissão, inscreve o aparelho no Web Push e alterna: "Avisos no celular" → "Avisos ligados" (aria-pressed,
+// como o botão do som); ligado, o toque desliga. Some quando o navegador não suporta, quando a API diz que as
+// notificações estão desligadas (sem as chaves no servidor ou com a opção da campanha desligada) e quando a API não
+// responde (é um extra: a tela continua igual). Nenhum texto fixo na página: no iPhone fora do app da Tela de Início,
+// com a permissão negada ou numa falha, o toque (ou a falha) abre um balão pequeno ancorado no botão, com uma frase.
 
 /** Uma vez por dia, no máximo, o aparelho já inscrito manda a inscrição de novo (refaz a que o servidor apagou). */
 export const INTERVALO_SINCRONIA_MS = 24 * 60 * 60 * 1000;
@@ -32,8 +41,11 @@ type Estado =
   | { tipo: "ligado"; chave: string; erro: string | null }
   | { tipo: "desligando"; chave: string };
 
+/** Os estados com o botão na tela. */
+type EstadoVisivel = Exclude<Estado, { tipo: "carregando" | "oculto" }>;
+
 type Props = {
-  /** Onde o cartão está (só para contar as inscrições). */
+  /** Onde o botão está (só para contar as inscrições). */
   origem: OrigemInscricaoPush;
   /** Para os testes: o navegador e a API falsos. */
   navegador?: PushDoNavegador;
@@ -66,7 +78,11 @@ export function AvisosNoCelular({
 }: Props) {
   const [push] = useState<PushDoNavegador>(() => navegador ?? pushDaJanela());
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
+  const [balaoAberto, setBalaoAberto] = useState(false);
   const ocupado = useRef(false);
+  const refAncora = useRef<HTMLSpanElement>(null);
+  const refBotao = useRef<HTMLButtonElement>(null);
+  const idBalao = useId();
 
   useEffect(() => {
     let vivo = true;
@@ -107,7 +123,7 @@ export function AvisosNoCelular({
       }
     }
     conferir().catch(() => {
-      // A API ou o navegador falharam na conferência: o cartão some (a tela segue igual).
+      // A API ou o navegador falharam na conferência: o botão some (a tela segue igual).
       setEstado((antes) =>
         antes.tipo === "carregando" ? { tipo: "oculto" } : antes,
       );
@@ -129,6 +145,7 @@ export function AvisosNoCelular({
           tipo: "negado",
           noIphone: ehAparelhoApple(window.navigator),
         });
+        setBalaoAberto(true);
         return;
       }
       if (permissao !== "granted") {
@@ -141,6 +158,7 @@ export function AvisosNoCelular({
       setEstado({ tipo: "ligado", chave, erro: null });
     } catch {
       setEstado({ tipo: "disponivel", chave, erro: TEXTOS_AVISOS.falhouLigar });
+      setBalaoAberto(true);
     } finally {
       ocupado.current = false;
     }
@@ -158,124 +176,229 @@ export function AvisosNoCelular({
       setEstado({ tipo: "disponivel", chave, erro: null });
     } catch {
       setEstado({ tipo: "ligado", chave, erro: TEXTOS_AVISOS.falhouDesligar });
+      setBalaoAberto(true);
     } finally {
       ocupado.current = false;
     }
   }
 
+  // O X e o Esc devolvem o foco ao botão; o toque fora, não (o foco vai para onde a pessoa tocou).
+  const fecharBalao = useCallback(
+    ({ devolverFoco }: { devolverFoco: boolean }) => {
+      setBalaoAberto(false);
+      if (devolverFoco) refBotao.current?.focus();
+    },
+    [],
+  );
+
   if (estado.tipo === "carregando" || estado.tipo === "oculto") return null;
 
+  const textoDoBalao = explicacao(estado);
+  const balaoVisivel = balaoAberto && textoDoBalao !== null;
+
+  function tocar() {
+    switch (estado.tipo) {
+      case "iphone":
+      case "negado":
+        setBalaoAberto((aberto) => !aberto);
+        return;
+      case "disponivel":
+        setBalaoAberto(false);
+        void ligar(estado.chave);
+        return;
+      case "ligado":
+        setBalaoAberto(false);
+        void desligar(estado.chave);
+        return;
+      default:
+        // Ligando ou desligando: o toque não faz nada (o botão está com aria-disabled).
+        return;
+    }
+  }
+
+  const ocupadoAgora =
+    estado.tipo === "ligando" || estado.tipo === "desligando";
+  const alterna = estado.tipo === "disponivel" || estado.tipo === "ligado";
+  const explica = estado.tipo === "iphone" || estado.tipo === "negado";
+  const ligadoAgora = estado.tipo === "ligado" || estado.tipo === "desligando";
+
   return (
-    <section
-      className="avisos-celular"
-      aria-label={TEXTOS_AVISOS.titulo}
-      data-estado={estado.tipo}
-    >
-      <span className="avisos-celular__icone">
-        <Icone nome="celular" />
-      </span>
-      <div className="avisos-celular__texto" aria-live="polite">
-        <Conteudo estado={estado} />
-      </div>
-      <Acao estado={estado} aoLigar={ligar} aoDesligar={desligar} />
-    </section>
+    <span className="avisos-celular" ref={refAncora} data-estado={estado.tipo}>
+      <ComDica texto={DICAS_AVISOS[dicaDoEstado(estado)]}>
+        <Button
+          ref={refBotao}
+          variante="secundario"
+          tamanho="pequeno"
+          className="avisos-celular__botao"
+          aria-pressed={alterna || ocupadoAgora ? ligadoAgora : undefined}
+          aria-disabled={ocupadoAgora || undefined}
+          aria-haspopup={explica ? "dialog" : undefined}
+          aria-expanded={explica ? balaoVisivel : undefined}
+          aria-controls={balaoVisivel ? idBalao : undefined}
+          onClick={tocar}
+        >
+          <Icone nome="celular" />
+          {rotuloDoEstado(estado)}
+        </Button>
+      </ComDica>
+      {balaoVisivel && (
+        <Balao
+          id={idBalao}
+          texto={textoDoBalao}
+          ancora={refAncora}
+          aoFechar={fecharBalao}
+        />
+      )}
+    </span>
   );
 }
 
-function Conteudo({ estado }: { estado: Estado }) {
+/** O texto do botão: "Avisos no celular"; ligado, "Avisos ligados"; no meio do caminho, "Ligando…" ou "Desligando…". */
+function rotuloDoEstado(estado: EstadoVisivel): string {
   switch (estado.tipo) {
-    case "iphone":
-      return (
-        <>
-          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.titulo}</p>
-          <p>{TEXTOS_AVISOS.iphone}</p>
-        </>
-      );
-    case "negado":
-      return (
-        <>
-          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.negado}</p>
-          <p>
-            {estado.noIphone
-              ? TEXTOS_AVISOS.negadoComoLiberarNoIphone
-              : TEXTOS_AVISOS.negadoComoLiberar}
-          </p>
-        </>
-      );
+    case "ligando":
+      return TEXTOS_AVISOS.ligando;
     case "ligado":
+      return TEXTOS_AVISOS.ligado;
     case "desligando":
-      return (
-        <>
-          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.ligado}</p>
-          <p>
-            {estado.tipo === "ligado" && estado.erro
-              ? estado.erro
-              : TEXTOS_AVISOS.ligadoDetalhe}
-          </p>
-        </>
-      );
+      return TEXTOS_AVISOS.desligando;
     default:
-      return (
-        <>
-          <p className="avisos-celular__titulo">{TEXTOS_AVISOS.titulo}</p>
-          <p>
-            {estado.tipo === "disponivel" && estado.erro
-              ? estado.erro
-              : TEXTOS_AVISOS.descricao}
-          </p>
-        </>
-      );
+      return TEXTOS_AVISOS.rotulo;
   }
 }
 
-function Acao({
-  estado,
-  aoLigar,
-  aoDesligar,
-}: {
-  estado: Estado;
-  aoLigar: (chave: string) => void;
-  aoDesligar: (chave: string) => void;
-}) {
+function dicaDoEstado(estado: EstadoVisivel): keyof typeof DICAS_AVISOS {
   switch (estado.tipo) {
-    case "disponivel":
-    case "ligando": {
-      const ligando = estado.tipo === "ligando";
-      return (
-        <ComDica texto={ligando ? DICAS_AVISOS.ocupado : DICAS_AVISOS.ligar}>
-          <Button
-            className="avisos-celular__botao"
-            aria-disabled={ligando || undefined}
-            onClick={() => {
-              if (!ligando) aoLigar(estado.chave);
-            }}
-          >
-            {ligando ? TEXTOS_AVISOS.ligando : TEXTOS_AVISOS.ligar}
-          </Button>
-        </ComDica>
-      );
-    }
+    case "iphone":
+      return "iphone";
+    case "negado":
+      return "negado";
     case "ligado":
-    case "desligando": {
-      const desligando = estado.tipo === "desligando";
-      return (
-        <ComDica
-          texto={desligando ? DICAS_AVISOS.ocupado : DICAS_AVISOS.desligar}
-        >
-          <Button
-            variante="secundario"
-            className="avisos-celular__botao"
-            aria-disabled={desligando || undefined}
-            onClick={() => {
-              if (!desligando) aoDesligar(estado.chave);
-            }}
-          >
-            {desligando ? TEXTOS_AVISOS.desligando : TEXTOS_AVISOS.desligar}
-          </Button>
-        </ComDica>
-      );
-    }
+      return "desligar";
+    case "disponivel":
+      return "ligar";
+    default:
+      return "ocupado";
+  }
+}
+
+/** O que o balão explica neste estado (null: nada a explicar, o balão não abre). */
+function explicacao(estado: EstadoVisivel): string | null {
+  switch (estado.tipo) {
+    case "iphone":
+      return TEXTOS_AVISOS.iphone;
+    case "negado":
+      return estado.noIphone
+        ? TEXTOS_AVISOS.negadoNoIphone
+        : TEXTOS_AVISOS.negado;
+    case "disponivel":
+    case "ligado":
+      return estado.erro;
     default:
       return null;
   }
+}
+
+/**
+ * O balão pequeno, ancorado embaixo do botão (o lado esquerdo vem do JS, pelo CSSOM, para ficar sempre dentro da tela;
+ * a seta aponta para o meio do botão). Um diálogo não modal: ao abrir, o foco vai para o X; o X e o Esc fecham e
+ * devolvem o foco ao botão; um toque fora fecha sem mexer no foco. O Esc que fecha uma dica aberta (Dica.tsx, na
+ * captura) não chega até aqui: o balão fecha no Esc seguinte.
+ */
+function Balao({
+  id,
+  texto,
+  ancora,
+  aoFechar,
+}: {
+  id: string;
+  texto: string;
+  ancora: RefObject<HTMLSpanElement | null>;
+  aoFechar: (opcoes: { devolverFoco: boolean }) => void;
+}) {
+  const refBalao = useRef<HTMLDivElement>(null);
+  const refFechar = useRef<HTMLButtonElement>(null);
+  const idTexto = useId();
+
+  useLayoutEffect(() => {
+    const posicionar = () => {
+      const balao = refBalao.current;
+      const alvo = ancora.current;
+      if (balao && alvo) posicionarBalao(alvo, balao);
+    };
+    posicionar();
+    window.addEventListener("resize", posicionar);
+    return () => window.removeEventListener("resize", posicionar);
+  }, [ancora, texto]);
+
+  useEffect(() => {
+    refFechar.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const aoTeclar = (evento: KeyboardEvent) => {
+      if (evento.key !== "Escape" || evento.isComposing) return;
+      aoFechar({ devolverFoco: true });
+    };
+    const aoTocarFora = (evento: PointerEvent) => {
+      const alvo = evento.target;
+      if (alvo instanceof Node && ancora.current?.contains(alvo)) return;
+      aoFechar({ devolverFoco: false });
+    };
+    document.addEventListener("keydown", aoTeclar);
+    document.addEventListener("pointerdown", aoTocarFora, true);
+    return () => {
+      document.removeEventListener("keydown", aoTeclar);
+      document.removeEventListener("pointerdown", aoTocarFora, true);
+    };
+  }, [ancora, aoFechar]);
+
+  return (
+    <div
+      ref={refBalao}
+      id={id}
+      className="avisos-celular__balao"
+      role="dialog"
+      aria-label={TEXTOS_AVISOS.titulo}
+      aria-describedby={idTexto}
+    >
+      <p id={idTexto} className="avisos-celular__explicacao">
+        {texto}
+      </p>
+      <ComDica texto={DICAS_AVISOS.fechar}>
+        <button
+          ref={refFechar}
+          type="button"
+          className="avisos-celular__fechar"
+          aria-label={TEXTOS_AVISOS.fechar}
+          onClick={() => aoFechar({ devolverFoco: true })}
+        >
+          <Icone nome="fechar" />
+        </button>
+      </ComDica>
+    </div>
+  );
+}
+
+/** Distância mínima entre o balão e a borda da tela, em px. */
+const MARGEM_DA_TELA_PX = 8;
+
+/**
+ * Centra o balão embaixo do botão e o empurra para dentro da tela (no celular, o botão pode estar perto de qualquer
+ * borda); a seta (--balao-seta) continua no meio do botão.
+ */
+export function posicionarBalao(alvo: HTMLElement, balao: HTMLElement): void {
+  const caixa = alvo.getBoundingClientRect();
+  const largura = balao.offsetWidth;
+  const larguraDaTela =
+    document.documentElement.clientWidth || window.innerWidth;
+  let esquerda = (caixa.width - largura) / 2;
+  const minimo = MARGEM_DA_TELA_PX - caixa.left;
+  const maximo = larguraDaTela - MARGEM_DA_TELA_PX - largura - caixa.left;
+  esquerda = Math.max(minimo, Math.min(esquerda, maximo));
+  balao.style.setProperty("left", `${Math.round(esquerda)}px`);
+  balao.style.setProperty(
+    "--balao-seta",
+    `${Math.round(caixa.width / 2 - esquerda)}px`,
+  );
 }

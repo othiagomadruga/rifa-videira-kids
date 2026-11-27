@@ -1269,8 +1269,11 @@ export type RespostaBumbo = z.infer<typeof respostaBumboSchema>;
 // GET /api/publico/vendas-recentes (RIFA-094, D42): os avisos de venda do ranking aberto e da /minha
 // ---------------------------------------------------------------------------------------------------
 
-/** Até quanto tempo atrás (pela aprovação) uma venda entra nos avisos: 3 minutos. */
-export const JANELA_VENDAS_RECENTES_MS = 180_000;
+/**
+ * Até quanto tempo atrás (pela aprovação) uma venda entra nos avisos: 10 minutos (RIFA-096; eram 3 na RIFA-094). Quem
+ * entra na página vê as mais recentes desta janela (D42, adendo da RIFA-096).
+ */
+export const JANELA_VENDAS_RECENTES_MS = 600_000;
 /** No máximo estas vendas por resposta (as mais recentes). */
 export const LIMITE_VENDAS_RECENTES = 30;
 /** Tamanho da chave opaca de cada venda (`k`), em caracteres hexadecimais minúsculos. */

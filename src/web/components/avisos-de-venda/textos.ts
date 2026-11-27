@@ -16,8 +16,20 @@ export function inicioDaFrase(celula: string): string {
   return /^c[ée]lula\b/i.test(celula.trim()) ? "A" : "A célula";
 }
 
-/** A linha menor de cada aviso. */
-export const LINHA_DO_AVISO = `agora mesmo · ${MARCA.produto}`;
+/**
+ * Há quanto tempo foi a venda (RIFA-096), pela `em` dela e pelo `agora` do servidor na mesma resposta (o relógio do
+ * aparelho, adiantado ou atrasado, não entra): menos de 1 minuto, "agora mesmo"; senão "há N min" (1 a 10, a janela
+ * da rota). Instante inválido ou depois do `agora` também é "agora mesmo".
+ */
+export function textoDoQuando(em: string, agora: string): string {
+  const minutos = Math.floor((Date.parse(agora) - Date.parse(em)) / 60_000);
+  return minutos >= 1 ? `há ${minutos} min` : "agora mesmo";
+}
+
+/** A linha menor de cada aviso: "há 3 min · Projeto Videira Kids". */
+export function linhaDoAviso(em: string, agora: string): string {
+  return `${textoDoQuando(em, agora)} · ${MARCA.produto}`;
+}
 
 export const ROTULO_SOM = "Som das vendas";
 

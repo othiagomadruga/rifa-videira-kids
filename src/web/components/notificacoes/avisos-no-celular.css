@@ -1,71 +1,94 @@
-/* O cartão "Avisos de venda no celular" (RIFA-095, D43), no ranking aberto e na /minha. Celular primeiro: o sino, o
-   texto e o botão numa coluna; a partir de 36rem, numa linha só, com o botão à direita. Sem rolagem lateral em 390 px. */
+/* O botão "Avisos no celular" (RIFA-095, D43; compacto desde a RIFA-096), nas ações do cabeçalho do ranking aberto e
+   da /minha, ao lado do "Som das vendas" (o mesmo Button secundário pequeno). O balão fica embaixo do botão, por cima
+   da tela; o lado esquerdo vem do JS (sempre dentro da tela, sem rolagem lateral em 390 px) e a seta aponta para o
+   meio do botão (--balao-seta). */
 
 .avisos-celular {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  gap: var(--espaco-3) var(--espaco-4);
-  padding: var(--espaco-4);
-  border: 1px solid var(--cor-borda);
-  border-radius: var(--raio-3);
-  background: var(--cor-superficie);
-  margin-block: var(--espaco-4);
+  position: relative;
+  display: inline-flex;
   min-width: 0;
 }
 
-.avisos-celular__icone {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--raio-pilula);
-  background: var(--cor-primaria-suave);
-  color: var(--cor-primaria-forte);
-  font-size: var(--texto-lg);
+.avisos-celular__botao {
+  white-space: nowrap;
 }
 
-.avisos-celular__texto {
-  display: grid;
-  gap: var(--espaco-1);
+.avisos-celular__balao {
+  position: absolute;
+  top: calc(100% + var(--espaco-2));
+  left: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-2);
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 1rem));
+  padding: var(--espaco-3);
+  padding-inline-end: var(--espaco-2);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-3);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  box-shadow: var(--sombra-3);
+  font-size: var(--texto-sm);
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+
+.avisos-celular__balao::before {
+  content: "";
+  position: absolute;
+  top: -0.375rem;
+  left: var(--balao-seta, 50%);
+  width: 0.625rem;
+  height: 0.625rem;
+  border-top: 1px solid var(--cor-borda);
+  border-left: 1px solid var(--cor-borda);
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.avisos-celular__explicacao {
+  margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.avisos-celular__texto p {
-  margin: 0;
+.avisos-celular__fechar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin: calc(var(--espaco-1) * -1) 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: transparent;
   color: var(--cor-texto-suave);
-  font-size: var(--texto-sm);
+  cursor: pointer;
 }
 
-.avisos-celular__texto .avisos-celular__titulo {
+.avisos-celular__fechar:hover {
+  background: var(--cor-superficie-2);
   color: var(--cor-texto);
-  font-size: var(--texto-md);
-  font-weight: var(--peso-forte);
 }
 
-/* O botão ocupa a linha de baixo inteira no celular (alvo de toque grande). */
-.avisos-celular > :last-child:not(.avisos-celular__texto) {
-  grid-column: 1 / -1;
-}
-
-.avisos-celular__botao {
-  width: 100%;
-  min-height: var(--alvo-toque);
-}
-
-@media (min-width: 36rem) {
-  .avisos-celular {
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
+/* Numa tela de toque, o alvo de 44 px (D25) sem mudar a altura do balão (a margem negativa devolve o espaço). */
+@media (pointer: coarse) {
+  .avisos-celular__fechar {
+    width: var(--alvo-toque);
+    height: var(--alvo-toque);
+    margin: calc((2rem - var(--alvo-toque)) / 2);
+    margin-inline-start: 0;
   }
+}
 
-  .avisos-celular > :last-child:not(.avisos-celular__texto) {
-    grid-column: auto;
-  }
-
-  .avisos-celular__botao {
-    width: auto;
+@media (prefers-reduced-motion: no-preference) {
+  .avisos-celular__balao {
+    animation: ui-surgir var(--duracao-rapida) var(--curva-saida);
   }
 }

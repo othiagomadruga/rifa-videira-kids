@@ -1229,7 +1229,7 @@ describe("p) RIFA-094 (D42): os avisos de venda, abertos como as rotas públicas
   });
 
   beforeEach(() => {
-    // Cada teste começa depois do prazo do cache (10 s) do anterior, ainda dentro da janela de 3 min das vendas.
+    // Cada teste começa depois do prazo do cache (10 s) do anterior, ainda dentro da janela de 10 min das vendas.
     instante += 11_000;
     vi.setSystemTime(instante);
   });

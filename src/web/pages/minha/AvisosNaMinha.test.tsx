@@ -1,6 +1,7 @@
 // RIFA-094 (D42): os avisos de venda também na /minha (líder, discipulador e rede), com o mesmo componente e a mesma
-// rota aberta do ranking aberto: a primeira resposta só marca as vendas; a seguinte mostra o aviso; o botão "Som das
-// vendas" fica no cabeçalho da tela, só com os avisos ligados; sem a palavra "rede" para o discipulador (D30).
+// rota aberta do ranking aberto: ao entrar, as vendas recentes aparecem com "há N min" (RIFA-096); a seguinte mostra o
+// aviso; o botão "Som das vendas" fica no cabeçalho da tela, só com os avisos ligados; sem a palavra "rede" para o
+// discipulador (D30).
 // O comportamento inteiro (fila, celular, som) está em components/avisos-de-venda/AvisosDeVenda.test.tsx.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,16 +10,20 @@ import type {
   RespostaVendasRecentes,
 } from "../../../shared/contracts/api";
 import { controlesSemDica } from "../../test/dicas";
-import { renderizarRota } from "../../test/renderizar";
+import { renderizarRota, respostaJson } from "../../test/renderizar";
+import {
+  ESTADO_NOTIFICACOES_LIGADAS,
+  simularWebPush,
+} from "../../test/web-push";
 import { criarApiFalsa, sessaoDaVisao, visaoDe } from "./teste-apoio";
 
 const AGORA = "2026-12-04T18:30:00.000Z";
-const venda = (n: number, celula: string, bilhetes: number) =>
+const venda = (n: number, celula: string, bilhetes: number, em = AGORA) =>
   ({
     k: n.toString(16).padStart(16, "0"),
     celula,
     bilhetes,
-    em: AGORA,
+    em,
   }) satisfies ItemVendaRecente;
 const resposta = (
   itens: ItemVendaRecente[],
@@ -57,9 +62,9 @@ afterEach(() => {
 
 describe("RIFA-094: os avisos de venda na /minha", () => {
   it.each(["lider", "discipulador", "rede"] as const)(
-    "%s: a 1ª resposta só marca; a venda seguinte vira o aviso, e o 'Som das vendas' fica no cabeçalho da tela",
+    "%s: ao entrar, a venda de 2 min atrás aparece (RIFA-096); a seguinte vira o aviso, e o 'Som das vendas' fica no cabeçalho da tela",
     async (papel) => {
-      const antiga = venda(1, "Shekinah", 2);
+      const antiga = venda(1, "Shekinah", 2, "2026-12-04T18:28:00.000Z");
       const nova = venda(2, "Bunker", 3);
       const api = await abrir(
         papel,
@@ -67,7 +72,11 @@ describe("RIFA-094: os avisos de venda na /minha", () => {
         resposta([nova, antiga]),
       );
       expect(api.avisos[0]).toBe("/api/publico/vendas-recentes");
-      expect(avisos()).toEqual([]);
+      await waitFor(() =>
+        expect(avisos()).toEqual([
+          "A célula Shekinah vendeu 2 bilhetes! há 2 min · Projeto Videira Kids",
+        ]),
+      );
 
       await proximaConsulta();
 
@@ -93,6 +102,45 @@ describe("RIFA-094: os avisos de venda na /minha", () => {
         expect(document.body.textContent).not.toMatch(/\brede\b/i);
     },
   );
+
+  it("RIFA-096: o 'Avisos no celular' fica no cabeçalho da tela, ao lado do 'Som das vendas' (não mais como cartão na visão)", async () => {
+    const desfazer = simularWebPush();
+    try {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const visao = visaoDe({ papel: "lider" });
+      const api = criarApiFalsa(visao);
+      api.proxima(
+        "GET",
+        "/api/publico/notificacoes",
+        respostaJson(ESTADO_NOTIFICACOES_LIGADAS),
+      );
+      vi.stubGlobal("fetch", api.fetch);
+      renderizarRota("/minha", { usuario: sessaoDaVisao(visao) });
+      const celular = await screen.findByRole(
+        "button",
+        { name: "Avisos no celular" },
+        { timeout: 5000 },
+      );
+      const cabecalho = screen
+        .getByRole("heading", { level: 1 })
+        .closest("header")!;
+      expect(cabecalho).toContainElement(celular);
+      const acoes = celular.closest(".ui-page-header__acoes")!;
+      expect(
+        within(acoes as HTMLElement)
+          .getAllByRole("button")
+          .map((botao) => botao.textContent),
+      ).toEqual(["Som das vendas", "Avisos no celular"]);
+      // Um botão só (o cabeçalho do esqueleto, antes da visão, fica sem: não monta duas vezes).
+      expect(
+        screen.getAllByRole("button", { name: "Avisos no celular" }),
+      ).toHaveLength(1);
+      expect(document.querySelector("section.avisos-celular")).toBeNull();
+      expect(controlesSemDica(cabecalho)).toEqual([]);
+    } finally {
+      desfazer();
+    }
+  });
 
   it("com os avisos desligados na campanha, nem aviso nem o botão do som", async () => {
     await abrir("lider", resposta([], false));

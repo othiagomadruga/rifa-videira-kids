@@ -3,7 +3,7 @@
  * quiser recebe, sem login. O index.ts monta este sub-app em /api/publico/notificacoes ANTES do sub-app de
  * /api/publico (assim o cache e o Cache-Control de lá não valem aqui).
  *
- * - GET /: o estado para o botão "Receber avisos de venda": `ligadas` (as chaves VAPID no servidor, uma campanha ativa
+ * - GET /: o estado para o botão "Avisos no celular": `ligadas` (as chaves VAPID no servidor, uma campanha ativa
  *   e a opção `notificacoes.vendas` ligada) e a chave VAPID pública. Igual para todos: cache de 30 s como as rotas
  *   abertas (lib/cache-publico.ts) e o limite por IP só nas idas ao banco.
  * - POST /inscrever e /cancelar: só da mesma origem (403), o limite por IP (429; toda requisição conta), o corpo até

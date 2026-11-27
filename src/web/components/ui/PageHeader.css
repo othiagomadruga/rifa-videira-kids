@@ -75,3 +75,8 @@
   flex-wrap: wrap;
   gap: var(--espaco-2);
 }
+
+/* As ações que podem não aparecer (o "Som das vendas" e o "Avisos no celular", RIFA-096): vazia, não ocupa a linha. */
+.ui-page-header__acoes:empty {
+  display: none;
+}

@@ -118,25 +118,36 @@ Para líder, discipulador e rede (o alvo vem só da sessão: a tela não manda i
 - **Pacote à parte**: `MinhaPage.tsx` carrega `VisaoIndividual.tsx` com `lazy` (como a configuração da Campanha); enquanto ele chega, o cabeçalho (`Cabecalho.tsx`, da sessão) e o carregando. O CSS segue a mesma divisão: `minha-moldura.css` (moldura e cabeçalho) vai no pacote inicial; `minha.css` (o resto da tela) vem só com a `VisaoIndividual` (`minha-css.test.ts` confere quem importa cada um). As dicas também: a do "Sair" da moldura fica em `textos-moldura.ts` (`DICAS_DA_MOLDURA`), para o pacote inicial não levar o `textos.ts` da visão (que tem o `DICAS` do resto da tela).
 - **Ranking geral (RIFA-090, adendo da D12), só discipulador e rede**: embaixo de tudo o que eles já veem (depois dos links de vendas das células, antes do rodapé), o cartão **"Ranking geral"** (`TodasAsRedes.tsx`, no pacote da `VisaoIndividual`, com `minha-todas-as-redes.css`; textos em `textos-todas-as-redes.ts`): `GET /api/minha/todas-as-redes` (`todas-as-redes-api.ts`; do contrato, só tipos de `todas-as-redes.ts`, que tem zod). A mesma troca "Esta semana" / "Campanha toda" dos maiores compradores (`aria-pressed`, dica, `role="group"`), a janela, e duas listas, **Discipuladores** e **Células** (uma embaixo da outra no celular; lado a lado a partir de duas colunas de 26rem): posição, nome (na célula, o discipulador embaixo), "% da meta" e bilhetes. As linhas de quem vê ficam em destaque (borda, fundo e o selo "Você" na do discipulador, "Sua" nas células dele, "Sua rede" na rede; `aria-current`). Cada lista mostra as 10 primeiras e o botão "Ver todos os N discipuladores" / "Ver todas as N células" (`aria-expanded`, `aria-controls`; "Mostrar só os 10 primeiros" volta), que abre na própria página; fechada, as linhas dele abaixo das 10 primeiras aparecem mesmo assim, depois de um respiro. Pede de novo a cada atualização da visão, sem voltar ao "carregando"; erro com "Tentar de novo"; vazio ("Ainda não há células na campanha."). O líder não vê o cartão nem pede a rota. A palavra "rede" não aparece para o discipulador (D30): o título é "Ranking geral". Nunca R$ nem comprador (`guarda-minha.test.ts`, que aceita só tipos de `todas-as-redes.ts`). Testes: `TodasAsRedes.test.tsx`, as varreduras de dicas (`dicas-fora-da-coordenacao.test.tsx`) e de ajuda (`ajuda-das-telas.test.ts`), `rede-unica.test.tsx` e `minha-css.test.ts`; a API falsa responde a rota com `todasAsRedesDe` (`teste-apoio-todas-as-redes.ts`).
 
-## Avisos de venda no celular (RIFA-095, D43)
+## Avisos de venda no celular (RIFA-095, D43; botão compacto desde a RIFA-096)
 
-O cartão **"Avisos de venda no celular"** (`components/notificacoes/`: `AvisosNoCelular.tsx`, `navegador.ts`,
-`notificacoes-api.ts`, `textos.ts` e `avisos-no-celular.css`; o ícone `celular`) fica logo abaixo do título no ranking
-aberto (`<AvisosNoCelular origem="publico" />`, depois dos avisos dentro da página da RIFA-094) e na `/minha` (`origem="minha"`, para o líder, o discipulador e a rede). Web Push:
-cada venda paga chega como notificação "🎟️ A célula X vendeu N bilhetes!", mesmo com o site fechado; tocar abre o
-ranking aberto.
+O botão **"Avisos no celular"** (`components/notificacoes/`: `AvisosNoCelular.tsx`, `navegador.ts`,
+`notificacoes-api.ts`, `textos.ts` e `avisos-no-celular.css`; o ícone `celular`) fica nas ações do `PageHeader`, na
+mesma linha do "Som das vendas" e do mesmo tamanho e estilo (`Button` secundário pequeno; quebra para a linha de baixo
+só se não couber): no ranking aberto (`<AvisosNoCelular origem="publico" />`, mesmo com os avisos da página
+desligados) e na `/minha` (`origem="minha"`, no `Cabecalho.tsx`, só o da visão: o cabeçalho do esqueleto fica sem).
+Até a RIFA-096 era um cartão abaixo do título, que no iPhone ocupava meia tela ("tem que ser muito mais discreto",
+PO). Nenhum texto fixo na página. Web Push: cada venda paga chega como notificação "🎟️ A célula X vendeu N
+bilhetes!", mesmo com o site fechado; tocar abre o ranking aberto.
 
 - **Estados:** some quando o navegador não tem service worker, Push API ou notificações, quando
   `GET /api/publico/notificacoes` diz `ligadas: false` (sem as chaves no servidor ou com a opção da campanha
-  desligada) e quando a API não responde (é um extra). **iPhone e iPad fora do app** (no navegador, não aberto pelo
-  ícone da Tela de Início): no lugar do botão, "No iPhone: toque em Compartilhar → Adicionar à Tela de Início, abra
-  pelo ícone e ative aqui." (o iOS só dá notificação ao app da Tela de Início, iOS 16.4+). **Pronto:** o botão
-  "Receber avisos de venda" (o service worker já fica registrado ao abrir); o toque pede a permissão (primeiro, ainda
-  dentro do toque: o Safari exige), inscreve com a chave VAPID pública e manda a inscrição à API; "Ligando…" com
-  `aria-disabled` e trava contra o toque duplo. **Ligado:** "Avisos ligados neste aparelho" + "Desligar" (cancela no
-  navegador e na API). **Negado:** explica como liberar (no iPhone, pelos Ajustes). Falha: a mensagem e o botão para
-  tentar de novo. Uma inscrição feita com outra chave VAPID (o servidor trocou a chave) volta ao botão. O aparelho já
-  inscrito manda a inscrição de novo no máximo uma vez por dia (`localStorage`, com try/catch).
+  desligada) e quando a API não responde (é um extra; as ações vazias somem pelo `:empty` do `PageHeader.css`).
+  **Pronto:** "Avisos no celular" (`aria-pressed="false"`; o service worker já fica registrado ao abrir); o toque pede
+  a permissão (primeiro, ainda dentro do toque: o Safari exige), inscreve com a chave VAPID pública e manda a inscrição
+  à API; "Ligando…" com `aria-disabled` e trava contra o toque duplo. **Ligado:** "Avisos ligados"
+  (`aria-pressed="true"`, como o botão do som); o toque desliga (cancela no navegador e na API; "Desligando…").
+  **iPhone e iPad fora do app** (no navegador, não aberto pelo ícone da Tela de Início; o iOS só dá notificação ao app
+  da Tela de Início, iOS 16.4+) e **negado**: o toque abre o **balão** (`aria-haspopup="dialog"`, `aria-expanded`,
+  `aria-controls`) com uma frase: "No iPhone: Compartilhar → Adicionar à Tela de Início. Depois abra pelo ícone e toque
+  aqui." ou como liberar a permissão (no navegador, pelo cadeado; no app do iPhone, pelos Ajustes). Negada no pedido,
+  ou uma falha ao ligar ou desligar: o balão abre sozinho com a frase. Uma inscrição feita com outra chave VAPID (o
+  servidor trocou a chave) volta ao "Avisos no celular". O aparelho já inscrito manda a inscrição de novo no máximo uma
+  vez por dia (`localStorage`, com try/catch).
+- **O balão:** um diálogo não modal (`role="dialog"`, nome "Avisos no celular", a frase no `aria-describedby`),
+  ancorado embaixo do botão, com a seta no meio dele; o lado esquerdo vem do JS pelo CSSOM (`posicionarBalao`: centrado
+  e empurrado para dentro da tela, a 8 px da borda, sem rolagem lateral em 390 px). Ao abrir, o foco vai para o X
+  (com dica); o X e o Esc fecham e devolvem o foco ao botão; um toque fora fecha. O Esc que fecha uma dica aberta não
+  chega ao balão (ele fecha no Esc seguinte).
 - **Sem zod no ranking aberto:** do contrato, só tipos (`notificacoes.ts`); os caminhos são conferidos pelo tipo de
   `ROTAS_NOTIFICACOES`, como em `ranking-publico-api.ts`. Nunca o comprador nem R$. Todo botão com dica (RIFA-045).
 - **Service worker** `public/sw.js` (escopo `/`, sem build): só `push` (a notificação com `icone-192.png`) e
@@ -144,8 +155,11 @@ ranking aberto.
   `public/manifest.webmanifest` (`standalone`, ícones 192 e 512), ligado no `index.html`.
 - **Tela Campanha:** a caixa "Enviar notificações de venda" (`OpcaoNotificacoes.tsx`, textos em
   `textos-notificacoes.ts`) no cartão "O que o público vê", e o item "Notificações de venda" no resumo das regras.
-- **Testes:** `AvisosNoCelular.test.tsx` (com o navegador e a API falsos: sem suporte, desligado, iPhone fora do app,
-  pedir permissão, ligado, negado, desligar, falhas, dicas), `navegador.test.ts`, `src/web/service-worker.test.ts` (o
+- **Testes:** `AvisosNoCelular.test.tsx` (com o navegador e a API falsos: sem suporte, desligado, o estilo do botão,
+  iPhone fora do app, pedir permissão, ligado, negado, desligar, falhas no balão, o balão abrindo e fechando, a posição
+  dele, as dicas de cada estado), a varredura de dicas do ranking aberto com o Web Push simulado
+  (`dicas-fora-da-coordenacao.test.tsx`, `test/web-push.ts`), `pages/minha/AvisosNaMinha.test.tsx` (o botão no
+  cabeçalho), `navegador.test.ts`, `src/web/service-worker.test.ts` (o
   `sw.js` com um `self` falso e o manifesto) e `pages/campanha/OpcaoNotificacoes.test.tsx`.
 
 ## Link de vendas e QR code de cada célula (RIFA-046)
@@ -277,17 +291,20 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   (o padrão da campanha): o botão já está no primeiro quadro e não empurra a tela; sai se a resposta disser que não
   ou se a primeira consulta falhar. Nada no telão nem na coordenação.
 - **Consulta** (`useAvisosDeVenda`): a cada 15 s, contados do fim da anterior, só com a aba visível (pausa no
-  `visibilitychange`; ao voltar, na hora). A **primeira** resposta com `ligados: true` só marca as chaves (`k`) como
-  vistas: quem abre a página não vê o passado. Nas seguintes, cada venda nova vira **um aviso por compra** (a mesma
-  célula duas vezes = dois avisos), da mais antiga para a mais nova. `ligados: false`: nada, e a próxima resposta
-  ligada volta a ser a "primeira". Uma falha não aparece (a próxima tenta de novo).
+  `visibilitychange`; ao voltar, na hora). **Entrada** (RIFA-096): a primeira resposta com `ligados: true` mostra as
+  vendas da janela da rota (10 min), no máximo as `AVISOS_NA_ENTRADA` (5) mais recentes, da mais antiga para a mais
+  nova, e marca **todas** as chaves (`k`) da resposta como vistas (as de fora não aparecem depois). Voltar para a aba
+  escondida é uma entrada nova, só com o que ainda não foi mostrado; `ligados: false` faz a próxima resposta ligada
+  ser uma entrada. Nas seguintes, cada venda nova vira **um aviso por compra** (a mesma célula duas vezes = dois
+  avisos), da mais antiga para a mais nova. Uma falha não aparece (a próxima tenta de novo).
 - **Fila**: um aviso entra a cada 0,8 s; cada um fica 5 s e sai (0,25 s de animação). Visíveis: até 4 no computador
   (canto de baixo à direita, 22,5rem, o mais novo embaixo) e até 3 no celular (`(max-width: 37,5rem)`: do topo, com
   0,75rem de margem, na largura toda, compactos). Esperando, no máximo 12 (os mais antigos saem).
 - **Visual** (`avisos-de-venda.css`, só tokens): cartão branco, borda esquerda `--kids-amarelo`, o ícone `bilhetes`
   num círculo com `--gradiente-marca-forte`, "A célula **X** vendeu **N bilhetes**!" (nome e quantidade em
-  `--cor-primaria`; o nome que já começa com "Célula" vai só com o "A") e a linha menor "agora mesmo · Projeto Videira
-  Kids". Sem emoji (o 🎟️ do protótipo virou o ícone, que não muda de desenho em cada celular). Animações só com
+  `--cor-primaria`; o nome que já começa com "Célula" vai só com o "A") e a linha menor com há quanto tempo foi a
+  venda (RIFA-096, `textoDoQuando`/`linhaDoAviso` em `textos.ts`, pela `em` e pelo `agora` da resposta, não pelo
+  relógio do aparelho): "agora mesmo · Projeto Videira Kids" (menos de 1 min) ou "há 3 min · Projeto Videira Kids". Sem emoji (o 🎟️ do protótipo virou o ícone, que não muda de desenho em cada celular). Animações só com
   `no-preference` (`avisos-entra`/`avisos-sai`; no celular, `avisos-desce`/`avisos-sobe`). Nada recebe toque
   (`pointer-events: none`): o que está embaixo continua clicável.
 - **Acessibilidade**: a pilha é uma região `role="log"` com `aria-live="polite"` (o leitor de tela lê cada aviso que

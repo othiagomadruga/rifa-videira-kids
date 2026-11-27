@@ -231,7 +231,7 @@ No critério % da meta, Ágape tem `acima` = Betel (1º, 2500 pontos-base) e `ab
 
 **Regra**
 - **Nunca valores em unidades, R$ ou bilhetes**, com qualquer configuração: `/api/publico/*` não devolve R$, centavos, quantidade de bilhetes, meta, esperado, realizado, diferença nem projeção em unidades, nem nos campos nem no texto do bumbo. Os percentuais (da meta, da curva e da projeção) podem aparecer. Os schemas são estritos, um teste varre os campos contra uma lista fechada e outro varre o texto do bumbo.
-- **Exceção (RIFA-094, D42): os avisos de venda** (`GET /api/publico/vendas-recentes`) trazem a quantidade de bilhetes **de cada venda** dos últimos 3 minutos, com o nome da célula (pedido do PO: "célula X vendeu 3"). Nunca totais, R$, comprador, número de bilhete ou id; a opção `publico.avisos_de_venda` desliga. Lista fechada própria nos testes.
+- **Exceção (RIFA-094, D42): os avisos de venda** (`GET /api/publico/vendas-recentes`) trazem a quantidade de bilhetes **de cada venda** dos últimos 10 minutos (eram 3 até a RIFA-096), com o nome da célula (pedido do PO: "célula X vendeu 3"). Nunca totais, R$, comprador, número de bilhete ou id; a opção `publico.avisos_de_venda` desliga. Lista fechada própria nos testes.
 - Ranking público: mesma ordem e mesmas posições da coordenação, só com posição, nome, divisão e, **se** `publico.mostra_percentual_meta`, o % da meta.
 - Aparecem só as instâncias que já venderam na janela (SUPOSIÇÃO S9), com posição até `publico.limite_ranking` (padrão 3; null = todas). Quem empata na última posição entra (1, 2, 3, 3).
 - Sempre na data de hoje (sem `data`). Antes da primeira venda, a lista é vazia; `referencia` permite à tela contar os dias.

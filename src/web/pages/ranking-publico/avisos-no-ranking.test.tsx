@@ -1,6 +1,7 @@
-// RIFA-094 (D42): os avisos de venda no ranking aberto (/), com o componente de components/avisos-de-venda: a primeira
-// resposta só marca as vendas; a seguinte mostra o aviso; o botão "Som das vendas" fica ao lado do título, só com os
-// avisos ligados na campanha. O comportamento inteiro (fila, celular, som) está em AvisosDeVenda.test.tsx.
+// RIFA-094 (D42): os avisos de venda no ranking aberto (/), com o componente de components/avisos-de-venda: ao entrar,
+// as vendas recentes aparecem com "há N min" (RIFA-096); a venda seguinte vira o aviso; o botão "Som das vendas" fica
+// ao lado do título, só com os avisos ligados na campanha. O comportamento inteiro (fila, celular, som) está em
+// AvisosDeVenda.test.tsx.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -47,12 +48,12 @@ const RANKING = respostaRankingPublicoSchema.parse({
   atualizado_em: AGORA,
 });
 
-const venda = (n: number, celula: string, bilhetes: number) =>
+const venda = (n: number, celula: string, bilhetes: number, em = AGORA) =>
   ({
     k: n.toString(16).padStart(16, "0"),
     celula,
     bilhetes,
-    em: AGORA,
+    em,
   }) satisfies ItemVendaRecente;
 
 function simularApi(
@@ -85,19 +86,24 @@ afterEach(() => {
 });
 
 describe("RIFA-094: os avisos de venda no ranking aberto", () => {
-  it("a 1ª resposta só marca; a venda seguinte vira o aviso; o 'Som das vendas' fica ao lado do título, com dica", async () => {
+  it("ao entrar, a venda de 4 min atrás aparece (RIFA-096); a seguinte vira o aviso; o 'Som das vendas' fica ao lado do título, com dica", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const antiga = venda(1, "Shekinah", 2);
+    const antiga = venda(1, "Shekinah", 2, "2026-12-04T18:26:00.000Z");
     simularApi(
       { ligados: true, itens: [antiga] },
       { ligados: true, itens: [venda(2, "Bunker", 3), antiga] },
     );
     renderizarRota("/");
     await screen.findByText(/^Atualizado às/);
-    expect(avisosNaTela()).toEqual([]);
+    await waitFor(() =>
+      expect(avisosNaTela()).toEqual([
+        "A célula Shekinah vendeu 2 bilhetes! há 4 min · Projeto Videira Kids",
+      ]),
+    );
 
     await act(() => vi.advanceTimersByTimeAsync(15_000));
 
+    // A da entrada já saiu (5 s); a nova entra, e a da entrada não volta.
     expect(avisosNaTela()).toEqual([
       "A célula Bunker vendeu 3 bilhetes! agora mesmo · Projeto Videira Kids",
     ]);

@@ -1,8 +1,10 @@
 // RIFA-094 (D42): os avisos de venda, com temporizadores falsos e a API falsa (as respostas passam pelo schema do
-// contrato). A primeira resposta só marca as vendas; cada compra nova vira o seu aviso (a mesma célula também), com o
-// texto certo; entram um de cada vez (0,8 s), ficam ~5 s e saem; até 4 no computador e 3 no celular; a fila guarda as
-// 12 mais novas; com a aba escondida, não consulta; desligados na campanha, nada. O plim: um por aviso, só depois de um
-// gesto na página e com o som ligado; o botão alterna e guarda a escolha no aparelho.
+// contrato). Ao entrar (RIFA-096), as vendas da janela aparecem: até 5, as mais recentes, da mais antiga para a mais
+// nova, sem repetir depois; a volta à aba escondida é uma entrada nova; a linha menor diz há quanto tempo ("agora
+// mesmo", "há N min") pela `em` e pelo `agora` do servidor. Cada compra nova vira o seu aviso (a mesma célula também),
+// com o texto certo; entram um de cada vez (0,8 s), ficam ~5 s e saem; até 4 no computador e 3 no celular; a fila
+// guarda as 12 mais novas; com a aba escondida, não consulta; desligados na campanha, nada. O plim: um por aviso (os da
+// entrada também), só depois de um gesto na página e com o som ligado; o botão alterna e guarda a escolha.
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -17,6 +19,7 @@ import { CHAVE_SOM_DAS_VENDAS, esquecerSomDasVendas } from "./som";
 import * as TEXTOS from "./textos";
 import { controlesSemDica } from "../../test/dicas";
 import {
+  AVISOS_NA_ENTRADA,
   INTERVALO_CONSULTA_MS,
   INTERVALO_ENTRE_AVISOS_MS,
   LIMITE_DA_FILA,
@@ -29,14 +32,18 @@ import {
 const AGORA = "2026-12-01T15:00:00.000Z";
 let sequencia = 0;
 
-/** Uma venda com chave nova (16 hex). */
-function venda(celula: string, bilhetes: number): ItemVendaRecente {
+/** Uma venda com chave nova (16 hex), aprovada `segundosAtras` antes do AGORA do servidor. */
+function venda(
+  celula: string,
+  bilhetes: number,
+  segundosAtras = 0,
+): ItemVendaRecente {
   sequencia += 1;
   return {
     k: sequencia.toString(16).padStart(16, "0"),
     celula,
     bilhetes,
-    em: AGORA,
+    em: new Date(Date.parse(AGORA) - segundosAtras * 1000).toISOString(),
   };
 }
 
@@ -137,7 +144,19 @@ function avisosNaTela(): string[] {
   ].map((aviso) => aviso.textContent ?? "");
 }
 
-const frase = (aviso: string) => aviso.split(" agora mesmo")[0];
+/** A frase do aviso ("A célula X vendeu N bilhetes!") e a linha menor ("há 3 min · Projeto Videira Kids"). */
+const frase = (aviso: string) => aviso.slice(0, aviso.indexOf("!") + 1);
+const linha = (aviso: string) => aviso.slice(aviso.indexOf("!") + 2);
+
+/** Tudo o que passou pela tela (sem repetir), em ordem, olhando a cada meio segundo por `ms`. */
+async function tudoQueApareceu(ms: number): Promise<string[]> {
+  const vistos = new Set<string>();
+  for (let passo = 0; passo <= ms / 500; passo++) {
+    for (const aviso of avisosNaTela()) vistos.add(aviso);
+    await avancar(500);
+  }
+  return [...vistos];
+}
 
 let ligados = vi.fn<(ligados: boolean) => void>();
 
@@ -176,25 +195,118 @@ describe("RIFA-094: os avisos de venda", () => {
     expect(CAMINHO_VENDAS_RECENTES).toBe(ROTAS.vendasRecentes.caminho);
   });
 
-  it("a primeira resposta só marca as vendas como vistas: nada aparece, nem depois", async () => {
-    const antigas = [venda("Bunker", 3), venda("Shekinah", 2)];
-    simularApi(antigas);
+  it(`RIFA-096: ao entrar, as vendas dos últimos 10 min aparecem: até ${AVISOS_NA_ENTRADA}, as mais recentes, da mais antiga para a mais nova, e não repetem depois`, async () => {
+    // 7 vendas na janela (a API manda da mais nova para a mais antiga): as 2 mais antigas ficam de fora.
+    const vendas = Array.from({ length: 7 }, (_, i) =>
+      venda(`Célula ${i + 1}`, i + 1, (7 - i) * 60),
+    );
+    simularApi([...vendas].reverse());
 
     await abrir();
-    await proximaConsulta();
-    await avancar(2000);
-
-    expect(consultas).toBe(2);
-    expect(avisosNaTela()).toEqual([]);
     expect(ligados).toHaveBeenLastCalledWith(true);
+    expect(avisosNaTela().map(frase)).toEqual([
+      "A Célula 3 vendeu 3 bilhetes!",
+    ]);
+    // O mesmo intervalo de 0,8 s e a mesma pilha (até 4 no computador) das vendas novas.
+    await avancar(INTERVALO_ENTRE_AVISOS_MS);
+    expect(avisosNaTela().map(frase)).toEqual([
+      "A Célula 3 vendeu 3 bilhetes!",
+      "A Célula 4 vendeu 4 bilhetes!",
+    ]);
+    const depois = await tudoQueApareceu(INTERVALO_CONSULTA_MS * 3);
+
+    expect(consultas).toBe(4);
+    expect([...new Set(depois.map(frase))]).toEqual([
+      "A Célula 3 vendeu 3 bilhetes!",
+      "A Célula 4 vendeu 4 bilhetes!",
+      "A Célula 5 vendeu 5 bilhetes!",
+      "A Célula 6 vendeu 6 bilhetes!",
+      "A Célula 7 vendeu 7 bilhetes!",
+    ]);
+    expect(avisosNaTela()).toEqual([]);
     // A região viva existe desde o começo (o leitor de tela lê o que entra nela), sem roubar o foco.
     expect(screen.getByRole("log")).toHaveAttribute("aria-live", "polite");
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("RIFA-096: a linha menor diz há quanto tempo, pela `em` da venda e pelo `agora` do servidor (não pelo relógio do aparelho)", async () => {
+    // O relógio do aparelho 2 dias adiantado: não muda nada.
+    vi.setSystemTime(Date.parse(AGORA) + 2 * 24 * 60 * 60 * 1000);
+    simularApi([
+      venda("Bunker", 1, 59),
+      venda("Shekinah", 2, 200),
+      venda("Betel", 3, 600),
+    ]);
+
+    await abrir();
+    await avancar(INTERVALO_ENTRE_AVISOS_MS * 2);
+
+    expect(avisosNaTela()).toEqual([
+      "A célula Betel vendeu 3 bilhetes! há 10 min · Projeto Videira Kids",
+      "A célula Shekinah vendeu 2 bilhetes! há 3 min · Projeto Videira Kids",
+      "A célula Bunker vendeu 1 bilhete! agora mesmo · Projeto Videira Kids",
+    ]);
+  });
+
+  it("RIFA-096: o texto do tempo: menos de 1 min é 'agora mesmo'; depois, 'há N min' (1 a 10)", () => {
+    const quando = (segundosAtras: number) =>
+      TEXTOS.textoDoQuando(
+        new Date(Date.parse(AGORA) - segundosAtras * 1000).toISOString(),
+        AGORA,
+      );
+    expect([0, 30, 59.999, 60, 119, 120, 200, 599, 600].map(quando)).toEqual([
+      "agora mesmo",
+      "agora mesmo",
+      "agora mesmo",
+      "há 1 min",
+      "há 1 min",
+      "há 2 min",
+      "há 3 min",
+      "há 9 min",
+      "há 10 min",
+    ]);
+    // A venda "depois" do agora (o relógio da Rifei adiantado) e um instante inválido não viram tempo negativo.
+    expect(quando(-30)).toBe("agora mesmo");
+    expect(TEXTOS.textoDoQuando("x", AGORA)).toBe("agora mesmo");
+    expect(TEXTOS.linhaDoAviso(AGORA, AGORA)).toBe(
+      "agora mesmo · Projeto Videira Kids",
+    );
+  });
+
+  it("RIFA-096: ao voltar para a aba escondida, é como entrar de novo: até 5 das que chegaram, sem repetir as já mostradas", async () => {
+    const vista = venda("Shekinah", 2, 30);
+    // Enquanto a aba estava escondida, chegaram 7 vendas (da mais nova para a mais antiga, como a API manda).
+    const chegaram = Array.from({ length: 7 }, (_, i) =>
+      venda(`Célula ${i + 1}`, 1, 300 - i * 30),
+    );
+    simularApi([vista], [...[...chegaram].reverse(), vista]);
+
+    await abrir();
+    expect(avisosNaTela().map(frase)).toEqual([
+      "A célula Shekinah vendeu 2 bilhetes!",
+    ]);
+    await avancar(TEMPO_NA_TELA_MS + TEMPO_DE_SAIDA_MS);
+    expect(avisosNaTela()).toEqual([]);
+    definirVisibilidade("hidden");
+    await avancar(INTERVALO_CONSULTA_MS * 2);
+    expect(consultas).toBe(1);
+
+    definirVisibilidade("visible");
+    const depois = await tudoQueApareceu(INTERVALO_CONSULTA_MS * 2);
+
+    expect([...new Set(depois.map(frase))]).toEqual([
+      "A Célula 3 vendeu 1 bilhete!",
+      "A Célula 4 vendeu 1 bilhete!",
+      "A Célula 5 vendeu 1 bilhete!",
+      "A Célula 6 vendeu 1 bilhete!",
+      "A Célula 7 vendeu 1 bilhete!",
+    ]);
+    expect(depois.map(linha)[0]).toBe("há 4 min · Projeto Videira Kids");
   });
 
   it("uma venda nova vira um aviso com a célula e os bilhetes", async () => {
-    const antiga = venda("Shekinah", 2);
     const nova = venda("Bunker", 3);
-    simularApi([antiga], [nova, antiga]);
+    simularApi([], [nova]);
 
     await abrir();
     expect(avisosNaTela()).toEqual([]);
@@ -381,6 +493,43 @@ describe("RIFA-094: o plim e o botão 'Som das vendas'", () => {
     expect(plins()).toBe(2);
   });
 
+  it("RIFA-096: os avisos da entrada também tocam o plim, um por aviso (com o som liberado por um gesto)", async () => {
+    simularApi([venda("Bunker", 1, 240), venda("Shekinah", 2, 120)]);
+
+    ligados = vi.fn<(ligados: boolean) => void>();
+    render(
+      <>
+        <AvisosDeVenda aoSaberSeLigados={ligados} />
+        <BotaoSomDasVendas />
+      </>,
+    );
+    // O toque vem antes de a 1ª resposta chegar.
+    fireEvent.pointerDown(document.body);
+    await avancar(0);
+
+    expect(avisosNaTela()).toHaveLength(1);
+    expect(plins()).toBe(1);
+    await avancar(INTERVALO_ENTRE_AVISOS_MS);
+    expect(avisosNaTela()).toHaveLength(2);
+    expect(plins()).toBe(2);
+  });
+
+  it("RIFA-096: na volta à aba (o som já liberado), os avisos da entrada tocam o plim", async () => {
+    simularApi([], [venda("Bunker", 1, 90), venda("Betel", 4, 100)]);
+
+    await abrir();
+    fireEvent.pointerDown(document.body);
+    definirVisibilidade("hidden");
+    definirVisibilidade("visible");
+    await avancar(0);
+    expect(avisosNaTela().map(frase)).toEqual([
+      "A célula Betel vendeu 4 bilhetes!",
+    ]);
+    expect(plins()).toBe(1);
+    await avancar(INTERVALO_ENTRE_AVISOS_MS);
+    expect(plins()).toBe(2);
+  });
+
   it("o botão alterna o som e guarda a escolha no aparelho; desligado, o aviso aparece em silêncio", async () => {
     simularApi([], [venda("Bunker", 3)]);
 
@@ -415,7 +564,8 @@ describe("RIFA-094: o plim e o botão 'Som das vendas'", () => {
 
     expect(controlesSemDica()).toEqual([]);
     const textos = [
-      TEXTOS.LINHA_DO_AVISO,
+      TEXTOS.linhaDoAviso(AGORA, AGORA),
+      TEXTOS.linhaDoAviso("2026-12-01T14:53:00.000Z", AGORA),
       TEXTOS.ROTULO_SOM,
       ...Object.values(TEXTOS.DICAS_SOM),
     ];

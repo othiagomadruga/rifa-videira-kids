@@ -1,6 +1,6 @@
 // RIFA-094 (D42): GET /api/publico/vendas-recentes, os avisos de venda do ranking aberto e da /minha, com o D1 dos
 // testes e o relógio fixo. Só as vendas que contam (aprovadas, sem desconsiderar, da campanha ativa e dos dias dela,
-// com a célula EFETIVA da D41) dos últimos 3 minutos, da mais recente para a mais antiga, até 30; cada item só com a
+// com a célula EFETIVA da D41) dos últimos 10 minutos (RIFA-096; eram 3), da mais recente para a mais antiga, até 30; cada item só com a
 // chave opaca, o nome da célula, os bilhetes e o instante; a opção da campanha desligada dá a lista vazia; o cache
 // (10 s) e o limite por IP como nas outras rotas abertas (D10); o plano da consulta no índice da aprovação.
 import { env } from "cloudflare:workers";
@@ -76,15 +76,18 @@ const RECENTES = {
   agape: { ...aprovado(101, antes(10), 3), id: "PEDIDO-AGAPE-10S" },
   betel: { ...aprovado(102, antes(60), 5), id: "PEDIDO-BETEL-60S" },
   agape2: { ...aprovado(101, antes(120), 1), id: "PEDIDO-AGAPE-120S" },
-  /** No limite da janela (3 min exatos): entra. */
-  canaaNoLimite: { ...aprovado(103, antes(180), 2), id: "PEDIDO-CANAA-180S" },
+  /** RIFA-096: 7 minutos atrás (fora da janela antiga, de 3 min): entra. */
+  betel7min: { ...aprovado(102, antes(420), 6), id: "PEDIDO-BETEL-7MIN" },
+  /** No limite da janela (10 min exatos): entra. */
+  canaaNoLimite: { ...aprovado(103, antes(600), 2), id: "PEDIDO-CANAA-10MIN" },
   /** Sem afiliado, atribuída à mão à Dorcas (D41): entra com a Dorcas. */
   atribuida: { ...aprovado(null, antes(30), 4), id: "PEDIDO-ATRIBUIDO" },
 } satisfies Record<string, PedidoTeste>;
 
 const FORA = [
-  // Mais de 3 minutos atrás.
-  { ...aprovado(101, antes(181), 7), id: "PEDIDO-VELHO" },
+  // Mais de 10 minutos atrás (1 s e 1 min depois do limite).
+  { ...aprovado(101, antes(601), 7), id: "PEDIDO-VELHO" },
+  { ...aprovado(104, antes(660), 7), id: "PEDIDO-VELHO-11MIN" },
   // Depois do "agora" do servidor.
   { ...aprovado(101, antes(-5), 7), id: "PEDIDO-FUTURO" },
   // Sem célula: sem afiliado e sem atribuição; afiliado não vinculado.
@@ -142,7 +145,7 @@ describe("GET /api/publico/vendas-recentes (RIFA-094, D42)", () => {
     });
   });
 
-  it("só as vendas que contam dos últimos 3 minutos, da mais recente para a mais antiga, com a célula efetiva", async () => {
+  it("só as vendas que contam dos últimos 10 minutos (até 10 min entra, 11 não), da mais recente para a mais antiga, com a célula efetiva", async () => {
     await semear();
 
     const { status, cacheControl, corpo } = await consultar();
@@ -158,8 +161,10 @@ describe("GET /api/publico/vendas-recentes (RIFA-094, D42)", () => {
       ["Célula Dorcas", 4, antes(30)],
       ["Célula Betel", 5, antes(60)],
       ["Célula Ágape", 1, antes(120)],
-      ["Célula Canaã", 2, antes(180)],
+      ["Célula Betel", 6, antes(420)],
+      ["Célula Canaã", 2, antes(600)],
     ]);
+    expect(JANELA_VENDAS_RECENTES_MS).toBe(10 * 60_000);
   });
 
   it("cada item só com k, celula, bilhetes e em: nada do comprador, do bilhete, do valor nem o id do pedido", async () => {
@@ -270,7 +275,7 @@ describe("GET /api/publico/vendas-recentes (RIFA-094, D42)", () => {
 
   it("venda aprovada com 0 bilhetes (o webhook aceita numbers_count 0) não vira aviso nem derruba a resposta", async () => {
     // Sem o filtro, o item `bilhetes: 0` reprovava o schema estrito (positivo) e a rota dava 500 para todo mundo
-    // durante os 3 minutos da janela.
+    // durante os 10 minutos da janela.
     await semear([
       RECENTES.agape,
       { ...aprovado(102, antes(20), 0, 0), id: "PEDIDO-ZERO" },
