@@ -160,7 +160,7 @@ Configuração da campanha ativa: tudo que é regra de campanha vive aqui, e nã
   - **O primeiro PUT cria a campanha já ativa**: o contrato não tem rascunho nem passo separado de ativação. A partir dele, o webhook passa a contar as vendas da Rifei com esse `slug_rifei` (D5). Preço e meta podem entrar provisórios e ser corrigidos depois.
   - Os PUTs seguintes substituem a configuração da mesma campanha (mesmo `id`: os pedidos já gravados continuam ligados a ela), e os períodos são substituídos inteiros. Campanha e períodos vão numa transação: se algo falha, nada muda. Nunca há duas campanhas ativas.
   - Grupo `bilhetes` (RIFA-075, D35): `quantidade` (1 a 1.000.000; padrão 7005) e `numero_inicial` (0, 1 ou null = automático). Ausente mantém o gravado (no primeiro PUT, o padrão). A tela Bilhetes desenha a grade com ele.
-  - Grupo `notificacoes` (RIFA-095, [D43](decisions.md#d43-notificações-de-venda-no-celular-e-no-computador-web-push-com-vapid-próprio-rifa-095-2026-11-27)): `{ "vendas": true | false }`, "Enviar notificações de venda". Ausente mantém o gravado (no primeiro PUT, o padrão: ligada); a resposta traz sempre o grupo. Da coordenação também (não é dos grupos só do admin). Desligada, o botão "Receber avisos de venda" some e nenhuma notificação sai (veja "Notificações de venda", abaixo).
+  - Grupo `notificacoes` (RIFA-095, [D43](decisions.md#d43-notificações-de-venda-no-celular-e-no-computador-web-push-com-vapid-próprio-rifa-095-2026-11-27)): `{ "vendas": true | false }`, "Enviar notificações de venda". Ausente mantém o gravado (no primeiro PUT, o padrão: ligada); a resposta traz sempre o grupo. Da coordenação também (não é dos grupos só do admin). Desligada, o botão "Avisos no celular" some e nenhuma notificação sai (veja "Notificações de venda", abaixo).
   - **200** `Campanha`, como ficou gravada.
   - **400** `json_invalido`: o corpo não é JSON, ou veio sem `Content-Type: application/json` (ou `application/<tipo>+json`), mesmo que o texto seja JSON.
   - **400** `requisicao_invalida`: fora do schema (`detalhes` = problemas).
@@ -755,14 +755,16 @@ Os avisos de venda ("A célula X vendeu N bilhetes!") do ranking aberto e da /mi
 ```
 
 - `itens`: as vendas **pagas que contam** (pedido `approved` da campanha ativa, sem desconsiderar, D20, com a **célula
-  efetiva**, D41, e com o dia local da aprovação dentro das datas da campanha) dos **últimos 3 minutos**
-  (`JANELA_VENDAS_RECENTES_MS`, pela aprovação, até `agora`), da mais recente para a mais antiga, no máximo 30
-  (`LIMITE_VENDAS_RECENTES`). Venda sem célula não aparece, nem a de 0 bilhetes (revisão da RIFA-094).
+  efetiva**, D41, e com o dia local da aprovação dentro das datas da campanha) dos **últimos 10 minutos**
+  (`JANELA_VENDAS_RECENTES_MS`, pela aprovação, até `agora`; eram 3 até a RIFA-096), da mais recente para a mais
+  antiga, no máximo 30 (`LIMITE_VENDAS_RECENTES`). Venda sem célula não aparece, nem a de 0 bilhetes (revisão da
+  RIFA-094). A tela mostra, a quem entra, as 5 mais recentes desta janela (D42, adendo da RIFA-096).
 - Cada item: `k`, a chave **opaca** e estável do pedido (os 16 primeiros hex do SHA-256 do id com um sal da campanha que
   o público não vê: não leva ao id), `celula` (o nome), `bilhetes` (os desta venda) e `em` (o instante da aprovação).
   **Nada do comprador, nenhum número de bilhete, nenhum valor em R$ e nenhum id.**
 - `ligados: false` (com `itens: []`): a opção `publico.avisos_de_venda` desligada ou nenhuma campanha ativa (sempre 200).
-- `agora`: o instante do servidor em que a resposta foi montada.
+- `agora`: o instante do servidor em que a resposta foi montada. A tela calcula o "há N min" de cada aviso por `agora`
+  menos `em` (o relógio do aparelho não entra).
 - Custo: o índice `pedidos_por_status_aprovacao` (status, aprovado_em) lê só a janela (`db/vendas-recentes.ts`, plano
   travado em teste).
 

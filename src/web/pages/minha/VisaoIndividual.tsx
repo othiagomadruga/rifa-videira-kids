@@ -1,5 +1,4 @@
 import type { RespostaVisaoIndividual } from "../../../shared/contracts/api";
-import { AvisosNoCelular } from "../../components/notificacoes";
 import { Aviso, EmptyState, ErrorState } from "../../components/ui";
 import { ehFalhaDeConexao, mensagemDoErro } from "../../lib/api";
 import { formatarHora } from "../../lib/formatadores";
@@ -33,9 +32,8 @@ export function VisaoIndividual() {
         alvo={alvo}
         nome={usuario.nome}
         porDivisao={visao?.ranking.por_divisao !== false}
+        avisosNoCelular
       />
-      {/* RIFA-095 (D43): os avisos de venda no celular, para o líder, o discipulador e a rede. */}
-      <AvisosNoCelular origem="minha" />
       {estado.tipo === "carregando" && <EsqueletoDaVisao />}
       {estado.tipo === "erro" && (
         <ErrorState

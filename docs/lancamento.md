@@ -489,7 +489,7 @@ Rifei). Nada disso muda as vendas: o Pix continua caindo na Efí pela Rifei.
 ### 3.9 Notificações de venda no celular (Web Push) [SM] (RIFA-095, D43)
 
 O recurso entrou **desligado** (a chave pública vazia no `wrangler.jsonc`) e foi ligado em 27/11 (a pública no
-`wrangler.jsonc` e a privada no segredo do Worker). Sem uma das duas, o botão "Receber avisos de venda" não aparece e
+`wrangler.jsonc` e a privada no segredo do Worker). Sem uma das duas, o botão "Avisos no celular" não aparece e
 nada é enviado. Para ligar (ou trocar o par), o par de chaves VAPID: a **pública** vai no `wrangler.jsonc` (não é segredo) e a
 **privada** vira o segredo do Worker `VAPID_PRIVATE_KEY` (nunca no repositório, no chat ou no DevMission).
 
@@ -506,8 +506,9 @@ nada é enviado. Para ligar (ou trocar o par), o par de chaves VAPID: a **públi
    `vars.VAPID_SUBJECT` já é `https://projetokidsbelem.com.br`.
 4. **[Admin] Conferir:** `https://projetokidsbelem.com.br/api/publico/notificacoes` responde
    `{"ligadas":true,"chave_publica":"B..."}` (com a opção "Enviar notificações de venda" ligada na tela Campanha, o
-   padrão). No celular (Android/Chrome) ou no computador, abra o ranking aberto, toque em **Receber avisos de venda** e
-   permita. No iPhone (iOS 16.4+): Compartilhar → Adicionar à Tela de Início, abra pelo ícone e ative ali. Na próxima
+   padrão). No celular (Android/Chrome) ou no computador, abra o ranking aberto, toque em **Avisos no celular** (ao lado do "Som das vendas") e
+   permita: o botão vira "Avisos ligados". No iPhone (iOS 16.4+): Compartilhar → Adicionar à Tela de Início, abra pelo
+   ícone e toque no botão ali (no navegador do iPhone, o toque abre um balão com esse caminho). Na próxima
    venda paga com célula chega "🎟️ A célula X vendeu N bilhetes!". No log do Worker: `notificacoes_de_venda` com as
    contagens (aceitas, expiradas, falharam, puladas), nunca o endereço do aparelho.
 5. **Desligar:** pela tela Campanha (desmarque "Enviar notificações de venda": o botão some e nada sai, as inscrições

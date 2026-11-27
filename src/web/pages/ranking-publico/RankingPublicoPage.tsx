@@ -53,6 +53,7 @@ const META_BATIDA_BP = 10_000;
 // próxima atualização que muda a ordem). RIFA-094 (D42): os avisos de venda ("A célula X vendeu N bilhetes!", um por
 // compra, com o plim) por cima da tela, e o botão "Som das vendas" ao lado do título, só com os avisos ligados na
 // campanha (components/avisos-de-venda: a quantidade de bilhetes de cada venda é a exceção à R9 que a D42 explica).
+// RIFA-095/096 (D43): o botão "Avisos no celular" (Web Push) na mesma linha do "Som das vendas".
 export function RankingPublicoPage() {
   const { estado, tentarDeNovo } = useRankingPublico();
   const [avisosLigados, setAvisosLigados] = useState(false);
@@ -61,12 +62,16 @@ export function RankingPublicoPage() {
       <PageHeader
         titulo="Ranking da campanha"
         ajuda={ajudaAberta("ranking")}
-        acoes={avisosLigados ? <BotaoSomDasVendas /> : undefined}
+        acoes={
+          <>
+            {avisosLigados && <BotaoSomDasVendas />}
+            {/* RIFA-095 (D43), compacto desde a RIFA-096: "Avisos no celular" na mesma linha do som (some sem suporte
+                ou com as notificações desligadas). */}
+            <AvisosNoCelular origem="publico" />
+          </>
+        }
       />
       <AvisosDeVenda aoSaberSeLigados={setAvisosLigados} />
-      {/* RIFA-095 (D43): o botão "Receber avisos de venda" no celular (some sem suporte ou com as notificações
-          desligadas). */}
-      <AvisosNoCelular origem="publico" />
       {estado.tipo === "carregando" && (
         <div className="ranking-publico__carregando">
           <Loading texto="Carregando o ranking…" />

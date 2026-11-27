@@ -1,4 +1,4 @@
-// Chamadas do botão "Receber avisos de venda" (RIFA-095, D43): as três rotas abertas de /api/publico/notificacoes
+// Chamadas do botão "Avisos no celular" (RIFA-095, D43): as três rotas abertas de /api/publico/notificacoes
 // (ROTAS_NOTIFICACOES). O componente aparece no ranking aberto e na /minha, sem login: nenhuma rota da coordenação.
 // Do contrato, só TIPOS (o ranking aberto não carrega o zod).
 import type {

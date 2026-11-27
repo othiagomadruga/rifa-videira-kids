@@ -2,7 +2,7 @@ import { ComAjuda } from "../../components/ui";
 import { AJUDA_NOTIFICACOES } from "./textos-notificacoes";
 
 // RIFA-095 (D43): "Enviar notificações de venda" (`notificacoes.vendas`), no cartão do que o público vê. Desligada, o
-// botão "Receber avisos de venda" some do ranking aberto e da /minha e nenhuma notificação sai. Da coordenação também
+// botão "Avisos no celular" some do ranking aberto e da /minha e nenhuma notificação sai. Da coordenação também
 // (como o resto do cartão).
 export const CAMPO_NOTIFICACOES = "notificacoes.vendas";
 
