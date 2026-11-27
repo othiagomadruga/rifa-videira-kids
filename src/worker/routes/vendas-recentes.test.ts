@@ -268,6 +268,22 @@ describe("GET /api/publico/vendas-recentes (RIFA-094, D42)", () => {
     });
   });
 
+  it("venda aprovada com 0 bilhetes (o webhook aceita numbers_count 0) não vira aviso nem derruba a resposta", async () => {
+    // Sem o filtro, o item `bilhetes: 0` reprovava o schema estrito (positivo) e a rota dava 500 para todo mundo
+    // durante os 3 minutos da janela.
+    await semear([
+      RECENTES.agape,
+      { ...aprovado(102, antes(20), 0, 0), id: "PEDIDO-ZERO" },
+    ]);
+
+    const res = await app.request(CAMINHO, {}, env);
+    expect(res.status).toBe(200);
+    const corpo = respostaVendasRecentesSchema.parse(await res.json());
+    expect(
+      corpo.itens.map(({ celula, bilhetes }) => [celula, bilhetes]),
+    ).toEqual([["Célula Ágape", 3]]);
+  });
+
   it("uma consulta qualquer na URL é ignorada (não muda a resposta nem a chave do cache)", async () => {
     await semear();
     const app = montarApp({

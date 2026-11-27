@@ -2564,6 +2564,8 @@ tela em `src/web/components/avisos-de-venda/` (montada em `pages/ranking-publico
   efetiva (D41) e com o dia local da aprovação dentro das datas da campanha (a compra de teste de antes do início não
   vira aviso), aprovadas nos últimos 3 minutos (até o "agora" do servidor), da mais recente para a mais antiga, até 30.
   A janela de 3 min cobre com folga o cache (10 s), a consulta da tela (15 s) e um webhook que chega com atraso.
+  Venda de 0 bilhetes também fica fora (revisão: o webhook aceita `numbers_count` 0 e o contrato pede bilhetes
+  positivos; sem o filtro, uma linha dessas dava 500 a todos durante a janela).
 - **Chave opaca `k`.** A tela precisa saber que já mostrou uma venda; o id do pedido (da Rifei) não sai para o público.
   `k` = os 16 primeiros hex do SHA-256 de `vendas-recentes:<id da campanha>:<criado_em da campanha>:<id do pedido>`:
   estável entre respostas e isolates, diferente por pedido, e o sal (o `criado_em`, em milissegundos) não é público,
