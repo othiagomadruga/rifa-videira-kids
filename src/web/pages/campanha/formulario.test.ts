@@ -124,7 +124,12 @@ describe("montarCorpo", () => {
         ],
         // RIFA-061 (D27): a opção do ranking por divisão vai sempre, com o padrão (separa).
         ranking: { criterio: "arrecadacao", por_divisao: true },
-        publico: { mostra_percentual_meta: false, limite_ranking: null },
+        // RIFA-094 (D42): os avisos de venda vão sempre, com o que está no formulário.
+        publico: {
+          mostra_percentual_meta: false,
+          limite_ranking: null,
+          avisos_de_venda: true,
+        },
         // Regras do admin (D20): do admin, os três grupos vão sempre, com o que está no formulário.
         pedidos: { ...PEDIDOS_PADRAO },
         acesso: { ...ACESSO_PADRAO },

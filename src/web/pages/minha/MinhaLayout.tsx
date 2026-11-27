@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
 import {
+  AvisosDeVenda,
+  BotaoSomDasVendas,
+} from "../../components/avisos-de-venda";
+import {
   Button,
   ComDica,
   ErrorState,
@@ -20,10 +24,15 @@ type Saida = { saindo: boolean; erro: string | null };
 // para a área deles (/coordenacao). O topo tem a altura final desde o primeiro quadro (a linha do papel reservada
 // e a barra com a altura do "Sair", só no CSS, em minha-moldura.css: nenhum texto de mentira na marca para o leitor
 // de tela): nada pula quando a sessão chega.
+// RIFA-094 (D42): com a sessão, os avisos de venda (os mesmos do ranking aberto, da rota aberta) para o líder, o
+// discipulador e a rede, e o botão "Som das vendas" na barra, ao lado do "Sair" (no celular, só o sino, para a barra
+// não crescer: o BotaoSomDasVendas compacto). Nada na tela fixa fica coberto: a /minha não tem barra fixa, e os avisos não
+// recebem toque.
 export function MinhaLayout() {
   const { estado, verificar, sair } = useSessao();
   const usuario = useGuardaDaArea("hierarquia");
   const [saida, setSaida] = useState<Saida>({ saindo: false, erro: null });
+  const [avisosLigados, setAvisosLigados] = useState(false);
 
   async function sairDoSistema() {
     // Saindo, o botão fica com aria-disabled (RIFA-045: continua no Tab, com a dica dizendo por quê): barra aqui.
@@ -47,19 +56,22 @@ export function MinhaLayout() {
             complemento={usuario ? ROTULO_PAPEL[usuario.papel] : undefined}
           />
           {usuario && (
-            <ComDica
-              texto={
-                saida.saindo ? DICAS_DA_MOLDURA.saindo : DICAS_DA_MOLDURA.sair
-              }
-            >
-              <Button
-                variante="secundario"
-                aria-disabled={saida.saindo || undefined}
-                onClick={() => void sairDoSistema()}
+            <div className="minha-moldura__acoes">
+              {avisosLigados && <BotaoSomDasVendas compacto />}
+              <ComDica
+                texto={
+                  saida.saindo ? DICAS_DA_MOLDURA.saindo : DICAS_DA_MOLDURA.sair
+                }
               >
-                {saida.saindo ? "Saindo…" : "Sair"}
-              </Button>
-            </ComDica>
+                <Button
+                  variante="secundario"
+                  aria-disabled={saida.saindo || undefined}
+                  onClick={() => void sairDoSistema()}
+                >
+                  {saida.saindo ? "Saindo…" : "Sair"}
+                </Button>
+              </ComDica>
+            </div>
           )}
         </div>
         {saida.erro && (
@@ -70,6 +82,10 @@ export function MinhaLayout() {
           </div>
         )}
       </header>
+      <AvisosDeVenda
+        ativo={usuario !== null}
+        aoSaberSeLigados={setAvisosLigados}
+      />
       <main id="conteudo" className="minha-moldura__conteudo">
         <div className="minha-moldura__limite minha-moldura__pagina">
           {usuario ? (

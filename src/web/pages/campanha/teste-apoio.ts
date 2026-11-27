@@ -3,6 +3,7 @@
 import { vi } from "vitest";
 import {
   ACESSO_PADRAO,
+  AVISOS_DE_VENDA_PADRAO,
   BILHETES_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
@@ -44,9 +45,13 @@ export function campanhaDaEntrada(
       criterio: entrada.ranking.criterio,
       por_divisao: entrada.ranking.por_divisao ?? RANKING_POR_DIVISAO_PADRAO,
     },
-    publico: entrada.publico ?? {
+    // RIFA-094 (D42): a API devolve sempre os avisos de venda (ausente no PUT, o padrão: ligados).
+    publico: {
       mostra_percentual_meta: false,
       limite_ranking: 3,
+      ...entrada.publico,
+      avisos_de_venda:
+        entrada.publico?.avisos_de_venda ?? AVISOS_DE_VENDA_PADRAO,
     },
     // Regras do admin (D20): a API devolve sempre (o grupo ausente no PUT fica com o padrão).
     pedidos: entrada.pedidos ?? { ...PEDIDOS_PADRAO },
