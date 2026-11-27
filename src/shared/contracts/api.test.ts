@@ -107,6 +107,8 @@ describe("CA3: catálogo de rotas", () => {
         "GET /api/painel/ranking",
         "GET /api/publico/ranking",
         "GET /api/publico/bumbo",
+        // RIFA-094 (D42): os avisos de venda.
+        "GET /api/publico/vendas-recentes",
         // Sprint 4 (RIFA-012): conferência pelo CSV da Rifei.
         "POST /api/admin/reconciliacao/analisar",
         "POST /api/admin/reconciliacao/recuperar",

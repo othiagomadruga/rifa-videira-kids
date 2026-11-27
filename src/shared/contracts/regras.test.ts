@@ -318,6 +318,12 @@ describe("D20: as regras na resposta da campanha", () => {
       },
       // RIFA-075 (D35): os números da rifa.
       bilhetes: { quantidade: 7005, numero_inicial: 0 },
+      // RIFA-094 (D42): os avisos de venda (desligados).
+      publico: {
+        mostra_percentual_meta: false,
+        limite_ranking: 3,
+        avisos_de_venda: false,
+      },
     };
     expect(campanhaSchema.parse(gravada)).toEqual(gravada);
     expect(
