@@ -138,7 +138,9 @@ export interface VendaParaNotificar {
 
 /**
  * O pedido da campanha, se ele CONTA agora: aprovado, sem desconsiderar e com célula EFETIVA (a do afiliado ou, sem
- * ela, a atribuída à mão; D41). Senão, null (a venda sem célula não notifica). Uma ida ao D1, pela chave do pedido.
+ * ela, a atribuída à mão; D41). Senão, null (a venda sem célula não notifica). A de 0 bilhetes (o webhook aceita
+ * `numbers_count` 0) também não: não há o que anunciar (como nos avisos da página, D42). Uma ida ao D1, pela chave
+ * do pedido.
  */
 export async function lerVendaParaNotificar(
   db: D1Database,
@@ -152,7 +154,8 @@ export async function lerVendaParaNotificar(
          ${juntarAfiliado()}
          ${juntarCelulaEfetiva()}
        WHERE p.id = ?1 AND p.campanha_id = ?2 AND p.status = 'approved'
-         AND p.desconsiderado_em IS NULL AND c.id IS NOT NULL AND p.aprovado_em IS NOT NULL`,
+         AND p.desconsiderado_em IS NULL AND c.id IS NOT NULL AND p.aprovado_em IS NOT NULL
+         AND p.qtd_bilhetes > 0`,
     )
     .bind(pedidoId, campanhaId)
     .first<VendaParaNotificar>();

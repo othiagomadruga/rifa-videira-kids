@@ -2643,7 +2643,8 @@ disparo), `db/push-inscricoes.ts` e `routes/notificacoes.ts`; site em `public/sw
   (D41) também não. Na hora do disparo, tudo é conferido de novo: as chaves no servidor, a opção da campanha, o pedido
   aprovado, sem desconsiderar (D20), com **célula efetiva** (D41: a do afiliado ou, sem ela, a atribuída antes do
   pagamento) e com a aprovação dentro das datas da campanha (a compra de teste antes do 1º dia não notifica). **Sem
-  célula, não notifica.** Approved é terminal (D4): a **reentrega** do mesmo `paid_order` é `duplicado` e não notifica
+  célula, não notifica**, nem a venda de 0 bilhetes (o webhook aceita `numbers_count` 0; não há o que anunciar, como
+  nos avisos da página, D42; revisão da RIFA-095). Approved é terminal (D4): a **reentrega** do mesmo `paid_order` é `duplicado` e não notifica
   de novo (testado pelo webhook real).
 - **Sem segurar o webhook:** o envio vai para o `ctx.waitUntil` e a resposta à Rifei sai na hora (testado com o
   serviço de push travado). Sem as chaves ou com a opção desligada, nada vai para o `waitUntil` (nem uma ida ao banco).

@@ -258,6 +258,21 @@ describe("pelo webhook da Rifei", () => {
     );
   });
 
+  it("a venda paga com 0 bilhetes (o webhook aceita numbers_count 0) não notifica", async () => {
+    // Revisão da RIFA-095: sem o filtro, ia para todos os aparelhos "🎟️ A Célula Ágape vendeu 0 bilhetes!".
+    await aparelhosInscritos(2);
+    const servico = servicoDePushFalso();
+    vi.spyOn(globalThis, "fetch").mockImplementation(servico.buscar);
+
+    await webhookEDisparo(
+      evento({ numbers: [], numbers_count: 0, subtotal: 0, total: 0 }),
+    );
+    expect(servico.recebidos).toHaveLength(0);
+    expect((await inscricoes()).every((l) => l.ultimo_envio_em === null)).toBe(
+      true,
+    );
+  });
+
   it("a reserva atribuída à mão a uma célula (D41) notifica com essa célula quando é paga", async () => {
     const [aparelho] = await aparelhosInscritos(1);
     const servico = servicoDePushFalso();
@@ -322,7 +337,7 @@ describe("pelo webhook da Rifei", () => {
     const servico = servicoDePushFalso();
     vi.spyOn(globalThis, "fetch").mockImplementation(servico.buscar);
 
-    // Sem as chaves (o env dos testes: a pública vazia, sem o segredo).
+    // Sem as chaves (o env dos testes: sem o segredo, a privada vazia no vitest.config.ts).
     expect((await webhookEDisparo(evento(), env)).pendentes).toHaveLength(0);
     await db
       .prepare("UPDATE campanhas SET notificacoes_vendas = 0 WHERE ativa = 1")
