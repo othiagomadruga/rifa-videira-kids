@@ -81,6 +81,8 @@ describe("buscarCampanhaAtiva", () => {
       acesso_celulas_senha: 1,
       bilhetes_quantidade: 7005,
       bilhetes_numero_inicial: null,
+      // 0022 (RIFA-095, D43): as notificações de venda nascem ligadas.
+      notificacoes_vendas: 1,
       criado_em: expect.stringMatching(/Z$/),
       atualizado_em: expect.stringMatching(/Z$/),
       periodos: [],

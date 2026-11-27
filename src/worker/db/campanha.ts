@@ -22,11 +22,15 @@
 // - Ranking por divisão (RIFA-061, D27; coluna da migração 0012): `ranking.por_divisao`. No PUT, ausente mantém o
 //   gravado (no primeiro PUT, o padrão da coluna: separa), como os grupos do admin; é do grupo `ranking`, que a
 //   coordenação também muda (como o critério).
+// - Notificações de venda (RIFA-095, D43; coluna da migração 0022): `notificacoes.vendas`. No PUT, ausente mantém o
+//   gravado (no primeiro PUT, o padrão da coluna: ligada), gravada à parte do UPSERT (GRAVAR_NOTIFICACOES), como o
+//   login das células com senha. É da coordenação (como o `publico`).
 import type { z } from "zod";
 import {
   ACESSO_PADRAO,
   BILHETES_PADRAO,
   MENSAGENS_PADRAO,
+  NOTIFICACOES_PADRAO,
   PEDIDOS_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
   TIPOS_MENSAGEM,
@@ -97,6 +101,8 @@ export interface CampanhaAtiva {
   /** RIFA-075 (D35, migração 0016): quantos números a rifa tem e o número inicial (NULL = automático). */
   bilhetes_quantidade: number;
   bilhetes_numero_inicial: number | null;
+  /** RIFA-095 (D43, migração 0022): 1 = envia as notificações de venda (o padrão); 0 = não envia. */
+  notificacoes_vendas: number;
   criado_em: string;
   atualizado_em: string;
   periodos: PeriodoGravado[];
@@ -122,7 +128,7 @@ type LinhaCampanhaAtiva = Omit<CampanhaAtiva, "periodos"> & {
 
 // A ativa e os períodos dela num comando só (json_group_array devolve "[]" sem períodos).
 const SELECIONAR_CAMPANHA_ATIVA = `
-  SELECT c.id, c.nome, c.slug_rifei, c.fuso_horario, c.data_inicio, c.preco_bilhete_centavos,
+  SELECT c.id, c.notificacoes_vendas, c.nome, c.slug_rifei, c.fuso_horario, c.data_inicio, c.preco_bilhete_centavos,
     c.meta_unidade, c.meta_regra, c.meta_valor, c.ranking_criterio, c.ranking_por_divisao,
     c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.pedidos_desconsiderar,
     c.acesso_discipuladores, c.acesso_redes, c.mensagem_link_coordenacao, c.mensagem_link_lider,
@@ -181,6 +187,13 @@ const GRAVAR_CAMPANHA = `
  */
 const GRAVAR_LOGIN_CELULAS_SENHA =
   "UPDATE campanhas SET acesso_celulas_senha = ?1 WHERE ativa = 1";
+
+/**
+ * RIFA-095 (D43): a opção das notificações de venda, como a chave acima: à parte do UPSERT, no mesmo lote (depois
+ * dele), só quando o corpo traz `notificacoes`. Ausente, a coluna fica como está (no primeiro PUT, o DEFAULT 1 da 0022).
+ */
+const GRAVAR_NOTIFICACOES =
+  "UPDATE campanhas SET notificacoes_vendas = ?1 WHERE ativa = 1";
 
 /** Chave (0/1) para o bind; null = grupo ausente. */
 const chave = (valor: boolean | undefined): number | null =>
@@ -320,6 +333,10 @@ function resumirCriacaoDaCampanha(depois: DadosCampanha): string {
     ...chaves.map(([nome, valor]) => `${nome}: ${ligado(valor)}`),
     ...porDivisao,
     ...editadas.map((tipo) => `mensagens.${tipo}`),
+    // RIFA-095 (D43): as notificações de venda só entram quando nascem desligadas (ligadas é o padrão).
+    ...((depois.notificacoes?.vendas ?? NOTIFICACOES_PADRAO.vendas)
+      ? []
+      : [`notificacoes.vendas: ${ligado(false)}`]),
   ].join(", ");
 }
 
@@ -379,6 +396,12 @@ export function resumirMudancaDaCampanha(
   )
     alterados.push(
       `bilhetes (${antes.bilhetes_quantidade}/${antes.bilhetes_numero_inicial ?? "auto"} → ${bilhetes.quantidade}/${bilhetes.numero_inicial ?? "auto"})`,
+    );
+  // RIFA-095 (D43): as notificações de venda, com o antes e o depois (ausente no corpo mantém o gravado).
+  const vendas = depois.notificacoes?.vendas;
+  if (vendas !== undefined && (antes.notificacoes_vendas !== 0) !== vendas)
+    alterados.push(
+      `notificacoes.vendas: ${ligado(antes.notificacoes_vendas !== 0)} → ${ligado(vendas)}`,
     );
   if (
     (antes.publico_mostra_percentual_meta === 1) !==
@@ -475,6 +498,13 @@ export async function salvarCampanhaAtiva(
             .prepare(GRAVAR_LOGIN_CELULAS_SENHA)
             .bind(chave(dados.acesso.celulas_senha)),
         ]),
+    ...(dados.notificacoes === undefined
+      ? []
+      : [
+          db
+            .prepare(GRAVAR_NOTIFICACOES)
+            .bind(chave(dados.notificacoes.vendas)),
+        ]),
   ];
 
   if (auditoria)
@@ -567,6 +597,13 @@ export function montarCampanha(campanha: CampanhaAtiva): Campanha {
     bilhetes: {
       quantidade: campanha.bilhetes_quantidade ?? BILHETES_PADRAO.quantidade,
       numero_inicial: campanha.bilhetes_numero_inicial ?? null,
+    },
+    // RIFA-095 (D43): só 0 desliga (uma linha lida sem a coluna, antes da 0022, fica com o padrão: ligada).
+    notificacoes: {
+      vendas:
+        campanha.notificacoes_vendas === undefined
+          ? NOTIFICACOES_PADRAO.vendas
+          : campanha.notificacoes_vendas !== 0,
     },
     criado_em: campanha.criado_em,
     atualizado_em: campanha.atualizado_em,

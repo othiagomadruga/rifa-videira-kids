@@ -41,6 +41,16 @@
   // O e-mail sai pelo Email Routing da Cloudflare só para destinos verificados; os endereços ficam no segredo
   // RELATORIO_EMAILS, nunca aqui (o binding fica sem lista de destinos). D40.
   "send_email": [{ "name": "EMAIL" }],
+  // Notificações de venda no celular e no computador (Web Push, RIFA-095, D43; src/worker/lib/web-push.ts). Valores
+  // públicos, não segredo: a chave VAPID PÚBLICA (vai para todo navegador que se inscreve; base64url de 65 bytes, 87
+  // caracteres) e o `sub` do VAPID (o site, uma URL: nada de e-mail aqui, o repositório é público). A chave privada
+  // é o segredo do Worker VAPID_PRIVATE_KEY (`wrangler secret put`), NUNCA aqui. Com a pública vazia ou sem o segredo,
+  // o recurso fica desligado: o botão não aparece, a inscrição responde 503 e nada é enviado. Como gerar e gravar as
+  // duas: docs/lancamento.md, 3.9 (`node scripts/gerar-chaves-vapid.mjs`).
+  "vars": {
+    "VAPID_PUBLIC_KEY": "",
+    "VAPID_SUBJECT": "https://projetokidsbelem.com.br",
+  },
   // Limite de requisições por IP (RIFA-013b; src/worker/lib/limite-requisicoes.ts, que tem as mesmas
   // regras). Conta por data center da Cloudflare; o período só pode ser 10 ou 60 s. Os namespace_id são
   // números escolhidos por nós, únicos na conta. Declarados também em src/worker/worker-env.d.ts.
