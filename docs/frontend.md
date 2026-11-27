@@ -26,6 +26,8 @@ src/web/
                         Comemoracao.css (a camada das partículas do useComemoracao)
   components/qr/        o link de vendas e o QR code dele (RIFA-046): CompartilharLink, VerQr, QrCodeLazy e, só em
                         pedaço `lazy`, QrCodeLinkVendas e qr-matriz.ts (o único módulo que importa o `qr`)
+  components/avisos-de-venda/   os avisos de venda (RIFA-094, D42): AvisosDeVenda (consulta e pilha), BotaoSomDasVendas,
+                        useAvisosDeVenda (fila e temporizadores) e som.ts (o plim da Web Audio e a escolha do som)
   components/EmConstrucao.tsx   aviso das telas que ainda são só a casca
   pages/<tela>/         uma pasta por tela: componente, CSS, chamadas à API e testes da tela
   test/                 setup.ts, renderizar.tsx, movimento.ts, download.ts, dicas.ts e redes.ts (ajudantes de teste)
@@ -232,6 +234,46 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   (`simularApi` de `pages/visao-geral/teste-apoio.ts`) responde `GRUPOS` (`api.grupos` troca a resposta) e
   `api.hierarquia` troca as células (`CELULAS_COM_GRUPOS`). Testes em `VisaoGeralPage.test.tsx` e
   `rede-unica.test.tsx`.
+
+## Avisos de venda no ranking aberto e na /minha (RIFA-094, D42)
+
+- **Onde**: o ranking aberto (`pages/ranking-publico/RankingPublicoPage.tsx`) e a moldura da `/minha`
+  (`pages/minha/MinhaLayout.tsx`, para o líder, o discipulador e a rede, só com a sessão) montam `<AvisosDeVenda>`
+  (de `components/avisos-de-venda`), que consulta `GET /api/publico/vendas-recentes` e desenha a pilha. O estado dos
+  avisos fica dentro dele (cada aviso que entra ou sai não desenha a tela de novo); a tela só recebe
+  `aoSaberSeLigados` para mostrar o `<BotaoSomDasVendas>`: no ranking, nas `acoes` do `PageHeader` (ao lado do título;
+  embaixo dele no celular); na `/minha`, na barra, ao lado do "Sair" (`compacto`: até 30rem, só o sino, para a barra
+  continuar numa linha). Nada no telão nem na coordenação.
+- **Consulta** (`useAvisosDeVenda`): a cada 15 s, contados do fim da anterior, só com a aba visível (pausa no
+  `visibilitychange`; ao voltar, na hora). A **primeira** resposta com `ligados: true` só marca as chaves (`k`) como
+  vistas: quem abre a página não vê o passado. Nas seguintes, cada venda nova vira **um aviso por compra** (a mesma
+  célula duas vezes = dois avisos), da mais antiga para a mais nova. `ligados: false`: nada, e a próxima resposta
+  ligada volta a ser a "primeira". Uma falha não aparece (a próxima tenta de novo).
+- **Fila**: um aviso entra a cada 0,8 s; cada um fica 5 s e sai (0,25 s de animação). Visíveis: até 4 no computador
+  (canto de baixo à direita, 22,5rem, o mais novo embaixo) e até 3 no celular (`(max-width: 37,5rem)`: do topo, com
+  0,75rem de margem, na largura toda, compactos). Esperando, no máximo 12 (os mais antigos saem).
+- **Visual** (`avisos-de-venda.css`, só tokens): cartão branco, borda esquerda `--kids-amarelo`, o ícone `bilhetes`
+  num círculo com `--gradiente-marca-forte`, "A célula **X** vendeu **N bilhetes**!" (nome e quantidade em
+  `--cor-primaria`; o nome que já começa com "Célula" vai só com o "A") e a linha menor "agora mesmo · Projeto Videira
+  Kids". Sem emoji (o 🎟️ do protótipo virou o ícone, que não muda de desenho em cada celular). Animações só com
+  `no-preference` (`avisos-entra`/`avisos-sai`; no celular, `avisos-desce`/`avisos-sobe`). Nada recebe toque
+  (`pointer-events: none`): o que está embaixo continua clicável.
+- **Acessibilidade**: a pilha é uma região `role="log"` com `aria-live="polite"` (o leitor de tela lê cada aviso que
+  entra; o `status` continua livre para o carregando de cada tela), sempre montada, sem foco.
+- **Som** (`som.ts`): um plim por aviso, quando ele aparece (dois tons senoidais, 1318,5 e 1975,5 Hz, ~260 ms, volume
+  0,14), pela Web Audio API, sem arquivo (a CSP não muda). O `AudioContext` só nasce **dentro de um gesto** (toque,
+  clique ou tecla na página; com `navigator.userActivation`, só depois de um), então antes disso nada toca e nada vai
+  para o console. Não toca com a aba escondida. O botão "Som das vendas" (`aria-pressed`, ícones `sino`/`sino-mudo`,
+  com dica): ligado por padrão; com o áudio ainda bloqueado, o 1º toque libera e toca um plim de teste (não desliga);
+  depois, alterna. A escolha fica no aparelho (`localStorage`, chave `rifa-videira-kids:som-das-vendas`, com
+  try/catch: sem armazenamento, vale enquanto a página está aberta).
+- **Testes**: `components/avisos-de-venda/AvisosDeVenda.test.tsx` (temporizadores falsos e um `AudioContext` falso:
+  a primeira resposta, o texto, um aviso por compra, a saída, os limites do computador e do celular, a fila, a aba
+  escondida, os avisos desligados, o plim e o botão), `guarda-avisos.test.ts` (só a rota dos avisos, sem dinheiro,
+  só tipos do contrato), `pages/ranking-publico/avisos-no-ranking.test.tsx` e `pages/minha/AvisosNaMinha.test.tsx`
+  (a tela com um aviso e o botão no lugar, com dica). Nas APIs falsas das telas (`RankingPublicoPage.test.tsx`,
+  `ranking-publico-movimento.test.tsx`, `minha/teste-apoio.ts`), a rota dos avisos fica à parte das chamadas
+  conferidas (404 por padrão; `responderAvisos` na /minha).
 
 ## Trilha e pedidos suspeitos (RIFA-024)
 
