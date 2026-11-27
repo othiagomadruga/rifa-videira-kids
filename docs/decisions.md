@@ -2541,3 +2541,95 @@ até 10 s, e com a Rifei lenta a tela dizia "Não foi possível mudar a célula"
 podia ser cancelado no meio). E escolher de novo a mesma célula numa venda **sem afiliado** manda o PUT (antes o
 diálogo só fechava): é o "Atribuir de novo" da seção 13.3 de integracao-rifei.md, para tentar a Rifei outra vez ou
 mandar a ela as atribuições feitas antes da RIFA-091. Na venda de afiliado sem célula, a mesma célula só fecha.
+
+## D43. Notificações de venda no celular e no computador: Web Push com VAPID próprio (RIFA-095, 2026-11-27)
+
+Pedido do PO (27/11, campanha em andamento): uma notificação de venda no celular (e no computador), como as de
+aplicativo, mesmo com o site fechado. "Do mesmo jeito para todo mundo, não é pra ser nome": cada compra paga vira
+**"🎟️ A célula <nome> vendeu N bilhete(s)!"**, sem o comprador e sem R$. Quem quiser recebe: o botão fica no ranking
+aberto e no painel dos líderes (`/minha`); tocar na notificação abre o ranking aberto. Contrato em
+`src/shared/contracts/notificacoes.ts` (`ROTAS_NOTIFICACOES`, os corpos, `endpointDePushPermitido`,
+`textoDaNotificacaoDeVenda`, `notificacaoDeVendaSchema` e a opção `notificacoes.vendas` da campanha); migração
+`0022_notificacoes_push.sql`; API em `src/worker/lib/web-push.ts` (cifra e VAPID), `lib/notificacoes-venda.ts` (o
+disparo), `db/push-inscricoes.ts` e `routes/notificacoes.ts`; site em `public/sw.js`, `public/manifest.webmanifest`,
+`src/web/components/notificacoes/` e a opção na tela Campanha; chaves com `scripts/gerar-chaves-vapid.mjs`.
+
+- **Web Push padrão, sem serviço de terceiros.** A notificação sai do próprio Worker pelo protocolo dos navegadores
+  (RFC 8030), com o conteúdo cifrado de ponta a ponta (`aes128gcm`, RFC 8291) e a identificação VAPID (RFC 8292). Os
+  únicos terceiros são os serviços de push que cada navegador já usa (Google FCM no Chrome/Android/Edge móvel/Samsung,
+  Mozilla no Firefox, Apple no Safari e iPhone, Microsoft WNS no Edge do computador), e eles só veem o conteúdo
+  cifrado. **Descartados:** OneSignal e o SDK do Firebase (conta e script de terceiros no site, a CSP só aceita
+  `'self'`, e o identificador do aparelho iria para a empresa); a biblioteca `web-push` (usa `crypto` e `https` do
+  Node, que o Worker não tem); bibliotecas de Web Push para Workers (pequenas e pouco usadas, para ~150 linhas de Web
+  Crypto). **Sem biblioteca:** `lib/web-push.ts` faz o ECDH P-256, o HKDF-SHA-256, o AES-128-GCM num registro só
+  (4096 bytes) e o JWT ES256 com a Web Crypto do Worker. Conferido em `lib/web-push.test.ts` **byte a byte contra o
+  exemplo da RFC 8291** (seção 5 e apêndice A), na ida e volta com um aparelho fictício e com o JWT conferido pela
+  chave pública.
+- **O que vai na notificação:** só `{ titulo: "Projeto Videira Kids", corpo: "🎟️ A célula X vendeu N bilhetes!",
+  url: "/" }` ("1 bilhete" no singular; um nome que já começa com "Célula" não repete a palavra). Nenhum dado do
+  comprador, nenhum valor em R$, nenhum id de pedido. É a mesma exceção à R9 dos avisos dentro da página (D42): a
+  quantidade de bilhetes de uma venda, pedida pelo PO.
+- **Quando sai:** quando o webhook da Rifei **aprova** um pedido (o `paid_order` processado: in_process → approved,
+  expired → approved, ou o pedido que já chega pago). É o único ponto em que um pedido passa a contar sozinho: o
+  "Marcar como pago" do sistema (D32) só pede à Rifei, e a venda chega pelo mesmo webhook (notifica); o "Recuperar" da
+  conferência (D19) grava vendas antigas em lote e **não** notifica; a atribuição de célula à mão depois do pagamento
+  (D41) também não. Na hora do disparo, tudo é conferido de novo: as chaves no servidor, a opção da campanha, o pedido
+  aprovado, sem desconsiderar (D20), com **célula efetiva** (D41: a do afiliado ou, sem ela, a atribuída antes do
+  pagamento) e com a aprovação dentro das datas da campanha (a compra de teste antes do 1º dia não notifica). **Sem
+  célula, não notifica.** Approved é terminal (D4): a **reentrega** do mesmo `paid_order` é `duplicado` e não notifica
+  de novo (testado pelo webhook real).
+- **Sem segurar o webhook:** o envio vai para o `ctx.waitUntil` e a resposta à Rifei sai na hora (testado com o
+  serviço de push travado). Sem as chaves ou com a opção desligada, nada vai para o `waitUntil` (nem uma ida ao banco).
+  Uma falha do disparo vai para o log e nunca muda a resposta do webhook.
+- **O envio:** 6 por vez (o Worker abre no máximo 6 conexões simultâneas; mais que isso só espera na fila), cada um com
+  8 s de tempo limite e sem seguir redirect, `TTL: 3600` (o serviço guarda por 1 h para o aparelho desligado) e
+  `Urgency: normal`; um JWT por serviço de push em cada disparo. Resultado gravado num lote só (4 comandos, com qualquer
+  número de inscrições): 2xx zera as falhas e grava `ultimo_envio_em`; **404 ou 410 apaga** a inscrição (acabou no
+  navegador); outra resposta, o tempo esgotado ou a rede somam uma falha, e **5 seguidas apagam**.
+- **Limites do Worker (D19, plano pago):** 1000 subrequisições por invocação (o webhook usa ~5, o disparo mais ~4 e
+  cada push é um fetch), 30 s de `waitUntil` depois da resposta. Por isso: **teto de 800 envios por venda** e nenhum
+  envio novo começa depois de 20 s. Acima do teto, o log avisa `notificacoes_acima_do_teto` (com o total) e a ordem do
+  envio (os que nunca receberam, depois quem recebeu há mais tempo; índice `push_inscricoes_por_envio`) faz quem ficou
+  de fora vir primeiro na venda seguinte. **Evolução** quando passar de ~800 aparelhos (ou o log começar a avisar): o
+  webhook põe `{ pedido }` numa fila (Cloudflare Queues, binding de producer) e um consumer manda em lotes de até 500
+  inscrições por invocação (cada mensagem da fila tem as próprias 1000 subrequisições e o próprio tempo), com o retry
+  da fila no lugar das falhas somadas.
+- **Inscrições (sem login, como as rotas abertas):** `POST /api/publico/notificacoes/inscrever` grava (ou troca, pelo
+  endpoint) e `POST /api/publico/notificacoes/cancelar` apaga; `GET /api/publico/notificacoes` diz ao botão se as
+  notificações estão ligadas e qual é a chave pública. Os POSTs: só da mesma origem do site (403), o limite por IP das
+  rotas abertas (D11: 60 por minuto, 429), corpo até 4 KiB (413), o schema estrito (400) e a chave do aparelho
+  conferida como um ponto da P-256. **Contra SSRF** (o Worker faz um POST para o endpoint a cada venda): só `https:`,
+  sem usuário, senha nem porta, e só os servidores `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+  `web.push.apple.com` e `<nome>.notify.windows.com`; o resto é 400. O envio usa `redirect: "manual"`. O endpoint
+  **nunca** vai para log, resposta (o 400 não ecoa o valor) ou trilha. Sem as chaves no servidor, a inscrição responde
+  503 `nao_configurado`; com a opção desligada ou sem campanha ativa, 409 `acao_desligada`.
+- **Nada da pessoa:** a inscrição é anônima (o endpoint, as duas chaves públicas do aparelho, de onde veio e as
+  contagens); nenhum nome, telefone, e-mail ou usuário, também na /minha. Não entra na trilha nem na planilha.
+- **Chaves VAPID:** a pública em `vars.VAPID_PUBLIC_KEY` do `wrangler.jsonc` (não é segredo: todo navegador que se
+  inscreve a recebe; vazia = recurso desligado) e a privada no segredo do Worker `VAPID_PRIVATE_KEY` (nunca no
+  repositório). `vars.VAPID_SUBJECT` = `https://projetokidsbelem.com.br` (o `sub` do JWT: uma URL, nada de e-mail no
+  repositório público; a Apple aceita `https:`). Sem a pública ou sem a privada (ou fora do formato, com um aviso no log
+  sem o valor), o recurso fica **desligado**: o botão não aparece, a inscrição responde 503 e nada é enviado. Gerar e
+  gravar: `docs/lancamento.md`, 3.9. **Trocar o par** faz os aparelhos inscritos pararem de receber (o serviço recusa
+  e, com 5 falhas, a inscrição some); o site percebe a chave nova e mostra o botão de novo.
+- **Opção da campanha** `notificacoes.vendas` ("Enviar notificações de venda", no cartão "O que o público vê" da tela
+  Campanha; padrão ligada; da coordenação também, como o resto do cartão): desligada, o botão some e nada é enviado; as
+  inscrições ficam guardadas para quando a opção voltar. No PUT, ausente mantém o gravado; a trilha diz o antes e o
+  depois.
+- **Site:** `public/sw.js` (escopo `/`, arquivo estático, sem build) só trata `push` (mostra a notificação com o ícone
+  da Videira, `icone-192.png`; uma URL de fora vira `/`) e `notificationclick` (foca a aba do ranking aberto ou abre
+  uma), mais o `install`/`activate` para a versão nova valer logo. **Nada de cache offline** nem de `fetch`. A CSP não
+  mudou (`default-src 'self'` cobre o service worker e o manifesto). O cartão "Avisos de venda no celular"
+  (`components/notificacoes/`) aparece logo abaixo do título no ranking aberto e na /minha: pede a permissão no toque,
+  inscreve e mostra "Avisos ligados neste aparelho" + "Desligar"; navegador sem suporte ou API sem resposta, some;
+  permissão negada, explica como liberar. Um aparelho já inscrito manda a inscrição de novo no máximo uma vez por dia
+  (refaz a que o servidor apagou).
+- **iPhone e iPad:** o iOS só dá notificação a um site **adicionado à Tela de Início e aberto pelo ícone**, a partir do
+  iOS 16.4. Por isso o `manifest.webmanifest` (`display: "standalone"`, nome "Projeto Videira Kids", ícones 192 e 512 e
+  o `apple-touch-icon`) e, no iPhone fora do app, no lugar do botão: "No iPhone: toque em Compartilhar → Adicionar à
+  Tela de Início, abra pelo ícone e ative aqui."
+
+**Suposições (RIFA-095):** a venda recuperada pela conferência não notifica (são vendas antigas, gravadas em lote); a
+aprovação fora das datas da campanha não notifica; o mesmo endpoint inscrito de novo troca as chaves e zera as falhas;
+o botão fica logo abaixo do título nas duas telas; a opção da campanha é da coordenação (como o resto do que o público
+vê); cada venda é uma notificação separada (sem agrupar).

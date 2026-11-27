@@ -20,6 +20,8 @@ export interface InscricaoDoNavegador {
   endpoint: string;
   p256dh: string;
   auth: string;
+  /** A chave VAPID pública com que a inscrição foi feita (base64url), quando o navegador diz. */
+  chave?: string | null;
 }
 
 export interface PushDoNavegador {
@@ -78,6 +80,16 @@ export function base64UrlParaBytes(valor: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/** bytes → base64url sem `=`. */
+export function bytesParaBase64Url(bytes: Uint8Array): string {
+  let binario = "";
+  for (const byte of bytes) binario += String.fromCharCode(byte);
+  return btoa(binario)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
 function mesmosBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
@@ -111,7 +123,15 @@ export function pushDaJanela(janela: Window = window): PushDoNavegador {
     },
     async inscricaoAtual() {
       const atual = await (await registro())?.pushManager.getSubscription();
-      return atual ? lerInscricao(atual) : null;
+      if (!atual) return null;
+      const lida = lerInscricao(atual);
+      const chave = atual.options?.applicationServerKey;
+      return (
+        lida && {
+          ...lida,
+          chave: chave ? bytesParaBase64Url(new Uint8Array(chave)) : null,
+        }
+      );
     },
     async inscrever(chavePublica) {
       await servicos().register(CAMINHO_SERVICE_WORKER, {

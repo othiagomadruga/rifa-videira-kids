@@ -486,6 +486,35 @@ firewall da Efí bloqueia a nuvem; adendo da D40). Depois que a RIFA-087 estiver
 Na Efí, a aplicação "Painel Videira Kids" e o certificado de Produção dela podem ser revogados pelo Thiago (não são os da
 Rifei). Nada disso muda as vendas: o Pix continua caindo na Efí pela Rifei.
 
+### 3.9 Notificações de venda no celular (Web Push) [SM] (RIFA-095, D43)
+
+O recurso entra **desligado** (a chave pública vazia no `wrangler.jsonc`): o botão "Receber avisos de venda" não
+aparece e nada é enviado. Para ligar, o par de chaves VAPID: a **pública** vai no `wrangler.jsonc` (não é segredo) e a
+**privada** vira o segredo do Worker `VAPID_PRIVATE_KEY` (nunca no repositório, no chat ou no DevMission).
+
+1. **[SM, no checkout, sem rede]** gere o par; a privada vai só para um arquivo novo, com permissão 600:
+   `umask 077 && node scripts/gerar-chaves-vapid.mjs --privada /tmp/vapid-privada`
+   O terminal mostra só `VAPID_PUBLIC_KEY (wrangler.jsonc, vars): B...` (87 caracteres).
+2. **[SM]** grave a privada como segredo do Worker e apague o arquivo:
+   `npx wrangler secret put VAPID_PRIVATE_KEY < /tmp/vapid-privada && rm /tmp/vapid-privada`
+   (precisa do token da Cloudflare no terminal; da sessão de nuvem do Claude, só se o `wrangler` tiver acesso à conta.
+   Sem ele, o Thiago grava pelo painel: **Workers & Pages → rifa-videira-kids → Settings → Variables and Secrets → Add
+   → Type: Secret**, nome `VAPID_PRIVATE_KEY`, valor = o conteúdo do arquivo.) O segredo novo vale na hora, sem publicar.
+3. **[SM]** ponha a pública no `wrangler.jsonc`, em `vars.VAPID_PUBLIC_KEY` (no lugar do `""`), num commit
+   `RIFA-095: liga as notificações de venda (chave VAPID pública)` na `main`. O push publica (D18).
+   `vars.VAPID_SUBJECT` já é `https://projetokidsbelem.com.br`.
+4. **[Admin] Conferir:** `https://projetokidsbelem.com.br/api/publico/notificacoes` responde
+   `{"ligadas":true,"chave_publica":"B..."}` (com a opção "Enviar notificações de venda" ligada na tela Campanha, o
+   padrão). No celular (Android/Chrome) ou no computador, abra o ranking aberto, toque em **Receber avisos de venda** e
+   permita. No iPhone (iOS 16.4+): Compartilhar → Adicionar à Tela de Início, abra pelo ícone e ative ali. Na próxima
+   venda paga com célula chega "🎟️ A célula X vendeu N bilhetes!". No log do Worker: `notificacoes_de_venda` com as
+   contagens (aceitas, expiradas, falharam, puladas), nunca o endereço do aparelho.
+5. **Desligar:** pela tela Campanha (desmarque "Enviar notificações de venda": o botão some e nada sai, as inscrições
+   ficam guardadas) ou, de vez, apagando o segredo (`npx wrangler secret delete VAPID_PRIVATE_KEY`). **Não troque o
+   par** sem necessidade: quem já ativou deixa de receber até ativar de novo.
+6. **Se o log avisar `notificacoes_acima_do_teto`** (mais de 800 aparelhos): as notificações continuam, revezando quem
+   recebe; a evolução é a fila (Cloudflare Queues) da D43. Fale com o SM.
+
 ## 4. Compra de teste de ponta a ponta
 
 **Quando:** depois de 3.1 a 3.4, com o Pix manual ligado na Rifei (1.6; ou a Efí, 1.4, se ela entrar), e **antes de 23/11** (veja 4.4). **Quem:** Thiago com uma segunda conta da Rifei como afiliada, cadastrada pelo convite gerado no painel (1.3), e um admin olhando o sistema. É esta compra que responde ao que as fontes da Rifei não dizem e que antes ia para o suporte: a lista está na [seção 9 de integracao-rifei.md](integracao-rifei.md#9-o-que-confirmar-com-uma-campanha-de-teste).

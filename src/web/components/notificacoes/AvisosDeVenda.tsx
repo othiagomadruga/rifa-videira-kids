@@ -86,7 +86,11 @@ export function AvisosDeVenda({
         });
       const atual =
         push.permissao() === "granted" ? await push.inscricaoAtual() : null;
-      if (atual === null) {
+      // Feita com outra chave VAPID (o servidor trocou a chave): não recebe mais; o botão volta para ativar de novo.
+      const daChaveAtual =
+        atual !== null &&
+        (atual.chave == null || atual.chave === chave_publica);
+      if (atual === null || !daChaveAtual) {
         mudar({ tipo: "disponivel", chave: chave_publica, erro: null });
         // O service worker já fica registrado: o toque no botão não espera por ele.
         void push.registrar().catch(() => undefined);
@@ -95,7 +99,10 @@ export function AvisosDeVenda({
       mudar({ tipo: "ligado", chave: chave_publica, erro: null });
       const ultima = lerSincronia();
       if (ultima === null || agora() - ultima >= INTERVALO_SINCRONIA_MS) {
-        await api.inscrever(atual, origem);
+        await api.inscrever(
+          { endpoint: atual.endpoint, p256dh: atual.p256dh, auth: atual.auth },
+          origem,
+        );
         gravarSincronia(agora());
       }
     }

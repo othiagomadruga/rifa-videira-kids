@@ -76,6 +76,7 @@ Configuração da campanha. A API v1 trabalha sempre com a campanha **ativa**, e
 | `acesso_celulas_senha` | INTEGER 0/1 NOT NULL | padrão 1 (0013, RIFA-064, D29): a chave `acesso.celulas_senha`, o login das células com a senha padrão. A senha não é gravada em lugar nenhum (sai do nome da célula); a sessão aberta por ela fica em `sessoes` com `link_id` NULL |
 | `mensagem_link_coordenacao`, `mensagem_link_lider`, `mensagem_link_discipulador`, `mensagem_link_rede` | TEXT NULL, 1–1000 | o modelo de cada mensagem do WhatsApp (0008); NULL = o padrão do contrato (`MENSAGENS_PADRAO`), que a API devolve no lugar. Um modelo salvo igual ao padrão é gravado como NULL |
 | `link_vendas_modelo` | TEXT NULL, 1–300 | o modelo do link de vendas (0010, D24): `https://rifei.com.br/...` com `{slug}` e `{afiliado}`, conferido pelo contrato (`problemasDoModeloLinkVendas`); NULL = o PO ainda não confirmou o formato com a Rifei, e nenhuma célula tem link. Só o admin muda (`PUT /api/admin/links-vendas/modelo`); o PUT da campanha nunca escreve nele |
+| `notificacoes_vendas` | INTEGER 0/1 NOT NULL | padrão 1 (migração 0022, RIFA-095, D43): `notificacoes.vendas`, "Enviar notificações de venda". 0 = o botão dos avisos some e nenhuma notificação sai |
 | `criado_em`, `atualizado_em` | TEXT | instantes UTC |
 
 O fim da campanha não é guardado: é `data_inicio + soma dos dias dos períodos − 1`.
@@ -632,3 +633,29 @@ célula efetiva (`coalesce(a.celula_id, p.celula_atribuida_id)`). A célula com 
 a Hierarquia responde 409 `em_uso` e diz para remover a atribuição). O webhook nunca escreve nas três colunas. Testes:
 `src/worker/test/migrations.test.ts` ("0020 sobre dados que já existiam": nada muda além das colunas novas em NULL, o
 CHECK, a FK RESTRICT, a view e o painel com a célula efetiva e a do afiliado vencendo, e os índices com o plano do painel).
+
+## 18. Migração `0022_notificacoes_push.sql` (RIFA-095; D43)
+
+Aditiva: a coluna `campanhas.notificacoes_vendas` (acima; 1 em todas as campanhas que já existiam) e a tabela nova, vazia:
+
+### `push_inscricoes`
+
+Um aparelho (navegador) que ativou os avisos de venda no ranking aberto ou na `/minha` (Web Push). Anônima: nada da
+pessoa. O `endpoint` nunca vai para log, resposta ou trilha.
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `endpoint` | TEXT UNIQUE NOT NULL | o endereço do serviço de push do navegador, `https://`, até 2048 caracteres; a API só aceita FCM, Mozilla, Apple e Microsoft (contra SSRF) |
+| `p256dh` | TEXT NOT NULL | a chave pública P-256 do aparelho, base64url sem `=`, 87 caracteres (CHECK do tamanho e do alfabeto) |
+| `auth` | TEXT NOT NULL | o segredo de autenticação do aparelho, base64url, 22 caracteres |
+| `origem` | TEXT NOT NULL | `publico` (ranking aberto) ou `minha` (painel dos líderes); só para contar |
+| `criado_em` | TEXT NOT NULL | instante UTC da primeira inscrição |
+| `ultimo_envio_em` | TEXT NULL | o último envio aceito pelo serviço (NULL = nunca) |
+| `falhas` | INTEGER NOT NULL ≥ 0 | falhas seguidas; um envio aceito zera, 5 apagam a inscrição (404 e 410 apagam na hora) |
+
+Índice `push_inscricoes_por_envio (ultimo_envio_em, id)`: a ordem do envio (os que nunca receberam, depois quem
+recebeu há mais tempo), para o teto de 800 envios por venda ir revezando. Gravação e leitura em
+`src/worker/db/push-inscricoes.ts`; o mesmo endpoint de novo troca as chaves e zera as falhas (UPSERT). Testes:
+`src/worker/test/migrations.test.ts` ("0022 sobre dados que já existiam": nada muda além da coluna nova com 1 e da
+tabela vazia; os CHECKs; o PUT da campanha de hoje, que nomeia a coluna, sobre o schema completo).

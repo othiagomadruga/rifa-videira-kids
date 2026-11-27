@@ -271,6 +271,21 @@ describe("ligado e desligar", () => {
     expect(api.inscrever).toHaveBeenCalledOnce();
   });
 
+  it("a inscrição feita com outra chave VAPID (o servidor trocou a chave): o botão volta para ativar de novo", async () => {
+    const api = criarApi();
+    desenhar(
+      criarNavegador({
+        permissao: "granted",
+        inscricao: { ...INSCRICAO, chave: `B${"Z".repeat(86)}` },
+      }),
+      api,
+    );
+    expect(
+      await screen.findByRole("button", { name: TEXTOS_AVISOS.ligar }),
+    ).toBeInTheDocument();
+    expect(api.inscrever).not.toHaveBeenCalled();
+  });
+
   it("'Desligar' cancela no navegador e na API e volta o botão", async () => {
     const navegador = criarNavegador({
       permissao: "granted",
