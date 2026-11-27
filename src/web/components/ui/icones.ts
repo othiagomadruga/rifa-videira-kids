@@ -78,6 +78,8 @@ export const ICONES = {
   // Ajuda (RIFA-066): o ponto de interrogação num círculo, ao lado de títulos e rótulos (o "info" é o "i" dos avisos).
   ajuda:
     "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6M12 17h.01",
+  // RIFA-095 (D43): o sino dos avisos de venda no celular (o botão do ranking aberto e da /minha).
+  sino: "M12 3a5 5 0 0 0-5 5v4.5L5 16h14l-2-3.5V8a5 5 0 0 0-5-5zM10 19.5a2 2 0 0 0 4 0",
 } as const satisfies Record<string, string>;
 
 /** O nome de um ícone (ex.: "copiar"): a chave de ICONES. */

@@ -21,4 +21,9 @@ export default defineConfig([
     files: ["*.config.{js,ts}"],
     languageOptions: { globals: globals.node },
   },
+  // RIFA-095 (D43): o service worker do Web Push, um arquivo estático do site (sem build).
+  {
+    files: ["public/sw.js"],
+    languageOptions: { globals: globals.serviceworker },
+  },
 ]);

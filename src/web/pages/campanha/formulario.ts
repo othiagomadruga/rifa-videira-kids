@@ -8,6 +8,7 @@ import {
   FUSO_PADRAO,
   LIMITE_CARACTERES_MENSAGEM,
   MENSAGENS_PADRAO,
+  NOTIFICACOES_PADRAO,
   PEDIDOS_PADRAO,
   PUBLICO_PADRAO,
   RANKING_POR_DIVISAO_PADRAO,
@@ -67,6 +68,8 @@ export type Formulario = {
   bilhetes_quantidade: string;
   /** "" = automático (null na API), "0" ou "1". */
   bilhetes_numero_inicial: "" | "0" | "1";
+  /** RIFA-095 (D43): "Enviar notificações de venda". */
+  notificacoes_vendas: boolean;
 };
 
 /** Corpo do PUT já validado pelo contrato (espaços tirados, padrões aplicados). */
@@ -135,6 +138,7 @@ export function formularioVazio(): Formulario {
     mensagens: { ...MENSAGENS_PADRAO },
     bilhetes_quantidade: String(BILHETES_PADRAO.quantidade),
     bilhetes_numero_inicial: "",
+    notificacoes_vendas: NOTIFICACOES_PADRAO.vendas,
   };
 }
 
@@ -180,6 +184,8 @@ export function formularioDaCampanha(campanha: Campanha): Formulario {
         : campanha.bilhetes?.numero_inicial === 1
           ? "1"
           : "",
+    // RIFA-095 (D43): só false desliga (uma resposta sem o grupo, de uma API de antes dele, vale o padrão).
+    notificacoes_vendas: campanha.notificacoes?.vendas !== false,
   };
 }
 
@@ -418,6 +424,8 @@ export function montarCorpo(
           ? null
           : Number(formulario.bilhetes_numero_inicial),
     },
+    // RIFA-095 (D43): a opção vai sempre (a coordenação também muda, como o resto do que o público vê).
+    notificacoes: { vendas: formulario.notificacoes_vendas },
     // Os três grupos vão sempre que é o admin (D20: o grupo presente substitui o gravado); da coordenação, nunca
     // (RIFA-042: grupo ausente mantém o gravado).
     ...(regrasDoAdmin && {
@@ -474,6 +482,7 @@ const MENSAGEM_DO_CAMPO: Record<string, string> = {
   "ranking.por_divisao": "Marque ou desmarque esta opção.",
   "bilhetes.quantidade": "Use um número inteiro de 1 a 1.000.000.",
   "bilhetes.numero_inicial": "Escolha 0, 1 ou automático.",
+  "notificacoes.vendas": "Marque ou desmarque esta opção.",
   "publico.mostra_percentual_meta": "Marque ou desmarque esta opção.",
   "publico.limite_ranking":
     "Use um número inteiro de 1 a 100, ou deixe em branco para mostrar todas.",
@@ -546,6 +555,7 @@ const ROTULO_DO_CAMPO: Record<string, string> = {
   "ranking.por_divisao": "Separar o ranking por divisão",
   "bilhetes.quantidade": "Quantidade de números da rifa",
   "bilhetes.numero_inicial": "Número inicial da rifa",
+  "notificacoes.vendas": "Enviar notificações de venda",
   "publico.mostra_percentual_meta": "Percentual da meta no ranking público",
   "publico.limite_ranking": "Posições no ranking público",
   "pedidos.desconsiderar": "Permitir desconsiderar pedidos",
@@ -576,6 +586,7 @@ const ORDEM_DOS_CAMPOS = [
   "meta.valor",
   "bilhetes.quantidade",
   "bilhetes.numero_inicial",
+  "notificacoes.vendas",
   "ranking.criterio",
   "ranking.por_divisao",
   "publico.mostra_percentual_meta",

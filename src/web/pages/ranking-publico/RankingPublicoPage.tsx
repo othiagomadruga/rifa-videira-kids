@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { ItemRankingPublico } from "../../../shared/contracts/calculos";
 import { TextoContado } from "../../components/movimento";
+import { AvisosDeVenda } from "../../components/notificacoes";
 import {
   EmptyState,
   ErrorState,
@@ -51,6 +52,8 @@ export function RankingPublicoPage() {
   return (
     <>
       <PageHeader titulo="Ranking da campanha" ajuda={ajudaAberta("ranking")} />
+      {/* RIFA-095 (D43): o botão "Receber avisos de venda" (some sem suporte ou com as notificações desligadas). */}
+      <AvisosDeVenda origem="publico" />
       {estado.tipo === "carregando" && (
         <div className="ranking-publico__carregando">
           <Loading texto="Carregando o ranking…" />

@@ -74,6 +74,8 @@ const CORPO_DO_FORMULARIO_VALIDO = {
   publico: { mostra_percentual_meta: false, limite_ranking: 3 },
   // RIFA-075 (D35): os números da rifa vão sempre, com o padrão (7005, número inicial automático).
   bilhetes: { quantidade: 7005, numero_inicial: null },
+  // RIFA-095 (D43): as notificações de venda vão sempre, com o padrão (ligadas).
+  notificacoes: { vendas: true },
   // Pedidos, acesso e mensagens são só do admin (RIFA-042): a coordenação (a sessão destes testes) não os manda, e
   // a API grava os padrões no primeiro PUT. O PUT do admin está em RegrasDaCampanha.test.tsx.
 };
@@ -383,7 +385,8 @@ describe("CA2: slug, meta e público", () => {
     expect(publico).toHaveTextContent(
       "Valores em R$ nunca aparecem para o público, com qualquer configuração.",
     );
-    expect(within(publico).getAllByRole("checkbox")).toHaveLength(1);
+    // O percentual da meta e, desde a RIFA-095 (D43), as notificações de venda (nenhuma em R$).
+    expect(within(publico).getAllByRole("checkbox")).toHaveLength(2);
     expect(within(publico).getAllByRole("textbox")).toEqual([
       campo("Quantas posições o público vê"),
     ]);
