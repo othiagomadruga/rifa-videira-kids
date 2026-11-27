@@ -2591,7 +2591,7 @@ tela em `src/web/components/avisos-de-venda/` (montada em `pages/ranking-publico
   pela Web Audio API: sem arquivo de áudio, então a CSP não muda. Como os avisos entram um de cada vez, dois plins
   nunca tocam juntos. Os navegadores só deixam tocar depois de um gesto da pessoa na página: o contexto de áudio só é
   criado dentro de um toque, clique ou tecla (nenhum erro no console antes). O botão "Som das vendas" (ao lado do
-  título do ranking; na /minha, na barra, ao lado do "Sair", só o sino no celular) começa ligado; enquanto o áudio
+  título do ranking e, na /minha, do título da tela; embaixo dele no celular) começa ligado; enquanto o áudio
   ainda está bloqueado, o primeiro toque nele libera e toca um plim de teste; depois, alterna. A escolha fica no
   aparelho (`localStorage`, com try/catch). Com a aba escondida, não toca.
 - **Descartado:** tempo real por WebSocket/Durable Object (custo e um serviço novo para um aviso de alguns segundos; a
@@ -2602,5 +2602,7 @@ tela em `src/web/components/avisos-de-venda/` (montada em `pages/ranking-publico
 
 **Suposições:** sem campanha ativa, 200 com `ligados: false` (e não 404, como o ranking): a tela não precisa tratar
 erro; a região viva é `role="log"` (e não `status`, que as telas já usam para o carregando); na /minha, o botão do som
-fica na barra da moldura (a "área equivalente" ao título do ranking), só com o sino no celular; venda aprovada com o
-relógio da Rifei adiantado entra só quando o "agora" do servidor passa dela.
+fica no cabeçalho da tela, ao lado do título (na barra de cima, com o "Sair", ela quebraria em duas linhas no celular);
+o botão aparece desde o primeiro quadro (o padrão da campanha é ligado) e sai se a resposta disser que não: com a
+opção desligada, ele pisca por um instante ao abrir; venda aprovada com o relógio da Rifei adiantado entra só quando
+o "agora" do servidor passa dela.

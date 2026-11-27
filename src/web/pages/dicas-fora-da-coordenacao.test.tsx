@@ -47,6 +47,7 @@ import { DICAS as DICAS_MINHA } from "./minha/textos";
 import { DICAS_TODAS_AS_REDES } from "./minha/textos-todas-as-redes";
 import { DICAS_DA_MOLDURA } from "./minha/textos-moldura";
 import { DICAS as DICAS_404 } from "./nao-encontrada/textos";
+import { DICAS_SOM } from "../components/avisos-de-venda/textos";
 
 /** As telas com `lazy` (a visão individual e o QR code): o primeiro teste do arquivo carrega os pacotes. */
 const ESPERA_DO_PACOTE = { timeout: 5000 };
@@ -232,9 +233,9 @@ describe("/minha (visão individual, com a moldura)", () => {
       expect(api.chamadasA("GET", "/api/minha/visao")).toHaveLength(1),
     );
     expect(document.querySelector(".minha-moldura__esqueleto")).not.toBeNull();
-    // O Sair e o "?" da ajuda do título (RIFA-066).
-    expect(contarControles()).toBe(2);
-    await conferirDicas(1);
+    // O Sair, o "?" da ajuda do título (RIFA-066) e, com os avisos de venda ligados (RIFA-094), o "Som das vendas".
+    expect(contarControles()).toBe(3);
+    await conferirDicas(2);
     expect(textoDaDica(botao("Sair"))).toBe(DICAS_DA_MOLDURA.sair);
   });
 
@@ -374,12 +375,21 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     },
   };
 
-  /** fetch simulado do ranking aberto (o mesmo da página inicial e do telão); `falhar`: sem conexão. */
-  function simularRanking({ falhar = false } = {}) {
+  /**
+   * fetch simulado do ranking aberto (o mesmo da página inicial e do telão); `falhar`: sem conexão. RIFA-094: os avisos
+   * de venda, ligados (sem venda nenhuma) ou desligados (`avisos: false`).
+   */
+  function simularRanking({ falhar = false, avisos = true } = {}) {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (entrada: string) => {
         const url = new URL(entrada, "http://localhost");
+        if (url.pathname === "/api/publico/vendas-recentes")
+          return respostaJson({
+            ligados: avisos,
+            itens: [],
+            agora: "2026-12-04T18:30:00.000Z",
+          });
         if (url.pathname !== "/api/publico/ranking")
           return respostaErro(404, "nao_encontrado", "Rota inesperada");
         if (falhar) throw new TypeError("Failed to fetch");
@@ -418,12 +428,28 @@ describe("telas abertas: ranking da campanha, telão, /status e a 404", () => {
     );
   }
 
-  it("ranking da campanha (página inicial): carregado, sem botão nem campo; na falha, 'Tentar de novo'", async () => {
+  it("ranking da campanha (página inicial): carregado, só o 'Som das vendas' (RIFA-094), com dica; sem os avisos, nenhum botão nem campo; na falha, 'Tentar de novo'", async () => {
     simularRanking();
-    const { unmount } = renderizarRota("/", { usuario: null });
+    let tela = renderizarRota("/", { usuario: null });
     expect(await screen.findAllByText("Célula Ágape")).not.toHaveLength(0);
+    const ajudas = document.querySelectorAll("[data-ajuda-botao]").length;
+    expect(contarControles() - ajudas).toBe(1);
+    await conferirDicas(1);
+    expect(
+      textoDaDica(screen.getByRole("button", { name: "Som das vendas" })),
+    ).toBe(DICAS_SOM.ligado);
+    tela.unmount();
+
+    simularRanking({ avisos: false });
+    tela = renderizarRota("/", { usuario: null });
+    expect(await screen.findAllByText("Célula Ágape")).not.toHaveLength(0);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Som das vendas" }),
+      ).toBeNull(),
+    );
     await conferirSemControles();
-    unmount();
+    tela.unmount();
 
     simularRanking({ falhar: true });
     renderizarRota("/", { usuario: null });

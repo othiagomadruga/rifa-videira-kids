@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
-import {
-  AvisosDeVenda,
-  BotaoSomDasVendas,
-} from "../../components/avisos-de-venda";
+import { AvisosDeVenda, AvisosLigados } from "../../components/avisos-de-venda";
 import {
   Button,
   ComDica,
@@ -25,9 +22,10 @@ type Saida = { saindo: boolean; erro: string | null };
 // e a barra com a altura do "Sair", só no CSS, em minha-moldura.css: nenhum texto de mentira na marca para o leitor
 // de tela): nada pula quando a sessão chega.
 // RIFA-094 (D42): com a sessão, os avisos de venda (os mesmos do ranking aberto, da rota aberta) para o líder, o
-// discipulador e a rede, e o botão "Som das vendas" na barra, ao lado do "Sair" (no celular, só o sino, para a barra
-// não crescer: o BotaoSomDasVendas compacto). Nada na tela fixa fica coberto: a /minha não tem barra fixa, e os avisos não
-// recebem toque.
+// discipulador e a rede. O botão "Som das vendas" fica no cabeçalho da tela (Cabecalho.tsx, ao lado do título, como
+// no ranking aberto), que sabe pelo contexto AvisosLigados se os avisos estão ligados: na barra de cima, ao lado do
+// "Sair", ele faria a barra quebrar em duas linhas a 390 px. A /minha não tem barra fixa, e os avisos não recebem
+// toque: nada fica bloqueado.
 export function MinhaLayout() {
   const { estado, verificar, sair } = useSessao();
   const usuario = useGuardaDaArea("hierarquia");
@@ -56,22 +54,19 @@ export function MinhaLayout() {
             complemento={usuario ? ROTULO_PAPEL[usuario.papel] : undefined}
           />
           {usuario && (
-            <div className="minha-moldura__acoes">
-              {avisosLigados && <BotaoSomDasVendas compacto />}
-              <ComDica
-                texto={
-                  saida.saindo ? DICAS_DA_MOLDURA.saindo : DICAS_DA_MOLDURA.sair
-                }
+            <ComDica
+              texto={
+                saida.saindo ? DICAS_DA_MOLDURA.saindo : DICAS_DA_MOLDURA.sair
+              }
+            >
+              <Button
+                variante="secundario"
+                aria-disabled={saida.saindo || undefined}
+                onClick={() => void sairDoSistema()}
               >
-                <Button
-                  variante="secundario"
-                  aria-disabled={saida.saindo || undefined}
-                  onClick={() => void sairDoSistema()}
-                >
-                  {saida.saindo ? "Saindo…" : "Sair"}
-                </Button>
-              </ComDica>
-            </div>
+                {saida.saindo ? "Saindo…" : "Sair"}
+              </Button>
+            </ComDica>
           )}
         </div>
         {saida.erro && (
@@ -89,7 +84,9 @@ export function MinhaLayout() {
       <main id="conteudo" className="minha-moldura__conteudo">
         <div className="minha-moldura__limite minha-moldura__pagina">
           {usuario ? (
-            <Outlet />
+            <AvisosLigados value={avisosLigados}>
+              <Outlet />
+            </AvisosLigados>
           ) : estado.situacao === "erro" ? (
             <ErrorState
               titulo="Não foi possível conferir o seu acesso."

@@ -1,7 +1,7 @@
 // RIFA-094 (D42): os avisos de venda no ranking aberto (/), com o componente de components/avisos-de-venda: a primeira
 // resposta só marca as vendas; a seguinte mostra o aviso; o botão "Som das vendas" fica ao lado do título, só com os
 // avisos ligados na campanha. O comportamento inteiro (fila, celular, som) está em AvisosDeVenda.test.tsx.
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   respostaRankingPublicoSchema,
@@ -116,8 +116,10 @@ describe("RIFA-094: os avisos de venda no ranking aberto", () => {
     await screen.findByText(/^Atualizado às/);
 
     expect(avisosNaTela()).toEqual([]);
-    expect(
-      screen.queryByRole("button", { name: "Som das vendas" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Som das vendas" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

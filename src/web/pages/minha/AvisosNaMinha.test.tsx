@@ -1,8 +1,8 @@
 // RIFA-094 (D42): os avisos de venda também na /minha (líder, discipulador e rede), com o mesmo componente e a mesma
 // rota aberta do ranking aberto: a primeira resposta só marca as vendas; a seguinte mostra o aviso; o botão "Som das
-// vendas" fica na barra, ao lado do "Sair", só com os avisos ligados; sem a palavra "rede" para o discipulador (D30).
+// vendas" fica no cabeçalho da tela, só com os avisos ligados; sem a palavra "rede" para o discipulador (D30).
 // O comportamento inteiro (fila, celular, som) está em components/avisos-de-venda/AvisosDeVenda.test.tsx.
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ItemVendaRecente,
@@ -57,7 +57,7 @@ afterEach(() => {
 
 describe("RIFA-094: os avisos de venda na /minha", () => {
   it.each(["lider", "discipulador", "rede"] as const)(
-    "%s: a 1ª resposta só marca; a venda seguinte vira o aviso, e o 'Som das vendas' fica na barra com o 'Sair'",
+    "%s: a 1ª resposta só marca; a venda seguinte vira o aviso, e o 'Som das vendas' fica no cabeçalho da tela",
     async (papel) => {
       const antiga = venda(1, "Shekinah", 2);
       const nova = venda(2, "Bunker", 3);
@@ -74,14 +74,21 @@ describe("RIFA-094: os avisos de venda na /minha", () => {
       expect(avisos()).toEqual([
         "A célula Bunker vendeu 3 bilhetes! agora mesmo · Projeto Videira Kids",
       ]);
-      const barra = document.querySelector(".minha-moldura__acoes")!;
+      // O "Som das vendas" no cabeçalho da tela (ao lado do título, como no ranking aberto), com dica (RIFA-045).
+      const cabecalho = screen
+        .getByRole("heading", { level: 1 })
+        .closest("header")!;
       expect(
-        within(barra as HTMLElement)
+        within(cabecalho).getByRole("button", { name: "Som das vendas" }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(controlesSemDica(cabecalho)).toEqual([]);
+      // A barra de cima continua só com o "Sair" (com o som, ela quebraria em duas linhas no celular).
+      expect(
+        within(document.querySelector(".minha-moldura__topo") as HTMLElement)
           .getAllByRole("button")
           .map((botao) => botao.textContent),
-      ).toEqual(["Som das vendas", "Sair"]);
-      // A barra segue com dica em todo botão (RIFA-045), e o discipulador não vê "rede" (D30).
-      expect(controlesSemDica(barra as HTMLElement)).toEqual([]);
+      ).toEqual(["Sair"]);
+      // O discipulador não vê "rede" (D30).
       if (papel === "discipulador")
         expect(document.body.textContent).not.toMatch(/\brede\b/i);
     },
@@ -92,9 +99,11 @@ describe("RIFA-094: os avisos de venda na /minha", () => {
     await proximaConsulta();
 
     expect(avisos()).toEqual([]);
-    expect(
-      screen.queryByRole("button", { name: "Som das vendas" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Som das vendas" }),
+      ).not.toBeInTheDocument(),
+    );
     expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
   });
 });

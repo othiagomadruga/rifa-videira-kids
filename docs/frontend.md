@@ -241,9 +241,11 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   (`pages/minha/MinhaLayout.tsx`, para o líder, o discipulador e a rede, só com a sessão) montam `<AvisosDeVenda>`
   (de `components/avisos-de-venda`), que consulta `GET /api/publico/vendas-recentes` e desenha a pilha. O estado dos
   avisos fica dentro dele (cada aviso que entra ou sai não desenha a tela de novo); a tela só recebe
-  `aoSaberSeLigados` para mostrar o `<BotaoSomDasVendas>`: no ranking, nas `acoes` do `PageHeader` (ao lado do título;
-  embaixo dele no celular); na `/minha`, na barra, ao lado do "Sair" (`compacto`: até 30rem, só o sino, para a barra
-  continuar numa linha). Nada no telão nem na coordenação.
+  `aoSaberSeLigados` para mostrar o `<BotaoSomDasVendas>` nas `acoes` do `PageHeader` (ao lado do título; embaixo dele
+  no celular): no ranking, direto; na `/minha`, no `Cabecalho.tsx`, que lê o contexto `AvisosLigados` fornecido pela
+  moldura (na barra de cima, ao lado do "Sair", a barra quebraria em duas linhas a 390 px). `ligados` começa `true`
+  (o padrão da campanha): o botão já está no primeiro quadro e não empurra a tela; sai se a resposta disser que não
+  ou se a primeira consulta falhar. Nada no telão nem na coordenação.
 - **Consulta** (`useAvisosDeVenda`): a cada 15 s, contados do fim da anterior, só com a aba visível (pausa no
   `visibilitychange`; ao voltar, na hora). A **primeira** resposta com `ligados: true` só marca as chaves (`k`) como
   vistas: quem abre a página não vê o passado. Nas seguintes, cada venda nova vira **um aviso por compra** (a mesma
@@ -267,13 +269,15 @@ O grupo do discipulador ("Adultos da manhã", "Adultos da noite", "Jovens", "Ado
   com dica): ligado por padrão; com o áudio ainda bloqueado, o 1º toque libera e toca um plim de teste (não desliga);
   depois, alterna. A escolha fica no aparelho (`localStorage`, chave `rifa-videira-kids:som-das-vendas`, com
   try/catch: sem armazenamento, vale enquanto a página está aberta).
-- **Testes**: `components/avisos-de-venda/AvisosDeVenda.test.tsx` (temporizadores falsos e um `AudioContext` falso:
+- **Testes** (as APIs falsas da `/minha` respondem os avisos ligados e sem venda por padrão: o botão do som está no
+  cabeçalho; `dicas-fora-da-coordenacao.test.tsx` confere a dica dele no ranking e na `/minha`):
+  `components/avisos-de-venda/AvisosDeVenda.test.tsx` (temporizadores falsos e um `AudioContext` falso:
   a primeira resposta, o texto, um aviso por compra, a saída, os limites do computador e do celular, a fila, a aba
   escondida, os avisos desligados, o plim e o botão), `guarda-avisos.test.ts` (só a rota dos avisos, sem dinheiro,
   só tipos do contrato), `pages/ranking-publico/avisos-no-ranking.test.tsx` e `pages/minha/AvisosNaMinha.test.tsx`
   (a tela com um aviso e o botão no lugar, com dica). Nas APIs falsas das telas (`RankingPublicoPage.test.tsx`,
   `ranking-publico-movimento.test.tsx`, `minha/teste-apoio.ts`), a rota dos avisos fica à parte das chamadas
-  conferidas (404 por padrão; `responderAvisos` na /minha).
+  conferidas (no ranking, 404; na /minha, `responderAvisos`).
 
 ## Trilha e pedidos suspeitos (RIFA-024)
 

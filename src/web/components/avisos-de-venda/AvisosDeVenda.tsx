@@ -10,7 +10,7 @@
 //   3, numa versão compacta. As animações só sem prefers-reduced-motion (avisos-de-venda.css).
 // - O botão do som: ligado por padrão, mas o navegador só toca depois de um gesto na página. Enquanto o áudio não foi
 //   liberado, o primeiro toque no botão libera e toca um plim de teste (não desliga); depois, alterna.
-import { useEffect } from "react";
+import { createContext, useEffect } from "react";
 import { Button, ComDica, Icone } from "../ui";
 import {
   desbloquearSom,
@@ -76,14 +76,13 @@ function Aviso({ celula, bilhetes, saindo }: AvisoDeVenda) {
 }
 
 /**
- * O botão "Som das vendas" (ligado/desligado, guardado no aparelho). `compacto`: numa tela estreita, só o sino (o nome
- * continua para o leitor de tela), para caber numa barra (a da /minha).
+ * Os avisos estão ligados (para uma tela mais funda mostrar o botão do som): a moldura da /minha fornece, o cabeçalho
+ * dela lê. Fora de um provedor, false.
  */
-export function BotaoSomDasVendas({
-  compacto = false,
-}: {
-  compacto?: boolean;
-}) {
+export const AvisosLigados = createContext(false);
+
+/** O botão "Som das vendas" (ligado/desligado, guardado no aparelho). */
+export function BotaoSomDasVendas() {
   const ligado = useSomDasVendas();
 
   function alternar() {
@@ -105,17 +104,13 @@ export function BotaoSomDasVendas({
       <Button
         variante="secundario"
         tamanho="pequeno"
-        className={
-          compacto
-            ? "som-das-vendas som-das-vendas--compacto"
-            : "som-das-vendas"
-        }
+        className="som-das-vendas"
         data-som-das-vendas=""
         aria-pressed={ligado}
         onClick={alternar}
       >
         <Icone nome={ligado ? "sino" : "sino-mudo"} />
-        <span className="som-das-vendas__rotulo">{ROTULO_SOM}</span>
+        {ROTULO_SOM}
       </Button>
     </ComDica>
   );

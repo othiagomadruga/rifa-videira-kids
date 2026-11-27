@@ -47,14 +47,6 @@
   min-height: var(--alvo-toque);
 }
 
-/* RIFA-094 (D42): o "Som das vendas" e o "Sair" juntos, à direita da marca. No celular, o som só com o sino
-   (BotaoSomDasVendas compacto, avisos-de-venda.css): a barra continua numa linha. */
-.minha-moldura__acoes {
-  display: flex;
-  align-items: center;
-  gap: var(--espaco-2);
-}
-
 .minha-moldura__erro {
   margin-top: var(--espaco-2);
   color: var(--cor-perigo);

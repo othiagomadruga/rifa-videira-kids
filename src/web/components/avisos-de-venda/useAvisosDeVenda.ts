@@ -13,7 +13,8 @@
 //   um de cada vez, dois plins nunca tocam juntos. O som só toca depois de um gesto da pessoa na página: este hook
 //   escuta os toques, cliques e teclas e libera o áudio no primeiro (o botão do som faz o mesmo).
 // - `ligados: false` (a opção da campanha desligada ou nenhuma campanha): nada na tela, a fila esvazia e a próxima
-//   resposta com os avisos ligados volta a ser a "primeira".
+//   resposta com os avisos ligados volta a ser a "primeira". Antes da primeira resposta, `ligados` é true (o padrão da
+//   campanha): o botão do som não empurra a tela quando a resposta chega.
 import { useEffect, useRef, useState } from "react";
 import type { ItemVendaRecente } from "../../../shared/contracts/api";
 import { carregarVendasRecentes } from "./avisos-de-venda-api";
@@ -79,7 +80,10 @@ export function useAvisosDeVenda({ ativo = true }: { ativo?: boolean } = {}): {
   /** Os avisos na tela, do mais antigo (em cima) para o mais novo. */
   avisos: AvisoDeVenda[];
 } {
-  const [ligados, setLigados] = useState(false);
+  // Otimista (o padrão da campanha é ligado): o botão do som já aparece no primeiro quadro, sem empurrar a tela quando
+  // a resposta chega; some se a resposta disser que não, ou se a primeira consulta falhar.
+  const [ligados, setLigados] = useState(true);
+  const respondeu = useRef(false);
   const [avisos, setAvisos] = useState<AvisoDeVenda[]>([]);
   const [visivel, setVisivel] = useState(abaVisivel);
   const [rodada, setRodada] = useState(0);
@@ -230,6 +234,7 @@ export function useAvisosDeVenda({ ativo = true }: { ativo?: boolean } = {}): {
     carregarVendasRecentes({ signal: controle.signal }).then(
       (resposta) => {
         if (controle.signal.aborted) return;
+        respondeu.current = true;
         setLigados(resposta.ligados);
         if (!resposta.ligados) {
           vistas.current = null;
@@ -252,8 +257,9 @@ export function useAvisosDeVenda({ ativo = true }: { ativo?: boolean } = {}): {
         agendarProxima();
       },
       () => {
-        // Uma falha não aparece: a próxima consulta tenta de novo.
+        // Uma falha não aparece: a próxima consulta tenta de novo. Sem nenhuma resposta ainda, o botão do som sai.
         if (controle.signal.aborted) return;
+        if (!respondeu.current) setLigados(false);
         agendarProxima();
       },
     );

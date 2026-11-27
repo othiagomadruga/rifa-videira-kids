@@ -1061,18 +1061,18 @@ export function criarApiFalsa(
   }
 
   // RIFA-094 (D42): os avisos de venda (a rota aberta que a moldura consulta) ficam à parte das chamadas da visão:
-  // sem respostas marcadas, 404 (a tela segue sem avisos); com `responderAvisos`, as respostas em ordem (a última se
-  // repete).
+  // sem respostas marcadas, ligados e sem venda nenhuma (o padrão da campanha: o botão "Som das vendas" fica no
+  // cabeçalho, sem aviso); com `responderAvisos`, as respostas em ordem (a última se repete).
   const avisos: string[] = [];
-  let respostasDosAvisos: RespostaVendasRecentes[] = [];
+  let respostasDosAvisos: RespostaVendasRecentes[] = [
+    { ligados: true, itens: [], agora: "2026-12-04T18:30:00.000Z" },
+  ];
 
   const fetchFalso = vi.fn(
     async (entrada: string | URL | Request, init?: RequestInit) => {
       const url = new URL(String(entrada), window.location.origin);
       if (url.pathname === "/api/publico/vendas-recentes") {
         avisos.push(`${url.pathname}${url.search}`);
-        if (respostasDosAvisos.length === 0)
-          return respostaErro(404, "nao_encontrado", "Fora do teste");
         const resposta =
           respostasDosAvisos[
             Math.min(avisos.length - 1, respostasDosAvisos.length - 1)

@@ -98,29 +98,9 @@
   }
 }
 
-/* O botão do som: o ícone e o texto juntos, sem quebrar. O compacto (a barra da /minha), no celular, só com o sino: o
-   nome fica para o leitor de tela (as regras do .visualmente-oculto do base.css) e na dica. */
+/* O botão do som: o ícone e o texto juntos, sem quebrar. */
 .som-das-vendas {
   white-space: nowrap;
-}
-
-@media (max-width: 30rem) {
-  .som-das-vendas--compacto {
-    min-width: var(--alvo-toque);
-    padding-inline: var(--espaco-2);
-  }
-
-  .som-das-vendas--compacto .som-das-vendas__rotulo {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
 }
 
 /* Entrada e saída, só sem reduce (com reduce, o aviso aparece e some parado). */
