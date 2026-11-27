@@ -22,9 +22,12 @@
 // - Ranking por divisão (RIFA-061, D27; coluna da migração 0012): `ranking.por_divisao`. No PUT, ausente mantém o
 //   gravado (no primeiro PUT, o padrão da coluna: separa), como os grupos do admin; é do grupo `ranking`, que a
 //   coordenação também muda (como o critério).
+// - Avisos de venda (RIFA-094, D42; coluna da migração 0021): `publico.avisos_de_venda`. No PUT, ausente mantém o
+//   gravado (no primeiro PUT, o padrão da coluna: ligada), como o `ranking.por_divisao`.
 import type { z } from "zod";
 import {
   ACESSO_PADRAO,
+  AVISOS_DE_VENDA_PADRAO,
   BILHETES_PADRAO,
   MENSAGENS_PADRAO,
   PEDIDOS_PADRAO,
@@ -80,6 +83,8 @@ export interface CampanhaAtiva {
   ranking_por_divisao: number;
   publico_mostra_percentual_meta: number;
   publico_limite_ranking: number | null;
+  /** RIFA-094 (D42, migração 0021): 1 = mostra os avisos de venda no ranking aberto e na /minha. */
+  publico_avisos_de_venda: number;
   /** Regras do admin (D20, migração 0008): as chaves (0/1) e os modelos (NULL = o padrão do contrato). */
   pedidos_desconsiderar: number;
   acesso_discipuladores: number;
@@ -127,7 +132,7 @@ const SELECIONAR_CAMPANHA_ATIVA = `
     c.publico_mostra_percentual_meta, c.publico_limite_ranking, c.pedidos_desconsiderar,
     c.acesso_discipuladores, c.acesso_redes, c.mensagem_link_coordenacao, c.mensagem_link_lider,
     c.mensagem_link_discipulador, c.mensagem_link_rede, c.acesso_celulas_senha, c.bilhetes_quantidade,
-    c.bilhetes_numero_inicial, c.criado_em, c.atualizado_em,
+    c.bilhetes_numero_inicial, c.publico_avisos_de_venda, c.criado_em, c.atualizado_em,
     (SELECT json_group_array(json_object('ordem', p.ordem, 'nome', p.nome, 'dias', p.dias,
         'percentual_bp', p.percentual_bp))
       FROM campanha_periodos AS p WHERE p.campanha_id = c.id) AS periodos
@@ -141,15 +146,16 @@ const ID_DA_ATIVA = "(SELECT id FROM campanhas WHERE ativa = 1)";
 // ?15 = 1 quando o grupo `mensagens` veio, e ?16 a ?19 são os modelos (null = o padrão do contrato).
 // RIFA-061 (D27): ?20 é `ranking.por_divisao` (null = ausente: o padrão no INSERT, o gravado no UPDATE).
 // RIFA-075 (D35): ?21 = 1 quando o grupo `bilhetes` veio; ?22 a quantidade e ?23 o número inicial (null = automático).
+// RIFA-094 (D42): ?24 é `publico.avisos_de_venda` (null = ausente: o padrão no INSERT, o gravado no UPDATE).
 const GRAVAR_CAMPANHA = `
   INSERT INTO campanhas (nome, slug_rifei, ativa, fuso_horario, data_inicio, preco_bilhete_centavos,
     meta_unidade, meta_regra, meta_valor, ranking_criterio, publico_mostra_percentual_meta,
     publico_limite_ranking, pedidos_desconsiderar, acesso_discipuladores, acesso_redes,
     mensagem_link_coordenacao, mensagem_link_lider, mensagem_link_discipulador, mensagem_link_rede,
-    ranking_por_divisao, bilhetes_quantidade, bilhetes_numero_inicial)
+    ranking_por_divisao, bilhetes_quantidade, bilhetes_numero_inicial, publico_avisos_de_venda)
   VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, coalesce(?12, 0), coalesce(?13, 1),
     coalesce(?14, 1), ?16, ?17, ?18, ?19, coalesce(?20, 1), CASE WHEN ?21 = 1 THEN ?22 ELSE ${BILHETES_PADRAO.quantidade} END,
-    CASE WHEN ?21 = 1 THEN ?23 ELSE NULL END)
+    CASE WHEN ?21 = 1 THEN ?23 ELSE NULL END, coalesce(?24, 1))
   ON CONFLICT (ativa) WHERE ativa = 1 DO UPDATE SET
     nome = excluded.nome,
     slug_rifei = excluded.slug_rifei,
@@ -163,6 +169,7 @@ const GRAVAR_CAMPANHA = `
     ranking_por_divisao = coalesce(?20, ranking_por_divisao),
     publico_mostra_percentual_meta = excluded.publico_mostra_percentual_meta,
     publico_limite_ranking = excluded.publico_limite_ranking,
+    publico_avisos_de_venda = coalesce(?24, publico_avisos_de_venda),
     pedidos_desconsiderar = coalesce(?12, pedidos_desconsiderar),
     acesso_discipuladores = coalesce(?13, acesso_discipuladores),
     acesso_redes = coalesce(?14, acesso_redes),
@@ -314,11 +321,17 @@ function resumirCriacaoDaCampanha(depois: DadosCampanha): string {
     (depois.ranking.por_divisao ?? RANKING_POR_DIVISAO_PADRAO)
       ? []
       : [`ranking.por_divisao: ${ligado(false)}`];
+  // RIFA-094 (D42): os avisos de venda, como o ranking por divisão, só quando nascem desligados.
+  const avisos =
+    (depois.publico.avisos_de_venda ?? AVISOS_DE_VENDA_PADRAO)
+      ? []
+      : [`publico.avisos_de_venda: ${ligado(false)}`];
   return [
     `Campanha criada: slug_rifei ${JSON.stringify(depois.slug_rifei)}`,
     `preco_bilhete_centavos ${depois.preco_bilhete_centavos}`,
     ...chaves.map(([nome, valor]) => `${nome}: ${ligado(valor)}`),
     ...porDivisao,
+    ...avisos,
     ...editadas.map((tipo) => `mensagens.${tipo}`),
   ].join(", ");
 }
@@ -386,6 +399,15 @@ export function resumirMudancaDaCampanha(
     antes.publico_limite_ranking !== depois.publico.limite_ranking
   )
     alterados.push("publico");
+  // RIFA-094 (D42): a opção, com o antes e o depois (ausente no corpo mantém o gravado: não muda nada).
+  const { avisos_de_venda } = depois.publico;
+  if (
+    avisos_de_venda !== undefined &&
+    (antes.publico_avisos_de_venda === 1) !== avisos_de_venda
+  )
+    alterados.push(
+      `publico.avisos_de_venda: ${ligado(antes.publico_avisos_de_venda === 1)} → ${ligado(avisos_de_venda)}`,
+    );
   // Regras do admin (D20): cada chave que mudou com o antes e o depois; das mensagens, só o nome do modelo. Grupo
   // ausente no corpo mantém o gravado: não muda nada.
   const chaves: [string, number, boolean | undefined][] = [
@@ -456,6 +478,7 @@ export async function salvarCampanhaAtiva(
         dados.bilhetes === undefined ? 0 : 1,
         dados.bilhetes?.quantidade ?? null,
         dados.bilhetes?.numero_inicial ?? null,
+        chave(dados.publico.avisos_de_venda),
       ),
     db.prepare(
       `DELETE FROM campanha_periodos WHERE campanha_id = ${ID_DA_ATIVA}`,
@@ -552,6 +575,8 @@ export function montarCampanha(campanha: CampanhaAtiva): Campanha {
     publico: {
       mostra_percentual_meta: campanha.publico_mostra_percentual_meta === 1,
       limite_ranking: campanha.publico_limite_ranking,
+      // RIFA-094 (D42): só 0 desliga (uma linha lida sem a coluna, antes da 0021, fica com o padrão: ligada).
+      avisos_de_venda: campanha.publico_avisos_de_venda !== 0,
     },
     pedidos: { desconsiderar: campanha.pedidos_desconsiderar === 1 },
     acesso: {
