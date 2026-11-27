@@ -6,6 +6,7 @@
 // - A pilha é uma região viva educada (role="log", aria-live="polite": uma sequência de mensagens em que as antigas
 //   saem; o "status" fica para o carregando de cada tela): o leitor de tela lê cada aviso que entra, sem roubar o foco.
 //   Nada nela é clicável (pointer-events: none no CSS): o toque passa para o que está embaixo.
+// - Cada aviso diz há quanto tempo foi a venda ("agora mesmo", "há 3 min · Projeto Videira Kids", RIFA-096).
 // - Computador: no canto de baixo à direita, até 4, o mais novo embaixo. Celular (até 37,5rem): descendo do topo, até
 //   3, numa versão compacta. As animações só sem prefers-reduced-motion (avisos-de-venda.css).
 // - O botão do som: ligado por padrão, mas o navegador só toca depois de um gesto na página. Enquanto o áudio não foi
@@ -21,9 +22,9 @@ import {
 } from "./som";
 import {
   DICAS_SOM,
-  LINHA_DO_AVISO,
   ROTULO_SOM,
   inicioDaFrase,
+  linhaDoAviso,
   textoDosBilhetes,
 } from "./textos";
 import { useAvisosDeVenda, type AvisoDeVenda } from "./useAvisosDeVenda";
@@ -54,7 +55,7 @@ export function PilhaDeAvisos({ avisos }: { avisos: AvisoDeVenda[] }) {
   );
 }
 
-function Aviso({ celula, bilhetes, saindo }: AvisoDeVenda) {
+function Aviso({ celula, bilhetes, em, agora, saindo }: AvisoDeVenda) {
   return (
     <div
       className="aviso-de-venda"
@@ -69,7 +70,9 @@ function Aviso({ celula, bilhetes, saindo }: AvisoDeVenda) {
           {inicioDaFrase(celula)} <strong>{celula}</strong> vendeu{" "}
           <strong>{textoDosBilhetes(bilhetes)}</strong>!
         </span>{" "}
-        <span className="aviso-de-venda__quando">{LINHA_DO_AVISO}</span>
+        <span className="aviso-de-venda__quando">
+          {linhaDoAviso(em, agora)}
+        </span>
       </p>
     </div>
   );

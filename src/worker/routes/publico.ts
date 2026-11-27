@@ -5,7 +5,7 @@
  *   campanha permitir), sempre na data de hoje (um `data` na URL é ignorado pelo schema);
  * - GET /api/publico/bumbo: o texto do dia para o grupo dos líderes, sobre o dia anterior já fechado;
  *   um `data` informado só vale na janela da campanha (do 1º dia ao dia seguinte ao último);
- * - GET /api/publico/vendas-recentes (RIFA-094, D42): as vendas pagas dos últimos 3 minutos para os avisos de venda
+ * - GET /api/publico/vendas-recentes (RIFA-094, D42): as vendas pagas dos últimos 10 minutos (RIFA-096) para os avisos de venda
  *   do ranking aberto e da /minha, só com a célula e os bilhetes DE CADA VENDA (a exceção à R9 que a D42 explica:
  *   nunca R$, comprador, número de bilhete ou id; db/vendas-recentes.ts). Cache de 10 s, e não de 30.
  *
